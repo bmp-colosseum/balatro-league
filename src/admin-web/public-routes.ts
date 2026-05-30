@@ -7,6 +7,7 @@ import { loadPlayerHistory } from "../profile.js";
 import { computeStandings, formatDivisionField } from "../standings.js";
 import { html, raw } from "./html.js";
 import { layout } from "./layout.js";
+import { sessionContext } from "./session-context.js";
 
 export const publicRouter = Router();
 
@@ -47,12 +48,11 @@ publicRouter.get("/seasons", async (req, res) => {
   });
 
   const body = html`
-    <h2>All seasons</h2>
-    <p class="muted">Public history — anyone with the URL can browse.</p>
+    <h2>Seasons</h2>
     ${cards.length ? html`<div class="grid grid-2">${cards}</div>` : html`<div class="card muted">No seasons yet.</div>`}
   `;
   res.set("Content-Type", "text/html; charset=utf-8").send(
-    layout({ title: "Seasons", activePath: "/seasons", body, sessionUser: req.session.user ?? null }).value,
+    layout({ title: "Seasons", activePath: "/seasons", body, ...(await sessionContext(req)) }).value,
   );
 });
 
@@ -76,7 +76,7 @@ publicRouter.get("/seasons/:id", async (req, res) => {
   if (!season) {
     const body = html`<h2>Season not found</h2><p><a href="/seasons">← all seasons</a></p>`;
     return res.set("Content-Type", "text/html; charset=utf-8").send(
-      layout({ title: "Season not found", activePath: "/seasons", body, sessionUser: req.session.user ?? null }).value,
+      layout({ title: "Season not found", activePath: "/seasons", body, ...(await sessionContext(req)) }).value,
     );
   }
 
@@ -126,7 +126,7 @@ publicRouter.get("/seasons/:id", async (req, res) => {
     ${sections.length ? sections : html`<div class="card muted">No divisions in this season.</div>`}
   `;
   res.set("Content-Type", "text/html; charset=utf-8").send(
-    layout({ title: season.name, activePath: "/seasons", body, sessionUser: req.session.user ?? null }).value,
+    layout({ title: season.name, activePath: "/seasons", body, ...(await sessionContext(req)) }).value,
   );
 });
 
@@ -137,7 +137,7 @@ publicRouter.get("/profile/:discordId", async (req, res) => {
   if (!player) {
     const body = html`<h2>Profile not found</h2><p>No player with Discord ID <code>${discordId}</code>.</p>`;
     return res.set("Content-Type", "text/html; charset=utf-8").send(
-      layout({ title: "Not found", activePath: "", body, sessionUser: req.session.user ?? null }).value,
+      layout({ title: "Not found", activePath: "", body, ...(await sessionContext(req)) }).value,
     );
   }
   const profile = await loadPlayerHistory(player.id);
@@ -189,7 +189,7 @@ publicRouter.get("/profile/:discordId", async (req, res) => {
     </div>
   `;
   res.set("Content-Type", "text/html; charset=utf-8").send(
-    layout({ title: profile.player.displayName, activePath: "", body, sessionUser: req.session.user ?? null }).value,
+    layout({ title: profile.player.displayName, activePath: "", body, ...(await sessionContext(req)) }).value,
   );
 });
 
@@ -213,7 +213,7 @@ publicRouter.get("/standings", async (req, res) => {
   if (!season) {
     const body = html`<h2>Standings</h2><div class="card muted">No active season right now.</div>`;
     return res.set("Content-Type", "text/html; charset=utf-8").send(
-      layout({ title: "Standings", activePath: "/standings", body, sessionUser: req.session.user ?? null }).value,
+      layout({ title: "Standings", activePath: "/standings", body, ...(await sessionContext(req)) }).value,
     );
   }
 
@@ -254,10 +254,9 @@ publicRouter.get("/standings", async (req, res) => {
 
   const body = html`
     <h2>${season.name} — Standings</h2>
-    <p class="muted">Live standings, updated as sets are confirmed.</p>
     ${sections.length ? sections : html`<div class="card muted">No divisions in this season.</div>`}
   `;
   res.set("Content-Type", "text/html; charset=utf-8").send(
-    layout({ title: "Standings", activePath: "/standings", body, sessionUser: req.session.user ?? null }).value,
+    layout({ title: "Standings", activePath: "/standings", body, ...(await sessionContext(req)) }).value,
   );
 });

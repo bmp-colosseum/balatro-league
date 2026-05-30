@@ -1,14 +1,21 @@
 import { html, raw, type RawHtml } from "./html.js";
 
-const NAV = [
+// Nav groups by who can see them.
+// PUBLIC always visible. PLAYER only when logged in. ADMIN only when isAdmin.
+const PUBLIC_NAV = [
   { href: "/standings", label: "Standings" },
   { href: "/seasons", label: "Past seasons" },
+] as const;
+const PLAYER_NAV = [
+  { href: "/me", label: "My profile" },
+] as const;
+const ADMIN_NAV = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/players", label: "Players" },
   { href: "/admin/rankings", label: "Rankings" },
   { href: "/admin/divisions", label: "Divisions" },
   { href: "/admin/signups", label: "Signups" },
-  { href: "/admin/seasons", label: "Seasons (admin)" },
+  { href: "/admin/seasons", label: "Manage seasons" },
 ] as const;
 
 const STYLES = `
@@ -75,8 +82,21 @@ const STYLES = `
   .muted { color: var(--muted); }
 `;
 
-export function layout(opts: { title: string; activePath: string; flash?: { kind: "success" | "error"; message: string }; body: RawHtml; sessionUser?: { username: string; avatar: string | null; discordId: string } | null }): RawHtml {
-  const navItems = NAV.map(
+export function layout(opts: {
+  title: string;
+  activePath: string;
+  flash?: { kind: "success" | "error"; message: string };
+  body: RawHtml;
+  sessionUser?: { username: string; avatar: string | null; discordId: string } | null;
+  isAdmin?: boolean;
+}): RawHtml {
+  // Build nav from the groups the caller is allowed to see
+  const visibleNav = [
+    ...PUBLIC_NAV,
+    ...(opts.sessionUser ? PLAYER_NAV : []),
+    ...(opts.isAdmin ? ADMIN_NAV : []),
+  ];
+  const navItems = visibleNav.map(
     (n) => html`<a href="${n.href}" class="${n.href === opts.activePath ? "active" : ""}">${n.label}</a>`,
   );
   const flash = opts.flash

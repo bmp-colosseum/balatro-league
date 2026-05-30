@@ -10,6 +10,7 @@ import { computeStandings } from "../standings.js";
 import { csvDocument } from "./csv.js";
 import { html, raw, type RawHtml } from "./html.js";
 import { layout } from "./layout.js";
+import { sessionContext } from "./session-context.js";
 
 export const router = Router();
 
@@ -89,7 +90,7 @@ router.get("/", async (req, res) => {
         </div>`}
   `;
 
-  send(res, layout({ title: "Dashboard", activePath: "/admin", flash: readFlash(req), body, sessionUser: req.session.user ?? null }));
+  send(res, layout({ title: "Dashboard", activePath: "/admin", flash: readFlash(req), body, ...(await sessionContext(req)) }));
 });
 
 // =============================================================================
@@ -204,7 +205,7 @@ router.get("/players", async (req, res) => {
       </table>
     </div>
   `;
-  send(res, layout({ title: "Players", activePath: "/admin/players", flash: readFlash(req), body, sessionUser: req.session.user ?? null }));
+  send(res, layout({ title: "Players", activePath: "/admin/players", flash: readFlash(req), body, ...(await sessionContext(req)) }));
 });
 
 // =============================================================================
@@ -300,7 +301,7 @@ Dave"></textarea>
       </form>
     </div>
   `;
-  send(res, layout({ title: "Bulk add", activePath: "/admin/players", flash: readFlash(req), body, sessionUser: req.session.user ?? null }));
+  send(res, layout({ title: "Bulk add", activePath: "/admin/players", flash: readFlash(req), body, ...(await sessionContext(req)) }));
 });
 
 interface ParsedLine {
@@ -678,7 +679,7 @@ Bob,210
       </table>
     </div>
   `;
-  send(res, layout({ title: "Rankings", activePath: "/admin/rankings", flash: readFlash(req), body, sessionUser: req.session.user ?? null }));
+  send(res, layout({ title: "Rankings", activePath: "/admin/rankings", flash: readFlash(req), body, ...(await sessionContext(req)) }));
 });
 
 router.post("/rankings/:id/set", async (req, res) => {
@@ -801,7 +802,7 @@ router.get("/divisions", async (req, res) => {
   const season = await prisma.season.findFirst({ where: { isActive: true } });
   if (!season) {
     const body = html`<h2>Divisions</h2><div class="card muted">No active season — create one on <a href="/admin/seasons">Seasons</a> first.</div>`;
-    return send(res, layout({ title: "Divisions", activePath: "/admin/divisions", flash: readFlash(req), body, sessionUser: req.session.user ?? null }));
+    return send(res, layout({ title: "Divisions", activePath: "/admin/divisions", flash: readFlash(req), body, ...(await sessionContext(req)) }));
   }
 
   const divisions = await prisma.division.findMany({
@@ -847,7 +848,7 @@ router.get("/divisions", async (req, res) => {
     <h2>Divisions <span class="muted" style="font-weight:normal; font-size:14px">· ${season.name}</span></h2>
     ${sections.length ? sections : html`<div class="muted">No divisions in this season.</div>`}
   `;
-  send(res, layout({ title: "Divisions", activePath: "/admin/divisions", flash: readFlash(req), body, sessionUser: req.session.user ?? null }));
+  send(res, layout({ title: "Divisions", activePath: "/admin/divisions", flash: readFlash(req), body, ...(await sessionContext(req)) }));
 });
 
 router.get("/divisions/:id", async (req, res) => {
@@ -1051,7 +1052,7 @@ router.get("/divisions/:id", async (req, res) => {
         : raw("")}
     </div>
   `;
-  send(res, layout({ title: division.name, activePath: "/admin/divisions", flash: readFlash(req), body, sessionUser: req.session.user ?? null }));
+  send(res, layout({ title: division.name, activePath: "/admin/divisions", flash: readFlash(req), body, ...(await sessionContext(req)) }));
 });
 
 // --- division actions ---
@@ -1248,7 +1249,7 @@ router.get("/signups", async (req, res) => {
     <p class="muted">Signup rounds let players opt in for an upcoming season. Use the Discord command <code>/league post-signup</code> to open one.</p>
     ${cards.length ? cards : html`<div class="card muted">No signup rounds yet. Run <code>/league post-signup name:"Season 2 Signups"</code> in your league's Discord.</div>`}
   `;
-  send(res, layout({ title: "Signups", activePath: "/admin/signups", flash: readFlash(req), body, sessionUser: req.session.user ?? null }));
+  send(res, layout({ title: "Signups", activePath: "/admin/signups", flash: readFlash(req), body, ...(await sessionContext(req)) }));
 });
 
 router.post("/signups/:id/close", async (req, res) => {
@@ -1329,7 +1330,7 @@ router.get("/seasons", async (req, res) => {
     <div class="grid grid-2">${seasonCards.length ? seasonCards : html`<div class="muted">No seasons yet.</div>`}</div>
   `;
 
-  send(res, layout({ title: "Seasons", activePath: "/admin/seasons", flash: readFlash(req), body, sessionUser: req.session.user ?? null }));
+  send(res, layout({ title: "Seasons", activePath: "/admin/seasons", flash: readFlash(req), body, ...(await sessionContext(req)) }));
 });
 
 router.post("/seasons/create", async (req, res) => {

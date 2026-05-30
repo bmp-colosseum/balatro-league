@@ -12,6 +12,7 @@ import { computeStandings } from "../standings.js";
 import { html, raw, type RawHtml } from "./html.js";
 import { layout } from "./layout.js";
 import { requireLogin } from "./auth.js";
+import { sessionContext } from "./session-context.js";
 
 export const playerRouter = Router();
 playerRouter.use(express.urlencoded({ extended: true }));
@@ -70,7 +71,7 @@ playerRouter.get("/me", async (req, res) => {
       </div>
     `;
     return res.set("Content-Type", "text/html; charset=utf-8").send(
-      layout({ title: "Your profile", activePath: "/me", flash: flashMessage, body, sessionUser: req.session.user ?? null }).value,
+      layout({ title: "Your profile", activePath: "/me", flash: flashMessage, body, ...(await sessionContext(req)) }).value,
     );
   }
 
@@ -85,7 +86,7 @@ playerRouter.get("/me", async (req, res) => {
       </div>
     `;
     return res.set("Content-Type", "text/html; charset=utf-8").send(
-      layout({ title: "Your profile", activePath: "/me", flash: flashMessage, body, sessionUser: req.session.user ?? null }).value,
+      layout({ title: "Your profile", activePath: "/me", flash: flashMessage, body, ...(await sessionContext(req)) }).value,
     );
   }
 
@@ -243,7 +244,7 @@ playerRouter.get("/me", async (req, res) => {
     </div>
   `;
   res.set("Content-Type", "text/html; charset=utf-8").send(
-    layout({ title: "Your profile", activePath: "/me", flash: flashMessage, body, sessionUser: req.session.user ?? null }).value,
+    layout({ title: "Your profile", activePath: "/me", flash: flashMessage, body, ...(await sessionContext(req)) }).value,
   );
 });
 
