@@ -67,16 +67,18 @@ export async function reportSet(input: ReportInput): Promise<ReportResult> {
     };
   }
 
+  // Auto-confirm: trust the report. Opponent or admin can contest via override-result.
+  const now = new Date();
   const pairing = existing
     ? await prisma.pairing.update({
         where: { id: existing.id },
         data: {
           gamesWonA,
           gamesWonB,
-          status: "PENDING",
+          status: "CONFIRMED",
           reporterId: input.reporterPlayerId,
-          reportedAt: new Date(),
-          confirmedAt: null,
+          reportedAt: now,
+          confirmedAt: now,
         },
       })
     : await prisma.pairing.create({
@@ -86,11 +88,15 @@ export async function reportSet(input: ReportInput): Promise<ReportResult> {
           playerBId,
           gamesWonA,
           gamesWonB,
-          status: "PENDING",
+          status: "CONFIRMED",
           reporterId: input.reporterPlayerId,
-          reportedAt: new Date(),
+          reportedAt: now,
+          confirmedAt: now,
         },
       });
+
+  // Fire-and-forget announcement (skipped for INTERNAL seasons)
+  announceResult(pairing.id).catch(() => {});
 
   return { ok: true, pairingId: pairing.id, status: existing ? "REREPORTED" : "CREATED" };
 }

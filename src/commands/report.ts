@@ -1,7 +1,4 @@
 import {
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
   EmbedBuilder,
   MessageFlags,
   SlashCommandBuilder,
@@ -77,26 +74,15 @@ export const report: SlashCommand = {
     });
     const displayed = `${games.a}-${games.b}`;
     const embed = new EmbedBuilder()
-      .setTitle("Match result submitted — awaiting confirmation")
+      .setTitle("✅ Set recorded")
       .setDescription(
-        `**${interaction.user.username}** reports **${displayed}** vs **${opponentUser.username}**${division ? ` in **${division.name}**` : ""}.\n` +
-          `<@${opponentUser.id}>, please confirm or dispute.`,
+        `<@${interaction.user.id}> **${displayed}** vs <@${opponentUser.id}>${division ? ` in **${division.name}**` : ""}.\n` +
+          `_Doesn't look right? Ask an admin to use \`/admin override-result set-id:${r.pairingId}\`._`,
       )
-      .setColor(0xf1c40f)
+      .setColor(0x2ecc71)
       .setFooter({ text: `Set ${r.pairingId}` });
 
-    const buttons = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`report:confirm:${r.pairingId}`)
-        .setLabel("Confirm")
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId(`report:dispute:${r.pairingId}`)
-        .setLabel("Dispute")
-        .setStyle(ButtonStyle.Danger),
-    );
-
-    await interaction.editReply({ embeds: [embed], components: [buttons] });
+    await interaction.editReply({ embeds: [embed] });
   },
 };
 

@@ -199,7 +199,7 @@ playerRouter.get("/me", async (req, res) => {
   const reportFormCard = remainingOpponents.length
     ? html`<div class="card">
         <strong>Report a set</strong>
-        <p class="muted">Submit your match result. Your opponent confirms or disputes.</p>
+        <p class="muted">Submit your match result. It's recorded immediately. If something's wrong, ask an admin to override.</p>
         <form method="post" action="/me/report">
           <label>Opponent
             <select name="opponentPlayerId" required>
@@ -263,7 +263,7 @@ playerRouter.post("/me/report", async (req, res) => {
     result,
   });
   if (!r.ok) return redirectMe(res, { err: r.reason });
-  redirectMe(res, { ok: "Set reported. Opponent will be notified to confirm." });
+  redirectMe(res, { ok: "Set recorded." });
 });
 
 playerRouter.post("/me/confirm/:id", async (req, res) => {

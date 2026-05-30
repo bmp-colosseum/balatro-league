@@ -176,6 +176,14 @@ export const league: SlashCommand = {
         .addStringOption((opt) =>
           opt.setName("round-id").setDescription("Finalized signup round id").setRequired(true),
         ),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("bootstrap-server")
+        .setDescription("Create category + channels + roles for the league. Owner only — run once.")
+        .addStringOption((opt) =>
+          opt.setName("category-name").setDescription("Name of the category to create (default: '🃏 Balatro League')").setRequired(false),
+        ),
     ),
 
   autocomplete: divisionNameAutocomplete,
@@ -201,8 +209,103 @@ export const league: SlashCommand = {
     if (sub === "finalize-signups") return closeSignups(interaction);
     if (sub === "signups") return listSignups(interaction);
     if (sub === "preview-from-signups") return previewSeason(interaction);
+    if (sub === "bootstrap-server") return bootstrapServer(interaction);
   },
 };
+
+async function bootstrapServer(interaction: ChatInputCommandInteraction) {
+  if (!interaction.guild) {
+    await interaction.reply({
+      content: "Run this command in your league's Discord server.",
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+  const categoryName = interaction.options.getString("category-name") ?? "🃏 Balatro League";
+
+  await interaction.deferReply();
+
+  // Check bot has the required permissions
+  const me = interaction.guild.members.me;
+  if (!me) {
+    await interaction.editReply("Couldn't find bot member in this server.");
+    return;
+  }
+  const required = ["ManageChannels", "ManageRoles"] as const;
+  const missing = required.filter((perm) => !me.permissions.has(perm));
+  if (missing.length > 0) {
+    await interaction.editReply(
+      `⚠️ Bot is missing required permission(s): **${missing.join(", ")}**. ` +
+        `Re-invite the bot with elevated permissions, or grant them to the bot's role manually in Server Settings → Roles.`,
+    );
+    return;
+  }
+
+  const { ChannelType, PermissionsBitField } = await import("discord.js");
+
+  try {
+    const category = await interaction.guild.channels.create({
+      name: categoryName,
+      type: ChannelType.GuildCategory,
+    });
+
+    const channels = await Promise.all([
+      interaction.guild.channels.create({
+        name: "league-info",
+        type: ChannelType.GuildText,
+        parent: category.id,
+        topic: "League rules, schedule, announcements. Read-only for most.",
+      }),
+      interaction.guild.channels.create({
+        name: "signups",
+        type: ChannelType.GuildText,
+        parent: category.id,
+        topic: "Use /league post-signup here. Players click the button to register.",
+      }),
+      interaction.guild.channels.create({
+        name: "results",
+        type: ChannelType.GuildText,
+        parent: category.id,
+        topic: "Auto-posted by the bot whenever a set is recorded.",
+      }),
+      interaction.guild.channels.create({
+        name: "league-chat",
+        type: ChannelType.GuildText,
+        parent: category.id,
+        topic: "General league chat. Match scheduling, banter, etc.",
+      }),
+    ]);
+
+    const role = await interaction.guild.roles.create({
+      name: "League Player",
+      mentionable: true,
+      permissions: new PermissionsBitField(),
+      reason: "Created by /league bootstrap-server",
+    });
+
+    const [infoChan, signupChan, resultsChan, chatChan] = channels;
+
+    const lines = [
+      `✅ **${categoryName}** scaffolded.`,
+      ``,
+      `📌 <#${infoChan!.id}> — league-info`,
+      `📝 <#${signupChan!.id}> — signups`,
+      `🏆 <#${resultsChan!.id}> — results (auto-announce target)`,
+      `💬 <#${chatChan!.id}> — league-chat`,
+      ``,
+      `🎭 Role: <@&${role.id}> (mentionable, no extra perms)`,
+      ``,
+      `**Next**: set this env var on your bot host so result announcements land in the right channel:`,
+      `\`RESULTS_CHANNEL_ID=${resultsChan!.id}\``,
+    ];
+
+    await interaction.editReply(lines.join("\n"));
+  } catch (err) {
+    await interaction.editReply(
+      `Bootstrap failed: ${(err as Error).message}. The bot may need additional permissions.`,
+    );
+  }
+}
 
 async function previewSeason(interaction: ChatInputCommandInteraction) {
   const roundId = interaction.options.getString("round-id", true);

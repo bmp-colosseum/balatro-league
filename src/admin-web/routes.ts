@@ -249,9 +249,9 @@ Dave"></textarea>
       <form method="post" action="/admin/players/bulk-real">
         <label style="flex:1 1 100%">
           Discord IDs
-          <textarea name="lines" rows="8" style="width:100%; font-family:ui-monospace, monospace; background:var(--surface-2); border:1px solid var(--border); color:var(--text); padding:8px; border-radius:4px" placeholder="152639712937508869
-505573604755505163 -> Common 1
-123456789012345678 -> Rare 2"></textarea>
+          <textarea name="lines" rows="8" style="width:100%; font-family:ui-monospace, monospace; background:var(--surface-2); border:1px solid var(--border); color:var(--text); padding:8px; border-radius:4px" placeholder="111111111111111111
+222222222222222222 -> Common 1
+333333333333333333 -> Rare 2"></textarea>
         </label>
         <label>Default division
           <select name="defaultDivision">
@@ -664,7 +664,7 @@ router.get("/rankings", async (req, res) => {
         <label style="flex:1 1 100%">
           <textarea name="lines" rows="6" style="width:100%; font-family:ui-monospace, monospace; background:var(--surface-2); border:1px solid var(--border); color:var(--text); padding:8px; border-radius:4px" placeholder="Alice,540,Glass tier
 Bob,210
-152639712937508869,720,Polychrome"></textarea>
+111111111111111111,720,Polychrome"></textarea>
         </label>
         <button type="submit">Apply</button>
       </form>
