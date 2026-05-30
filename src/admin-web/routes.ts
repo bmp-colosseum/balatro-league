@@ -1401,13 +1401,16 @@ router.get("/seasons", async (req, res) => {
         addRow('', 1, list.children.length);
         renumber();
       });
-      document.getElementById('load-template').addEventListener('change', (e) => {
-        const id = e.target.value;
-        if (!id) return;
-        const t = TEMPLATES.find(x => x.id === id);
-        if (t) renderRows(t.config);
-        e.target.value = '';
-      });
+      const loadSelect = document.getElementById('load-template');
+      if (loadSelect) {
+        loadSelect.addEventListener('change', (e) => {
+          const id = e.target.value;
+          if (!id) return;
+          const t = TEMPLATES.find(x => x.id === id);
+          if (t) renderRows(t.config);
+          e.target.value = '';
+        });
+      }
       document.getElementById('save-template').addEventListener('click', () => {
         const nameInput = document.getElementById('save-template-name');
         const name = nameInput.value.trim();
