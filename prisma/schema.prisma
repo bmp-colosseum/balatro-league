@@ -1,0 +1,211 @@
+// Balatro League schema.
+//
+// Domain shape:
+//   Season has many Divisions. Division has many Players (via DivisionMember).
+//   Inside a Division, every pair of players has exactly one Pairing (the 2-game series, best-of-2).
+//   Result is stored as games won by A and B; sum is always 2 once played.
+//   A Pairing only counts toward standings once its status is CONFIRMED.
+//
+// Scoring (points per pairing):
+//   2-0 win → 3 pts winner, 0 pts loser
+//   1-1 draw → 1 pt each
+//   Standings sort by total points (desc). Tiebreakers (in order):
+//     1. Head-to-head points between tied players
+//     2. Shootout (admin-resolved, recorded via /league force-result)
+//
+// Division structure (a pyramid by joker rarity):
+//   Legendary x1, Rare x4, Uncommon x6, Common x6  (17 divisions, 5 players each = ~85 player capacity)
+// Promotion/relegation at season end:
+//   Top of any division promotes to a division of the next-higher rarity (Common→Uncommon, etc.)
+//   Bottom of any division relegates to the next-lower rarity (Legendary→Rare, etc.; Common bottoms stay).
+//   Slot assignment across rarities is NOT 1:1 (e.g. 6 Uncommon winners but only 4 Rare divisions),
+//   so the bot surfaces season-end standings and admins finalize placements via /league assign-players.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Swap provider to "postgresql" in prod; DATABASE_URL controls the actual connection.
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Player {
+  id              String   @id @default(cuid())
+  discordId       String   @unique
+  displayName     String
+  createdAt       DateTime @default(now())
+  // Admin-managed skill rating. Used by auto-seed-by-rating to place players into divisions.
+  // Null = unrated (auto-seed treats as 0 / lowest).
+  rating          Int?
+  // Optional note explaining the rating (e.g. "Balatro MP MMR 540, Glass tier")
+  ratingNote      String?
+
+  memberships     DivisionMember[]
+  pairingsAsA     Pairing[] @relation("PairingPlayerA")
+  pairingsAsB     Pairing[] @relation("PairingPlayerB")
+  reportedPairings Pairing[] @relation("PairingReporter")
+
+  @@index([rating])
+}
+
+model Season {
+  id          String   @id @default(cuid())
+  name        String
+  startedAt   DateTime @default(now())
+  // Hard deadline. Season auto-ends at min(deadline, all-pairings-confirmed).
+  deadline    DateTime?
+  endedAt     DateTime?
+  isActive    Boolean  @default(true)
+  // Target players per division. Driving fewer games per player → use 4 instead of 5.
+  targetGroupSize Int  @default(5)
+  // Don't auto-create a division with fewer than this many players (smaller leftover groups
+  // are flagged as warnings instead of becoming tiny divisions).
+  minGroupSize    Int  @default(3)
+
+  divisions   Division[]
+
+  @@index([isActive])
+}
+
+enum SignupStatus {
+  OPEN
+  CLOSED  // signups locked; awaiting build-season
+  BUILT   // converted into a Season
+}
+
+// A round of signups. Lives independently of Season so signups for "next season"
+// can be collected while the current season is still running.
+model SignupRound {
+  id                String       @id @default(cuid())
+  name              String
+  guildId           String
+  channelId         String       // channel the signup embed lives in
+  messageId         String       // the signup message we re-edit as people sign up
+  status            SignupStatus @default(OPEN)
+  openedAt          DateTime     @default(now())
+  closedAt          DateTime?
+  resultingSeasonId String?      // set when build-season turns this into a Season
+
+  signups           Signup[]
+
+  @@index([status])
+}
+
+model Signup {
+  id          String      @id @default(cuid())
+  roundId     String
+  discordId   String
+  displayName String
+  mpUsername  String?
+  mpMmr       Int?
+  withdrawn   Boolean     @default(false)
+  signedUpAt  DateTime    @default(now())
+
+  round       SignupRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, discordId])
+  @@index([roundId, withdrawn])
+}
+
+// Binding between a Discord role and a bot permission tier.
+// Multiple Discord roles can map to the same tier (e.g. two separate "Mod" roles).
+enum PermissionTier {
+  OWNER   // full power, including destructive ops
+  ADMIN   // season/division management, force-resolve disputes
+  MOD     // dispute resolution, light moderation
+}
+
+model RoleBinding {
+  id            String         @id @default(cuid())
+  discordRoleId String         @unique
+  tier          PermissionTier
+  createdAt     DateTime       @default(now())
+  createdBy     String?        // discord user id of who set it
+
+  @@index([tier])
+}
+
+enum Rarity {
+  LEGENDARY  // tier 1 (top)
+  RARE
+  UNCOMMON
+  COMMON     // bottom
+}
+
+model Division {
+  id          String   @id @default(cuid())
+  seasonId    String
+  rarity      Rarity
+  // Index within the rarity tier (1-based). Legendary: 1. Rare: 1-4. Uncommon: 1-6. Common: 1-6.
+  // Sibling divisions at the same rarity are parallel (no rank between them).
+  groupNumber Int
+  // Display label, e.g. "Rare 3", "Legendary"
+  name        String
+  // Optional Discord role + channel IDs the bot manages for this division
+  discordRoleId    String?
+  discordChannelId String?
+
+  season      Season            @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  members     DivisionMember[]
+  pairings    Pairing[]
+
+  @@unique([seasonId, rarity, groupNumber])
+  @@index([seasonId])
+}
+
+enum DivisionMemberStatus {
+  ACTIVE
+  DROPPED   // quit mid-season; existing pairings stay, unplayed ones become forfeits at admin's option
+}
+
+model DivisionMember {
+  id            String              @id @default(cuid())
+  divisionId    String
+  playerId      String
+  joinedAt      DateTime            @default(now())
+  status        DivisionMemberStatus @default(ACTIVE)
+  droppedAt     DateTime?
+  dropoutReason String?
+
+  division      Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  player        Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([divisionId, playerId])
+  @@index([playerId])
+  @@index([divisionId, status])
+}
+
+enum PairingStatus {
+  PENDING    // submitted by reporter, awaiting opponent confirm
+  CONFIRMED  // opponent confirmed OR admin force-resolved → counts in standings
+  DISPUTED   // opponent rejected → needs admin attention
+  CANCELLED  // admin voided
+}
+
+// A 2-game series between two players within a Division. Exactly one row per unordered pair.
+model Pairing {
+  id           String        @id @default(cuid())
+  divisionId   String
+  playerAId    String        // canonical: playerA.id < playerB.id (lexicographic) so the pair is unique
+  playerBId    String
+  // Games won by A and by B across the 2-game series. Together they sum to 2 (or 0 if not yet reported).
+  gamesWonA    Int           @default(0)
+  gamesWonB    Int           @default(0)
+  status       PairingStatus @default(PENDING)
+  reporterId   String?       // which player submitted /report
+  reportedAt   DateTime?
+  confirmedAt  DateTime?
+  // If status=CONFIRMED via admin override, who and why
+  adminOverrideBy String?
+  adminOverrideReason String?
+
+  division     Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  playerA      Player   @relation("PairingPlayerA", fields: [playerAId], references: [id])
+  playerB      Player   @relation("PairingPlayerB", fields: [playerBId], references: [id])
+  reporter     Player?  @relation("PairingReporter", fields: [reporterId], references: [id])
+
+  @@unique([divisionId, playerAId, playerBId])
+  @@index([divisionId, status])
+}

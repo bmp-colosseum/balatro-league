@@ -1,0 +1,73 @@
+// Test seed: drops you and a friend into a single test division so /report has something to find.
+//
+// Usage:
+//   tsx src/scripts/seed-test.ts <yourDiscordId> <opponentDiscordId> [yourName] [opponentName]
+//
+// Safe to re-run — it upserts and won't duplicate.
+
+import { prisma } from "../db.js";
+
+const [yourId, opponentId, yourName = "You", opponentName = "Opponent"] = process.argv.slice(2);
+
+if (!yourId || !opponentId) {
+  console.error(
+    "Usage: tsx src/scripts/seed-test.ts <yourDiscordId> <opponentDiscordId> [yourName] [opponentName]",
+  );
+  process.exit(1);
+}
+
+const season = await prisma.season.upsert({
+  where: { id: "test-season" },
+  create: {
+    id: "test-season",
+    name: "Test Season",
+    deadline: new Date("2026-06-13T18:00:00Z"),
+    isActive: true,
+  },
+  update: { isActive: true },
+});
+
+const division = await prisma.division.upsert({
+  where: {
+    seasonId_rarity_groupNumber: {
+      seasonId: season.id,
+      rarity: "COMMON",
+      groupNumber: 1,
+    },
+  },
+  create: {
+    seasonId: season.id,
+    rarity: "COMMON",
+    groupNumber: 1,
+    name: "Test Common 1",
+  },
+  update: {},
+});
+
+const me = await prisma.player.upsert({
+  where: { discordId: yourId },
+  create: { discordId: yourId, displayName: yourName },
+  update: { displayName: yourName },
+});
+
+const opp = await prisma.player.upsert({
+  where: { discordId: opponentId },
+  create: { discordId: opponentId, displayName: opponentName },
+  update: { displayName: opponentName },
+});
+
+for (const p of [me, opp]) {
+  await prisma.divisionMember.upsert({
+    where: { divisionId_playerId: { divisionId: division.id, playerId: p.id } },
+    create: { divisionId: division.id, playerId: p.id },
+    update: {},
+  });
+}
+
+console.log("Seeded test data:");
+console.log(`  Season:   ${season.name} (${season.id})`);
+console.log(`  Division: ${division.name} (${division.id})`);
+console.log(`  Players:  ${me.displayName} (${me.discordId}) vs ${opp.displayName} (${opp.discordId})`);
+console.log("\nNow try `/report` in your Discord server.");
+
+await prisma.$disconnect();
