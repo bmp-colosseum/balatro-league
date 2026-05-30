@@ -30,8 +30,9 @@ export default async function MePage({
     ? await prisma.player.findUnique({ where: { discordId: user.discordId } })
     : null;
 
-  // Auto-sync display name from Discord — see prior commit for rationale.
-  if (player && user.name && player.displayName !== user.name) {
+  // Auto-sync display name from Discord — only if the player hasn't set
+  // their own override. Once they do, this stops touching it.
+  if (player && user.name && !player.hasCustomDisplayName && player.displayName !== user.name) {
     player = await prisma.player.update({
       where: { discordId: user.discordId },
       data: { displayName: user.name },
@@ -83,6 +84,36 @@ export default async function MePage({
   async function logoutAction() {
     "use server";
     await signOut({ redirectTo: "/standings" });
+  }
+
+  async function setCustomNameAction(formData: FormData) {
+    "use server";
+    const session = await auth();
+    const discordId = (session?.user as { discordId?: string } | undefined)?.discordId;
+    if (!discordId) return;
+    const name = String(formData.get("displayName") ?? "").trim();
+    if (!name) return;
+    await prisma.player.update({
+      where: { discordId },
+      data: { displayName: name, hasCustomDisplayName: true },
+    });
+    revalidatePath("/me");
+  }
+
+  async function resetToDiscordNameAction() {
+    "use server";
+    const session = await auth();
+    const discordId = (session?.user as { discordId?: string } | undefined)?.discordId;
+    const discordName = (session?.user as { name?: string } | undefined)?.name;
+    if (!discordId) return;
+    await prisma.player.update({
+      where: { discordId },
+      data: {
+        hasCustomDisplayName: false,
+        ...(discordName ? { displayName: discordName } : {}),
+      },
+    });
+    revalidatePath("/me");
   }
 
   async function reportAction(formData: FormData) {
@@ -145,6 +176,35 @@ export default async function MePage({
         {err && (
           <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c" }}>
             {err}
+          </div>
+        )}
+
+        {player && (
+          <div className="card">
+            <strong>Display name</strong>
+            <p className="muted" style={{ fontSize: 12 }}>
+              {player.hasCustomDisplayName
+                ? <>Currently using your custom name <strong>{player.displayName}</strong>. To switch back to your Discord username (auto-updates when you change it on Discord), reset below.</>
+                : <>Auto-synced from your Discord username (<strong>{player.displayName}</strong>). Set your own below if you want it shown differently in standings/profiles.</>}
+            </p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <form action={setCustomNameAction} style={{ display: "flex", gap: 6, flex: "1 1 280px" }}>
+                <input
+                  type="text"
+                  name="displayName"
+                  defaultValue={player.displayName}
+                  required
+                  maxLength={64}
+                  style={{ flex: 1 }}
+                />
+                <button type="submit">Save custom name</button>
+              </form>
+              {player.hasCustomDisplayName && (
+                <form action={resetToDiscordNameAction}>
+                  <button type="submit" className="secondary">↻ Reset to Discord name</button>
+                </form>
+              )}
+            </div>
           </div>
         )}
 
