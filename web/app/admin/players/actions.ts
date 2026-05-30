@@ -5,7 +5,63 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
+import { announceResult } from "@/lib/announce";
 import { placePlayerInDivision } from "@/lib/division-membership";
+
+type Result = "2-0" | "1-1" | "0-2";
+
+function gamesFromResult(r: Result): { a: number; b: number } {
+  if (r === "2-0") return { a: 2, b: 0 };
+  if (r === "0-2") return { a: 0, b: 2 };
+  return { a: 1, b: 1 };
+}
+
+// Admin records a set between two active members of a division. Upserts
+// the Pairing as CONFIRMED with this admin's user id stamped on
+// adminOverrideBy. Mirrors /admin/divisions/[id] recordSet but invocable
+// from the per-player view so admin doesn't have to navigate away.
+export async function recordSetForPlayer(formData: FormData) {
+  await requireAdmin();
+  const divisionId = String(formData.get("divisionId") ?? "");
+  const playerId = String(formData.get("playerId") ?? "");
+  const opponentId = String(formData.get("opponentId") ?? "");
+  const result = String(formData.get("result") ?? "") as Result;
+  if (!divisionId || !playerId || !opponentId || !["2-0", "1-1", "0-2"].includes(result)) return;
+  if (playerId === opponentId) return;
+
+  const [canonA, canonB] = playerId < opponentId ? [playerId, opponentId] : [opponentId, playerId];
+  const playerIsA = playerId === canonA;
+  const games = gamesFromResult(result);
+  const gamesWonA = playerIsA ? games.a : games.b;
+  const gamesWonB = playerIsA ? games.b : games.a;
+
+  const recorded = await prisma.pairing.upsert({
+    where: { divisionId_playerAId_playerBId: { divisionId, playerAId: canonA, playerBId: canonB } },
+    create: {
+      divisionId,
+      playerAId: canonA,
+      playerBId: canonB,
+      gamesWonA,
+      gamesWonB,
+      status: "CONFIRMED",
+      reportedAt: new Date(),
+      confirmedAt: new Date(),
+      adminOverrideBy: "admin-players-page",
+      adminOverrideReason: "recorded via /admin/players",
+    },
+    update: {
+      gamesWonA,
+      gamesWonB,
+      status: "CONFIRMED",
+      confirmedAt: new Date(),
+      adminOverrideBy: "admin-players-page",
+      adminOverrideReason: "recorded via /admin/players (overwrite)",
+    },
+  });
+  announceResult(recorded.id).catch(() => {});
+  revalidatePath("/admin/players");
+  revalidatePath(`/admin/divisions/${divisionId}`);
+}
 
 const MOCK_PREFIX = "mock-";
 

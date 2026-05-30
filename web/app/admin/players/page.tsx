@@ -5,7 +5,7 @@ import { tierColors } from "@/lib/tier-colors";
 import { computeStandings } from "@/lib/standings";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
-import { addFakePlayer, deletePlayer, dropPlayer, reinstatePlayer } from "./actions";
+import { addFakePlayer, deletePlayer, dropPlayer, recordSetForPlayer, reinstatePlayer } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +85,7 @@ export default async function AdminPlayersPage({
                   <th>Pts</th>
                   <th>W-D-L</th>
                   <th>Rating</th>
-                  <th>Discord</th>
+                  <th>Record/override result</th>
                   <th></th>
                 </tr>
               </thead>
@@ -94,6 +94,7 @@ export default async function AdminPlayersPage({
                   <tr><td colSpan={8} className="muted">No active players in this division.</td></tr>
                 ) : active.map((m) => {
                   const s = standingByPlayer.get(m.playerId);
+                  const otherActives = active.filter((o) => o.playerId !== m.playerId);
                   return (
                     <tr key={m.id}>
                       <td style={{ width: 24 }}>{s && s.rank <= 3 ? ["🥇", "🥈", "🥉"][s.rank - 1] : ""}</td>
@@ -101,12 +102,31 @@ export default async function AdminPlayersPage({
                         <Link href={`/profile/${m.player.id}`} style={{ color: "var(--text)" }}>
                           <strong>{m.player.displayName}</strong>
                         </Link>
+                        <div className="muted" style={{ fontSize: 10 }}>{m.player.discordId}</div>
                       </td>
                       <td>{s?.rank ?? "—"}</td>
                       <td><strong>{s?.points ?? 0}</strong></td>
                       <td>{s ? `${s.wins}-${s.draws}-${s.losses}` : "—"}</td>
                       <td>{m.player.rating ?? <span className="muted">unranked</span>}</td>
-                      <td><span className="muted" style={{ fontSize: 11 }}>{m.player.discordId}</span></td>
+                      <td>
+                        <form action={recordSetForPlayer} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                          <input type="hidden" name="divisionId" value={division.id} />
+                          <input type="hidden" name="playerId" value={m.player.id} />
+                          <span className="muted" style={{ fontSize: 11 }}>vs</span>
+                          <select name="opponentId" required style={{ fontSize: 11, maxWidth: 140 }}>
+                            <option value="">—</option>
+                            {otherActives.map((o) => (
+                              <option key={o.playerId} value={o.playerId}>{o.player.displayName}</option>
+                            ))}
+                          </select>
+                          <select name="result" defaultValue="2-0" style={{ fontSize: 11 }}>
+                            <option value="2-0">2-0 (won)</option>
+                            <option value="1-1">1-1</option>
+                            <option value="0-2">0-2 (lost)</option>
+                          </select>
+                          <button type="submit" className="secondary" style={{ fontSize: 11 }}>Record</button>
+                        </form>
+                      </td>
                       <td>
                         <form action={dropPlayer} style={{ display: "inline-block" }}>
                           <input type="hidden" name="playerId" value={m.player.id} />
