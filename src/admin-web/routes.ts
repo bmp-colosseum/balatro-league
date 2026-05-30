@@ -1,7 +1,8 @@
 import { Router, type Request, type Response } from "express";
 import { prisma } from "../db.js";
 import { clearMockData, isMockPlayer, makeRng, MOCK_PREFIX, simulateDivisionPairings } from "../mock.js";
-import { parseTierConfig, PLAYERS_PER_DIVISION, tiersToText, DEFAULT_TIERS } from "../pyramid.js";
+import { parseTierConfig, PLAYERS_PER_DIVISION, tiersToText, DEFAULT_TIERS, type TierConfig } from "../pyramid.js";
+import { deleteTemplate, listTemplates, preferredDefault, recordLastUsed, saveTemplate } from "../tier-templates.js";
 import { gamesFromResult, parsePairingResult } from "../scoring.js";
 import { announceResult } from "../announce.js";
 import { tryGetDiscordClient } from "../discord.js";
@@ -1328,21 +1329,111 @@ router.get("/seasons", async (req, res) => {
     </div>`;
   });
 
+  const templates = await listTemplates();
+  const initialTiers = await preferredDefault();
+  // Embed all templates as JSON for the client-side switcher
+  const templatesJson = JSON.stringify(
+    templates.map((t) => ({ id: t.id, name: t.name, config: t.config })),
+  );
+
+  const tierRowsHtml = initialTiers.map(
+    (t, i) => html`<div class="tier-row" data-row-index="${i}">
+      <span class="tier-pos">${i + 1}.</span>
+      <input type="text" name="tier_name[]" value="${t.name}" placeholder="Tier name" required />
+      <input type="number" name="tier_count[]" value="${t.divisionCount}" min="1" max="50" required />
+      <button type="button" class="secondary tier-up" title="Move up">▲</button>
+      <button type="button" class="secondary tier-down" title="Move down">▼</button>
+      <button type="button" class="danger tier-remove" title="Remove">✕</button>
+    </div>`,
+  );
+
+  const templateOptions = templates.map(
+    (t) => html`<option value="${t.id}">${t.isLastUsed ? "★ " : ""}${t.name}</option>`,
+  );
+
+  const editorStyles = raw(`
+    .tier-row { display: flex; gap: 8px; align-items: center; padding: 6px 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; margin-bottom: 6px; }
+    .tier-row .tier-pos { color: var(--muted); width: 22px; font-variant-numeric: tabular-nums; }
+    .tier-row input[type="text"] { flex: 1 1 auto; }
+    .tier-row input[type="number"] { width: 80px; }
+    .tier-row button { padding: 4px 8px; font-size: 12px; }
+  `);
+
+  const editorScript = raw(`
+    (function() {
+      const TEMPLATES = ${templatesJson};
+      const list = document.getElementById('tier-list');
+      const tpl = document.getElementById('tier-row-template');
+
+      function renderRows(configs) {
+        list.innerHTML = '';
+        configs.forEach((c, i) => addRow(c.name, c.divisionCount, i));
+        renumber();
+      }
+      function addRow(name, count, idx) {
+        const node = tpl.content.firstElementChild.cloneNode(true);
+        node.querySelector('input[name="tier_name[]"]').value = name || '';
+        node.querySelector('input[name="tier_count[]"]').value = count || 1;
+        node.dataset.rowIndex = idx;
+        list.appendChild(node);
+      }
+      function renumber() {
+        Array.from(list.children).forEach((row, i) => {
+          row.dataset.rowIndex = i;
+          row.querySelector('.tier-pos').textContent = (i + 1) + '.';
+        });
+      }
+      list.addEventListener('click', (e) => {
+        const row = e.target.closest('.tier-row');
+        if (!row) return;
+        if (e.target.classList.contains('tier-remove')) {
+          if (list.children.length > 1) row.remove();
+          renumber();
+        } else if (e.target.classList.contains('tier-up')) {
+          if (row.previousElementSibling) row.parentNode.insertBefore(row, row.previousElementSibling);
+          renumber();
+        } else if (e.target.classList.contains('tier-down')) {
+          if (row.nextElementSibling) row.parentNode.insertBefore(row.nextElementSibling, row);
+          renumber();
+        }
+      });
+      document.getElementById('add-tier').addEventListener('click', () => {
+        addRow('', 1, list.children.length);
+        renumber();
+      });
+      document.getElementById('load-template').addEventListener('change', (e) => {
+        const id = e.target.value;
+        if (!id) return;
+        const t = TEMPLATES.find(x => x.id === id);
+        if (t) renderRows(t.config);
+        e.target.value = '';
+      });
+      document.getElementById('save-template').addEventListener('click', () => {
+        const name = prompt('Save current tier layout as template. Name?');
+        if (!name) return;
+        const config = Array.from(list.children).map(row => ({
+          name: row.querySelector('input[name="tier_name[]"]').value,
+          divisionCount: parseInt(row.querySelector('input[name="tier_count[]"]').value, 10) || 1,
+        }));
+        const form = document.getElementById('save-template-form');
+        form.querySelector('input[name="templateName"]').value = name;
+        form.querySelector('input[name="config"]').value = JSON.stringify(config);
+        form.submit();
+      });
+    })();
+  `);
+
   const body = html`
     <h2>Seasons</h2>
+    <style>${editorStyles}</style>
 
     <div class="card">
       <strong>Create new season</strong>
-      <p class="muted">Configure the tier pyramid as <code>Name, count</code> per line, top tier first. Created as <strong>inactive</strong> — your current active season is untouched. Use the Activate button below when ready to switch player commands over.</p>
+      <p class="muted">Configure tiers, then submit. Pre-filled with your last-used layout (★). Created as <strong>inactive</strong> — your current active season is untouched.</p>
+
       <form method="post" action="/admin/seasons/create">
         <label>Name <input name="name" required placeholder="Season 2" /></label>
         <label>Deadline (UTC) <input name="deadline" type="datetime-local" /></label>
-        <label style="flex:1 1 100%">Tiers (one per line: <code>Name, divisionCount</code>)
-          <textarea name="tiers" rows="6" style="width:100%; font-family:ui-monospace, monospace; background:var(--surface-2); border:1px solid var(--border); color:var(--text); padding:8px; border-radius:4px" placeholder="Legendary, 1
-Rare, 4
-Uncommon, 6
-Common, 6">${tiersToText(DEFAULT_TIERS)}</textarea>
-        </label>
         <label>Group size <input name="targetGroupSize" type="number" min="2" max="20" value="5" /></label>
         <label>Min group <input name="minGroupSize" type="number" min="2" max="20" value="3" /></label>
         <label>Visibility
@@ -1351,8 +1442,42 @@ Common, 6">${tiersToText(DEFAULT_TIERS)}</textarea>
             <option value="INTERNAL">INTERNAL (admin-only test)</option>
           </select>
         </label>
-        <button type="submit">Create season</button>
+
+        <div style="flex:1 1 100%; margin-top:12px">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px">
+            <strong>Tiers</strong>
+            ${templates.length > 0
+              ? html`<select id="load-template" style="margin-left:auto">
+                  <option value="">— Load template… —</option>
+                  ${templateOptions}
+                </select>`
+              : raw("")}
+            <button type="button" class="secondary" id="save-template">💾 Save current as template</button>
+            <a href="/admin/seasons/templates"><button type="button" class="secondary">Manage templates</button></a>
+          </div>
+          <div id="tier-list">${tierRowsHtml}</div>
+          <button type="button" class="secondary" id="add-tier" style="margin-top:6px">+ Add tier</button>
+          <template id="tier-row-template">
+            <div class="tier-row" data-row-index="0">
+              <span class="tier-pos">1.</span>
+              <input type="text" name="tier_name[]" placeholder="Tier name" required />
+              <input type="number" name="tier_count[]" value="1" min="1" max="50" required />
+              <button type="button" class="secondary tier-up" title="Move up">▲</button>
+              <button type="button" class="secondary tier-down" title="Move down">▼</button>
+              <button type="button" class="danger tier-remove" title="Remove">✕</button>
+            </div>
+          </template>
+        </div>
+
+        <button type="submit" style="margin-top:12px">Create season</button>
       </form>
+
+      <form id="save-template-form" method="post" action="/admin/seasons/templates/save" style="display:none">
+        <input type="hidden" name="templateName" />
+        <input type="hidden" name="config" />
+      </form>
+
+      <script>${editorScript}</script>
     </div>
 
     <div class="grid grid-2">${seasonCards.length ? seasonCards : html`<div class="muted">No seasons yet.</div>`}</div>
@@ -1361,20 +1486,86 @@ Common, 6">${tiersToText(DEFAULT_TIERS)}</textarea>
   send(res, layout({ title: "Seasons", activePath: "/admin/seasons", flash: readFlash(req), body, ...(await sessionContext(req)) }));
 });
 
+// Save current tier layout as a named template (triggered by JS form submit).
+router.post("/seasons/templates/save", async (req, res) => {
+  const name = String(req.body.templateName ?? "").trim();
+  const configJson = String(req.body.config ?? "");
+  if (!name) return redirectWith(res, "/admin/seasons", { err: "Template name required." });
+  try {
+    const parsed = JSON.parse(configJson) as TierConfig[];
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return redirectWith(res, "/admin/seasons", { err: "Template must have at least one tier." });
+    }
+    await saveTemplate(name, parsed);
+    redirectWith(res, "/admin/seasons", { ok: `Template "${name}" saved.` });
+  } catch {
+    redirectWith(res, "/admin/seasons", { err: "Invalid template config." });
+  }
+});
+
+// Manage templates: list, edit names, delete.
+router.get("/seasons/templates", async (req, res) => {
+  const templates = await listTemplates();
+  const rows = templates.map((t) => html`<tr>
+    <td>${t.isLastUsed ? raw('<span class="pill" style="background:rgba(241,196,15,0.2); color:#f1c40f">LAST USED</span> ') : raw("")}<strong>${t.name}</strong></td>
+    <td><span class="muted">${t.config.map((c) => `${c.name}×${c.divisionCount}`).join(" · ")}</span></td>
+    <td>${t.updatedAt.toISOString().slice(0, 10)}</td>
+    <td>
+      <form method="post" action="/admin/seasons/templates/${t.id}/delete" onsubmit="return confirm('Delete template ${t.name}?')" style="display:inline">
+        <button class="danger" type="submit">Delete</button>
+      </form>
+    </td>
+  </tr>`);
+  const body = html`
+    <h2>Tier templates</h2>
+    <p class="muted">Saved layouts for the Create Season form. The ★ Last used template is auto-updated after every season create.</p>
+    <div class="card">
+      <table>
+        <thead><tr><th>Name</th><th>Layout</th><th>Updated</th><th></th></tr></thead>
+        <tbody>${rows.length ? rows : html`<tr><td colspan="4" class="muted">No templates saved yet.</td></tr>`}</tbody>
+      </table>
+      <p style="margin-top:12px"><a href="/admin/seasons">← Back to Seasons</a></p>
+    </div>
+  `;
+  send(res, layout({ title: "Tier templates", activePath: "/admin/seasons", flash: readFlash(req), body, ...(await sessionContext(req)) }));
+});
+
+router.post("/seasons/templates/:id/delete", async (req, res) => {
+  await deleteTemplate(req.params.id!);
+  redirectWith(res, "/admin/seasons/templates", { ok: "Template deleted." });
+});
+
 router.post("/seasons/create", async (req, res) => {
   const name = String(req.body.name ?? "").trim();
   if (!name) return redirectWith(res, "/admin/seasons", { err: "Name required." });
 
-  // Parse the textarea-style tier config (e.g. "Legendary, 1\nRare, 4"). Falls back to DEFAULT_TIERS if empty.
-  const tierConfigs = parseTierConfig(String(req.body.tiers ?? ""));
-  const totalDivisions = tierConfigs.reduce((sum, t) => sum + t.divisionCount, 0);
+  // Parse the structured rows. tier_name[] and tier_count[] arrive as arrays (or single strings).
+  const rawNames = req.body.tier_name;
+  const rawCounts = req.body.tier_count;
+  const names = Array.isArray(rawNames) ? rawNames : rawNames ? [rawNames] : [];
+  const counts = Array.isArray(rawCounts) ? rawCounts : rawCounts ? [rawCounts] : [];
+
+  const tierConfigs: TierConfig[] = [];
+  for (let i = 0; i < names.length; i++) {
+    const tierName = String(names[i] ?? "").trim();
+    const tierCount = parseInt(String(counts[i] ?? "1"), 10);
+    if (!tierName || Number.isNaN(tierCount) || tierCount < 1) continue;
+    tierConfigs.push({ name: tierName, divisionCount: Math.min(50, tierCount) });
+  }
+
+  // Fallback to old-style textarea (legacy compat) or default
+  const fallbackConfigs = tierConfigs.length === 0
+    ? parseTierConfig(String(req.body.tiers ?? ""))
+    : tierConfigs;
+
+  const totalDivisions = fallbackConfigs.reduce((sum, t) => sum + t.divisionCount, 0);
   if (totalDivisions === 0) {
-    return redirectWith(res, "/admin/seasons", { err: "Pyramid must have at least one division." });
+    return redirectWith(res, "/admin/seasons", { err: "Need at least one tier with one division." });
   }
 
   let deadline: Date | null = null;
   if (req.body.deadline) {
-    const d = new Date(req.body.deadline + "Z"); // treat datetime-local as UTC
+    const d = new Date(req.body.deadline + "Z");
     if (!Number.isNaN(d.getTime())) deadline = d;
   }
 
@@ -1382,12 +1573,14 @@ router.post("/seasons/create", async (req, res) => {
   const minGroupSize = Math.max(2, parseInt(req.body.minGroupSize, 10) || 3);
   const visibility: "PUBLIC" | "INTERNAL" = req.body.visibility === "INTERNAL" ? "INTERNAL" : "PUBLIC";
 
-  // Don't auto-deactivate the current active season — admin activates the new one explicitly.
   const season = await prisma.season.create({
     data: { name, deadline, isActive: false, targetGroupSize, minGroupSize, visibility },
   });
-  await createTiersAndDivisions(season.id, tierConfigs);
-  redirectWith(res, "/admin/seasons", { ok: `Created ${name} (inactive, group size ${targetGroupSize}). Use Activate when you're ready to switch player commands to it.` });
+  await createTiersAndDivisions(season.id, fallbackConfigs);
+  // Save the layout we just used as "Last used" so the form pre-fills with it next time
+  await recordLastUsed(fallbackConfigs);
+
+  redirectWith(res, "/admin/seasons", { ok: `Created ${name} (inactive, ${fallbackConfigs.length} tiers, group size ${targetGroupSize}). Use Activate when ready.` });
 });
 
 // CSV exports — one row per player (standings) or one row per pairing.

@@ -130,6 +130,18 @@ model RoleBinding {
   @@index([tier])
 }
 
+// Saved tier layout admins can pick from when creating a season.
+// `config` is JSON-encoded array: [{name, divisionCount}, ...] in order.
+// A magic "Last used" template is auto-upserted after every season create
+// so the form pre-fills with the most recent shape.
+model TierTemplate {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  config    String   // JSON array of TierConfig
+  isLastUsed Boolean @default(false)
+  updatedAt DateTime @updatedAt
+}
+
 // Per-season tier. Position 1 = top of the pyramid (e.g., Legendary).
 // Each tier groups 1+ divisions. Promotion/relegation runs between adjacent positions.
 model Tier {
