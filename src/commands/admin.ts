@@ -1,0 +1,192 @@
+// /admin — admin-only tools that genuinely belong in Discord rather than
+// the web dashboard, because admin context is the live chat:
+// reading a dispute thread + deciding the result + recording it is one
+// continuous flow there, vs context-switching to the web dashboard.
+//
+// All other admin functions (season setup, signups, division assignment,
+// rankings, presets, etc.) live on www.balatroleague.com.
+
+import {
+  MessageFlags,
+  SlashCommandBuilder,
+  type ChatInputCommandInteraction,
+} from "discord.js";
+import { announceResult } from "../announce.js";
+import { prisma } from "../db.js";
+import { requireAdmin } from "../permissions.js";
+import { getOrCreatePlayer } from "../players.js";
+import { gamesFromResult, parsePairingResult } from "../scoring.js";
+import type { SlashCommand } from "./types.js";
+
+const RESULT_CHOICES = [
+  { name: "2-0 (P1 won both)", value: "2-0" },
+  { name: "1-1 (draw)", value: "1-1" },
+  { name: "0-2 (P2 won both)", value: "0-2" },
+] as const;
+
+export const admin: SlashCommand = {
+  data: new SlashCommandBuilder()
+    .setName("admin")
+    .setDescription("Admin tools that make sense in Discord context (dispute resolution).")
+    .addSubcommand((sub) =>
+      sub
+        .setName("record-set")
+        .setDescription("Manually record a CONFIRMED set (e.g. agreed verbally, never reported).")
+        .addUserOption((opt) => opt.setName("p1").setDescription("Player 1").setRequired(true))
+        .addUserOption((opt) => opt.setName("p2").setDescription("Player 2").setRequired(true))
+        .addStringOption((opt) =>
+          opt
+            .setName("result")
+            .setDescription("Result from P1's POV")
+            .setRequired(true)
+            .addChoices(...RESULT_CHOICES),
+        )
+        .addStringOption((opt) =>
+          opt
+            .setName("reason")
+            .setDescription("Why (e.g. 'agreed in DMs', 'shootout', 'dispute resolution')")
+            .setRequired(false),
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("override-result")
+        .setDescription("Force-resolve a disputed set with the correct result.")
+        .addStringOption((opt) =>
+          opt.setName("set-id").setDescription("ID of the disputed set (from the dispute embed)").setRequired(true),
+        )
+        .addStringOption((opt) =>
+          opt
+            .setName("result")
+            .setDescription("Result from playerA's POV")
+            .setRequired(true)
+            .addChoices(...RESULT_CHOICES),
+        )
+        .addStringOption((opt) => opt.setName("reason").setDescription("Why").setRequired(true)),
+    ),
+
+  async execute(interaction: ChatInputCommandInteraction) {
+    if (!(await requireAdmin(interaction))) return;
+    const sub = interaction.options.getSubcommand();
+    if (sub === "record-set") return recordPairing(interaction);
+    if (sub === "override-result") return forceResult(interaction);
+  },
+};
+
+async function recordPairing(interaction: ChatInputCommandInteraction) {
+  const p1User = interaction.options.getUser("p1", true);
+  const p2User = interaction.options.getUser("p2", true);
+  const resultStr = interaction.options.getString("result", true);
+  const reason = interaction.options.getString("reason") ?? undefined;
+  const result = parsePairingResult(resultStr);
+
+  if (!result) {
+    await interaction.reply({ content: `Invalid result \`${resultStr}\`.`, flags: MessageFlags.Ephemeral });
+    return;
+  }
+  if (p1User.id === p2User.id) {
+    await interaction.reply({ content: "P1 and P2 must be different players.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  await interaction.deferReply();
+
+  const activeSeason = await prisma.season.findFirst({ where: { isActive: true } });
+  if (!activeSeason) {
+    await interaction.editReply("No active season.");
+    return;
+  }
+
+  const p1 = await getOrCreatePlayer(p1User);
+  const p2 = await getOrCreatePlayer(p2User);
+
+  const shared = await prisma.divisionMember.findFirst({
+    where: { playerId: p1.id, division: { seasonId: activeSeason.id } },
+    include: { division: { include: { members: { where: { playerId: p2.id } } } } },
+  });
+  if (!shared || shared.division.members.length === 0) {
+    await interaction.editReply(
+      `${p1User.username} and ${p2User.username} aren't in the same division this season.`,
+    );
+    return;
+  }
+  const division = shared.division;
+
+  const [playerAId, playerBId] = p1.id < p2.id ? [p1.id, p2.id] : [p2.id, p1.id];
+  const p1IsA = p1.id === playerAId;
+  const games = gamesFromResult(result);
+  const gamesWonA = p1IsA ? games.a : games.b;
+  const gamesWonB = p1IsA ? games.b : games.a;
+
+  const upserted = await prisma.pairing.upsert({
+    where: { divisionId_playerAId_playerBId: { divisionId: division.id, playerAId, playerBId } },
+    create: {
+      divisionId: division.id,
+      playerAId,
+      playerBId,
+      gamesWonA,
+      gamesWonB,
+      status: "CONFIRMED",
+      reporterId: null,
+      reportedAt: new Date(),
+      confirmedAt: new Date(),
+      adminOverrideBy: interaction.user.id,
+      adminOverrideReason: reason ?? "admin record-set",
+    },
+    update: {
+      gamesWonA,
+      gamesWonB,
+      status: "CONFIRMED",
+      confirmedAt: new Date(),
+      adminOverrideBy: interaction.user.id,
+      adminOverrideReason: reason ?? "admin record-set (overwrite)",
+    },
+  });
+  announceResult(upserted.id).catch(() => {});
+
+  await interaction.editReply(
+    `Recorded: **${p1User.username} ${games.a}-${games.b} ${p2User.username}** in **${division.name}**.` +
+      (reason ? `\nReason: ${reason}` : ""),
+  );
+}
+
+async function forceResult(interaction: ChatInputCommandInteraction) {
+  const pairingId = interaction.options.getString("set-id", true);
+  const resultStr = interaction.options.getString("result", true);
+  const reason = interaction.options.getString("reason", true);
+  const result = parsePairingResult(resultStr);
+
+  if (!result) {
+    await interaction.reply({ content: `Invalid result \`${resultStr}\`.`, flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  await interaction.deferReply();
+
+  const pairing = await prisma.pairing.findUnique({
+    where: { id: pairingId },
+    include: { playerA: true, playerB: true, division: true },
+  });
+  if (!pairing) {
+    await interaction.editReply(`No set with id \`${pairingId}\`.`);
+    return;
+  }
+
+  const games = gamesFromResult(result);
+  await prisma.pairing.update({
+    where: { id: pairingId },
+    data: {
+      gamesWonA: games.a,
+      gamesWonB: games.b,
+      status: "CONFIRMED",
+      confirmedAt: new Date(),
+      adminOverrideBy: interaction.user.id,
+      adminOverrideReason: reason,
+    },
+  });
+  announceResult(pairingId).catch(() => {});
+
+  await interaction.editReply(
+    `Force-resolved: **${pairing.playerA.displayName} ${games.a}-${games.b} ${pairing.playerB.displayName}** in **${pairing.division.name}**.\nReason: ${reason}`,
+  );
+}
