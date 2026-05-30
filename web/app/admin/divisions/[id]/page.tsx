@@ -7,7 +7,14 @@ import { tierColors } from "@/lib/tier-colors";
 import { isMockPlayer } from "@/lib/mock";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
-import { addDivisionMemberByDiscordId, recordSet, overridePairing, deletePairing } from "./actions";
+import {
+  addDivisionMemberByDiscordId,
+  bulkAddMembers,
+  bulkRecordPairings,
+  deletePairing,
+  overridePairing,
+  recordSet,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +23,13 @@ export default async function AdminDivisionDetail({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ err?: string }>;
+  searchParams: Promise<{ err?: string; bulk?: string }>;
 }) {
   await requireAdmin();
   const { id } = await params;
-  const { err } = await searchParams;
+  const { err, bulk } = await searchParams;
+  // bulk is a URL-encoded query string like "added=5&skipped=1&failed=123,456" or "recorded=8&errors=..."
+  const bulkSummary = bulk ? new URLSearchParams(decodeURIComponent(bulk)) : null;
 
   const division = await prisma.division.findUnique({
     where: { id },
@@ -86,6 +95,62 @@ export default async function AdminDivisionDetail({
             {err}
           </div>
         )}
+
+        {bulkSummary && (
+          <div className="card" style={{ borderColor: "#2ecc71" }}>
+            <strong>Bulk import done</strong>
+            <ul className="muted" style={{ marginTop: 4 }}>
+              {bulkSummary.get("added") && <li>{bulkSummary.get("added")} member(s) added</li>}
+              {bulkSummary.get("skipped") && <li>{bulkSummary.get("skipped")} line(s) skipped (no Discord ID found)</li>}
+              {bulkSummary.get("failed") && bulkSummary.get("failed")!.length > 0 && (
+                <li style={{ color: "#e74c3c" }}>failed lookups: {bulkSummary.get("failed")}</li>
+              )}
+              {bulkSummary.get("recorded") && <li>{bulkSummary.get("recorded")} pairing(s) recorded</li>}
+              {bulkSummary.get("errors") && bulkSummary.get("errors")!.length > 0 && (
+                <li style={{ color: "#e74c3c" }}>line errors: {bulkSummary.get("errors")}</li>
+              )}
+            </ul>
+          </div>
+        )}
+
+        <details className="card">
+          <summary style={{ cursor: "pointer" }}><strong>Bulk import members</strong></summary>
+          <p className="muted" style={{ marginTop: 8 }}>
+            Paste one Discord ID per line. Mentions like <code>&lt;@123456&gt;</code> work too —
+            we just extract the digits. Lines starting with <code>#</code> are skipped.
+          </p>
+          <form action={bulkAddMembers}>
+            <input type="hidden" name="divisionId" value={division.id} />
+            <textarea
+              name="lines"
+              rows={8}
+              placeholder={"123456789012345678\n234567890123456789\n# comment lines are ok\n<@345678901234567890>"}
+              style={{ width: "100%", fontFamily: "ui-monospace, monospace", fontSize: 12 }}
+              required
+            />
+            <button type="submit" style={{ marginTop: 6 }}>Add all to division</button>
+          </form>
+        </details>
+
+        <details className="card">
+          <summary style={{ cursor: "pointer" }}><strong>Bulk record played pairings</strong></summary>
+          <p className="muted" style={{ marginTop: 8 }}>
+            One line per played set: <code>discordA discordB RESULT</code> where RESULT is{" "}
+            <code>2-0</code>, <code>1-1</code>, or <code>0-2</code> (A's perspective).
+            Both players must already be members of this division.
+          </p>
+          <form action={bulkRecordPairings}>
+            <input type="hidden" name="divisionId" value={division.id} />
+            <textarea
+              name="lines"
+              rows={8}
+              placeholder={"123456789012345678 234567890123456789 2-0\n123456789012345678 345678901234567890 1-1"}
+              style={{ width: "100%", fontFamily: "ui-monospace, monospace", fontSize: 12 }}
+              required
+            />
+            <button type="submit" style={{ marginTop: 6 }}>Record all pairings</button>
+          </form>
+        </details>
 
         <div className="card">
           <strong>Add player by Discord ID</strong>
