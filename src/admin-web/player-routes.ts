@@ -61,14 +61,44 @@ playerRouter.get("/me", async (req, res) => {
   </div>`;
 
   if (!player) {
+    // Show a self-serve signup button if there's an open signup round
+    const openRound = await prisma.signupRound.findFirst({
+      where: { status: "OPEN" },
+      orderBy: { openedAt: "desc" },
+      include: {
+        signups: { where: { discordId: u.discordId } },
+      },
+    });
+    const alreadySignedUp = openRound && openRound.signups.some((s) => !s.withdrawn);
+
+    let signupCard;
+    if (openRound && alreadySignedUp) {
+      signupCard = html`<div class="card" style="border-left:3px solid var(--success)">
+        <strong>✅ Signed up for ${openRound.name}</strong>
+        <p class="muted">You're on the list. An admin will place you in a division when the round is built into a season.</p>
+        <form method="post" action="/me/withdraw-signup/${openRound.id}" onsubmit="return confirm('Withdraw from this signup round?')">
+          <button class="secondary" type="submit">Withdraw</button>
+        </form>
+      </div>`;
+    } else if (openRound) {
+      signupCard = html`<div class="card" style="border-left:3px solid var(--accent-2)">
+        <strong>📝 Sign up for ${openRound.name}</strong>
+        <p class="muted">An admin is collecting signups for the next season. Click below to add yourself.</p>
+        <form method="post" action="/me/join-signup/${openRound.id}">
+          <button type="submit">Sign me up</button>
+        </form>
+      </div>`;
+    } else {
+      signupCard = html`<div class="card">
+        <strong>No active signup round</strong>
+        <p>An admin will open one when registration is ready. Check back, or ask in your Discord server.</p>
+      </div>`;
+    }
+
     const body = html`
       <h2>Your profile</h2>
       ${identityCard}
-      <div class="card">
-        <strong>Not in the league yet</strong>
-        <p>You're logged in, but no league profile is linked to <code>${u.discordId}</code>.</p>
-        <p>Sign up via the Discord bot's Sign Up button, or ask an admin to add you.</p>
-      </div>
+      ${signupCard}
     `;
     return res.set("Content-Type", "text/html; charset=utf-8").send(
       layout({ title: "Your profile", activePath: "/me", flash: flashMessage, body, ...(await sessionContext(req)) }).value,
@@ -273,6 +303,40 @@ playerRouter.post("/me/confirm/:id", async (req, res) => {
   if (!me) return redirectMe(res, { err: "You're not a Player yet." });
   const r = await confirmSet(req.params.id!, me.id);
   redirectMe(res, r.ok ? { ok: "Confirmed." } : { err: r.reason });
+});
+
+// Self-service signup: user clicks "Sign me up" on /me when there's an open round.
+playerRouter.post("/me/join-signup/:roundId", async (req, res) => {
+  const u = req.session.user!;
+  const roundId = req.params.roundId!;
+
+  const round = await prisma.signupRound.findUnique({ where: { id: roundId } });
+  if (!round) return redirectMe(res, { err: "Signup round not found." });
+  if (round.status !== "OPEN") return redirectMe(res, { err: `Sign-ups are ${round.status.toLowerCase()}.` });
+
+  const existing = await prisma.signup.findUnique({
+    where: { roundId_discordId: { roundId, discordId: u.discordId } },
+  });
+  if (existing) {
+    await prisma.signup.update({ where: { id: existing.id }, data: { withdrawn: false } });
+  } else {
+    await prisma.signup.create({
+      data: { roundId, discordId: u.discordId, displayName: u.username },
+    });
+  }
+  redirectMe(res, { ok: `Signed up for ${round.name}.` });
+});
+
+playerRouter.post("/me/withdraw-signup/:roundId", async (req, res) => {
+  const u = req.session.user!;
+  const roundId = req.params.roundId!;
+  const existing = await prisma.signup.findUnique({
+    where: { roundId_discordId: { roundId, discordId: u.discordId } },
+  });
+  if (existing) {
+    await prisma.signup.update({ where: { id: existing.id }, data: { withdrawn: true } });
+  }
+  redirectMe(res, { ok: "Withdrawn from signup round." });
 });
 
 playerRouter.post("/me/dispute/:id", async (req, res) => {

@@ -3,6 +3,7 @@
 import { Router } from "express";
 import { Rarity } from "@prisma/client";
 import { prisma } from "../db.js";
+import { isMockPlayer } from "../mock.js";
 import { loadPlayerHistory } from "../profile.js";
 import { computeStandings, formatDivisionField } from "../standings.js";
 import { html, raw } from "./html.js";
@@ -19,6 +20,49 @@ const RARITY_LABEL: Record<Rarity, string> = {
 };
 
 const RARITY_ORDER: Rarity[] = ["LEGENDARY", "RARE", "UNCOMMON", "COMMON"];
+
+// Public roster — browseable list of every real player in the league.
+publicRouter.get("/players", async (req, res) => {
+  const allPlayers = await prisma.player.findMany({
+    include: {
+      memberships: {
+        where: { division: { season: { isActive: true, visibility: "PUBLIC" } } },
+        include: { division: true },
+      },
+    },
+    orderBy: { displayName: "asc" },
+  });
+  // Hide fake/test players from public view
+  const players = allPlayers.filter((p) => !isMockPlayer(p));
+
+  const rows = players.map((p) => {
+    const membership = p.memberships[0];
+    const division = membership?.division;
+    const isDropped = membership?.status === "DROPPED";
+    const divLabel = division
+      ? html`<a href="/seasons/${division.seasonId}" class="muted" style="text-decoration:none">
+          <span class="pill ${division.rarity.toLowerCase()}">${division.name}</span>
+        </a>${isDropped ? raw(' <span class="pill" style="background:rgba(231,76,60,0.2); color:#e74c3c">DROPPED</span>') : raw("")}`
+      : raw('<span class="muted">— not in current season —</span>');
+    return html`<tr>
+      <td><a href="/profile/${p.discordId}" style="color:var(--text)">${p.displayName}</a></td>
+      <td>${divLabel}</td>
+    </tr>`;
+  });
+
+  const body = html`
+    <h2>Players (${players.length})</h2>
+    <div class="card">
+      <table>
+        <thead><tr><th>Player</th><th>Current division</th></tr></thead>
+        <tbody>${rows.length ? rows : html`<tr><td colspan="2" class="muted">No players yet.</td></tr>`}</tbody>
+      </table>
+    </div>
+  `;
+  res.set("Content-Type", "text/html; charset=utf-8").send(
+    layout({ title: "Players", activePath: "/players", body, ...(await sessionContext(req)) }).value,
+  );
+});
 
 // List of every season (active + past). Click into one to see its standings.
 publicRouter.get("/seasons", async (req, res) => {

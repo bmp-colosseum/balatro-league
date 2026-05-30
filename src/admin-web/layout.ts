@@ -4,6 +4,7 @@ import { html, raw, type RawHtml } from "./html.js";
 // PUBLIC always visible. PLAYER only when logged in. ADMIN only when isAdmin.
 const PUBLIC_NAV = [
   { href: "/standings", label: "Standings" },
+  { href: "/players", label: "Players" },
   { href: "/seasons", label: "Past seasons" },
 ] as const;
 const PLAYER_NAV = [
