@@ -3,15 +3,22 @@
 // memberships are deleted (transfer semantics) — a player has at most
 // one DivisionMember per season at any time.
 //
-// All add-to-division code paths should go through this. There's no
-// DB-level unique constraint enforcing one-per-season; this function
-// is the only thing keeping it true.
+// All add-to-division code paths should go through this. There's a
+// DB unique constraint (seasonId, playerId) that hard-enforces the rule;
+// this function is what makes the user-facing semantics 'transfer' rather
+// than 'error'.
+//
+// Also handles Discord role bookkeeping — strips the previous division's
+// role from the player when a transfer happens, so they only carry the
+// role of their current division.
 
 import { prisma } from "@/lib/prisma";
+import { removeGuildMemberRole } from "@/lib/discord";
 
 export interface PlaceResult {
   transferred: boolean;            // true if we removed an existing membership in another division
   previousDivisionName?: string;   // if transferred, the division they came from
+  previousRoleRemoved?: boolean;   // true if we also stripped the previous division's Discord role
 }
 
 export async function placePlayerInDivision(
@@ -31,13 +38,29 @@ export async function placePlayerInDivision(
       division: { seasonId: division.seasonId },
       NOT: { divisionId: division.id },
     },
-    include: { division: { select: { name: true } } },
+    include: {
+      division: { select: { name: true, discordRoleId: true } },
+      player: { select: { discordId: true } },
+    },
   });
 
   let result: PlaceResult = { transferred: false };
   if (existing) {
     await prisma.divisionMember.delete({ where: { id: existing.id } });
-    result = { transferred: true, previousDivisionName: existing.division.name };
+    let previousRoleRemoved = false;
+    const guildId = process.env.DISCORD_GUILD_ID;
+    if (guildId && existing.division.discordRoleId) {
+      previousRoleRemoved = await removeGuildMemberRole(
+        guildId,
+        existing.player.discordId,
+        existing.division.discordRoleId,
+      );
+    }
+    result = {
+      transferred: true,
+      previousDivisionName: existing.division.name,
+      previousRoleRemoved,
+    };
   }
 
   await prisma.divisionMember.upsert({

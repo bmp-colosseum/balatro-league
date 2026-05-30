@@ -194,6 +194,20 @@ export async function addGuildMemberRole(guildId: string, userId: string, roleId
   return true;
 }
 
+// Remove a role from a guild member. Best-effort — 404 is treated as success
+// since the end state is the same (member doesn't have the role).
+export async function removeGuildMemberRole(guildId: string, userId: string, roleId: string): Promise<boolean> {
+  const res = await fetch(`${BASE_URL}/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
+    method: "DELETE",
+    headers: { Authorization: botAuthHeader() },
+  });
+  if (!res.ok && res.status !== 404) {
+    console.warn(`Discord removeGuildMemberRole(${userId}, ${roleId}) failed: ${res.status} ${await res.text()}`);
+    return false;
+  }
+  return true;
+}
+
 // Create a guild text channel. If `visibleToRoleIds` is set, the channel is
 // private — @everyone gets VIEW_CHANNEL denied and only the listed roles
 // can see/send. Bot retains access via its own permissions.
