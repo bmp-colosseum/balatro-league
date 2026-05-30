@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
+import {
+  postChannelMessage,
+  type ComponentActionRow,
+  type MessageEmbed,
+} from "@/lib/discord";
 import { computeRatingDeltas, type DivisionForRating } from "@/lib/end-season";
 import { computeStandings } from "@/lib/standings";
 
@@ -184,6 +189,85 @@ export async function endSeason(formData: FormData) {
   revalidatePath("/admin/seasons");
   revalidatePath("/admin/rankings");
   redirect("/admin/seasons");
+}
+
+function buildSignupPayload(round: { id: string; name: string }): {
+  embeds: MessageEmbed[];
+  components: ComponentActionRow[];
+} {
+  const embed: MessageEmbed = {
+    title: `🃏  ${round.name}`,
+    description: "Click below to register. Withdraw anytime before sign-ups close.",
+    fields: [
+      { name: "Status", value: "**0 signed up**", inline: false },
+      { name: "Players", value: "_No one yet — be the first!_", inline: false },
+    ],
+    color: 0x5865f2,
+    footer: { text: `Round ${round.id}` },
+  };
+  const row: ComponentActionRow = {
+    type: 1,
+    components: [
+      { type: 2, custom_id: `signup:join:${round.id}`, style: 3, label: "Sign Up" },
+      { type: 2, custom_id: `signup:withdraw:${round.id}`, style: 2, label: "Withdraw" },
+    ],
+  };
+  return { embeds: [embed], components: [row] };
+}
+
+// Open a signup round bound to a specific season. The round's
+// resultingSeasonId is set immediately so the build step (later) populates
+// THIS season's existing divisions instead of creating a new one.
+export async function openSignupsForSeason(formData: FormData) {
+  await requireAdmin();
+  const seasonId = String(formData.get("seasonId") ?? "");
+  const channelId = String(formData.get("channelId") ?? "").trim();
+  if (!seasonId || !channelId) redirect("/admin/seasons?err=missing-fields");
+
+  const guildId = process.env.DISCORD_GUILD_ID;
+  if (!guildId) redirect("/admin/seasons?err=no-guild-id");
+
+  const season = await prisma.season.findUnique({ where: { id: seasonId } });
+  if (!season) redirect("/admin/seasons?err=season-not-found");
+
+  const round = await prisma.signupRound.create({
+    data: {
+      name: `${season!.name} Signups`,
+      guildId,
+      channelId,
+      messageId: "pending",
+      resultingSeasonId: season!.id,
+      status: "OPEN",
+    },
+  });
+
+  const messageId = await postChannelMessage(channelId, buildSignupPayload(round));
+  if (!messageId) {
+    await prisma.signupRound.delete({ where: { id: round.id } });
+    redirect("/admin/seasons?err=signup-post-failed");
+  }
+  await prisma.signupRound.update({ where: { id: round.id }, data: { messageId } });
+
+  revalidatePath("/admin/seasons");
+  revalidatePath("/admin/signups");
+}
+
+// Close (finalize) the signup round linked to a season, directly from the
+// season card — saves a trip to /admin/signups.
+export async function finalizeSignupsForSeason(formData: FormData) {
+  await requireAdmin();
+  const seasonId = String(formData.get("seasonId") ?? "");
+  if (!seasonId) return;
+  const round = await prisma.signupRound.findFirst({
+    where: { resultingSeasonId: seasonId, status: "OPEN" },
+  });
+  if (!round) return;
+  await prisma.signupRound.update({
+    where: { id: round.id },
+    data: { status: "CLOSED", closedAt: new Date() },
+  });
+  revalidatePath("/admin/seasons");
+  revalidatePath("/admin/signups");
 }
 
 export async function setSeasonVisibility(formData: FormData) {

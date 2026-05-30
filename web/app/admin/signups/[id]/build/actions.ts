@@ -142,28 +142,19 @@ export async function addSignupByDiscordId(formData: FormData) {
   revalidatePath(`/admin/signups/${roundId}/build`);
 }
 
-// Commit: create season + tiers + divisions, place players, mark round BUILT.
+// Commit: place players into divisions and mark round BUILT.
+//
+// Two modes (auto-detected):
+//   1. Round was opened standalone (resultingSeasonId not set yet) → CREATE
+//      a new season + tiers + divisions using the form config, then populate.
+//   2. Round was opened from a season card (resultingSeasonId pre-set) →
+//      POPULATE the existing season's divisions. Form's tier config is
+//      ignored — we use the season's existing shape.
 export async function buildSeason(formData: FormData) {
   await requireAdmin();
 
   const roundId = String(formData.get("roundId") ?? "");
-  const seasonName = String(formData.get("name") ?? "").trim();
-  const tiersJson = String(formData.get("config") ?? "");
-  const tiers = parseTierConfig(tiersJson);
-  if (!roundId || !seasonName || tiers.length === 0) return;
-
-  const targetGroupSize = Math.max(2, parseInt(String(formData.get("targetGroupSize")), 10) || 5);
-  const minGroupSize = Math.max(2, parseInt(String(formData.get("minGroupSize")), 10) || 3);
-  const visibility = formData.get("visibility") === "INTERNAL" ? "INTERNAL" : "PUBLIC";
-  const matchConfigPresetIdRaw = String(formData.get("matchConfigPresetId") ?? "");
-  const matchConfigPresetId = matchConfigPresetIdRaw === "" ? null : matchConfigPresetIdRaw;
-
-  let deadline: Date | null = null;
-  const deadlineStr = String(formData.get("deadline") ?? "");
-  if (deadlineStr) {
-    const d = new Date(deadlineStr + "Z");
-    if (!Number.isNaN(d.getTime())) deadline = d;
-  }
+  if (!roundId) return;
 
   const round = await prisma.signupRound.findUnique({
     where: { id: roundId },
@@ -171,7 +162,6 @@ export async function buildSeason(formData: FormData) {
   });
   if (!round) return;
 
-  // Upsert players + collect their current ratings
   const players = await Promise.all(
     round.signups.map((s) =>
       prisma.player.upsert({
@@ -181,59 +171,123 @@ export async function buildSeason(formData: FormData) {
       }),
     ),
   );
-
-  const plan = planByRating(
-    players.map((p) => ({ id: p.id, discordId: p.discordId, displayName: p.displayName, rating: p.rating })),
-    tiers,
-    targetGroupSize,
-  );
-
-  // Build season + tiers + divisions + memberships in a transaction
-  const season = await prisma.season.create({
-    data: {
-      name: seasonName,
-      deadline,
-      isActive: false,
-      targetGroupSize,
-      minGroupSize,
-      visibility,
-      matchConfigPresetId,
-    },
-  });
-
   const playerByDiscordId = new Map(players.map((p) => [p.discordId, p]));
 
-  for (const planTier of plan) {
-    const tier = await prisma.tier.create({
-      data: { seasonId: season.id, position: planTier.position, name: planTier.tier.name },
+  let targetSeasonId: string;
+
+  if (round.resultingSeasonId) {
+    // Populate-existing mode
+    const existing = await prisma.season.findUnique({
+      where: { id: round.resultingSeasonId },
+      include: {
+        tiers: { orderBy: { position: "asc" } },
+        divisions: { orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }], include: { tier: true } },
+      },
     });
-    for (let gi = 0; gi < planTier.divisions.length; gi++) {
-      const memberDiscordIds = planTier.divisions[gi]!;
-      const divisionName =
-        planTier.tier.divisionCount === 1 && gi === 0
-          ? planTier.tier.name
-          : `${planTier.tier.name} ${gi + 1}`;
-      const division = await prisma.division.create({
-        data: {
-          seasonId: season.id,
-          tierId: tier.id,
-          groupNumber: gi + 1,
-          name: divisionName,
-        },
-      });
-      for (const discordId of memberDiscordIds) {
-        const player = playerByDiscordId.get(discordId);
-        if (!player) continue;
-        await prisma.divisionMember.create({
-          data: { divisionId: division.id, playerId: player.id },
-        });
+    if (!existing) return;
+
+    const existingTierConfigs: TierConfig[] = existing.tiers.map((t) => ({
+      name: t.name,
+      divisionCount: existing.divisions.filter((d) => d.tierId === t.id).length,
+    }));
+
+    const plan = planByRating(
+      players.map((p) => ({ id: p.id, discordId: p.discordId, displayName: p.displayName, rating: p.rating })),
+      existingTierConfigs,
+      existing.targetGroupSize,
+    );
+
+    for (const planTier of plan) {
+      const dbTier = existing.tiers.find((t) => t.position === planTier.position);
+      if (!dbTier) continue;
+      const dbDivisions = existing.divisions
+        .filter((d) => d.tierId === dbTier.id)
+        .sort((a, b) => a.groupNumber - b.groupNumber);
+      for (let gi = 0; gi < planTier.divisions.length && gi < dbDivisions.length; gi++) {
+        const division = dbDivisions[gi]!;
+        for (const discordId of planTier.divisions[gi]!) {
+          const player = playerByDiscordId.get(discordId);
+          if (!player) continue;
+          await prisma.divisionMember.upsert({
+            where: { divisionId_playerId: { divisionId: division.id, playerId: player.id } },
+            create: { divisionId: division.id, playerId: player.id, status: "ACTIVE" },
+            update: { status: "ACTIVE", droppedAt: null, dropoutReason: null },
+          });
+        }
       }
     }
+    targetSeasonId = existing.id;
+  } else {
+    // Create-new mode (original behavior)
+    const seasonName = String(formData.get("name") ?? "").trim();
+    const tiersJson = String(formData.get("config") ?? "");
+    const tiers = parseTierConfig(tiersJson);
+    if (!seasonName || tiers.length === 0) return;
+
+    const targetGroupSize = Math.max(2, parseInt(String(formData.get("targetGroupSize")), 10) || 5);
+    const minGroupSize = Math.max(2, parseInt(String(formData.get("minGroupSize")), 10) || 3);
+    const visibility = formData.get("visibility") === "INTERNAL" ? "INTERNAL" : "PUBLIC";
+    const matchConfigPresetIdRaw = String(formData.get("matchConfigPresetId") ?? "");
+    const matchConfigPresetId = matchConfigPresetIdRaw === "" ? null : matchConfigPresetIdRaw;
+
+    let deadline: Date | null = null;
+    const deadlineStr = String(formData.get("deadline") ?? "");
+    if (deadlineStr) {
+      const d = new Date(deadlineStr + "Z");
+      if (!Number.isNaN(d.getTime())) deadline = d;
+    }
+
+    const plan = planByRating(
+      players.map((p) => ({ id: p.id, discordId: p.discordId, displayName: p.displayName, rating: p.rating })),
+      tiers,
+      targetGroupSize,
+    );
+
+    const season = await prisma.season.create({
+      data: {
+        name: seasonName,
+        deadline,
+        isActive: false,
+        targetGroupSize,
+        minGroupSize,
+        visibility,
+        matchConfigPresetId,
+      },
+    });
+
+    for (const planTier of plan) {
+      const tier = await prisma.tier.create({
+        data: { seasonId: season.id, position: planTier.position, name: planTier.tier.name },
+      });
+      for (let gi = 0; gi < planTier.divisions.length; gi++) {
+        const memberDiscordIds = planTier.divisions[gi]!;
+        const divisionName =
+          planTier.tier.divisionCount === 1 && gi === 0
+            ? planTier.tier.name
+            : `${planTier.tier.name} ${gi + 1}`;
+        const division = await prisma.division.create({
+          data: {
+            seasonId: season.id,
+            tierId: tier.id,
+            groupNumber: gi + 1,
+            name: divisionName,
+          },
+        });
+        for (const discordId of memberDiscordIds) {
+          const player = playerByDiscordId.get(discordId);
+          if (!player) continue;
+          await prisma.divisionMember.create({
+            data: { divisionId: division.id, playerId: player.id },
+          });
+        }
+      }
+    }
+    targetSeasonId = season.id;
   }
 
   await prisma.signupRound.update({
     where: { id: roundId },
-    data: { status: "BUILT", resultingSeasonId: season.id },
+    data: { status: "BUILT", resultingSeasonId: targetSeasonId },
   });
 
   revalidatePath("/admin/signups");

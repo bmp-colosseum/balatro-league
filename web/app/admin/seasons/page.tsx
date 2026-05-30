@@ -4,9 +4,18 @@ import { requireAdmin } from "@/lib/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
-import { activateSeason, createSeason, endSeason, setSeasonPreset, setSeasonVisibility } from "./actions";
+import {
+  activateSeason,
+  createSeason,
+  endSeason,
+  finalizeSignupsForSeason,
+  openSignupsForSeason,
+  setSeasonPreset,
+  setSeasonVisibility,
+} from "./actions";
 import { bootstrapSeasonDiscord, setSeasonDiscordCategory } from "./bootstrap-actions";
 import { SeasonDeckPresetPicker } from "@/components/SeasonDeckPresetPicker";
+import { listGuildTextChannels } from "@/lib/discord";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +42,7 @@ function parseTemplateConfig(json: string) {
 export default async function AdminSeasonsPage() {
   await requireAdmin();
 
-  const [seasons, templatesRaw, lastUsed, presets, defaultPreset] = await Promise.all([
+  const [seasons, templatesRaw, lastUsed, presets, defaultPreset, signupRounds] = await Promise.all([
     prisma.season.findMany({
       include: {
         _count: { select: { divisions: true } },
@@ -53,7 +62,20 @@ export default async function AdminSeasonsPage() {
     prisma.tierTemplate.findUnique({ where: { name: "Last used" } }),
     prisma.matchConfigPreset.findMany({ orderBy: { name: "asc" } }),
     prisma.matchConfigPreset.findUnique({ where: { name: "Default" } }),
+    prisma.signupRound.findMany({
+      where: { resultingSeasonId: { not: null } },
+      include: { _count: { select: { signups: true } } },
+    }),
   ]);
+
+  // discord channels for the "Open signups" picker (only fetched if at least
+  // one season is missing a linked round)
+  const needsChannels = seasons.some(
+    (s) => !s.endedAt && !signupRounds.find((r) => r.resultingSeasonId === s.id),
+  );
+  const guildId = process.env.DISCORD_GUILD_ID;
+  const channels = needsChannels && guildId ? await listGuildTextChannels(guildId) : [];
+  const roundsBySeason = new Map(signupRounds.map((r) => [r.resultingSeasonId!, r]));
 
   const templates = templatesRaw.map((t) => ({
     id: t.id,
@@ -180,30 +202,125 @@ export default async function AdminSeasonsPage() {
                 )}
 
                 <DiscordBootstrap season={s} />
-                <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                  {!s.isActive && (
-                    <form action={activateSeason}>
-                      <input type="hidden" name="id" value={s.id} />
-                      <button type="submit" className="secondary">Activate</button>
-                    </form>
-                  )}
-                  {s.isActive && (
-                    <Link href={`/admin/seasons/${s.id}/end`}>
-                      <button type="button">End season →</button>
-                    </Link>
-                  )}
-                  {s.endedAt && (
-                    <span className="muted" style={{ fontSize: 12, alignSelf: "center" }}>
-                      ended {s.endedAt.toISOString().slice(0, 10)}
-                    </span>
-                  )}
-                </div>
+                <LifecycleActions
+                  season={s}
+                  round={roundsBySeason.get(s.id) ?? null}
+                  channels={channels}
+                  playerCount={players}
+                />
               </div>
             );
           })}
         </div>
       </main>
     </>
+  );
+}
+
+interface LifecycleSeason {
+  id: string;
+  name: string;
+  isActive: boolean;
+  endedAt: Date | null;
+}
+interface LifecycleRound {
+  id: string;
+  status: "OPEN" | "CLOSED" | "BUILT";
+  channelId: string;
+  _count: { signups: number };
+}
+interface LifecycleChannel { id: string; name: string }
+
+function LifecycleActions({
+  season,
+  round,
+  channels,
+  playerCount,
+}: {
+  season: LifecycleSeason;
+  round: LifecycleRound | null;
+  channels: LifecycleChannel[];
+  playerCount: number;
+}) {
+  // Step 1: ended → just show date
+  if (season.endedAt) {
+    return (
+      <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+        ✓ Ended {season.endedAt.toISOString().slice(0, 10)}
+      </div>
+    );
+  }
+
+  // Step 5: active → end-season button
+  if (season.isActive) {
+    return (
+      <div style={{ marginTop: 8 }}>
+        <Link href={`/admin/seasons/${season.id}/end`}>
+          <button type="button">End season →</button>
+        </Link>
+      </div>
+    );
+  }
+
+  // Step 4: divisions populated → start (activate)
+  if (playerCount > 0) {
+    return (
+      <div style={{ marginTop: 8 }}>
+        <form action={activateSeason}>
+          <input type="hidden" name="id" value={season.id} />
+          <button type="submit"><strong>Start season →</strong></button>
+        </form>
+        <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+          {playerCount} player(s) placed. Starting flips this to the active season for /standings + /report.
+        </div>
+      </div>
+    );
+  }
+
+  // Step 3: signups CLOSED → build divisions
+  if (round && round.status === "CLOSED") {
+    return (
+      <div style={{ marginTop: 8 }}>
+        <Link href={`/admin/signups/${round.id}/build`}>
+          <button type="button"><strong>Build divisions from {round._count.signups} signups →</strong></button>
+        </Link>
+      </div>
+    );
+  }
+
+  // Step 2: signups OPEN → show status + finalize button
+  if (round && round.status === "OPEN") {
+    return (
+      <div style={{ marginTop: 8 }}>
+        <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
+          🟢 Signups open in <code>#{channels.find((c) => c.id === round.channelId)?.name ?? round.channelId}</code> — {round._count.signups} joined
+        </div>
+        <form action={finalizeSignupsForSeason}>
+          <input type="hidden" name="seasonId" value={season.id} />
+          <button type="submit" className="secondary">Finalize signups →</button>
+        </form>
+      </div>
+    );
+  }
+
+  // Step 1: no signup round yet → open one
+  return (
+    <details style={{ marginTop: 8 }}>
+      <summary style={{ cursor: "pointer" }}><strong>Open signups for this season →</strong></summary>
+      <form action={openSignupsForSeason} style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+        <input type="hidden" name="seasonId" value={season.id} />
+        <select name="channelId" required style={{ flex: "1 1 200px" }}>
+          <option value="">— Pick a Discord channel —</option>
+          {channels.map((c) => (
+            <option key={c.id} value={c.id}>#{c.name}</option>
+          ))}
+        </select>
+        <button type="submit" disabled={channels.length === 0}>Open signups</button>
+      </form>
+      <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+        Posts a signup embed in the channel. Players click Sign Up; you Finalize when ready, then Build divisions from the signups.
+      </div>
+    </details>
   );
 }
 
