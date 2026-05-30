@@ -77,6 +77,10 @@ export default async function MePage({
     ? computeStandings(division.members.map((m) => m.player), division.pairings).find((r) => r.player.id === player.id)
     : null;
 
+  const interest = user.discordId
+    ? await prisma.seasonInterest.findUnique({ where: { discordId: user.discordId } })
+    : null;
+
   const avatarUrl = user.avatar
     ? `https://cdn.discordapp.com/avatars/${user.discordId}/${user.avatar}.png?size=128`
     : `https://cdn.discordapp.com/embed/avatars/0.png`;
@@ -113,6 +117,28 @@ export default async function MePage({
         ...(discordName ? { displayName: discordName } : {}),
       },
     });
+    revalidatePath("/me");
+  }
+
+  async function subscribeNextSeason() {
+    "use server";
+    const session = await auth();
+    const discordId = (session?.user as { discordId?: string } | undefined)?.discordId;
+    if (!discordId) return;
+    await prisma.seasonInterest.upsert({
+      where: { discordId },
+      create: { discordId },
+      update: {},
+    });
+    revalidatePath("/me");
+  }
+
+  async function unsubscribeNextSeason() {
+    "use server";
+    const session = await auth();
+    const discordId = (session?.user as { discordId?: string } | undefined)?.discordId;
+    if (!discordId) return;
+    await prisma.seasonInterest.deleteMany({ where: { discordId } });
     revalidatePath("/me");
   }
 
@@ -178,6 +204,29 @@ export default async function MePage({
             {err}
           </div>
         )}
+
+        <div className="card">
+          <strong>Next-season notifications</strong>
+          {interest ? (
+            <>
+              <p className="muted" style={{ fontSize: 12 }}>
+                ✓ You're subscribed (since {interest.subscribedAt.toISOString().slice(0, 10)}). The bot will DM you when the next season's signups open.
+              </p>
+              <form action={unsubscribeNextSeason}>
+                <button type="submit" className="secondary">Unsubscribe</button>
+              </form>
+            </>
+          ) : (
+            <>
+              <p className="muted" style={{ fontSize: 12 }}>
+                Get a Discord DM the moment a new season's signups open. Useful if you don't check the server often.
+              </p>
+              <form action={subscribeNextSeason}>
+                <button type="submit">🔔 Notify me about the next season</button>
+              </form>
+            </>
+          )}
+        </div>
 
         {player && (
           <div className="card">

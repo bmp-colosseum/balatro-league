@@ -5,8 +5,10 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import {
+  createChannelInvite,
   editChannelMessage,
   postChannelMessage,
+  sendDirectMessage,
   type ComponentActionRow,
   type MessageEmbed,
 } from "@/lib/discord";
@@ -304,8 +306,33 @@ export async function openSignupsForSeason(formData: FormData) {
   }
   await prisma.signupRound.update({ where: { id: round.id }, data: { messageId } });
 
+  // Fire-and-forget: DM everyone on the next-season interest list so they
+  // know signups just opened. Don't block the admin form on this.
+  notifyNextSeasonSubscribers(season!.name, channelId).catch((err) =>
+    console.warn("notifyNextSeasonSubscribers failed:", err),
+  );
+
   revalidatePath("/admin/seasons");
-  revalidatePath("/admin/signups");
+}
+
+// Async DM blast — skips silently if no subscribers. Tries to include a
+// server invite to the signup channel so non-members can join the guild.
+async function notifyNextSeasonSubscribers(seasonName: string, signupChannelId: string) {
+  const subscribers = await prisma.seasonInterest.findMany();
+  if (subscribers.length === 0) return;
+  const invite = await createChannelInvite(signupChannelId, { maxAge: 0, maxUses: 0 });
+  const inviteLine = invite ? `\nJoin the server here if you're not already: ${invite}` : "";
+  const content =
+    `🃏 **${seasonName}** signups just opened! Head to the signups channel and hit Sign Up to lock your spot.${inviteLine}\n\n` +
+    `_You're getting this because you opted in to next-season notifications. Turn it off on your /me page anytime._`;
+  let delivered = 0;
+  let failed = 0;
+  for (const s of subscribers) {
+    const ok = await sendDirectMessage(s.discordId, { content });
+    if (ok) delivered++;
+    else failed++;
+  }
+  console.log(`[next-season-dm] delivered ${delivered}/${subscribers.length} (${failed} failed)`);
 }
 
 // Close (finalize) the signup round linked to a season AND update the

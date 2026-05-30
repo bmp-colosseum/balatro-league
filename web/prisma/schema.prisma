@@ -197,6 +197,15 @@ enum PermissionTier {
   MOD     // dispute resolution, light moderation
 }
 
+// Opt-in list for next-season notifications. Bot DMs every entry when
+// admin opens a new signup round. Decoupled from Player so non-league
+// members (who logged in but never joined) can also subscribe.
+model SeasonInterest {
+  id           String   @id @default(cuid())
+  discordId    String   @unique
+  subscribedAt DateTime @default(now())
+}
+
 model RoleBinding {
   id            String         @id @default(cuid())
   discordRoleId String         @unique

@@ -208,6 +208,54 @@ export async function removeGuildMemberRole(guildId: string, userId: string, rol
   return true;
 }
 
+// Open (or reuse) a DM channel with a user and post a message to it.
+// Returns true if delivery probably succeeded; logs + returns false on the
+// common failure modes (user has DMs disabled, bot doesn't share a guild
+// with them, unknown user, etc.). Caller should treat failures as "they
+// didn't get it" without bubbling up the error.
+export async function sendDirectMessage(
+  userId: string,
+  payload: { content?: string; embeds?: MessageEmbed[]; components?: ComponentActionRow[] },
+): Promise<boolean> {
+  const createChannelRes = await discordFetch(`${BASE_URL}/users/@me/channels`, {
+    method: "POST",
+    headers: { Authorization: botAuthHeader(), "Content-Type": "application/json" },
+    body: JSON.stringify({ recipient_id: userId }),
+  });
+  if (!createChannelRes.ok) {
+    console.warn(`Discord createDM(${userId}) failed: ${createChannelRes.status} ${await createChannelRes.text()}`);
+    return false;
+  }
+  const channel = (await createChannelRes.json()) as { id?: string };
+  if (!channel.id) return false;
+  const messageId = await postChannelMessage(channel.id, payload);
+  return messageId !== null;
+}
+
+// Create a never-expiring single-use invite to a channel. Used to point
+// next-season subscribers at the signups channel directly. Returns the
+// invite URL (just the code, prepended with https://discord.gg/) or null.
+export async function createChannelInvite(
+  channelId: string,
+  options?: { maxAge?: number; maxUses?: number },
+): Promise<string | null> {
+  const res = await discordFetch(`${BASE_URL}/channels/${channelId}/invites`, {
+    method: "POST",
+    headers: { Authorization: botAuthHeader(), "Content-Type": "application/json" },
+    body: JSON.stringify({
+      max_age: options?.maxAge ?? 0,    // 0 = never expire
+      max_uses: options?.maxUses ?? 0,  // 0 = unlimited uses
+      unique: false,                     // reuse an existing equivalent invite if one exists
+    }),
+  });
+  if (!res.ok) {
+    console.warn(`Discord createChannelInvite(${channelId}) failed: ${res.status} ${await res.text()}`);
+    return null;
+  }
+  const body = (await res.json()) as { code?: string };
+  return body.code ? `https://discord.gg/${body.code}` : null;
+}
+
 // Create a guild text channel. If `visibleToRoleIds` is set, the channel is
 // private — @everyone gets VIEW_CHANNEL denied and only the listed roles
 // can see/send. Bot retains access via its own permissions.
