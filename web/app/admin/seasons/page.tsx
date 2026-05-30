@@ -6,6 +6,7 @@ import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
 import { activateSeason, createSeason, endSeason, setSeasonPreset } from "./actions";
 import { bootstrapSeasonDiscord, setSeasonDiscordCategory } from "./bootstrap-actions";
+import { SeasonDeckPresetPicker } from "@/components/SeasonDeckPresetPicker";
 
 export const dynamic = "force-dynamic";
 
@@ -32,12 +33,18 @@ function parseTemplateConfig(json: string) {
 export default async function AdminSeasonsPage() {
   await requireAdmin();
 
-  const [seasons, templatesRaw, lastUsed, presets] = await Promise.all([
+  const [seasons, templatesRaw, lastUsed, presets, defaultPreset] = await Promise.all([
     prisma.season.findMany({
       include: {
         _count: { select: { divisions: true } },
         tiers: { orderBy: { position: "asc" }, include: { _count: { select: { divisions: true } } } },
-        divisions: { include: { _count: { select: { members: true, pairings: true } } } },
+        divisions: {
+          orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
+          include: {
+            tier: true,
+            _count: { select: { members: true, pairings: true } },
+          },
+        },
         matchConfigPreset: true,
       },
       orderBy: [{ isActive: "desc" }, { startedAt: "desc" }],
@@ -45,6 +52,7 @@ export default async function AdminSeasonsPage() {
     prisma.tierTemplate.findMany({ orderBy: [{ isLastUsed: "desc" }, { name: "asc" }] }),
     prisma.tierTemplate.findUnique({ where: { name: "Last used" } }),
     prisma.matchConfigPreset.findMany({ orderBy: { name: "asc" } }),
+    prisma.matchConfigPreset.findUnique({ where: { name: "Default" } }),
   ]);
 
   const templates = templatesRaw.map((t) => ({
@@ -126,20 +134,36 @@ export default async function AdminSeasonsPage() {
                 <div className="muted">
                   {players} player(s) · {sets} set(s) · group size {s.targetGroupSize} (min {s.minGroupSize})
                 </div>
-                <form
-                  action={setSeasonPreset}
-                  style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center" }}
-                >
-                  <input type="hidden" name="id" value={s.id} />
-                  <label className="muted" style={{ fontSize: 12 }}>Deck preset:</label>
-                  <select name="presetId" defaultValue={s.matchConfigPresetId ?? ""} style={{ flex: 1 }}>
-                    <option value="">— Use Default —</option>
-                    {presets.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                  <button type="submit" className="secondary">Save</button>
-                </form>
+                <SeasonDeckPresetPicker
+                  seasonId={s.id}
+                  presets={presets}
+                  initialPresetId={s.matchConfigPresetId}
+                  defaultPreset={defaultPreset}
+                  saveAction={setSeasonPreset}
+                />
+
+                {s.divisions.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Divisions:</div>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                      {s.divisions.map((d) => (
+                        <Link
+                          key={d.id}
+                          href={`/admin/divisions/${d.id}`}
+                          style={{
+                            fontSize: 11,
+                            padding: "2px 8px",
+                            borderRadius: 3,
+                            background: "var(--surface-2, rgba(255,255,255,0.05))",
+                            textDecoration: "none",
+                          }}
+                        >
+                          {d.name} <span className="muted">({d._count.members})</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <DiscordBootstrap season={s} />
                 <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
