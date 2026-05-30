@@ -6,6 +6,7 @@ import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
 import {
   activateSeason,
+  configureTiers,
   createSeason,
   deleteSeason,
   endSeason,
@@ -98,8 +99,9 @@ export default async function AdminSeasonsPage() {
         <div className="card">
           <strong>Create new season</strong>
           <p className="muted">
-            Configure tiers, then submit. Pre-filled with your last-used layout (★). Created as{" "}
-            <strong>inactive</strong> — your current active season is untouched.
+            Just name + settings here. Tier shape is configured later, after signups
+            close, so you can split divisions based on the actual player count.
+            (You can still set it now if you already know.)
           </p>
           <form action={createSeason}>
             <label>Name <input name="name" required placeholder="Season 2" /></label>
@@ -114,17 +116,22 @@ export default async function AdminSeasonsPage() {
               </select>
             </label>
 
-            <div style={{ flex: "1 1 100%", marginTop: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <strong>Tiers</strong>
-                <span style={{ marginLeft: "auto" }}>
-                  <Link href="/admin/seasons/templates">
+            <details style={{ flex: "1 1 100%", marginTop: 12 }}>
+              <summary style={{ cursor: "pointer" }}>
+                <strong>Optional: set tier shape now</strong>
+                <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
+                  (skip and configure after signups close)
+                </span>
+              </summary>
+              <div style={{ marginTop: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <Link href="/admin/seasons/templates" style={{ marginLeft: "auto" }}>
                     <button type="button" className="secondary">Manage templates</button>
                   </Link>
-                </span>
+                </div>
+                <TierEditor initial={initial} templates={templates} />
               </div>
-              <TierEditor initial={initial} templates={templates} />
-            </div>
+            </details>
 
             <button type="submit" style={{ marginTop: 12 }}>Create season</button>
           </form>
@@ -190,7 +197,7 @@ export default async function AdminSeasonsPage() {
                   saveAction={setSeasonPreset}
                 />
 
-                {s.divisions.length > 0 && (
+                {s.divisions.length > 0 ? (
                   <div style={{ marginTop: 8 }}>
                     <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Divisions:</div>
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -211,6 +218,22 @@ export default async function AdminSeasonsPage() {
                       ))}
                     </div>
                   </div>
+                ) : (
+                  <details style={{ marginTop: 8 }}>
+                    <summary style={{ cursor: "pointer" }}>
+                      <strong>⚙ Configure tiers</strong>
+                      <span className="muted" style={{ marginLeft: 8, fontSize: 11 }}>
+                        — no divisions yet. {roundsBySeason.get(s.id)?._count.signups != null
+                          ? `${roundsBySeason.get(s.id)?._count.signups} signed up so far.`
+                          : "Set this up before opening signups, or after closing."}
+                      </span>
+                    </summary>
+                    <form action={configureTiers} style={{ marginTop: 8 }}>
+                      <input type="hidden" name="seasonId" value={s.id} />
+                      <TierEditor initial={initial} templates={templates} />
+                      <button type="submit" style={{ marginTop: 8 }}>Create tiers + divisions</button>
+                    </form>
+                  </details>
                 )}
 
                 <DiscordBootstrap season={s} />

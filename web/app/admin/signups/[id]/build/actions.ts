@@ -186,6 +186,40 @@ export async function buildSeason(formData: FormData) {
     });
     if (!existing) return;
 
+    // If the season has no tiers yet (admin deferred shape until after
+    // signups closed), create them now from the build form's tier config.
+    if (existing.tiers.length === 0) {
+      const formTiers = parseTierConfig(String(formData.get("config") ?? ""));
+      if (formTiers.length === 0) {
+        // No shape supplied — caller should re-submit the build form with one.
+        return;
+      }
+      for (let i = 0; i < formTiers.length; i++) {
+        const c = formTiers[i]!;
+        const tier = await prisma.tier.create({
+          data: { seasonId: existing.id, position: i + 1, name: c.name },
+        });
+        for (let g = 1; g <= c.divisionCount; g++) {
+          const divisionName = c.divisionCount === 1 ? c.name : `${c.name} ${g}`;
+          await prisma.division.create({
+            data: { seasonId: existing.id, tierId: tier.id, groupNumber: g, name: divisionName },
+          });
+        }
+      }
+      // Re-fetch so the placement loop below sees the freshly-created tiers
+      const refetched = await prisma.season.findUnique({
+        where: { id: existing.id },
+        include: {
+          tiers: { orderBy: { position: "asc" } },
+          divisions: { orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }], include: { tier: true } },
+        },
+      });
+      if (refetched) {
+        existing.tiers = refetched.tiers;
+        existing.divisions = refetched.divisions;
+      }
+    }
+
     const existingTierConfigs: TierConfig[] = existing.tiers.map((t) => ({
       name: t.name,
       divisionCount: existing.divisions.filter((d) => d.tierId === t.id).length,

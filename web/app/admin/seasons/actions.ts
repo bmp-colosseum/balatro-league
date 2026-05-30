@@ -45,9 +45,9 @@ export async function createSeason(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
 
+  // Tier config is now OPTIONAL — admin can skip setup and configure tiers
+  // later once they see how many players signed up.
   const configs = parseConfig(String(formData.get("config") ?? ""));
-  const total = configs.reduce((sum, t) => sum + t.divisionCount, 0);
-  if (total === 0) return;
 
   let deadline: Date | null = null;
   const deadlineStr = String(formData.get("deadline") ?? "");
@@ -64,26 +64,52 @@ export async function createSeason(formData: FormData) {
     data: { name, deadline, isActive: false, targetGroupSize, minGroupSize, visibility },
   });
 
+  if (configs.length > 0) {
+    await createTiersAndDivisionsFor(season.id, configs);
+    await prisma.tierTemplate.upsert({
+      where: { name: LAST_USED_NAME },
+      create: { name: LAST_USED_NAME, config: JSON.stringify(configs), isLastUsed: true },
+      update: { config: JSON.stringify(configs), isLastUsed: true },
+    });
+  }
+
+  revalidatePath("/admin/seasons");
+}
+
+async function createTiersAndDivisionsFor(seasonId: string, configs: TierConfig[]) {
   for (let i = 0; i < configs.length; i++) {
     const c = configs[i]!;
     const tier = await prisma.tier.create({
-      data: { seasonId: season.id, position: i + 1, name: c.name },
+      data: { seasonId, position: i + 1, name: c.name },
     });
     const names = defaultDivisionNames(c);
     for (let g = 1; g <= c.divisionCount; g++) {
       await prisma.division.create({
-        data: { seasonId: season.id, tierId: tier.id, groupNumber: g, name: names[g - 1]! },
+        data: { seasonId, tierId: tier.id, groupNumber: g, name: names[g - 1]! },
       });
     }
   }
+}
 
-  // Save layout as Last used template
+// Configure tiers for an existing tier-less season (e.g. one created with
+// "skip tier setup" then configured after signups close so admin sees the
+// player count). Refuses if tiers already exist — use delete-and-recreate
+// (manual on the page) for now.
+export async function configureTiers(formData: FormData) {
+  await requireAdmin();
+  const seasonId = String(formData.get("seasonId") ?? "");
+  const configs = parseConfig(String(formData.get("config") ?? ""));
+  if (!seasonId || configs.length === 0) return;
+  const existingTierCount = await prisma.tier.count({ where: { seasonId } });
+  if (existingTierCount > 0) {
+    redirect(`/admin/seasons?err=${encodeURIComponent("Tiers already configured for this season — delete the season + recreate, or edit divisions individually.")}`);
+  }
+  await createTiersAndDivisionsFor(seasonId, configs);
   await prisma.tierTemplate.upsert({
     where: { name: LAST_USED_NAME },
     create: { name: LAST_USED_NAME, config: JSON.stringify(configs), isLastUsed: true },
     update: { config: JSON.stringify(configs), isLastUsed: true },
   });
-
   revalidatePath("/admin/seasons");
 }
 
