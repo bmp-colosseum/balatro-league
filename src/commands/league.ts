@@ -277,12 +277,42 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       }),
     ]);
 
-    const role = await interaction.guild.roles.create({
-      name: "League Player",
-      mentionable: true,
-      permissions: new PermissionsBitField(),
-      reason: "Created by /league bootstrap-server",
-    });
+    const [playerRole, adminRole, modRole] = await Promise.all([
+      interaction.guild.roles.create({
+        name: "League Player",
+        mentionable: true,
+        permissions: new PermissionsBitField(),
+        reason: "Created by /league bootstrap-server",
+      }),
+      interaction.guild.roles.create({
+        name: "League Admin",
+        mentionable: true,
+        permissions: new PermissionsBitField(),
+        reason: "Created by /league bootstrap-server — bound to bot's ADMIN tier",
+      }),
+      interaction.guild.roles.create({
+        name: "League Mod",
+        mentionable: true,
+        permissions: new PermissionsBitField(),
+        reason: "Created by /league bootstrap-server — bound to bot's MOD tier",
+      }),
+    ]);
+
+    // Wire the management roles to the bot's permission tiers so anyone
+    // assigned the Discord role gets the matching permission on the web
+    // dashboard + /league commands without further setup.
+    await Promise.all([
+      prisma.roleBinding.upsert({
+        where: { discordRoleId: adminRole.id },
+        create: { discordRoleId: adminRole.id, tier: "ADMIN", createdBy: interaction.user.id },
+        update: { tier: "ADMIN" },
+      }),
+      prisma.roleBinding.upsert({
+        where: { discordRoleId: modRole.id },
+        create: { discordRoleId: modRole.id, tier: "MOD", createdBy: interaction.user.id },
+        update: { tier: "MOD" },
+      }),
+    ]);
 
     const [infoChan, signupChan, resultsChan, chatChan] = channels;
 
@@ -294,7 +324,12 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       `🏆 <#${resultsChan!.id}> — results (auto-announce target)`,
       `💬 <#${chatChan!.id}> — league-chat`,
       ``,
-      `🎭 Role: <@&${role.id}> (mentionable, no extra perms)`,
+      `🎭 Roles created:`,
+      `• <@&${playerRole.id}> — League Player (mentionable, no extra perms)`,
+      `• <@&${adminRole.id}> — League Admin (bound to ADMIN tier — full management access)`,
+      `• <@&${modRole.id}> — League Mod (bound to MOD tier — moderation only)`,
+      ``,
+      `Assign Admin/Mod to staff in **Server Settings → Members** and they immediately get the matching permissions on www.balatroleague.com + /league commands.`,
       ``,
       `**Next**: set this env var on your bot host so result announcements land in the right channel:`,
       `\`RESULTS_CHANNEL_ID=${resultsChan!.id}\``,
