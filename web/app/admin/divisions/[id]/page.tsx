@@ -112,6 +112,16 @@ export default async function AdminDivisionDetail({
               {bulkSummary.get("errors") && bulkSummary.get("errors")!.length > 0 && (
                 <li style={{ color: "#e74c3c" }}>line errors: {bulkSummary.get("errors")}</li>
               )}
+              {bulkSummary.get("transferred") && bulkSummary.get("transferred")!.length > 0 && (
+                <li style={{ color: "#f1c40f" }}>
+                  ↪ Transferred from other divisions: {bulkSummary.get("transferred")}
+                </li>
+              )}
+              {bulkSummary.get("from") && (
+                <li style={{ color: "#f1c40f" }}>
+                  ↪ {bulkSummary.get("transferred")} moved here from <strong>{bulkSummary.get("from")}</strong> (one-per-season rule).
+                </li>
+              )}
             </ul>
           </div>
         )}

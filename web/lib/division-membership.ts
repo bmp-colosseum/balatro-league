@@ -42,7 +42,7 @@ export async function placePlayerInDivision(
 
   await prisma.divisionMember.upsert({
     where: { divisionId_playerId: { divisionId: division.id, playerId } },
-    create: { divisionId: division.id, playerId, status: "ACTIVE" },
+    create: { divisionId: division.id, seasonId: division.seasonId, playerId, status: "ACTIVE" },
     update: { status: "ACTIVE", droppedAt: null, dropoutReason: null },
   });
 

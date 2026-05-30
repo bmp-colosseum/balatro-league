@@ -73,6 +73,7 @@ export async function bulkImportSeason(formData: FormData) {
   let membersSkipped = 0;
   const unknownDivisions = new Set<string>();
   const membersErrors: string[] = [];
+  const transferred: string[] = [];
   // (divisionNameLower) → Map(challongeNameLower → Player)
   const nameToPlayerByDiv = new Map<string, Map<string, { id: string; discordId: string }>>();
   // (discordId) → Player
@@ -109,7 +110,10 @@ export async function bulkImportSeason(formData: FormData) {
         create: { discordId, displayName },
         update: { displayName },
       });
-      await placePlayerInDivision(div.id, player.id);
+      const placement = await placePlayerInDivision(div.id, player.id);
+      if (placement.transferred) {
+        transferred.push(`${player.displayName} (${placement.previousDivisionName} → ${div.name})`);
+      }
       if (guildId && div.discordRoleId) {
         await addGuildMemberRole(guildId, discordId, div.discordRoleId);
       }
@@ -210,6 +214,7 @@ export async function bulkImportSeason(formData: FormData) {
       unknownDivisions: [...unknownDivisions].slice(0, 10).join(" | "),
       membersErrors: membersErrors.slice(0, 8).join(" | "),
       matchErrors: matchErrors.slice(0, 8).join(" | "),
+      transferred: transferred.slice(0, 10).join(" | "),
     }).toString();
     redirect(`/admin/seasons/${seasonId}/bulk-import?result=${encodeURIComponent(summary)}`);
   }

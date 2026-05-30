@@ -52,7 +52,7 @@ export async function addDivisionMemberByDiscordId(formData: FormData) {
     update: { displayName: displayNameOverride || resolved.displayName },
   });
 
-  await placePlayerInDivision(divisionId, player.id);
+  const placement = await placePlayerInDivision(divisionId, player.id);
 
   const division = await prisma.division.findUnique({ where: { id: divisionId } });
   if (division?.discordRoleId) {
@@ -60,6 +60,9 @@ export async function addDivisionMemberByDiscordId(formData: FormData) {
   }
 
   revalidatePath(`/admin/divisions/${divisionId}`);
+  if (placement.transferred) {
+    redirect(`/admin/divisions/${divisionId}?bulk=${encodeURIComponent(`transferred=${encodeURIComponent(player.displayName)}&from=${encodeURIComponent(placement.previousDivisionName ?? "")}`)}`);
+  }
 }
 
 // Soft drop: marks the membership DROPPED and voids any PENDING pairings.
@@ -148,6 +151,7 @@ export async function bulkAddMembers(formData: FormData) {
   let added = 0;
   let skipped = 0;
   const failedIds: string[] = [];
+  const transferred: string[] = [];
 
   for (const line of lines) {
     // Extract first 17-20 digit number from the line (lets users paste mentions like <@123...>)
@@ -167,14 +171,17 @@ export async function bulkAddMembers(formData: FormData) {
       create: { discordId: resolved.discordId, displayName: resolved.displayName },
       update: { displayName: resolved.displayName },
     });
-    await placePlayerInDivision(divisionId, player.id);
+    const placement = await placePlayerInDivision(divisionId, player.id);
+    if (placement.transferred) {
+      transferred.push(`${player.displayName} (from ${placement.previousDivisionName})`);
+    }
     if (division!.discordRoleId) {
       await addGuildMemberRole(guildId, player.discordId, division!.discordRoleId);
     }
     added++;
   }
 
-  const summary = `added=${added}&skipped=${skipped}&failed=${failedIds.join(",")}`;
+  const summary = `added=${added}&skipped=${skipped}&failed=${failedIds.join(",")}&transferred=${encodeURIComponent(transferred.slice(0, 10).join(" | "))}`;
   revalidatePath(`/admin/divisions/${divisionId}`);
   redirect(`/admin/divisions/${divisionId}?bulk=${encodeURIComponent(summary)}`);
 }

@@ -73,6 +73,11 @@ export default async function BulkImportPage({
               {(summary.get("matchErrors") ?? "").length > 0 && (
                 <li style={{ color: "#e74c3c" }}>Match errors: {summary.get("matchErrors")}</li>
               )}
+              {(summary.get("transferred") ?? "").length > 0 && (
+                <li style={{ color: "#f1c40f" }}>
+                  ↪ Transferred (player listed in different division this season): {summary.get("transferred")}
+                </li>
+              )}
             </ul>
           </div>
         )}

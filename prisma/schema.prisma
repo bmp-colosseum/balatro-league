@@ -264,6 +264,10 @@ enum DivisionMemberStatus {
 model DivisionMember {
   id            String              @id @default(cuid())
   divisionId    String
+  // Denormalized from Division.seasonId so we can enforce one-member-per-
+  // season-per-player at the DB layer via @@unique([seasonId, playerId]).
+  // Kept in sync by placePlayerInDivision (the only write path).
+  seasonId      String
   playerId      String
   joinedAt      DateTime            @default(now())
   status        DivisionMemberStatus @default(ACTIVE)
@@ -274,6 +278,8 @@ model DivisionMember {
   player        Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
   @@unique([divisionId, playerId])
+  // Hard guarantee: a player can be in at most one division per season.
+  @@unique([seasonId, playerId])
   @@index([playerId])
   @@index([divisionId, status])
 }
