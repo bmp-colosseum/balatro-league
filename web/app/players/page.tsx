@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { isMockPlayer } from "@/lib/mock";
 import { tierColors } from "@/lib/tier-colors";
@@ -7,6 +9,11 @@ import { SiteNav } from "@/components/SiteNav";
 export const dynamic = "force-dynamic";
 
 export default async function PlayersPage() {
+  // Player roster is gated — must be logged in to see it. Standings + season
+  // pages stay public.
+  const session = await auth();
+  if (!session?.user) redirect("/auth/signin?from=/players");
+
   const allPlayers = await prisma.player.findMany({
     include: {
       memberships: {

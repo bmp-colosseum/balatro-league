@@ -34,6 +34,44 @@ export async function fetchGuildMember(
   return res.json() as Promise<DiscordMember>;
 }
 
+interface DiscordUser {
+  id: string;
+  username: string;
+  global_name?: string | null; // Discord's new display name (since 2023)
+  avatar?: string | null;
+}
+
+// Fetch a Discord user globally — works for ANY user ID regardless of
+// guild membership. Use when we just need a name for someone the bot
+// can see at all (signed up but not in the server, etc.). Bot uses its
+// own auth so the lookup doesn't depend on the target being in our guild.
+export async function fetchDiscordUser(userId: string): Promise<DiscordUser | null> {
+  const res = await fetch(`${BASE_URL}/users/${userId}`, {
+    headers: { Authorization: botAuthHeader() },
+    cache: "no-store",
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    console.warn(`Discord fetchDiscordUser failed: ${res.status} ${await res.text()}`);
+    return null;
+  }
+  return res.json() as Promise<DiscordUser>;
+}
+
+// Preferred display name for a user ID. Tries guild member first (so we
+// get the server-specific nick if set), falls back to global user
+// (so we still work for non-members). Returns null only if Discord
+// has no record of the user at all.
+export async function resolveDisplayName(guildId: string | undefined, userId: string): Promise<string | null> {
+  if (guildId) {
+    const m = await fetchGuildMember(guildId, userId);
+    if (m) return m.nick || m.user?.username || null;
+  }
+  const u = await fetchDiscordUser(userId);
+  if (u) return u.global_name || u.username || null;
+  return null;
+}
+
 export interface MessageEmbed {
   title?: string;
   description?: string;

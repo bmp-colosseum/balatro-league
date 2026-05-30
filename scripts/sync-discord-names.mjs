@@ -45,21 +45,32 @@ if (!DISCORD_TOKEN || !GUILD_ID) {
 
 const dryRun = process.argv.includes("--dry-run");
 
-async function fetchMember(userId) {
-  const res = await fetch(`https://discord.com/api/v10/guilds/${GUILD_ID}/members/${userId}`, {
-    headers: { Authorization: `Bot ${DISCORD_TOKEN}` },
-  });
+async function fetchJson(url) {
+  const res = await fetch(url, { headers: { Authorization: `Bot ${DISCORD_TOKEN}` } });
   if (res.status === 429) {
     const retryAfter = parseFloat(res.headers.get("retry-after") ?? "1");
     await new Promise((r) => setTimeout(r, Math.min(5000, retryAfter * 1000)));
-    return fetchMember(userId);
+    return fetchJson(url);
   }
   if (res.status === 404) return null;
   if (!res.ok) {
-    console.warn(`[${userId}] Discord ${res.status}: ${await res.text()}`);
+    console.warn(`Discord ${res.status}: ${await res.text()}`);
     return null;
   }
   return res.json();
+}
+
+// Try guild member (server-specific nick) first, then global user (works
+// regardless of guild membership). Returns the best name we can find or null.
+async function resolveName(userId) {
+  const m = await fetchJson(`https://discord.com/api/v10/guilds/${GUILD_ID}/members/${userId}`);
+  if (m) {
+    const n = (m.nick || m.user?.username || "").trim();
+    if (n) return n;
+  }
+  const u = await fetchJson(`https://discord.com/api/v10/users/${userId}`);
+  if (u) return (u.global_name || u.username || "").trim() || null;
+  return null;
 }
 
 async function main() {
@@ -74,19 +85,14 @@ async function main() {
 
     let updated = 0;
     let unchanged = 0;
-    let notInGuild = 0;
-    const notFoundNames = [];
+    let unknown = 0;
+    const unknownNames = [];
 
     for (const p of players) {
-      const m = await fetchMember(p.discordId);
-      if (!m) {
-        notInGuild++;
-        notFoundNames.push(`${p.displayName} (${p.discordId})`);
-        continue;
-      }
-      const liveName = (m.nick || m.user?.username || "").trim();
+      const liveName = await resolveName(p.discordId);
       if (!liveName) {
-        notInGuild++;
+        unknown++;
+        unknownNames.push(`${p.displayName} (${p.discordId})`);
         continue;
       }
       if (liveName === p.displayName) {
@@ -104,16 +110,16 @@ async function main() {
     }
 
     console.log("");
-    console.log(`Updated:        ${updated}${dryRun ? " (would be)" : ""}`);
-    console.log(`Already in sync: ${unchanged}`);
-    console.log(`Not in guild:   ${notInGuild}`);
-    if (notFoundNames.length > 0 && notFoundNames.length <= 20) {
+    console.log(`Updated:           ${updated}${dryRun ? " (would be)" : ""}`);
+    console.log(`Already in sync:   ${unchanged}`);
+    console.log(`No Discord record: ${unknown}`);
+    if (unknownNames.length > 0 && unknownNames.length <= 20) {
       console.log("");
-      console.log("Not-in-guild details:");
-      for (const n of notFoundNames) console.log(`  - ${n}`);
-    } else if (notFoundNames.length > 20) {
-      console.log(`(${notFoundNames.length} not-in-guild; sample below)`);
-      for (const n of notFoundNames.slice(0, 20)) console.log(`  - ${n}`);
+      console.log("Unknown details:");
+      for (const n of unknownNames) console.log(`  - ${n}`);
+    } else if (unknownNames.length > 20) {
+      console.log(`(${unknownNames.length} unknown; sample below)`);
+      for (const n of unknownNames.slice(0, 20)) console.log(`  - ${n}`);
     }
   } finally {
     await prisma.$disconnect();

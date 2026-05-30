@@ -1,7 +1,10 @@
-// Helper: validate a Discord ID and fetch the user's guild display name.
-// Returns null if not in the guild or the bot can't see them.
+// Helper: validate a Discord ID and fetch the user's display name.
+// Tries guild member first (for server-specific nicks), falls back to
+// global Discord user lookup (works for anyone with a valid ID, no
+// guild membership required). Only errors if Discord has no record
+// of the user at all.
 
-import { fetchGuildMember } from "@/lib/discord";
+import { resolveDisplayName } from "@/lib/discord";
 
 export interface ResolvedDiscordUser {
   discordId: string;
@@ -16,10 +19,9 @@ export async function resolveDiscordIdToDisplayName(
   if (!/^\d{17,20}$/.test(discordId)) {
     return { error: "Discord ID must be 17-20 digits." };
   }
-  const member = await fetchGuildMember(guildId, discordId);
-  if (!member) {
-    return { error: "User not found in this guild — make sure they've joined the server." };
+  const name = await resolveDisplayName(guildId, discordId);
+  if (!name) {
+    return { error: "No Discord user with that ID — double-check it's right." };
   }
-  const displayName = member.nick || member.user?.username || `Unknown (${discordId})`;
-  return { discordId, displayName };
+  return { discordId, displayName: name };
 }

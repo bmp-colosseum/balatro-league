@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
-import { addGuildMemberRole, fetchGuildMember } from "@/lib/discord";
+import { addGuildMemberRole, resolveDisplayName } from "@/lib/discord";
 import { placePlayerInDivision } from "@/lib/division-membership";
 
 // Minimal CSV parser supporting quoted fields (handles commas/newlines/quotes inside).
@@ -98,20 +98,15 @@ export async function bulkImportSeason(formData: FormData) {
         continue;
       }
 
-      // Verify the Discord ID against the actual guild + grab the live name.
-      // If they're not in the guild, fall back to the CSV name with a warning
-      // (admin may be importing players who haven't joined yet).
+      // Verify + grab the Discord name. resolveDisplayName tries guild
+      // first then falls back to global user — works for players who
+      // signed up to the league but aren't in this Discord server.
       let displayName = challongeName.trim();
-      let foundInGuild = false;
-      if (guildId) {
-        const m = await fetchGuildMember(guildId, discordId);
-        if (m) {
-          foundInGuild = true;
-          displayName = m.nick || m.user?.username || displayName;
-        }
-      }
-      if (!foundInGuild) {
-        membersErrors.push(`${divisionName} / ${displayName || discordId}: not in guild — used CSV name as fallback`);
+      const liveName = await resolveDisplayName(guildId, discordId);
+      if (liveName) {
+        displayName = liveName;
+      } else {
+        membersErrors.push(`${divisionName} / ${displayName || discordId}: no Discord user with that ID — used CSV name as fallback`);
       }
       if (!displayName) displayName = `Player ${discordId.slice(-4)}`;
 
