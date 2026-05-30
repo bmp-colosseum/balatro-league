@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
-import { activateSeason, createSeason, setSeasonPreset } from "./actions";
+import { activateSeason, createSeason, endSeason, setSeasonPreset } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -139,12 +139,24 @@ export default async function AdminSeasonsPage() {
                   </select>
                   <button type="submit" className="secondary">Save</button>
                 </form>
-                {!s.isActive && (
-                  <form action={activateSeason} style={{ marginTop: 8 }}>
-                    <input type="hidden" name="id" value={s.id} />
-                    <button type="submit" className="secondary">Activate</button>
-                  </form>
-                )}
+                <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                  {!s.isActive && (
+                    <form action={activateSeason}>
+                      <input type="hidden" name="id" value={s.id} />
+                      <button type="submit" className="secondary">Activate</button>
+                    </form>
+                  )}
+                  {s.isActive && (
+                    <Link href={`/admin/seasons/${s.id}/end`}>
+                      <button type="button">End season →</button>
+                    </Link>
+                  )}
+                  {s.endedAt && (
+                    <span className="muted" style={{ fontSize: 12, alignSelf: "center" }}>
+                      ended {s.endedAt.toISOString().slice(0, 10)}
+                    </span>
+                  )}
+                </div>
               </div>
             );
           })}

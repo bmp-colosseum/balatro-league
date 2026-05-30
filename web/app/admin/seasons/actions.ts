@@ -1,8 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
+import { computeRatingDeltas, type DivisionForRating } from "@/lib/end-season";
+import { computeStandings } from "@/lib/standings";
 
 interface TierConfig {
   name: string;
@@ -119,6 +122,68 @@ export async function deleteTemplate(formData: FormData) {
   if (!id) return;
   await prisma.tierTemplate.delete({ where: { id } });
   revalidatePath("/admin/seasons/templates");
+}
+
+// End a season: compute new ratings from final standings, write them back to
+// Players, mark Season inactive + endedAt now. Idempotent on the inactive
+// flag — clicking on an already-inactive season is a no-op for the season
+// state but still recomputes ratings.
+export async function endSeason(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+
+  const season = await prisma.season.findUnique({
+    where: { id },
+    include: {
+      tiers: { orderBy: { position: "asc" } },
+      divisions: {
+        include: {
+          tier: true,
+          members: {
+            include: { player: true },
+          },
+          pairings: { where: { status: "CONFIRMED" } },
+        },
+      },
+    },
+  });
+  if (!season) return;
+
+  const divisionsForRating: DivisionForRating[] = season.divisions.map((d) => {
+    const players = d.members.map((m) => m.player);
+    return {
+      tierPosition: d.tier.position,
+      members: d.members.map((m) => ({
+        playerId: m.playerId,
+        status: m.status,
+        currentRating: m.player.rating,
+      })),
+      standings: computeStandings(players, d.pairings),
+    };
+  });
+
+  const numTiers = season.tiers.length;
+  const deltas = computeRatingDeltas(numTiers, divisionsForRating);
+
+  // Apply rating updates in a single transaction so partial failure doesn't
+  // leave the league half-rated.
+  await prisma.$transaction([
+    ...deltas.map((d) =>
+      prisma.player.update({
+        where: { id: d.playerId },
+        data: { rating: d.newRating },
+      }),
+    ),
+    prisma.season.update({
+      where: { id: season.id },
+      data: { isActive: false, endedAt: new Date() },
+    }),
+  ]);
+
+  revalidatePath("/admin/seasons");
+  revalidatePath("/admin/rankings");
+  redirect("/admin/seasons");
 }
 
 export async function setSeasonPreset(formData: FormData) {
