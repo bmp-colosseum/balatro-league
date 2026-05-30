@@ -115,20 +115,6 @@ export default async function AdminDivisionDetail({
         )}
 
         <details className="card">
-          <summary style={{ cursor: "pointer" }}>
-            <strong>Import from Challonge</strong>
-            <span className="muted" style={{ marginLeft: 8 }}>
-              one-click: paste bracket URL → name-to-ID mapping → players + results imported
-            </span>
-          </summary>
-          <div style={{ marginTop: 8 }}>
-            <Link href={`/admin/divisions/${division.id}/import-challonge`}>
-              <button type="button">Open Challonge importer →</button>
-            </Link>
-          </div>
-        </details>
-
-        <details className="card">
           <summary style={{ cursor: "pointer" }}><strong>Bulk import members</strong></summary>
           <p className="muted" style={{ marginTop: 8 }}>
             Paste one Discord ID per line. Mentions like <code>&lt;@123456&gt;</code> work too —

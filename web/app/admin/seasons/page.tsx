@@ -237,6 +237,15 @@ export default async function AdminSeasonsPage() {
                 )}
 
                 <DiscordBootstrap season={s} />
+
+                {s.divisions.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <Link href={`/admin/seasons/${s.id}/bulk-import`} style={{ fontSize: 12 }}>
+                      📥 Bulk import members + pairings (all divisions in one shot)
+                    </Link>
+                  </div>
+                )}
+
                 <LifecycleActions
                   season={s}
                   round={roundsBySeason.get(s.id) ?? null}
