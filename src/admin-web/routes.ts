@@ -1361,69 +1361,85 @@ router.get("/seasons", async (req, res) => {
 
   const editorScript = raw(`
     (function() {
-      const TEMPLATES = ${templatesJson};
-      const list = document.getElementById('tier-list');
-      const tpl = document.getElementById('tier-row-template');
+      try {
+        const TEMPLATES = ${templatesJson};
+        const list = document.getElementById('tier-list');
+        if (!list) { console.error('tier-list not found'); return; }
 
-      function renderRows(configs) {
-        list.innerHTML = '';
-        configs.forEach((c, i) => addRow(c.name, c.divisionCount, i));
-        renumber();
-      }
-      function addRow(name, count, idx) {
-        const node = tpl.content.firstElementChild.cloneNode(true);
-        node.querySelector('input[name="tier_name[]"]').value = name || '';
-        node.querySelector('input[name="tier_count[]"]').value = count || 1;
-        node.dataset.rowIndex = idx;
-        list.appendChild(node);
-      }
-      function renumber() {
-        Array.from(list.children).forEach((row, i) => {
-          row.dataset.rowIndex = i;
-          row.querySelector('.tier-pos').textContent = (i + 1) + '.';
-        });
-      }
-      list.addEventListener('click', (e) => {
-        const row = e.target.closest('.tier-row');
-        if (!row) return;
-        if (e.target.classList.contains('tier-remove')) {
-          if (list.children.length > 1) row.remove();
-          renumber();
-        } else if (e.target.classList.contains('tier-up')) {
-          if (row.previousElementSibling) row.parentNode.insertBefore(row, row.previousElementSibling);
-          renumber();
-        } else if (e.target.classList.contains('tier-down')) {
-          if (row.nextElementSibling) row.parentNode.insertBefore(row.nextElementSibling, row);
+        function escapeAttr(s) {
+          return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+        function buildRow(name, count, idx) {
+          const div = document.createElement('div');
+          div.className = 'tier-row';
+          div.dataset.rowIndex = idx;
+          div.innerHTML =
+            '<span class="tier-pos">' + (idx + 1) + '.</span>' +
+            '<input type="text" name="tier_name[]" value="' + escapeAttr(name) + '" placeholder="Tier name" required />' +
+            '<input type="number" name="tier_count[]" value="' + (count || 1) + '" min="1" max="50" required />' +
+            '<button type="button" class="secondary tier-up" title="Move up">&#9650;</button>' +
+            '<button type="button" class="secondary tier-down" title="Move down">&#9660;</button>' +
+            '<button type="button" class="danger tier-remove" title="Remove">&#10005;</button>';
+          return div;
+        }
+        function renderRows(configs) {
+          list.innerHTML = '';
+          configs.forEach((c, i) => list.appendChild(buildRow(c.name, c.divisionCount, i)));
           renumber();
         }
-      });
-      document.getElementById('add-tier').addEventListener('click', () => {
-        addRow('', 1, list.children.length);
-        renumber();
-      });
-      const loadSelect = document.getElementById('load-template');
-      if (loadSelect) {
-        loadSelect.addEventListener('change', (e) => {
-          const id = e.target.value;
-          if (!id) return;
-          const t = TEMPLATES.find(x => x.id === id);
-          if (t) renderRows(t.config);
-          e.target.value = '';
+        function renumber() {
+          Array.from(list.children).forEach((row, i) => {
+            row.dataset.rowIndex = i;
+            const pos = row.querySelector('.tier-pos');
+            if (pos) pos.textContent = (i + 1) + '.';
+          });
+        }
+        list.addEventListener('click', (e) => {
+          const row = e.target.closest('.tier-row');
+          if (!row) return;
+          if (e.target.classList.contains('tier-remove')) {
+            if (list.children.length > 1) row.remove();
+            renumber();
+          } else if (e.target.classList.contains('tier-up')) {
+            if (row.previousElementSibling) row.parentNode.insertBefore(row, row.previousElementSibling);
+            renumber();
+          } else if (e.target.classList.contains('tier-down')) {
+            if (row.nextElementSibling) row.parentNode.insertBefore(row.nextElementSibling, row);
+            renumber();
+          }
         });
+        const addBtn = document.getElementById('add-tier');
+        if (addBtn) addBtn.addEventListener('click', () => {
+          list.appendChild(buildRow('', 1, list.children.length));
+          renumber();
+        });
+        const loadSelect = document.getElementById('load-template');
+        if (loadSelect) {
+          loadSelect.addEventListener('change', (e) => {
+            const id = e.target.value;
+            if (!id) return;
+            const t = TEMPLATES.find(x => x.id === id);
+            if (t) { renderRows(t.config); e.target.value = ''; }
+            else { console.warn('Template not found:', id); }
+          });
+        }
+        const saveBtn = document.getElementById('save-template');
+        if (saveBtn) saveBtn.addEventListener('click', () => {
+          const nameInput = document.getElementById('save-template-name');
+          const name = nameInput.value.trim();
+          if (!name) { nameInput.focus(); nameInput.style.outline = '2px solid #e74c3c'; setTimeout(() => nameInput.style.outline = '', 1500); return; }
+          const config = Array.from(list.children).map(row => ({
+            name: row.querySelector('input[name="tier_name[]"]').value,
+            divisionCount: parseInt(row.querySelector('input[name="tier_count[]"]').value, 10) || 1,
+          }));
+          const form = document.getElementById('save-template-form');
+          form.querySelector('input[name="templateName"]').value = name;
+          form.querySelector('input[name="config"]').value = JSON.stringify(config);
+          form.submit();
+        });
+      } catch (err) {
+        console.error('Tier editor init failed:', err);
       }
-      document.getElementById('save-template').addEventListener('click', () => {
-        const nameInput = document.getElementById('save-template-name');
-        const name = nameInput.value.trim();
-        if (!name) { nameInput.focus(); nameInput.style.outline = '2px solid #e74c3c'; setTimeout(() => nameInput.style.outline = '', 1500); return; }
-        const config = Array.from(list.children).map(row => ({
-          name: row.querySelector('input[name="tier_name[]"]').value,
-          divisionCount: parseInt(row.querySelector('input[name="tier_count[]"]').value, 10) || 1,
-        }));
-        const form = document.getElementById('save-template-form');
-        form.querySelector('input[name="templateName"]').value = name;
-        form.querySelector('input[name="config"]').value = JSON.stringify(config);
-        form.submit();
-      });
     })();
   `);
 
@@ -1462,16 +1478,6 @@ router.get("/seasons", async (req, res) => {
           </div>
           <div id="tier-list">${tierRowsHtml}</div>
           <button type="button" class="secondary" id="add-tier" style="margin-top:6px">+ Add tier</button>
-          <template id="tier-row-template">
-            <div class="tier-row" data-row-index="0">
-              <span class="tier-pos">1.</span>
-              <input type="text" name="tier_name[]" placeholder="Tier name" required />
-              <input type="number" name="tier_count[]" value="1" min="1" max="50" required />
-              <button type="button" class="secondary tier-up" title="Move up">▲</button>
-              <button type="button" class="secondary tier-down" title="Move down">▼</button>
-              <button type="button" class="danger tier-remove" title="Remove">✕</button>
-            </div>
-          </template>
         </div>
 
         <button type="submit" style="margin-top:12px">Create season</button>
@@ -1550,45 +1556,64 @@ router.get("/seasons/templates", async (req, res) => {
 
   const tplScript = raw(`
     (function() {
-      const list = document.getElementById('tpl-tier-list');
-      const tpl = document.getElementById('tpl-tier-row-template');
-      function renumber() {
-        Array.from(list.children).forEach((row, i) => {
-          row.dataset.rowIndex = i;
-          row.querySelector('.tier-pos').textContent = (i + 1) + '.';
-        });
-      }
-      list.addEventListener('click', (e) => {
-        const row = e.target.closest('.tier-row');
-        if (!row) return;
-        if (e.target.classList.contains('tpl-remove')) {
-          if (list.children.length > 1) row.remove();
-          renumber();
-        } else if (e.target.classList.contains('tpl-up')) {
-          if (row.previousElementSibling) row.parentNode.insertBefore(row, row.previousElementSibling);
-          renumber();
-        } else if (e.target.classList.contains('tpl-down')) {
-          if (row.nextElementSibling) row.parentNode.insertBefore(row.nextElementSibling, row);
-          renumber();
+      try {
+        const list = document.getElementById('tpl-tier-list');
+        if (!list) { console.error('tpl-tier-list not found'); return; }
+        function escapeAttr(s) {
+          return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
-      });
-      document.getElementById('tpl-add-tier').addEventListener('click', () => {
-        const node = tpl.content.firstElementChild.cloneNode(true);
-        node.querySelector('input[name="tpl_tier_name[]"]').value = '';
-        node.querySelector('input[name="tpl_tier_count[]"]').value = 1;
-        list.appendChild(node);
-        renumber();
-      });
-      document.getElementById('tpl-create-form').addEventListener('submit', (e) => {
-        const name = document.getElementById('tpl-name').value.trim();
-        if (!name) { e.preventDefault(); document.getElementById('tpl-name').focus(); return; }
-        // Serialize current rows to JSON in the hidden 'config' field
-        const config = Array.from(list.children).map(row => ({
-          name: row.querySelector('input[name="tpl_tier_name[]"]').value,
-          divisionCount: parseInt(row.querySelector('input[name="tpl_tier_count[]"]').value, 10) || 1,
-        }));
-        document.getElementById('tpl-config-hidden').value = JSON.stringify(config);
-      });
+        function buildRow(name, count, idx) {
+          const div = document.createElement('div');
+          div.className = 'tier-row';
+          div.dataset.rowIndex = idx;
+          div.innerHTML =
+            '<span class="tier-pos">' + (idx + 1) + '.</span>' +
+            '<input type="text" name="tpl_tier_name[]" value="' + escapeAttr(name) + '" placeholder="Tier name" required />' +
+            '<input type="number" name="tpl_tier_count[]" value="' + (count || 1) + '" min="1" max="50" required />' +
+            '<button type="button" class="secondary tpl-up" title="Move up">&#9650;</button>' +
+            '<button type="button" class="secondary tpl-down" title="Move down">&#9660;</button>' +
+            '<button type="button" class="danger tpl-remove" title="Remove">&#10005;</button>';
+          return div;
+        }
+        function renumber() {
+          Array.from(list.children).forEach((row, i) => {
+            row.dataset.rowIndex = i;
+            const pos = row.querySelector('.tier-pos');
+            if (pos) pos.textContent = (i + 1) + '.';
+          });
+        }
+        list.addEventListener('click', (e) => {
+          const row = e.target.closest('.tier-row');
+          if (!row) return;
+          if (e.target.classList.contains('tpl-remove')) {
+            if (list.children.length > 1) row.remove();
+            renumber();
+          } else if (e.target.classList.contains('tpl-up')) {
+            if (row.previousElementSibling) row.parentNode.insertBefore(row, row.previousElementSibling);
+            renumber();
+          } else if (e.target.classList.contains('tpl-down')) {
+            if (row.nextElementSibling) row.parentNode.insertBefore(row.nextElementSibling, row);
+            renumber();
+          }
+        });
+        const addBtn = document.getElementById('tpl-add-tier');
+        if (addBtn) addBtn.addEventListener('click', () => {
+          list.appendChild(buildRow('', 1, list.children.length));
+          renumber();
+        });
+        const formEl = document.getElementById('tpl-create-form');
+        if (formEl) formEl.addEventListener('submit', (e) => {
+          const name = document.getElementById('tpl-name').value.trim();
+          if (!name) { e.preventDefault(); document.getElementById('tpl-name').focus(); return; }
+          const config = Array.from(list.children).map(row => ({
+            name: row.querySelector('input[name="tpl_tier_name[]"]').value,
+            divisionCount: parseInt(row.querySelector('input[name="tpl_tier_count[]"]').value, 10) || 1,
+          }));
+          document.getElementById('tpl-config-hidden').value = JSON.stringify(config);
+        });
+      } catch (err) {
+        console.error('Template editor init failed:', err);
+      }
     })();
   `);
 
@@ -1608,16 +1633,6 @@ router.get("/seasons/templates", async (req, res) => {
         <div style="flex: 1 1 100%">
           <div id="tpl-tier-list">${seedRowsHtml}</div>
           <button type="button" class="secondary" id="tpl-add-tier" style="margin-top:6px">+ Add tier</button>
-          <template id="tpl-tier-row-template">
-            <div class="tier-row" data-row-index="0">
-              <span class="tier-pos">1.</span>
-              <input type="text" name="tpl_tier_name[]" placeholder="Tier name" required />
-              <input type="number" name="tpl_tier_count[]" value="1" min="1" max="50" required />
-              <button type="button" class="secondary tpl-up" title="Move up">▲</button>
-              <button type="button" class="secondary tpl-down" title="Move down">▼</button>
-              <button type="button" class="danger tpl-remove" title="Remove">✕</button>
-            </div>
-          </template>
         </div>
         <input id="tpl-config-hidden" type="hidden" name="config" />
         <button type="submit" style="margin-top:12px">Save template</button>
