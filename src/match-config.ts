@@ -56,12 +56,9 @@ function shuffle<T>(arr: T[], rand: () => number): T[] {
 
 // Seed Balatro's default decks + stakes if the tables are empty.
 // Called on first /start-match if admin hasn't configured yet.
-const DEFAULT_DECKS = [
-  "Red", "Blue", "Yellow", "Green", "Black",
-  "Magic", "Nebula", "Ghost", "Abandoned", "Checkered",
-  "Zodiac", "Painted", "Anaglyph", "Plasma", "Erratic",
-];
-const DEFAULT_STAKES = ["White", "Red", "Green", "Black", "Blue", "Purple", "Orange", "Gold"];
+// Defaults live in src/data/match-defaults.json — the web app pulls the same
+// file via web's sync-schema.mjs postinstall so both sides stay in sync.
+import defaults from "./data/match-defaults.json" with { type: "json" };
 
 export async function seedDefaultsIfEmpty(): Promise<void> {
   const [deckCount, stakeCount] = await Promise.all([
@@ -70,12 +67,12 @@ export async function seedDefaultsIfEmpty(): Promise<void> {
   ]);
   if (deckCount === 0) {
     await prisma.allowedDeck.createMany({
-      data: DEFAULT_DECKS.map((name) => ({ name })),
+      data: defaults.decks.map((name) => ({ name })),
     });
   }
   if (stakeCount === 0) {
     await prisma.allowedStake.createMany({
-      data: DEFAULT_STAKES.map((name) => ({ name })),
+      data: defaults.stakes.map((name) => ({ name })),
     });
   }
 }

@@ -1,0 +1,8 @@
+{
+  "decks": [
+    "Red", "Blue", "Yellow", "Green", "Black",
+    "Magic", "Nebula", "Ghost", "Abandoned", "Checkered",
+    "Zodiac", "Painted", "Anaglyph", "Plasma", "Erratic"
+  ],
+  "stakes": ["White", "Red", "Green", "Black", "Blue", "Purple", "Orange", "Gold"]
+}

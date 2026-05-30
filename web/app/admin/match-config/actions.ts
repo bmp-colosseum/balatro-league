@@ -3,15 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
-
-// Mirrors src/match-config.ts DEFAULT_DECKS / DEFAULT_STAKES — kept in sync manually
-// since web and bot don't share a package yet.
-const DEFAULT_DECKS = [
-  "Red", "Blue", "Yellow", "Green", "Black",
-  "Magic", "Nebula", "Ghost", "Abandoned", "Checkered",
-  "Zodiac", "Painted", "Anaglyph", "Plasma", "Erratic",
-];
-const DEFAULT_STAKES = ["White", "Red", "Green", "Black", "Blue", "Purple", "Orange", "Gold"];
+// Synced from src/data/match-defaults.json by web/scripts/sync-schema.mjs (postinstall).
+import defaults from "@/lib/match-defaults.json";
 
 export async function addDeck(formData: FormData) {
   await requireAdmin();
@@ -60,10 +53,10 @@ export async function seedDefaults() {
     prisma.allowedStake.count(),
   ]);
   if (deckCount === 0) {
-    await prisma.allowedDeck.createMany({ data: DEFAULT_DECKS.map((name) => ({ name })) });
+    await prisma.allowedDeck.createMany({ data: defaults.decks.map((name) => ({ name })) });
   }
   if (stakeCount === 0) {
-    await prisma.allowedStake.createMany({ data: DEFAULT_STAKES.map((name) => ({ name })) });
+    await prisma.allowedStake.createMany({ data: defaults.stakes.map((name) => ({ name })) });
   }
   revalidatePath("/admin/match-config");
 }
