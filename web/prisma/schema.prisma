@@ -145,6 +145,10 @@ model MatchSession {
   playerAId     String            // initiator (ran /start-match)
   playerBId     String            // opponent
   state         MatchSessionState @default(WAITING_ACCEPT)
+  // Bumped on every update; used for optimistic concurrency control so
+  // racing button clicks can't double-write the state machine. Any update
+  // is gated by `where: { id, version }` — a stale click hits 0 rows updated.
+  version       Int               @default(0)
   threadId      String?           // Discord thread id (set once accepted)
   channelId     String?           // parent channel of the thread
 
@@ -156,11 +160,15 @@ model MatchSession {
   pairingId     String?           // populated when COMPLETE
 
   createdAt     DateTime          @default(now())
+  // When the invite expires (WAITING_ACCEPT only). Survives bot restarts —
+  // the previous setTimeout-only approach lost timers on every deploy.
+  expiresAt     DateTime?
   acceptedAt    DateTime?
   completedAt   DateTime?
 
   @@index([state])
   @@index([threadId])
+  @@index([state, expiresAt])
 }
 
 // Binding between a Discord role and a bot permission tier.

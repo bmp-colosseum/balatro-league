@@ -67,16 +67,14 @@ The web app uses next-auth, which expects callbacks at `/api/auth/callback/disco
 
 Once Phase 6 deprecates the Express dashboard (separate cleanup commit), you can remove the old redirect URL.
 
-## Part 6: Schema sync caveat
+## Part 6: Schema sync (automatic)
 
-The web app has its own copy of the Prisma schema at `web/prisma/schema.prisma` (mirrors the root `/prisma/schema.prisma`). Whenever the bot's schema changes:
+The web app has its own copy of the Prisma schema at `web/prisma/schema.prisma`, kept in sync with the root `/prisma/schema.prisma` automatically:
 
-```bash
-# from repo root
-cp prisma/schema.prisma web/prisma/schema.prisma
-```
+- **Locally + on Railway**: `web/scripts/sync-schema.mjs` runs in `web`'s `postinstall`, copying the root schema down before `prisma generate`. You never need to `cp` manually.
+- The bot service runs `prisma migrate deploy` at boot. The web service only regenerates the client — it doesn't run migrations (avoiding a race against the bot).
 
-Then commit both. Both services run `prisma migrate deploy` at boot using their respective schemas. They should always be identical.
+If the root schema isn't accessible during a web build (shouldn't happen on Railway since both services share the repo), the sync script falls back silently and uses whatever's already committed in `web/prisma/schema.prisma`.
 
 Future cleanup: move both to a shared `packages/db` workspace.
 

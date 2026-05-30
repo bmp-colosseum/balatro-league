@@ -1,8 +1,8 @@
 import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
-import { startAdminServer } from "./admin-web/server.js";
 import { buttonHandlers, slashCommands } from "./commands/index.js";
 import { setDiscordClient } from "./discord.js";
 import { env } from "./env.js";
+import { startMatchSweep } from "./match-sweep.js";
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
@@ -63,5 +63,5 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 setDiscordClient(client);
-startAdminServer();
+startMatchSweep();
 await client.login(env.DISCORD_TOKEN);

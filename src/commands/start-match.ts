@@ -103,7 +103,10 @@ export const startMatch: SlashCommand = {
       return;
     }
 
-    // Create the session
+    // Create the session — expiresAt is DB-backed so it survives bot restarts.
+    // The accept handler checks it before doing anything else; the boot sweep
+    // (match-sweep.ts) also cleans up expired invites we never saw a click on.
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
     const session = await prisma.matchSession.create({
       data: {
         divisionId: division.id,
@@ -111,31 +114,13 @@ export const startMatch: SlashCommand = {
         playerBId: opp.id,
         state: "WAITING_ACCEPT",
         channelId: interaction.channelId,
+        expiresAt,
       },
     });
 
-    // Render and post in current channel; we'll move to a thread once accepted
     const { embeds, components } = renderMatch(session, me, opp);
     const message = await (interaction.channel as TextChannel).send({ embeds, components });
 
     await interaction.editReply(`Match invite posted: ${message.url}`);
-
-    // Schedule a 5-min timeout
-    setTimeout(async () => {
-      const s = await prisma.matchSession.findUnique({ where: { id: session.id } });
-      if (s && s.state === "WAITING_ACCEPT") {
-        await prisma.matchSession.update({ where: { id: s.id }, data: { state: "CANCELLED" } });
-        try {
-          const { embeds, components } = renderMatch(
-            { ...s, state: "CANCELLED" },
-            me,
-            opp,
-          );
-          await message.edit({ embeds, components });
-        } catch {
-          // Message may have been deleted; ignore
-        }
-      }
-    }, 5 * 60 * 1000);
   },
 };

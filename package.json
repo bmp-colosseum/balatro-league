@@ -23,12 +23,8 @@
   },
   "dependencies": {
     "@prisma/client": "^6.0.0",
-    "@types/express": "^5.0.6",
-    "@types/express-session": "^1.19.0",
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.7",
-    "express": "^5.2.1",
-    "express-session": "^1.19.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {

@@ -14,7 +14,7 @@ import {
   type ButtonInteraction,
   type TextChannel,
 } from "discord.js";
-import { MatchSessionState, type MatchSession } from "@prisma/client";
+import { MatchSessionState, Prisma, type MatchSession } from "@prisma/client";
 import { announceResult } from "../announce.js";
 import { prisma } from "../db.js";
 import { generatePool, getAllowedDecks, getAllowedStakes } from "../match-config.js";
@@ -48,6 +48,21 @@ async function loadPlayers(session: { playerAId: string; playerBId: string }) {
   return { playerA: a, playerB: b };
 }
 
+// Optimistic-locked update: only succeeds if `version` still matches what we read.
+// On version-mismatch (concurrent click won the race), returns null so the caller
+// can show a "refresh and try again" message.
+async function updateSession(
+  session: MatchSession,
+  data: Prisma.MatchSessionUpdateManyMutationInput,
+): Promise<MatchSession | null> {
+  const result = await prisma.matchSession.updateMany({
+    where: { id: session.id, version: session.version },
+    data: { ...data, version: { increment: 1 } },
+  });
+  if (result.count === 0) return null;
+  return prisma.matchSession.findUnique({ where: { id: session.id } });
+}
+
 async function refreshMessage(interaction: ButtonInteraction, session: MatchSession) {
   const { playerA, playerB } = await loadPlayers(session);
   const { embeds, components } = renderMatch(session, playerA, playerB);
@@ -58,7 +73,10 @@ async function reply(interaction: ButtonInteraction, content: string) {
   await interaction.reply({ content, flags: MessageFlags.Ephemeral });
 }
 
-// Helper: only the opponent can accept/decline; only the named player can ban/pick/etc.
+async function raceLost(interaction: ButtonInteraction) {
+  return reply(interaction, "Someone else just acted on this match — the buttons may have changed. Try again.");
+}
+
 async function requireActor(interaction: ButtonInteraction, expectedDiscordId: string): Promise<boolean> {
   if (interaction.user.id !== expectedDiscordId) {
     await reply(interaction, "Only the player whose turn it is can use this button.");
@@ -101,21 +119,25 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
   if (session.state !== "WAITING_ACCEPT") {
     return reply(interaction, "This match is no longer waiting for acceptance.");
   }
+  // Expiry check — survives bot restarts unlike the original setTimeout.
+  if (session.expiresAt && session.expiresAt.getTime() < Date.now()) {
+    const cancelled = await updateSession(session, { state: MatchSessionState.CANCELLED });
+    if (cancelled) await refreshMessage(interaction, cancelled);
+    return reply(interaction, "This match invite expired.");
+  }
   const { playerB } = await loadPlayers(session);
   if (!(await requireActor(interaction, playerB.discordId))) return;
 
-  // Generate deck pool now (admin may have changed config since invite was posted)
   const [decks, stakes] = await Promise.all([getAllowedDecks(), getAllowedStakes()]);
   if (decks.length === 0 || stakes.length === 0) {
     return reply(interaction, "Deck/stake pool is empty — ask an admin to configure it before accepting.");
   }
   const pool = generatePool(decks, stakes);
 
-  // Coin toss: pick who bans first
   const { playerA } = await loadPlayers(session);
   const firstId = Math.random() < 0.5 ? playerA.id : playerB.id;
 
-  // Create or reuse a thread for the match (so chat doesn't fill the parent channel)
+  // Create thread for match chat (failures fall back to the parent channel).
   let threadId = session.threadId;
   if (!threadId && interaction.channel && interaction.channel.type === ChannelType.GuildText) {
     try {
@@ -125,24 +147,21 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
       });
       threadId = thread.id;
     } catch {
-      // Thread creation can fail (perms); proceed in the parent channel
+      // perms issue; keep going in the parent channel
     }
   }
 
-  const updated = await prisma.matchSession.update({
-    where: { id: session.id },
-    data: {
-      state: "GAME_1_BAN",
-      acceptedAt: new Date(),
-      pool: JSON.stringify(pool),
-      game1: JSON.stringify(emptyGameState(firstId)),
-      threadId,
-    },
+  const updated = await updateSession(session, {
+    state: MatchSessionState.GAME_1_BAN,
+    acceptedAt: new Date(),
+    pool: JSON.stringify(pool),
+    game1: JSON.stringify(emptyGameState(firstId)),
+    threadId,
   });
+  if (!updated) return raceLost(interaction);
 
   await refreshMessage(interaction, updated);
 
-  // If we created a thread, post the next embed there + add both players
   if (threadId && threadId !== session.threadId) {
     try {
       const thread = await interaction.client.channels.fetch(threadId);
@@ -165,10 +184,8 @@ async function handleDecline(interaction: ButtonInteraction, session: MatchSessi
   const { playerB } = await loadPlayers(session);
   if (!(await requireActor(interaction, playerB.discordId))) return;
 
-  const updated = await prisma.matchSession.update({
-    where: { id: session.id },
-    data: { state: "CANCELLED" },
-  });
+  const updated = await updateSession(session, { state: MatchSessionState.CANCELLED });
+  if (!updated) return raceLost(interaction);
   await refreshMessage(interaction, updated);
 }
 
@@ -180,23 +197,19 @@ async function handleChooseFirst(interaction: ButtonInteraction, session: MatchS
   const game1 = parseGame(session.game1);
   if (!game1?.winnerId) return reply(interaction, "Game 1 winner not recorded.");
 
-  // The loser of game 1 must be the actor
   const loserId = game1.winnerId === session.playerAId ? session.playerBId : session.playerAId;
   const loser = await prisma.player.findUniqueOrThrow({ where: { id: loserId } });
   if (!(await requireActor(interaction, loser.discordId))) return;
 
-  // Validate firstId is one of the two players
   if (firstIdRaw !== session.playerAId && firstIdRaw !== session.playerBId) {
     return reply(interaction, "Invalid first-ban player.");
   }
 
-  const updated = await prisma.matchSession.update({
-    where: { id: session.id },
-    data: {
-      state: "GAME_2_BAN",
-      game2: JSON.stringify(emptyGameState(firstIdRaw)),
-    },
+  const updated = await updateSession(session, {
+    state: MatchSessionState.GAME_2_BAN,
+    game2: JSON.stringify(emptyGameState(firstIdRaw)),
   });
+  if (!updated) return raceLost(interaction);
   await refreshMessage(interaction, updated);
 }
 
@@ -224,17 +237,17 @@ async function handleBan(interaction: ButtonInteraction, session: MatchSession, 
 
   const newGame: GameState = { ...game, bans: [...game.bans, idx] };
 
-  // Check if we transitioned to PICK
   const newPhase = phaseFor(newGame, session.playerAId, session.playerBId, pool.length);
   let newState: MatchSessionState = session.state;
   if (newPhase.kind === "PICK") {
     newState = isGame1 ? MatchSessionState.GAME_1_PICK : MatchSessionState.GAME_2_PICK;
   }
 
-  const data = isGame1
+  const data: Prisma.MatchSessionUpdateManyMutationInput = isGame1
     ? { game1: JSON.stringify(newGame), state: newState }
     : { game2: JSON.stringify(newGame), state: newState };
-  const updated = await prisma.matchSession.update({ where: { id: session.id }, data });
+  const updated = await updateSession(session, data);
+  if (!updated) return raceLost(interaction);
   await refreshMessage(interaction, updated);
 }
 
@@ -262,10 +275,11 @@ async function handlePick(interaction: ButtonInteraction, session: MatchSession,
 
   const newGame: GameState = { ...game, pickedDeckIdx: idx };
   const newState: MatchSessionState = isGame1 ? MatchSessionState.GAME_1_PLAYING : MatchSessionState.GAME_2_PLAYING;
-  const data = isGame1
+  const data: Prisma.MatchSessionUpdateManyMutationInput = isGame1
     ? { game1: JSON.stringify(newGame), state: newState }
     : { game2: JSON.stringify(newGame), state: newState };
-  const updated = await prisma.matchSession.update({ where: { id: session.id }, data });
+  const updated = await updateSession(session, data);
+  if (!updated) return raceLost(interaction);
   await refreshMessage(interaction, updated);
 }
 
@@ -274,7 +288,6 @@ async function handleWinner(interaction: ButtonInteraction, session: MatchSessio
   if (winnerIdRaw !== session.playerAId && winnerIdRaw !== session.playerBId) {
     return reply(interaction, "Invalid winner.");
   }
-  // Either player can report
   const { playerA, playerB } = await loadPlayers(session);
   if (interaction.user.id !== playerA.discordId && interaction.user.id !== playerB.discordId) {
     return reply(interaction, "Only the two players in this match can report the winner.");
@@ -291,30 +304,38 @@ async function handleWinner(interaction: ButtonInteraction, session: MatchSessio
   const newGame: GameState = { ...game, winnerId: winnerIdRaw };
 
   if (isGame1) {
-    const updated = await prisma.matchSession.update({
-      where: { id: session.id },
-      data: {
-        game1: JSON.stringify(newGame),
-        state: "GAME_2_CHOOSE_FIRST",
-      },
+    const updated = await updateSession(session, {
+      game1: JSON.stringify(newGame),
+      state: MatchSessionState.GAME_2_CHOOSE_FIRST,
     });
+    if (!updated) return raceLost(interaction);
     return refreshMessage(interaction, updated);
   }
 
-  // Game 2 winner: finalize the match
+  // Game 2 winner: finalize.
   const game1 = parseGame(session.game1);
   if (!game1?.winnerId) return reply(interaction, "Game 1 winner missing — can't finalize.");
 
   const aWins = (game1.winnerId === session.playerAId ? 1 : 0) + (winnerIdRaw === session.playerAId ? 1 : 0);
   const bWins = (game1.winnerId === session.playerBId ? 1 : 0) + (winnerIdRaw === session.playerBId ? 1 : 0);
 
-  // Write a CONFIRMED Pairing (or update if one exists)
   const [canonA, canonB] = session.playerAId < session.playerBId
     ? [session.playerAId, session.playerBId]
     : [session.playerBId, session.playerAId];
   const gamesWonA = canonA === session.playerAId ? aWins : bWins;
   const gamesWonB = canonA === session.playerAId ? bWins : aWins;
 
+  // Bump version first; if we lose the race, don't write the Pairing.
+  const updated = await updateSession(session, {
+    game2: JSON.stringify(newGame),
+    state: MatchSessionState.COMPLETE,
+    completedAt: new Date(),
+  });
+  if (!updated) return raceLost(interaction);
+
+  // Normal /start-match results — NOT admin overrides. reporterId is the user
+  // who clicked the final winner button (both players have equal authority here).
+  const reporter = interaction.user.id === playerA.discordId ? playerA : playerB;
   const pairing = await prisma.pairing.upsert({
     where: {
       divisionId_playerAId_playerBId: {
@@ -330,30 +351,23 @@ async function handleWinner(interaction: ButtonInteraction, session: MatchSessio
       gamesWonA,
       gamesWonB,
       status: "CONFIRMED",
-      reporterId: session.playerAId,
+      reporterId: reporter.id,
       reportedAt: new Date(),
       confirmedAt: new Date(),
-      adminOverrideBy: "match-flow",
-      adminOverrideReason: `recorded via /start-match session ${session.id}`,
     },
     update: {
       gamesWonA,
       gamesWonB,
       status: "CONFIRMED",
+      reporterId: reporter.id,
+      reportedAt: new Date(),
       confirmedAt: new Date(),
-      adminOverrideBy: "match-flow",
-      adminOverrideReason: `recorded via /start-match session ${session.id} (overwrite)`,
     },
   });
 
-  const updated = await prisma.matchSession.update({
-    where: { id: session.id },
-    data: {
-      game2: JSON.stringify(newGame),
-      state: "COMPLETE",
-      completedAt: new Date(),
-      pairingId: pairing.id,
-    },
+  await prisma.matchSession.update({
+    where: { id: updated.id },
+    data: { pairingId: pairing.id },
   });
 
   await refreshMessage(interaction, updated);
