@@ -16,3 +16,4 @@ prisma/migrations/dev/
 
 # Claude Code session state
 .claude/
+scripts/out/
