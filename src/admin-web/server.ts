@@ -86,10 +86,11 @@ export function startAdminServer(): void {
   });
   app.use("/admin", router);
 
-  // Root: send authenticated users to /me, otherwise to /admin (or login)
+  // Root: logged-in players land on their profile, unauthenticated visitors see public standings
+  // (no forced login — anyone can browse the league without an account).
   app.get("/", (req, res) => {
     if (req.session.user) return res.redirect("/me");
-    res.redirect("/admin");
+    res.redirect("/standings");
   });
 
   const port = env.PORT ?? env.WEB_PORT;
