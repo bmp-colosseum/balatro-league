@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
-import { isMockPlayer } from "@/lib/mock";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
@@ -66,15 +65,11 @@ export default async function AdminRankingsPage() {
               {players.length === 0 ? (
                 <tr><td colSpan={4} className="muted">No players yet.</td></tr>
               ) : players.map((p) => {
-                const isFake = isMockPlayer(p);
                 const div = p.memberships[0]?.division;
                 return (
                   <tr key={p.id}>
                     <td>
-                      <strong>{p.displayName}</strong>{" "}
-                      {isFake && (
-                        <span className="pill" style={{ background: "rgba(241,196,15,0.15)", color: "#f1c40f" }}>FAKE</span>
-                      )}
+                      <strong>{p.displayName}</strong>
                     </td>
                     <td><span className="muted">{p.discordId}</span></td>
                     <td>

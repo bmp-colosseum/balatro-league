@@ -97,7 +97,6 @@ export default async function AdminPlayersPage({
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Type</th>
                 <th>Discord ID</th>
                 <th>Division</th>
                 <th>Move to</th>
@@ -107,23 +106,15 @@ export default async function AdminPlayersPage({
             </thead>
             <tbody>
               {players.length === 0 ? (
-                <tr><td colSpan={7} className="muted">No players match.</td></tr>
+                <tr><td colSpan={6} className="muted">No players match.</td></tr>
               ) : (
                 players.map((p) => {
-                  const isFake = isMockPlayer(p);
                   const membership = p.memberships[0];
                   const currentDiv = membership?.division;
                   const isDropped = membership?.status === "DROPPED";
                   return (
                     <tr key={p.id}>
                       <td><strong>{p.displayName}</strong></td>
-                      <td>
-                        {isFake ? (
-                          <span className="pill" style={{ background: "rgba(241,196,15,0.15)", color: "#f1c40f" }}>FAKE</span>
-                        ) : (
-                          <span className="pill" style={{ background: "rgba(46,204,113,0.15)", color: "#2ecc71" }}>REAL</span>
-                        )}
-                      </td>
                       <td><span className="muted">{p.discordId}</span></td>
                       <td>
                         {currentDiv ? (

@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { computeStandings } from "@/lib/standings";
 import { tierColors } from "@/lib/tier-colors";
-import { isMockPlayer } from "@/lib/mock";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import {
@@ -228,30 +227,22 @@ export default async function AdminDivisionDetail({
           </div>
           <table>
             <thead>
-              <tr><th>Player</th><th>Discord ID</th><th>Joined</th></tr>
+              <tr><th>Player</th><th>Discord ID</th></tr>
             </thead>
             <tbody>
               {division.members.length === 0 ? (
-                <tr><td colSpan={3} className="muted">No members.</td></tr>
+                <tr><td colSpan={2} className="muted">No members.</td></tr>
               ) : division.members.map((m) => {
-                const isFake = isMockPlayer(m.player);
                 const isDropped = m.status === "DROPPED";
                 return (
                   <tr key={m.id}>
                     <td>
                       <strong>{m.player.displayName}</strong>
-                      {" "}
-                      {isFake ? (
-                        <span className="pill" style={{ background: "rgba(241,196,15,0.15)", color: "#f1c40f" }}>FAKE</span>
-                      ) : (
-                        <span className="pill" style={{ background: "rgba(46,204,113,0.15)", color: "#2ecc71" }}>REAL</span>
-                      )}
                       {isDropped && (
-                        <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "#e74c3c", marginLeft: 4 }}>DROPPED</span>
+                        <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "#e74c3c", marginLeft: 6 }}>DROPPED</span>
                       )}
                     </td>
                     <td><span className="muted">{m.player.discordId}</span></td>
-                    <td>{m.joinedAt.toISOString().slice(0, 10)}</td>
                   </tr>
                 );
               })}
