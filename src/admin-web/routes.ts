@@ -1409,8 +1409,9 @@ router.get("/seasons", async (req, res) => {
         e.target.value = '';
       });
       document.getElementById('save-template').addEventListener('click', () => {
-        const name = prompt('Save current tier layout as template. Name?');
-        if (!name) return;
+        const nameInput = document.getElementById('save-template-name');
+        const name = nameInput.value.trim();
+        if (!name) { nameInput.focus(); nameInput.style.outline = '2px solid #e74c3c'; setTimeout(() => nameInput.style.outline = '', 1500); return; }
         const config = Array.from(list.children).map(row => ({
           name: row.querySelector('input[name="tier_name[]"]').value,
           divisionCount: parseInt(row.querySelector('input[name="tier_count[]"]').value, 10) || 1,
@@ -1451,8 +1452,9 @@ router.get("/seasons", async (req, res) => {
                   <option value="">— Load template… —</option>
                   ${templateOptions}
                 </select>`
-              : raw("")}
-            <button type="button" class="secondary" id="save-template">💾 Save current as template</button>
+              : raw('<span style="margin-left:auto"></span>')}
+            <input id="save-template-name" type="text" placeholder="Template name" style="width:160px" />
+            <button type="button" class="secondary" id="save-template">💾 Save as template</button>
             <a href="/admin/seasons/templates"><button type="button" class="secondary">Manage templates</button></a>
           </div>
           <div id="tier-list">${tierRowsHtml}</div>
@@ -1503,7 +1505,7 @@ router.post("/seasons/templates/save", async (req, res) => {
   }
 });
 
-// Manage templates: list, edit names, delete.
+// Manage templates: list, create new ones, delete.
 router.get("/seasons/templates", async (req, res) => {
   const templates = await listTemplates();
   const rows = templates.map((t) => html`<tr>
@@ -1516,10 +1518,112 @@ router.get("/seasons/templates", async (req, res) => {
       </form>
     </td>
   </tr>`);
+
+  const editorStyles = raw(`
+    .tier-row { display: flex; gap: 8px; align-items: center; padding: 6px 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; margin-bottom: 6px; }
+    .tier-row .tier-pos { color: var(--muted); width: 22px; font-variant-numeric: tabular-nums; }
+    .tier-row input[type="text"] { flex: 1 1 auto; }
+    .tier-row input[type="number"] { width: 80px; }
+    .tier-row button { padding: 4px 8px; font-size: 12px; }
+  `);
+
+  // Default starting rows for a brand-new template
+  const seedConfig = [
+    { name: "Legendary", divisionCount: 1 },
+    { name: "Rare", divisionCount: 4 },
+    { name: "Uncommon", divisionCount: 6 },
+    { name: "Common", divisionCount: 6 },
+  ];
+  const seedRowsHtml = seedConfig.map(
+    (t, i) => html`<div class="tier-row" data-row-index="${i}">
+      <span class="tier-pos">${i + 1}.</span>
+      <input type="text" name="tpl_tier_name[]" value="${t.name}" placeholder="Tier name" required />
+      <input type="number" name="tpl_tier_count[]" value="${t.divisionCount}" min="1" max="50" required />
+      <button type="button" class="secondary tpl-up" title="Move up">▲</button>
+      <button type="button" class="secondary tpl-down" title="Move down">▼</button>
+      <button type="button" class="danger tpl-remove" title="Remove">✕</button>
+    </div>`,
+  );
+
+  const tplScript = raw(`
+    (function() {
+      const list = document.getElementById('tpl-tier-list');
+      const tpl = document.getElementById('tpl-tier-row-template');
+      function renumber() {
+        Array.from(list.children).forEach((row, i) => {
+          row.dataset.rowIndex = i;
+          row.querySelector('.tier-pos').textContent = (i + 1) + '.';
+        });
+      }
+      list.addEventListener('click', (e) => {
+        const row = e.target.closest('.tier-row');
+        if (!row) return;
+        if (e.target.classList.contains('tpl-remove')) {
+          if (list.children.length > 1) row.remove();
+          renumber();
+        } else if (e.target.classList.contains('tpl-up')) {
+          if (row.previousElementSibling) row.parentNode.insertBefore(row, row.previousElementSibling);
+          renumber();
+        } else if (e.target.classList.contains('tpl-down')) {
+          if (row.nextElementSibling) row.parentNode.insertBefore(row.nextElementSibling, row);
+          renumber();
+        }
+      });
+      document.getElementById('tpl-add-tier').addEventListener('click', () => {
+        const node = tpl.content.firstElementChild.cloneNode(true);
+        node.querySelector('input[name="tpl_tier_name[]"]').value = '';
+        node.querySelector('input[name="tpl_tier_count[]"]').value = 1;
+        list.appendChild(node);
+        renumber();
+      });
+      document.getElementById('tpl-create-form').addEventListener('submit', (e) => {
+        const name = document.getElementById('tpl-name').value.trim();
+        if (!name) { e.preventDefault(); document.getElementById('tpl-name').focus(); return; }
+        // Serialize current rows to JSON in the hidden 'config' field
+        const config = Array.from(list.children).map(row => ({
+          name: row.querySelector('input[name="tpl_tier_name[]"]').value,
+          divisionCount: parseInt(row.querySelector('input[name="tpl_tier_count[]"]').value, 10) || 1,
+        }));
+        document.getElementById('tpl-config-hidden').value = JSON.stringify(config);
+      });
+    })();
+  `);
+
   const body = html`
     <h2>Tier templates</h2>
     <p class="muted">Saved layouts for the Create Season form. The ★ Last used template is auto-updated after every season create.</p>
+    <style>${editorStyles}</style>
+
     <div class="card">
+      <strong>Create a new template</strong>
+      <p class="muted">Build the tier structure below, give it a name, save.</p>
+      <form id="tpl-create-form" method="post" action="/admin/seasons/templates/save">
+        <label style="flex: 1 1 100%">
+          Name
+          <input id="tpl-name" type="text" name="templateName" placeholder="e.g. Compact Pyramid" required />
+        </label>
+        <div style="flex: 1 1 100%">
+          <div id="tpl-tier-list">${seedRowsHtml}</div>
+          <button type="button" class="secondary" id="tpl-add-tier" style="margin-top:6px">+ Add tier</button>
+          <template id="tpl-tier-row-template">
+            <div class="tier-row" data-row-index="0">
+              <span class="tier-pos">1.</span>
+              <input type="text" name="tpl_tier_name[]" placeholder="Tier name" required />
+              <input type="number" name="tpl_tier_count[]" value="1" min="1" max="50" required />
+              <button type="button" class="secondary tpl-up" title="Move up">▲</button>
+              <button type="button" class="secondary tpl-down" title="Move down">▼</button>
+              <button type="button" class="danger tpl-remove" title="Remove">✕</button>
+            </div>
+          </template>
+        </div>
+        <input id="tpl-config-hidden" type="hidden" name="config" />
+        <button type="submit" style="margin-top:12px">Save template</button>
+      </form>
+      <script>${tplScript}</script>
+    </div>
+
+    <div class="card">
+      <strong>Saved templates</strong>
       <table>
         <thead><tr><th>Name</th><th>Layout</th><th>Updated</th><th></th></tr></thead>
         <tbody>${rows.length ? rows : html`<tr><td colspan="4" class="muted">No templates saved yet.</td></tr>`}</tbody>
