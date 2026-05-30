@@ -5,6 +5,7 @@ import type {
   SlashCommandBuilder,
   SlashCommandOptionsOnlyBuilder,
   SlashCommandSubcommandsOnlyBuilder,
+  StringSelectMenuInteraction,
 } from "discord.js";
 
 export type CommandBuilder =
@@ -23,4 +24,12 @@ export interface SlashCommand {
 export interface ButtonHandler {
   prefix: string;
   execute(interaction: ButtonInteraction): Promise<void>;
+}
+
+// Same routing model for StringSelectMenu interactions. Multi-pick UIs
+// (e.g. the match ban phases) submit one interaction with `values: string[]`
+// instead of one button click per choice.
+export interface SelectMenuHandler {
+  prefix: string;
+  execute(interaction: StringSelectMenuInteraction): Promise<void>;
 }

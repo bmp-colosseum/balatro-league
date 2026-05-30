@@ -6,7 +6,11 @@ import {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
 } from "discord.js";
+
+type AnyComponentRow = ActionRowBuilder<ButtonBuilder> | ActionRowBuilder<StringSelectMenuBuilder>;
 import type { MatchSession, Player } from "@prisma/client";
 import { phaseFor, remainingCombos, type GameState } from "./match-session.js";
 import type { DeckEntry } from "./match-config.js";
@@ -24,7 +28,7 @@ export function renderMatch(
   session: MatchSession,
   playerA: Player,
   playerB: Player,
-): { embeds: EmbedBuilder[]; components: ActionRowBuilder<ButtonBuilder>[] } {
+): { embeds: EmbedBuilder[]; components: AnyComponentRow[] } {
   const pool = parsePool(session.pool);
   const game1 = parseGame(session.game1);
   const game2 = parseGame(session.game2);
@@ -105,24 +109,29 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
     const whose = phase.whoseBanId === a.id ? a : b;
     embed.setDescription(
       `**${first.displayName}** bans first (coin toss).\n\n` +
-        `**${whose.displayName}** to ban (${phase.remainingForThem} left).\n` +
-        `Pool: ${remaining.length} decks remaining.`,
+        `**${whose.displayName}** to ban ${phase.remainingForThem} combo(s) below.\n` +
+        `Pool: ${remaining.length} combo(s) remaining.`,
     );
-    // Split into rows of 5 buttons each (Discord max)
-    const rows = chunkButtons(
-      remaining.map(({ idx, combo }) =>
-        new ButtonBuilder()
-          .setCustomId(`match:ban:${s.id}:${idx}`)
-          .setLabel(`${combo.deck} / ${combo.stake}`)
-          .setStyle(ButtonStyle.Danger),
-      ),
-    );
-    return { embeds: [embed], components: rows };
+    const select = new StringSelectMenuBuilder()
+      .setCustomId(`match:bans:${s.id}`)
+      .setPlaceholder(`Select ${phase.remainingForThem} combo(s) to ban`)
+      .setMinValues(phase.remainingForThem)
+      .setMaxValues(phase.remainingForThem)
+      .addOptions(
+        remaining.map(({ idx, combo }) =>
+          new StringSelectMenuOptionBuilder()
+            .setLabel(`${combo.deck} / ${combo.stake}`)
+            .setValue(String(idx)),
+        ),
+      );
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select);
+    return { embeds: [embed], components: [row] };
   }
 
   if (phase.kind === "PICK") {
+    const picker = phase.pickerId === a.id ? a : b;
     embed.setDescription(
-      `Bans done. **${first.displayName}** picks the deck for this game from the 2 remaining.`,
+      `Bans done. **${picker.displayName}** picks the deck for this game from the 2 remaining.`,
     );
     const rows = chunkButtons(
       remaining.map(({ idx, combo }) =>

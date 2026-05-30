@@ -4,18 +4,20 @@
 //
 //   WAITING_ACCEPT  --opponent clicks Accept-->  GAME_1_BAN
 //   GAME_1_BAN      --7 bans completed------->   GAME_1_PICK
-//   GAME_1_PICK     --first picks 1 of 2----->   GAME_1_PLAYING
+//   GAME_1_PICK     --second picks 1 of 2---->   GAME_1_PLAYING
 //   GAME_1_PLAYING  --winner button---------->   GAME_2_CHOOSE_FIRST
 //   GAME_2_CHOOSE_FIRST --loser picks who---->   GAME_2_BAN
 //   GAME_2_BAN      --7 bans completed------->   GAME_2_PICK
-//   GAME_2_PICK     --first picks 1 of 2----->   GAME_2_PLAYING
+//   GAME_2_PICK     --second picks 1 of 2---->   GAME_2_PLAYING
 //   GAME_2_PLAYING  --winner button---------->   COMPLETE (writes Pairing, fires announce)
 //
 // Ban order in each game:
 //   - First player bans 1 (8 left)
 //   - Second player bans 3 (5 left)
 //   - First player bans 3 (2 left)
-//   - First player picks 1 of 2 — that's the deck/stake for the game.
+//   - SECOND player picks 1 of the 2 remaining. The first player banned 4
+//     times total — they shaped the pool — so the second player gets the
+//     final say on which of the two survives.
 
 import type { DeckEntry } from "./match-config.js";
 
@@ -81,9 +83,9 @@ export function phaseFor(
       totalDone: banCount,
     };
   }
-  // All bans done — first picks
+  // All bans done — SECOND player picks
   if (banCount >= poolSize - 2) {
-    return { kind: "PICK", pickerId: game.firstId };
+    return { kind: "PICK", pickerId: otherId };
   }
   // Shouldn't reach here
   return { kind: "PLAYING" };

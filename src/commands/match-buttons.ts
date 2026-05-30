@@ -12,7 +12,9 @@ import {
   MessageFlags,
   ThreadAutoArchiveDuration,
   type ButtonInteraction,
+  type StringSelectMenuInteraction,
   type TextChannel,
+  type ThreadChannel,
 } from "discord.js";
 import { MatchSessionState, Prisma, type MatchSession } from "@prisma/client";
 import { announceResult } from "../announce.js";
@@ -25,7 +27,7 @@ import {
   remainingCombos,
   type GameState,
 } from "../match-session.js";
-import type { ButtonHandler } from "./types.js";
+import type { ButtonHandler, SelectMenuHandler } from "./types.js";
 
 function parseGame(json: string | null): GameState | null {
   if (!json) return null;
@@ -63,21 +65,23 @@ async function updateSession(
   return prisma.matchSession.findUnique({ where: { id: session.id } });
 }
 
-async function refreshMessage(interaction: ButtonInteraction, session: MatchSession) {
+type AnyInteraction = ButtonInteraction | StringSelectMenuInteraction;
+
+async function refreshMessage(interaction: AnyInteraction, session: MatchSession) {
   const { playerA, playerB } = await loadPlayers(session);
   const { embeds, components } = renderMatch(session, playerA, playerB);
   await interaction.update({ embeds, components });
 }
 
-async function reply(interaction: ButtonInteraction, content: string) {
+async function reply(interaction: AnyInteraction, content: string) {
   await interaction.reply({ content, flags: MessageFlags.Ephemeral });
 }
 
-async function raceLost(interaction: ButtonInteraction) {
+async function raceLost(interaction: AnyInteraction) {
   return reply(interaction, "Someone else just acted on this match — the buttons may have changed. Try again.");
 }
 
-async function requireActor(interaction: ButtonInteraction, expectedDiscordId: string): Promise<boolean> {
+async function requireActor(interaction: AnyInteraction, expectedDiscordId: string): Promise<boolean> {
   if (interaction.user.id !== expectedDiscordId) {
     await reply(interaction, "Only the player whose turn it is can use this button.");
     return false;
@@ -105,13 +109,41 @@ export const matchButtons: ButtonHandler = {
     if (action === "accept") return handleAccept(interaction, session);
     if (action === "decline") return handleDecline(interaction, session);
     if (action === "choosefirst") return handleChooseFirst(interaction, session, parts[3]);
-    if (action === "ban") return handleBan(interaction, session, parts[3]);
     if (action === "pick") return handlePick(interaction, session, parts[3]);
     if (action === "winner") return handleWinner(interaction, session, parts[3]);
 
     await reply(interaction, "Unknown match action.");
   },
 };
+
+// Select-menu side of the match interactions — currently only used for
+// batch ban submission. Custom id format: `match:bans:<sessionId>`.
+export const matchSelectMenus: SelectMenuHandler = {
+  prefix: "match:bans:",
+  async execute(interaction) {
+    const sessionId = interaction.customId.slice("match:bans:".length);
+    if (!sessionId) return reply(interaction, "Malformed select menu.");
+    const session = await loadSession(sessionId);
+    if (!session) return reply(interaction, "Match session not found.");
+    return handleBanBatch(interaction, session);
+  },
+};
+
+async function closeMatchThread(interaction: AnyInteraction, threadId: string | null): Promise<void> {
+  if (!threadId) return;
+  try {
+    const channel = await interaction.client.channels.fetch(threadId);
+    if (channel && (channel.type === ChannelType.PublicThread || channel.type === ChannelType.PrivateThread)) {
+      const thread = channel as ThreadChannel;
+      // Lock first (no new messages), then archive (collapsed in sidebar).
+      // setArchived alone would let users post in it again; setLocked freezes it.
+      await thread.setLocked(true, "Match complete").catch(() => {});
+      await thread.setArchived(true, "Match complete").catch(() => {});
+    }
+  } catch {
+    // Thread may have been deleted manually; ignore.
+  }
+}
 
 // === Handlers ===
 
@@ -138,11 +170,13 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
   const firstId = Math.random() < 0.5 ? playerA.id : playerB.id;
 
   // Create thread for match chat (failures fall back to the parent channel).
+  // Name includes a short session-id suffix so repeat matchups don't collide.
   let threadId = session.threadId;
   if (!threadId && interaction.channel && interaction.channel.type === ChannelType.GuildText) {
     try {
+      const suffix = session.id.slice(-6);
       const thread = await (interaction.channel as TextChannel).threads.create({
-        name: `Match: ${playerA.displayName} vs ${playerB.displayName}`,
+        name: `Match: ${playerA.displayName} vs ${playerB.displayName} · ${suffix}`,
         autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
       });
       threadId = thread.id;
@@ -213,10 +247,12 @@ async function handleChooseFirst(interaction: ButtonInteraction, session: MatchS
   await refreshMessage(interaction, updated);
 }
 
-async function handleBan(interaction: ButtonInteraction, session: MatchSession, idxRaw: string | undefined) {
-  if (!idxRaw) return reply(interaction, "Malformed button.");
-  const idx = parseInt(idxRaw, 10);
-  if (Number.isNaN(idx)) return reply(interaction, "Invalid index.");
+// Batch ban handler — fired by a StringSelectMenu submission with all of
+// the player's bans for this step. Cuts Discord API traffic for a match
+// from 8 message edits to 4 (one per ban step + pick + winner per game).
+async function handleBanBatch(interaction: StringSelectMenuInteraction, session: MatchSession) {
+  const indices = interaction.values.map((v) => parseInt(v, 10));
+  if (indices.some((n) => Number.isNaN(n))) return reply(interaction, "Invalid selection.");
 
   const isGame1 = session.state === "GAME_1_BAN";
   const isGame2 = session.state === "GAME_2_BAN";
@@ -233,10 +269,17 @@ async function handleBan(interaction: ButtonInteraction, session: MatchSession, 
   const actor = await prisma.player.findUniqueOrThrow({ where: { id: phase.whoseBanId } });
   if (!(await requireActor(interaction, actor.discordId))) return;
 
-  if (game.bans.includes(idx)) return reply(interaction, "That combo is already banned.");
+  if (indices.length !== phase.remainingForThem) {
+    return reply(interaction, `You need to pick exactly ${phase.remainingForThem} combo(s) to ban.`);
+  }
+  if (new Set(indices).size !== indices.length) {
+    return reply(interaction, "Can't ban the same combo twice.");
+  }
+  if (indices.some((i) => game.bans.includes(i))) {
+    return reply(interaction, "One of those combos was already banned.");
+  }
 
-  const newGame: GameState = { ...game, bans: [...game.bans, idx] };
-
+  const newGame: GameState = { ...game, bans: [...game.bans, ...indices] };
   const newPhase = phaseFor(newGame, session.playerAId, session.playerBId, pool.length);
   let newState: MatchSessionState = session.state;
   if (newPhase.kind === "PICK") {
@@ -270,7 +313,11 @@ async function handlePick(interaction: ButtonInteraction, session: MatchSession,
     return reply(interaction, "That combo isn't in the remaining 2.");
   }
 
-  const picker = await prisma.player.findUniqueOrThrow({ where: { id: game.firstId } });
+  // SECOND player picks (the one who banned 3 in the middle, not the one
+  // who banned 1 + 3 = 4). phaseFor encodes this — pickerId is the other.
+  const phase = phaseFor(game, session.playerAId, session.playerBId, pool.length);
+  if (phase.kind !== "PICK") return reply(interaction, "Not a pick phase.");
+  const picker = await prisma.player.findUniqueOrThrow({ where: { id: phase.pickerId } });
   if (!(await requireActor(interaction, picker.discordId))) return;
 
   const newGame: GameState = { ...game, pickedDeckIdx: idx };
@@ -371,5 +418,8 @@ async function handleWinner(interaction: ButtonInteraction, session: MatchSessio
   });
 
   await refreshMessage(interaction, updated);
+  // Close the match thread + fire the auto-announce. Both are best-effort
+  // and don't block the user-facing message update.
+  closeMatchThread(interaction, updated.threadId).catch(() => {});
   announceResult(pairing.id).catch(() => {});
 }

@@ -1,5 +1,5 @@
 import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
-import { buttonHandlers, slashCommands } from "./commands/index.js";
+import { buttonHandlers, selectMenuHandlers, slashCommands } from "./commands/index.js";
 import { setDiscordClient } from "./discord.js";
 import { env } from "./env.js";
 import { startHealthCheck } from "./healthcheck.js";
@@ -43,6 +43,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
       if (!handler) {
         await interaction.reply({
           content: "No handler for this button.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      await handler.execute(interaction);
+      return;
+    }
+
+    if (interaction.isStringSelectMenu()) {
+      const handler = selectMenuHandlers.find((h) => interaction.customId.startsWith(h.prefix));
+      if (!handler) {
+        await interaction.reply({
+          content: "No handler for this menu.",
           flags: MessageFlags.Ephemeral,
         });
         return;
