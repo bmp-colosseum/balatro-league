@@ -97,4 +97,8 @@ src/
 
 ## Deploying
 
-See **[DEPLOY.md](./DEPLOY.md)** for a click-by-click Railway walkthrough including Postgres setup, Discord OAuth redirect, and secrets.
+Two services on Railway:
+- **Bot** (this repo root): Discord gateway connection. See [DEPLOY.md](./DEPLOY.md).
+- **Web** (`web/`): Next.js dashboard + public pages. See [DEPLOY-WEB.md](./DEPLOY-WEB.md).
+
+Both share the same Postgres. The old Express dashboard at the bot service will be deprecated once the web service is live and verified.
