@@ -8,9 +8,6 @@ CREATE TYPE "SignupStatus" AS ENUM ('OPEN', 'CLOSED', 'BUILT');
 CREATE TYPE "PermissionTier" AS ENUM ('OWNER', 'ADMIN', 'MOD');
 
 -- CreateEnum
-CREATE TYPE "Rarity" AS ENUM ('LEGENDARY', 'RARE', 'UNCOMMON', 'COMMON');
-
--- CreateEnum
 CREATE TYPE "DivisionMemberStatus" AS ENUM ('ACTIVE', 'DROPPED');
 
 -- CreateEnum
@@ -84,10 +81,20 @@ CREATE TABLE "RoleBinding" (
 );
 
 -- CreateTable
+CREATE TABLE "Tier" (
+    "id" TEXT NOT NULL,
+    "seasonId" TEXT NOT NULL,
+    "position" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+
+    CONSTRAINT "Tier_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Division" (
     "id" TEXT NOT NULL,
     "seasonId" TEXT NOT NULL,
-    "rarity" "Rarity" NOT NULL,
+    "tierId" TEXT NOT NULL,
     "groupNumber" INTEGER NOT NULL,
     "name" TEXT NOT NULL,
     "discordRoleId" TEXT,
@@ -152,10 +159,22 @@ CREATE UNIQUE INDEX "RoleBinding_discordRoleId_key" ON "RoleBinding"("discordRol
 CREATE INDEX "RoleBinding_tier_idx" ON "RoleBinding"("tier");
 
 -- CreateIndex
+CREATE INDEX "Tier_seasonId_idx" ON "Tier"("seasonId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Tier_seasonId_position_key" ON "Tier"("seasonId", "position");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Tier_seasonId_name_key" ON "Tier"("seasonId", "name");
+
+-- CreateIndex
 CREATE INDEX "Division_seasonId_idx" ON "Division"("seasonId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Division_seasonId_rarity_groupNumber_key" ON "Division"("seasonId", "rarity", "groupNumber");
+CREATE INDEX "Division_tierId_idx" ON "Division"("tierId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Division_seasonId_tierId_groupNumber_key" ON "Division"("seasonId", "tierId", "groupNumber");
 
 -- CreateIndex
 CREATE INDEX "DivisionMember_playerId_idx" ON "DivisionMember"("playerId");
@@ -176,7 +195,13 @@ CREATE UNIQUE INDEX "Pairing_divisionId_playerAId_playerBId_key" ON "Pairing"("d
 ALTER TABLE "Signup" ADD CONSTRAINT "Signup_roundId_fkey" FOREIGN KEY ("roundId") REFERENCES "SignupRound"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Tier" ADD CONSTRAINT "Tier_seasonId_fkey" FOREIGN KEY ("seasonId") REFERENCES "Season"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Division" ADD CONSTRAINT "Division_seasonId_fkey" FOREIGN KEY ("seasonId") REFERENCES "Season"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Division" ADD CONSTRAINT "Division_tierId_fkey" FOREIGN KEY ("tierId") REFERENCES "Tier"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "DivisionMember" ADD CONSTRAINT "DivisionMember_divisionId_fkey" FOREIGN KEY ("divisionId") REFERENCES "Division"("id") ON DELETE CASCADE ON UPDATE CASCADE;

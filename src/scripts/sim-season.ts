@@ -6,7 +6,7 @@
 //
 // --reset wipes any existing "sim-*" data first. Without it, re-running stacks on top.
 
-import { Rarity, type Player } from "@prisma/client";
+import { type Player, type Tier } from "@prisma/client";
 import { prisma } from "../db.js";
 import { gamesFromResult, type PairingResult } from "../scoring.js";
 import { computeStandings, formatStandingsTable } from "../standings.js";
@@ -72,18 +72,28 @@ async function main() {
     data: { name: seasonName, isActive: false }, // mark inactive so real /report doesn't see it
   });
 
-  // Spread divisions across rarities for variety: first → Legendary, then Rare, Uncommon, Common
-  const rarityOrder: Rarity[] = ["LEGENDARY", "RARE", "UNCOMMON", "COMMON"];
-  const groupCounter = new Map<Rarity, number>();
+  // Spread divisions across tiers for variety: first → Legendary, then Rare, Uncommon, Common.
+  // Create the tier rows up front (position 1..4) and look up by name on demand.
+  const tierNames = ["Legendary", "Rare", "Uncommon", "Common"] as const;
+  const tiersByName = new Map<string, Tier>();
+  for (let i = 0; i < tierNames.length; i++) {
+    const name = tierNames[i]!;
+    const tier = await prisma.tier.create({
+      data: { seasonId: season.id, position: i + 1, name },
+    });
+    tiersByName.set(name, tier);
+  }
+  const groupCounter = new Map<string, number>();
 
   for (let d = 0; d < args.divisions; d++) {
-    const rarity = rarityOrder[Math.min(d, rarityOrder.length - 1)]!;
-    const groupNumber = (groupCounter.get(rarity) ?? 0) + 1;
-    groupCounter.set(rarity, groupNumber);
-    const divisionName = rarity === "LEGENDARY" ? "Legendary" : `${titleCase(rarity)} ${groupNumber}`;
+    const tierName = tierNames[Math.min(d, tierNames.length - 1)]!;
+    const tier = tiersByName.get(tierName)!;
+    const groupNumber = (groupCounter.get(tierName) ?? 0) + 1;
+    groupCounter.set(tierName, groupNumber);
+    const divisionName = tierName === "Legendary" ? "Legendary" : `${tierName} ${groupNumber}`;
 
     const division = await prisma.division.create({
-      data: { seasonId: season.id, rarity, groupNumber, name: divisionName },
+      data: { seasonId: season.id, tierId: tier.id, groupNumber, name: divisionName },
     });
 
     const players: Player[] = [];
@@ -140,10 +150,6 @@ async function main() {
   console.log(`(Marked inactive — won't interfere with your real /report flow.)`);
 
   await prisma.$disconnect();
-}
-
-function titleCase(s: string): string {
-  return s.charAt(0) + s.slice(1).toLowerCase();
 }
 
 function flipGames(g: { a: number; b: number }): { a: number; b: number } {

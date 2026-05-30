@@ -9,9 +9,10 @@ import { PermissionTier } from "@prisma/client";
 import { prisma } from "../db.js";
 import { requireAdmin, requireOwner } from "../permissions.js";
 import { getOrCreatePlayer } from "../players.js";
-import { DEFAULT_PYRAMID, PLAYERS_PER_DIVISION } from "../pyramid.js";
+import { DEFAULT_TIERS } from "../pyramid.js";
 import { signupButtons, signupEmbed } from "../signup.js";
 import { commitSeason, planSeason } from "../build-season.js";
+import { createTiersAndDivisions } from "../tiers.js";
 import { divisionNameAutocomplete } from "./autocomplete.js";
 import type { SlashCommand } from "./types.js";
 
@@ -313,14 +314,16 @@ async function previewSeason(interaction: ChatInputCommandInteraction) {
   try {
     const plan = await planSeason(roundId);
     const lines: string[] = [`**Preview for round \`${roundId}\`**`];
-    lines.push(
-      `Bucket totals — Legendary ${plan.rarityCounts.LEGENDARY}, Rare ${plan.rarityCounts.RARE}, Uncommon ${plan.rarityCounts.UNCOMMON}, Common ${plan.rarityCounts.COMMON}`,
-    );
-    for (const div of plan.divisions) {
-      if (div.signupIds.length === 0) {
-        lines.push(`  • **${div.name}** — _empty_`);
-      } else {
-        lines.push(`  • **${div.name}** — ${div.signupIds.length} player(s)`);
+    const bucketSummary = plan.tiers.map((t) => `${t.name} ${t.playerCount}`).join(", ");
+    lines.push(`Bucket totals — ${bucketSummary}`);
+    for (const tier of plan.tiers) {
+      lines.push(`__${tier.name}__`);
+      for (const div of tier.divisions) {
+        if (div.signupIds.length === 0) {
+          lines.push(`  • **${div.name}** — _empty_`);
+        } else {
+          lines.push(`  • **${div.name}** — ${div.signupIds.length} player(s)`);
+        }
       }
     }
     if (plan.warnings.length) {
@@ -551,17 +554,8 @@ async function createSeason(interaction: ChatInputCommandInteraction) {
 
   let divisionsCreated = 0;
   if (buildDivisions) {
-    for (const slot of DEFAULT_PYRAMID) {
-      await prisma.division.create({
-        data: {
-          seasonId: season.id,
-          rarity: slot.rarity,
-          groupNumber: slot.groupNumber,
-          name: slot.name,
-        },
-      });
-      divisionsCreated++;
-    }
+    const result = await createTiersAndDivisions(season.id, DEFAULT_TIERS);
+    divisionsCreated = result.divisionsCreated;
   }
 
   const lines = [
@@ -617,9 +611,14 @@ async function info(interaction: ChatInputCommandInteraction) {
   const season = await prisma.season.findFirst({
     where: { isActive: true },
     include: {
-      divisions: {
-        include: { _count: { select: { members: true, pairings: true } } },
-        orderBy: [{ rarity: "asc" }, { groupNumber: "asc" }],
+      tiers: {
+        orderBy: { position: "asc" },
+        include: {
+          divisions: {
+            orderBy: { groupNumber: "asc" },
+            include: { _count: { select: { members: true, pairings: true } } },
+          },
+        },
       },
     },
   });
@@ -633,19 +632,11 @@ async function info(interaction: ChatInputCommandInteraction) {
     ? `Deadline: <t:${Math.floor(season.deadline.getTime() / 1000)}:F>`
     : "Deadline: none";
 
-  // Group divisions by rarity for a compact summary
-  const byRarity = new Map<string, typeof season.divisions>();
-  for (const d of season.divisions) {
-    if (!byRarity.has(d.rarity)) byRarity.set(d.rarity, []);
-    byRarity.get(d.rarity)!.push(d);
-  }
-
-  const order = ["LEGENDARY", "RARE", "UNCOMMON", "COMMON"] as const;
+  const totalDivisions = season.tiers.reduce((sum, t) => sum + t.divisions.length, 0);
   const divisionLines: string[] = [];
-  for (const r of order) {
-    const divs = byRarity.get(r);
-    if (!divs || divs.length === 0) continue;
-    for (const d of divs) {
+  for (const tier of season.tiers) {
+    if (tier.divisions.length === 0) continue;
+    for (const d of tier.divisions) {
       divisionLines.push(
         `  • **${d.name}** — ${d._count.members}/${season.targetGroupSize} players, ${d._count.pairings} sets`,
       );
@@ -656,7 +647,7 @@ async function info(interaction: ChatInputCommandInteraction) {
     [
       `**${season.name}**`,
       deadlineLine,
-      `Divisions (${season.divisions.length}):`,
+      `Divisions (${totalDivisions}):`,
       ...(divisionLines.length ? divisionLines : ["  _(none yet)_"]),
     ].join("\n"),
   );

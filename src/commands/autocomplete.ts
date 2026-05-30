@@ -15,7 +15,7 @@ export async function divisionNameAutocomplete(interaction: AutocompleteInteract
   const divisions = await prisma.division.findMany({
     where: { seasonId: activeSeason.id },
     select: { name: true },
-    orderBy: [{ rarity: "asc" }, { groupNumber: "asc" }],
+    orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
   });
   const matches = divisions
     .filter((d) => d.name.toLowerCase().includes(focused))

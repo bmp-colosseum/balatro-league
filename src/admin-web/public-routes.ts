@@ -1,25 +1,22 @@
 // Public, read-only views. No login required — anyone with the URL can browse standings.
 
 import { Router } from "express";
-import { Rarity } from "@prisma/client";
 import { prisma } from "../db.js";
 import { isMockPlayer } from "../mock.js";
 import { loadPlayerHistory } from "../profile.js";
 import { computeStandings, formatDivisionField } from "../standings.js";
+import { tierColors } from "../tiers.js";
 import { html, raw } from "./html.js";
 import { layout } from "./layout.js";
 import { sessionContext } from "./session-context.js";
 
 export const publicRouter = Router();
 
-const RARITY_LABEL: Record<Rarity, string> = {
-  LEGENDARY: "Legendary",
-  RARE: "Rare",
-  UNCOMMON: "Uncommon",
-  COMMON: "Common",
-};
-
-const RARITY_ORDER: Rarity[] = ["LEGENDARY", "RARE", "UNCOMMON", "COMMON"];
+// Inline pill for a tier (uses position-based palette so any number of custom tiers gets colored sensibly).
+function tierPill(name: string, position: number) {
+  const c = tierColors(position);
+  return html`<span class="pill" style="background:${c.bg}; color:${c.fg}">${name}</span>`;
+}
 
 // Public roster — browseable list of every real player in the league.
 publicRouter.get("/players", async (req, res) => {
@@ -27,7 +24,7 @@ publicRouter.get("/players", async (req, res) => {
     include: {
       memberships: {
         where: { division: { season: { isActive: true, visibility: "PUBLIC" } } },
-        include: { division: true },
+        include: { division: { include: { tier: true } } },
       },
     },
     orderBy: { displayName: "asc" },
@@ -41,7 +38,7 @@ publicRouter.get("/players", async (req, res) => {
     const isDropped = membership?.status === "DROPPED";
     const divLabel = division
       ? html`<a href="/seasons/${division.seasonId}" class="muted" style="text-decoration:none">
-          <span class="pill ${division.rarity.toLowerCase()}">${division.name}</span>
+          ${tierPill(division.name, division.tier.position)}
         </a>${isDropped ? raw(' <span class="pill" style="background:rgba(231,76,60,0.2); color:#e74c3c">DROPPED</span>') : raw("")}`
       : raw('<span class="muted">— not in current season —</span>');
     return html`<tr>
@@ -104,15 +101,20 @@ publicRouter.get("/seasons/:id", async (req, res) => {
   const season = await prisma.season.findFirst({
     where: { id: req.params.id!, visibility: "PUBLIC" },
     include: {
-      divisions: {
+      tiers: {
+        orderBy: { position: "asc" },
         include: {
-          members: { include: { player: true } },
-          pairings: {
-            where: { status: "CONFIRMED" },
-            select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
+          divisions: {
+            orderBy: { groupNumber: "asc" },
+            include: {
+              members: { include: { player: true } },
+              pairings: {
+                where: { status: "CONFIRMED" },
+                select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
+              },
+            },
           },
         },
-        orderBy: [{ rarity: "asc" }, { groupNumber: "asc" }],
       },
     },
   });
@@ -124,38 +126,33 @@ publicRouter.get("/seasons/:id", async (req, res) => {
     );
   }
 
-  const byRarity = new Map<Rarity, typeof season.divisions>();
-  for (const d of season.divisions) {
-    if (!byRarity.has(d.rarity)) byRarity.set(d.rarity, []);
-    byRarity.get(d.rarity)!.push(d);
-  }
-
-  const sections = RARITY_ORDER.filter((r) => (byRarity.get(r)?.length ?? 0) > 0).map((rarity) => {
-    const divs = byRarity.get(rarity)!;
-    const cards = divs.map((d) => {
-      const droppedIds = new Set(d.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId));
-      const rows = computeStandings(d.members.map((m) => m.player), d.pairings).map((r) => ({
-        ...r,
-        dropped: droppedIds.has(r.player.id),
-      }));
-      const rowsHtml = rows.length
-        ? rows.map((r, i) => {
-            const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
-            const linked = html`<a href="/profile/${r.player.id}" style="color:var(--text)">${r.player.displayName}</a>`;
-            const name = r.dropped ? html`<s>${linked}</s>` : linked;
-            return html`<tr><td>${medal}</td><td>${name}</td><td><strong>${r.points}</strong></td><td>${r.wins}-${r.draws}-${r.losses}</td><td>${r.gamesWon}-${r.gamesLost}</td></tr>`;
-          })
-        : [html`<tr><td colspan="5" class="muted">No sets played.</td></tr>`];
-      return html`<div class="card">
-        <strong>${d.name}</strong>
-        <table style="margin-top:8px">
-          <thead><tr><th></th><th>Player</th><th>Pts</th><th>W-D-L</th><th>Games</th></tr></thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
-      </div>`;
+  const sections = season.tiers
+    .filter((t) => t.divisions.length > 0)
+    .map((tier) => {
+      const cards = tier.divisions.map((d) => {
+        const droppedIds = new Set(d.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId));
+        const rows = computeStandings(d.members.map((m) => m.player), d.pairings).map((r) => ({
+          ...r,
+          dropped: droppedIds.has(r.player.id),
+        }));
+        const rowsHtml = rows.length
+          ? rows.map((r, i) => {
+              const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
+              const linked = html`<a href="/profile/${r.player.id}" style="color:var(--text)">${r.player.displayName}</a>`;
+              const name = r.dropped ? html`<s>${linked}</s>` : linked;
+              return html`<tr><td>${medal}</td><td>${name}</td><td><strong>${r.points}</strong></td><td>${r.wins}-${r.draws}-${r.losses}</td><td>${r.gamesWon}-${r.gamesLost}</td></tr>`;
+            })
+          : [html`<tr><td colspan="5" class="muted">No sets played.</td></tr>`];
+        return html`<div class="card">
+          <strong>${d.name}</strong>
+          <table style="margin-top:8px">
+            <thead><tr><th></th><th>Player</th><th>Pts</th><th>W-D-L</th><th>Games</th></tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>`;
+      });
+      return html`<h3 style="margin-top:24px">${tier.name}</h3><div class="grid grid-2">${cards}</div>`;
     });
-    return html`<h3 style="margin-top:24px">${RARITY_LABEL[rarity]}</h3><div class="grid grid-2">${cards}</div>`;
-  });
 
   const period = season.endedAt
     ? `${season.startedAt.toISOString().slice(0, 10)} → ${season.endedAt.toISOString().slice(0, 10)}`
@@ -191,8 +188,6 @@ publicRouter.get("/profile/:playerId", async (req, res) => {
     return res.status(500).send("Couldn't load profile.");
   }
 
-  const rarityPill = (r: Rarity) => html`<span class="pill ${r.toLowerCase()}">${RARITY_LABEL[r]}</span>`;
-
   const seasonCards = profile.history.map((h) => {
     const rankStr = h.rank > 0 ? `#${h.rank}/${h.totalMembers}` : "—";
     const statusPill =
@@ -223,7 +218,7 @@ publicRouter.get("/profile/:playerId", async (req, res) => {
       <div style="display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:8px">
         <a href="/seasons/${h.seasonId}" style="color:var(--text); font-weight:600; font-size:16px">${h.seasonName}</a>
         ${activeMarker}
-        ${rarityPill(h.rarity)}
+        ${tierPill(h.tierName, h.tierPosition)}
         <span>${h.divisionName}</span>
         ${statusPill}
         <span style="margin-left:auto" class="muted">
@@ -266,15 +261,20 @@ publicRouter.get("/standings", async (req, res) => {
   const season = await prisma.season.findFirst({
     where: { isActive: true, visibility: "PUBLIC" },
     include: {
-      divisions: {
+      tiers: {
+        orderBy: { position: "asc" },
         include: {
-          members: { include: { player: true } },
-          pairings: {
-            where: { status: "CONFIRMED" },
-            select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
+          divisions: {
+            orderBy: { groupNumber: "asc" },
+            include: {
+              members: { include: { player: true } },
+              pairings: {
+                where: { status: "CONFIRMED" },
+                select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
+              },
+            },
           },
         },
-        orderBy: [{ rarity: "asc" }, { groupNumber: "asc" }],
       },
     },
   });
@@ -286,40 +286,35 @@ publicRouter.get("/standings", async (req, res) => {
     );
   }
 
-  const byRarity = new Map<Rarity, typeof season.divisions>();
-  for (const d of season.divisions) {
-    if (!byRarity.has(d.rarity)) byRarity.set(d.rarity, []);
-    byRarity.get(d.rarity)!.push(d);
-  }
-
-  const sections = RARITY_ORDER.filter((r) => (byRarity.get(r)?.length ?? 0) > 0).map((rarity) => {
-    const divs = byRarity.get(rarity)!;
-    const cards = divs.map((d) => {
-      const droppedIds = new Set(d.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId));
-      const rows = computeStandings(d.members.map((m) => m.player), d.pairings).map((r) => ({
-        ...r,
-        dropped: droppedIds.has(r.player.id),
-      }));
-      const rowsHtml = rows.length
-        ? rows.map((r, i) => {
-            const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
-            const linked = html`<a href="/profile/${r.player.id}" style="color:var(--text)">${r.player.displayName}</a>`;
-            const name = r.dropped ? html`<s>${linked}</s>` : linked;
-            return html`<tr><td>${medal}</td><td>${name}</td><td><strong>${r.points}</strong></td><td>${r.wins}-${r.draws}-${r.losses}</td><td>${r.gamesWon}-${r.gamesLost}</td></tr>`;
-          })
-        : [html`<tr><td colspan="5" class="muted">No sets played yet.</td></tr>`];
-      void formatDivisionField; // referenced for symmetry with Discord path
-      return html`<div class="card">
-        <strong>${d.name}</strong>
-        <table style="margin-top:8px">
-          <thead><tr><th></th><th>Player</th><th>Pts</th><th>W-D-L</th><th>Games</th></tr></thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
-      </div>`;
+  const sections = season.tiers
+    .filter((t) => t.divisions.length > 0)
+    .map((tier) => {
+      const cards = tier.divisions.map((d) => {
+        const droppedIds = new Set(d.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId));
+        const rows = computeStandings(d.members.map((m) => m.player), d.pairings).map((r) => ({
+          ...r,
+          dropped: droppedIds.has(r.player.id),
+        }));
+        const rowsHtml = rows.length
+          ? rows.map((r, i) => {
+              const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
+              const linked = html`<a href="/profile/${r.player.id}" style="color:var(--text)">${r.player.displayName}</a>`;
+              const name = r.dropped ? html`<s>${linked}</s>` : linked;
+              return html`<tr><td>${medal}</td><td>${name}</td><td><strong>${r.points}</strong></td><td>${r.wins}-${r.draws}-${r.losses}</td><td>${r.gamesWon}-${r.gamesLost}</td></tr>`;
+            })
+          : [html`<tr><td colspan="5" class="muted">No sets played yet.</td></tr>`];
+        void formatDivisionField; // referenced for symmetry with Discord path
+        return html`<div class="card">
+          <strong>${d.name}</strong>
+          <table style="margin-top:8px">
+            <thead><tr><th></th><th>Player</th><th>Pts</th><th>W-D-L</th><th>Games</th></tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>`;
+      });
+      return html`<h3 style="margin-top:24px">${tier.name}</h3>
+        <div class="grid grid-2">${cards}</div>`;
     });
-    return html`<h3 style="margin-top:24px">${RARITY_LABEL[rarity]}</h3>
-      <div class="grid grid-2">${cards}</div>`;
-  });
 
   const body = html`
     <h2>${season.name} — Standings</h2>

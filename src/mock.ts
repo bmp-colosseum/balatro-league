@@ -41,7 +41,7 @@ export async function seedMockPlayers(
   const divisions = await prisma.division.findMany({
     where: { seasonId },
     include: { _count: { select: { members: true } } },
-    orderBy: [{ rarity: "asc" }, { groupNumber: "asc" }],
+    orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
   });
 
   let created = 0;

@@ -13,13 +13,10 @@
 //     1. Head-to-head points between tied players
 //     2. Shootout (admin-resolved, recorded via /league force-result)
 //
-// Division structure (a pyramid by joker rarity):
-//   Legendary x1, Rare x4, Uncommon x6, Common x6  (17 divisions, 5 players each = ~85 player capacity)
-// Promotion/relegation at season end:
-//   Top of any division promotes to a division of the next-higher rarity (Common→Uncommon, etc.)
-//   Bottom of any division relegates to the next-lower rarity (Legendary→Rare, etc.; Common bottoms stay).
-//   Slot assignment across rarities is NOT 1:1 (e.g. 6 Uncommon winners but only 4 Rare divisions),
-//   so the bot surfaces season-end standings and admins finalize placements via /league assign-players.
+// Division structure: per-season ordered Tiers, each containing 1+ Divisions.
+// Position 1 = top tier. Each Division belongs to one Tier and has its own display name.
+// Default for new seasons (admin can override): 4 tiers — Legendary, Rare, Uncommon, Common —
+// with 1 / 4 / 6 / 6 divisions respectively. Promo/relegation runs between adjacent tier positions.
 
 generator client {
   provider = "prisma-client-js"
@@ -70,6 +67,7 @@ model Season {
   minGroupSize    Int  @default(3)
 
   divisions   Division[]
+  tiers       Tier[]
 
   @@index([isActive, visibility])
 }
@@ -132,32 +130,42 @@ model RoleBinding {
   @@index([tier])
 }
 
-enum Rarity {
-  LEGENDARY  // tier 1 (top)
-  RARE
-  UNCOMMON
-  COMMON     // bottom
+// Per-season tier. Position 1 = top of the pyramid (e.g., Legendary).
+// Each tier groups 1+ divisions. Promotion/relegation runs between adjacent positions.
+model Tier {
+  id        String     @id @default(cuid())
+  seasonId  String
+  position  Int        // 1 = top. Determines promo/relegation order.
+  name      String     // Display name: "Legendary", "Champions", etc.
+
+  season    Season     @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  divisions Division[]
+
+  @@unique([seasonId, position])
+  @@unique([seasonId, name])
+  @@index([seasonId])
 }
 
 model Division {
   id          String   @id @default(cuid())
   seasonId    String
-  rarity      Rarity
-  // Index within the rarity tier (1-based). Legendary: 1. Rare: 1-4. Uncommon: 1-6. Common: 1-6.
-  // Sibling divisions at the same rarity are parallel (no rank between them).
+  tierId      String
+  // Index within the tier (1-based). Sibling divisions at the same tier are parallel.
   groupNumber Int
-  // Display label, e.g. "Rare 3", "Legendary"
+  // Display label, e.g. "Rare 3", "Legendary", or any custom name.
   name        String
   // Optional Discord role + channel IDs the bot manages for this division
   discordRoleId    String?
   discordChannelId String?
 
   season      Season            @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  tier        Tier              @relation(fields: [tierId], references: [id], onDelete: Cascade)
   members     DivisionMember[]
   pairings    Pairing[]
 
-  @@unique([seasonId, rarity, groupNumber])
+  @@unique([seasonId, tierId, groupNumber])
   @@index([seasonId])
+  @@index([tierId])
 }
 
 enum DivisionMemberStatus {

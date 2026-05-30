@@ -1,6 +1,6 @@
 // Shared profile/history loader. Returns a player's season-by-season trajectory.
 
-import { Rarity, type Player } from "@prisma/client";
+import { type Player } from "@prisma/client";
 import { prisma } from "./db.js";
 import { computeStandings } from "./standings.js";
 
@@ -18,7 +18,8 @@ export interface SeasonHistoryEntry {
   seasonName: string;
   isActive: boolean;
   divisionName: string;
-  rarity: Rarity;
+  tierName: string;
+  tierPosition: number;  // 1 = top
   rank: number;          // 1-based; 0 if no pairings played
   totalMembers: number;
   points: number;
@@ -48,6 +49,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
       division: {
         include: {
           season: true,
+          tier: true,
           members: { include: { player: true } },
           // Full pairings (for match list rendering); we still filter to CONFIRMED below
           pairings: {
@@ -100,7 +102,8 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
       seasonName: m.division.season.name,
       isActive: m.division.season.isActive,
       divisionName: m.division.name,
-      rarity: m.division.rarity,
+      tierName: m.division.tier.name,
+      tierPosition: m.division.tier.position,
       rank: myRow ? myRank : 0,
       totalMembers: rows.length,
       points: myRow?.points ?? 0,

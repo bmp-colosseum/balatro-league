@@ -8,11 +8,13 @@ import { getOrCreatePlayer } from "../players.js";
 import { loadPlayerHistory } from "../profile.js";
 import type { SlashCommand } from "./types.js";
 
-const RARITY_EMOJI: Record<string, string> = {
-  LEGENDARY: "🟡",
-  RARE: "🟣",
-  UNCOMMON: "🔵",
-  COMMON: "⚪",
+// Tier-position-based emoji. Mirrors the default Legendary/Rare/Uncommon/Common palette
+// but works for any season's custom tier names.
+const TIER_POSITION_EMOJI: Record<number, string> = {
+  1: "🟡",
+  2: "🟣",
+  3: "🔵",
+  4: "⚪",
 };
 
 export const profile: SlashCommand = {
@@ -55,7 +57,7 @@ export const profile: SlashCommand = {
       lines.push("_No season history yet — placed in 0 divisions._");
     } else {
       for (const h of history.history) {
-        const emoji = RARITY_EMOJI[h.rarity] ?? "▫️";
+        const emoji = TIER_POSITION_EMOJI[h.tierPosition] ?? "▫️";
         const activeMarker = h.isActive ? " · _active_" : "";
         const droppedMarker = h.status === "DROPPED" ? " · ⚠️ dropped" : "";
         const rankStr = h.rank > 0 ? `#${h.rank}/${h.totalMembers}` : "—";

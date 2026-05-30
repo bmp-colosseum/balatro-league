@@ -143,7 +143,7 @@ async function simulatePairings(interaction: ChatInputCommandInteraction) {
     ? await prisma.division.findMany({ where: { seasonId: season.id, name: divName } })
     : await prisma.division.findMany({
         where: { seasonId: season.id },
-        orderBy: [{ rarity: "asc" }, { groupNumber: "asc" }],
+        orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
       });
   if (divisions.length === 0) {
     await interaction.editReply(divName ? `No division named \`${divName}\`.` : "No divisions in season.");

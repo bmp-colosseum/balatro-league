@@ -27,17 +27,24 @@ const season = await prisma.season.upsert({
   update: { isActive: true },
 });
 
+// Per-season Tier: upsert a Common tier at position 1 (this test season has just one tier).
+const tier = await prisma.tier.upsert({
+  where: { seasonId_position: { seasonId: season.id, position: 1 } },
+  create: { seasonId: season.id, position: 1, name: "Common" },
+  update: {},
+});
+
 const division = await prisma.division.upsert({
   where: {
-    seasonId_rarity_groupNumber: {
+    seasonId_tierId_groupNumber: {
       seasonId: season.id,
-      rarity: "COMMON",
+      tierId: tier.id,
       groupNumber: 1,
     },
   },
   create: {
     seasonId: season.id,
-    rarity: "COMMON",
+    tierId: tier.id,
     groupNumber: 1,
     name: "Test Common 1",
   },

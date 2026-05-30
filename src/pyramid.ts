@@ -1,35 +1,55 @@
-// Canonical league pyramid shape. Tweak here if the structure changes (e.g. an extra Rare division).
-import type { Rarity } from "@prisma/client";
+// Tier + division template for new seasons.
+//
+// A season has N tiers (ordered by position 1..N, where 1 = top of the pyramid).
+// Each tier has 1+ divisions. Default structure is the joker-rarity pyramid but
+// admins can fully customize per-season at creation time.
 
-export interface PyramidSlot {
-  rarity: Rarity;
-  groupNumber: number;
+export interface TierConfig {
   name: string;
+  divisionCount: number;
 }
 
-export const DEFAULT_PYRAMID: Readonly<PyramidSlot[]> = buildPyramid({
-  LEGENDARY: 1,
-  RARE: 4,
-  UNCOMMON: 6,
-  COMMON: 6,
-});
+export const DEFAULT_TIERS: TierConfig[] = [
+  { name: "Legendary", divisionCount: 1 },
+  { name: "Rare", divisionCount: 4 },
+  { name: "Uncommon", divisionCount: 6 },
+  { name: "Common", divisionCount: 6 },
+];
 
 export const PLAYERS_PER_DIVISION = 5;
 
-export function buildPyramid(counts: Record<Rarity, number>): PyramidSlot[] {
-  const slots: PyramidSlot[] = [];
-  const order: Rarity[] = ["LEGENDARY", "RARE", "UNCOMMON", "COMMON"];
-  for (const rarity of order) {
-    const n = counts[rarity] ?? 0;
-    for (let i = 1; i <= n; i++) {
-      const label = titleCase(rarity);
-      const name = n === 1 ? label : `${label} ${i}`;
-      slots.push({ rarity, groupNumber: i, name });
-    }
+// Parse a textarea-style tier config:
+//   Legendary, 1
+//   Rare, 4
+//   Uncommon, 6
+//   Common, 6
+// Returns the parsed list (or the default if input is empty/invalid).
+export function parseTierConfig(text: string | null | undefined): TierConfig[] {
+  if (!text || !text.trim()) return DEFAULT_TIERS;
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#"));
+  if (lines.length === 0) return DEFAULT_TIERS;
+
+  const out: TierConfig[] = [];
+  for (const line of lines) {
+    const parts = line.split(",").map((p) => p.trim());
+    const name = parts[0];
+    const count = parseInt(parts[1] ?? "1", 10);
+    if (!name || Number.isNaN(count) || count < 1) continue;
+    out.push({ name, divisionCount: Math.min(count, 50) });
   }
-  return slots;
+  return out.length > 0 ? out : DEFAULT_TIERS;
 }
 
-function titleCase(s: string): string {
-  return s.charAt(0) + s.slice(1).toLowerCase();
+// Compose the default tier config as a textarea-friendly string.
+export function tiersToText(tiers: TierConfig[]): string {
+  return tiers.map((t) => `${t.name}, ${t.divisionCount}`).join("\n");
+}
+
+// Generate display names for divisions in a tier (e.g. "Rare 1", "Rare 2", or just "Legendary" for single)
+export function defaultDivisionNames(tier: TierConfig): string[] {
+  if (tier.divisionCount === 1) return [tier.name];
+  return Array.from({ length: tier.divisionCount }, (_, i) => `${tier.name} ${i + 1}`);
 }

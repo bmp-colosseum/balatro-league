@@ -1,12 +1,12 @@
-import { Rarity } from "@prisma/client";
 import { Router, type Request, type Response } from "express";
 import { prisma } from "../db.js";
 import { clearMockData, isMockPlayer, makeRng, MOCK_PREFIX, simulateDivisionPairings } from "../mock.js";
-import { buildPyramid, DEFAULT_PYRAMID, PLAYERS_PER_DIVISION } from "../pyramid.js";
+import { parseTierConfig, PLAYERS_PER_DIVISION, tiersToText, DEFAULT_TIERS } from "../pyramid.js";
 import { gamesFromResult, parsePairingResult } from "../scoring.js";
 import { announceResult } from "../announce.js";
 import { tryGetDiscordClient } from "../discord.js";
 import { computeStandings } from "../standings.js";
+import { createTiersAndDivisions, tierColors } from "../tiers.js";
 import { csvDocument } from "./csv.js";
 import { html, raw, type RawHtml } from "./html.js";
 import { layout } from "./layout.js";
@@ -14,15 +14,11 @@ import { sessionContext } from "./session-context.js";
 
 export const router = Router();
 
-const RARITY_LABEL: Record<Rarity, string> = {
-  LEGENDARY: "Legendary",
-  RARE: "Rare",
-  UNCOMMON: "Uncommon",
-  COMMON: "Common",
-};
-
-function pillForRarity(r: Rarity): RawHtml {
-  return html`<span class="pill ${r.toLowerCase()}">${RARITY_LABEL[r]}</span>`;
+// Render a pill for a tier given its position + display name.
+// Uses tierColors() so any tier (including admin-customized names) gets a matching pill.
+function pillForTier(position: number, name: string): RawHtml {
+  const c = tierColors(position);
+  return html`<span class="pill" style="background:${c.bg}; color:${c.fg}">${name}</span>`;
 }
 
 function send(res: Response, body: RawHtml) {
@@ -123,8 +119,26 @@ router.get("/players", async (req, res) => {
     orderBy: { displayName: "asc" },
   });
 
-  const activeSeason = await prisma.season.findFirst({ where: { isActive: true }, include: { divisions: { orderBy: [{ rarity: "asc" }, { groupNumber: "asc" }] } } });
-  const divisionOptions = activeSeason?.divisions ?? [];
+  const activeSeason = await prisma.season.findFirst({
+    where: { isActive: true },
+    include: {
+      tiers: {
+        orderBy: { position: "asc" },
+        include: { divisions: { orderBy: { groupNumber: "asc" } } },
+      },
+    },
+  });
+  // Flat list of divisions across all tiers (top → bottom), used by the move-select.
+  // Map each division id → its tier so we can render the right pill color per row.
+  const divisionOptions = activeSeason?.tiers.flatMap((t) => t.divisions) ?? [];
+  const tierByDivisionId = new Map<string, { position: number; name: string }>();
+  if (activeSeason) {
+    for (const tier of activeSeason.tiers) {
+      for (const d of tier.divisions) {
+        tierByDivisionId.set(d.id, { position: tier.position, name: tier.name });
+      }
+    }
+  }
 
   const rows = players.map((p) => {
     const isFake = p.discordId.startsWith(MOCK_PREFIX);
@@ -144,8 +158,9 @@ router.get("/players", async (req, res) => {
         </form>`
       : raw('<span class="muted">no active season</span>');
 
+    const currentTier = currentDiv ? tierByDivisionId.get(currentDiv.id) : undefined;
     const divLabel = currentDiv
-      ? html`${pillForRarity(currentDiv.rarity)} ${currentDiv.name}${isDropped ? raw(' <span class="pill" style="background:rgba(231,76,60,0.2); color:#e74c3c">DROPPED</span>') : raw("")}`
+      ? html`${currentTier ? pillForTier(currentTier.position, currentTier.name) : raw("")} ${currentDiv.name}${isDropped ? raw(' <span class="pill" style="background:rgba(231,76,60,0.2); color:#e74c3c">DROPPED</span>') : raw("")}`
       : raw('<span class="muted">—</span>');
 
     const dropAction = currentDiv
@@ -215,9 +230,14 @@ router.get("/players", async (req, res) => {
 router.get("/players/bulk", async (req, res) => {
   const activeSeason = await prisma.season.findFirst({
     where: { isActive: true },
-    include: { divisions: { orderBy: [{ rarity: "asc" }, { groupNumber: "asc" }] } },
+    include: {
+      tiers: {
+        orderBy: { position: "asc" },
+        include: { divisions: { orderBy: { groupNumber: "asc" } } },
+      },
+    },
   });
-  const divisionOptions = activeSeason?.divisions ?? [];
+  const divisionOptions = activeSeason?.tiers.flatMap((t) => t.divisions) ?? [];
 
   const body = html`
     <h2>Bulk add players</h2>
@@ -279,15 +299,12 @@ Dave"></textarea>
     </div>
 
     <div class="card">
-      <strong>Auto-distribute unassigned players (random within rarity)</strong>
-      <p class="muted">Takes every player not currently in a division and packs them round-robin into the selected rarity. Useful when ratings aren't set.</p>
+      <strong>Auto-distribute unassigned players (random within a tier)</strong>
+      <p class="muted">Takes every player not currently in a division and packs them round-robin across the selected tier's divisions. Useful when ratings aren't set.</p>
       <form method="post" action="/admin/players/auto-distribute">
-        <label>Target rarity
-          <select name="rarity">
-            <option value="COMMON">Common</option>
-            <option value="UNCOMMON">Uncommon</option>
-            <option value="RARE">Rare</option>
-            <option value="LEGENDARY">Legendary</option>
+        <label>Target tier
+          <select name="tierName">
+            ${(activeSeason?.tiers ?? []).map((t) => html`<option value="${t.name}">${t.name}</option>`)}
           </select>
         </label>
         <label>Source
@@ -452,10 +469,10 @@ router.post("/players/bulk-real", async (req, res) => {
 });
 
 router.post("/players/auto-distribute", async (req, res) => {
-  const rarity = String(req.body.rarity ?? "").trim() as Rarity;
+  const tierName = String(req.body.tierName ?? "").trim();
   const source = String(req.body.source ?? "all");
-  if (!["LEGENDARY", "RARE", "UNCOMMON", "COMMON"].includes(rarity)) {
-    return redirectWith(res, "/admin/players/bulk", { err: "Pick a target rarity." });
+  if (!tierName) {
+    return redirectWith(res, "/admin/players/bulk", { err: "Pick a target tier." });
   }
 
   const season = await prisma.season.findFirst({ where: { isActive: true } });
@@ -463,13 +480,19 @@ router.post("/players/auto-distribute", async (req, res) => {
     return redirectWith(res, "/admin/players/bulk", { err: "No active season." });
   }
 
+  // Look up the tier within the active season; supports any custom name.
+  const tier = await prisma.tier.findFirst({ where: { seasonId: season.id, name: tierName } });
+  if (!tier) {
+    return redirectWith(res, "/admin/players/bulk", { err: `No tier named "${tierName}" in active season.` });
+  }
+
   const targetDivisions = await prisma.division.findMany({
-    where: { seasonId: season.id, rarity },
+    where: { seasonId: season.id, tierId: tier.id },
     orderBy: { groupNumber: "asc" },
     include: { _count: { select: { members: true } } },
   });
   if (targetDivisions.length === 0) {
-    return redirectWith(res, "/admin/players/bulk", { err: `No ${rarity} divisions in active season.` });
+    return redirectWith(res, "/admin/players/bulk", { err: `No divisions in tier "${tierName}".` });
   }
 
   // Unassigned players: those with no DivisionMember in the active season.
@@ -512,7 +535,7 @@ router.post("/players/auto-distribute", async (req, res) => {
     cursor++;
   }
 
-  const msg = `Placed ${placed} player(s) across ${targetDivisions.length} ${rarity} division(s). ${skippedFull ? `${skippedFull} couldn't fit (full).` : ""}`;
+  const msg = `Placed ${placed} player(s) across ${targetDivisions.length} ${tierName} division(s). ${skippedFull ? `${skippedFull} couldn't fit (full).` : ""}`;
   redirectWith(res, "/admin/players", { ok: msg });
 });
 
@@ -631,7 +654,7 @@ router.get("/rankings", async (req, res) => {
     include: {
       memberships: {
         where: { division: { season: { isActive: true } } },
-        include: { division: true },
+        include: { division: { include: { tier: true } } },
       },
     },
     orderBy: [{ rating: { sort: "desc", nulls: "last" } }, { displayName: "asc" }],
@@ -643,7 +666,7 @@ router.get("/rankings", async (req, res) => {
     return html`<tr>
       <td><strong>${p.displayName}</strong> ${isFake ? raw('<span class="pill fake">FAKE</span>') : raw("")}</td>
       <td><span class="muted">${p.discordId}</span></td>
-      <td>${currentDiv ? html`${pillForRarity(currentDiv.rarity)} ${currentDiv.name}` : raw('<span class="muted">—</span>')}</td>
+      <td>${currentDiv ? html`${pillForTier(currentDiv.tier.position, currentDiv.tier.name)} ${currentDiv.name}` : raw('<span class="muted">—</span>')}</td>
       <td>
         <form method="post" action="/admin/rankings/${p.id}/set" style="display:flex; gap:6px">
           <input type="number" name="rating" value="${p.rating ?? ""}" placeholder="unrated" style="width:90px" />
@@ -734,24 +757,14 @@ router.post("/players/auto-seed-by-rating", async (req, res) => {
   const season = await prisma.season.findFirst({ where: { isActive: true } });
   if (!season) return redirectWith(res, "/admin/players/bulk", { err: "No active season." });
 
-  const divisions = await prisma.division.findMany({
+  // Order divisions top-down by tier position (1 = top), then by groupNumber within each tier.
+  const orderedDivs = await prisma.division.findMany({
     where: { seasonId: season.id },
-    orderBy: [{ rarity: "asc" }, { groupNumber: "asc" }],
-    // rarity enum sorts COMMON,LEGENDARY,RARE,UNCOMMON alphabetically — fix that with manual order below.
+    orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
   });
-  if (divisions.length === 0) {
+  if (orderedDivs.length === 0) {
     return redirectWith(res, "/admin/players/bulk", { err: "No divisions to seed." });
   }
-
-  // Sort divisions by tier (Legendary first → Common last)
-  const rarityRank: Record<string, number> = { LEGENDARY: 0, RARE: 1, UNCOMMON: 2, COMMON: 3 };
-  const orderedDivs = divisions
-    .slice()
-    .sort((a, b) =>
-      rarityRank[a.rarity] === rarityRank[b.rarity]
-        ? a.groupNumber - b.groupNumber
-        : (rarityRank[a.rarity] ?? 999) - (rarityRank[b.rarity] ?? 999),
-    );
 
   if (mode === "reseed") {
     // Clear all current memberships (no confirmed-pairing protection — admin opted in)
@@ -805,13 +818,19 @@ router.get("/divisions", async (req, res) => {
     return send(res, layout({ title: "Divisions", activePath: "/admin/divisions", flash: readFlash(req), body, ...(await sessionContext(req)) }));
   }
 
-  const divisions = await prisma.division.findMany({
+  // Load tiers in top→bottom order with their divisions nested.
+  const tiers = await prisma.tier.findMany({
     where: { seasonId: season.id },
+    orderBy: { position: "asc" },
     include: {
-      _count: { select: { members: true, pairings: true } },
-      pairings: { where: { status: "CONFIRMED" }, select: { id: true } },
+      divisions: {
+        orderBy: { groupNumber: "asc" },
+        include: {
+          _count: { select: { members: true, pairings: true } },
+          pairings: { where: { status: "CONFIRMED" }, select: { id: true } },
+        },
+      },
     },
-    orderBy: [{ rarity: "asc" }, { groupNumber: "asc" }],
   });
 
   // Expected pairings for a full round-robin: n choose 2
@@ -819,28 +838,21 @@ router.get("/divisions", async (req, res) => {
     return memberCount < 2 ? 0 : (memberCount * (memberCount - 1)) / 2;
   }
 
-  const byRarity = new Map<Rarity, typeof divisions>();
-  for (const d of divisions) {
-    if (!byRarity.has(d.rarity)) byRarity.set(d.rarity, []);
-    byRarity.get(d.rarity)!.push(d);
-  }
-
-  const sections = (["LEGENDARY", "RARE", "UNCOMMON", "COMMON"] as Rarity[])
-    .filter((r) => (byRarity.get(r)?.length ?? 0) > 0)
-    .map((rarity) => {
-      const divs = byRarity.get(rarity)!;
-      const cards = divs.map((d) => {
+  const sections = tiers
+    .filter((t) => t.divisions.length > 0)
+    .map((tier) => {
+      const cards = tier.divisions.map((d) => {
         const expected = expectedPairings(d._count.members);
         const confirmed = d.pairings.length;
         const pct = expected === 0 ? 0 : Math.round((confirmed / expected) * 100);
         return html`<a href="/admin/divisions/${d.id}" class="division-card">
           <strong>${d.name}</strong>
-          ${pillForRarity(d.rarity)}
+          ${pillForTier(tier.position, tier.name)}
           <div class="muted" style="margin-top:8px">${d._count.members}/${season.targetGroupSize} players · ${confirmed}/${expected} sets</div>
           <div class="progress"><div style="width:${pct}%"></div></div>
         </a>`;
       });
-      return html`<h3 style="margin-top:24px">${RARITY_LABEL[rarity]} (${divs.length})</h3>
+      return html`<h3 style="margin-top:24px">${tier.name} (${tier.divisions.length})</h3>
         <div class="grid grid-3">${cards}</div>`;
     });
 
@@ -857,6 +869,7 @@ router.get("/divisions/:id", async (req, res) => {
     where: { id },
     include: {
       season: true,
+      tier: true,
       members: { include: { player: true }, orderBy: { joinedAt: "asc" } },
       pairings: {
         include: { playerA: true, playerB: true },
@@ -995,7 +1008,7 @@ router.get("/divisions/:id", async (req, res) => {
   const body = html`
     <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:8px">
       <h2 style="margin:0">${division.name}</h2>
-      ${pillForRarity(division.rarity)}
+      ${pillForTier(division.tier.position, division.tier.name)}
       <span class="muted">· ${division.season.name}</span>
       <a href="/admin/divisions" style="margin-left:auto">← All divisions</a>
     </div>
@@ -1270,18 +1283,31 @@ router.post("/signups/:id/close", async (req, res) => {
 
 router.get("/seasons", async (req, res) => {
   const seasons = await prisma.season.findMany({
-    include: { _count: { select: { divisions: true } }, divisions: { include: { _count: { select: { members: true, pairings: true } } } } },
+    include: {
+      _count: { select: { divisions: true } },
+      tiers: {
+        orderBy: { position: "asc" },
+        include: {
+          divisions: {
+            include: { _count: { select: { members: true, pairings: true } } },
+          },
+        },
+      },
+    },
     orderBy: [{ isActive: "desc" }, { startedAt: "desc" }],
   });
 
   const seasonCards = seasons.map((s) => {
-    const standingsByRarity = new Map<Rarity, number>();
-    for (const d of s.divisions) standingsByRarity.set(d.rarity, (standingsByRarity.get(d.rarity) ?? 0) + 1);
-    const pyramidLine = ["LEGENDARY", "RARE", "UNCOMMON", "COMMON"]
-      .map((r) => `${RARITY_LABEL[r as Rarity]}: ${standingsByRarity.get(r as Rarity) ?? 0}`)
-      .join(" · ");
-    const players = s.divisions.reduce((sum, d) => sum + d._count.members, 0);
-    const pairings = s.divisions.reduce((sum, d) => sum + d._count.pairings, 0);
+    // Pyramid summary lists each tier (in position order) with its division count.
+    const pyramidLine = s.tiers.map((t) => `${t.name}: ${t.divisions.length}`).join(" · ") || "(no tiers)";
+    const players = s.tiers.reduce(
+      (sum, t) => sum + t.divisions.reduce((s2, d) => s2 + d._count.members, 0),
+      0,
+    );
+    const pairings = s.tiers.reduce(
+      (sum, t) => sum + t.divisions.reduce((s2, d) => s2 + d._count.pairings, 0),
+      0,
+    );
 
     return html`<div class="card">
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
@@ -1307,14 +1333,16 @@ router.get("/seasons", async (req, res) => {
 
     <div class="card">
       <strong>Create new season</strong>
-      <p class="muted">Configure the pyramid shape inline. Created as <strong>inactive</strong> — your current active season is untouched. Use the Activate button below when ready to switch player commands over.</p>
+      <p class="muted">Configure the tier pyramid as <code>Name, count</code> per line, top tier first. Created as <strong>inactive</strong> — your current active season is untouched. Use the Activate button below when ready to switch player commands over.</p>
       <form method="post" action="/admin/seasons/create">
         <label>Name <input name="name" required placeholder="Season 2" /></label>
         <label>Deadline (UTC) <input name="deadline" type="datetime-local" /></label>
-        <label>Legendary divs <input name="legendary" type="number" min="0" max="20" value="1" /></label>
-        <label>Rare divs <input name="rare" type="number" min="0" max="20" value="4" /></label>
-        <label>Uncommon divs <input name="uncommon" type="number" min="0" max="20" value="6" /></label>
-        <label>Common divs <input name="common" type="number" min="0" max="20" value="6" /></label>
+        <label style="flex:1 1 100%">Tiers (one per line: <code>Name, divisionCount</code>)
+          <textarea name="tiers" rows="6" style="width:100%; font-family:ui-monospace, monospace; background:var(--surface-2); border:1px solid var(--border); color:var(--text); padding:8px; border-radius:4px" placeholder="Legendary, 1
+Rare, 4
+Uncommon, 6
+Common, 6">${tiersToText(DEFAULT_TIERS)}</textarea>
+        </label>
         <label>Group size <input name="targetGroupSize" type="number" min="2" max="20" value="5" /></label>
         <label>Min group <input name="minGroupSize" type="number" min="2" max="20" value="3" /></label>
         <label>Visibility
@@ -1336,14 +1364,13 @@ router.get("/seasons", async (req, res) => {
 router.post("/seasons/create", async (req, res) => {
   const name = String(req.body.name ?? "").trim();
   if (!name) return redirectWith(res, "/admin/seasons", { err: "Name required." });
-  const counts = {
-    LEGENDARY: parseInt(req.body.legendary, 10) || 0,
-    RARE: parseInt(req.body.rare, 10) || 0,
-    UNCOMMON: parseInt(req.body.uncommon, 10) || 0,
-    COMMON: parseInt(req.body.common, 10) || 0,
-  } as Record<Rarity, number>;
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  if (total === 0) return redirectWith(res, "/admin/seasons", { err: "Pyramid must have at least one division." });
+
+  // Parse the textarea-style tier config (e.g. "Legendary, 1\nRare, 4"). Falls back to DEFAULT_TIERS if empty.
+  const tierConfigs = parseTierConfig(String(req.body.tiers ?? ""));
+  const totalDivisions = tierConfigs.reduce((sum, t) => sum + t.divisionCount, 0);
+  if (totalDivisions === 0) {
+    return redirectWith(res, "/admin/seasons", { err: "Pyramid must have at least one division." });
+  }
 
   let deadline: Date | null = null;
   if (req.body.deadline) {
@@ -1359,11 +1386,7 @@ router.post("/seasons/create", async (req, res) => {
   const season = await prisma.season.create({
     data: { name, deadline, isActive: false, targetGroupSize, minGroupSize, visibility },
   });
-  for (const slot of buildPyramid(counts)) {
-    await prisma.division.create({
-      data: { seasonId: season.id, rarity: slot.rarity, groupNumber: slot.groupNumber, name: slot.name },
-    });
-  }
+  await createTiersAndDivisions(season.id, tierConfigs);
   redirectWith(res, "/admin/seasons", { ok: `Created ${name} (inactive, group size ${targetGroupSize}). Use Activate when you're ready to switch player commands to it.` });
 });
 
@@ -1379,7 +1402,7 @@ router.get("/export/players.csv", async (_req, res) => {
     include: {
       memberships: {
         where: { division: { season: { isActive: true } } },
-        include: { division: true },
+        include: { division: { include: { tier: true } } },
       },
     },
     orderBy: { displayName: "asc" },
@@ -1392,7 +1415,7 @@ router.get("/export/players.csv", async (_req, res) => {
       p.displayName,
       isMockPlayer(p) ? "FAKE" : "REAL",
       m?.division.name ?? "",
-      m?.division.rarity ?? "",
+      m?.division.tier.name ?? "",
       m?.status ?? "",
       p.createdAt.toISOString(),
     ];
@@ -1402,7 +1425,7 @@ router.get("/export/players.csv", async (_req, res) => {
   res.set("Content-Disposition", `attachment; filename="players.csv"`);
   res.send(
     csvDocument(
-      ["discord_id", "display_name", "type", "current_division", "current_rarity", "current_status", "created_at"],
+      ["discord_id", "display_name", "type", "current_division", "current_tier", "current_status", "created_at"],
       rows,
     ),
   );
@@ -1413,42 +1436,50 @@ router.get("/seasons/:id/export/standings.csv", async (req, res) => {
   const season = await prisma.season.findUnique({
     where: { id },
     include: {
-      divisions: {
+      // Load tiers in top→bottom order; each tier nests its divisions ordered by groupNumber.
+      tiers: {
+        orderBy: { position: "asc" },
         include: {
-          members: { include: { player: true } },
-          pairings: {
-            where: { status: "CONFIRMED" },
-            select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
+          divisions: {
+            orderBy: { groupNumber: "asc" },
+            include: {
+              members: { include: { player: true } },
+              pairings: {
+                where: { status: "CONFIRMED" },
+                select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
+              },
+            },
           },
         },
-        orderBy: [{ rarity: "asc" }, { groupNumber: "asc" }],
       },
     },
   });
   if (!season) return res.status(404).send("season not found");
 
   const rows: unknown[][] = [];
-  for (const division of season.divisions) {
-    const droppedIds = new Set(division.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId));
-    const standings = computeStandings(division.members.map((m) => m.player), division.pairings);
-    standings.forEach((row, idx) => {
-      rows.push([
-        season.name,
-        division.name,
-        division.rarity,
-        idx + 1,
-        row.player.displayName,
-        row.player.discordId,
-        row.points,
-        row.wins,
-        row.draws,
-        row.losses,
-        row.gamesWon,
-        row.gamesLost,
-        row.played,
-        droppedIds.has(row.player.id) ? "DROPPED" : "ACTIVE",
-      ]);
-    });
+  for (const tier of season.tiers) {
+    for (const division of tier.divisions) {
+      const droppedIds = new Set(division.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId));
+      const standings = computeStandings(division.members.map((m) => m.player), division.pairings);
+      standings.forEach((row, idx) => {
+        rows.push([
+          season.name,
+          division.name,
+          tier.name,
+          idx + 1,
+          row.player.displayName,
+          row.player.discordId,
+          row.points,
+          row.wins,
+          row.draws,
+          row.losses,
+          row.gamesWon,
+          row.gamesLost,
+          row.played,
+          droppedIds.has(row.player.id) ? "DROPPED" : "ACTIVE",
+        ]);
+      });
+    }
   }
 
   res.set("Content-Type", "text/csv; charset=utf-8");
@@ -1456,7 +1487,7 @@ router.get("/seasons/:id/export/standings.csv", async (req, res) => {
   res.send(
     csvDocument(
       [
-        "season", "division", "rarity", "rank", "player", "discord_id",
+        "season", "division", "tier", "rank", "player", "discord_id",
         "points", "wins", "draws", "losses", "games_won", "games_lost", "played", "status",
       ],
       rows,
@@ -1469,36 +1500,43 @@ router.get("/seasons/:id/export/pairings.csv", async (req, res) => {
   const season = await prisma.season.findUnique({
     where: { id },
     include: {
-      divisions: {
+      tiers: {
+        orderBy: { position: "asc" },
         include: {
-          pairings: {
-            include: { playerA: true, playerB: true },
-            orderBy: { reportedAt: "asc" },
+          divisions: {
+            orderBy: { groupNumber: "asc" },
+            include: {
+              pairings: {
+                include: { playerA: true, playerB: true },
+                orderBy: { reportedAt: "asc" },
+              },
+            },
           },
         },
-        orderBy: [{ rarity: "asc" }, { groupNumber: "asc" }],
       },
     },
   });
   if (!season) return res.status(404).send("season not found");
 
   const rows: unknown[][] = [];
-  for (const division of season.divisions) {
-    for (const p of division.pairings) {
-      rows.push([
-        season.name,
-        division.name,
-        division.rarity,
-        p.playerA.displayName,
-        p.playerB.displayName,
-        p.gamesWonA,
-        p.gamesWonB,
-        p.status,
-        p.reportedAt?.toISOString() ?? "",
-        p.confirmedAt?.toISOString() ?? "",
-        p.adminOverrideBy ?? "",
-        p.adminOverrideReason ?? "",
-      ]);
+  for (const tier of season.tiers) {
+    for (const division of tier.divisions) {
+      for (const p of division.pairings) {
+        rows.push([
+          season.name,
+          division.name,
+          tier.name,
+          p.playerA.displayName,
+          p.playerB.displayName,
+          p.gamesWonA,
+          p.gamesWonB,
+          p.status,
+          p.reportedAt?.toISOString() ?? "",
+          p.confirmedAt?.toISOString() ?? "",
+          p.adminOverrideBy ?? "",
+          p.adminOverrideReason ?? "",
+        ]);
+      }
     }
   }
 
@@ -1507,7 +1545,7 @@ router.get("/seasons/:id/export/pairings.csv", async (req, res) => {
   res.send(
     csvDocument(
       [
-        "season", "division", "rarity",
+        "season", "division", "tier",
         "player_a", "player_b", "games_won_a", "games_won_b",
         "status", "reported_at", "confirmed_at",
         "admin_override_by", "admin_override_reason",
@@ -1532,6 +1570,4 @@ router.post("/seasons/:id/activate", async (req, res) => {
   redirectWith(res, "/admin/seasons", { ok: `Activated as ${target.visibility}.` });
 });
 
-// Silence unused-import warning when DEFAULT_PYRAMID isn't referenced anywhere yet.
-void DEFAULT_PYRAMID;
 void computeStandings;
