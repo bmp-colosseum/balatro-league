@@ -32,6 +32,7 @@ export function TierEditor({
   const [rows, setRows] = useState<TierConfig[]>(
     initial.length > 0 ? initial : [{ name: "", divisionCount: 1 }],
   );
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
 
   const addRow = () => setRows([...rows, { name: "", divisionCount: 1 }]);
   const removeRow = (idx: number) => {
@@ -61,10 +62,10 @@ export function TierEditor({
           <label>
             Load template
             <select
-              defaultValue=""
+              value={selectedTemplateId}
               onChange={(e) => {
-                loadTemplate(e.target.value);
-                e.target.value = "";
+                setSelectedTemplateId(e.target.value);
+                if (e.target.value) loadTemplate(e.target.value);
               }}
             >
               <option value="">— pick a template —</option>
@@ -76,6 +77,11 @@ export function TierEditor({
               ))}
             </select>
           </label>
+          {selectedTemplateId && (
+            <span className="muted" style={{ marginLeft: 8, fontSize: 11 }}>
+              ✓ loaded — edit rows below and click Create season when ready
+            </span>
+          )}
         </div>
       )}
 

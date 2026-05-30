@@ -7,9 +7,11 @@ import { TierEditor } from "@/components/TierEditor";
 import {
   activateSeason,
   createSeason,
+  deleteSeason,
   endSeason,
   finalizeSignupsForSeason,
   openSignupsForSeason,
+  renameSeason,
   setSeasonPreset,
   setSeasonVisibility,
 } from "./actions";
@@ -140,7 +142,17 @@ export default async function AdminSeasonsPage() {
             return (
               <div key={s.id} className="card">
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <strong style={{ fontSize: 16 }}>{s.name}</strong>
+                  <form action={renameSeason} style={{ display: "flex", gap: 4 }}>
+                    <input type="hidden" name="id" value={s.id} />
+                    <input
+                      type="text"
+                      name="name"
+                      defaultValue={s.name}
+                      required
+                      style={{ fontSize: 16, fontWeight: 600, padding: "2px 6px", minWidth: 200 }}
+                    />
+                    <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+                  </form>
                   {s.isActive ? (
                     <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "#2ecc71" }}>ACTIVE</span>
                   ) : (
@@ -208,6 +220,23 @@ export default async function AdminSeasonsPage() {
                   channels={channels}
                   playerCount={players}
                 />
+
+                <details style={{ marginTop: 8 }}>
+                  <summary className="muted" style={{ cursor: "pointer", fontSize: 11, color: "#e74c3c" }}>
+                    Delete season
+                  </summary>
+                  <form action={deleteSeason} style={{ marginTop: 6, display: "flex", gap: 6, alignItems: "center" }}>
+                    <input type="hidden" name="id" value={s.id} />
+                    <span className="muted" style={{ fontSize: 11 }}>Type season name to confirm:</span>
+                    <input type="text" name="confirm" placeholder={s.name} required style={{ flex: 1, fontSize: 11 }} />
+                    <button type="submit" style={{ fontSize: 11, background: "#e74c3c", color: "white", border: "none" }}>
+                      Delete
+                    </button>
+                  </form>
+                  <div className="muted" style={{ fontSize: 10, marginTop: 4 }}>
+                    Cascades: tiers, divisions, members, pairings. Signup rounds get unlinked but kept.
+                  </div>
+                </details>
               </div>
             );
           })}

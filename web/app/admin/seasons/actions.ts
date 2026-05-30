@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import {
+  editChannelMessage,
   postChannelMessage,
   type ComponentActionRow,
   type MessageEmbed,
@@ -215,6 +216,35 @@ function buildSignupPayload(round: { id: string; name: string }): {
   return { embeds: [embed], components: [row] };
 }
 
+// Mirrors the bot's signup-embed for the CLOSED state — buttons disabled,
+// status text updated, embed color grey.
+function buildClosedSignupPayload(
+  round: { id: string; name: string },
+  signups: Array<{ discordId: string }>,
+): { embeds: MessageEmbed[]; components: ComponentActionRow[] } {
+  const playerList = signups.length
+    ? signups.map((s, i) => `${i + 1}. <@${s.discordId}>`).join("\n")
+    : "_No one signed up._";
+  const embed: MessageEmbed = {
+    title: `🃏  ${round.name}`,
+    description: "Sign-ups are closed.",
+    fields: [
+      { name: "Status", value: `**${signups.length} signed up — sign-ups closed**`, inline: false },
+      { name: "Players", value: playerList, inline: false },
+    ],
+    color: 0x99aab5,
+    footer: { text: `Round ${round.id}` },
+  };
+  const row: ComponentActionRow = {
+    type: 1,
+    components: [
+      { type: 2, custom_id: `signup:join:${round.id}`, style: 3, label: "Sign Up", disabled: true },
+      { type: 2, custom_id: `signup:withdraw:${round.id}`, style: 2, label: "Withdraw", disabled: true },
+    ],
+  };
+  return { embeds: [embed], components: [row] };
+}
+
 // Open a signup round bound to a specific season. The round's
 // resultingSeasonId is set immediately so the build step (later) populates
 // THIS season's existing divisions instead of creating a new one.
@@ -252,22 +282,62 @@ export async function openSignupsForSeason(formData: FormData) {
   revalidatePath("/admin/signups");
 }
 
-// Close (finalize) the signup round linked to a season, directly from the
-// season card — saves a trip to /admin/signups.
+// Close (finalize) the signup round linked to a season AND update the
+// Discord message so players see the closed-state embed (buttons disabled,
+// status updated). Previously only the DB was updated.
 export async function finalizeSignupsForSeason(formData: FormData) {
   await requireAdmin();
   const seasonId = String(formData.get("seasonId") ?? "");
   if (!seasonId) return;
   const round = await prisma.signupRound.findFirst({
     where: { resultingSeasonId: seasonId, status: "OPEN" },
+    include: { signups: { where: { withdrawn: false }, orderBy: { signedUpAt: "asc" } } },
   });
   if (!round) return;
   await prisma.signupRound.update({
     where: { id: round.id },
     data: { status: "CLOSED", closedAt: new Date() },
   });
+  // Update the Discord message in place
+  if (round.messageId && round.messageId !== "pending") {
+    const payload = buildClosedSignupPayload(round, round.signups);
+    await editChannelMessage(round.channelId, round.messageId, payload);
+  }
   revalidatePath("/admin/seasons");
   revalidatePath("/admin/signups");
+}
+
+export async function renameSeason(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  if (!id || !name) return;
+  await prisma.season.update({ where: { id }, data: { name } });
+  revalidatePath("/admin/seasons");
+}
+
+// Delete a season entirely. Cascade handles Tier/Division/DivisionMember/
+// Pairing via the schema relations. SignupRound.resultingSeasonId is a bare
+// string (not a relation), so we manually clear any rounds pointing here
+// before deleting so they don't end up referencing a non-existent season.
+export async function deleteSeason(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+  if (!id) return;
+  const season = await prisma.season.findUnique({ where: { id } });
+  if (!season) return;
+  // Require typing the season name to confirm — protects against fat-fingering
+  if (confirm.trim() !== season.name.trim()) {
+    redirect(`/admin/seasons?err=${encodeURIComponent("Confirmation name didn't match — season not deleted.")}`);
+  }
+  await prisma.signupRound.updateMany({
+    where: { resultingSeasonId: id },
+    data: { resultingSeasonId: null },
+  });
+  await prisma.season.delete({ where: { id } });
+  revalidatePath("/admin/seasons");
+  redirect("/admin/seasons");
 }
 
 export async function setSeasonVisibility(formData: FormData) {

@@ -62,12 +62,9 @@ export async function postChannelMessage(
   channelId: string,
   payload: { content?: string; embeds?: MessageEmbed[]; components?: ComponentActionRow[] },
 ): Promise<string | null> {
-  const res = await fetch(`${BASE_URL}/channels/${channelId}/messages`, {
+  const res = await discordFetch(`${BASE_URL}/channels/${channelId}/messages`, {
     method: "POST",
-    headers: {
-      Authorization: botAuthHeader(),
-      "Content-Type": "application/json",
-    },
+    headers: { Authorization: botAuthHeader(), "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
@@ -76,6 +73,39 @@ export async function postChannelMessage(
   }
   const body = (await res.json()) as { id?: string };
   return body.id ?? null;
+}
+
+// Edit an existing message (replace content/embeds/components).
+export async function editChannelMessage(
+  channelId: string,
+  messageId: string,
+  payload: { content?: string; embeds?: MessageEmbed[]; components?: ComponentActionRow[] },
+): Promise<boolean> {
+  const res = await discordFetch(`${BASE_URL}/channels/${channelId}/messages/${messageId}`, {
+    method: "PATCH",
+    headers: { Authorization: botAuthHeader(), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    console.warn(`Discord editChannelMessage failed: ${res.status} ${await res.text()}`);
+    return false;
+  }
+  return true;
+}
+
+// Wrapper that retries once on HTTP 429 (rate limit), honoring Retry-After.
+// Discord's rate limits are bucketed per route; for low-volume admin actions
+// one polite retry is usually enough.
+async function discordFetch(url: string, init: RequestInit): Promise<Response> {
+  let res = await fetch(url, init);
+  if (res.status === 429) {
+    const retryAfter = parseFloat(res.headers.get("retry-after") ?? "1");
+    const waitMs = Math.min(5000, Math.max(100, retryAfter * 1000));
+    console.warn(`Discord 429 on ${url} — retrying after ${waitMs}ms`);
+    await new Promise((r) => setTimeout(r, waitMs));
+    res = await fetch(url, init);
+  }
+  return res;
 }
 
 interface DiscordChannel {
