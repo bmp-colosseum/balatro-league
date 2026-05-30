@@ -55,7 +55,9 @@ export default async function StandingsPage() {
                     void tierColors;
                     return (
                       <div key={div.id} className="card">
-                        <strong>{div.name}</strong>
+                        <strong>
+                          <Link href={`/divisions/${div.id}`} style={{ textDecoration: "none" }}>{div.name}</Link>
+                        </strong>
                         <table style={{ marginTop: 8 }}>
                           <thead>
                             <tr>

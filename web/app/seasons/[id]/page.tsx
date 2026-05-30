@@ -68,7 +68,9 @@ export default async function SeasonDetailPage({
                 ).map((r) => ({ ...r, dropped: droppedIds.has(r.player.id) }));
                 return (
                   <div key={div.id} className="card">
-                    <strong>{div.name}</strong>
+                    <strong>
+                      <Link href={`/divisions/${div.id}`} style={{ textDecoration: "none" }}>{div.name}</Link>
+                    </strong>
                     <table style={{ marginTop: 8 }}>
                       <thead>
                         <tr><th></th><th>Player</th><th>Pts</th><th>W-D-L</th><th>Games</th></tr>
