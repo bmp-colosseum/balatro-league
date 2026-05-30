@@ -138,25 +138,20 @@ function PresetEditor({
   return (
     <div style={{ display: "grid", gap: 16 }}>
       <div className="card">
-        <form action={renamePreset} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <input type="hidden" name="id" value={preset.id} />
-          <strong style={{ marginRight: 4 }}>Name:</strong>
-          <input type="text" name="name" defaultValue={preset.name} required style={{ flex: 1 }} />
-          <button type="submit">Save</button>
-          <form
-            action={deletePreset}
-            style={{ marginLeft: "auto" }}
-          >
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <form action={renamePreset} style={{ display: "flex", gap: 6, alignItems: "center", flex: 1 }}>
             <input type="hidden" name="id" value={preset.id} />
-            <button
-              type="submit"
-              className="secondary"
-              style={{ color: "#e74c3c" }}
-            >
+            <strong style={{ marginRight: 4 }}>Name:</strong>
+            <input type="text" name="name" defaultValue={preset.name} required style={{ flex: 1 }} />
+            <button type="submit">Save name</button>
+          </form>
+          <form action={deletePreset}>
+            <input type="hidden" name="id" value={preset.id} />
+            <button type="submit" className="secondary" style={{ color: "#e74c3c" }}>
               Delete preset
             </button>
           </form>
-        </form>
+        </div>
         <p className="muted" style={{ marginTop: 8 }}>
           {preset.decks.length} decks Ã— {preset.stakes.length} stakes ={" "}
           <strong>{totalCombos} possible combos</strong>.
