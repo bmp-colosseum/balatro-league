@@ -23,7 +23,7 @@ playerRouter.get("/me", async (req, res) => {
     where: { discordId: u.discordId },
     include: {
       memberships: {
-        where: { division: { season: { isActive: true } } },
+        where: { division: { season: { isActive: true, visibility: "PUBLIC" } } },
         include: {
           division: {
             include: {

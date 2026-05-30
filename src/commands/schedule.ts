@@ -3,6 +3,7 @@ import {
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
 } from "discord.js";
+import { activePublicSeason } from "../active-season.js";
 import { prisma } from "../db.js";
 import { getOrCreatePlayer } from "../players.js";
 import type { SlashCommand } from "./types.js";
@@ -16,7 +17,7 @@ export const schedule: SlashCommand = {
     await interaction.deferReply();
 
     const me = await getOrCreatePlayer(interaction.user);
-    const activeSeason = await prisma.season.findFirst({ where: { isActive: true } });
+    const activeSeason = await activePublicSeason();
     if (!activeSeason) {
       await interaction.editReply("No active season right now.");
       return;

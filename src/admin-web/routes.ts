@@ -1283,9 +1283,12 @@ router.get("/seasons", async (req, res) => {
     const pairings = s.divisions.reduce((sum, d) => sum + d._count.pairings, 0);
 
     return html`<div class="card">
-      <div style="display:flex; align-items:center; gap:8px">
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
         <strong style="font-size:16px">${s.name}</strong>
         ${s.isActive ? raw('<span class="pill" style="background:rgba(46,204,113,0.2); color:#2ecc71">ACTIVE</span>') : raw('<span class="pill" style="background:rgba(149,165,166,0.2); color:#c0c8cb">Inactive</span>')}
+        ${s.visibility === "INTERNAL"
+          ? raw('<span class="pill" style="background:rgba(241,196,15,0.2); color:#f1c40f">INTERNAL — admin only</span>')
+          : raw('<span class="pill" style="background:rgba(52,152,219,0.2); color:#76c7ff">PUBLIC</span>')}
         ${s.deadline ? html`<span class="muted" style="margin-left:auto">Deadline: ${s.deadline.toISOString().slice(0, 16).replace("T", " ")} UTC</span>` : raw("")}
       </div>
       <div class="muted" style="margin-top:4px">${pyramidLine}</div>
@@ -1313,6 +1316,12 @@ router.get("/seasons", async (req, res) => {
         <label>Common divs <input name="common" type="number" min="0" max="20" value="6" /></label>
         <label>Group size <input name="targetGroupSize" type="number" min="2" max="20" value="5" /></label>
         <label>Min group <input name="minGroupSize" type="number" min="2" max="20" value="3" /></label>
+        <label>Visibility
+          <select name="visibility">
+            <option value="PUBLIC">PUBLIC (visible to players)</option>
+            <option value="INTERNAL">INTERNAL (admin-only test)</option>
+          </select>
+        </label>
         <button type="submit">Create season</button>
       </form>
     </div>
@@ -1343,10 +1352,11 @@ router.post("/seasons/create", async (req, res) => {
 
   const targetGroupSize = Math.max(2, parseInt(req.body.targetGroupSize, 10) || 5);
   const minGroupSize = Math.max(2, parseInt(req.body.minGroupSize, 10) || 3);
+  const visibility: "PUBLIC" | "INTERNAL" = req.body.visibility === "INTERNAL" ? "INTERNAL" : "PUBLIC";
 
   // Don't auto-deactivate the current active season — admin activates the new one explicitly.
   const season = await prisma.season.create({
-    data: { name, deadline, isActive: false, targetGroupSize, minGroupSize },
+    data: { name, deadline, isActive: false, targetGroupSize, minGroupSize, visibility },
   });
   for (const slot of buildPyramid(counts)) {
     await prisma.division.create({
@@ -1508,12 +1518,17 @@ router.get("/seasons/:id/export/pairings.csv", async (req, res) => {
 
 router.post("/seasons/:id/activate", async (req, res) => {
   const id = req.params.id!;
-  const prior = await prisma.season.findFirst({ where: { isActive: true } });
-  if (prior && prior.id !== id) {
+  const target = await prisma.season.findUnique({ where: { id } });
+  if (!target) return redirectWith(res, "/admin/seasons", { err: "Season not found." });
+  // Only demote a prior active season of the same visibility
+  const prior = await prisma.season.findFirst({
+    where: { isActive: true, visibility: target.visibility, NOT: { id } },
+  });
+  if (prior) {
     await prisma.season.update({ where: { id: prior.id }, data: { isActive: false, endedAt: new Date() } });
   }
   await prisma.season.update({ where: { id }, data: { isActive: true, endedAt: null } });
-  redirectWith(res, "/admin/seasons", { ok: "Season reactivated." });
+  redirectWith(res, "/admin/seasons", { ok: `Activated as ${target.visibility}.` });
 });
 
 // Silence unused-import warning when DEFAULT_PYRAMID isn't referenced anywhere yet.

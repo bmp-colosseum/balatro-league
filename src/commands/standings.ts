@@ -4,6 +4,7 @@ import {
   type ChatInputCommandInteraction,
 } from "discord.js";
 import { Rarity } from "@prisma/client";
+import { activePublicSeason } from "../active-season.js";
 import { prisma } from "../db.js";
 import { PLAYERS_PER_DIVISION } from "../pyramid.js";
 import { computeStandings, formatDivisionField, formatStandingsTable } from "../standings.js";
@@ -43,7 +44,7 @@ export const standings: SlashCommand = {
   async execute(interaction: ChatInputCommandInteraction) {
     await interaction.deferReply();
 
-    const activeSeason = await prisma.season.findFirst({ where: { isActive: true } });
+    const activeSeason = await activePublicSeason();
     if (!activeSeason) {
       await interaction.editReply("No active season right now.");
       return;

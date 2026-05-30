@@ -1,6 +1,7 @@
 // Shared report/confirm/dispute logic. Used by both the Discord /report flow and the web /me/report page
 // so the same validation runs no matter how the set is submitted.
 
+import { activePublicSeason } from "./active-season.js";
 import { announceResult } from "./announce.js";
 import { prisma } from "./db.js";
 import { gamesFromResult, type PairingResult } from "./scoring.js";
@@ -20,7 +21,7 @@ export async function reportSet(input: ReportInput): Promise<ReportResult> {
     return { ok: false, reason: "You can't report a set against yourself." };
   }
 
-  const activeSeason = await prisma.season.findFirst({ where: { isActive: true } });
+  const activeSeason = await activePublicSeason();
   if (!activeSeason) return { ok: false, reason: "No active season right now." };
 
   const sharedMembership = await prisma.divisionMember.findFirst({

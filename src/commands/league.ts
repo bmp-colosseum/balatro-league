@@ -59,6 +59,16 @@ export const league: SlashCommand = {
             .setRequired(false)
             .setMinValue(2)
             .setMaxValue(20),
+        )
+        .addStringOption((opt) =>
+          opt
+            .setName("visibility")
+            .setDescription("PUBLIC (default) = visible to players. INTERNAL = admin-only test season.")
+            .setRequired(false)
+            .addChoices(
+              { name: "PUBLIC (visible to players)", value: "PUBLIC" },
+              { name: "INTERNAL (admin-only, for testing)", value: "INTERNAL" },
+            ),
         ),
     )
     .addSubcommand((sub) =>
@@ -393,6 +403,7 @@ async function createSeason(interaction: ChatInputCommandInteraction) {
   const fromSignupsRoundId = interaction.options.getString("from-signups");
   const targetGroupSize = interaction.options.getInteger("group-size") ?? 5;
   const minGroupSize = interaction.options.getInteger("min-group-size") ?? 3;
+  const visibility = (interaction.options.getString("visibility") ?? "PUBLIC") as "PUBLIC" | "INTERNAL";
 
   let deadline: Date | null = null;
   if (deadlineStr) {
@@ -432,7 +443,7 @@ async function createSeason(interaction: ChatInputCommandInteraction) {
   const currentlyActive = await prisma.season.findFirst({ where: { isActive: true } });
 
   const season = await prisma.season.create({
-    data: { name, deadline, isActive: false, targetGroupSize, minGroupSize },
+    data: { name, deadline, isActive: false, targetGroupSize, minGroupSize, visibility },
   });
 
   let divisionsCreated = 0;
@@ -475,8 +486,11 @@ async function activateSeason(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  const prior = await prisma.season.findFirst({ where: { isActive: true } });
-  if (prior) {
+  // Only demote a prior active season of the SAME visibility — PUBLIC and INTERNAL can both be active.
+  const prior = await prisma.season.findFirst({
+    where: { isActive: true, visibility: target.visibility },
+  });
+  if (prior && prior.id !== target.id) {
     await prisma.season.update({
       where: { id: prior.id },
       data: { isActive: false, endedAt: new Date() },
@@ -488,9 +502,9 @@ async function activateSeason(interaction: ChatInputCommandInteraction) {
   });
 
   await interaction.editReply(
-    prior
-      ? `✅ **${target.name}** is now active. **${prior.name}** moved to inactive.`
-      : `✅ **${target.name}** is now active.`,
+    prior && prior.id !== target.id
+      ? `✅ **${target.name}** is now the active ${target.visibility} season. **${prior.name}** moved to inactive.`
+      : `✅ **${target.name}** is now the active ${target.visibility} season.`,
   );
 }
 

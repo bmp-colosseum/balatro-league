@@ -2,11 +2,12 @@
 // Centralized so all commands feel the same (same matching, same ordering).
 
 import type { AutocompleteInteraction } from "discord.js";
+import { activePublicSeason } from "../active-season.js";
 import { prisma } from "../db.js";
 
 export async function divisionNameAutocomplete(interaction: AutocompleteInteraction): Promise<void> {
   const focused = interaction.options.getFocused().toLowerCase();
-  const activeSeason = await prisma.season.findFirst({ where: { isActive: true } });
+  const activeSeason = await activePublicSeason();
   if (!activeSeason) {
     await interaction.respond([]);
     return;

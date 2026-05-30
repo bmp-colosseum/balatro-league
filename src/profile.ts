@@ -33,7 +33,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
   if (!player) return null;
 
   const memberships = await prisma.divisionMember.findMany({
-    where: { playerId },
+    where: { playerId, division: { season: { visibility: "PUBLIC" } } },
     include: {
       division: {
         include: {

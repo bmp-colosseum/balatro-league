@@ -73,7 +73,7 @@ export const report: SlashCommand = {
 
     const games = gamesFromResult(result);
     const division = await prisma.division.findFirst({
-      where: { members: { some: { playerId: reporter.id } }, season: { isActive: true } },
+      where: { members: { some: { playerId: reporter.id } }, season: { isActive: true, visibility: "PUBLIC" } },
     });
     const displayed = `${games.a}-${games.b}`;
     const embed = new EmbedBuilder()

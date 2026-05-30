@@ -14,9 +14,11 @@ export async function announceResult(pairingId: string): Promise<void> {
 
   const pairing = await prisma.pairing.findUnique({
     where: { id: pairingId },
-    include: { playerA: true, playerB: true, division: true },
+    include: { playerA: true, playerB: true, division: { include: { season: true } } },
   });
   if (!pairing || pairing.status !== "CONFIRMED") return;
+  // Skip announcements for INTERNAL/test seasons — they'd flood the real results channel
+  if (pairing.division.season.visibility !== "PUBLIC") return;
 
   try {
     const channel = await client.channels.fetch(env.RESULTS_CHANNEL_ID);

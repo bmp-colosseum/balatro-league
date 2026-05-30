@@ -22,6 +22,7 @@ const RARITY_ORDER: Rarity[] = ["LEGENDARY", "RARE", "UNCOMMON", "COMMON"];
 // List of every season (active + past). Click into one to see its standings.
 publicRouter.get("/seasons", async (req, res) => {
   const seasons = await prisma.season.findMany({
+    where: { visibility: "PUBLIC" },
     include: {
       _count: { select: { divisions: true } },
       divisions: { include: { _count: { select: { members: true, pairings: true } } } },
@@ -56,8 +57,8 @@ publicRouter.get("/seasons", async (req, res) => {
 });
 
 publicRouter.get("/seasons/:id", async (req, res) => {
-  const season = await prisma.season.findUnique({
-    where: { id: req.params.id! },
+  const season = await prisma.season.findFirst({
+    where: { id: req.params.id!, visibility: "PUBLIC" },
     include: {
       divisions: {
         include: {
@@ -194,7 +195,7 @@ publicRouter.get("/profile/:discordId", async (req, res) => {
 
 publicRouter.get("/standings", async (req, res) => {
   const season = await prisma.season.findFirst({
-    where: { isActive: true },
+    where: { isActive: true, visibility: "PUBLIC" },
     include: {
       divisions: {
         include: {

@@ -26,8 +26,7 @@ generator client {
 }
 
 datasource db {
-  // Swap provider to "postgresql" in prod; DATABASE_URL controls the actual connection.
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -50,6 +49,11 @@ model Player {
   @@index([rating])
 }
 
+enum SeasonVisibility {
+  PUBLIC    // shown to players via /report, /standings, /me, public web pages
+  INTERNAL  // hidden — admins-only on the dashboard. Use for testing without polluting the real league.
+}
+
 model Season {
   id          String   @id @default(cuid())
   name        String
@@ -58,6 +62,7 @@ model Season {
   deadline    DateTime?
   endedAt     DateTime?
   isActive    Boolean  @default(true)
+  visibility  SeasonVisibility @default(PUBLIC)
   // Target players per division. Driving fewer games per player → use 4 instead of 5.
   targetGroupSize Int  @default(5)
   // Don't auto-create a division with fewer than this many players (smaller leftover groups
@@ -66,7 +71,7 @@ model Season {
 
   divisions   Division[]
 
-  @@index([isActive])
+  @@index([isActive, visibility])
 }
 
 enum SignupStatus {
