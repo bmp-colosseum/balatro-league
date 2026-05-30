@@ -4,6 +4,15 @@ import { Rarity, type Player } from "@prisma/client";
 import { prisma } from "./db.js";
 import { computeStandings } from "./standings.js";
 
+export interface MatchEntry {
+  opponentPlayerId: string;
+  opponentDisplayName: string;
+  myGames: number;
+  opponentGames: number;
+  outcome: "WIN" | "DRAW" | "LOSS";
+  confirmedAt: Date | null;
+}
+
 export interface SeasonHistoryEntry {
   seasonId: string;
   seasonName: string;
@@ -20,6 +29,7 @@ export interface SeasonHistoryEntry {
   gamesLost: number;
   played: number;
   status: "ACTIVE" | "DROPPED";
+  matches: MatchEntry[];
 }
 
 export interface PlayerHistory {
@@ -39,9 +49,11 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
         include: {
           season: true,
           members: { include: { player: true } },
+          // Full pairings (for match list rendering); we still filter to CONFIRMED below
           pairings: {
             where: { status: "CONFIRMED" },
-            select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
+            include: { playerA: true, playerB: true },
+            orderBy: { confirmedAt: "asc" },
           },
         },
       },
@@ -53,10 +65,36 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
   for (const m of memberships) {
     const rows = computeStandings(
       m.division.members.map((mm) => mm.player),
-      m.division.pairings,
+      m.division.pairings.map((p) => ({
+        playerAId: p.playerAId,
+        playerBId: p.playerBId,
+        gamesWonA: p.gamesWonA,
+        gamesWonB: p.gamesWonB,
+      })),
     );
     const myRow = rows.find((r) => r.player.id === playerId);
     const myRank = rows.findIndex((r) => r.player.id === playerId) + 1;
+
+    // Per-set list for THIS player in THIS division
+    const myMatches: MatchEntry[] = [];
+    for (const p of m.division.pairings) {
+      if (p.playerAId !== playerId && p.playerBId !== playerId) continue;
+      const meIsA = p.playerAId === playerId;
+      const opponent = meIsA ? p.playerB : p.playerA;
+      const myGames = meIsA ? p.gamesWonA : p.gamesWonB;
+      const oppGames = meIsA ? p.gamesWonB : p.gamesWonA;
+      const outcome: MatchEntry["outcome"] =
+        myGames > oppGames ? "WIN" : myGames < oppGames ? "LOSS" : "DRAW";
+      myMatches.push({
+        opponentPlayerId: opponent.id,
+        opponentDisplayName: opponent.displayName,
+        myGames,
+        opponentGames: oppGames,
+        outcome,
+        confirmedAt: p.confirmedAt,
+      });
+    }
+
     history.push({
       seasonId: m.division.season.id,
       seasonName: m.division.season.name,
@@ -73,6 +111,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
       gamesLost: myRow?.gamesLost ?? 0,
       played: myRow?.played ?? 0,
       status: m.status,
+      matches: myMatches,
     });
   }
 

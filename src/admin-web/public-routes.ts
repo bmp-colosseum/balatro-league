@@ -192,20 +192,49 @@ publicRouter.get("/profile/:playerId", async (req, res) => {
   }
 
   const rarityPill = (r: Rarity) => html`<span class="pill ${r.toLowerCase()}">${RARITY_LABEL[r]}</span>`;
-  const rows = profile.history.map((h) => {
-    const rankStr = h.rank > 0 ? `#${h.rank}/${h.totalMembers}` : raw('<span class="muted">—</span>');
-    const statusPill = h.status === "DROPPED"
-      ? raw(' <span class="pill" style="background:rgba(231,76,60,0.2); color:#e74c3c">DROPPED</span>')
-      : raw("");
+
+  const seasonCards = profile.history.map((h) => {
+    const rankStr = h.rank > 0 ? `#${h.rank}/${h.totalMembers}` : "—";
+    const statusPill =
+      h.status === "DROPPED"
+        ? raw(' <span class="pill" style="background:rgba(231,76,60,0.2); color:#e74c3c">DROPPED</span>')
+        : raw("");
     const activeMarker = h.isActive ? raw(' <span class="pill confirmed">ACTIVE</span>') : raw("");
-    return html`<tr>
-      <td><a href="/seasons/${h.seasonId}">${h.seasonName}</a>${activeMarker}</td>
-      <td>${rarityPill(h.rarity)} ${h.divisionName}${statusPill}</td>
-      <td>${rankStr}</td>
-      <td><strong>${h.points}</strong></td>
-      <td>${h.wins}-${h.draws}-${h.losses}</td>
-      <td>${h.gamesWon}-${h.gamesLost}</td>
-    </tr>`;
+
+    const matchRows = h.matches.length
+      ? h.matches.map((m) => {
+          const date = m.confirmedAt ? m.confirmedAt.toISOString().slice(0, 10) : "—";
+          const outcomeBadge =
+            m.outcome === "WIN"
+              ? raw('<span class="pill confirmed">W</span>')
+              : m.outcome === "LOSS"
+                ? raw('<span class="pill disputed">L</span>')
+                : raw('<span class="pill pending">D</span>');
+          return html`<tr>
+            <td>${date}</td>
+            <td><a href="/profile/${m.opponentPlayerId}" style="color:var(--text)">${m.opponentDisplayName}</a></td>
+            <td><strong>${m.myGames}–${m.opponentGames}</strong></td>
+            <td>${outcomeBadge}</td>
+          </tr>`;
+        })
+      : [html`<tr><td colspan="4" class="muted">No sets played yet.</td></tr>`];
+
+    return html`<div class="card">
+      <div style="display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:8px">
+        <a href="/seasons/${h.seasonId}" style="color:var(--text); font-weight:600; font-size:16px">${h.seasonName}</a>
+        ${activeMarker}
+        ${rarityPill(h.rarity)}
+        <span>${h.divisionName}</span>
+        ${statusPill}
+        <span style="margin-left:auto" class="muted">
+          Rank ${rankStr} · ${h.points} pts · ${h.wins}-${h.draws}-${h.losses} · ${h.gamesWon}-${h.gamesLost} games
+        </span>
+      </div>
+      <table>
+        <thead><tr><th>Date</th><th>Opponent</th><th>Score</th><th>Result</th></tr></thead>
+        <tbody>${matchRows}</tbody>
+      </table>
+    </div>`;
   });
 
   const t = profile.totals;
@@ -223,15 +252,10 @@ publicRouter.get("/profile/:playerId", async (req, res) => {
       <div class="stat"><div class="label">Losses (0-2)</div><div class="value">${t.losses}</div></div>
     </div>
 
-    <div class="card" style="margin-top:24px">
-      <strong>Season history</strong>
-      ${rows.length
-        ? html`<table>
-            <thead><tr><th>Season</th><th>Division</th><th>Rank</th><th>Pts</th><th>W-D-L</th><th>Games</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>`
-        : html`<p class="muted">No season history yet.</p>`}
-    </div>
+    <h3 style="margin-top:24px">Season history</h3>
+    ${seasonCards.length
+      ? seasonCards
+      : html`<div class="card muted">No season history yet.</div>`}
   `;
   res.set("Content-Type", "text/html; charset=utf-8").send(
     layout({ title: profile.player.displayName, activePath: "", body, ...(await sessionContext(req)) }).value,
