@@ -45,7 +45,7 @@ publicRouter.get("/players", async (req, res) => {
         </a>${isDropped ? raw(' <span class="pill" style="background:rgba(231,76,60,0.2); color:#e74c3c">DROPPED</span>') : raw("")}`
       : raw('<span class="muted">— not in current season —</span>');
     return html`<tr>
-      <td><a href="/profile/${p.discordId}" style="color:var(--text)">${p.displayName}</a></td>
+      <td><a href="/profile/${p.id}" style="color:var(--text)">${p.displayName}</a></td>
       <td>${divLabel}</td>
     </tr>`;
   });
@@ -141,7 +141,7 @@ publicRouter.get("/seasons/:id", async (req, res) => {
       const rowsHtml = rows.length
         ? rows.map((r, i) => {
             const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
-            const linked = html`<a href="/profile/${r.player.discordId}" style="color:var(--text)">${r.player.displayName}</a>`;
+            const linked = html`<a href="/profile/${r.player.id}" style="color:var(--text)">${r.player.displayName}</a>`;
             const name = r.dropped ? html`<s>${linked}</s>` : linked;
             return html`<tr><td>${medal}</td><td>${name}</td><td><strong>${r.points}</strong></td><td>${r.wins}-${r.draws}-${r.losses}</td><td>${r.gamesWon}-${r.gamesLost}</td></tr>`;
           })
@@ -175,11 +175,13 @@ publicRouter.get("/seasons/:id", async (req, res) => {
 });
 
 // Public profile page: season-by-season history for a single player.
-publicRouter.get("/profile/:discordId", async (req, res) => {
-  const discordId = req.params.discordId!;
-  const player = await prisma.player.findUnique({ where: { discordId } });
+// URL uses Player.id (internal cuid) — NOT Discord ID — to avoid exposing
+// Discord account identifiers in public links.
+publicRouter.get("/profile/:playerId", async (req, res) => {
+  const playerId = req.params.playerId!;
+  const player = await prisma.player.findUnique({ where: { id: playerId } });
   if (!player) {
-    const body = html`<h2>Profile not found</h2><p>No player with Discord ID <code>${discordId}</code>.</p>`;
+    const body = html`<h2>Profile not found</h2>`;
     return res.set("Content-Type", "text/html; charset=utf-8").send(
       layout({ title: "Not found", activePath: "", body, ...(await sessionContext(req)) }).value,
     );
@@ -209,7 +211,6 @@ publicRouter.get("/profile/:discordId", async (req, res) => {
   const t = profile.totals;
   const body = html`
     <h2>${profile.player.displayName}</h2>
-    <p class="muted">Discord ID: <code>${profile.player.discordId}</code></p>
 
     <div class="grid grid-3">
       <div class="stat"><div class="label">Seasons</div><div class="value">${t.seasons}</div></div>
@@ -278,7 +279,7 @@ publicRouter.get("/standings", async (req, res) => {
       const rowsHtml = rows.length
         ? rows.map((r, i) => {
             const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
-            const linked = html`<a href="/profile/${r.player.discordId}" style="color:var(--text)">${r.player.displayName}</a>`;
+            const linked = html`<a href="/profile/${r.player.id}" style="color:var(--text)">${r.player.displayName}</a>`;
             const name = r.dropped ? html`<s>${linked}</s>` : linked;
             return html`<tr><td>${medal}</td><td>${name}</td><td><strong>${r.points}</strong></td><td>${r.wins}-${r.draws}-${r.losses}</td><td>${r.gamesWon}-${r.gamesLost}</td></tr>`;
           })
