@@ -71,6 +71,10 @@ model Season {
   matchConfigPresetId String?
   matchConfigPreset   MatchConfigPreset? @relation(fields: [matchConfigPresetId], references: [id], onDelete: SetNull)
 
+  // Discord category to nest per-division channels under. Set once per season
+  // via /admin/seasons. If null, division channels are created at top level.
+  discordCategoryId   String?
+
   divisions   Division[]
   tiers       Tier[]
 

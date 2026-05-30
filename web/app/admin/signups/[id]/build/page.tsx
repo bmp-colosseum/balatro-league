@@ -5,7 +5,7 @@ import { requireAdmin } from "@/lib/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
-import { buildSeason, saveRatings } from "./actions";
+import { addSignupByDiscordId, buildSeason, saveRatings } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -36,11 +36,14 @@ function parseTemplateConfig(json: string): TierConfig[] {
 
 export default async function BuildSeasonPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ err?: string }>;
 }) {
   await requireAdmin();
   const { id } = await params;
+  const { err } = await searchParams;
 
   const [round, templatesRaw, lastUsed, presets] = await Promise.all([
     prisma.signupRound.findUnique({
@@ -94,6 +97,39 @@ export default async function BuildSeasonPage({
           click <strong>Build season</strong>. Auto-seed snake-drafts top-ranked players into the
           top tier, balancing skill across divisions within each tier.
         </p>
+
+        {err && (
+          <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c" }}>
+            {err}
+          </div>
+        )}
+
+        <div className="card">
+          <strong>Add player by Discord ID</strong>
+          <p className="muted">
+            For late additions — bot looks up the member's guild display name; you can
+            override before adding. The player will appear in the list below and be
+            included when you Build season.
+          </p>
+          <form action={addSignupByDiscordId} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <input type="hidden" name="roundId" value={round.id} />
+            <input
+              type="text"
+              name="discordId"
+              placeholder="Discord ID (17-20 digits)"
+              required
+              pattern="\d{17,20}"
+              style={{ flex: "1 1 200px" }}
+            />
+            <input
+              type="text"
+              name="displayName"
+              placeholder="Display name override (optional)"
+              style={{ flex: "1 1 200px" }}
+            />
+            <button type="submit">Look up & add</button>
+          </form>
+        </div>
 
         <div className="card">
           <strong>Player ratings ({playerCount} signed up)</strong>

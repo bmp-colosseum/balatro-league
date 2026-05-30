@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
+import { resolveDiscordIdToDisplayName } from "@/lib/add-player";
 
 interface TierConfig {
   name: string;
@@ -102,6 +103,42 @@ export async function saveRatings(formData: FormData) {
       update: { rating, displayName: signup.displayName },
     });
   }
+  revalidatePath(`/admin/signups/${roundId}/build`);
+}
+
+// Late add: insert a Signup into a round by Discord ID. Display name is
+// fetched from the guild but admin can override via the form. Works on
+// OPEN, CLOSED, or unbuilt rounds — anything not yet BUILT.
+export async function addSignupByDiscordId(formData: FormData) {
+  await requireAdmin();
+  const roundId = String(formData.get("roundId") ?? "");
+  const discordIdRaw = String(formData.get("discordId") ?? "");
+  const displayNameOverride = String(formData.get("displayName") ?? "").trim();
+  if (!roundId || !discordIdRaw) {
+    redirect(`/admin/signups/${roundId}/build?err=missing-fields`);
+  }
+  const guildId = process.env.DISCORD_GUILD_ID;
+  if (!guildId) redirect(`/admin/signups/${roundId}/build?err=no-guild-id`);
+
+  const resolved = await resolveDiscordIdToDisplayName(guildId, discordIdRaw);
+  if ("error" in resolved) {
+    redirect(`/admin/signups/${roundId}/build?err=${encodeURIComponent(resolved.error)}`);
+  }
+
+  await prisma.signup.upsert({
+    where: { roundId_discordId: { roundId, discordId: resolved.discordId } },
+    create: {
+      roundId,
+      discordId: resolved.discordId,
+      displayName: displayNameOverride || resolved.displayName,
+      withdrawn: false,
+    },
+    update: {
+      displayName: displayNameOverride || resolved.displayName,
+      withdrawn: false,
+    },
+  });
+
   revalidatePath(`/admin/signups/${roundId}/build`);
 }
 

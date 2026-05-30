@@ -7,17 +7,20 @@ import { tierColors } from "@/lib/tier-colors";
 import { isMockPlayer } from "@/lib/mock";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
-import { recordSet, overridePairing, deletePairing } from "./actions";
+import { addDivisionMemberByDiscordId, recordSet, overridePairing, deletePairing } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDivisionDetail({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ err?: string }>;
 }) {
   await requireAdmin();
   const { id } = await params;
+  const { err } = await searchParams;
 
   const division = await prisma.division.findUnique({
     where: { id },
@@ -76,6 +79,39 @@ export default async function AdminDivisionDetail({
         </div>
         <div className="muted" style={{ marginBottom: 16 }}>
           Round-robin best-of-2 · 3 pts for 2-0, 1 pt each for 1-1, 0 for 0-2
+        </div>
+
+        {err && (
+          <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c" }}>
+            {err}
+          </div>
+        )}
+
+        <div className="card">
+          <strong>Add player by Discord ID</strong>
+          <p className="muted">
+            Mid-season add — looks up the member's guild display name; you can override.
+            If this division has a Discord role set up, the new player will also be
+            granted the role (and channel access).
+          </p>
+          <form action={addDivisionMemberByDiscordId} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <input type="hidden" name="divisionId" value={division.id} />
+            <input
+              type="text"
+              name="discordId"
+              placeholder="Discord ID (17-20 digits)"
+              required
+              pattern="\d{17,20}"
+              style={{ flex: "1 1 200px" }}
+            />
+            <input
+              type="text"
+              name="displayName"
+              placeholder="Display name override (optional)"
+              style={{ flex: "1 1 200px" }}
+            />
+            <button type="submit">Add to division</button>
+          </form>
         </div>
 
         {/* Standings */}

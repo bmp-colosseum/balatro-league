@@ -5,6 +5,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
 import { activateSeason, createSeason, endSeason, setSeasonPreset } from "./actions";
+import { bootstrapSeasonDiscord, setSeasonDiscordCategory } from "./bootstrap-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -139,6 +140,8 @@ export default async function AdminSeasonsPage() {
                   </select>
                   <button type="submit" className="secondary">Save</button>
                 </form>
+
+                <DiscordBootstrap season={s} />
                 <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                   {!s.isActive && (
                     <form action={activateSeason}>
@@ -163,5 +166,46 @@ export default async function AdminSeasonsPage() {
         </div>
       </main>
     </>
+  );
+}
+
+function DiscordBootstrap({
+  season,
+}: {
+  season: {
+    id: string;
+    discordCategoryId: string | null;
+    divisions: Array<{ discordRoleId: string | null; discordChannelId: string | null }>;
+  };
+}) {
+  const total = season.divisions.length;
+  const ready = season.divisions.filter((d) => d.discordRoleId && d.discordChannelId).length;
+  const remaining = total - ready;
+  return (
+    <details style={{ marginTop: 8 }}>
+      <summary className="muted" style={{ cursor: "pointer", fontSize: 12 }}>
+        Discord channels & roles: {ready} / {total} set up
+      </summary>
+      <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
+        <form action={setSeasonDiscordCategory} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input type="hidden" name="id" value={season.id} />
+          <label className="muted" style={{ fontSize: 12 }}>Category ID:</label>
+          <input
+            type="text"
+            name="discordCategoryId"
+            defaultValue={season.discordCategoryId ?? ""}
+            placeholder="(optional — channels at top level if blank)"
+            style={{ flex: 1, fontSize: 12 }}
+          />
+          <button type="submit" className="secondary" style={{ fontSize: 12 }}>Save</button>
+        </form>
+        <form action={bootstrapSeasonDiscord}>
+          <input type="hidden" name="id" value={season.id} />
+          <button type="submit" disabled={remaining === 0} style={{ fontSize: 12 }}>
+            {remaining === 0 ? "All divisions ready" : `Set up ${remaining} remaining division(s)`}
+          </button>
+        </form>
+      </div>
+    </details>
   );
 }

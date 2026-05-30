@@ -1,9 +1,51 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
+import { resolveDiscordIdToDisplayName } from "@/lib/add-player";
 import { announceResult } from "@/lib/announce";
+import { addGuildMemberRole } from "@/lib/discord";
+
+// Mid-season add: upsert Player by Discord ID, add to division as ACTIVE.
+// If the division has a discordRoleId, also assign the role so they get
+// access to the division's private channel.
+export async function addDivisionMemberByDiscordId(formData: FormData) {
+  await requireAdmin();
+  const divisionId = String(formData.get("divisionId") ?? "");
+  const discordIdRaw = String(formData.get("discordId") ?? "");
+  const displayNameOverride = String(formData.get("displayName") ?? "").trim();
+  if (!divisionId || !discordIdRaw) {
+    redirect(`/admin/divisions/${divisionId}?err=missing-fields`);
+  }
+  const guildId = process.env.DISCORD_GUILD_ID;
+  if (!guildId) redirect(`/admin/divisions/${divisionId}?err=no-guild-id`);
+
+  const resolved = await resolveDiscordIdToDisplayName(guildId, discordIdRaw);
+  if ("error" in resolved) {
+    redirect(`/admin/divisions/${divisionId}?err=${encodeURIComponent(resolved.error)}`);
+  }
+
+  const player = await prisma.player.upsert({
+    where: { discordId: resolved.discordId },
+    create: { discordId: resolved.discordId, displayName: displayNameOverride || resolved.displayName },
+    update: { displayName: displayNameOverride || resolved.displayName },
+  });
+
+  await prisma.divisionMember.upsert({
+    where: { divisionId_playerId: { divisionId, playerId: player.id } },
+    create: { divisionId, playerId: player.id, status: "ACTIVE" },
+    update: { status: "ACTIVE", droppedAt: null, dropoutReason: null },
+  });
+
+  const division = await prisma.division.findUnique({ where: { id: divisionId } });
+  if (division?.discordRoleId) {
+    await addGuildMemberRole(guildId, player.discordId, division.discordRoleId);
+  }
+
+  revalidatePath(`/admin/divisions/${divisionId}`);
+}
 
 type Result = "2-0" | "1-1" | "0-2";
 

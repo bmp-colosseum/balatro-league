@@ -81,9 +81,90 @@ export async function postChannelMessage(
 interface DiscordChannel {
   id: string;
   name: string;
-  type: number;       // 0 = GuildText, 5 = Announcement, others = ignore
+  type: number;       // 0 = GuildText, 4 = Category, 5 = Announcement, others = ignore
   parent_id?: string | null;
   position?: number;
+}
+
+interface DiscordRole {
+  id: string;
+  name: string;
+}
+
+// Create a role in a guild. Returns the new role's id.
+export async function createGuildRole(
+  guildId: string,
+  name: string,
+  options?: { color?: number; mentionable?: boolean },
+): Promise<DiscordRole | null> {
+  const res = await fetch(`${BASE_URL}/guilds/${guildId}/roles`, {
+    method: "POST",
+    headers: { Authorization: botAuthHeader(), "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name,
+      color: options?.color ?? 0,
+      mentionable: options?.mentionable ?? true,
+    }),
+  });
+  if (!res.ok) {
+    console.warn(`Discord createGuildRole failed: ${res.status} ${await res.text()}`);
+    return null;
+  }
+  return res.json() as Promise<DiscordRole>;
+}
+
+// Add a role to a guild member.
+export async function addGuildMemberRole(guildId: string, userId: string, roleId: string): Promise<boolean> {
+  const res = await fetch(`${BASE_URL}/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
+    method: "PUT",
+    headers: { Authorization: botAuthHeader() },
+  });
+  if (!res.ok) {
+    console.warn(`Discord addGuildMemberRole(${userId}, ${roleId}) failed: ${res.status} ${await res.text()}`);
+    return false;
+  }
+  return true;
+}
+
+// Create a guild text channel. If `roleIdOnlyVisible` is set, the channel
+// is private to that role — @everyone gets VIEW_CHANNEL denied and only the
+// named role is allowed. Bot retains access via its own permissions.
+export async function createGuildTextChannel(
+  guildId: string,
+  name: string,
+  options?: { parentId?: string; topic?: string; roleIdOnlyVisible?: string },
+): Promise<DiscordChannel | null> {
+  const VIEW_CHANNEL = "1024"; // 1 << 10
+  const SEND_MESSAGES = "2048"; // 1 << 11
+  const overwrites = options?.roleIdOnlyVisible
+    ? [
+        // Deny @everyone (whose role id == guild id)
+        { id: guildId, type: 0, deny: VIEW_CHANNEL, allow: "0" },
+        // Allow the named role
+        {
+          id: options.roleIdOnlyVisible,
+          type: 0,
+          allow: String((BigInt(VIEW_CHANNEL) | BigInt(SEND_MESSAGES)).toString()),
+          deny: "0",
+        },
+      ]
+    : undefined;
+  const res = await fetch(`${BASE_URL}/guilds/${guildId}/channels`, {
+    method: "POST",
+    headers: { Authorization: botAuthHeader(), "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name,
+      type: 0,
+      parent_id: options?.parentId,
+      topic: options?.topic,
+      permission_overwrites: overwrites,
+    }),
+  });
+  if (!res.ok) {
+    console.warn(`Discord createGuildTextChannel failed: ${res.status} ${await res.text()}`);
+    return null;
+  }
+  return res.json() as Promise<DiscordChannel>;
 }
 
 // List text-like channels in a guild. Used by the admin signup-create form
