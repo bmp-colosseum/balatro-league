@@ -6,6 +6,7 @@ import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
 import {
   activateSeason,
+  archiveSeason,
   configureTiers,
   createSeason,
   deleteSeason,
@@ -15,6 +16,7 @@ import {
   renameSeason,
   setSeasonPreset,
   setSeasonVisibility,
+  unarchiveSeason,
 } from "./actions";
 import { bootstrapSeasonDiscord, setSeasonDiscordCategory } from "./bootstrap-actions";
 import { SeasonDeckPresetPicker } from "@/components/SeasonDeckPresetPicker";
@@ -42,11 +44,18 @@ function parseTemplateConfig(json: string) {
   }
 }
 
-export default async function AdminSeasonsPage() {
+export default async function AdminSeasonsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ archived?: string }>;
+}) {
   await requireAdmin();
+  const { archived: showArchivedFlag } = await searchParams;
+  const showArchived = showArchivedFlag === "1";
 
-  const [seasons, templatesRaw, lastUsed, presets, defaultPreset, signupRounds] = await Promise.all([
+  const [seasons, templatesRaw, lastUsed, presets, defaultPreset, signupRounds, archivedCount] = await Promise.all([
     prisma.season.findMany({
+      where: showArchived ? {} : { archivedAt: null },
       include: {
         _count: { select: { divisions: true } },
         tiers: { orderBy: { position: "asc" }, include: { _count: { select: { divisions: true } } } },
@@ -69,6 +78,7 @@ export default async function AdminSeasonsPage() {
       where: { resultingSeasonId: { not: null } },
       include: { _count: { select: { signups: true } } },
     }),
+    prisma.season.count({ where: { archivedAt: { not: null } } }),
   ]);
 
   // discord channels for the "Open signups" picker (only fetched if at least
@@ -94,7 +104,14 @@ export default async function AdminSeasonsPage() {
       <SiteNav activePath="/admin" />
       <AdminNav activePath="/admin/seasons" />
       <main>
-        <h2>Seasons</h2>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+          <h2 style={{ margin: 0 }}>Seasons</h2>
+          {archivedCount > 0 && (
+            <Link href={showArchived ? "/admin/seasons" : "/admin/seasons?archived=1"} className="muted" style={{ marginLeft: "auto", fontSize: 12 }}>
+              {showArchived ? `← hide archived` : `📦 show ${archivedCount} archived`}
+            </Link>
+          )}
+        </div>
 
         <div className="card">
           <strong>Create new season</strong>
@@ -244,6 +261,28 @@ export default async function AdminSeasonsPage() {
                   channels={channels}
                   playerCount={players}
                 />
+
+                {s.archivedAt && (
+                  <div className="muted" style={{ fontSize: 11, marginTop: 8 }}>
+                    📦 Archived {s.archivedAt.toISOString().slice(0, 10)}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                  {s.archivedAt ? (
+                    <form action={unarchiveSeason}>
+                      <input type="hidden" name="id" value={s.id} />
+                      <button type="submit" className="secondary" style={{ fontSize: 11 }}>Unarchive</button>
+                    </form>
+                  ) : (
+                    s.endedAt && (
+                      <form action={archiveSeason}>
+                        <input type="hidden" name="id" value={s.id} />
+                        <button type="submit" className="secondary" style={{ fontSize: 11 }}>📦 Archive</button>
+                      </form>
+                    )
+                  )}
+                </div>
 
                 <details style={{ marginTop: 8 }}>
                   <summary className="muted" style={{ cursor: "pointer", fontSize: 11, color: "#e74c3c" }}>

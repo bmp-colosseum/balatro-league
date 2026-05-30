@@ -64,6 +64,9 @@ model Season {
   // Hard deadline. Season auto-ends at min(deadline, all-pairings-confirmed).
   deadline    DateTime?
   endedAt     DateTime?
+  // Archived seasons are hidden from default lists (admin + public). Use
+  // for old seasons you want kept-but-out-of-the-way.
+  archivedAt  DateTime?
   isActive    Boolean  @default(true)
   visibility  SeasonVisibility @default(PUBLIC)
   // Target players per division. Driving fewer games per player → use 4 instead of 5.

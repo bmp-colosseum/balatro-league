@@ -360,6 +360,24 @@ export async function finalizeSignupsForSeason(formData: FormData) {
   revalidatePath("/admin/signups");
 }
 
+export async function archiveSeason(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await prisma.season.update({ where: { id }, data: { archivedAt: new Date() } });
+  revalidatePath("/admin/seasons");
+  revalidatePath("/seasons");
+}
+
+export async function unarchiveSeason(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await prisma.season.update({ where: { id }, data: { archivedAt: null } });
+  revalidatePath("/admin/seasons");
+  revalidatePath("/seasons");
+}
+
 export async function renameSeason(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id") ?? "");

@@ -6,7 +6,9 @@ export const dynamic = "force-dynamic";
 
 export default async function SeasonsPage() {
   const seasons = await prisma.season.findMany({
-    where: { visibility: "PUBLIC" },
+    // Archived seasons stay accessible by direct URL but are hidden from
+    // the index — they clutter the season list otherwise.
+    where: { visibility: "PUBLIC", archivedAt: null },
     include: {
       _count: { select: { divisions: true } },
       divisions: { include: { _count: { select: { members: true, pairings: true } } } },
