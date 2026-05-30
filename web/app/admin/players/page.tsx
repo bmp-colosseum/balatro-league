@@ -5,7 +5,7 @@ import { tierColors } from "@/lib/tier-colors";
 import { computeStandings } from "@/lib/standings";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
-import { addFakePlayer, deletePlayer, dropPlayer, recordSetForPlayer, reinstatePlayer } from "./actions";
+import { addFakePlayer, deletePlayer, dropPlayer, recordSetForPlayer, reinstatePlayer, setPlayerDiscordId } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -256,7 +256,20 @@ export default async function AdminPlayersPage({
                         <span className="muted">—</span>
                       )}
                     </td>
-                    <td><span className="muted" style={{ fontSize: 11 }}>{p.discordId}</span></td>
+                    <td>
+                      <form action={setPlayerDiscordId} style={{ display: "flex", gap: 4 }}>
+                        <input type="hidden" name="playerId" value={p.id} />
+                        <input
+                          type="text"
+                          name="discordId"
+                          defaultValue={p.discordId}
+                          pattern="\d{17,20}"
+                          title="17-20 digits"
+                          style={{ fontSize: 11, width: 170, fontFamily: "ui-monospace, monospace" }}
+                        />
+                        <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+                      </form>
+                    </td>
                     <td>
                       <form action={deletePlayer}>
                         <input type="hidden" name="playerId" value={p.id} />

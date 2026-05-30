@@ -16,6 +16,29 @@ function gamesFromResult(r: Result): { a: number; b: number } {
   return { a: 1, b: 1 };
 }
 
+// Change a player's Discord ID. Useful when a row was imported with a
+// typo or the wrong account ID. Keeps everything else (rating, memberships,
+// pairings) intact — they all reference Player.id, not discordId.
+export async function setPlayerDiscordId(formData: FormData) {
+  await requireAdmin();
+  const playerId = String(formData.get("playerId") ?? "");
+  const newId = String(formData.get("discordId") ?? "").trim();
+  if (!playerId || !newId) return;
+  if (!/^\d{17,20}$/.test(newId)) return;
+
+  // Check the new ID isn't already in use by another player
+  const collision = await prisma.player.findUnique({ where: { discordId: newId } });
+  if (collision && collision.id !== playerId) return; // silently no-op on collision
+
+  await prisma.player.update({
+    where: { id: playerId },
+    // Also clear the custom-name flag so the next /me visit auto-syncs the
+    // new account's actual Discord username (probably what admin wants).
+    data: { discordId: newId, hasCustomDisplayName: false },
+  });
+  revalidatePath("/admin/players");
+}
+
 // Admin records a set between two active members of a division. Upserts
 // the Pairing as CONFIRMED with this admin's user id stamped on
 // adminOverrideBy. Mirrors /admin/divisions/[id] recordSet but invocable
