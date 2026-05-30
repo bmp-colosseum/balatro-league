@@ -94,7 +94,14 @@ export default async function AdminPlayersPage({
                   <tr><td colSpan={8} className="muted">No active players in this division.</td></tr>
                 ) : active.map((m) => {
                   const s = standingByPlayer.get(m.playerId);
-                  const otherActives = active.filter((o) => o.playerId !== m.playerId);
+                  const playedThisPlayer = new Set(
+                    division.pairings
+                      .filter((p) => p.playerAId === m.playerId || p.playerBId === m.playerId)
+                      .map((p) => (p.playerAId === m.playerId ? p.playerBId : p.playerAId)),
+                  );
+                  const otherActives = active
+                    .filter((o) => o.playerId !== m.playerId)
+                    .filter((o) => !playedThisPlayer.has(o.playerId));
                   return (
                     <tr key={m.id}>
                       <td style={{ width: 24 }}>{s && s.rank <= 3 ? ["🥇", "🥈", "🥉"][s.rank - 1] : ""}</td>
@@ -200,6 +207,18 @@ export default async function AdminPlayersPage({
     list.push({ playerId: m.playerId, player: m.player });
     membersByDivision.set(m.divisionId, list);
   }
+  // Also build a "who has already played whom" set so the per-row record-set
+  // form only offers unplayed opponents. Override of an already-played set
+  // happens via /admin/divisions/[id] (where pairings are listed individually).
+  const seasonPairings = seasonForRecord
+    ? await prisma.pairing.findMany({
+        where: { status: "CONFIRMED", division: { seasonId: seasonForRecord.id } },
+        select: { divisionId: true, playerAId: true, playerBId: true },
+      })
+    : [];
+  const playedKey = (divisionId: string, a: string, b: string) =>
+    `${divisionId}|${a < b ? `${a}-${b}` : `${b}-${a}`}`;
+  const playedSet = new Set(seasonPairings.map((p) => playedKey(p.divisionId, p.playerAId, p.playerBId)));
   if (sort === "ranked-only") players = players.filter((p) => p.rating != null);
   if (sort === "unranked-only") players = players.filter((p) => p.rating == null);
   if (sort === "rating-desc") players.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1) || a.displayName.localeCompare(b.displayName));
@@ -253,7 +272,9 @@ export default async function AdminPlayersPage({
                 const div = membership?.division;
                 const isDropped = membership?.status === "DROPPED";
                 const divisionMembers = div ? membersByDivision.get(div.id) ?? [] : [];
-                const opponents = divisionMembers.filter((m) => m.playerId !== p.id);
+                const opponents = divisionMembers
+                  .filter((m) => m.playerId !== p.id)
+                  .filter((m) => !div || !playedSet.has(playedKey(div.id, p.id, m.playerId)));
                 return (
                   <tr key={p.id}>
                     <td>
