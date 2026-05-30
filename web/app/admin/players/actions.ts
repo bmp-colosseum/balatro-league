@@ -11,7 +11,7 @@ const MOCK_PREFIX = "mock-";
 export async function addFakePlayer(formData: FormData) {
   await requireAdmin();
   const name = String(formData.get("name") ?? "").trim();
-  const divisionName = String(formData.get("divisionName") ?? "").trim();
+  const divisionId = String(formData.get("divisionId") ?? "").trim();
   if (!name) return;
 
   const discordId = `${MOCK_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -19,43 +19,54 @@ export async function addFakePlayer(formData: FormData) {
     data: { discordId, displayName: name },
   });
 
-  if (divisionName) {
-    const season = await prisma.season.findFirst({ where: { isActive: true } });
-    if (season) {
-      const div = await prisma.division.findFirst({
-        where: { seasonId: season.id, name: divisionName },
-        include: { _count: { select: { members: true } } },
+  if (divisionId) {
+    const div = await prisma.division.findUnique({
+      where: { id: divisionId },
+      include: { season: true, _count: { select: { members: true } } },
+    });
+    if (div && div._count.members < (div.targetSize ?? div.season.targetGroupSize)) {
+      await prisma.divisionMember.create({
+        data: { divisionId: div.id, playerId: player.id },
       });
-      if (div && div._count.members < (div.targetSize ?? season.targetGroupSize)) {
-        await prisma.divisionMember.create({
-          data: { divisionId: div.id, playerId: player.id },
-        });
-      }
     }
   }
   revalidatePath("/admin/players");
 }
 
+// Move a player into/out of a division. divisionId encodes which season,
+// so this works for any season (not just the active one). Empty divisionId
+// = remove from whatever division(s) they're in for that season.
 export async function movePlayer(formData: FormData) {
   await requireAdmin();
   const playerId = String(formData.get("playerId") ?? "");
-  const divisionName = String(formData.get("divisionName") ?? "").trim();
-  const season = await prisma.season.findFirst({ where: { isActive: true } });
-  if (!season || !playerId) return;
+  const divisionId = String(formData.get("divisionId") ?? "").trim();
+  if (!playerId) return;
 
-  await prisma.divisionMember.deleteMany({
-    where: { playerId, division: { seasonId: season.id } },
-  });
-
-  if (divisionName) {
-    const div = await prisma.division.findFirst({
-      where: { seasonId: season.id, name: divisionName },
+  if (divisionId) {
+    const div = await prisma.division.findUnique({
+      where: { id: divisionId },
+      include: { season: true },
     });
-    if (div) {
-      const count = await prisma.divisionMember.count({ where: { divisionId: div.id } });
-      if (count < (div.targetSize ?? season.targetGroupSize)) {
-        await prisma.divisionMember.create({ data: { divisionId: div.id, playerId } });
-      }
+    if (!div) return;
+    // Remove from any other division in the same season first
+    await prisma.divisionMember.deleteMany({
+      where: { playerId, division: { seasonId: div.seasonId }, NOT: { divisionId: div.id } },
+    });
+    const count = await prisma.divisionMember.count({ where: { divisionId: div.id } });
+    if (count < (div.targetSize ?? div.season.targetGroupSize)) {
+      await prisma.divisionMember.upsert({
+        where: { divisionId_playerId: { divisionId: div.id, playerId } },
+        create: { divisionId: div.id, playerId, status: "ACTIVE" },
+        update: { status: "ACTIVE", droppedAt: null, dropoutReason: null },
+      });
+    }
+  } else {
+    // Empty divisionId = remove from active season (preserves old behavior for the "— remove —" option)
+    const active = await prisma.season.findFirst({ where: { isActive: true } });
+    if (active) {
+      await prisma.divisionMember.deleteMany({
+        where: { playerId, division: { seasonId: active.id } },
+      });
     }
   }
   revalidatePath("/admin/players");

@@ -19,11 +19,20 @@ export default async function AdminPlayersPage({
   await requireAdmin();
   const { filter = "all" } = await searchParams;
 
-  const activeSeason = await prisma.season.findFirst({
-    where: { isActive: true },
-    include: { tiers: { orderBy: { position: "asc" }, include: { divisions: { orderBy: { groupNumber: "asc" } } } } },
+  // Pull divisions from every non-ended season so admin can place into INTERNAL
+  // / inactive seasons too — not just the live one.
+  const seasonsWithDivisions = await prisma.season.findMany({
+    where: { endedAt: null },
+    include: {
+      tiers: { orderBy: { position: "asc" }, include: { divisions: { orderBy: { groupNumber: "asc" } } } },
+    },
+    orderBy: [{ isActive: "desc" }, { startedAt: "desc" }],
   });
-  const divisionOptions = activeSeason?.tiers.flatMap((t) => t.divisions) ?? [];
+  // Flat list of {id, label} where label is "Season name · Division name"
+  const divisionOptions = seasonsWithDivisions.flatMap((s) =>
+    s.tiers.flatMap((t) => t.divisions.map((d) => ({ id: d.id, label: `${s.name} · ${d.name}` }))),
+  );
+  const activeSeason = seasonsWithDivisions.find((s) => s.isActive) ?? null;
 
   const allPlayers = await prisma.player.findMany({
     include: {
@@ -58,10 +67,10 @@ export default async function AdminPlayersPage({
             </label>
             <label>
               Division (optional)
-              <select name="divisionName">
+              <select name="divisionId">
                 <option value="">— unassigned —</option>
                 {divisionOptions.map((d) => (
-                  <option key={d.id} value={d.name}>{d.name}</option>
+                  <option key={d.id} value={d.id}>{d.label}</option>
                 ))}
               </select>
             </label>
@@ -129,20 +138,16 @@ export default async function AdminPlayersPage({
                         )}
                       </td>
                       <td>
-                        {activeSeason ? (
-                          <form action={movePlayer} style={{ display: "flex", gap: 4 }}>
-                            <input type="hidden" name="playerId" value={p.id} />
-                            <select name="divisionName" defaultValue={currentDiv?.name ?? ""}>
-                              <option value="">— remove —</option>
-                              {divisionOptions.map((d) => (
-                                <option key={d.id} value={d.name}>{d.name}</option>
-                              ))}
-                            </select>
-                            <button type="submit">Apply</button>
-                          </form>
-                        ) : (
-                          <span className="muted">no active season</span>
-                        )}
+                        <form action={movePlayer} style={{ display: "flex", gap: 4 }}>
+                          <input type="hidden" name="playerId" value={p.id} />
+                          <select name="divisionId" defaultValue={currentDiv?.id ?? ""}>
+                            <option value="">— remove —</option>
+                            {divisionOptions.map((d) => (
+                              <option key={d.id} value={d.id}>{d.label}</option>
+                            ))}
+                          </select>
+                          <button type="submit">Apply</button>
+                        </form>
                       </td>
                       <td>
                         {currentDiv ? (
