@@ -11,8 +11,11 @@ import {
   bulkAddMembers,
   bulkRecordPairings,
   deletePairing,
+  dropDivisionMember,
   overridePairing,
+  reactivateDivisionMember,
   recordSet,
+  removeDivisionMember,
   setDivisionTargetSize,
 } from "./actions";
 
@@ -227,11 +230,11 @@ export default async function AdminDivisionDetail({
           </div>
           <table>
             <thead>
-              <tr><th>Player</th><th>Discord ID</th></tr>
+              <tr><th>Player</th><th>Discord ID</th><th></th></tr>
             </thead>
             <tbody>
               {division.members.length === 0 ? (
-                <tr><td colSpan={2} className="muted">No members.</td></tr>
+                <tr><td colSpan={3} className="muted">No members.</td></tr>
               ) : division.members.map((m) => {
                 const isDropped = m.status === "DROPPED";
                 return (
@@ -243,6 +246,40 @@ export default async function AdminDivisionDetail({
                       )}
                     </td>
                     <td><span className="muted">{m.player.discordId}</span></td>
+                    <td style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                      {isDropped ? (
+                        <form action={reactivateDivisionMember}>
+                          <input type="hidden" name="divisionId" value={division.id} />
+                          <input type="hidden" name="playerId" value={m.playerId} />
+                          <button type="submit" className="secondary" style={{ fontSize: 11 }}>Reactivate</button>
+                        </form>
+                      ) : (
+                        <form action={dropDivisionMember}>
+                          <input type="hidden" name="divisionId" value={division.id} />
+                          <input type="hidden" name="playerId" value={m.playerId} />
+                          <button
+                            type="submit"
+                            className="secondary"
+                            style={{ fontSize: 11 }}
+                            title="Mark dropped — keeps played pairings, voids unplayed"
+                          >
+                            Drop
+                          </button>
+                        </form>
+                      )}
+                      <form action={removeDivisionMember}>
+                        <input type="hidden" name="divisionId" value={division.id} />
+                        <input type="hidden" name="playerId" value={m.playerId} />
+                        <button
+                          type="submit"
+                          className="secondary"
+                          style={{ fontSize: 11, color: "#e74c3c" }}
+                          title="Hard remove: deletes membership + ALL their pairings in this division"
+                        >
+                          Remove
+                        </button>
+                      </form>
+                    </td>
                   </tr>
                 );
               })}

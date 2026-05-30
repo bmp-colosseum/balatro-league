@@ -65,6 +65,71 @@ export async function addDivisionMemberByDiscordId(formData: FormData) {
   revalidatePath(`/admin/divisions/${divisionId}`);
 }
 
+// Soft drop: marks the membership DROPPED and voids any PENDING pairings.
+// Played (CONFIRMED) pairings stay so standings reflect actual play history.
+export async function dropDivisionMember(formData: FormData) {
+  await requireAdmin();
+  const divisionId = String(formData.get("divisionId") ?? "");
+  const playerId = String(formData.get("playerId") ?? "");
+  if (!divisionId || !playerId) return;
+
+  const membership = await prisma.divisionMember.findUnique({
+    where: { divisionId_playerId: { divisionId, playerId } },
+  });
+  if (!membership) return;
+
+  await prisma.divisionMember.update({
+    where: { id: membership.id },
+    data: { status: "DROPPED", droppedAt: new Date() },
+  });
+  // Void unplayed pairings only
+  await prisma.pairing.deleteMany({
+    where: {
+      divisionId,
+      status: "PENDING",
+      OR: [{ playerAId: playerId }, { playerBId: playerId }],
+    },
+  });
+  revalidatePath(`/admin/divisions/${divisionId}`);
+}
+
+// Reverse of dropDivisionMember.
+export async function reactivateDivisionMember(formData: FormData) {
+  await requireAdmin();
+  const divisionId = String(formData.get("divisionId") ?? "");
+  const playerId = String(formData.get("playerId") ?? "");
+  if (!divisionId || !playerId) return;
+  await prisma.divisionMember.update({
+    where: { divisionId_playerId: { divisionId, playerId } },
+    data: { status: "ACTIVE", droppedAt: null, dropoutReason: null },
+  });
+  revalidatePath(`/admin/divisions/${divisionId}`);
+}
+
+// Hard remove: deletes the membership entirely + ALL pairings in this
+// division involving the player (both played and unplayed). Use for
+// "added by mistake" cases, not for normal mid-season dropouts (use
+// drop for that). If the division has a Discord role, the player is
+// NOT auto-removed from the role — that's manual since they may want
+// to keep channel access for chat history.
+export async function removeDivisionMember(formData: FormData) {
+  await requireAdmin();
+  const divisionId = String(formData.get("divisionId") ?? "");
+  const playerId = String(formData.get("playerId") ?? "");
+  if (!divisionId || !playerId) return;
+
+  await prisma.pairing.deleteMany({
+    where: {
+      divisionId,
+      OR: [{ playerAId: playerId }, { playerBId: playerId }],
+    },
+  });
+  await prisma.divisionMember.deleteMany({
+    where: { divisionId, playerId },
+  });
+  revalidatePath(`/admin/divisions/${divisionId}`);
+}
+
 // Bulk import: parses a textarea where each non-blank line is a Discord ID
 // (17-20 digits — anything else is skipped with a note). For each valid id:
 // upsert Player, upsert DivisionMember as ACTIVE, optionally assign role.
