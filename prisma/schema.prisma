@@ -237,6 +237,11 @@ model Division {
   groupNumber Int
   // Display label, e.g. "Rare 3", "Legendary", or any custom name.
   name        String
+  // Optional per-division target size — overrides Season.targetGroupSize for
+  // this division's "X/Y players" display + auto-assign behavior. Lets a
+  // division be intentionally larger or smaller than the season default
+  // without affecting other divisions.
+  targetSize  Int?
   // Optional Discord role + channel IDs the bot manages for this division
   discordRoleId    String?
   discordChannelId String?

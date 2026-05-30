@@ -8,6 +8,24 @@ import { resolveDiscordIdToDisplayName } from "@/lib/add-player";
 import { announceResult } from "@/lib/announce";
 import { addGuildMemberRole } from "@/lib/discord";
 
+// Set a per-division target size override. Null clears the override and
+// falls back to Season.targetGroupSize at display time.
+export async function setDivisionTargetSize(formData: FormData) {
+  await requireAdmin();
+  const divisionId = String(formData.get("divisionId") ?? "");
+  const sizeRaw = String(formData.get("targetSize") ?? "").trim();
+  if (!divisionId) return;
+  const targetSize = sizeRaw === "" ? null : Math.max(1, parseInt(sizeRaw, 10) || 0);
+  if (targetSize !== null && Number.isNaN(targetSize)) return;
+  await prisma.division.update({
+    where: { id: divisionId },
+    data: { targetSize },
+  });
+  revalidatePath(`/admin/divisions/${divisionId}`);
+  revalidatePath("/admin/divisions");
+  revalidatePath("/admin/seasons");
+}
+
 // Mid-season add: upsert Player by Discord ID, add to division as ACTIVE.
 // If the division has a discordRoleId, also assign the role so they get
 // access to the division's private channel.

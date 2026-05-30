@@ -26,7 +26,7 @@ export async function addFakePlayer(formData: FormData) {
         where: { seasonId: season.id, name: divisionName },
         include: { _count: { select: { members: true } } },
       });
-      if (div && div._count.members < season.targetGroupSize) {
+      if (div && div._count.members < (div.targetSize ?? season.targetGroupSize)) {
         await prisma.divisionMember.create({
           data: { divisionId: div.id, playerId: player.id },
         });
@@ -53,7 +53,7 @@ export async function movePlayer(formData: FormData) {
     });
     if (div) {
       const count = await prisma.divisionMember.count({ where: { divisionId: div.id } });
-      if (count < season.targetGroupSize) {
+      if (count < (div.targetSize ?? season.targetGroupSize)) {
         await prisma.divisionMember.create({ data: { divisionId: div.id, playerId } });
       }
     }

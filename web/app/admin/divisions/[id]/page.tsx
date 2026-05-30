@@ -14,6 +14,7 @@ import {
   deletePairing,
   overridePairing,
   recordSet,
+  setDivisionTargetSize,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -222,7 +223,23 @@ export default async function AdminDivisionDetail({
 
         {/* Members */}
         <div className="card">
-          <strong>Members ({division.members.length}/{division.season.targetGroupSize})</strong>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <strong>Members ({division.members.length}/{division.targetSize ?? division.season.targetGroupSize})</strong>
+            <form action={setDivisionTargetSize} style={{ display: "flex", gap: 4, alignItems: "center", marginLeft: "auto" }}>
+              <input type="hidden" name="divisionId" value={division.id} />
+              <label className="muted" style={{ fontSize: 11 }}>Override size:</label>
+              <input
+                type="number"
+                name="targetSize"
+                min={1}
+                max={50}
+                defaultValue={division.targetSize ?? ""}
+                placeholder={`${division.season.targetGroupSize} (default)`}
+                style={{ width: 80, fontSize: 12 }}
+              />
+              <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+            </form>
+          </div>
           <table>
             <thead>
               <tr><th>Player</th><th>Discord ID</th><th>Joined</th></tr>

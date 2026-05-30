@@ -86,7 +86,7 @@ export default async function AdminDivisionsPage() {
                         >
                           <strong>{d.name}</strong>
                           <div className="muted" style={{ marginTop: 8 }}>
-                            {d._count.members}/{season.targetGroupSize} players · {confirmed}/{expected} sets
+                            {d._count.members}/{d.targetSize ?? season.targetGroupSize} players · {confirmed}/{expected} sets
                           </div>
                           <div style={{ background: "var(--surface-2)", borderRadius: 99, height: 6, overflow: "hidden", marginTop: 6 }}>
                             <div style={{ background: "var(--accent-2)", height: "100%", width: `${pct}%` }} />
