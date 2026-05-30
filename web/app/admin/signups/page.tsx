@@ -80,12 +80,24 @@ export default async function AdminSignupsPage() {
                     ))}
                   </tbody>
                 </table>
-                {round.status === "OPEN" && (
-                  <form action={closeRound} style={{ marginTop: 8 }}>
-                    <input type="hidden" name="roundId" value={round.id} />
-                    <button type="submit" className="secondary">Finalize signups</button>
-                  </form>
-                )}
+                <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                  {round.status === "OPEN" && (
+                    <form action={closeRound}>
+                      <input type="hidden" name="roundId" value={round.id} />
+                      <button type="submit" className="secondary">Finalize signups</button>
+                    </form>
+                  )}
+                  {round.status === "CLOSED" && (
+                    <Link href={`/admin/signups/${round.id}/build`}>
+                      <button type="button">Build season →</button>
+                    </Link>
+                  )}
+                  {round.status === "BUILT" && round.resultingSeasonId && (
+                    <Link href="/admin/seasons" className="muted" style={{ fontSize: 12 }}>
+                      → built into season
+                    </Link>
+                  )}
+                </div>
               </div>
             );
           })
