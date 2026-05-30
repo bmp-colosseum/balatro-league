@@ -117,16 +117,18 @@ authRouter.get("/discord/callback", async (req, res) => {
   }
 });
 
-authRouter.post("/logout", (req, res) => {
+function doLogout(req: Request, res: Response) {
   req.session.destroy(() => {
-    res.redirect("/");
+    // Explicitly clear the session cookie so the browser drops it on disk too,
+    // not just the server-side session data. Without this, the browser still
+    // sends bl.sid on the next request and we hand it a fresh empty session
+    // (functionally logged out, but feels weird because the cookie lingers).
+    res.clearCookie("bl.sid");
+    res.redirect("/standings");
   });
-});
-authRouter.get("/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.redirect("/");
-  });
-});
+}
+authRouter.post("/logout", doLogout);
+authRouter.get("/logout", doLogout);
 
 // Middleware factories ---------------------------------------------------------
 
