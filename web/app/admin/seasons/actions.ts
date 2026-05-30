@@ -186,6 +186,16 @@ export async function endSeason(formData: FormData) {
   redirect("/admin/seasons");
 }
 
+export async function setSeasonVisibility(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const visibilityRaw = String(formData.get("visibility") ?? "");
+  if (!id) return;
+  const visibility = visibilityRaw === "INTERNAL" ? "INTERNAL" : "PUBLIC";
+  await prisma.season.update({ where: { id }, data: { visibility } });
+  revalidatePath("/admin/seasons");
+}
+
 export async function setSeasonPreset(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id") ?? "");

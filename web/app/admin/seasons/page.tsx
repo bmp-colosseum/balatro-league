@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
-import { activateSeason, createSeason, endSeason, setSeasonPreset } from "./actions";
+import { activateSeason, createSeason, endSeason, setSeasonPreset, setSeasonVisibility } from "./actions";
 import { bootstrapSeasonDiscord, setSeasonDiscordCategory } from "./bootstrap-actions";
 import { SeasonDeckPresetPicker } from "@/components/SeasonDeckPresetPicker";
 
@@ -124,11 +124,25 @@ export default async function AdminSeasonsPage() {
                   ) : (
                     <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "#c0c8cb" }}>Inactive</span>
                   )}
-                  {s.visibility === "INTERNAL" ? (
-                    <span className="pill" style={{ background: "rgba(241,196,15,0.2)", color: "#f1c40f" }}>INTERNAL</span>
-                  ) : (
-                    <span className="pill" style={{ background: "rgba(52,152,219,0.2)", color: "#76c7ff" }}>PUBLIC</span>
-                  )}
+                  <form action={setSeasonVisibility} style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+                    <input type="hidden" name="id" value={s.id} />
+                    <select
+                      name="visibility"
+                      defaultValue={s.visibility}
+                      style={{
+                        fontSize: 11,
+                        padding: "2px 4px",
+                        background: s.visibility === "INTERNAL" ? "rgba(241,196,15,0.2)" : "rgba(52,152,219,0.2)",
+                        color: s.visibility === "INTERNAL" ? "#f1c40f" : "#76c7ff",
+                        border: "1px solid var(--border)",
+                        borderRadius: 4,
+                      }}
+                    >
+                      <option value="PUBLIC">PUBLIC</option>
+                      <option value="INTERNAL">INTERNAL</option>
+                    </select>
+                    <button type="submit" className="secondary" style={{ fontSize: 11, padding: "2px 6px" }}>Save</button>
+                  </form>
                 </div>
                 <div className="muted" style={{ marginTop: 4 }}>{tierLine}</div>
                 <div className="muted">
