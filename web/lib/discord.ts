@@ -156,27 +156,24 @@ export async function addGuildMemberRole(guildId: string, userId: string, roleId
   return true;
 }
 
-// Create a guild text channel. If `roleIdOnlyVisible` is set, the channel
-// is private to that role — @everyone gets VIEW_CHANNEL denied and only the
-// named role is allowed. Bot retains access via its own permissions.
+// Create a guild text channel. If `visibleToRoleIds` is set, the channel is
+// private — @everyone gets VIEW_CHANNEL denied and only the listed roles
+// can see/send. Bot retains access via its own permissions.
 export async function createGuildTextChannel(
   guildId: string,
   name: string,
-  options?: { parentId?: string; topic?: string; roleIdOnlyVisible?: string },
+  options?: { parentId?: string; topic?: string; visibleToRoleIds?: string[] },
 ): Promise<DiscordChannel | null> {
   const VIEW_CHANNEL = "1024"; // 1 << 10
   const SEND_MESSAGES = "2048"; // 1 << 11
-  const overwrites = options?.roleIdOnlyVisible
+  const allowMask = String((BigInt(VIEW_CHANNEL) | BigInt(SEND_MESSAGES)).toString());
+  const visibleToRoleIds = options?.visibleToRoleIds?.filter(Boolean) ?? [];
+  const overwrites = visibleToRoleIds.length > 0
     ? [
         // Deny @everyone (whose role id == guild id)
         { id: guildId, type: 0, deny: VIEW_CHANNEL, allow: "0" },
-        // Allow the named role
-        {
-          id: options.roleIdOnlyVisible,
-          type: 0,
-          allow: String((BigInt(VIEW_CHANNEL) | BigInt(SEND_MESSAGES)).toString()),
-          deny: "0",
-        },
+        // Allow each listed role to view + send
+        ...visibleToRoleIds.map((roleId) => ({ id: roleId, type: 0, allow: allowMask, deny: "0" })),
       ]
     : undefined;
   const res = await fetch(`${BASE_URL}/guilds/${guildId}/channels`, {

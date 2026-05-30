@@ -62,6 +62,15 @@ export async function bootstrapSeasonDiscord(formData: FormData) {
 
   const parentId = season.discordCategoryId ?? undefined;
 
+  // Look up every Discord role bound to ADMIN or MOD tier so the new
+  // private division channels are visible to staff as well as the
+  // division's own role. (Owners are env-pinned via LEAGUE_OWNER_DISCORD_ID
+  // and don't need a role.)
+  const staffBindings = await prisma.roleBinding.findMany({
+    where: { tier: { in: ["ADMIN", "MOD"] } },
+  });
+  const staffRoleIds = staffBindings.map((b) => b.discordRoleId);
+
   for (const div of season.divisions) {
     if (div.discordRoleId && div.discordChannelId) continue; // already set up
     if (div.members.length === 0) continue; // no one in this division
@@ -82,14 +91,14 @@ export async function bootstrapSeasonDiscord(formData: FormData) {
       await addGuildMemberRole(guildId, m.player.discordId, roleId);
     }
 
-    // 3) Channel
+    // 3) Channel — visible to the division's own role + staff roles
     let channelId = div.discordChannelId;
     if (!channelId) {
       const channelName = div.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
       const channel = await createGuildTextChannel(guildId, channelName, {
         parentId,
         topic: `${season.name} — ${div.tier.name} tier, division ${div.name}`,
-        roleIdOnlyVisible: roleId,
+        visibleToRoleIds: [roleId, ...staffRoleIds],
       });
       if (!channel) {
         console.warn(`[bootstrap] failed to create channel for division ${div.id}`);
