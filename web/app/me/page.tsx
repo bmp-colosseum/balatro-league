@@ -15,10 +15,19 @@ export default async function MePage() {
     avatar?: string | null;
   };
 
-  // Look up the Player row (may not exist if they haven't been added to the league)
-  const player = user.discordId
+  let player = user.discordId
     ? await prisma.player.findUnique({ where: { discordId: user.discordId } })
     : null;
+
+  // Auto-sync display name from Discord. If the user's Discord username has
+  // changed since the Player row was created (or admin set a placeholder name
+  // when adding by Discord ID), bring the Player row up to date.
+  if (player && user.name && player.displayName !== user.name) {
+    player = await prisma.player.update({
+      where: { discordId: user.discordId },
+      data: { displayName: user.name },
+    });
+  }
 
   const avatarUrl = user.avatar
     ? `https://cdn.discordapp.com/avatars/${user.discordId}/${user.avatar}.png?size=128`
@@ -67,8 +76,10 @@ export default async function MePage() {
         {player ? (
           <div className="card">
             <p className="muted">
-              Match reporting, schedule, and division standings are coming over from the old
-              dashboard in a future update. For now use <code>/report</code> in Discord.
+              Your display name is synced from your Discord username automatically — change it
+              in Discord and it'll update here next time you visit. Match reporting, schedule,
+              and division standings are coming over from the old dashboard. For now use{" "}
+              <code>/report</code> in Discord.
             </p>
           </div>
         ) : (
