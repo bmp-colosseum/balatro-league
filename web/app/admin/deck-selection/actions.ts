@@ -1,4 +1,4 @@
-"use server";
+﻿"use server";
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -20,8 +20,8 @@ export async function createPreset(formData: FormData) {
       stakes: seedDefaults ? defaults.stakes : [],
     },
   });
-  revalidatePath("/admin/match-config");
-  redirect(`/admin/match-config?preset=${preset.id}`);
+  revalidatePath("/admin/deck-selection");
+  redirect(`/admin/deck-selection?preset=${preset.id}`);
 }
 
 export async function renamePreset(formData: FormData) {
@@ -30,18 +30,18 @@ export async function renamePreset(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   if (!id || !name) return;
   await prisma.matchConfigPreset.update({ where: { id }, data: { name } });
-  revalidatePath("/admin/match-config");
+  revalidatePath("/admin/deck-selection");
 }
 
 export async function deletePreset(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
-  // Season.matchConfigPresetId is ON DELETE SET NULL — any season pointing
+  // Season.matchConfigPresetId is ON DELETE SET NULL â€” any season pointing
   // at this preset will fall back to the Default preset at match-time.
   await prisma.matchConfigPreset.delete({ where: { id } });
-  revalidatePath("/admin/match-config");
-  redirect("/admin/match-config");
+  revalidatePath("/admin/deck-selection");
+  redirect("/admin/deck-selection");
 }
 
 export async function addDeck(formData: FormData) {
@@ -55,7 +55,7 @@ export async function addDeck(formData: FormData) {
     where: { id },
     data: { decks: [...preset.decks, name] },
   });
-  revalidatePath("/admin/match-config");
+  revalidatePath("/admin/deck-selection");
 }
 
 export async function removeDeck(formData: FormData) {
@@ -68,7 +68,7 @@ export async function removeDeck(formData: FormData) {
     where: { id },
     data: { decks: preset.decks.filter((d) => d !== name) },
   });
-  revalidatePath("/admin/match-config");
+  revalidatePath("/admin/deck-selection");
 }
 
 export async function addStake(formData: FormData) {
@@ -82,7 +82,7 @@ export async function addStake(formData: FormData) {
     where: { id },
     data: { stakes: [...preset.stakes, name] },
   });
-  revalidatePath("/admin/match-config");
+  revalidatePath("/admin/deck-selection");
 }
 
 export async function removeStake(formData: FormData) {
@@ -95,22 +95,22 @@ export async function removeStake(formData: FormData) {
     where: { id },
     data: { stakes: preset.stakes.filter((s) => s !== name) },
   });
-  revalidatePath("/admin/match-config");
+  revalidatePath("/admin/deck-selection");
 }
 
-// Bootstrap action — creates the Default preset on demand if none exists.
+// Bootstrap action â€” creates the Default preset on demand if none exists.
 export async function seedDefaultPreset() {
   await requireAdmin();
   const existing = await prisma.matchConfigPreset.findUnique({
     where: { name: DEFAULT_PRESET_NAME },
   });
   if (existing) {
-    revalidatePath("/admin/match-config");
-    redirect(`/admin/match-config?preset=${existing.id}`);
+    revalidatePath("/admin/deck-selection");
+    redirect(`/admin/deck-selection?preset=${existing.id}`);
   }
   const created = await prisma.matchConfigPreset.create({
     data: { name: DEFAULT_PRESET_NAME, decks: defaults.decks, stakes: defaults.stakes },
   });
-  revalidatePath("/admin/match-config");
-  redirect(`/admin/match-config?preset=${created.id}`);
+  revalidatePath("/admin/deck-selection");
+  redirect(`/admin/deck-selection?preset=${created.id}`);
 }

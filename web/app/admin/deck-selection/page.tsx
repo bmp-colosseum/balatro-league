@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
@@ -17,7 +17,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function MatchConfigPage({
+export default async function DeckSelectionPage({
   searchParams,
 }: {
   searchParams: Promise<{ preset?: string }>;
@@ -38,13 +38,13 @@ export default async function MatchConfigPage({
   return (
     <>
       <SiteNav activePath="/admin" />
-      <AdminNav activePath="/admin/match-config" />
+      <AdminNav activePath="/admin/deck-selection" />
       <main>
-        <h2>Match config presets</h2>
+        <h2>Deck Selection presets</h2>
         <p className="muted">
-          A preset is a named set of decks + stakes used by <code>/start-match</code>. Seasons
-          pick which preset to use (see season detail); seasons without a preset fall back to
-          the one named <strong>Default</strong>.
+          A preset is a named set of decks + stakes that <code>/start-match</code> samples
+          combos from for the ban/pick flow. Seasons pick which preset to use (set on each
+          season's card); seasons without a preset fall back to <strong>Default</strong>.
         </p>
 
         {presets.length === 0 ? (
@@ -89,7 +89,7 @@ function PresetSidebar({
           return (
             <li key={p.id} style={{ marginBottom: 4 }}>
               <Link
-                href={`/admin/match-config?preset=${p.id}`}
+                href={`/admin/deck-selection?preset=${p.id}`}
                 style={{
                   display: "block",
                   padding: "6px 8px",
@@ -158,10 +158,10 @@ function PresetEditor({
           </form>
         </form>
         <p className="muted" style={{ marginTop: 8 }}>
-          {preset.decks.length} decks × {preset.stakes.length} stakes ={" "}
+          {preset.decks.length} decks Ã— {preset.stakes.length} stakes ={" "}
           <strong>{totalCombos} possible combos</strong>.
           {totalCombos < 9 && (
-            <span style={{ color: "#e74c3c" }}> ⚠ need at least 9 for a normal match.</span>
+            <span style={{ color: "#e74c3c" }}> âš  need at least 9 for a normal match.</span>
           )}
         </p>
       </div>

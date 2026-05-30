@@ -14,7 +14,7 @@ const ADMIN_LINKS: AdminLink[] = [
   { href: "/admin/divisions", label: "Divisions" },
   { href: "/admin/signups", label: "Signups" },
   { href: "/admin/seasons", label: "Seasons" },
-  { href: "/admin/match-config", label: "Match config" },
+  { href: "/admin/deck-selection", label: "Deck Selection" },
 ];
 
 export function AdminNav({ activePath }: { activePath: string }) {

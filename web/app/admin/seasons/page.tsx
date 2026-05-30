@@ -131,7 +131,7 @@ export default async function AdminSeasonsPage() {
                   style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center" }}
                 >
                   <input type="hidden" name="id" value={s.id} />
-                  <label className="muted" style={{ fontSize: 12 }}>Match preset:</label>
+                  <label className="muted" style={{ fontSize: 12 }}>Deck preset:</label>
                   <select name="presetId" defaultValue={s.matchConfigPresetId ?? ""} style={{ flex: 1 }}>
                     <option value="">— Use Default —</option>
                     {presets.map((p) => (

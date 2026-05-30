@@ -221,7 +221,7 @@ export default async function BuildSeasonPage({
                 </select>
               </label>
               <label>
-                Match preset
+                Deck preset
                 <select name="matchConfigPresetId" defaultValue="" style={{ width: "100%" }}>
                   <option value="">— Use Default —</option>
                   {presets.map((p) => (
