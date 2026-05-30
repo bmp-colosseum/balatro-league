@@ -76,3 +76,44 @@ header.site-nav nav { display: flex; gap: 16px; }
 header.site-nav nav a { color: var(--muted); padding: 4px 8px; border-radius: 4px; }
 header.site-nav nav a.active { color: var(--text); background: var(--surface-2); }
 main { max-width: 1100px; margin: 24px auto; padding: 0 24px; }
+
+.subnav {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 24px;
+}
+.subnav-inner { max-width: 1100px; margin: 0 auto; }
+.subnav nav { display: flex; gap: 12px; }
+.subnav nav a { color: var(--muted); padding: 4px 10px; border-radius: 4px; font-size: 13px; }
+.subnav nav a.active { color: var(--accent-2); background: var(--bg); }
+
+/* form bits */
+input[type="text"], input[type="number"], input[type="datetime-local"],
+input[type="email"], input[type="password"], select, textarea {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 4px;
+  font: inherit;
+}
+input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent-2); border-color: var(--accent-2); }
+button {
+  background: var(--accent-2);
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+}
+button.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+button.danger { background: var(--danger); }
+button:hover { filter: brightness(1.1); }
+
+label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+
+.flash { padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; }
+.flash.success { background: rgba(46,204,113,0.15); color: var(--success); border: 1px solid rgba(46,204,113,0.3); }
+.flash.error { background: rgba(231,76,60,0.15); color: var(--danger); border: 1px solid rgba(231,76,60,0.3); }
