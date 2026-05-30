@@ -149,17 +149,9 @@ export default async function AdminSeasonsPage() {
             return (
               <div key={s.id} className="card">
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <form action={renameSeason} style={{ display: "flex", gap: 4 }}>
-                    <input type="hidden" name="id" value={s.id} />
-                    <input
-                      type="text"
-                      name="name"
-                      defaultValue={s.name}
-                      required
-                      style={{ fontSize: 16, fontWeight: 600, padding: "2px 6px", minWidth: 200 }}
-                    />
-                    <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
-                  </form>
+                  <Link href={`/admin/seasons/${s.id}`} style={{ fontSize: 16, fontWeight: 600, textDecoration: "none" }}>
+                    {s.name} <span className="muted" style={{ fontSize: 11, fontWeight: 400 }}>→ manage</span>
+                  </Link>
                   {s.isActive ? (
                     <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "#2ecc71" }}>ACTIVE</span>
                   ) : (

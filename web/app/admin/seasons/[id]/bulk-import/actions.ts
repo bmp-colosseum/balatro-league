@@ -198,14 +198,25 @@ export async function bulkImportSeason(formData: FormData) {
   revalidatePath("/admin/seasons");
   revalidatePath(`/admin/seasons/${seasonId}/bulk-import`);
 
-  const summary = new URLSearchParams({
-    membersAdded: String(membersAdded),
-    membersSkipped: String(membersSkipped),
-    pairingsRecorded: String(pairingsRecorded),
-    pairingsSkipped: String(pairingsSkipped),
-    unknownDivisions: [...unknownDivisions].slice(0, 10).join(" | "),
-    membersErrors: membersErrors.slice(0, 8).join(" | "),
-    matchErrors: matchErrors.slice(0, 8).join(" | "),
-  }).toString();
-  redirect(`/admin/seasons/${seasonId}/bulk-import?result=${encodeURIComponent(summary)}`);
+  const hadErrors =
+    unknownDivisions.size > 0 ||
+    membersErrors.length > 0 ||
+    matchErrors.length > 0;
+
+  if (hadErrors) {
+    // Keep the user on the import page so they can read errors + fix and retry.
+    const summary = new URLSearchParams({
+      membersAdded: String(membersAdded),
+      membersSkipped: String(membersSkipped),
+      pairingsRecorded: String(pairingsRecorded),
+      pairingsSkipped: String(pairingsSkipped),
+      unknownDivisions: [...unknownDivisions].slice(0, 10).join(" | "),
+      membersErrors: membersErrors.slice(0, 8).join(" | "),
+      matchErrors: matchErrors.slice(0, 8).join(" | "),
+    }).toString();
+    redirect(`/admin/seasons/${seasonId}/bulk-import?result=${encodeURIComponent(summary)}`);
+  }
+
+  // Clean import → take admin to the season overview where they can verify everything
+  redirect(`/admin/seasons/${seasonId}?imported=1`);
 }
