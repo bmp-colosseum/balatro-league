@@ -1,7 +1,8 @@
-// Shared site nav. Server component — reads the session and shows login/logout.
+// Shared site nav. Server component — reads session + admin tier from helpers.
 
 import Link from "next/link";
 import { auth } from "@/auth";
+import { isAdminUser } from "@/lib/admin";
 
 const PUBLIC_LINKS = [
   { href: "/standings", label: "Standings" },
@@ -9,21 +10,25 @@ const PUBLIC_LINKS = [
   { href: "/seasons", label: "Past seasons" },
 ] as const;
 
-const PLAYER_LINKS = [{ href: "/me", label: "My profile" }] as const;
-
 export async function SiteNav({ activePath }: { activePath: string }) {
   const session = await auth();
   const isLoggedIn = !!session?.user;
   const user = session?.user as { name?: string | null } | undefined;
+  const isAdmin = isLoggedIn ? await isAdminUser() : false;
 
-  const links = [...PUBLIC_LINKS, ...(isLoggedIn ? PLAYER_LINKS : [])];
+  const links: { href: string; label: string }[] = [...PUBLIC_LINKS];
+  if (isLoggedIn) links.push({ href: "/me", label: "My profile" });
+  if (isAdmin) links.push({ href: "/admin", label: "Admin" });
 
   return (
     <header className="site-nav">
       <h1>🃏 Balatro League</h1>
       <nav>
         {links.map((link) => {
-          const isActive = link.href === activePath;
+          const isActive =
+            link.href === "/admin"
+              ? activePath.startsWith("/admin")
+              : link.href === activePath;
           return (
             <Link key={link.href} href={link.href} className={isActive ? "active" : ""}>
               {link.label}

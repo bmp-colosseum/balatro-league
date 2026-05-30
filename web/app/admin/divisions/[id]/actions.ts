@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
+import { announceResult } from "@/lib/announce";
 
 type Result = "2-0" | "1-1" | "0-2";
 
@@ -26,7 +27,7 @@ export async function recordSet(formData: FormData) {
   const gamesWonA = meIsA ? games.a : games.b;
   const gamesWonB = meIsA ? games.b : games.a;
 
-  await prisma.pairing.upsert({
+  const recorded = await prisma.pairing.upsert({
     where: { divisionId_playerAId_playerBId: { divisionId, playerAId: canonA, playerBId: canonB } },
     create: {
       divisionId,
@@ -49,6 +50,8 @@ export async function recordSet(formData: FormData) {
       adminOverrideReason: "recorded via web dashboard (overwrite)",
     },
   });
+  // Fire-and-forget Discord announce
+  announceResult(recorded.id).catch((err) => console.warn("announceResult failed:", err));
   revalidatePath(`/admin/divisions/${divisionId}`);
 }
 
@@ -69,6 +72,7 @@ export async function overridePairing(formData: FormData) {
       adminOverrideReason: "override via web dashboard",
     },
   });
+  announceResult(updated.id).catch((err) => console.warn("announceResult failed:", err));
   revalidatePath(`/admin/divisions/${updated.divisionId}`);
 }
 
