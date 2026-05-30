@@ -183,6 +183,23 @@ export default async function AdminPlayersPage({
   if (selectedSeason) {
     players = players.filter((p) => p.memberships.length > 0);
   }
+
+  // For the season-scoped view, build a divisionId → active members map so
+  // we can render an inline "Record set vs..." form per player without
+  // N+1 queries per row.
+  const seasonForRecord = selectedSeason ?? (await prisma.season.findFirst({ where: { isActive: true } }));
+  const seasonDivisionMembers = seasonForRecord
+    ? await prisma.divisionMember.findMany({
+        where: { seasonId: seasonForRecord.id, status: "ACTIVE" },
+        include: { player: true },
+      })
+    : [];
+  const membersByDivision = new Map<string, Array<{ playerId: string; player: { id: string; displayName: string } }>>();
+  for (const m of seasonDivisionMembers) {
+    const list = membersByDivision.get(m.divisionId) ?? [];
+    list.push({ playerId: m.playerId, player: m.player });
+    membersByDivision.set(m.divisionId, list);
+  }
   if (sort === "ranked-only") players = players.filter((p) => p.rating != null);
   if (sort === "unranked-only") players = players.filter((p) => p.rating == null);
   if (sort === "rating-desc") players.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1) || a.displayName.localeCompare(b.displayName));
@@ -223,17 +240,20 @@ export default async function AdminPlayersPage({
                 <th>Name</th>
                 <th>Rating</th>
                 <th>Division</th>
+                <th>Record set</th>
                 <th>Discord</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {players.length === 0 ? (
-                <tr><td colSpan={5} className="muted">No players match.</td></tr>
+                <tr><td colSpan={6} className="muted">No players match.</td></tr>
               ) : players.map((p) => {
                 const membership = p.memberships[0];
                 const div = membership?.division;
                 const isDropped = membership?.status === "DROPPED";
+                const divisionMembers = div ? membersByDivision.get(div.id) ?? [] : [];
+                const opponents = divisionMembers.filter((m) => m.playerId !== p.id);
                 return (
                   <tr key={p.id}>
                     <td>
@@ -254,6 +274,29 @@ export default async function AdminPlayersPage({
                         </>
                       ) : (
                         <span className="muted">—</span>
+                      )}
+                    </td>
+                    <td>
+                      {div && !isDropped && opponents.length > 0 ? (
+                        <form action={recordSetForPlayer} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                          <input type="hidden" name="divisionId" value={div.id} />
+                          <input type="hidden" name="playerId" value={p.id} />
+                          <span className="muted" style={{ fontSize: 11 }}>vs</span>
+                          <select name="opponentId" required style={{ fontSize: 11, maxWidth: 140 }}>
+                            <option value="">—</option>
+                            {opponents.map((o) => (
+                              <option key={o.playerId} value={o.playerId}>{o.player.displayName}</option>
+                            ))}
+                          </select>
+                          <select name="result" defaultValue="2-0" style={{ fontSize: 11 }}>
+                            <option value="2-0">2-0</option>
+                            <option value="1-1">1-1</option>
+                            <option value="0-2">0-2</option>
+                          </select>
+                          <button type="submit" className="secondary" style={{ fontSize: 11 }}>Record</button>
+                        </form>
+                      ) : (
+                        <span className="muted" style={{ fontSize: 11 }}>—</span>
                       )}
                     </td>
                     <td>
