@@ -20,6 +20,14 @@ export default async function ProfilePage({
 
   const t = profile.totals;
 
+  // Latest BMP Ranked MMR snapshot for this player (any season). Renders
+  // null silently when there's no snapshot — new players see no card
+  // until the next refresh cycle catches them.
+  const latestSnapshot = await prisma.playerMmrSnapshot.findFirst({
+    where: { playerId: profile.player.id, rankedMmr: { not: null } },
+    orderBy: { capturedAt: "desc" },
+  });
+
   // Admin-only: if the viewer is an admin, surface a record-set form scoped
   // to this player's current division. Same opponent-filter rules as
   // /admin/players (only unplayed opponents shown).
@@ -39,6 +47,26 @@ export default async function ProfilePage({
           <div className="stat"><div className="label">Total points</div><div className="value">{t.points}</div></div>
           <div className="stat"><div className="label">Best rank</div><div className="value">{t.bestRank ? `#${t.bestRank}` : "—"}</div></div>
         </div>
+
+        {latestSnapshot && (
+          <div className="card" style={{ marginTop: 16 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+              <strong>BMP Ranked MMR</strong>
+              <span style={{ fontSize: 24, fontWeight: 600 }}>{latestSnapshot.rankedMmr}</span>
+              <span className="pill" style={{ background: "rgba(118,199,255,0.15)", color: "#76c7ff" }}>
+                {latestSnapshot.rankedTier}
+              </span>
+              {latestSnapshot.totalGames != null && (
+                <span className="muted" style={{ fontSize: 12 }}>
+                  {latestSnapshot.totalGames} games · {latestSnapshot.winRatePct}% win rate
+                </span>
+              )}
+              <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
+                from <a href={`https://balatromp.com/players/${profile.player.discordId}`} target="_blank" rel="noopener">balatromp.com</a> · captured {latestSnapshot.capturedAt.toISOString().slice(0, 10)}
+              </span>
+            </div>
+          </div>
+        )}
 
         {adminCtx && adminCtx.opponents.length > 0 && (
           <div className="card" style={{ borderColor: "#f1c40f" }}>

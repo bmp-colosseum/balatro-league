@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/admin";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
-import { setRating, bulkRatings } from "./actions";
+import { setRating, bulkRatings, refreshActiveSeasonMmrs } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +62,19 @@ export default async function AdminRankingsPage() {
         </div>
 
         <div className="card">
-          <strong>All players ({players.length})</strong>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+            <strong>All players ({players.length})</strong>
+            <form action={refreshActiveSeasonMmrs}>
+              <button type="submit" className="secondary" style={{ fontSize: 12 }}>
+                Refresh BMP MMRs (active season)
+              </button>
+            </form>
+          </div>
+          <p className="muted" style={{ fontSize: 12 }}>
+            Auto-refreshes daily @ 12:00 UTC for current-season players. Click for
+            an on-demand refresh — fans out a snapshot job per player, drains at
+            ~1 req/3sec so a full season takes a few minutes.
+          </p>
           <table>
             <thead>
               <tr>
