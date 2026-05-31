@@ -109,7 +109,7 @@ export const matchButtons: ButtonHandler = {
     if (action === "accept") return handleAccept(interaction, session);
     if (action === "decline") return handleDecline(interaction, session);
     if (action === "choosefirst") return handleChooseFirst(interaction, session, parts[3]);
-    if (action === "ban") return handleBan(interaction, session, parts[3]);
+    if (action === "banconfirm") return handleBanConfirm(interaction, session);
     if (action === "pick") return handlePick(interaction, session, parts[3]);
     if (action === "winner") return handleWinner(interaction, session, parts[3]);
 
@@ -117,52 +117,114 @@ export const matchButtons: ButtonHandler = {
   },
 };
 
-// SelectMenu infra retained for future use (no current consumers).
+// Multi-select for the ban phase. Player picks N decks from the dropdown
+// (Discord enforces the count via min/max), interaction lands here, we
+// stash the picks on game.pendingBans. They click the Confirm button
+// (matchButtons handler above) to actually apply them.
 export const matchSelectMenus: SelectMenuHandler = {
-  prefix: "__match_select_unused__",
+  prefix: "match:banselect:",
   async execute(interaction) {
-    await reply(interaction, "No handler.");
+    const sessionId = interaction.customId.split(":")[2];
+    if (!sessionId) {
+      await reply(interaction, "Malformed select menu.");
+      return;
+    }
+    const session = await loadSession(sessionId);
+    if (!session) {
+      await reply(interaction, "Match session not found.");
+      return;
+    }
+    await handleBanSelect(interaction, session);
   },
 };
 
-async function handleBan(interaction: ButtonInteraction, session: MatchSession, idxRaw: string | undefined) {
-  if (!idxRaw) return reply(interaction, "Malformed button.");
-  const idx = parseInt(idxRaw, 10);
-  if (Number.isNaN(idx)) return reply(interaction, "Invalid index.");
-
+// Shared helper for the two ban interactions — pulls the current game's
+// state, validates the actor is the player whose turn it is, and returns
+// what's needed. Returns null after replying with an error.
+async function loadBanContext(
+  interaction: ButtonInteraction | StringSelectMenuInteraction,
+  session: MatchSession,
+): Promise<{
+  gameNum: 1 | 2 | 3;
+  gameField: "game1" | "game2" | "game3";
+  game: GameState;
+  expected: number;
+} | null> {
   const gameNum =
     session.state === "GAME_1_BAN" ? 1 :
     session.state === "GAME_2_BAN" ? 2 :
     session.state === "GAME_3_BAN" ? 3 : 0;
-  if (gameNum === 0) return reply(interaction, "Not in a ban phase.");
-
+  if (gameNum === 0) {
+    await reply(interaction, "Not in a ban phase.");
+    return null;
+  }
   const gameField: "game1" | "game2" | "game3" = `game${gameNum}` as const;
   const game = parseGame(session[gameField]);
-  if (!game) return reply(interaction, "Game state missing.");
-  const pool = game.pool;
-
-  const phase = phaseFor(game, session.playerAId, session.playerBId, pool.length);
-  if (phase.kind !== "BAN") return reply(interaction, "Not a ban phase.");
-
+  if (!game) {
+    await reply(interaction, "Game state missing.");
+    return null;
+  }
+  const phase = phaseFor(game, session.playerAId, session.playerBId, game.pool.length);
+  if (phase.kind !== "BAN") {
+    await reply(interaction, "Not a ban phase.");
+    return null;
+  }
   const actor = await prisma.player.findUniqueOrThrow({ where: { id: phase.whoseBanId } });
-  if (!(await requireActor(interaction, actor.discordId))) return;
+  if (!(await requireActor(interaction, actor.discordId))) return null;
+  return { gameNum: gameNum as 1 | 2 | 3, gameField, game, expected: phase.remainingForThem };
+}
 
-  if (game.bans.includes(idx)) return reply(interaction, "That combo is already banned.");
+// Selection-only handler: writes the chosen indices to game.pendingBans
+// without actually banning them. Player can re-select before clicking
+// Confirm. The render reflects the pending state by default-selecting
+// those options in the menu + enabling the Confirm button.
+async function handleBanSelect(interaction: StringSelectMenuInteraction, session: MatchSession) {
+  const ctx = await loadBanContext(interaction, session);
+  if (!ctx) return;
+  const selected = interaction.values.map((v) => parseInt(v, 10)).filter((n) => !Number.isNaN(n));
+  if (selected.length !== ctx.expected) {
+    return reply(interaction, `Pick exactly ${ctx.expected} combo(s) to ban.`);
+  }
+  if (selected.some((idx) => ctx.game.bans.includes(idx))) {
+    return reply(interaction, "Some of those are already banned.");
+  }
+  const newGame: GameState = { ...ctx.game, pendingBans: selected };
+  const updated = await updateSession(session, {
+    [ctx.gameField]: JSON.stringify(newGame),
+  } as Prisma.MatchSessionUpdateManyMutationInput);
+  if (!updated) return raceLost(interaction);
+  await refreshMessage(interaction, updated);
+}
 
-  const newGame: GameState = { ...game, bans: [...game.bans, idx] };
-  const newPhase = phaseFor(newGame, session.playerAId, session.playerBId, pool.length);
+// Commit-the-pending-bans handler: takes the pendingBans on the game,
+// folds them into the actual bans array, advances phase. Disabled in
+// the UI until pendingBans count matches the expected ban count.
+async function handleBanConfirm(interaction: ButtonInteraction, session: MatchSession) {
+  const ctx = await loadBanContext(interaction, session);
+  if (!ctx) return;
+  const pending = ctx.game.pendingBans ?? [];
+  if (pending.length !== ctx.expected) {
+    return reply(interaction, `Pick ${ctx.expected} combo(s) in the menu first.`);
+  }
+  if (pending.some((idx) => ctx.game.bans.includes(idx))) {
+    return reply(interaction, "Some of those bans were already applied — pick again.");
+  }
+  const newGame: GameState = {
+    ...ctx.game,
+    bans: [...ctx.game.bans, ...pending],
+    pendingBans: undefined,
+  };
+  const newPhase = phaseFor(newGame, session.playerAId, session.playerBId, newGame.pool.length);
   let newState: MatchSessionState = session.state;
   if (newPhase.kind === "PICK") {
-    newState = gameNum === 1 ? MatchSessionState.GAME_1_PICK
-      : gameNum === 2 ? MatchSessionState.GAME_2_PICK
+    newState = ctx.gameNum === 1 ? MatchSessionState.GAME_1_PICK
+      : ctx.gameNum === 2 ? MatchSessionState.GAME_2_PICK
       : MatchSessionState.GAME_3_PICK;
   }
-
-  const data: Prisma.MatchSessionUpdateManyMutationInput = {
-    [gameField]: JSON.stringify(newGame),
+  const updated = await updateSession(session, {
+    [ctx.gameField]: JSON.stringify(newGame),
     state: newState,
-  } as Prisma.MatchSessionUpdateManyMutationInput;
-  const updated = await updateSession(session, data);
+  } as Prisma.MatchSessionUpdateManyMutationInput);
   if (!updated) return raceLost(interaction);
   await refreshMessage(interaction, updated);
 }

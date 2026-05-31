@@ -30,6 +30,10 @@ export interface GameState {
   // game2 and game3 don't reuse game1's shuffle — bans reset to a new
   // random subset of the preset each round.
   pool: DeckEntry[];
+  // Bans the current ban-acting player has selected in the multi-select
+  // menu but not yet confirmed. Cleared when applied via the Confirm
+  // button (or when the player re-selects in the menu).
+  pendingBans?: number[];
 }
 
 export function emptyGameState(firstId: string, pool: DeckEntry[]): GameState {

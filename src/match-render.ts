@@ -6,6 +6,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
+  StringSelectMenuBuilder,
 } from "discord.js";
 import type { MatchSession, Player } from "@prisma/client";
 import { phaseFor, remainingCombos, type GameState } from "./match-session.js";
@@ -16,11 +17,16 @@ function parseGame(json: string | null): GameState | null {
   try { return JSON.parse(json) as GameState; } catch { return null; }
 }
 
+// Components row can hold buttons OR a string-select menu — ban phase
+// renders both (a select menu row + a confirm button row), other phases
+// render only buttons. The Discord.js MessageComponentBuilder covers it.
+type ComponentRow = ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>;
+
 export function renderMatch(
   session: MatchSession,
   playerA: Player,
   playerB: Player,
-): { embeds: EmbedBuilder[]; components: ActionRowBuilder<ButtonBuilder>[] } {
+): { embeds: EmbedBuilder[]; components: ComponentRow[] } {
   const game1 = parseGame(session.game1);
   const game2 = parseGame(session.game2);
 
@@ -109,20 +115,53 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
 
   if (phase.kind === "BAN") {
     const whose = phase.whoseBanId === a.id ? a : b;
+    const expected = phase.remainingForThem;
+    const pending = (game.pendingBans ?? []).filter((idx) =>
+      remaining.some((r) => r.idx === idx),
+    );
+    const pendingLabels = pending
+      .map((idx) => {
+        const combo = pool[idx];
+        return combo ? `${combo.deck} / ${combo.stake}` : null;
+      })
+      .filter((s): s is string => !!s);
     embed.setDescription(
       `**${first.displayName}** bans first (coin toss).\n\n` +
-        `**${whose.displayName}** to ban — click ${phase.remainingForThem} combo(s) one at a time.\n` +
-        `Pool: ${remaining.length} combo(s) remaining.`,
+        `**${whose.displayName}** to ban — pick **${expected}** combo(s) in the menu, then click Confirm.\n` +
+        `Pool: ${remaining.length} combo(s) remaining.` +
+        (pendingLabels.length > 0
+          ? `\n\n**Pending**: ${pendingLabels.join(", ")} _(not yet applied)_`
+          : ""),
     );
-    const rows = chunkButtons(
-      remaining.map(({ idx, combo }) =>
-        new ButtonBuilder()
-          .setCustomId(`match:ban:${s.id}:${idx}`)
-          .setLabel(`${combo.deck} / ${combo.stake}`)
-          .setStyle(ButtonStyle.Danger),
-      ),
+    // Multi-select dropdown of remaining combos; min == max means Discord
+    // enforces an exact count of selections on submit. Default-mark the
+    // pending picks so the menu remembers them across re-renders.
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId(`match:banselect:${s.id}`)
+      .setPlaceholder(`Pick ${expected} combo(s) to ban`)
+      .setMinValues(expected)
+      .setMaxValues(expected)
+      .addOptions(
+        remaining.map(({ idx, combo }) => ({
+          label: `${combo.deck} / ${combo.stake}`,
+          value: String(idx),
+          default: pending.includes(idx),
+        })),
+      );
+    const confirmRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`match:banconfirm:${s.id}`)
+        .setLabel(pending.length === expected ? `Confirm ${expected} ban(s)` : `Select ${expected - pending.length} more…`)
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(pending.length !== expected),
     );
-    return { embeds: [embed], components: rows };
+    return {
+      embeds: [embed],
+      components: [
+        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu),
+        confirmRow,
+      ],
+    };
   }
 
   if (phase.kind === "PICK") {
