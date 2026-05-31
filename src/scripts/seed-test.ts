@@ -66,7 +66,7 @@ const opp = await prisma.player.upsert({
 for (const p of [me, opp]) {
   await prisma.divisionMember.upsert({
     where: { divisionId_playerId: { divisionId: division.id, playerId: p.id } },
-    create: { divisionId: division.id, playerId: p.id },
+    create: { divisionId: division.id, seasonId: season.id, playerId: p.id },
     update: {},
   });
 }

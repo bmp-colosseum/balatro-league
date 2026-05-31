@@ -61,7 +61,7 @@ export async function seedMockPlayers(
         data: { discordId, displayName },
       });
       await prisma.divisionMember.create({
-        data: { divisionId: div.id, playerId: player.id },
+        data: { divisionId: div.id, seasonId: div.seasonId, playerId: player.id },
       });
       created++;
     }

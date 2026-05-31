@@ -104,7 +104,7 @@ async function main() {
         data: { discordId, displayName },
       });
       await prisma.divisionMember.create({
-        data: { divisionId: division.id, playerId: player.id },
+        data: { divisionId: division.id, seasonId: season.id, playerId: player.id },
       });
       players.push(player);
     }

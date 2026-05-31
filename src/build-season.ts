@@ -281,7 +281,7 @@ export async function commitSeason(
           update: { displayName: signup.displayName },
         });
         await prisma.divisionMember.create({
-          data: { divisionId: division.id, playerId: player.id },
+          data: { divisionId: division.id, seasonId: season.id, playerId: player.id },
         });
         playersPlaced++;
       }

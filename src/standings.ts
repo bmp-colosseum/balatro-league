@@ -67,46 +67,20 @@ export function computeStandings(
   return sortStandings(Array.from(byId.values()), pairings);
 }
 
-// Sort rules: points desc → head-to-head points between tied players → game differential → games won.
-// Head-to-head is computed only among players currently tied on raw points.
+// Sort rules: points DESC → wins (2-0 count) DESC → draws (1-1 count) DESC
+// → displayName for a stable tiebreak. Unbreakable ties (same pts/wins/
+// draws) are admin-resolved manually.
 function sortStandings(
   rows: StandingRow[],
-  pairings: Array<Pick<Pairing, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
+  _pairings: Array<Pick<Pairing, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
 ): StandingRow[] {
+  void _pairings;
   return rows.slice().sort((x, y) => {
     if (y.points !== x.points) return y.points - x.points;
-
-    // Same points → head-to-head between just these two players.
-    const h2h = headToHeadPoints(x.player.id, y.player.id, pairings);
-    if (h2h.x !== h2h.y) return h2h.y - h2h.x;
-
-    const xDiff = x.gamesWon - x.gamesLost;
-    const yDiff = y.gamesWon - y.gamesLost;
-    if (yDiff !== xDiff) return yDiff - xDiff;
-
-    if (y.gamesWon !== x.gamesWon) return y.gamesWon - x.gamesWon;
+    if (y.wins !== x.wins) return y.wins - x.wins;
+    if (y.draws !== x.draws) return y.draws - x.draws;
     return x.player.displayName.localeCompare(y.player.displayName);
   });
-}
-
-function headToHeadPoints(
-  xId: string,
-  yId: string,
-  pairings: Array<Pick<Pairing, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
-): { x: number; y: number } {
-  const meeting = pairings.find(
-    (p) =>
-      (p.playerAId === xId && p.playerBId === yId) ||
-      (p.playerAId === yId && p.playerBId === xId),
-  );
-  if (!meeting) return { x: 0, y: 0 };
-  const xIsA = meeting.playerAId === xId;
-  const xGames = xIsA ? meeting.gamesWonA : meeting.gamesWonB;
-  const yGames = xIsA ? meeting.gamesWonB : meeting.gamesWonA;
-  if (xGames === 2 && yGames === 0) return { x: POINTS_FOR_2_0_WIN, y: 0 };
-  if (yGames === 2 && xGames === 0) return { x: 0, y: POINTS_FOR_2_0_WIN };
-  if (xGames === 1 && yGames === 1) return { x: POINTS_FOR_1_1_DRAW, y: POINTS_FOR_1_1_DRAW };
-  return { x: 0, y: 0 };
 }
 
 // Formatting helper shared by /standings and admin previews. Kept for compact text use.
