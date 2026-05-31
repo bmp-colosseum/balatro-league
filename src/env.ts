@@ -10,6 +10,12 @@ const schema = z.object({
   LEAGUE_ADMIN_ROLE_ID: z.string().optional(),
   LEAGUE_OWNER_DISCORD_ID: z.string().optional(),
   RESULTS_CHANNEL_ID: z.string().optional(),
+  // Optional: post auto-announces via a webhook instead of the bot's REST
+  // channel.send. Webhooks don't count against the bot's global 50/sec
+  // budget — keeps the announce path out of contention with bursty admin
+  // operations (bootstrap, DM blast). Create one via Channel Settings →
+  // Integrations → Webhooks → New Webhook → Copy Webhook URL.
+  RESULTS_WEBHOOK_URL: z.string().url().optional(),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
 });
 
