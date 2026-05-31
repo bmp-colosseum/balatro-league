@@ -57,7 +57,11 @@ tr:hover { background: var(--surface-2); }
 }
 
 .grid { display: grid; gap: 16px; }
-.grid-2 { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+/* Cards in grid-2 hold standings tables — minmax(420px) is large enough
+   that the table content fits without overflow, and small enough that
+   we still get 2 columns on a typical 1100px main. Below ~840px main
+   width, gracefully stacks to a single column instead of clipping. */
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
 .grid-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 
 .stat { background: var(--surface-2); padding: 16px; border-radius: 8px; }
