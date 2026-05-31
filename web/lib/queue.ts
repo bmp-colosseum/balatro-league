@@ -67,3 +67,17 @@ export async function enqueueBootstrapDivision(job: {
     retryBackoff: true,
   });
 }
+
+export async function enqueueMmrSnapshot(job: {
+  discordId: string;
+  seasonId: string | null;
+}): Promise<void> {
+  await ensureStarted();
+  // Two retries — balatromp.com is occasionally flaky but we still want
+  // to capture even if the first attempt fails. Failure beyond that gets
+  // recorded in PlayerMmrSnapshot.fetchError so admin can see it.
+  await getBoss().send("snapshot.mmr", job, {
+    retryLimit: 2,
+    retryBackoff: true,
+  });
+}

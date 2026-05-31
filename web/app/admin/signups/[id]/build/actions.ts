@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { resolveDiscordIdToDisplayName } from "@/lib/add-player";
 import { placePlayerInDivision } from "@/lib/division-membership";
+import { enqueueMmrSnapshot } from "@/lib/queue";
 
 interface TierConfig {
   name: string;
@@ -81,6 +82,31 @@ function planByRating(
 
 // Bulk-update ratings for signed-up players. Creates Player rows for new
 // signups so the rating sticks before we build the season.
+// Enqueue a fresh balatromp.com snapshot job for every active signup in
+// this round. Idempotent — each job inserts a new snapshot row, so the
+// build page just reads the latest by capturedAt.
+export async function refreshSignupMmrSnapshots(formData: FormData) {
+  await requireAdmin();
+  const roundId = String(formData.get("roundId") ?? "");
+  if (!roundId) return;
+  const round = await prisma.signupRound.findUnique({
+    where: { id: roundId },
+    include: { signups: { where: { withdrawn: false } } },
+  });
+  if (!round) return;
+  // Snapshots aren't tied to a season until build-season runs, so seasonId
+  // is the round's resultingSeasonId (may be null pre-build, fine).
+  const seasonId = round.resultingSeasonId;
+  await Promise.all(
+    round.signups.map((s) =>
+      enqueueMmrSnapshot({ discordId: s.discordId, seasonId }).catch((err) =>
+        console.warn(`[refresh-mmr] enqueue failed for ${s.discordId}:`, err),
+      ),
+    ),
+  );
+  revalidatePath(`/admin/signups/${roundId}/build`);
+}
+
 export async function saveRatings(formData: FormData) {
   await requireAdmin();
   const roundId = String(formData.get("roundId") ?? "");

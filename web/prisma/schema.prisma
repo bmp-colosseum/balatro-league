@@ -48,8 +48,54 @@ model Player {
   pairingsAsA     Pairing[] @relation("PairingPlayerA")
   pairingsAsB     Pairing[] @relation("PairingPlayerB")
   reportedPairings Pairing[] @relation("PairingReporter")
+  mmrSnapshots    PlayerMmrSnapshot[]
 
   @@index([rating])
+}
+
+// Scraped point-in-time MMR snapshot from balatromp.com. We capture one
+// per signed-up player at signup-close so future seeding decisions can
+// reference what their public skill rating was *when they joined this
+// season* — not their current rating, which may have drifted by the time
+// promo/relegation runs. Admin can also trigger ad-hoc refreshes.
+//
+// rawHtml retained for forensics: if balatromp restructures their page
+// and our parser breaks, we can re-parse historical snapshots without
+// re-scraping (their site only shows current state, so historical data
+// would otherwise be lost forever).
+model PlayerMmrSnapshot {
+  id          String   @id @default(cuid())
+  // Canonical key — present even when no Player row exists yet (new
+  // signups that haven't been turned into Players by build-season).
+  discordId   String
+  // Set when a Player row exists; null for snapshots captured during
+  // signup-close before the new player has been materialized. Backfilled
+  // by build-season when it creates the Player row.
+  playerId    String?
+  player      Player?  @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  // Null = ad-hoc capture not tied to a specific season (e.g., admin
+  // hit refresh). Otherwise the season this snapshot was taken FOR
+  // (typically the season the player just signed up to).
+  seasonId    String?
+  capturedAt  DateTime @default(now())
+  // Source = "balatromp.com" for now; future-proofs adding other rating
+  // sources (e.g., a self-reported manual entry).
+  source      String   @default("balatromp.com")
+  // Nullable because the player may not have an account on balatromp,
+  // or the fetch may have failed — we still want a row recording the
+  // attempt rather than silently dropping it (fetchError captures why).
+  rankedMmr   Int?
+  rankedTier  String?
+  totalGames  Int?
+  // Stored as integer 0-100 (e.g., 52 = 52%). Easier to sort/filter than
+  // a float and we don't need sub-percent precision for seeding.
+  winRatePct  Int?
+  rawHtml     String?
+  fetchError  String?
+
+  @@index([discordId, capturedAt])
+  @@index([playerId, capturedAt])
+  @@index([seasonId])
 }
 
 enum SeasonVisibility {

@@ -5,7 +5,7 @@ import { requireAdmin } from "@/lib/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
-import { addSignupByDiscordId, buildSeason, saveRatings } from "./actions";
+import { addSignupByDiscordId, buildSeason, refreshSignupMmrSnapshots, saveRatings } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +67,15 @@ export default async function BuildSeasonPage({
     where: { discordId: { in: discordIds } },
   });
   const playerByDiscordId = new Map(existingPlayers.map((p) => [p.discordId, p]));
+
+  // Latest balatromp.com snapshot per signed-up discord id. distinct() with
+  // orderBy(capturedAt desc) keeps just the freshest row per player.
+  const latestSnapshots = await prisma.playerMmrSnapshot.findMany({
+    where: { discordId: { in: discordIds } },
+    orderBy: { capturedAt: "desc" },
+    distinct: ["discordId"],
+  });
+  const snapshotByDiscordId = new Map(latestSnapshots.map((s) => [s.discordId, s]));
 
   const templates = templatesRaw.map((t) => ({
     id: t.id,
@@ -132,10 +141,20 @@ export default async function BuildSeasonPage({
         </div>
 
         <div className="card">
-          <strong>Player ratings ({playerCount} signed up)</strong>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+            <strong>Player ratings ({playerCount} signed up)</strong>
+            <form action={refreshSignupMmrSnapshots}>
+              <input type="hidden" name="roundId" value={round.id} />
+              <button type="submit" className="secondary" style={{ fontSize: 12 }}>
+                Refresh balatromp MMRs
+              </button>
+            </form>
+          </div>
           <p className="muted">
-            Higher = better. Empty = unrated (treated as lowest). Save here before building so the
-            auto-seed picks up your changes.
+            Higher = better. Empty = unrated (treated as lowest). MMR column shows
+            their latest snapshot from balatromp.com (auto-captured at signup-close;
+            refresh re-fetches on demand). Save here before building so the auto-seed
+            picks up your changes.
           </p>
           <form action={saveRatings}>
             <input type="hidden" name="roundId" value={round.id} />
@@ -144,15 +163,17 @@ export default async function BuildSeasonPage({
                 <tr>
                   <th>Player</th>
                   <th>Status</th>
+                  <th>MMR (balatromp)</th>
                   <th style={{ width: 120 }}>Rating</th>
                 </tr>
               </thead>
               <tbody>
                 {round.signups.length === 0 ? (
-                  <tr><td colSpan={3} className="muted">No signups in this round.</td></tr>
+                  <tr><td colSpan={4} className="muted">No signups in this round.</td></tr>
                 ) : round.signups.map((s) => {
                   const player = playerByDiscordId.get(s.discordId);
                   const isReturning = !!player;
+                  const snapshot = snapshotByDiscordId.get(s.discordId);
                   return (
                     <tr key={s.id}>
                       <td>
@@ -170,12 +191,30 @@ export default async function BuildSeasonPage({
                           </span>
                         )}
                       </td>
+                      <td style={{ fontSize: 12 }}>
+                        {snapshot && snapshot.rankedMmr != null ? (
+                          <span>
+                            <strong>{snapshot.rankedMmr}</strong>{" "}
+                            <span className="muted">
+                              ({snapshot.rankedTier} · {snapshot.totalGames}g · {snapshot.winRatePct}%)
+                            </span>
+                          </span>
+                        ) : snapshot?.fetchError ? (
+                          <span className="muted" title={snapshot.fetchError}>
+                            {snapshot.fetchError.length > 30
+                              ? `${snapshot.fetchError.slice(0, 27)}…`
+                              : snapshot.fetchError}
+                          </span>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
                       <td>
                         <input
                           type="number"
                           name={`rating:${s.discordId}`}
-                          defaultValue={player?.rating ?? ""}
-                          placeholder="unrated"
+                          defaultValue={player?.rating ?? snapshot?.rankedMmr ?? ""}
+                          placeholder={snapshot?.rankedMmr ? `${snapshot.rankedMmr}` : "unrated"}
                           style={{ width: 100 }}
                         />
                       </td>

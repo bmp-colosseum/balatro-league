@@ -17,6 +17,7 @@
 // same Postgres tables; this file owns the workers.
 
 import { PgBoss, type Job } from "pg-boss";
+import { fetchPlayerStats } from "./balatromp.js";
 import { prisma } from "./db.js";
 import { env } from "./env.js";
 import { tryGetDiscordClient } from "./discord.js";
@@ -43,6 +44,7 @@ export async function initQueue(): Promise<void> {
   // to run every boot.
   await boss.createQueue("notify.dm");
   await boss.createQueue("bootstrap.division");
+  await boss.createQueue("snapshot.mmr");
   console.log("[pg-boss] queue started");
 
   // Worker: send a DM to one user. Retried automatically on failure.
@@ -78,11 +80,49 @@ export async function initQueue(): Promise<void> {
       }
     },
   );
+
+  // Worker: scrape one player's stats from balatromp.com and store a
+  // PlayerMmrSnapshot row. Serial (batchSize 1) so a 50-player signup
+  // burst doesn't slam balatromp's CDN. Always writes a row, even on
+  // parse/fetch failure — fetchError captures what went wrong so admin
+  // can see "no balatromp account" vs "page changed" vs "timeout".
+  await boss.work<MmrSnapshotJob>(
+    "snapshot.mmr",
+    { batchSize: 1, pollingIntervalSeconds: 3 },
+    async (jobs: Job<MmrSnapshotJob>[]) => {
+      for (const job of jobs) {
+        await snapshotPlayerMmr(job.data);
+      }
+    },
+  );
 }
 
 export async function enqueueDm(job: DmJob): Promise<void> {
   if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
   await boss.send("notify.dm", job, { retryLimit: 3, retryBackoff: true });
+}
+
+async function snapshotPlayerMmr({ discordId, seasonId }: MmrSnapshotJob): Promise<void> {
+  const { stats, rawJson, error } = await fetchPlayerStats(discordId);
+  // Best-effort link to a Player row if one already exists; null is fine
+  // for snapshots taken at signup-close before build-season has created
+  // the Player. Build-season backfills playerId later.
+  const player = await prisma.player.findUnique({ where: { discordId } });
+  await prisma.playerMmrSnapshot.create({
+    data: {
+      discordId,
+      playerId: player?.id ?? null,
+      seasonId,
+      rankedMmr: stats?.rankedMmr ?? null,
+      rankedTier: stats?.rankedTier ?? null,
+      totalGames: stats?.totalGames ?? null,
+      winRatePct: stats?.winRatePct ?? null,
+      // Only keep the blob on failures — successful snapshots don't
+      // need a JSON body per player taking up space.
+      rawHtml: error ? rawJson : null,
+      fetchError: error,
+    },
+  });
 }
 
 interface DmJob {
@@ -93,6 +133,14 @@ interface DmJob {
 interface BootstrapDivisionJob {
   divisionId: string;
   guildId: string;
+}
+
+interface MmrSnapshotJob {
+  // Canonical key — works even when no Player row exists yet (new signups
+  // captured at signup-close, before build-season materializes Players).
+  discordId: string;
+  // Null = ad-hoc capture not tied to a season (admin refresh of a player).
+  seasonId: string | null;
 }
 
 // Set up role + member-roles + private channel + welcome post for one

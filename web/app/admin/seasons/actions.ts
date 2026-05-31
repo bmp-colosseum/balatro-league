@@ -11,7 +11,7 @@ import {
   type ComponentActionRow,
   type MessageEmbed,
 } from "@/lib/discord";
-import { enqueueDm } from "@/lib/queue";
+import { enqueueDm, enqueueMmrSnapshot } from "@/lib/queue";
 import { computeRatingDeltas, type DivisionForRating } from "@/lib/end-season";
 import { computeStandings } from "@/lib/standings";
 
@@ -358,6 +358,17 @@ export async function finalizeSignupsForSeason(formData: FormData) {
     const payload = buildClosedSignupPayload(round, round.signups);
     await editChannelMessage(round.channelId, round.messageId, payload);
   }
+  // Capture each signed-up player's current balatromp.com MMR for seeding.
+  // Tied to the season so admin can compare snapshot-at-signup vs current
+  // when promo/relegation runs at end of season.
+  await Promise.all(
+    round.signups.map((s) =>
+      enqueueMmrSnapshot({ discordId: s.discordId, seasonId }).catch((err) =>
+        console.warn(`[mmr-snapshot] enqueue failed for ${s.discordId}:`, err),
+      ),
+    ),
+  );
+  console.log(`[mmr-snapshot] queued ${round.signups.length} snapshots for season ${seasonId}`);
   revalidatePath("/admin/seasons");
   revalidatePath("/admin/signups");
 }
