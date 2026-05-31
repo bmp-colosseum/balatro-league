@@ -107,14 +107,31 @@ export async function bootstrapSeasonDiscord(formData: FormData) {
       }
       channelId = channel.id;
 
-      // 4) Welcome message pinging all members
+      // 4) Welcome message — full onboarding for everyone in this division
       const mentions = div.members.map((m) => `<@${m.player.discordId}>`).join(" ");
-      await postChannelMessage(channelId, {
-        content:
-          `Welcome to **${div.name}** for ${season.name}!\n` +
-          `${mentions}\n\n` +
-          `Use this channel to schedule matches. Run \`/start-match @opponent\` to begin a series, or \`/report @opponent result:...\` to log a played set.`,
-      });
+      const memberList = div.members
+        .map((m, i) => `${i + 1}. <@${m.player.discordId}>`)
+        .join("\n");
+      const setsToPlay = (div.members.length * (div.members.length - 1)) / 2;
+      const welcome = [
+        `# 🃏 Welcome to ${div.name}`,
+        `_${season.name} · ${div.tier.name} tier_`,
+        ``,
+        mentions,
+        ``,
+        `**Your opponents (${div.members.length}):**`,
+        memberList,
+        ``,
+        `**What to do**`,
+        `• Play **every other person** in this list once — best-of-2 (${setsToPlay} sets total per player).`,
+        `• Schedule in this channel. DMs work too.`,
+        `• Use \`/start-match @opponent\` for the guided ban/pick flow (the bot picks the deck/stake for you), OR just play in Balatro and use \`/report @opponent result:2-0|1-1|0-2\` to log it.`,
+        ``,
+        `**Standings + your schedule:** <https://www.balatroleague.com/divisions/${div.id}>`,
+        ``,
+        `Good luck. 🎴`,
+      ].join("\n");
+      await postChannelMessage(channelId, { content: welcome });
     }
 
     // 5) Persist IDs
