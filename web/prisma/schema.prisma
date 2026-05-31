@@ -172,8 +172,6 @@ model Signup {
   roundId     String
   discordId   String
   displayName String
-  mpUsername  String?
-  mpMmr       Int?
   withdrawn   Boolean     @default(false)
   signedUpAt  DateTime    @default(now())
 
