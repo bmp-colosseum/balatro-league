@@ -45,6 +45,17 @@ th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--bor
 th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
 tr:hover { background: var(--surface-2); }
 
+/* Standings tables — pack densely so they fit a 320px card column.
+   Numeric cols nowrap so 'W-D-L' / game totals never wrap awkwardly;
+   the player-name column gets the slack and ellipsizes on overflow. */
+.card table { font-size: 13px; }
+.card table th, .card table td { padding: 4px 8px; }
+.card table th:not(:nth-child(2)),
+.card table td:not(:nth-child(2)) { white-space: nowrap; text-align: right; }
+.card table th:nth-child(2),
+.card table td:nth-child(2) { max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card { overflow-x: auto; }
+
 .pill {
   display: inline-block;
   padding: 2px 8px;
@@ -56,7 +67,7 @@ tr:hover { background: var(--surface-2); }
 }
 
 .grid { display: grid; gap: 16px; }
-.grid-2 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
 .grid-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 
 .stat { background: var(--surface-2); padding: 16px; border-radius: 8px; }
