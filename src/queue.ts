@@ -45,6 +45,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("notify.dm");
   await boss.createQueue("bootstrap.division");
   await boss.createQueue("snapshot.mmr");
+  await boss.createQueue("refresh.active-mmrs");
   console.log("[pg-boss] queue started");
 
   // Worker: send a DM to one user. Retried automatically on failure.
@@ -83,9 +84,10 @@ export async function initQueue(): Promise<void> {
 
   // Worker: scrape one player's stats from balatromp.com and store a
   // PlayerMmrSnapshot row. Serial (batchSize 1) so a 50-player signup
-  // burst doesn't slam balatromp's CDN. Always writes a row, even on
-  // parse/fetch failure — fetchError captures what went wrong so admin
-  // can see "no balatromp account" vs "page changed" vs "timeout".
+  // burst doesn't slam balatromp's CDN — drains at ~1 req/3sec. Always
+  // writes a row, even on parse/fetch failure — fetchError captures
+  // what went wrong so admin can see "no balatromp account" vs "page
+  // changed" vs "timeout".
   await boss.work<MmrSnapshotJob>(
     "snapshot.mmr",
     { batchSize: 1, pollingIntervalSeconds: 3 },
@@ -95,11 +97,87 @@ export async function initQueue(): Promise<void> {
       }
     },
   );
+
+  // Worker: periodic re-snapshot of CURRENT participants only — open
+  // signup round signups, or (when no signups are open) active season
+  // members. Past seasons are static; their snapshots are frozen on
+  // purpose for historical reference, so we never re-fetch them.
+  await boss.work(
+    "refresh.active-mmrs",
+    { batchSize: 1 },
+    async () => {
+      await refreshActiveMmrs();
+    },
+  );
+  // Daily at 12:00 UTC. Idempotent: schedule() upserts so calling on every
+  // boot just keeps the cron expression in sync. With current participants
+  // (~100 max) and snapshot.mmr at 1 req/3sec, a full refresh takes ~5 min
+  // — gentle on balatromp's CDN.
+  await boss.schedule("refresh.active-mmrs", "0 12 * * *");
+  console.log("[pg-boss] scheduled refresh.active-mmrs @ 12:00 UTC daily");
 }
 
 export async function enqueueDm(job: DmJob): Promise<void> {
   if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
   await boss.send("notify.dm", job, { retryLimit: 3, retryBackoff: true });
+}
+
+// Re-snapshot every CURRENT participant — either everyone in the open
+// signup round, or (if no signups are open) every active member of the
+// active season. Past-season players are never re-fetched: their
+// snapshots are frozen by design for historical seeding reference.
+async function refreshActiveMmrs(): Promise<void> {
+  if (!boss) return;
+  // Open signups take priority — players in this state are about to need
+  // their MMR for build-season, so freshness matters more here.
+  const openRound = await prisma.signupRound.findFirst({
+    where: { status: "OPEN" },
+    orderBy: { openedAt: "desc" },
+    include: {
+      signups: { where: { withdrawn: false }, select: { discordId: true } },
+    },
+  });
+  if (openRound) {
+    const seasonId = openRound.resultingSeasonId ?? null;
+    for (const s of openRound.signups) {
+      await boss.send("snapshot.mmr", { discordId: s.discordId, seasonId }, { retryLimit: 2 });
+    }
+    console.log(`[refresh.active-mmrs] queued ${openRound.signups.length} for open round ${openRound.id}`);
+    return;
+  }
+  // Fall back to active season members.
+  const activeSeason = await prisma.season.findFirst({
+    where: { isActive: true, endedAt: null },
+    orderBy: { startedAt: "desc" },
+    include: {
+      divisions: {
+        include: {
+          members: {
+            where: { status: "ACTIVE" },
+            include: { player: { select: { discordId: true } } },
+          },
+        },
+      },
+    },
+  });
+  if (!activeSeason) {
+    console.log("[refresh.active-mmrs] no open signups and no active season — skipping");
+    return;
+  }
+  // Dedup by discordId — a player shouldn't be in two divisions but be defensive.
+  const seen = new Set<string>();
+  for (const div of activeSeason.divisions) {
+    for (const m of div.members) {
+      if (seen.has(m.player.discordId)) continue;
+      seen.add(m.player.discordId);
+      await boss.send(
+        "snapshot.mmr",
+        { discordId: m.player.discordId, seasonId: activeSeason.id },
+        { retryLimit: 2 },
+      );
+    }
+  }
+  console.log(`[refresh.active-mmrs] queued ${seen.size} for active season ${activeSeason.id}`);
 }
 
 async function snapshotPlayerMmr({ discordId, seasonId }: MmrSnapshotJob): Promise<void> {

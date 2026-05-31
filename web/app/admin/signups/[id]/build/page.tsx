@@ -77,6 +77,16 @@ export default async function BuildSeasonPage({
   });
   const snapshotByDiscordId = new Map(latestSnapshots.map((s) => [s.discordId, s]));
 
+  // Render signups sorted by BMP Ranked MMR DESC so admin sees the top of
+  // the ladder first when seeding. Unrated (no snapshot or fetch failed)
+  // sink to the bottom — they'd default to "lowest" in the auto-seed too.
+  const sortedSignups = [...round.signups].sort((a, b) => {
+    const aMmr = snapshotByDiscordId.get(a.discordId)?.rankedMmr ?? -1;
+    const bMmr = snapshotByDiscordId.get(b.discordId)?.rankedMmr ?? -1;
+    if (aMmr !== bMmr) return bMmr - aMmr;
+    return a.signedUpAt.getTime() - b.signedUpAt.getTime();
+  });
+
   const templates = templatesRaw.map((t) => ({
     id: t.id,
     name: t.name,
@@ -146,15 +156,15 @@ export default async function BuildSeasonPage({
             <form action={refreshSignupMmrSnapshots}>
               <input type="hidden" name="roundId" value={round.id} />
               <button type="submit" className="secondary" style={{ fontSize: 12 }}>
-                Refresh balatromp MMRs
+                Refresh BMP MMRs
               </button>
             </form>
           </div>
           <p className="muted">
-            Higher = better. Empty = unrated (treated as lowest). MMR column shows
-            their latest snapshot from balatromp.com (auto-captured at signup-close;
-            refresh re-fetches on demand). Save here before building so the auto-seed
-            picks up your changes.
+            Sorted by BMP Ranked MMR (descending). Higher Rating = better; empty Rating
+            = unrated (treated as lowest in auto-seed). Snapshots auto-capture at
+            signup-close and refresh daily for current participants; click the button
+            for an ad-hoc refresh. Save ratings before building.
           </p>
           <form action={saveRatings}>
             <input type="hidden" name="roundId" value={round.id} />
@@ -163,14 +173,14 @@ export default async function BuildSeasonPage({
                 <tr>
                   <th>Player</th>
                   <th>Status</th>
-                  <th>MMR (balatromp)</th>
+                  <th>BMP Ranked MMR</th>
                   <th style={{ width: 120 }}>Rating</th>
                 </tr>
               </thead>
               <tbody>
-                {round.signups.length === 0 ? (
+                {sortedSignups.length === 0 ? (
                   <tr><td colSpan={4} className="muted">No signups in this round.</td></tr>
-                ) : round.signups.map((s) => {
+                ) : sortedSignups.map((s) => {
                   const player = playerByDiscordId.get(s.discordId);
                   const isReturning = !!player;
                   const snapshot = snapshotByDiscordId.get(s.discordId);
