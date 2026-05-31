@@ -257,6 +257,55 @@ export async function createGuildTextChannel(
   }
 }
 
+// Create or reuse a category by name (case-insensitive). Used by the
+// season-bootstrap flow to give each season a clean home and by the
+// archive flow to gather ended seasons' channels in one place.
+export async function ensureGuildCategory(guildId: string, name: string): Promise<DiscordChannel | null> {
+  try {
+    const all = (await rest().get(Routes.guildChannels(guildId))) as APIChannel[];
+    const existing = all.find(
+      (c) => c.type === ChannelType.GuildCategory && "name" in c && c.name?.toLowerCase() === name.toLowerCase(),
+    );
+    if (existing) {
+      return { id: existing.id, name: ("name" in existing ? existing.name : null) ?? name, type: existing.type };
+    }
+    const created = (await rest().post(Routes.guildChannels(guildId), {
+      body: { name, type: ChannelType.GuildCategory } as RESTPostAPIGuildChannelJSONBody,
+    })) as APIChannel;
+    return { id: created.id, name: ("name" in created ? created.name : null) ?? name, type: created.type };
+  } catch (err) {
+    console.warn(`Discord ensureGuildCategory(${name}) failed:`, err);
+    return null;
+  }
+}
+
+// Move a channel under a new parent. parentId=null moves to top level.
+export async function setChannelParent(channelId: string, parentId: string | null): Promise<boolean> {
+  try {
+    await rest().patch(Routes.channel(channelId), { body: { parent_id: parentId } });
+    return true;
+  } catch (err) {
+    console.warn(`Discord setChannelParent(${channelId} → ${parentId}) failed:`, err);
+    return false;
+  }
+}
+
+// Apply permission overwrite that DENIES @everyone SEND_MESSAGES on a
+// channel — readable history, no new posts. Channel-level lock that
+// any role with explicit allow can override.
+export async function lockChannelForEveryone(guildId: string, channelId: string): Promise<boolean> {
+  const SEND_MESSAGES = "2048"; // 1 << 11
+  try {
+    await rest().put(`${Routes.channel(channelId)}/permissions/${guildId}` as `/channels/${string}/permissions/${string}`, {
+      body: { type: 0, allow: "0", deny: SEND_MESSAGES },
+    });
+    return true;
+  } catch (err) {
+    console.warn(`Discord lockChannelForEveryone(${channelId}) failed:`, err);
+    return false;
+  }
+}
+
 export async function listGuildTextChannels(guildId: string): Promise<DiscordChannel[]> {
   try {
     const all = (await rest().get(Routes.guildChannels(guildId))) as APIChannel[];

@@ -7,7 +7,10 @@ import {
   addGuildMemberRole,
   createGuildRole,
   createGuildTextChannel,
+  ensureGuildCategory,
+  lockChannelForEveryone,
   postChannelMessage,
+  setChannelParent,
 } from "@/lib/discord";
 
 // Save (or clear) the Discord category id a season's division channels
@@ -60,7 +63,20 @@ export async function bootstrapSeasonDiscord(formData: FormData) {
   });
   if (!season) return;
 
-  const parentId = season.discordCategoryId ?? undefined;
+  // If admin didn't set a category id, auto-create '🃏 Season Name' so each
+  // season gets a clean home (instead of all divisions dumped in #general
+  // or whatever the bot's nearest category is).
+  let parentId = season.discordCategoryId ?? undefined;
+  if (!parentId) {
+    const cat = await ensureGuildCategory(guildId, `🃏 ${season.name}`);
+    if (cat) {
+      parentId = cat.id;
+      await prisma.season.update({
+        where: { id: season.id },
+        data: { discordCategoryId: parentId },
+      });
+    }
+  }
 
   // Look up every Discord role bound to ADMIN or MOD tier so the new
   // private division channels are visible to staff as well as the
@@ -154,4 +170,47 @@ export async function bootstrapSeasonDiscord(formData: FormData) {
   }
 
   revalidatePath("/admin/seasons");
+}
+
+// Close out a season's Discord presence: lock every division channel
+// (deny SEND_MESSAGES on @everyone) and move them to a '📦 Season X
+// Archive' category so the active categories aren't cluttered with
+// dead seasons. History stays readable.
+export async function archiveSeasonChannels(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+
+  const guildId = process.env.DISCORD_GUILD_ID;
+  if (!guildId) {
+    console.warn("DISCORD_GUILD_ID not set; skipping channel archive");
+    return;
+  }
+
+  const season = await prisma.season.findUnique({
+    where: { id },
+    include: {
+      divisions: {
+        where: { discordChannelId: { not: null } },
+      },
+    },
+  });
+  if (!season) return;
+
+  const archiveCategory = await ensureGuildCategory(guildId, `📦 ${season.name} Archive`);
+  if (!archiveCategory) {
+    console.warn(`[archive] couldn't create archive category for ${season.name}`);
+    return;
+  }
+
+  for (const div of season.divisions) {
+    if (!div.discordChannelId) continue;
+    // Lock the channel (read-only) then move it under the archive category.
+    // Best-effort — failures don't abort the loop so we archive what we can.
+    await lockChannelForEveryone(guildId, div.discordChannelId).catch(() => {});
+    await setChannelParent(div.discordChannelId, archiveCategory.id).catch(() => {});
+  }
+
+  revalidatePath("/admin/seasons");
+  revalidatePath(`/admin/seasons/${id}`);
 }

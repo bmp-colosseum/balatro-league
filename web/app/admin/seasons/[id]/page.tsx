@@ -19,7 +19,7 @@ import {
   setSeasonPreset,
   setSeasonVisibility,
 } from "../actions";
-import { bootstrapSeasonDiscord, setSeasonDiscordCategory } from "../bootstrap-actions";
+import { archiveSeasonChannels, bootstrapSeasonDiscord, setSeasonDiscordCategory } from "../bootstrap-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -265,6 +265,21 @@ export default async function SeasonDetailPage({
               );
             })}
           </>
+        )}
+
+        {season.endedAt && season.divisions.some((d) => d.discordChannelId) && (
+          <div className="card" style={{ marginTop: 16 }}>
+            <strong>📦 Archive Discord channels</strong>
+            <p className="muted" style={{ fontSize: 12 }}>
+              Season's ended — move every division channel into a <code>📦 {season.name} Archive</code>
+              category and lock them (read-only). History stays, channels just stop cluttering
+              the active categories. Idempotent — safe to re-run if some channels failed last time.
+            </p>
+            <form action={archiveSeasonChannels}>
+              <input type="hidden" name="id" value={season.id} />
+              <button type="submit" className="secondary">Archive division channels →</button>
+            </form>
+          </div>
         )}
 
         <details className="card" style={{ marginTop: 16 }}>
