@@ -4,12 +4,16 @@
 // — they'd flood the channel.
 //
 // Two delivery paths, in priority order:
-//   1. RESULTS_WEBHOOK_URL — POSTs directly to the channel webhook. Doesn't
+//   1. Webhook URL — POSTs directly to the channel webhook. Doesn't
 //      count against the bot's global 50/sec budget; route bucket is per
 //      webhook, not per channel. Preferred for high-volume / burst paths.
-//   2. RESULTS_CHANNEL_ID — falls back to bot REST channel.send via the
+//   2. Channel ID — falls back to bot REST channel.send via the
 //      gateway client. Counts against the global budget.
-// Configure one or the other; if both are set, webhook wins.
+//
+// Config precedence for each, season → global → env, so individual seasons
+// can post to their own channel without touching the global config:
+//   webhook: season.resultsWebhookUrl → LeagueConfig.ResultsWebhookUrl → env.RESULTS_WEBHOOK_URL
+//   channel: season.resultsChannelId  → env.RESULTS_CHANNEL_ID
 
 import { ChannelType, EmbedBuilder, type TextChannel } from "discord.js";
 import { prisma } from "./db.js";
@@ -18,11 +22,6 @@ import { env } from "./env.js";
 import { getConfig, LeagueConfigKey } from "./league-config.js";
 
 export async function announceResult(pairingId: string): Promise<void> {
-  // Webhook URL precedence: DB (set via /league setup-results-webhook) →
-  // env var. DB wins so admin can change at runtime without a redeploy.
-  const webhookUrl = (await getConfig(LeagueConfigKey.ResultsWebhookUrl)) || env.RESULTS_WEBHOOK_URL;
-  if (!webhookUrl && !env.RESULTS_CHANNEL_ID) return;
-
   const pairing = await prisma.pairing.findUnique({
     where: { id: pairingId },
     include: { playerA: true, playerB: true, division: { include: { season: true } } },
@@ -30,6 +29,14 @@ export async function announceResult(pairingId: string): Promise<void> {
   if (!pairing || pairing.status !== "CONFIRMED") return;
   // Skip announcements for INTERNAL/test seasons — they'd flood the real results channel
   if (pairing.division.season.visibility !== "PUBLIC") return;
+
+  const season = pairing.division.season;
+  const webhookUrl =
+    season.resultsWebhookUrl ||
+    (await getConfig(LeagueConfigKey.ResultsWebhookUrl)) ||
+    env.RESULTS_WEBHOOK_URL;
+  const channelId = season.resultsChannelId || env.RESULTS_CHANNEL_ID;
+  if (!webhookUrl && !channelId) return;
 
   let title: string;
   let color: number;
@@ -74,11 +81,11 @@ export async function announceResult(pairingId: string): Promise<void> {
   }
 
   // Bot REST fallback.
-  if (!env.RESULTS_CHANNEL_ID) return;
+  if (!channelId) return;
   const client = tryGetDiscordClient();
   if (!client) return;
   try {
-    const channel = await client.channels.fetch(env.RESULTS_CHANNEL_ID);
+    const channel = await client.channels.fetch(channelId);
     if (!channel || channel.type !== ChannelType.GuildText) return;
     await (channel as TextChannel).send({ embeds: [embed] });
   } catch (err) {

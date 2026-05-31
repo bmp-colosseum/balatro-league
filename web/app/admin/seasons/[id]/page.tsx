@@ -19,7 +19,7 @@ import {
   setSeasonPreset,
   setSeasonVisibility,
 } from "../actions";
-import { archiveSeasonChannels, bootstrapSeasonDiscord, setSeasonDiscordCategory } from "../bootstrap-actions";
+import { archiveSeasonChannels, bootstrapSeasonDiscord, setSeasonDiscordCategory, setSeasonResultsChannel, setSeasonResultsWebhook } from "../bootstrap-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -179,18 +179,42 @@ export default async function SeasonDetailPage({
             />
           </div>
           <details style={{ marginTop: 8 }}>
-            <summary className="muted" style={{ cursor: "pointer", fontSize: 12 }}>Discord category for division channels</summary>
-            <form action={setSeasonDiscordCategory} style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
-              <input type="hidden" name="id" value={season.id} />
-              <input
-                type="text"
-                name="discordCategoryId"
-                defaultValue={season.discordCategoryId ?? ""}
-                placeholder="Discord category ID (optional)"
-                style={{ flex: 1, fontSize: 12 }}
-              />
-              <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
-            </form>
+            <summary className="muted" style={{ cursor: "pointer", fontSize: 12 }}>Discord overrides for this season</summary>
+            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              <form action={setSeasonDiscordCategory} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input type="hidden" name="id" value={season.id} />
+                <input
+                  type="text"
+                  name="discordCategoryId"
+                  defaultValue={season.discordCategoryId ?? ""}
+                  placeholder="Category ID for division channels (auto-created if blank)"
+                  style={{ flex: 1, fontSize: 12 }}
+                />
+                <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+              </form>
+              <form action={setSeasonResultsWebhook} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input type="hidden" name="id" value={season.id} />
+                <input
+                  type="text"
+                  name="resultsWebhookUrl"
+                  defaultValue={season.resultsWebhookUrl ?? ""}
+                  placeholder="Results webhook URL (falls back to global if blank)"
+                  style={{ flex: 1, fontSize: 12 }}
+                />
+                <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+              </form>
+              <form action={setSeasonResultsChannel} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input type="hidden" name="id" value={season.id} />
+                <input
+                  type="text"
+                  name="resultsChannelId"
+                  defaultValue={season.resultsChannelId ?? ""}
+                  placeholder="Results channel ID for bot-REST fallback (optional)"
+                  style={{ flex: 1, fontSize: 12 }}
+                />
+                <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+              </form>
+            </div>
           </details>
         </div>
 

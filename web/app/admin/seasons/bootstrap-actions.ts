@@ -22,6 +22,43 @@ export async function setSeasonDiscordCategory(formData: FormData) {
   revalidatePath("/admin/seasons");
 }
 
+// Save (or clear) per-season override for the results-announcement webhook
+// URL. Empty input clears the override — the season falls back to global
+// LeagueConfig / env.
+export async function setSeasonResultsWebhook(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const raw = String(formData.get("resultsWebhookUrl") ?? "").trim();
+  if (!id) return;
+  // Validate webhook URL shape only when non-empty. Discord webhook URLs
+  // look like: https://discord.com/api/webhooks/<id>/<token>
+  if (raw !== "" && !/^https:\/\/(canary\.|ptb\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+$/.test(raw)) {
+    throw new Error("Doesn't look like a Discord webhook URL");
+  }
+  await prisma.season.update({
+    where: { id },
+    data: { resultsWebhookUrl: raw === "" ? null : raw },
+  });
+  revalidatePath(`/admin/seasons/${id}`);
+}
+
+// Save (or clear) per-season override for the results channel id used by
+// the bot-REST fallback path (when no webhook is configured).
+export async function setSeasonResultsChannel(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const raw = String(formData.get("resultsChannelId") ?? "").trim();
+  if (!id) return;
+  if (raw !== "" && !/^\d{17,20}$/.test(raw)) {
+    throw new Error("Channel ID should be a numeric Discord snowflake");
+  }
+  await prisma.season.update({
+    where: { id },
+    data: { resultsChannelId: raw === "" ? null : raw },
+  });
+  revalidatePath(`/admin/seasons/${id}`);
+}
+
 // Bootstrap Discord channels + roles for every division in a season.
 // The web action just ensures the season category exists, then enqueues
 // one bootstrap.division job per division. The bot's pg-boss worker

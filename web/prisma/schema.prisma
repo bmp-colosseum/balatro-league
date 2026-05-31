@@ -84,6 +84,13 @@ model Season {
   // via /admin/seasons. If null, division channels are created at top level.
   discordCategoryId   String?
 
+  // Per-season overrides for results announcements. If null, fall back to
+  // the global LeagueConfig.ResultsWebhookUrl / env RESULTS_CHANNEL_ID.
+  // Lets each season post results to its own dedicated channel without
+  // having to touch env vars between seasons.
+  resultsWebhookUrl   String?
+  resultsChannelId    String?
+
   divisions   Division[]
   tiers       Tier[]
 
