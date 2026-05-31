@@ -1,5 +1,6 @@
 import {
   EmbedBuilder,
+  MessageFlags,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
 } from "discord.js";
@@ -25,7 +26,7 @@ export const standings: SlashCommand = {
   autocomplete: divisionNameAutocomplete,
 
   async execute(interaction: ChatInputCommandInteraction) {
-    await interaction.deferReply();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const activeSeason = await activePublicSeason();
     if (!activeSeason) {

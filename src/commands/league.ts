@@ -260,7 +260,7 @@ async function unsetRole(interaction: ChatInputCommandInteraction) {
 }
 
 async function listRoles(interaction: ChatInputCommandInteraction) {
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const bindings = await prisma.roleBinding.findMany({
     orderBy: [{ tier: "asc" }, { createdAt: "asc" }],
   });

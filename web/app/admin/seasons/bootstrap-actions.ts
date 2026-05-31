@@ -95,11 +95,23 @@ export async function bootstrapSeasonDiscord(formData: FormData) {
     let channelId = div.discordChannelId;
     if (!channelId) {
       const channelName = div.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-      const channel = await createGuildTextChannel(guildId, channelName, {
+      // Discord caps a category at 50 channels. Try the configured parent
+      // first; if creation fails (likely because the category is full or
+      // the parent doesn't exist), fall back to no parent so the bootstrap
+      // doesn't grind to a halt. Admin can drag channels into a fresh
+      // overflow category afterward.
+      let channel = await createGuildTextChannel(guildId, channelName, {
         parentId,
         topic: `${season.name} — ${div.tier.name} tier, division ${div.name}`,
         visibleToRoleIds: [roleId, ...staffRoleIds],
       });
+      if (!channel && parentId) {
+        console.warn(`[bootstrap] couldn't place ${channelName} under category ${parentId} — falling back to top level (likely 50-channel cap)`);
+        channel = await createGuildTextChannel(guildId, channelName, {
+          topic: `${season.name} — ${div.tier.name} tier, division ${div.name} (no category — overflow)`,
+          visibleToRoleIds: [roleId, ...staffRoleIds],
+        });
+      }
       if (!channel) {
         console.warn(`[bootstrap] failed to create channel for division ${div.id}`);
         await prisma.division.update({ where: { id: div.id }, data: { discordRoleId: roleId } });

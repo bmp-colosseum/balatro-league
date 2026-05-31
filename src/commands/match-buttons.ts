@@ -109,6 +109,7 @@ export const matchButtons: ButtonHandler = {
     if (action === "accept") return handleAccept(interaction, session);
     if (action === "decline") return handleDecline(interaction, session);
     if (action === "choosefirst") return handleChooseFirst(interaction, session, parts[3]);
+    if (action === "ban") return handleBan(interaction, session, parts[3]);
     if (action === "pick") return handlePick(interaction, session, parts[3]);
     if (action === "winner") return handleWinner(interaction, session, parts[3]);
 
@@ -116,18 +117,55 @@ export const matchButtons: ButtonHandler = {
   },
 };
 
-// Select-menu side of the match interactions — currently only used for
-// batch ban submission. Custom id format: `match:bans:<sessionId>`.
+// SelectMenu infra retained for future use (no current consumers).
 export const matchSelectMenus: SelectMenuHandler = {
-  prefix: "match:bans:",
+  prefix: "__match_select_unused__",
   async execute(interaction) {
-    const sessionId = interaction.customId.slice("match:bans:".length);
-    if (!sessionId) return reply(interaction, "Malformed select menu.");
-    const session = await loadSession(sessionId);
-    if (!session) return reply(interaction, "Match session not found.");
-    return handleBanBatch(interaction, session);
+    await reply(interaction, "No handler.");
   },
 };
+
+async function handleBan(interaction: ButtonInteraction, session: MatchSession, idxRaw: string | undefined) {
+  if (!idxRaw) return reply(interaction, "Malformed button.");
+  const idx = parseInt(idxRaw, 10);
+  if (Number.isNaN(idx)) return reply(interaction, "Invalid index.");
+
+  const gameNum =
+    session.state === "GAME_1_BAN" ? 1 :
+    session.state === "GAME_2_BAN" ? 2 :
+    session.state === "GAME_3_BAN" ? 3 : 0;
+  if (gameNum === 0) return reply(interaction, "Not in a ban phase.");
+
+  const gameField: "game1" | "game2" | "game3" = `game${gameNum}` as const;
+  const game = parseGame(session[gameField]);
+  const pool = parsePool(session.pool);
+  if (!game) return reply(interaction, "Game state missing.");
+
+  const phase = phaseFor(game, session.playerAId, session.playerBId, pool.length);
+  if (phase.kind !== "BAN") return reply(interaction, "Not a ban phase.");
+
+  const actor = await prisma.player.findUniqueOrThrow({ where: { id: phase.whoseBanId } });
+  if (!(await requireActor(interaction, actor.discordId))) return;
+
+  if (game.bans.includes(idx)) return reply(interaction, "That combo is already banned.");
+
+  const newGame: GameState = { ...game, bans: [...game.bans, idx] };
+  const newPhase = phaseFor(newGame, session.playerAId, session.playerBId, pool.length);
+  let newState: MatchSessionState = session.state;
+  if (newPhase.kind === "PICK") {
+    newState = gameNum === 1 ? MatchSessionState.GAME_1_PICK
+      : gameNum === 2 ? MatchSessionState.GAME_2_PICK
+      : MatchSessionState.GAME_3_PICK;
+  }
+
+  const data: Prisma.MatchSessionUpdateManyMutationInput = {
+    [gameField]: JSON.stringify(newGame),
+    state: newState,
+  } as Prisma.MatchSessionUpdateManyMutationInput;
+  const updated = await updateSession(session, data);
+  if (!updated) return raceLost(interaction);
+  await refreshMessage(interaction, updated);
+}
 
 async function closeMatchThread(interaction: AnyInteraction, threadId: string | null): Promise<void> {
   if (!threadId) return;
@@ -249,59 +287,6 @@ async function handleChooseFirst(interaction: ButtonInteraction, session: MatchS
   const data: Prisma.MatchSessionUpdateManyMutationInput = isGame2
     ? { state: MatchSessionState.GAME_2_BAN, game2: JSON.stringify(emptyGameState(firstIdRaw)) }
     : { state: MatchSessionState.GAME_3_BAN, game3: JSON.stringify(emptyGameState(firstIdRaw)) };
-  const updated = await updateSession(session, data);
-  if (!updated) return raceLost(interaction);
-  await refreshMessage(interaction, updated);
-}
-
-// Batch ban handler — fired by a StringSelectMenu submission with all of
-// the player's bans for this step. Cuts Discord API traffic for a match
-// from 8 message edits to 4 (one per ban step + pick + winner per game).
-async function handleBanBatch(interaction: StringSelectMenuInteraction, session: MatchSession) {
-  const indices = interaction.values.map((v) => parseInt(v, 10));
-  if (indices.some((n) => Number.isNaN(n))) return reply(interaction, "Invalid selection.");
-
-  const gameNum =
-    session.state === "GAME_1_BAN" ? 1 :
-    session.state === "GAME_2_BAN" ? 2 :
-    session.state === "GAME_3_BAN" ? 3 : 0;
-  if (gameNum === 0) return reply(interaction, "Not in a ban phase.");
-
-  const gameField: "game1" | "game2" | "game3" = `game${gameNum}` as const;
-  const gameJson = session[gameField];
-  const game = parseGame(gameJson);
-  const pool = parsePool(session.pool);
-  if (!game) return reply(interaction, "Game state missing.");
-
-  const phase = phaseFor(game, session.playerAId, session.playerBId, pool.length);
-  if (phase.kind !== "BAN") return reply(interaction, "Not a ban phase.");
-
-  const actor = await prisma.player.findUniqueOrThrow({ where: { id: phase.whoseBanId } });
-  if (!(await requireActor(interaction, actor.discordId))) return;
-
-  if (indices.length !== phase.remainingForThem) {
-    return reply(interaction, `You need to pick exactly ${phase.remainingForThem} combo(s) to ban.`);
-  }
-  if (new Set(indices).size !== indices.length) {
-    return reply(interaction, "Can't ban the same combo twice.");
-  }
-  if (indices.some((i) => game.bans.includes(i))) {
-    return reply(interaction, "One of those combos was already banned.");
-  }
-
-  const newGame: GameState = { ...game, bans: [...game.bans, ...indices] };
-  const newPhase = phaseFor(newGame, session.playerAId, session.playerBId, pool.length);
-  let newState: MatchSessionState = session.state;
-  if (newPhase.kind === "PICK") {
-    newState = gameNum === 1 ? MatchSessionState.GAME_1_PICK
-      : gameNum === 2 ? MatchSessionState.GAME_2_PICK
-      : MatchSessionState.GAME_3_PICK;
-  }
-
-  const data: Prisma.MatchSessionUpdateManyMutationInput = {
-    [gameField]: JSON.stringify(newGame),
-    state: newState,
-  } as Prisma.MatchSessionUpdateManyMutationInput;
   const updated = await updateSession(session, data);
   if (!updated) return raceLost(interaction);
   await refreshMessage(interaction, updated);

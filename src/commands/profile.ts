@@ -1,5 +1,6 @@
 import {
   EmbedBuilder,
+  MessageFlags,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
 } from "discord.js";
@@ -26,7 +27,7 @@ export const profile: SlashCommand = {
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
-    await interaction.deferReply();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const user = interaction.options.getUser("player") ?? interaction.user;
     const player = await prisma.player.findUnique({ where: { discordId: user.id } });

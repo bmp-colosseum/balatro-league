@@ -1,5 +1,6 @@
 import {
   EmbedBuilder,
+  MessageFlags,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
 } from "discord.js";
@@ -14,7 +15,7 @@ export const schedule: SlashCommand = {
     .setDescription("Show your remaining matches in the current season."),
 
   async execute(interaction: ChatInputCommandInteraction) {
-    await interaction.deferReply();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const me = await getOrCreatePlayer(interaction.user);
     const activeSeason = await activePublicSeason();
