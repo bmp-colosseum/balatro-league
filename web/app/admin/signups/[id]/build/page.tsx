@@ -6,7 +6,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
 import { computeStandings } from "@/lib/standings";
-import { addSignupByDiscordId, buildSeason, refreshSignupMmrSnapshots, saveRatings } from "./actions";
+import { addSignupByDiscordId, autoFillRatingsFromMmr, buildSeason, refreshSignupMmrSnapshots, saveRatings } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -237,12 +237,20 @@ export default async function BuildSeasonPage({
         <div className="card">
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
             <strong>Player ratings ({playerCount} signed up)</strong>
-            <form action={refreshSignupMmrSnapshots}>
-              <input type="hidden" name="roundId" value={round.id} />
-              <button type="submit" className="secondary" style={{ fontSize: 12 }}>
-                Refresh BMP MMRs
-              </button>
-            </form>
+            <div style={{ display: "flex", gap: 6 }}>
+              <form action={autoFillRatingsFromMmr}>
+                <input type="hidden" name="roundId" value={round.id} />
+                <button type="submit" className="secondary" style={{ fontSize: 12 }}>
+                  Auto-fill ratings from BMP MMR
+                </button>
+              </form>
+              <form action={refreshSignupMmrSnapshots}>
+                <input type="hidden" name="roundId" value={round.id} />
+                <button type="submit" className="secondary" style={{ fontSize: 12 }}>
+                  Refresh BMP MMRs
+                </button>
+              </form>
+            </div>
           </div>
           <p className="muted">
             Sorted by BMP Ranked MMR (descending). For returners, "Last season"

@@ -424,6 +424,29 @@ export async function deleteSeason(formData: FormData) {
   redirect("/admin/seasons");
 }
 
+// Move one player from their current division (in this season) to a target
+// division. Wraps placePlayerInDivision so the transfer semantics + Discord
+// role bookkeeping are handled the same way as the bulk-import / add-by-id
+// flows. Used by the draft review UI on the season detail page.
+export async function moveDivisionMember(formData: FormData) {
+  await requireAdmin();
+  const seasonId = String(formData.get("seasonId") ?? "");
+  const playerId = String(formData.get("playerId") ?? "");
+  const targetDivisionId = String(formData.get("targetDivisionId") ?? "");
+  if (!seasonId || !playerId || !targetDivisionId) return;
+  // Belt-and-suspenders: confirm the target division actually belongs to
+  // this season. Prevents accidental cross-season transfers via crafted
+  // form posts.
+  const target = await prisma.division.findUnique({
+    where: { id: targetDivisionId },
+    select: { seasonId: true },
+  });
+  if (!target || target.seasonId !== seasonId) return;
+  const { placePlayerInDivision } = await import("@/lib/division-membership");
+  await placePlayerInDivision(targetDivisionId, playerId);
+  revalidatePath(`/admin/seasons/${seasonId}`);
+}
+
 export async function setSeasonVisibility(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id") ?? "");

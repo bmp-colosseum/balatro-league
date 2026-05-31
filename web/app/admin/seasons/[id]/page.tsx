@@ -14,6 +14,7 @@ import {
   configureTiers,
   deleteSeason,
   finalizeSignupsForSeason,
+  moveDivisionMember,
   openSignupsForSeason,
   renameSeason,
   setSeasonPreset,
@@ -240,9 +241,26 @@ export default async function SeasonDetailPage({
               <DiscordBootstrap season={season} />
             </div>
 
+            {/* Draft mode: inactive + un-ended season. Show ALL members per division
+                with a "Move to..." dropdown so admin can adjust auto-seeded placements
+                before starting the league. Active/ended seasons keep the top-3
+                standings preview below. */}
+            {!season.isActive && !season.endedAt && (
+              <div className="card" style={{ background: "rgba(241,196,15,0.08)", borderColor: "#f1c40f", marginTop: 12 }}>
+                <strong style={{ color: "#f1c40f" }}>📝 Draft mode</strong>
+                <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
+                  Review the auto-seeded placements below. Each player has a "Move
+                  to…" dropdown — use it to nudge people between divisions. Changes
+                  save immediately; you can leave and come back. When you're happy,
+                  click <strong>Activate season</strong> at the top to start the league.
+                </p>
+              </div>
+            )}
+
             {season.tiers.map((tier) => {
               const tierDivs = season.divisions.filter((d) => d.tierId === tier.id);
               const tc = tierColors(tier.position);
+              const isDraft = !season.isActive && !season.endedAt;
               return (
                 <div key={tier.id} style={{ marginTop: 12 }}>
                   <h4 style={{ margin: "8px 0 4px" }}>
@@ -253,6 +271,10 @@ export default async function SeasonDetailPage({
                       const standings = computeStandings(d.members.map((m) => m.player), d.pairings);
                       const top3 = standings.slice(0, 3);
                       const expectedSets = d.members.length < 2 ? 0 : (d.members.length * (d.members.length - 1)) / 2;
+                      // For draft mode: list of OTHER divisions in this season for the move dropdown.
+                      const moveTargets = isDraft
+                        ? season.divisions.filter((other) => other.id !== d.id)
+                        : [];
                       return (
                         <div key={d.id} className="card" style={{ margin: 0 }}>
                           <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
@@ -260,10 +282,45 @@ export default async function SeasonDetailPage({
                               <Link href={`/admin/divisions/${d.id}`} style={{ textDecoration: "none" }}>{d.name}</Link>
                             </strong>
                             <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
-                              {d.members.length}/{d.targetSize ?? season.targetGroupSize} · {d.pairings.length}/{expectedSets} sets
+                              {d.members.length}/{d.targetSize ?? season.targetGroupSize}
+                              {!isDraft && ` · ${d.pairings.length}/${expectedSets} sets`}
                             </span>
                           </div>
-                          {standings.length > 0 ? (
+                          {isDraft ? (
+                            d.members.length === 0 ? (
+                              <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>Empty division.</div>
+                            ) : (
+                              <table style={{ fontSize: 12, marginTop: 4, width: "100%" }}>
+                                <tbody>
+                                  {d.members.map((m) => (
+                                    <tr key={m.id}>
+                                      <td style={{ padding: "2px 4px 2px 0" }}>{m.player.displayName}</td>
+                                      <td style={{ padding: "2px 0", textAlign: "right" }}>
+                                        <form action={moveDivisionMember} style={{ display: "inline-flex", gap: 2 }}>
+                                          <input type="hidden" name="seasonId" value={season.id} />
+                                          <input type="hidden" name="playerId" value={m.player.id} />
+                                          <select
+                                            name="targetDivisionId"
+                                            required
+                                            defaultValue=""
+                                            style={{ fontSize: 11, padding: "1px 4px", maxWidth: 120 }}
+                                          >
+                                            <option value="" disabled>Move to…</option>
+                                            {moveTargets.map((t) => (
+                                              <option key={t.id} value={t.id}>{t.name}</option>
+                                            ))}
+                                          </select>
+                                          <button type="submit" className="secondary" style={{ fontSize: 11, padding: "1px 6px" }}>
+                                            Go
+                                          </button>
+                                        </form>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            )
+                          ) : standings.length > 0 ? (
                             <table style={{ fontSize: 12, marginTop: 4 }}>
                               <tbody>
                                 {top3.map((r, i) => (

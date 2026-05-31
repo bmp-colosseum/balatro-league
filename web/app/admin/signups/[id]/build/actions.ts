@@ -107,6 +107,62 @@ export async function refreshSignupMmrSnapshots(formData: FormData) {
   revalidatePath(`/admin/signups/${roundId}/build`);
 }
 
+// Pre-fill league ratings from each signup's latest BMP Ranked MMR snapshot.
+// Only touches players who DON'T already have a saved rating — won't clobber
+// admin overrides. Useful as a first-pass shortcut: click once and the
+// auto-seed has skill data for everyone, then admin nudges individuals.
+export async function autoFillRatingsFromMmr(formData: FormData) {
+  await requireAdmin();
+  const roundId = String(formData.get("roundId") ?? "");
+  if (!roundId) return;
+  const round = await prisma.signupRound.findUnique({
+    where: { id: roundId },
+    include: { signups: { where: { withdrawn: false } } },
+  });
+  if (!round) return;
+  const discordIds = round.signups.map((s) => s.discordId);
+  // Latest snapshot per signup (freshest capture wins).
+  const snapshots = await prisma.playerMmrSnapshot.findMany({
+    where: { discordId: { in: discordIds }, rankedMmr: { not: null } },
+    orderBy: { capturedAt: "desc" },
+    distinct: ["discordId"],
+  });
+  const mmrByDiscordId = new Map(snapshots.map((s) => [s.discordId, s.rankedMmr!]));
+  let filled = 0;
+  let skipped = 0;
+  for (const signup of round.signups) {
+    const mmr = mmrByDiscordId.get(signup.discordId);
+    if (mmr == null) { skipped++; continue; }
+    // Upsert Player row if missing — first-time signups won't have one yet.
+    // Existing Player rows: only set rating when null. Don't overwrite an
+    // admin's deliberate value.
+    const existing = await prisma.player.findUnique({ where: { discordId: signup.discordId } });
+    if (existing) {
+      if (existing.rating == null) {
+        await prisma.player.update({
+          where: { id: existing.id },
+          data: { rating: mmr, ratingNote: `Auto from BMP Ranked MMR snapshot` },
+        });
+        filled++;
+      } else {
+        skipped++;
+      }
+    } else {
+      await prisma.player.create({
+        data: {
+          discordId: signup.discordId,
+          displayName: signup.displayName,
+          rating: mmr,
+          ratingNote: `Auto from BMP Ranked MMR snapshot`,
+        },
+      });
+      filled++;
+    }
+  }
+  console.log(`[auto-fill-ratings] filled ${filled}, skipped ${skipped}/${round.signups.length}`);
+  revalidatePath(`/admin/signups/${roundId}/build`);
+}
+
 export async function saveRatings(formData: FormData) {
   await requireAdmin();
   const roundId = String(formData.get("roundId") ?? "");
