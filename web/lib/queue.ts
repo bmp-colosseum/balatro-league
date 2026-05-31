@@ -53,3 +53,17 @@ export async function enqueueDm(job: { discordId: string; content: string }): Pr
     retryBackoff: true,
   });
 }
+
+export async function enqueueBootstrapDivision(job: {
+  divisionId: string;
+  guildId: string;
+}): Promise<void> {
+  await ensureStarted();
+  // Lower retry count than DMs — a bootstrap failure usually means a
+  // missing permission or wrong guild id, not a transient hiccup, so
+  // hammering retries just delays the admin seeing the real error.
+  await getBoss().send("bootstrap.division", job, {
+    retryLimit: 1,
+    retryBackoff: true,
+  });
+}
