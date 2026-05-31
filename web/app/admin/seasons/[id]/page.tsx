@@ -21,6 +21,7 @@ import {
   setSeasonVisibility,
 } from "../actions";
 import { archiveSeasonChannels, bootstrapSeasonDiscord, setSeasonDiscordCategory, setSeasonResultsChannel, setSeasonResultsWebhook } from "../bootstrap-actions";
+import { cloneSeasonAsDraft } from "../clone-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -346,6 +347,23 @@ export default async function SeasonDetailPage({
               );
             })}
           </>
+        )}
+
+        {season.divisions.length > 0 && (
+          <div className="card" style={{ marginTop: 16 }}>
+            <strong>🌱 Clone to draft season</strong>
+            <p className="muted" style={{ fontSize: 12, margin: "4px 0 8px" }}>
+              Spin up a new <em>DRAFT</em> season seeded by this season's current standings —
+              top 1 of each division promoted up a tier, bottom 1 relegated, rest stay.
+              The clone is created INTERNAL so it stays admin-only; review/adjust in draft
+              mode, then activate (or delete) when you're done. Useful for previewing what
+              next season looks like without affecting the current one.
+            </p>
+            <form action={cloneSeasonAsDraft}>
+              <input type="hidden" name="sourceSeasonId" value={season.id} />
+              <button type="submit" className="secondary">Create draft from this season →</button>
+            </form>
+          </div>
         )}
 
         {season.endedAt && season.divisions.some((d) => d.discordChannelId) && (
