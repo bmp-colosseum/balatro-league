@@ -4,6 +4,7 @@ import { setDiscordClient } from "./discord.js";
 import { env } from "./env.js";
 import { startHealthCheck } from "./healthcheck.js";
 import { startMatchSweep } from "./match-sweep.js";
+import { initQueue } from "./queue.js";
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
@@ -80,3 +81,6 @@ setDiscordClient(client);
 startHealthCheck();
 startMatchSweep();
 await client.login(env.DISCORD_TOKEN);
+// Start the pg-boss worker AFTER the Discord client is logged in — DM
+// jobs need the client to send. Errors here don't abort the bot.
+initQueue().catch((err) => console.warn("[pg-boss] init failed:", err));

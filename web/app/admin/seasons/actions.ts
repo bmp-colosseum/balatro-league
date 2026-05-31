@@ -8,10 +8,10 @@ import {
   createChannelInvite,
   editChannelMessage,
   postChannelMessage,
-  sendDirectMessage,
   type ComponentActionRow,
   type MessageEmbed,
 } from "@/lib/discord";
+import { enqueueDm } from "@/lib/queue";
 import { computeRatingDeltas, type DivisionForRating } from "@/lib/end-season";
 import { computeStandings } from "@/lib/standings";
 
@@ -315,8 +315,10 @@ export async function openSignupsForSeason(formData: FormData) {
   revalidatePath("/admin/seasons");
 }
 
-// Async DM blast — skips silently if no subscribers. Tries to include a
-// server invite to the signup channel so non-members can join the guild.
+// Enqueue one DM per subscriber. The bot's pg-boss worker drains them
+// asynchronously, retrying failures and surviving crashes — so opening
+// signups never blocks on N round-trips to Discord and we don't lose
+// the blast mid-flight if the web service restarts.
 async function notifyNextSeasonSubscribers(seasonName: string, signupChannelId: string) {
   const subscribers = await prisma.seasonInterest.findMany();
   if (subscribers.length === 0) return;
@@ -325,14 +327,14 @@ async function notifyNextSeasonSubscribers(seasonName: string, signupChannelId: 
   const content =
     `🃏 **${seasonName}** signups just opened! Head to the signups channel and hit Sign Up to lock your spot.${inviteLine}\n\n` +
     `_You're getting this because you opted in to next-season notifications. Turn it off on your /me page anytime._`;
-  let delivered = 0;
-  let failed = 0;
-  for (const s of subscribers) {
-    const ok = await sendDirectMessage(s.discordId, { content });
-    if (ok) delivered++;
-    else failed++;
-  }
-  console.log(`[next-season-dm] delivered ${delivered}/${subscribers.length} (${failed} failed)`);
+  await Promise.all(
+    subscribers.map((s) =>
+      enqueueDm({ discordId: s.discordId, content }).catch((err) =>
+        console.warn(`[next-season-dm] enqueue failed for ${s.discordId}:`, err),
+      ),
+    ),
+  );
+  console.log(`[next-season-dm] queued ${subscribers.length} DMs`);
 }
 
 // Close (finalize) the signup round linked to a season AND update the
