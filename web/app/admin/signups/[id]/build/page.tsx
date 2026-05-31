@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
+import { computeStandings } from "@/lib/standings";
 import { addSignupByDiscordId, buildSeason, refreshSignupMmrSnapshots, saveRatings } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -68,14 +69,97 @@ export default async function BuildSeasonPage({
   });
   const playerByDiscordId = new Map(existingPlayers.map((p) => [p.discordId, p]));
 
-  // Latest balatromp.com snapshot per signed-up discord id. distinct() with
-  // orderBy(capturedAt desc) keeps just the freshest row per player.
-  const latestSnapshots = await prisma.playerMmrSnapshot.findMany({
-    where: { discordId: { in: discordIds } },
+  // All BMP MMR snapshots per signed-up discord id, ordered freshest first.
+  // We need the latest (current MMR) AND the 2nd-most-recent (prior season
+  // MMR) for the "X → Y" trend view, so a single query + JS group is cleaner
+  // than two distinct() queries.
+  const allSnapshots = discordIds.length === 0 ? [] : await prisma.playerMmrSnapshot.findMany({
+    where: { discordId: { in: discordIds }, rankedMmr: { not: null } },
     orderBy: { capturedAt: "desc" },
-    distinct: ["discordId"],
   });
-  const snapshotByDiscordId = new Map(latestSnapshots.map((s) => [s.discordId, s]));
+  const snapshotsByDiscordId = new Map<string, typeof allSnapshots>();
+  for (const s of allSnapshots) {
+    const arr = snapshotsByDiscordId.get(s.discordId) ?? [];
+    arr.push(s);
+    snapshotsByDiscordId.set(s.discordId, arr);
+  }
+  const snapshotByDiscordId = new Map(
+    Array.from(snapshotsByDiscordId.entries()).map(([did, arr]) => [did, arr[0]!] as const),
+  );
+  const priorSnapshotByDiscordId = new Map(
+    Array.from(snapshotsByDiscordId.entries())
+      .filter(([_, arr]) => arr.length >= 2)
+      .map(([did, arr]) => [did, arr[1]!] as const),
+  );
+
+  // For each returning player: load their most recent prior DivisionMember +
+  // the division's standings so we can show "Common 3 · #2/5 last season."
+  // Heavy-ish query but bounded (~80 returners across maybe ~20 divisions).
+  const returnerPlayerIds = existingPlayers.map((p) => p.id);
+  const priorMemberships = returnerPlayerIds.length === 0 ? [] : await prisma.divisionMember.findMany({
+    where: { playerId: { in: returnerPlayerIds }, status: "ACTIVE" },
+    include: {
+      division: {
+        include: {
+          tier: true,
+          season: { select: { id: true, name: true, startedAt: true } },
+          members: { where: { status: "ACTIVE" }, include: { player: true } },
+          pairings: {
+            where: { status: "CONFIRMED" },
+            select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
+          },
+        },
+      },
+    },
+  });
+  // Pick the most-recent membership per player (by season.startedAt desc).
+  const mostRecentMembershipByPlayerId = new Map<string, typeof priorMemberships[0]>();
+  for (const m of priorMemberships) {
+    const cur = mostRecentMembershipByPlayerId.get(m.playerId);
+    if (!cur || m.division.season.startedAt > cur.division.season.startedAt) {
+      mostRecentMembershipByPlayerId.set(m.playerId, m);
+    }
+  }
+  // Compute standings ONCE per unique division (lots of players might share one).
+  interface PriorInfo {
+    rank: number;
+    totalMembers: number;
+    divisionName: string;
+    tierName: string;
+    seasonName: string;
+    seasonStartedAt: Date;
+  }
+  const priorByPlayerId = new Map<string, PriorInfo>();
+  const standingsByDivisionId = new Map<string, ReturnType<typeof computeStandings>>();
+  for (const m of mostRecentMembershipByPlayerId.values()) {
+    const div = m.division;
+    let rows = standingsByDivisionId.get(div.id);
+    if (!rows) {
+      rows = computeStandings(div.members.map((mm) => mm.player), div.pairings);
+      standingsByDivisionId.set(div.id, rows);
+    }
+    const rank = rows.findIndex((r) => r.player.id === m.playerId) + 1;
+    priorByPlayerId.set(m.playerId, {
+      rank: rank || 0,
+      totalMembers: div.members.length,
+      divisionName: div.name,
+      tierName: div.tier.name,
+      seasonName: div.season.name,
+      seasonStartedAt: div.season.startedAt,
+    });
+  }
+  // Count seasons each returner skipped (ended seasons after their prior
+  // season). >=1 = "gap returner" — surface visually so admin knows to
+  // give those a fresh look rather than auto-trusting old standings.
+  const endedSeasons = await prisma.season.findMany({
+    where: { endedAt: { not: null } },
+    select: { startedAt: true },
+  });
+  const skippedByPlayerId = new Map<string, number>();
+  for (const [pid, info] of priorByPlayerId) {
+    const skipped = endedSeasons.filter((s) => s.startedAt > info.seasonStartedAt).length;
+    skippedByPlayerId.set(pid, skipped);
+  }
 
   // Render signups sorted by BMP Ranked MMR DESC so admin sees the top of
   // the ladder first when seeding. Unrated (no snapshot or fetch failed)
@@ -161,10 +245,10 @@ export default async function BuildSeasonPage({
             </form>
           </div>
           <p className="muted">
-            Sorted by BMP Ranked MMR (descending). Higher Rating = better; empty Rating
-            = unrated (treated as lowest in auto-seed). Snapshots auto-capture at
-            signup-close and refresh daily for current participants; click the button
-            for an ad-hoc refresh. Save ratings before building.
+            Sorted by BMP Ranked MMR (descending). For returners, "Last season"
+            shows their finishing rank — the strongest single signal you have for
+            placement. BMP MMR trend ("current → prior") flags players who improved
+            or slipped between seasons. Save ratings before building.
           </p>
           <form action={saveRatings}>
             <input type="hidden" name="roundId" value={round.id} />
@@ -173,17 +257,21 @@ export default async function BuildSeasonPage({
                 <tr>
                   <th>Player</th>
                   <th>Status</th>
+                  <th>Last season</th>
                   <th>BMP Ranked MMR</th>
                   <th style={{ width: 120 }}>Rating</th>
                 </tr>
               </thead>
               <tbody>
                 {sortedSignups.length === 0 ? (
-                  <tr><td colSpan={4} className="muted">No signups in this round.</td></tr>
+                  <tr><td colSpan={5} className="muted">No signups in this round.</td></tr>
                 ) : sortedSignups.map((s) => {
                   const player = playerByDiscordId.get(s.discordId);
                   const isReturning = !!player;
+                  const prior = player ? priorByPlayerId.get(player.id) : undefined;
+                  const skipped = player ? skippedByPlayerId.get(player.id) ?? 0 : 0;
                   const snapshot = snapshotByDiscordId.get(s.discordId);
+                  const priorSnap = priorSnapshotByDiscordId.get(s.discordId);
                   return (
                     <tr key={s.id}>
                       <td>
@@ -191,20 +279,47 @@ export default async function BuildSeasonPage({
                         <span className="muted" style={{ fontSize: 11 }}>{s.discordId}</span>
                       </td>
                       <td>
-                        {isReturning ? (
-                          <span className="pill" style={{ background: "rgba(52,152,219,0.2)", color: "#76c7ff" }}>
-                            Returning
-                          </span>
-                        ) : (
+                        {!isReturning ? (
                           <span className="pill" style={{ background: "rgba(241,196,15,0.2)", color: "#f1c40f" }}>
                             New
                           </span>
+                        ) : skipped >= 1 ? (
+                          <span
+                            className="pill"
+                            style={{ background: "rgba(241,196,15,0.2)", color: "#f1c40f" }}
+                            title={`Played ${skipped + 1} season${skipped > 0 ? "s" : ""} ago, skipped the last ${skipped}`}
+                          >
+                            Gap · skipped {skipped}
+                          </span>
+                        ) : (
+                          <span className="pill" style={{ background: "rgba(52,152,219,0.2)", color: "#76c7ff" }}>
+                            Returning
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ fontSize: 12 }}>
+                        {prior ? (
+                          <span>
+                            <strong>{prior.divisionName}</strong>{" "}
+                            <span className="muted">
+                              · #{prior.rank}/{prior.totalMembers}
+                              {skipped >= 1 ? ` (${skipped + 1}s ago)` : ""}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="muted">—</span>
                         )}
                       </td>
                       <td style={{ fontSize: 12 }}>
                         {snapshot && snapshot.rankedMmr != null ? (
                           <span>
-                            <strong>{snapshot.rankedMmr}</strong>{" "}
+                            <strong>{snapshot.rankedMmr}</strong>
+                            {priorSnap && priorSnap.rankedMmr != null && priorSnap.rankedMmr !== snapshot.rankedMmr && (
+                              <span className="muted" style={{ fontSize: 11 }}>
+                                {" "}← {priorSnap.rankedMmr}
+                              </span>
+                            )}
+                            {" "}
                             <span className="muted">
                               ({snapshot.rankedTier} · {snapshot.totalGames}g · {snapshot.winRatePct}%)
                             </span>
