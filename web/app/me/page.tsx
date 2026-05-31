@@ -13,12 +13,12 @@ export const dynamic = "force-dynamic";
 export default async function MePage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; err?: string; fbOk?: string; fbErr?: string }>;
+  searchParams: Promise<{ ok?: string; err?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/auth/signin");
 
-  const { ok, err, fbOk, fbErr } = await searchParams;
+  const { ok, err } = await searchParams;
 
   const user = session.user as {
     discordId: string;
@@ -120,26 +120,6 @@ export default async function MePage({
     revalidatePath("/me");
   }
 
-  async function submitFeedbackAction(formData: FormData) {
-    "use server";
-    const { createFeedbackIssue } = await import("@/lib/github-issues");
-    const session = await auth();
-    const u = session?.user as { discordId?: string; name?: string } | undefined;
-    const title = String(formData.get("title") ?? "").trim();
-    const description = String(formData.get("description") ?? "").trim();
-    if (!title || !description) redirect("/me?fbErr=Title and description required");
-    const body = [
-      description,
-      "",
-      "---",
-      `Reported by **${u?.name ?? "anonymous"}** (Discord: \`${u?.discordId ?? "n/a"}\`)`,
-      `Submitted via /me on www.balatroleague.com`,
-    ].join("\n");
-    const r = await createFeedbackIssue({ title, body, labels: ["from-website"] });
-    if (!r.ok) redirect(`/me?fbErr=${encodeURIComponent(r.reason)}`);
-    redirect(`/me?fbOk=${encodeURIComponent(r.url)}`);
-  }
-
   async function subscribeNextSeason() {
     "use server";
     const session = await auth();
@@ -224,28 +204,6 @@ export default async function MePage({
             {err}
           </div>
         )}
-
-        <div className="card">
-          <strong>Report a bug / suggest a feature</strong>
-          <p className="muted" style={{ fontSize: 12 }}>
-            Posts to the public feedback tracker. Your Discord username gets attached so we can follow up.
-          </p>
-          {fbOk && (
-            <div className="muted" style={{ color: "#2ecc71", fontSize: 12, marginBottom: 6 }}>
-              ✓ Filed — <a href={fbOk} target="_blank" rel="noreferrer">view on GitHub</a>
-            </div>
-          )}
-          {fbErr && (
-            <div className="muted" style={{ color: "#e74c3c", fontSize: 12, marginBottom: 6 }}>
-              {fbErr}
-            </div>
-          )}
-          <form action={submitFeedbackAction} style={{ display: "grid", gap: 6 }}>
-            <input type="text" name="title" placeholder="Short title (e.g. 'Standings overflows on mobile')" required maxLength={200} />
-            <textarea name="description" placeholder="What happened? What did you expect? Steps to reproduce if it's a bug." required rows={4} style={{ fontFamily: "inherit" }} />
-            <button type="submit" style={{ justifySelf: "start" }}>Submit feedback</button>
-          </form>
-        </div>
 
         <div className="card">
           <strong>Next-season notifications</strong>
