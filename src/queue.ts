@@ -38,6 +38,11 @@ export async function initQueue(): Promise<void> {
   });
   boss.on("error", (err: Error) => console.warn("[pg-boss] error:", err));
   await boss.start();
+  // pg-boss v12 no longer auto-creates queues on first work()/send(). Have
+  // to declare every queue we use here; createQueue is idempotent so safe
+  // to run every boot.
+  await boss.createQueue("notify.dm");
+  await boss.createQueue("bootstrap.division");
   console.log("[pg-boss] queue started");
 
   // Worker: send a DM to one user. Retried automatically on failure.
