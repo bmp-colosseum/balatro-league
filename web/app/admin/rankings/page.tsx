@@ -20,6 +20,17 @@ export default async function AdminRankingsPage() {
     orderBy: [{ rating: { sort: "desc", nulls: "last" } }, { displayName: "asc" }],
   });
 
+  // Latest BMP MMR snapshot per player (any season — we want whatever's
+  // most current, regardless of which season it was tied to).
+  const latestSnapshots = await prisma.playerMmrSnapshot.findMany({
+    where: { playerId: { in: players.map((p) => p.id) } },
+    orderBy: { capturedAt: "desc" },
+    distinct: ["playerId"],
+  });
+  const snapshotByPlayerId = new Map(
+    latestSnapshots.filter((s) => s.playerId).map((s) => [s.playerId!, s] as const),
+  );
+
   return (
     <>
       <SiteNav activePath="/admin" />
@@ -58,14 +69,16 @@ export default async function AdminRankingsPage() {
                 <th>Player</th>
                 <th>Discord ID</th>
                 <th>Current division</th>
+                <th>BMP MMR</th>
                 <th>Rating (note)</th>
               </tr>
             </thead>
             <tbody>
               {players.length === 0 ? (
-                <tr><td colSpan={4} className="muted">No players yet.</td></tr>
+                <tr><td colSpan={5} className="muted">No players yet.</td></tr>
               ) : players.map((p) => {
                 const div = p.memberships[0]?.division;
+                const snap = snapshotByPlayerId.get(p.id);
                 return (
                   <tr key={p.id}>
                     <td>
@@ -75,6 +88,16 @@ export default async function AdminRankingsPage() {
                     <td>
                       {div ? (
                         <TierPill name={div.name} position={div.tier.position} />
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                    <td style={{ fontSize: 12 }}>
+                      {snap?.rankedMmr != null ? (
+                        <span>
+                          <strong>{snap.rankedMmr}</strong>{" "}
+                          <span className="muted">({snap.rankedTier})</span>
+                        </span>
                       ) : (
                         <span className="muted">—</span>
                       )}

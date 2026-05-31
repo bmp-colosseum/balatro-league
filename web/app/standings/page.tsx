@@ -28,6 +28,21 @@ export default async function StandingsPage() {
     },
   });
 
+  // Latest BMP MMR snapshot per player in this season (any season really —
+  // pick the freshest captured row for each playerId). Empty map if there
+  // are no snapshots yet; rows render '—' in that case.
+  const allPlayerIds = season?.tiers.flatMap((t) =>
+    t.divisions.flatMap((d) => d.members.map((m) => m.playerId)),
+  ) ?? [];
+  const latestSnapshots = allPlayerIds.length === 0 ? [] : await prisma.playerMmrSnapshot.findMany({
+    where: { playerId: { in: allPlayerIds } },
+    orderBy: { capturedAt: "desc" },
+    distinct: ["playerId"],
+  });
+  const mmrByPlayerId = new Map(
+    latestSnapshots.filter((s) => s.playerId && s.rankedMmr != null).map((s) => [s.playerId!, s.rankedMmr!] as const),
+  );
+
   return (
     <>
       <SiteNav activePath="/standings" />
@@ -66,12 +81,13 @@ export default async function StandingsPage() {
                               <th>Pts</th>
                               <th>W-D-L</th>
                               <th>Games</th>
+                              <th title="BMP Ranked MMR from balatromp.com">BMP MMR</th>
                             </tr>
                           </thead>
                           <tbody>
                             {rows.length === 0 ? (
                               <tr>
-                                <td colSpan={5} className="muted">No sets played yet.</td>
+                                <td colSpan={6} className="muted">No sets played yet.</td>
                               </tr>
                             ) : (
                               rows.map((r, i) => {
@@ -81,6 +97,7 @@ export default async function StandingsPage() {
                                     {r.player.displayName}
                                   </Link>
                                 );
+                                const mmr = mmrByPlayerId.get(r.player.id);
                                 return (
                                   <tr key={r.player.id}>
                                     <td>{medal}</td>
@@ -88,6 +105,7 @@ export default async function StandingsPage() {
                                     <td><strong>{r.points}</strong></td>
                                     <td>{r.wins}-{r.draws}-{r.losses}</td>
                                     <td>{r.gamesWon}-{r.gamesLost}</td>
+                                    <td>{mmr != null ? mmr : <span className="muted">—</span>}</td>
                                   </tr>
                                 );
                               })
