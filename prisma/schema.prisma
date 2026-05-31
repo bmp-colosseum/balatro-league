@@ -212,6 +212,17 @@ enum PermissionTier {
   MOD     // dispute resolution, light moderation
 }
 
+// Global key-value config for the bot — things like the results-webhook
+// URL that need to be admin-editable at runtime without an env-var redeploy.
+// Kept generic so we can stash more values here later (announce category,
+// etc.) without a migration per setting.
+model LeagueConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+  updatedBy String?  // Discord ID of whoever set it
+}
+
 // Opt-in list for next-season notifications. Bot DMs every entry when
 // admin opens a new signup round. Decoupled from Player so non-league
 // members (who logged in but never joined) can also subscribe.

@@ -24,6 +24,9 @@ const ADMIN_COMMANDS = [
   { cmd: "/league set-role tier role", desc: "Bind a Discord role to ADMIN/MOD/OWNER tier" },
   { cmd: "/league unset-role role", desc: "Remove a role's permission binding" },
   { cmd: "/league list-roles", desc: "Show every role currently bound to a tier" },
+  { cmd: "/league setup-results-webhook", desc: "Auto-create a webhook for results announces (needs Manage Webhooks)" },
+  { cmd: "/league set-results-webhook url:<url>", desc: "Paste an existing webhook URL for results announces" },
+  { cmd: "/league unset-results-webhook", desc: "Stop using a webhook for results announces" },
 ];
 
 export const help: SlashCommand = {

@@ -3,14 +3,19 @@
 // the web dashboard at www.balatroleague.com.
 
 import {
+  ChannelType,
   MessageFlags,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
+  type TextChannel,
 } from "discord.js";
 import { PermissionTier } from "@prisma/client";
 import { prisma } from "../db.js";
+import { clearConfig, LeagueConfigKey, setConfig } from "../league-config.js";
 import { requireOwner } from "../permissions.js";
 import type { SlashCommand } from "./types.js";
+
+const WEBHOOK_URL_RE = /^https:\/\/(discord\.com|discordapp\.com)\/api\/(v\d+\/)?webhooks\/\d+\/[\w-]+$/;
 
 export const league: SlashCommand = {
   data: new SlashCommandBuilder()
@@ -55,16 +60,44 @@ export const league: SlashCommand = {
       sub
         .setName("list-roles")
         .setDescription("Show all roles bound to bot permission tiers."),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("setup-results-webhook")
+        .setDescription("Auto-create a webhook in this channel for the results announces. Owner only.")
+        .addChannelOption((opt) =>
+          opt
+            .setName("channel")
+            .setDescription("Channel for the results webhook (defaults to current channel)")
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(false),
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("set-results-webhook")
+        .setDescription("Paste an existing webhook URL to use for results announces. Owner only.")
+        .addStringOption((opt) =>
+          opt.setName("url").setDescription("Webhook URL (from Discord channel Integrations)").setRequired(true),
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("unset-results-webhook")
+        .setDescription("Stop using a webhook for results announces (falls back to bot REST). Owner only."),
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
     const sub = interaction.options.getSubcommand();
     if (sub === "list-roles") return listRoles(interaction);
-    // Owner-only for state-changing role-binding + bootstrap
+    // Owner-only for state-changing role-binding + bootstrap + webhook config
     if (!(await requireOwner(interaction))) return;
     if (sub === "bootstrap-server") return bootstrapServer(interaction);
     if (sub === "set-role") return setRole(interaction);
     if (sub === "unset-role") return unsetRole(interaction);
+    if (sub === "setup-results-webhook") return setupResultsWebhook(interaction);
+    if (sub === "set-results-webhook") return setResultsWebhook(interaction);
+    if (sub === "unset-results-webhook") return unsetResultsWebhook(interaction);
   },
 };
 
@@ -270,4 +303,61 @@ async function listRoles(interaction: ChatInputCommandInteraction) {
   }
   const lines = bindings.map((b) => `  • **${b.tier}** — <@&${b.discordRoleId}>`);
   await interaction.editReply(["**Role bindings**", ...lines].join("\n"));
+}
+
+// Auto-create a webhook in the chosen channel and store its URL.
+// Needs the bot to have Manage Webhooks in that channel.
+async function setupResultsWebhook(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const channelArg = interaction.options.getChannel("channel");
+  const channelId = channelArg?.id ?? interaction.channelId;
+  if (!channelId) {
+    await interaction.editReply("Run this in a text channel, or pass `channel:`.");
+    return;
+  }
+  try {
+    const channel = await interaction.client.channels.fetch(channelId);
+    if (!channel || channel.type !== ChannelType.GuildText) {
+      await interaction.editReply("That isn't a text channel.");
+      return;
+    }
+    const wh = await (channel as TextChannel).createWebhook({
+      name: "Match Results",
+      reason: `Created by /league setup-results-webhook (by ${interaction.user.tag})`,
+    });
+    if (!wh.url) {
+      await interaction.editReply("Discord didn't return a webhook URL. Try `/league set-results-webhook url:...` manually.");
+      return;
+    }
+    await setConfig(LeagueConfigKey.ResultsWebhookUrl, wh.url, interaction.user.id);
+    await interaction.editReply(
+      `✅ Results announces will now post in <#${channelId}> via webhook \`${wh.name}\`.\n` +
+        `(URL stored in the DB — not shown here.)`,
+    );
+  } catch (err) {
+    await interaction.editReply(
+      `Couldn't create the webhook: ${(err as Error).message}\n` +
+        `Either grant the bot **Manage Webhooks** in that channel, or create one in **Channel Settings → Integrations → Webhooks**, then paste the URL with \`/league set-results-webhook url:...\`.`,
+    );
+  }
+}
+
+// Manual paste — admin made the webhook themselves via the Discord UI.
+async function setResultsWebhook(interaction: ChatInputCommandInteraction) {
+  const url = interaction.options.getString("url", true).trim();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  if (!WEBHOOK_URL_RE.test(url)) {
+    await interaction.editReply("That doesn't look like a Discord webhook URL. Expected `https://discord.com/api/webhooks/.../...`");
+    return;
+  }
+  await setConfig(LeagueConfigKey.ResultsWebhookUrl, url, interaction.user.id);
+  await interaction.editReply("✅ Results webhook URL saved. (Not echoed back — keep the URL secret.)");
+}
+
+async function unsetResultsWebhook(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  await clearConfig(LeagueConfigKey.ResultsWebhookUrl);
+  await interaction.editReply(
+    `Cleared. Results announces will fall back to bot REST via \`RESULTS_CHANNEL_ID\` env var (if set).`,
+  );
 }

@@ -15,9 +15,13 @@ import { ChannelType, EmbedBuilder, type TextChannel } from "discord.js";
 import { prisma } from "./db.js";
 import { tryGetDiscordClient } from "./discord.js";
 import { env } from "./env.js";
+import { getConfig, LeagueConfigKey } from "./league-config.js";
 
 export async function announceResult(pairingId: string): Promise<void> {
-  if (!env.RESULTS_WEBHOOK_URL && !env.RESULTS_CHANNEL_ID) return;
+  // Webhook URL precedence: DB (set via /league setup-results-webhook) →
+  // env var. DB wins so admin can change at runtime without a redeploy.
+  const webhookUrl = (await getConfig(LeagueConfigKey.ResultsWebhookUrl)) || env.RESULTS_WEBHOOK_URL;
+  if (!webhookUrl && !env.RESULTS_CHANNEL_ID) return;
 
   const pairing = await prisma.pairing.findUnique({
     where: { id: pairingId },
@@ -51,9 +55,9 @@ export async function announceResult(pairingId: string): Promise<void> {
     .setTimestamp(new Date());
 
   // Prefer webhook — keeps announces out of the bot's global rate limit pool.
-  if (env.RESULTS_WEBHOOK_URL) {
+  if (webhookUrl) {
     try {
-      const res = await fetch(env.RESULTS_WEBHOOK_URL, {
+      const res = await fetch(webhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ embeds: [embed.toJSON()] }),
