@@ -45,14 +45,6 @@ th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--bor
 th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
 tr:hover { background: var(--surface-2); }
 
-/* Standings tables — pack densely so they fit comfortably. Numeric cols
-   nowrap so 'W-D-L' / game totals never wrap awkwardly; the player-name
-   column expands freely. Card scrolls horizontally as a safety net. */
-.card table { font-size: 13px; }
-.card table th, .card table td { padding: 4px 8px; }
-.card table th:not(:nth-child(2)),
-.card table td:not(:nth-child(2)) { white-space: nowrap; text-align: right; }
-.card { overflow-x: auto; }
 
 .pill {
   display: inline-block;
