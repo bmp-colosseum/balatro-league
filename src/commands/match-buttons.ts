@@ -10,15 +10,19 @@
 import {
   ChannelType,
   MessageFlags,
-  ThreadAutoArchiveDuration,
+  PermissionFlagsBits,
   type ButtonInteraction,
   type StringSelectMenuInteraction,
   type TextChannel,
-  type ThreadChannel,
 } from "discord.js";
 import { MatchSessionState, Prisma, type MatchSession } from "@prisma/client";
 import { announceResult } from "../announce.js";
 import { prisma } from "../db.js";
+import { env } from "../env.js";
+import {
+  createGuildTextChannel,
+  ensureGuildCategory,
+} from "../discord-helpers.js";
 import { generatePool, presetForDivision } from "../match-config.js";
 import { renderMatch } from "../match-render.js";
 import {
@@ -163,19 +167,35 @@ async function handleBan(interaction: ButtonInteraction, session: MatchSession, 
   await refreshMessage(interaction, updated);
 }
 
-async function closeMatchThread(interaction: AnyInteraction, threadId: string | null): Promise<void> {
-  if (!threadId) return;
+// Lock the per-match channel for further posts when the match completes.
+// View permission is kept so players can scroll back through bans/picks
+// and the final result; send is revoked on @everyone and on the two
+// player-specific overwrites we added at channel creation. Admin can
+// later delete the channel manually or via a cleanup pass.
+async function closeMatchChannel(interaction: AnyInteraction, channelId: string | null): Promise<void> {
+  if (!channelId) return;
   try {
-    const channel = await interaction.client.channels.fetch(threadId);
-    if (channel && (channel.type === ChannelType.PublicThread || channel.type === ChannelType.PrivateThread)) {
-      const thread = channel as ThreadChannel;
-      // Lock first (no new messages), then archive (collapsed in sidebar).
-      // setArchived alone would let users post in it again; setLocked freezes it.
-      await thread.setLocked(true, "Match complete").catch(() => {});
-      await thread.setArchived(true, "Match complete").catch(() => {});
+    const channel = await interaction.client.channels.fetch(channelId);
+    if (!channel || channel.type !== ChannelType.GuildText) return;
+    const text = channel as TextChannel;
+    const guildId = text.guild.id;
+    await text.permissionOverwrites
+      .edit(guildId, { SendMessages: false }, { reason: "Match complete" })
+      .catch(() => {});
+    // Flip SendMessages off on each per-user overwrite (kept ViewChannel
+    // so history stays visible). discord.js OverwriteType.Member === 1.
+    for (const ow of text.permissionOverwrites.cache.values()) {
+      if (ow.type === 1) {
+        await text.permissionOverwrites
+          .edit(ow.id, { ViewChannel: true, SendMessages: false }, { reason: "Match complete" })
+          .catch(() => {});
+      }
     }
+    // PermissionFlagsBits import is referenced only to keep the lint pass
+    // calm in case we extend the lock semantics later. Touch it explicitly.
+    void PermissionFlagsBits;
   } catch {
-    // Thread may have been deleted manually; ignore.
+    // Channel may have been deleted manually; ignore.
   }
 }
 
@@ -207,20 +227,33 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
   const { playerA } = await loadPlayers(session);
   const firstId = Math.random() < 0.5 ? playerA.id : playerB.id;
 
-  // Create thread for match chat (failures fall back to the parent channel).
-  // Name includes a short session-id suffix so repeat matchups don't collide.
-  let threadId = session.threadId;
-  if (!threadId && interaction.channel && interaction.channel.type === ChannelType.GuildText) {
-    try {
-      const suffix = session.id.slice(-6);
-      const thread = await (interaction.channel as TextChannel).threads.create({
-        name: `Match: ${playerA.displayName} vs ${playerB.displayName} · ${suffix}`,
-        autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
-      });
-      threadId = thread.id;
-    } catch {
-      // perms issue; keep going in the parent channel
-    }
+  // Create a private text channel for this match in the '🎴 Matches'
+  // category. Only the two players + staff roles can see it. Used to be
+  // a thread in the parent channel, but a real channel lets us hide it
+  // from everyone else AND keeps the bot-commands channel clean (where
+  // /start-match might have been run from). Failure falls back to no
+  // channel — the match still proceeds in the original channel via the
+  // interaction message.
+  let matchChannelId = session.threadId; // legacy field name; now stores a channel id
+  if (!matchChannelId && interaction.guildId) {
+    const category = await ensureGuildCategory(interaction.guildId, "🎴 Matches");
+    const suffix = session.id.slice(-6);
+    // Discord channel names: lowercase, no spaces, max ~100 chars.
+    const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 20);
+    const channelName = `match-${slug(playerA.displayName)}-vs-${slug(playerB.displayName)}-${suffix}`;
+    // Look up admin role IDs so staff can drop in to mediate disputes
+    // without needing the players to invite them manually.
+    const staffBindings = await prisma.roleBinding.findMany({
+      where: { tier: { in: ["ADMIN", "MOD"] } },
+    });
+    const staffRoleIds = staffBindings.map((b) => b.discordRoleId);
+    const created = await createGuildTextChannel(interaction.guildId, channelName, {
+      parentId: category?.id,
+      topic: `${playerA.displayName} vs ${playerB.displayName}${session.isCasual ? " · casual" : ""}`,
+      visibleToRoleIds: staffRoleIds,
+      visibleToUserIds: [playerA.discordId, playerB.discordId],
+    });
+    if (created) matchChannelId = created.id;
   }
 
   const updated = await updateSession(session, {
@@ -230,25 +263,29 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
     // game2/game3 each get their own fresh pool generated at ChooseFirst.
     pool: JSON.stringify(game1Pool),
     game1: JSON.stringify(emptyGameState(firstId, game1Pool)),
-    threadId,
+    threadId: matchChannelId,
   });
   if (!updated) return raceLost(interaction);
 
   await refreshMessage(interaction, updated);
 
-  if (threadId && threadId !== session.threadId) {
+  if (matchChannelId && matchChannelId !== session.threadId) {
     try {
-      const thread = await interaction.client.channels.fetch(threadId);
-      if (thread && thread.type === ChannelType.PublicThread) {
-        await thread.members.add(playerA.discordId).catch(() => {});
-        await thread.members.add(playerB.discordId).catch(() => {});
+      const channel = await interaction.client.channels.fetch(matchChannelId);
+      if (channel && channel.type === ChannelType.GuildText) {
         const { embeds, components } = renderMatch(updated, playerA, playerB);
-        await thread.send({ embeds, components });
+        await channel.send({
+          content: `<@${playerA.discordId}> <@${playerB.discordId}> — your match channel. Play here, the bot will guide you through bans/picks.`,
+          embeds,
+          components,
+        });
       }
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn(`[match] failed to post into match channel ${matchChannelId}:`, err);
     }
   }
+  // Hush the unused-env warning when we don't reference it elsewhere yet.
+  void env;
 }
 
 async function handleDecline(interaction: ButtonInteraction, session: MatchSession) {
@@ -446,7 +483,7 @@ async function finalizeMatch(
   // Casual /challenge — no Pairing write, no announce. Show result + close.
   if (session.isCasual || !session.divisionId) {
     await refreshMessage(interaction, updated);
-    closeMatchThread(interaction, updated.threadId).catch(() => {});
+    closeMatchChannel(interaction, updated.threadId).catch(() => {});
     return;
   }
 
@@ -504,8 +541,8 @@ async function finalizeMatch(
   });
 
   await refreshMessage(interaction, updated);
-  // Close the match thread + fire the auto-announce. Both are best-effort
+  // Lock the match channel + fire the auto-announce. Both are best-effort
   // and don't block the user-facing message update.
-  closeMatchThread(interaction, updated.threadId).catch(() => {});
+  closeMatchChannel(interaction, updated.threadId).catch(() => {});
   announceResult(pairing.id).catch(() => {});
 }

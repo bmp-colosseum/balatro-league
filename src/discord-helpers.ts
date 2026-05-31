@@ -72,16 +72,33 @@ export async function ensureGuildCategory(
 export async function createGuildTextChannel(
   guildId: string,
   name: string,
-  opts?: { parentId?: string; topic?: string; visibleToRoleIds?: string[] },
+  opts?: {
+    parentId?: string;
+    topic?: string;
+    visibleToRoleIds?: string[];
+    // Specific guild members who get view + send. Used for per-match
+    // private channels — same effect as visibleToRoleIds but scoped to
+    // individual users instead of a role. discord.js infers OverwriteType
+    // by snowflake but we pass it explicitly to avoid ambiguity.
+    visibleToUserIds?: string[];
+  },
 ): Promise<{ id: string } | null> {
   try {
     const guild = await getGuild(guildId);
-    const visible = opts?.visibleToRoleIds?.filter(Boolean) ?? [];
-    const permissionOverwrites = visible.length > 0
+    const visibleRoles = opts?.visibleToRoleIds?.filter(Boolean) ?? [];
+    const visibleUsers = opts?.visibleToUserIds?.filter(Boolean) ?? [];
+    const hasAnyOverwrite = visibleRoles.length > 0 || visibleUsers.length > 0;
+    const permissionOverwrites = hasAnyOverwrite
       ? [
-          { id: guildId, deny: [PermissionFlagsBits.ViewChannel] },
-          ...visible.map((id) => ({
+          { id: guildId, type: 0 as const, deny: [PermissionFlagsBits.ViewChannel] },
+          ...visibleRoles.map((id) => ({
             id,
+            type: 0 as const,
+            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+          })),
+          ...visibleUsers.map((id) => ({
+            id,
+            type: 1 as const,
             allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
           })),
         ]
