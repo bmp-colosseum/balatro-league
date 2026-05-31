@@ -135,38 +135,45 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     const resultsChan = await ensureChannel("results", "Auto-posted by the bot whenever a set is recorded.");
     const chatChan = await ensureChannel("league-chat", "General league chat. Match scheduling, banter, etc.");
 
-    // If #league-info is freshly created, drop a pinned 'how it works' so
-    // every new member sees the rules + slash commands at a glance.
-    if (justCreated.has(infoChan.id)) {
-      const intro = [
-        "# 🃏 Welcome to the league",
-        "",
-        "**How it works**",
-        "• Each season splits players into tiers + divisions by rating.",
-        "• Inside a division it's round-robin: you play everyone once, best-of-2 set.",
-        "• Top finishers promote up a tier; bottom finishers drop down.",
-        "",
-        "**Scoring**",
-        "• `2-0` win → **3 pts** winner, 0 loser",
-        "• `1-1` draw → **1 pt** each",
-        "• Standings sort: points → wins → draws.",
-        "",
-        "**Slash commands**",
-        "• `/standings` — current division table",
-        "• `/profile` — your match history & ranks",
-        "• `/schedule` — sets you still need to play",
-        "• `/start-match @opponent` — guided ban/pick flow (bot picks the deck/stake)",
-        "• `/report @opponent result:2-0` — log a played set (auto-confirmed)",
-        "• `/help` — full command list",
-        "",
-        "**Website:** <https://www.balatroleague.com> — standings, profiles, signup, settings.",
-      ].join("\n");
-      try {
+    // Always (re-)seed #league-info with a pinned 'how it works' message.
+    // If the bot already pinned one, edit it in place so re-running bootstrap
+    // refreshes the content; otherwise post + pin a new one. Idempotent.
+    const intro = [
+      "# 🃏 Welcome to the league",
+      "",
+      "**How it works**",
+      "• Each season splits players into tiers + divisions by rating.",
+      "• Inside a division it's round-robin: you play everyone once, best-of-2 set.",
+      "• Top finishers promote up a tier; bottom finishers drop down.",
+      "",
+      "**Scoring**",
+      "• `2-0` win → **3 pts** winner, 0 loser",
+      "• `1-1` draw → **1 pt** each",
+      "• Standings sort: points → wins → draws.",
+      "",
+      "**Slash commands**",
+      "• `/standings` — current division table",
+      "• `/profile` — your match history & ranks",
+      "• `/schedule` — sets you still need to play",
+      "• `/start-match @opponent` — guided ban/pick flow (bot picks the deck/stake)",
+      "• `/report @opponent result:2-0` — log a played set (auto-confirmed)",
+      "• `/help` — full command list",
+      "",
+      "**Website:** <https://www.balatroleague.com> — standings, profiles, signup, settings.",
+    ].join("\n");
+    try {
+      const pinned = await infoChan.messages.fetchPinned();
+      const existing = pinned.find((m) => m.author.id === interaction.client.user.id);
+      if (existing) {
+        await existing.edit({ content: intro });
+        reused.push(`#league-info pinned intro (refreshed)`);
+      } else {
         const msg = await infoChan.send({ content: intro });
         await msg.pin().catch(() => { /* MANAGE_MESSAGES may be missing */ });
-      } catch (e) {
-        console.warn(`[bootstrap] couldn't post intro to #league-info: ${(e as Error).message}`);
+        created.push(`#league-info pinned intro`);
       }
+    } catch (e) {
+      console.warn(`[bootstrap] couldn't seed/refresh intro in #league-info: ${(e as Error).message}`);
     }
 
     async function ensureRole(name: string, reason: string) {
