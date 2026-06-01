@@ -43,25 +43,59 @@ export async function SiteNav({ activePath }: { activePath: string }) {
         })}
       </nav>
       <span style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
-        <form action={toggleShowBmpMmr} style={{ display: "inline" }}>
-          <input type="hidden" name="next" value={showingBmpMmr ? "0" : "1"} />
-          <input type="hidden" name="returnTo" value={activePath || "/"} />
-          <button
-            type="submit"
-            className="muted"
-            title={showingBmpMmr ? "Hide BMP MMR columns" : "Show each player's balatromp.com Ranked MMR"}
+        <details style={{ position: "relative" }}>
+          <summary
+            title="Settings"
+            aria-label="Settings"
             style={{
-              background: "none",
-              border: "none",
-              padding: 0,
-              fontSize: 12,
+              listStyle: "none",
               cursor: "pointer",
-              color: "var(--muted)",
+              fontSize: 18,
+              lineHeight: 1,
+              userSelect: "none",
             }}
           >
-            {showingBmpMmr ? "hide BMP MMR" : "show BMP MMR"}
-          </button>
-        </form>
+            ⚙️
+          </summary>
+          <div
+            style={{
+              position: "absolute",
+              top: "calc(100% + 6px)",
+              right: 0,
+              minWidth: 220,
+              background: "var(--surface, #1a1a1a)",
+              border: "1px solid var(--border, #333)",
+              borderRadius: 6,
+              padding: 8,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+              zIndex: 50,
+            }}
+          >
+            <form action={toggleShowBmpMmr}>
+              <input type="hidden" name="next" value={showingBmpMmr ? "0" : "1"} />
+              <input type="hidden" name="returnTo" value={activePath || "/"} />
+              <button
+                type="submit"
+                style={{
+                  background: "none",
+                  border: "none",
+                  padding: "6px 4px",
+                  fontSize: 13,
+                  cursor: "pointer",
+                  color: "var(--text)",
+                  width: "100%",
+                  textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <span style={{ fontSize: 14 }}>{showingBmpMmr ? "☑" : "☐"}</span>
+                <span>Show BMP MMR</span>
+              </button>
+            </form>
+          </div>
+        </details>
         {isLoggedIn ? (
           <>
             <Link href="/me" style={{ color: "var(--text)" }}>
