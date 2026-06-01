@@ -207,7 +207,7 @@ export default async function AdminDivisionDetail({
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={6} className="muted">No confirmed sets yet.</td></tr>
+                <tr><td colSpan={6} className="muted">No confirmed matches yet.</td></tr>
               ) : rows.map((r, i) => {
                 const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
                 return (
@@ -303,9 +303,9 @@ export default async function AdminDivisionDetail({
           </table>
         </div>
 
-        {/* Recorded sets */}
+        {/* Recorded matches */}
         <div className="card">
-          <strong>Sets — recorded ({division.pairings.length})</strong>
+          <strong>Matches — recorded ({division.pairings.length})</strong>
           <table>
             <thead>
               <tr><th>Matchup</th><th>Result</th><th>Status</th><th>Override</th><th></th></tr>
@@ -412,14 +412,14 @@ export default async function AdminDivisionDetail({
 
         {/* Unplayed */}
         <div className="card">
-          <strong>Sets — unplayed ({unplayed.length})</strong>
+          <strong>Matches — unplayed ({unplayed.length})</strong>
           <table>
             <thead>
               <tr><th>Matchup</th><th>Record</th></tr>
             </thead>
             <tbody>
               {unplayed.length === 0 ? (
-                <tr><td colSpan={2} className="muted">All round-robin sets recorded.</td></tr>
+                <tr><td colSpan={2} className="muted">All round-robin matches recorded.</td></tr>
               ) : unplayed.map(({ a, b }) => (
                 <tr key={`${a.id}-${b.id}`}>
                   <td>{a.displayName} <span className="muted">vs</span> {b.displayName}</td>

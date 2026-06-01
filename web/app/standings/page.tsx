@@ -94,9 +94,9 @@ export default async function StandingsPage() {
                     // division is "done" when confirmed = expected. Shows
                     // as a pill + ✅ on the card header.
                     const activeCount = div.members.filter((m) => m.status === "ACTIVE").length;
-                    const expectedSets = activeCount < 2 ? 0 : (activeCount * (activeCount - 1)) / 2;
-                    const playedSets = div._count.pairings;
-                    const complete = expectedSets > 0 && playedSets >= expectedSets;
+                    const expectedMatches = activeCount < 2 ? 0 : (activeCount * (activeCount - 1)) / 2;
+                    const playedMatches = div._count.pairings;
+                    const complete = expectedMatches > 0 && playedMatches >= expectedMatches;
                     // Highlight promo/relegation positions in the rendered
                     // standings. Top non-bottom: position 1 promotes. Bottom
                     // non-top: last position relegates. Edge tiers don't
@@ -116,9 +116,9 @@ export default async function StandingsPage() {
                               fontSize: 11,
                               marginLeft: "auto",
                             }}
-                            title={complete ? "All sets played" : "Round-robin in progress"}
+                            title={complete ? "All matches played" : "Round-robin in progress"}
                           >
-                            {complete ? "✅" : ""} {playedSets}/{expectedSets} sets
+                            {complete ? "✅" : ""} {playedMatches}/{expectedMatches} matches
                           </span>
                         </div>
                         <table style={{ marginTop: 8 }}>
@@ -135,7 +135,7 @@ export default async function StandingsPage() {
                           <tbody>
                             {rows.length === 0 ? (
                               <tr>
-                                <td colSpan={6} className="muted">No sets played yet.</td>
+                                <td colSpan={6} className="muted">No matches played yet.</td>
                               </tr>
                             ) : (
                               rows.map((r, i) => {
@@ -155,12 +155,20 @@ export default async function StandingsPage() {
                                 ) : isRelegating ? (
                                   <span title="Relegation position" style={{ color: "#e74c3c" }}>↓</span>
                                 ) : null;
-                                // tiedWithPrev means this row and the one above are
-                                // structurally tied AND no shootout has been recorded
-                                // between them. Visible nudge to play+report a shootout.
-                                const shootoutMarker = r.tiedWithPrev ? (
+                                // Shootout marker visibility:
+                                // 1. All matches in the division must be played (otherwise
+                                //    the tie isn't final and shootout is premature)
+                                // 2. The tie must be at a position that decides promo or
+                                //    relegation — index 1 (tied with #1 promo) if not top
+                                //    tier, OR last index (tied with last for relegation)
+                                //    if not bottom tier. Mid-table ties don't matter.
+                                // 3. tiedWithPrev means no shootout has been recorded yet.
+                                const isPromoBoundaryTie = i === 1 && !isTopTier;
+                                const isRelegationBoundaryTie = i === rows.length - 1 && !isBottomTier && rows.length > 1;
+                                const shootoutNeeded = complete && r.tiedWithPrev && (isPromoBoundaryTie || isRelegationBoundaryTie);
+                                const shootoutMarker = shootoutNeeded ? (
                                   <span
-                                    title="Tied with the row above — play a shootout and /report-shootout"
+                                    title="Tied for promotion/relegation — play a shootout and /report-shootout"
                                     style={{ color: "#f1c40f", marginLeft: 4 }}
                                   >
                                     ⚔

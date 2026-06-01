@@ -85,7 +85,7 @@ export default async function PublicDivisionPage({
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={5} className="muted">No sets played yet.</td></tr>
+                <tr><td colSpan={5} className="muted">No matches played yet.</td></tr>
               ) : rows.map((r, i) => {
                 const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
                 const link = (
@@ -108,9 +108,9 @@ export default async function PublicDivisionPage({
         </div>
 
         <div className="card">
-          <strong>Recent sets ({division.pairings.length})</strong>
+          <strong>Recent matches ({division.pairings.length})</strong>
           {division.pairings.length === 0 ? (
-            <p className="muted" style={{ marginTop: 4 }}>No sets played yet.</p>
+            <p className="muted" style={{ marginTop: 4 }}>No matches played yet.</p>
           ) : (
             <table style={{ marginTop: 8 }}>
               <thead><tr><th>Date</th><th>Result</th></tr></thead>

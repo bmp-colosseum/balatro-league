@@ -21,7 +21,7 @@ export const report: SlashCommand = {
   channelScope: "bot-commands-only",
   data: new SlashCommandBuilder()
     .setName("report")
-    .setDescription("Report the result of your best-of-2 set against an opponent.")
+    .setDescription("Report the result of your best-of-2 match against an opponent.")
     .addUserOption((opt) =>
       opt.setName("opponent").setDescription("The player you faced").setRequired(true),
     )
@@ -75,13 +75,13 @@ export const report: SlashCommand = {
     });
     const displayed = `${games.a}-${games.b}`;
     const embed = new EmbedBuilder()
-      .setTitle("✅ Set recorded")
+      .setTitle("✅ Match recorded")
       .setDescription(
         `<@${interaction.user.id}> **${displayed}** vs <@${opponentUser.id}>${division ? ` in **${division.name}**` : ""}.\n` +
           `_Doesn't look right? Ask an admin to use \`/admin override-result set-id:${r.pairingId}\`._`,
       )
       .setColor(0x2ecc71)
-      .setFooter({ text: `Set ${r.pairingId}` });
+      .setFooter({ text: `Match ${r.pairingId}` });
 
     await interaction.editReply({ embeds: [embed] });
   },
@@ -124,7 +124,7 @@ export const reportButtons: ButtonHandler = {
             `Division: **${pairing.division.name}**`,
         )
         .setColor(0x2ecc71)
-        .setFooter({ text: `Set ${pairing.id}` });
+        .setFooter({ text: `Match ${pairing.id}` });
       await interaction.update({ embeds: [embed], components: [] });
       return;
     }
@@ -136,7 +136,7 @@ export const reportButtons: ButtonHandler = {
           "An admin needs to use `/admin override-result` to resolve this.",
       )
       .setColor(0xe74c3c)
-      .setFooter({ text: `Set ${pairing.id}` });
+      .setFooter({ text: `Match ${pairing.id}` });
     await interaction.update({ embeds: [embed], components: [] });
   },
 };
