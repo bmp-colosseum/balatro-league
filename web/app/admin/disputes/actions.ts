@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
+import { announceResult } from "@/lib/announce";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
@@ -41,6 +42,10 @@ export async function acceptDisputeProposal(formData: FormData) {
         : "Accepted disputer's proposal",
     },
   });
+  // Re-announce the corrected result so the channel sees the final
+  // numbers — admin's accept-the-proposal flow effectively re-posts
+  // the match with the new scores.
+  announceResult(pairingId).catch((err) => console.warn("[dispute.accept] announceResult failed:", err));
   recomputeDivisionStandings(pairing.divisionId).catch(() => {});
   recordAudit({
     actor: actorFromAdminUser(user),
@@ -83,6 +88,9 @@ export async function rejectDispute(formData: FormData) {
       adminOverrideReason: "Dispute rejected, original result kept",
     },
   });
+  // Re-announce so the channel knows the dispute was rejected and
+  // the original result stands.
+  announceResult(pairingId).catch((err) => console.warn("[dispute.reject] announceResult failed:", err));
   recomputeDivisionStandings(pairing.divisionId).catch(() => {});
   recordAudit({
     actor: actorFromAdminUser(user),

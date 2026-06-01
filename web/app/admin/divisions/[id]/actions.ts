@@ -344,7 +344,7 @@ export async function setCrosstableCell(formData: FormData) {
   const gamesWonA = rowIsA ? gamesWon : 2 - gamesWon;
   const gamesWonB = rowIsA ? 2 - gamesWon : gamesWon;
 
-  await prisma.pairing.upsert({
+  const recorded = await prisma.pairing.upsert({
     where: { divisionId_playerAId_playerBId: { divisionId, playerAId: canonA, playerBId: canonB } },
     create: {
       divisionId,
@@ -367,6 +367,10 @@ export async function setCrosstableCell(formData: FormData) {
       adminOverrideReason: "crosstable cell edit (overwrite)",
     },
   });
+  // Fire-and-forget Discord announce — same pattern as recordSet and
+  // overridePairing. Resolves season-webhook -> LeagueConfig -> env,
+  // posts the result. Failure here doesn't block the cell save.
+  announceResult(recorded.id).catch((err) => console.warn("[crosstable cell] announceResult failed:", err));
   recomputeDivisionStandings(divisionId).catch(() => {});
   revalidatePath(`/admin/divisions/${divisionId}`);
 }

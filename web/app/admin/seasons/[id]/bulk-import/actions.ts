@@ -190,6 +190,10 @@ export async function bulkImportSeason(formData: FormData) {
       const gamesWonA = aIsCanonA ? games.a : games.b;
       const gamesWonB = aIsCanonA ? games.b : games.a;
 
+      // Bulk import does NOT call announceResult per row — would spam
+      // the Discord channel with dozens of posts. If you need to
+      // re-announce after import, do it via /admin record-set or
+      // /admin override-result per row.
       await prisma.pairing.upsert({
         where: { divisionId_playerAId_playerBId: { divisionId: div.id, playerAId: canonA, playerBId: canonB } },
         create: {
