@@ -162,7 +162,7 @@ export default async function StandingsPage() {
                               <th>Pts</th>
                               <th>W-D-L</th>
                               <th>Games</th>
-                              <th title="Each player's current Ranked MMR from balatromp.com — separate from your league ranking. Click a player to see their full BMP history.">BMP Rating</th>
+                              <th title="Each player's current Ranked MMR from balatromp.com — separate from your league ranking. Click a player to see their full BMP history.">BMP MMR</th>
                             </tr>
                           </thead>
                           <tbody>
