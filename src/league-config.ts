@@ -27,6 +27,11 @@ export const LeagueConfigKey = {
   // want every player to have a season N-1 row even if they joined
   // mid-season-N). Toggle off again when the backfill's done.
   BmpCapturePreviousSeason: "bmp_capture_previous_season",
+  // Parent channel for casual /challenge threads. Lives under a dedicated
+  // '🎴 Matches' category, separate from #bot-commands and division
+  // channels. Optional — falls back to interaction.channel when unset,
+  // which matches the original /challenge behavior.
+  ChallengesChannelId: "challenges_channel_id",
 } as const;
 
 export type LeagueConfigKey = (typeof LeagueConfigKey)[keyof typeof LeagueConfigKey];

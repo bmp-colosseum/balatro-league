@@ -298,6 +298,43 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       update: { value: backupChan.id, updatedBy: interaction.user.id },
     });
 
+    // Casual matches get their own '🎴 Matches' category with a single
+    // #challenges parent channel — /challenge threads spawn there.
+    // Separate category from the league category so casual play has a
+    // visually distinct home (and matches don't clutter the bot-commands
+    // channel where the invite is posted).
+    let matchesCategory = guild.channels.cache.find(
+      (c) => c.type === ChannelType.GuildCategory && c.name === "🎴 Matches",
+    );
+    if (!matchesCategory) {
+      matchesCategory = await guild.channels.create({ name: "🎴 Matches", type: ChannelType.GuildCategory });
+      created.push(`category "🎴 Matches"`);
+    } else {
+      reused.push(`category "🎴 Matches"`);
+    }
+    let challengesChan = guild.channels.cache.find(
+      (c) =>
+        c.type === ChannelType.GuildText &&
+        c.name === "challenges" &&
+        c.parentId === matchesCategory!.id,
+    );
+    if (!challengesChan || challengesChan.type !== ChannelType.GuildText) {
+      challengesChan = await guild.channels.create({
+        name: "challenges",
+        type: ChannelType.GuildText,
+        parent: matchesCategory.id,
+        topic: "Casual /challenge matches spawn private threads here. Browse the thread list for active games.",
+      });
+      created.push(`#challenges (under 🎴 Matches)`);
+    } else {
+      reused.push(`#challenges`);
+    }
+    await prisma.leagueConfig.upsert({
+      where: { key: "challenges_channel_id" },
+      create: { key: "challenges_channel_id", value: challengesChan.id, updatedBy: interaction.user.id },
+      update: { value: challengesChan.id, updatedBy: interaction.user.id },
+    });
+
     const lines = [
       `✅ **${categoryName}** scaffolded.`,
       created.length > 0 ? `  Created: ${created.join(", ")}` : `  (nothing new — everything already existed)`,
@@ -309,6 +346,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       `💬 <#${chatChan.id}> — league-chat`,
       `🤖 <#${botCmdChan.id}> — bot-commands (casual /challenge, /report)`,
       `📦 <#${backupChan.id}> — league-backups (staff-only, daily snapshots)`,
+      `🎴 <#${challengesChan.id}> — challenges (parent for casual /challenge threads, under 🎴 Matches)`,
       ``,
       `🎭 Roles:`,
       `• <@&${playerRole.id}> — League Player`,

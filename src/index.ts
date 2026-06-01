@@ -1,6 +1,7 @@
 import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
 import { ensureBackupChannel } from "./backup-channel.js";
 import { ensureBotCommandsChannel } from "./bot-commands-channel.js";
+import { ensureChallengesChannel } from "./challenges-channel.js";
 import { checkChannelScope } from "./command-channels.js";
 import { buttonHandlers, selectMenuHandlers, slashCommands } from "./commands/index.js";
 import { setDiscordClient } from "./discord.js";
@@ -103,3 +104,6 @@ ensureBotCommandsChannel().catch((err) => console.warn("[bot-commands] init fail
 // Same pattern for the private backup channel — sensitive content
 // (full pairings + season config) should not land in public bot-commands.
 ensureBackupChannel().catch((err) => console.warn("[backup-channel] init failed:", err));
+// And the casual-challenges parent channel under a dedicated '🎴 Matches'
+// category so /challenge threads have their own home.
+ensureChallengesChannel().catch((err) => console.warn("[challenges-channel] init failed:", err));

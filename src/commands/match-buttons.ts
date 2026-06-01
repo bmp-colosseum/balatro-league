@@ -19,6 +19,7 @@ import {
 } from "discord.js";
 import { MatchSessionState, Prisma, type MatchSession } from "@prisma/client";
 import { announceResult } from "../announce.js";
+import { resolveChallengesChannelId } from "../challenges-channel.js";
 import { prisma } from "../db.js";
 import { env } from "../env.js";
 import { generatePool, presetForDivision } from "../match-config.js";
@@ -362,20 +363,43 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
   // Staff is NOT auto-added — players + bot only. Admins opt in via
   // /admin join-match when mediation is needed.
   let matchChannelId = session.threadId;
-  if (!matchChannelId && interaction.channel && interaction.channel.type === ChannelType.GuildText) {
-    try {
-      const suffix = session.id.slice(-6);
-      const thread = await (interaction.channel as TextChannel).threads.create({
-        name: `Match · ${playerA.displayName} vs ${playerB.displayName} · ${suffix}`,
-        type: ChannelType.PrivateThread,
-        autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
-        invitable: false,
-      });
-      await thread.members.add(playerA.discordId).catch(() => {});
-      await thread.members.add(playerB.discordId).catch(() => {});
-      matchChannelId = thread.id;
-    } catch (err) {
-      console.warn("[match] failed to create private thread:", err);
+  if (!matchChannelId) {
+    // Casual /challenge threads live under the dedicated #challenges
+    // channel (in the '🎴 Matches' category) when one is configured,
+    // so all casual matches sit together regardless of where the
+    // invite was posted. League /start-match threads stay under the
+    // division channel so division members can browse the thread list.
+    let parentChannel = interaction.channel?.type === ChannelType.GuildText
+      ? (interaction.channel as TextChannel)
+      : null;
+    if (session.isCasual) {
+      const challengesId = await resolveChallengesChannelId();
+      if (challengesId) {
+        try {
+          const fetched = await interaction.client.channels.fetch(challengesId);
+          if (fetched && fetched.type === ChannelType.GuildText) {
+            parentChannel = fetched as TextChannel;
+          }
+        } catch {
+          // fall through to interaction.channel
+        }
+      }
+    }
+    if (parentChannel) {
+      try {
+        const suffix = session.id.slice(-6);
+        const thread = await parentChannel.threads.create({
+          name: `Match · ${playerA.displayName} vs ${playerB.displayName} · ${suffix}`,
+          type: ChannelType.PrivateThread,
+          autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
+          invitable: false,
+        });
+        await thread.members.add(playerA.discordId).catch(() => {});
+        await thread.members.add(playerB.discordId).catch(() => {});
+        matchChannelId = thread.id;
+      } catch (err) {
+        console.warn("[match] failed to create private thread:", err);
+      }
     }
   }
 
