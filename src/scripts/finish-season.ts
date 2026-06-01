@@ -12,12 +12,14 @@
 //   npm run finish:season -- --season <seasonId> --seed 42
 
 import { prisma } from "../db.js";
+import { announceResult } from "../announce.js";
 import { gamesFromResult, type PairingResult } from "../scoring.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
 
 interface Args {
   seasonId: string;
   seed: number;
+  announce: boolean;
 }
 
 function parseArgs(): Args {
@@ -33,7 +35,12 @@ function parseArgs(): Args {
     process.exit(1);
   }
   const seedRaw = get("--seed", "42");
-  return { seasonId, seed: Number(seedRaw) || 42 };
+  // --announce opts into posting each pairing to the results channel.
+  // Off by default: a 100-pairing seed run would spam the channel and
+  // hit Discord rate limits. Useful when verifying the results
+  // destination is wired up correctly (try with a small division).
+  const announce = argv.includes("--announce");
+  return { seasonId, seed: Number(seedRaw) || 42, announce };
 }
 
 function rng(seed: number): () => number {
@@ -56,7 +63,7 @@ function randomResult(rand: () => number): PairingResult {
 }
 
 async function main(): Promise<void> {
-  const { seasonId, seed } = parseArgs();
+  const { seasonId, seed, announce } = parseArgs();
   const rand = rng(seed);
 
   const season = await prisma.season.findUnique({ where: { id: seasonId } });
@@ -88,7 +95,7 @@ async function main(): Promise<void> {
         const result = randomResult(rand);
         const { a: gA, b: gB } = gamesFromResult(result);
         if (!existing) {
-          await prisma.pairing.create({
+          const created2 = await prisma.pairing.create({
             data: {
               divisionId: div.id,
               playerAId: aId,
@@ -101,6 +108,9 @@ async function main(): Promise<void> {
             },
           });
           created++;
+          if (announce) {
+            await announceResult(created2.id).catch((err) => console.warn("[finish:season] announce failed:", err));
+          }
         } else if (existing.status !== "CONFIRMED") {
           await prisma.pairing.update({
             where: { id: existing.id },
@@ -119,6 +129,9 @@ async function main(): Promise<void> {
             },
           });
           confirmed++;
+          if (announce) {
+            await announceResult(existing.id).catch((err) => console.warn("[finish:season] announce failed:", err));
+          }
         }
       }
     }
