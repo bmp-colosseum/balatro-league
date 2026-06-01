@@ -460,7 +460,7 @@ async function handleWinner(interaction: ButtonInteraction, session: MatchSessio
   }
   const { playerA, playerB } = await loadPlayers(session);
   if (interaction.user.id !== playerA.discordId && interaction.user.id !== playerB.discordId) {
-    return reply(interaction, "Only the two players in this match can report the winner.");
+    return reply(interaction, "Only the two players in this match can vote on the winner.");
   }
 
   const isGame1 = session.state === "GAME_1_PLAYING";
@@ -468,11 +468,47 @@ async function handleWinner(interaction: ButtonInteraction, session: MatchSessio
   const isGame3 = session.state === "GAME_3_PLAYING";
   if (!isGame1 && !isGame2 && !isGame3) return reply(interaction, "Not waiting for a winner.");
 
-  const gameJson = isGame1 ? session.game1 : isGame2 ? session.game2 : session.game3;
+  const gameField: "game1" | "game2" | "game3" = isGame1 ? "game1" : isGame2 ? "game2" : "game3";
+  const gameJson = session[gameField];
   const game = parseGame(gameJson);
   if (!game) return reply(interaction, "Game state missing.");
 
-  const newGame: GameState = { ...game, winnerId: winnerIdRaw };
+  // Record the voter's pick. Either player can change their mind by
+  // clicking the other button before both votes are in. Disputed games
+  // also accept re-votes so players can talk it out and re-cast — voting
+  // again clears the disputed flag and re-checks agreement.
+  const voterIsA = interaction.user.id === playerA.discordId;
+  const newGame: GameState = {
+    ...game,
+    voteByA: voterIsA ? winnerIdRaw : game.voteByA,
+    voteByB: !voterIsA ? winnerIdRaw : game.voteByB,
+    disputed: false, // re-check below
+  };
+
+  // Both votes in?
+  if (!newGame.voteByA || !newGame.voteByB) {
+    const updated = await updateSession(session, {
+      [gameField]: JSON.stringify(newGame),
+    } as Prisma.MatchSessionUpdateManyMutationInput);
+    if (!updated) return raceLost(interaction);
+    return refreshMessage(interaction, updated);
+  }
+
+  // Disagreement → dispute. Match stays in PLAYING state; admin uses
+  // /admin override-result, OR players talk and re-vote (revoting clears
+  // the disputed flag at the top of this handler).
+  if (newGame.voteByA !== newGame.voteByB) {
+    newGame.disputed = true;
+    const updated = await updateSession(session, {
+      [gameField]: JSON.stringify(newGame),
+    } as Prisma.MatchSessionUpdateManyMutationInput);
+    if (!updated) return raceLost(interaction);
+    return refreshMessage(interaction, updated);
+  }
+
+  // Both voted the same way → that's the winner. Continue with existing
+  // game-advance / finalize logic.
+  newGame.winnerId = newGame.voteByA;
 
   // Helper: count wins per player across played games (treating in-progress
   // game as just-recorded if applicable).

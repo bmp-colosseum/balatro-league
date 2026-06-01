@@ -207,10 +207,31 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
 
   if (phase.kind === "PLAYING") {
     const picked = game.pickedDeckIdx !== undefined ? pool[game.pickedDeckIdx] : null;
-    embed.setDescription(
-      `🎲 Playing: **${picked?.deck ?? "?"} / ${picked?.stake ?? "?"} stake**\n\n` +
-        `Report the winner once the game's done.`,
-    );
+    // Per-player vote status line: who voted what. When both votes agree
+    // the match auto-advances (this render only fires while voting is
+    // incomplete or disputed).
+    const voteLine = (vote: string | undefined, who: Player) => {
+      if (!vote) return `· **${who.displayName}**: not voted`;
+      const target = vote === a.id ? a.displayName : b.displayName;
+      return `· **${who.displayName}**: voted ${target}`;
+    };
+    let description = `🎲 Playing: **${picked?.deck ?? "?"} / ${picked?.stake ?? "?"} stake**\n\n`;
+    if (game.disputed) {
+      description +=
+        `⚠️ **Disputed** — players voted for different winners.\n` +
+        `${voteLine(game.voteByA, a)}\n` +
+        `${voteLine(game.voteByB, b)}\n\n` +
+        `Talk it out and click again, OR ask an admin to run ` +
+        `\`/admin override-result\` with match id \`${s.id}\`.`;
+    } else if (game.voteByA || game.voteByB) {
+      description +=
+        `Vote for the winner. Match advances when both agree.\n` +
+        `${voteLine(game.voteByA, a)}\n` +
+        `${voteLine(game.voteByB, b)}`;
+    } else {
+      description += `Both players vote: click who won. Match advances when you agree.`;
+    }
+    embed.setDescription(description);
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(`match:winner:${s.id}:${a.id}`)

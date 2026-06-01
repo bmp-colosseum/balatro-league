@@ -25,7 +25,7 @@ export interface GameState {
   firstId: string;        // who bans first in this game
   bans: number[];         // indices into THIS game's pool that have been banned
   pickedDeckIdx?: number; // which remaining combo was picked (index into this game's pool)
-  winnerId?: string;
+  winnerId?: string;      // confirmed winner (both players' votes agreed)
   // Per-game deck/stake pool. Generated fresh when this game starts so
   // game2 and game3 don't reuse game1's shuffle — bans reset to a new
   // random subset of the preset each round.
@@ -34,6 +34,15 @@ export interface GameState {
   // menu but not yet confirmed. Cleared when applied via the Confirm
   // button (or when the player re-selects in the menu).
   pendingBans?: number[];
+  // Per-player winner votes. Both players vote independently; if they
+  // agree the winner is recorded. If they disagree the match enters a
+  // dispute state — admin uses /admin override-result to resolve.
+  voteByA?: string;       // playerAId's vote (a discord-user-id-equivalent player.id)
+  voteByB?: string;       // playerBId's vote
+  // True once both votes are in AND disagree. UI shows dispute notice;
+  // admin must resolve via /admin override-result before the match can
+  // continue (or the match stays here forever).
+  disputed?: boolean;
 }
 
 export function emptyGameState(firstId: string, pool: DeckEntry[]): GameState {
