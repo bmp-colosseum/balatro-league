@@ -113,7 +113,11 @@ export default async function AdminPlayersPage({
                 <tbody>
                   {view.inactive.map((m) => (
                     <tr key={m.membershipId}>
-                      <td><s>{m.displayName}</s></td>
+                      <td>
+                        <Link href={`/profile/${m.playerId}`} style={{ color: "var(--text)" }}>
+                          <s>{m.displayName}</s>
+                        </Link>
+                      </td>
                       <td className="muted">{m.droppedAt?.toISOString().slice(0, 10) ?? "—"}</td>
                       <td><span className="muted" style={{ fontSize: 11 }}>{m.discordId}</span></td>
                       <td>

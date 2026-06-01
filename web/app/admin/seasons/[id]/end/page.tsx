@@ -69,7 +69,10 @@ export default async function EndSeasonPreviewPage({
                     return (
                       <tr key={row.player.id}>
                         <td>{idx + 1}</td>
-                        <td>{row.player.displayName} <span className="muted">(dropped)</span></td>
+                        <td>
+                          <Link href={`/profile/${row.player.id}`} style={{ color: "var(--text)" }}>{row.player.displayName}</Link>
+                          {" "}<span className="muted">(dropped)</span>
+                        </td>
                         <td colSpan={3} className="muted">no change</td>
                       </tr>
                     );
@@ -79,7 +82,11 @@ export default async function EndSeasonPreviewPage({
                   return (
                     <tr key={row.player.id}>
                       <td>{idx + 1}</td>
-                      <td><strong>{row.player.displayName}</strong></td>
+                      <td>
+                        <Link href={`/profile/${row.player.id}`} style={{ color: "var(--text)" }}>
+                          <strong>{row.player.displayName}</strong>
+                        </Link>
+                      </td>
                       <td>{delta.oldRating ?? "—"}</td>
                       <td>{delta.newRating}</td>
                       <td style={{ color: positive ? "#2ecc71" : negative ? "#e74c3c" : undefined }}>

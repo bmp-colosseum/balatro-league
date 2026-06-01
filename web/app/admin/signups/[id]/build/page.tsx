@@ -140,7 +140,17 @@ export default async function BuildSeasonPage({
                   return (
                     <tr key={s.id}>
                       <td>
-                        <strong>{s.displayName}</strong>{" "}
+                        {/* Only returners have a Player record yet — new signups
+                            get one written during build, so we can't link them
+                            until then. */}
+                        {player ? (
+                          <Link href={`/profile/${player.id}`} style={{ color: "var(--text)" }}>
+                            <strong>{s.displayName}</strong>
+                          </Link>
+                        ) : (
+                          <strong>{s.displayName}</strong>
+                        )}
+                        {" "}
                         <span className="muted" style={{ fontSize: 11 }}>{s.discordId}</span>
                       </td>
                       <td>

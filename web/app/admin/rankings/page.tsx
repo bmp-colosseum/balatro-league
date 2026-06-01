@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAdmin } from "@/lib/admin";
 import { loadAdminRankings } from "@/lib/loaders/admin";
 import { tierColors } from "@/lib/tier-colors";
@@ -62,7 +63,7 @@ export default async function AdminRankingsPage() {
                 <th>Discord ID</th>
                 <th>Current division</th>
                 <th>BMP MMR</th>
-                <th>Rating (note)</th>
+                <th>Rating</th>
               </tr>
             </thead>
             <tbody>
@@ -70,7 +71,11 @@ export default async function AdminRankingsPage() {
                 <tr><td colSpan={5} className="muted">No players yet.</td></tr>
               ) : players.map((p) => (
                 <tr key={p.id}>
-                  <td><strong>{p.displayName}</strong></td>
+                  <td>
+                    <Link href={`/profile/${p.id}`} style={{ color: "var(--text)" }}>
+                      <strong>{p.displayName}</strong>
+                    </Link>
+                  </td>
                   <td><span className="muted">{p.discordId}</span></td>
                   <td>
                     {p.division ? (
@@ -93,7 +98,6 @@ export default async function AdminRankingsPage() {
                     <form action={setRating} style={{ display: "flex", gap: 6 }}>
                       <input type="hidden" name="playerId" value={p.id} />
                       <input type="number" name="rating" defaultValue={p.rating ?? ""} placeholder="unrated" style={{ width: 90 }} />
-                      <input type="text" name="ratingNote" defaultValue={p.ratingNote ?? ""} placeholder="note (optional)" style={{ width: 240 }} />
                       <button type="submit">Save</button>
                     </form>
                   </td>

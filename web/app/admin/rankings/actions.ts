@@ -9,11 +9,18 @@ export async function setRating(formData: FormData) {
   await requireAdmin();
   const playerId = String(formData.get("playerId") ?? "");
   const ratingStr = String(formData.get("rating") ?? "").trim();
-  const note = String(formData.get("ratingNote") ?? "").trim() || null;
   if (!playerId) return;
   const rating = ratingStr === "" ? null : parseInt(ratingStr, 10);
   if (rating !== null && Number.isNaN(rating)) return;
-  await prisma.player.update({ where: { id: playerId }, data: { rating, ratingNote: note } });
+  // ratingNote isn't in the rankings UI anymore. Only update it when
+  // the form explicitly includes the field (e.g. from bulkRatings),
+  // so removing the input doesn't wipe any existing notes set elsewhere.
+  const noteRaw = formData.get("ratingNote");
+  const data: { rating: number | null; ratingNote?: string | null } = { rating };
+  if (noteRaw !== null) {
+    data.ratingNote = String(noteRaw).trim() || null;
+  }
+  await prisma.player.update({ where: { id: playerId }, data });
   revalidatePath("/admin/rankings");
 }
 

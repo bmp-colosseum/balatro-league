@@ -244,7 +244,9 @@ export default async function SeasonDetailPage({
                                 <tbody>
                                   {d.members.map((m) => (
                                     <tr key={m.id}>
-                                      <td style={{ padding: "2px 4px 2px 0" }}>{m.player.displayName}</td>
+                                      <td style={{ padding: "2px 4px 2px 0" }}>
+                                        <Link href={`/profile/${m.player.id}`} style={{ color: "var(--text)" }}>{m.player.displayName}</Link>
+                                      </td>
                                       <td style={{ padding: "2px 0", textAlign: "right" }}>
                                         <form action={moveDivisionMember} style={{ display: "inline-flex", gap: 2 }}>
                                           <input type="hidden" name="seasonId" value={season.id} />
@@ -276,7 +278,9 @@ export default async function SeasonDetailPage({
                                 {top3.map((r, i) => (
                                   <tr key={r.player.id}>
                                     <td style={{ width: 18 }}>{i + 1}.</td>
-                                    <td>{r.player.displayName}</td>
+                                    <td>
+                                      <Link href={`/profile/${r.player.id}`} style={{ color: "var(--text)" }}>{r.player.displayName}</Link>
+                                    </td>
                                     <td style={{ textAlign: "right" }}><strong>{r.points}</strong></td>
                                   </tr>
                                 ))}

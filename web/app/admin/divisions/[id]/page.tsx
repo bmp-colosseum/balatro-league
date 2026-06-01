@@ -288,7 +288,11 @@ export default async function AdminDivisionDetail({
                 const statusFg = p.status === "CONFIRMED" ? "#2ecc71" : p.status === "DISPUTED" ? "#e74c3c" : "#f1c40f";
                 return (
                   <tr key={p.id}>
-                    <td>{p.playerA.displayName} <span className="muted">vs</span> {p.playerB.displayName}</td>
+                    <td>
+                      <Link href={`/profile/${p.playerA.id}`} style={{ color: "var(--text)" }}>{p.playerA.displayName}</Link>
+                      {" "}<span className="muted">vs</span>{" "}
+                      <Link href={`/profile/${p.playerB.id}`} style={{ color: "var(--text)" }}>{p.playerB.displayName}</Link>
+                    </td>
                     <td><strong>{p.gamesWonA}-{p.gamesWonB}</strong></td>
                     <td><span className="pill" style={{ background: statusBg, color: statusFg }}>{p.status}</span></td>
                     <td>
@@ -335,8 +339,16 @@ export default async function AdminDivisionDetail({
                   if (!pA || !pB || !winner) return null;
                   return (
                     <tr key={`${s.playerAId}-${s.playerBId}`}>
-                      <td>{pA.displayName} <span className="muted">vs</span> {pB.displayName}</td>
-                      <td><strong>{winner.displayName}</strong></td>
+                      <td>
+                        <Link href={`/profile/${pA.id}`} style={{ color: "var(--text)" }}>{pA.displayName}</Link>
+                        {" "}<span className="muted">vs</span>{" "}
+                        <Link href={`/profile/${pB.id}`} style={{ color: "var(--text)" }}>{pB.displayName}</Link>
+                      </td>
+                      <td>
+                        <Link href={`/profile/${winner.id}`} style={{ color: "var(--text)" }}>
+                          <strong>{winner.displayName}</strong>
+                        </Link>
+                      </td>
                       <td style={{ fontSize: 11 }} className="muted">{s.recordedBy}</td>
                       <td>
                         <form action={deleteShootout}>
@@ -392,7 +404,11 @@ export default async function AdminDivisionDetail({
                 <tr><td colSpan={2} className="muted">All round-robin matches recorded.</td></tr>
               ) : unplayed.map(({ a, b }) => (
                 <tr key={`${a.id}-${b.id}`}>
-                  <td>{a.displayName} <span className="muted">vs</span> {b.displayName}</td>
+                  <td>
+                    <Link href={`/profile/${a.id}`} style={{ color: "var(--text)" }}>{a.displayName}</Link>
+                    {" "}<span className="muted">vs</span>{" "}
+                    <Link href={`/profile/${b.id}`} style={{ color: "var(--text)" }}>{b.displayName}</Link>
+                  </td>
                   <td>
                     <form action={recordSet} style={{ display: "flex", gap: 4 }}>
                       <input type="hidden" name="divisionId" value={division.id} />
