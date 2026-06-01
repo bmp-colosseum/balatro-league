@@ -192,7 +192,7 @@ export function EditableCrosstable({ initial }: { initial: EditableCrosstableDat
                   {rowPlayer.displayName}
                 </Link>
               </td>
-              {initial.players.map((_, colIdx) => {
+              {initial.players.map((colPlayer, colIdx) => {
                 if (colIdx === rowIdx) {
                   return (
                     <td
@@ -201,7 +201,7 @@ export function EditableCrosstable({ initial }: { initial: EditableCrosstableDat
                         background: "rgba(80,80,80,0.18)",
                         border: "1px dotted var(--border)",
                         textAlign: "center",
-                        width: 36,
+                        width: 64,
                       }}
                     >
                       ·
@@ -210,6 +210,9 @@ export function EditableCrosstable({ initial }: { initial: EditableCrosstableDat
                 }
                 const cell = cells[rowIdx]![colIdx]!;
                 const hasValue = cell.value !== "";
+                // Map cell.value (row player's games-won as a string) into
+                // a select option key. "2"=W, "1"=D, "0"=L, ""=unplayed.
+                const selectValue = cell.value === "2" ? "win" : cell.value === "1" ? "draw" : cell.value === "0" ? "loss" : "";
                 return (
                   <td
                     key={colIdx}
@@ -219,44 +222,51 @@ export function EditableCrosstable({ initial }: { initial: EditableCrosstableDat
                         : cell.saving
                           ? "rgba(118,199,255,0.10)"
                           : hasValue
-                            ? "rgba(46,204,113,0.12)"
+                            ? cell.value === "2"
+                              ? "rgba(46,204,113,0.20)"
+                              : cell.value === "0"
+                                ? "rgba(231,76,60,0.15)"
+                                : "rgba(241,196,15,0.18)"
                             : undefined,
                       border: "1px dotted var(--border)",
                       padding: 0,
-                      width: 36,
+                      width: 64,
                     }}
-                    title={`${rowPlayer.displayName} vs ${initial.players[colIdx]!.displayName} — type 0/1/2 or blank`}
+                    title={`${rowPlayer.displayName} vs ${colPlayer.displayName}`}
                   >
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-2]"
-                      maxLength={1}
-                      value={cell.value}
+                    <select
+                      value={selectValue}
                       onChange={(e) => {
-                        // Local typing — defer commit until blur/Enter so admin
-                        // can clear-then-type without an intermediate save.
-                        const v = e.target.value;
-                        setCells((prev) => updateCell(prev, rowIdx, colIdx, v, false, false, false));
-                      }}
-                      onBlur={(e) => commitCell(rowIdx, colIdx, e.currentTarget.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.currentTarget.blur();
-                        }
+                        const v = e.currentTarget.value;
+                        // Translate select value back to row-player's games-won
+                        // and commit immediately. Select changes already feel
+                        // intentional (vs a typo into a number field), so we
+                        // don't defer like the old input did.
+                        const games = v === "win" ? "2" : v === "draw" ? "1" : v === "loss" ? "0" : "";
+                        commitCell(rowIdx, colIdx, games);
                       }}
                       style={{
                         width: "100%",
-                        height: 28,
+                        height: 30,
                         border: "none",
                         background: "transparent",
                         textAlign: "center",
                         fontSize: 13,
-                        fontVariantNumeric: "tabular-nums",
                         color: "var(--text)",
                         padding: 0,
+                        cursor: "pointer",
+                        // Center the visible option text — default browser
+                        // styling left-aligns. Hiding the dropdown arrow
+                        // would mislead admin into thinking the cell isn't
+                        // editable, so we keep it.
+                        appearance: "auto",
                       }}
-                    />
+                    >
+                      <option value="">—</option>
+                      <option value="win">2-0 W (vs {colPlayer.displayName})</option>
+                      <option value="draw">1-1 D (vs {colPlayer.displayName})</option>
+                      <option value="loss">0-2 L (vs {colPlayer.displayName})</option>
+                    </select>
                   </td>
                 );
               })}
