@@ -153,8 +153,8 @@ export default async function ReportPage({
 
             <p className="muted" style={{ fontSize: 11, marginTop: 12 }}>
               Reports go to <strong>#results</strong> in Discord with Confirm + Dispute buttons. Your opponent
-              has 2 minutes — if no one clicks, it auto-confirms. Mistake? Ask an admin to use{" "}
-              <code>/admin override-result</code>.
+              has 2 minutes — if no one clicks, it auto-confirms. Something wrong? Ping a
+              <strong> League Helper</strong> in Discord and they'll sort it out.
             </p>
           </div>
         )}
