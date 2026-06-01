@@ -146,12 +146,16 @@ export default async function StandingsPage() {
                                   </Link>
                                 );
                                 const mmr = mmrByPlayerId.get(r.player.id);
-                                // ↑/↓ only show when the division is COMPLETE — before
-                                // all matches have been played, position 1 / last position
-                                // isn't yet decided so showing the arrows would mislead
-                                // players into thinking promotion/relegation is locked in.
-                                const isPromoting = complete && i === 0 && !isTopTier;
-                                const isRelegating = complete && i === rows.length - 1 && !isBottomTier && rows.length > 1;
+                                // ↑/↓ only show when (a) division is COMPLETE — before all
+                                // matches are in, positions shift every report — and (b) the
+                                // boundary isn't tied: a promo arrow is wrong if row 0 and
+                                // row 1 are tied, because the tie hasn't been resolved by a
+                                // shootout yet. Same for relegation arrow if last and
+                                // second-to-last are tied.
+                                const promoTied = rows.length > 1 && rows[1]?.tiedWithPrev;
+                                const relegationTied = rows[rows.length - 1]?.tiedWithPrev;
+                                const isPromoting = complete && i === 0 && !isTopTier && !promoTied;
+                                const isRelegating = complete && i === rows.length - 1 && !isBottomTier && rows.length > 1 && !relegationTied;
                                 const movementMarker = isPromoting ? (
                                   <span title="Promotion position" style={{ color: "#2ecc71" }}>↑</span>
                                 ) : isRelegating ? (
