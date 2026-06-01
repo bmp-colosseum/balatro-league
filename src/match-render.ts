@@ -15,7 +15,7 @@ import {
   deckDescription,
   stakeDescription,
 } from "./balatro-info.js";
-import { deckEmojiPartial } from "./balatro-emojis.js";
+import { deckEmoji, deckEmojiPartial, stakeEmoji } from "./balatro-emojis.js";
 import { parsePolicy, phaseFor, remainingCombos, type GameState } from "./match-session.js";
 import type { DeckEntry } from "./match-config.js";
 
@@ -148,18 +148,6 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
       gameNumber === 1
         ? `**${first.displayName}** bans first (coin toss).`
         : `**${first.displayName}** bans first (chosen by the loser of game ${gameNumber - 1}).`;
-    embed.setDescription(
-      `${firstAttribution}\n\n` +
-        `**${whose.displayName}** to ban — pick **${expected}** combo(s) in the menu, then click Confirm.\n` +
-        `Pool: ${remaining.length} combo(s) remaining.` +
-        (pendingLabels.length > 0
-          ? `\n\n**Pending**: ${pendingLabels.join(", ")} _(not yet applied)_`
-          : "") +
-        rerollLine,
-    );
-    // Multi-select dropdown of remaining combos; min == max means Discord
-    // enforces an exact count of selections on submit. Default-mark the
-    // pending picks so the menu remembers them across re-renders.
     // Sort remaining combos by canonical order (deck A-Z, stake difficulty)
     // for predictable scanning. The underlying pool index stays in
     // `idx` so ban/select logic isn't affected — display order only.
@@ -168,6 +156,27 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
       if (d !== 0) return d;
       return canonicalStakeIndex(x.combo.stake) - canonicalStakeIndex(y.combo.stake);
     });
+    // BMP-style numbered list with deck + stake emojis inline so players see
+    // every option visually without expanding the dropdown.
+    const banOptionLines = sortedRemaining.map(({ combo }, i) => {
+      const deckIcon = deckEmoji(combo.deck) ?? "";
+      const stakeIcon = stakeEmoji(combo.stake) ?? "";
+      const icons = [deckIcon, stakeIcon].filter(Boolean).join(" ");
+      return `${i + 1}. ${icons ? `${icons} ` : ""}${combo.deck} / ${combo.stake}`;
+    });
+    embed.setDescription(
+      `${firstAttribution}\n\n` +
+        `**${whose.displayName}** to ban — pick **${expected}** combo(s) in the menu, then click Confirm.\n` +
+        `Pool: ${remaining.length} combo(s) remaining.\n\n` +
+        banOptionLines.join("\n") +
+        (pendingLabels.length > 0
+          ? `\n\n**Pending**: ${pendingLabels.join(", ")} _(not yet applied)_`
+          : "") +
+        rerollLine,
+    );
+    // Multi-select dropdown of remaining combos; min == max means Discord
+    // enforces an exact count of selections on submit. Default-mark the
+    // pending picks so the menu remembers them across re-renders.
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId(`match:banselect:${s.id}`)
       .setPlaceholder(`Pick ${expected} combo(s) to ban`)
@@ -231,13 +240,16 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
       return canonicalStakeIndex(x.combo.stake) - canonicalStakeIndex(y.combo.stake);
     });
     // Spell out each remaining combo's deck + stake effects in the embed
-    // so picker has full info without hovering a tooltip somewhere. Deck
-    // emoji renders inline before the name when its PNG is uploaded.
+    // so picker has full info without hovering a tooltip somewhere. Both
+    // deck and stake emojis render inline (Discord embed text has no
+    // one-emoji limit like select options do).
     const optionLines = sortedPickRemaining.map(({ combo }, i) => {
       const deckDesc = deckDescription(combo.deck);
       const stakeDesc = stakeDescription(combo.stake);
-      const deckIcon = deckEmojiPartial(combo.deck);
-      const iconPrefix = deckIcon ? `<:${deckIcon.name}:${deckIcon.id}> ` : "";
+      const deckIcon = deckEmoji(combo.deck) ?? "";
+      const stakeIcon = stakeEmoji(combo.stake) ?? "";
+      const icons = [deckIcon, stakeIcon].filter(Boolean).join(" ");
+      const iconPrefix = icons ? `${icons} ` : "";
       return (
         `**${i + 1}. ${iconPrefix}${combo.deck} / ${combo.stake}**` +
         (deckDesc ? `\n  · ${combo.deck}: ${deckDesc}` : "") +
