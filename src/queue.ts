@@ -23,6 +23,7 @@ import { resolveBackupChannelId } from "./backup-channel.js";
 import { resolveBotCommandsChannelId } from "./bot-commands-channel.js";
 import { prisma } from "./db.js";
 import { env } from "./env.js";
+import { checkQueueStalls } from "./devops-alarm.js";
 import { tryGetDiscordClient } from "./discord.js";
 import {
   addGuildMemberRole,
@@ -58,6 +59,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("report.post-pending");
   await boss.createQueue("report.auto-confirm");
   await boss.createQueue("archive.stale-threads");
+  await boss.createQueue("devops.queue-stall-check");
   console.log("[pg-boss] queue started");
 
   // Worker: send a DM to one user. Retried automatically on failure.
@@ -194,6 +196,20 @@ export async function initQueue(): Promise<void> {
   // fire at once. Idempotent.
   await boss.schedule("archive.stale-threads", "15 * * * *");
   console.log("[pg-boss] scheduled archive.stale-threads @ :15 hourly");
+
+  // Worker: scan pg-boss for jobs stuck in 'created' state >5min and
+  // post to #devops. Pings DEVOPS role bindings ONLY — distinct from
+  // league admin/helper. Hooking it as a pg-boss job means if pg-boss
+  // itself is unhealthy enough that this check can't run, we'd notice
+  // the check itself stops firing (silence = also a signal).
+  await boss.work("devops.queue-stall-check", { batchSize: 1 }, async () => {
+    await checkQueueStalls();
+  });
+  // Every 5 minutes. Threshold is 5min so first alert lands 5–10min
+  // after a stall starts. Cooldown inside the handler suppresses
+  // repeats per queue.
+  await boss.schedule("devops.queue-stall-check", "*/5 * * * *");
+  console.log("[pg-boss] scheduled devops.queue-stall-check every 5min");
 }
 
 export async function enqueueDm(job: DmJob): Promise<void> {

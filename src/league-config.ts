@@ -32,6 +32,11 @@ export const LeagueConfigKey = {
   // channels. Optional — falls back to interaction.channel when unset,
   // which matches the original /challenge behavior.
   ChallengesChannelId: "challenges_channel_id",
+  // Private channel for infra/DevOps alerts (queue stalls, rate-limit
+  // floods, anything that needs a tech person not a game admin). Resolved
+  // env.DEVOPS_CHANNEL_ID → LeagueConfig.DevopsChannelId → null (alerts
+  // log-only). Bootstrap auto-creates if neither is set.
+  DevopsChannelId: "devops_channel_id",
 } as const;
 
 export type LeagueConfigKey = (typeof LeagueConfigKey)[keyof typeof LeagueConfigKey];

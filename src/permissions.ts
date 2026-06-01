@@ -9,6 +9,9 @@
 //   OWNER  — full power including destructive ops + role binding
 //   ADMIN  — season/division CRUD, force-resolve disputes, exports
 //   HELPER — dispute mediation: join match channels, record verbal results
+//   DEVOPS — pure notification target for infra alerts. Rank 0 so it
+//            does NOT satisfy any league-admin permission check; it's
+//            a ping target, not a privilege ladder rung.
 
 import type { PermissionTier } from "@prisma/client";
 import type { ChatInputCommandInteraction, GuildMember } from "discord.js";
@@ -19,6 +22,7 @@ const TIER_RANK: Record<PermissionTier, number> = {
   OWNER: 3,
   ADMIN: 2,
   HELPER: 1,
+  DEVOPS: 0,
 };
 
 // Compute the highest tier a Discord user holds, given their guild roles.

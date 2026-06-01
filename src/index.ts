@@ -2,6 +2,7 @@ import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
 import { ensureBackupChannel } from "./backup-channel.js";
 import { ensureBotCommandsChannel } from "./bot-commands-channel.js";
 import { ensureChallengesChannel } from "./challenges-channel.js";
+import { ensureDevopsChannel } from "./devops-channel.js";
 import { checkChannelScope } from "./command-channels.js";
 import { buttonHandlers, selectMenuHandlers, slashCommands } from "./commands/index.js";
 import { setDiscordClient } from "./discord.js";
@@ -107,3 +108,6 @@ ensureBackupChannel().catch((err) => console.warn("[backup-channel] init failed:
 // And the casual-challenges parent channel under a dedicated '🎴 Matches'
 // category so /challenge threads have their own home.
 ensureChallengesChannel().catch((err) => console.warn("[challenges-channel] init failed:", err));
+// DevOps alert channel — infra-only, distinct from league admin. Used
+// by the queue-stall alarm; null is fine (alerts log to console).
+ensureDevopsChannel().catch((err) => console.warn("[devops-channel] init failed:", err));

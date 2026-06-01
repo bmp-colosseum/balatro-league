@@ -9,7 +9,10 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { fetchGuildMember } from "@/lib/discord";
 
-const TIER_RANK = { OWNER: 3, ADMIN: 2, HELPER: 1 } as const;
+// DEVOPS = 0: present so the table covers every PermissionTier value,
+// but ranks below HELPER so it never satisfies a league-admin check.
+// It's a notification target, not a permission ladder rung.
+const TIER_RANK = { OWNER: 3, ADMIN: 2, HELPER: 1, DEVOPS: 0 } as const;
 type Tier = keyof typeof TIER_RANK;
 
 export async function tierOfCurrentUser(): Promise<Tier | null> {

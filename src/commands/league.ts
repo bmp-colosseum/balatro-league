@@ -42,6 +42,7 @@ export const league: SlashCommand = {
               { name: "OWNER", value: "OWNER" },
               { name: "ADMIN", value: "ADMIN" },
               { name: "HELPER", value: "HELPER" },
+              { name: "DEVOPS", value: "DEVOPS" },
             ),
         )
         .addRoleOption((opt) =>
@@ -245,6 +246,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     const playerRole = await ensureRole("League Player", "Created by /league bootstrap-server");
     const adminRole = await ensureRole("League Admin", "Created by /league bootstrap-server — bound to bot's ADMIN tier");
     const helperRole = await ensureRole("League Helper", "Created by /league bootstrap-server — bound to bot's HELPER tier");
+    const devopsRole = await ensureRole("League DevOps", "Created by /league bootstrap-server — bound to bot's DEVOPS tier (infra alerts only)");
 
     // Wire the management roles to the bot's permission tiers so anyone
     // assigned the Discord role gets the matching permission on the web
@@ -259,6 +261,11 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
         where: { discordRoleId: helperRole.id },
         create: { discordRoleId: helperRole.id, tier: "HELPER", createdBy: interaction.user.id },
         update: { tier: "HELPER" },
+      }),
+      prisma.roleBinding.upsert({
+        where: { discordRoleId: devopsRole.id },
+        create: { discordRoleId: devopsRole.id, tier: "DEVOPS", createdBy: interaction.user.id },
+        update: { tier: "DEVOPS" },
       }),
     ]);
 
@@ -296,6 +303,39 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       where: { key: "backup_channel_id" },
       create: { key: "backup_channel_id", value: backupChan.id, updatedBy: interaction.user.id },
       update: { value: backupChan.id, updatedBy: interaction.user.id },
+    });
+
+    // DevOps channel — separate from league-backups. Infra alerts
+    // (queue stalls, rate-limit floods) post here pinging @League DevOps
+    // and don't bother league admins who can't act on tech issues.
+    async function ensureDevopsChan() {
+      const existing = guild.channels.cache.find(
+        (c) => c.type === ChannelType.GuildText && c.name === "devops" && c.parentId === categoryId,
+      );
+      if (existing && existing.type === ChannelType.GuildText) {
+        reused.push(`#devops`);
+        return existing;
+      }
+      const ch = await guild.channels.create({
+        name: "devops",
+        type: ChannelType.GuildText,
+        parent: categoryId,
+        topic: "🔧 Infra alerts: queue stalls, rate-limit floods, anything tech. DevOps-only.",
+        permissionOverwrites: [
+          { id: guild.roles.everyone.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+          { id: devopsRole.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+          // Bot itself needs view+send to post the actual alerts.
+          { id: interaction.client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+        ],
+      });
+      created.push(`#devops (private, DevOps-only)`);
+      return ch;
+    }
+    const devopsChan = await ensureDevopsChan();
+    await prisma.leagueConfig.upsert({
+      where: { key: "devops_channel_id" },
+      create: { key: "devops_channel_id", value: devopsChan.id, updatedBy: interaction.user.id },
+      update: { value: devopsChan.id, updatedBy: interaction.user.id },
     });
 
     // Casual matches get their own '🎴 Matches' category with a single
@@ -346,6 +386,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       `💬 <#${chatChan.id}> — league-chat`,
       `🤖 <#${botCmdChan.id}> — bot-commands (casual /challenge, /report)`,
       `📦 <#${backupChan.id}> — league-backups (staff-only, daily snapshots)`,
+      `🔧 <#${devopsChan.id}> — devops (DevOps-only, queue stalls + infra alerts)`,
       `🎴 <#${challengesChan.id}> — challenges (parent for casual /challenge threads, under 🎴 Matches)`,
       ``,
       `🎭 Roles:`,

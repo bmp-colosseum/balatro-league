@@ -27,6 +27,11 @@ const schema = z.object({
   // which is sensitive league config. If unset, bot auto-creates a
   // '📦 league-backups' channel restricted to staff roles on startup.
   BACKUP_CHANNEL_ID: z.string().optional(),
+  // Channel ID for DevOps alerts (queue stalls, rate-limit floods, infra
+  // health). Distinct from BACKUP_CHANNEL_ID — backups go to staff, infra
+  // alerts go to the people who can debug them. If unset, bot auto-creates
+  // a '🔧 devops' channel restricted to the DEVOPS role on startup.
+  DEVOPS_CHANNEL_ID: z.string().optional(),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
 });
 

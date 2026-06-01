@@ -309,6 +309,10 @@ enum PermissionTier {
   OWNER   // full power, including destructive ops + role binding
   ADMIN   // season/division management, force-resolve disputes, export
   HELPER  // dispute mediation: join match channels, record verbal results
+  DEVOPS  // infra alerts only (queue stalls, rate-limit floods). Does
+          // NOT grant league-admin powers — distinct surface from ADMIN
+          // so the people who can debug stack traces aren't pinged for
+          // game mediation, and vice versa.
 }
 
 // Global key-value config for the bot — things like the results-webhook
