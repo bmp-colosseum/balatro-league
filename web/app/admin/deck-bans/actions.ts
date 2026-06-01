@@ -9,6 +9,19 @@ import defaults from "@/lib/match-defaults.json";
 
 const DEFAULT_PRESET_NAME = "Default";
 
+// Any change to MatchConfigPreset (create, rename, delete, edit
+// decks/stakes) needs to bust the cached preset list on every
+// surface that renders it. Without this, an admin who creates a
+// preset on /admin/deck-bans wouldn't see it in /admin/seasons or
+// the per-season picker until the page's revalidate window expires.
+function revalidatePresetSurfaces() {
+  revalidatePresetSurfaces();
+  revalidatePath("/admin/seasons");
+  // The per-season picker lives on every season detail page.
+  // Layout-level revalidation invalidates all of them.
+  revalidatePath("/admin/seasons", "layout");
+}
+
 export async function createPreset(formData: FormData) {
   await requireAdmin();
   const name = String(formData.get("name") ?? "").trim();
@@ -21,7 +34,7 @@ export async function createPreset(formData: FormData) {
       stakes: seedDefaults ? defaults.stakes : [],
     },
   });
-  revalidatePath("/admin/deck-bans");
+  revalidatePresetSurfaces();
   redirect(`/admin/deck-bans?preset=${preset.id}`);
 }
 
@@ -31,7 +44,7 @@ export async function renamePreset(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   if (!id || !name) return;
   await prisma.matchConfigPreset.update({ where: { id }, data: { name } });
-  revalidatePath("/admin/deck-bans");
+  revalidatePresetSurfaces();
 }
 
 export async function deletePreset(formData: FormData) {
@@ -41,7 +54,7 @@ export async function deletePreset(formData: FormData) {
   // Season.matchConfigPresetId is ON DELETE SET NULL — any season pointing
   // at this preset will fall back to the Default preset at match-time.
   await prisma.matchConfigPreset.delete({ where: { id } });
-  revalidatePath("/admin/deck-bans");
+  revalidatePresetSurfaces();
   redirect("/admin/deck-bans");
 }
 
@@ -59,7 +72,7 @@ export async function addDeck(formData: FormData) {
     where: { id },
     data: { decks: [...preset.decks, name] },
   });
-  revalidatePath("/admin/deck-bans");
+  revalidatePresetSurfaces();
 }
 
 export async function removeDeck(formData: FormData) {
@@ -72,7 +85,7 @@ export async function removeDeck(formData: FormData) {
     where: { id },
     data: { decks: preset.decks.filter((d) => d !== name) },
   });
-  revalidatePath("/admin/deck-bans");
+  revalidatePresetSurfaces();
 }
 
 export async function addStake(formData: FormData) {
@@ -87,7 +100,7 @@ export async function addStake(formData: FormData) {
     where: { id },
     data: { stakes: [...preset.stakes, name] },
   });
-  revalidatePath("/admin/deck-bans");
+  revalidatePresetSurfaces();
 }
 
 export async function removeStake(formData: FormData) {
@@ -100,7 +113,7 @@ export async function removeStake(formData: FormData) {
     where: { id },
     data: { stakes: preset.stakes.filter((s) => s !== name) },
   });
-  revalidatePath("/admin/deck-bans");
+  revalidatePresetSurfaces();
 }
 
 // Bootstrap action — creates the Default preset on demand if none exists.
@@ -110,12 +123,12 @@ export async function seedDefaultPreset() {
     where: { name: DEFAULT_PRESET_NAME },
   });
   if (existing) {
-    revalidatePath("/admin/deck-bans");
+    revalidatePresetSurfaces();
     redirect(`/admin/deck-bans?preset=${existing.id}`);
   }
   const created = await prisma.matchConfigPreset.create({
     data: { name: DEFAULT_PRESET_NAME, decks: defaults.decks, stakes: defaults.stakes },
   });
-  revalidatePath("/admin/deck-bans");
+  revalidatePresetSurfaces();
   redirect(`/admin/deck-bans?preset=${created.id}`);
 }
