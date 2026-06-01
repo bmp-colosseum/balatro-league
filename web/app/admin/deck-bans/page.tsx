@@ -1,7 +1,6 @@
 ﻿import Link from "next/link";
-import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
+import { loadDeckBansPage } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { CANONICAL_DECKS, CANONICAL_STAKES, deckDescription, stakeDescription } from "@/lib/balatro-info";
@@ -25,16 +24,7 @@ export default async function DeckSelectionPage({
 }) {
   await requireAdmin();
   const { preset: presetIdParam } = await searchParams;
-
-  const presets = await prisma.matchConfigPreset.findMany({
-    orderBy: { name: "asc" },
-    include: { _count: { select: { seasons: true } } },
-  });
-
-  // Pick which preset to show in the editor pane
-  const selected = presetIdParam
-    ? presets.find((p) => p.id === presetIdParam)
-    : presets[0];
+  const { presets, selected } = await loadDeckBansPage(presetIdParam);
 
   return (
     <>
@@ -78,7 +68,7 @@ function PresetSidebar({
   presets,
   selectedId,
 }: {
-  presets: Array<{ id: string; name: string; _count: { seasons: number } }>;
+  presets: Array<{ id: string; name: string; seasonCount: number }>;
   selectedId: string | null;
 }) {
   return (
@@ -102,7 +92,7 @@ function PresetSidebar({
               >
                 <div>{p.name}</div>
                 <div className="muted" style={{ fontSize: 11 }}>
-                  {p._count.seasons} season{p._count.seasons === 1 ? "" : "s"} using this
+                  {p.seasonCount} season{p.seasonCount === 1 ? "" : "s"} using this
                 </div>
               </Link>
             </li>

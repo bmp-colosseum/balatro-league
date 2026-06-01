@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
+import { loadBulkImportSeasonContext } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { bulkImportSeason } from "./actions";
@@ -18,16 +18,7 @@ export default async function BulkImportPage({
   await requireAdmin();
   const { id } = await params;
   const { result } = await searchParams;
-
-  const season = await prisma.season.findUnique({
-    where: { id },
-    include: {
-      divisions: {
-        orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
-        include: { tier: true },
-      },
-    },
-  });
+  const season = await loadBulkImportSeasonContext(id);
   if (!season) notFound();
 
   const summary = result ? new URLSearchParams(decodeURIComponent(result)) : null;

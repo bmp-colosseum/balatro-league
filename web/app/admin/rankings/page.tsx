@@ -1,5 +1,5 @@
-import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
+import { loadAdminRankings } from "@/lib/loaders/admin";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
@@ -9,27 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminRankingsPage() {
   await requireAdmin();
-
-  const players = await prisma.player.findMany({
-    include: {
-      memberships: {
-        where: { division: { season: { isActive: true } } },
-        include: { division: { include: { tier: true } } },
-      },
-    },
-    orderBy: [{ rating: { sort: "desc", nulls: "last" } }, { displayName: "asc" }],
-  });
-
-  // Latest BMP MMR snapshot per player (any season — we want whatever's
-  // most current, regardless of which season it was tied to).
-  const latestSnapshots = await prisma.playerMmrSnapshot.findMany({
-    where: { playerId: { in: players.map((p) => p.id) } },
-    orderBy: { capturedAt: "desc" },
-    distinct: ["playerId"],
-  });
-  const snapshotByPlayerId = new Map(
-    latestSnapshots.filter((s) => s.playerId).map((s) => [s.playerId!, s] as const),
-  );
+  const players = await loadAdminRankings();
 
   return (
     <>
@@ -88,43 +68,37 @@ export default async function AdminRankingsPage() {
             <tbody>
               {players.length === 0 ? (
                 <tr><td colSpan={5} className="muted">No players yet.</td></tr>
-              ) : players.map((p) => {
-                const div = p.memberships[0]?.division;
-                const snap = snapshotByPlayerId.get(p.id);
-                return (
-                  <tr key={p.id}>
-                    <td>
-                      <strong>{p.displayName}</strong>
-                    </td>
-                    <td><span className="muted">{p.discordId}</span></td>
-                    <td>
-                      {div ? (
-                        <TierPill name={div.name} position={div.tier.position} />
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
-                    <td style={{ fontSize: 12 }}>
-                      {snap?.rankedMmr != null ? (
-                        <span>
-                          <strong>{snap.rankedMmr}</strong>{" "}
-                          <span className="muted">({snap.rankedTier})</span>
-                        </span>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
-                    <td>
-                      <form action={setRating} style={{ display: "flex", gap: 6 }}>
-                        <input type="hidden" name="playerId" value={p.id} />
-                        <input type="number" name="rating" defaultValue={p.rating ?? ""} placeholder="unrated" style={{ width: 90 }} />
-                        <input type="text" name="ratingNote" defaultValue={p.ratingNote ?? ""} placeholder="note (optional)" style={{ width: 240 }} />
-                        <button type="submit">Save</button>
-                      </form>
-                    </td>
-                  </tr>
-                );
-              })}
+              ) : players.map((p) => (
+                <tr key={p.id}>
+                  <td><strong>{p.displayName}</strong></td>
+                  <td><span className="muted">{p.discordId}</span></td>
+                  <td>
+                    {p.division ? (
+                      <TierPill name={p.division.name} position={p.division.tierPosition} />
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
+                  <td style={{ fontSize: 12 }}>
+                    {p.latestMmr?.rankedMmr != null ? (
+                      <span>
+                        <strong>{p.latestMmr.rankedMmr}</strong>{" "}
+                        <span className="muted">({p.latestMmr.rankedTier})</span>
+                      </span>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
+                  <td>
+                    <form action={setRating} style={{ display: "flex", gap: 6 }}>
+                      <input type="hidden" name="playerId" value={p.id} />
+                      <input type="number" name="rating" defaultValue={p.rating ?? ""} placeholder="unrated" style={{ width: 90 }} />
+                      <input type="text" name="ratingNote" defaultValue={p.ratingNote ?? ""} placeholder="note (optional)" style={{ width: 240 }} />
+                      <button type="submit">Save</button>
+                    </form>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
