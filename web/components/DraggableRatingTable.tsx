@@ -137,16 +137,14 @@ export function DraggableRatingTable({
   // Sort presets. Each one replaces the local order — the user's manual
   // drag is discarded (drag state isn't persisted until Save, so there's
   // nothing to warn about beyond "the visible order changes").
+  // Smart sort = single key: Player.rating, falling back to BMP MMR
+  // when null. Matches the server-side initial render so smart sort
+  // restores it after a manual reorder.
   const sortSmart = () => {
     setRows([...rows].sort((a, b) => {
-      const aIsRet = a.leagueRating != null;
-      const bIsRet = b.leagueRating != null;
-      if (aIsRet !== bIsRet) return aIsRet ? -1 : 1;
-      if (aIsRet && bIsRet) {
-        const d = (b.leagueRating ?? -1) - (a.leagueRating ?? -1);
-        if (d !== 0) return d;
-      }
-      return (b.bmpMmr ?? -1) - (a.bmpMmr ?? -1);
+      const aKey = a.leagueRating ?? a.bmpMmr ?? -1;
+      const bKey = b.leagueRating ?? b.bmpMmr ?? -1;
+      return bKey - aKey;
     }));
   };
   const sortByBmpMmr = () => {
