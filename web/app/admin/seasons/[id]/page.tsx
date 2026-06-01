@@ -5,6 +5,7 @@ import { loadAdminSeasonDetail } from "@/lib/loaders/admin";
 import { prisma } from "@/lib/prisma";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
+import { DraggableDivisionsEditor, type EditorMember, type EditorTier } from "@/components/DraggableDivisionsEditor";
 import { SeasonDeckPresetPicker } from "@/components/SeasonDeckPresetPicker";
 import { TierEditor } from "@/components/TierEditor";
 import { tierColors } from "@/lib/tier-colors";
@@ -252,7 +253,41 @@ export default async function SeasonDetailPage({
               </div>
             )}
 
-            {season.tiers.map((tier) => {
+            {/* In draft mode, use the drag-and-drop editor. It owns
+                tier headers + member rows + move + late-add forms in
+                one client component so cross-division drags work
+                without page roundtrips. */}
+            {!season.isActive && !season.endedAt && (() => {
+              const editorTiers: EditorTier[] = season.tiers.map((t) => ({
+                id: t.id,
+                name: t.name,
+                position: t.position,
+                color: tierColors(t.position),
+              }));
+              const editorDivisions = season.divisions.map((d) => ({
+                id: d.id,
+                name: d.name,
+                tierId: d.tierId,
+              }));
+              const editorMembers: EditorMember[] = season.divisions.flatMap((d) =>
+                d.members.map((m) => ({
+                  id: m.id,
+                  playerId: m.player.id,
+                  playerName: m.player.displayName,
+                  divisionId: d.id,
+                })),
+              );
+              return (
+                <DraggableDivisionsEditor
+                  seasonId={season.id}
+                  tiers={editorTiers}
+                  divisions={editorDivisions}
+                  initialMembers={editorMembers}
+                />
+              );
+            })()}
+
+            {(season.isActive || season.endedAt) && season.tiers.map((tier) => {
               const tierDivs = season.divisions.filter((d) => d.tierId === tier.id);
               const tc = tierColors(tier.position);
               const isDraft = !season.isActive && !season.endedAt;
