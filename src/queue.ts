@@ -18,6 +18,7 @@
 
 import { PgBoss, type Job } from "pg-boss";
 import { fetchPlayerStats } from "./balatromp.js";
+import { resolveBackupChannelId } from "./backup-channel.js";
 import { resolveBotCommandsChannelId } from "./bot-commands-channel.js";
 import { prisma } from "./db.js";
 import { env } from "./env.js";
@@ -154,9 +155,13 @@ export async function runLeagueBackup(): Promise<{
     console.warn("[backup.league] Discord client not ready; skipping post");
     return { postedTo: null, fileSize: buf.length, filename };
   }
-  const channelId = await resolveBotCommandsChannelId();
+  // Backups go to the dedicated staff-private backup channel — falls
+  // back to bot-commands ONLY when no backup channel is set (legacy/
+  // first-boot transition). Once ensureBackupChannel runs and stores
+  // the id, this path uses the dedicated channel.
+  const channelId = (await resolveBackupChannelId()) ?? (await resolveBotCommandsChannelId());
   if (!channelId) {
-    console.warn("[backup.league] no bot-commands channel configured; skipping post");
+    console.warn("[backup.league] no destination channel resolved; skipping post");
     return { postedTo: null, fileSize: buf.length, filename };
   }
   try {

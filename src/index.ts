@@ -1,4 +1,5 @@
 import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
+import { ensureBackupChannel } from "./backup-channel.js";
 import { ensureBotCommandsChannel } from "./bot-commands-channel.js";
 import { checkChannelScope } from "./command-channels.js";
 import { buttonHandlers, selectMenuHandlers, slashCommands } from "./commands/index.js";
@@ -99,3 +100,6 @@ initQueue().catch((err) => console.warn("[pg-boss] init failed:", err));
 // Auto-create the bot-commands channel if neither env var nor LeagueConfig
 // has one already. Best-effort — admin can always pin manually later.
 ensureBotCommandsChannel().catch((err) => console.warn("[bot-commands] init failed:", err));
+// Same pattern for the private backup channel — sensitive content
+// (full pairings + season config) should not land in public bot-commands.
+ensureBackupChannel().catch((err) => console.warn("[backup-channel] init failed:", err));

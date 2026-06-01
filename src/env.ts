@@ -22,6 +22,11 @@ const schema = z.object({
   // division (mostly /challenge for casual matches). Optional — if unset,
   // match-flow commands only work in division channels.
   BOT_COMMANDS_CHANNEL_ID: z.string().optional(),
+  // Channel ID for daily league backups (JSON snapshot attachment).
+  // Should be admin-private — backup includes seasons/divisions/pairings
+  // which is sensitive league config. If unset, bot auto-creates a
+  // '📦 league-backups' channel restricted to staff roles on startup.
+  BACKUP_CHANNEL_ID: z.string().optional(),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
 });
 
