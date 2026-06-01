@@ -68,7 +68,10 @@ export async function reportSet(input: ReportInput): Promise<ReportResult> {
     };
   }
 
-  // Auto-confirm: trust the report. Opponent or admin can contest via override-result.
+  // PENDING by default — opponent confirms via the embed buttons in
+  // #results, OR the 2-minute auto-confirm pg-boss job fires and
+  // promotes it to CONFIRMED. No standings recompute or announce
+  // happens until status flips to CONFIRMED.
   const now = new Date();
   const pairing = existing
     ? await prisma.pairing.update({
@@ -76,10 +79,10 @@ export async function reportSet(input: ReportInput): Promise<ReportResult> {
         data: {
           gamesWonA,
           gamesWonB,
-          status: "CONFIRMED",
+          status: "PENDING",
           reporterId: input.reporterPlayerId,
           reportedAt: now,
-          confirmedAt: now,
+          confirmedAt: null,
         },
       })
     : await prisma.pairing.create({
@@ -89,16 +92,11 @@ export async function reportSet(input: ReportInput): Promise<ReportResult> {
           playerBId,
           gamesWonA,
           gamesWonB,
-          status: "CONFIRMED",
+          status: "PENDING",
           reporterId: input.reporterPlayerId,
           reportedAt: now,
-          confirmedAt: now,
         },
       });
-
-  // Fire-and-forget announcement (skipped for INTERNAL seasons)
-  announceResult(pairing.id).catch(() => {});
-  recomputeDivisionStandings(division.id).catch(() => {});
 
   return { ok: true, pairingId: pairing.id, status: existing ? "REREPORTED" : "CREATED" };
 }

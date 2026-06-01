@@ -31,6 +31,8 @@ import {
 } from "./discord-helpers.js";
 import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
 import { buildLeagueExport, exportFilename, serializeExport } from "./league-export.js";
+import { postPendingReport } from "./report-flow.js";
+import { autoConfirmReport } from "./report-auto-confirm.js";
 import { ChannelType, AttachmentBuilder } from "discord.js";
 
 let boss: PgBoss | null = null;
@@ -52,6 +54,8 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("snapshot.mmr");
   await boss.createQueue("refresh.active-mmrs");
   await boss.createQueue("backup.league");
+  await boss.createQueue("report.post-pending");
+  await boss.createQueue("report.auto-confirm");
   console.log("[pg-boss] queue started");
 
   // Worker: send a DM to one user. Retried automatically on failure.
@@ -145,11 +149,57 @@ export async function initQueue(): Promise<void> {
   // non-issue for Discord storage.
   await boss.schedule("backup.league", "0 6 * * *");
   console.log("[pg-boss] scheduled backup.league @ 06:00 UTC daily");
+
+  // Worker: post the public PENDING report embed to #results. Used by
+  // the web-side /me report flow which can't post directly. Discord
+  // /report posts inline so it normally bypasses this queue.
+  await boss.work<{ pairingId: string }>(
+    "report.post-pending",
+    { batchSize: 5 },
+    async (jobs) => {
+      for (const job of jobs) {
+        await postPendingReport(job.data.pairingId).catch((err) =>
+          console.warn(`[report.post-pending] ${job.data.pairingId} failed:`, err),
+        );
+      }
+    },
+  );
+
+  // Worker: 2-min auto-confirm. Both the inline /report path AND the
+  // web report path enqueue this with startAfter 120s. Handler is a
+  // no-op if the pairing already left PENDING (opponent confirmed,
+  // admin overrode, etc).
+  await boss.work<{ pairingId: string }>(
+    "report.auto-confirm",
+    { batchSize: 5 },
+    async (jobs) => {
+      for (const job of jobs) {
+        await autoConfirmReport(job.data.pairingId).catch((err) =>
+          console.warn(`[report.auto-confirm] ${job.data.pairingId} failed:`, err),
+        );
+      }
+    },
+  );
 }
 
 export async function enqueueDm(job: DmJob): Promise<void> {
   if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
   await boss.send("notify.dm", job, { retryLimit: 3, retryBackoff: true });
+}
+
+export async function enqueueReportPostPending(pairingId: string): Promise<void> {
+  if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
+  await boss.send("report.post-pending", { pairingId }, { retryLimit: 2 });
+}
+
+const AUTO_CONFIRM_DELAY_SECONDS = 120;
+export async function enqueueReportAutoConfirm(pairingId: string): Promise<void> {
+  if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
+  await boss.send(
+    "report.auto-confirm",
+    { pairingId },
+    { startAfter: AUTO_CONFIRM_DELAY_SECONDS, retryLimit: 2 },
+  );
 }
 
 // Build snapshot, post to the bot-commands channel as a file. Shared

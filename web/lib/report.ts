@@ -1,10 +1,10 @@
 // Pure web-side report logic. Mirrors src/reporting.ts so the rules
-// (one auto-confirmed Pairing per matchup per season, validates both
-// players in same division) are identical no matter where the report
-// comes from.
+// (one pending-then-confirmed Pairing per matchup per season,
+// validates both players in same division) are identical no matter
+// where the report comes from.
 
 import { prisma } from "@/lib/prisma";
-import { recomputeDivisionStandings } from "@/lib/standings-cache";
+import { enqueueReportAutoConfirm, enqueueReportPostPending } from "@/lib/queue";
 
 export type ReportResultStr = "2-0" | "1-1" | "0-2";
 
@@ -68,24 +68,35 @@ export async function reportSetFromWeb(
       reason: `Already recorded ${existing.gamesWonA}-${existing.gamesWonB}. Ask an admin to use /admin override-result if it needs to change.`,
     };
   }
+  if (existing && existing.status === "PENDING") {
+    return {
+      ok: false,
+      reason: "There's already a pending report for this match — opponent needs to confirm/dispute first (or wait for the 2-min auto-confirm).",
+    };
+  }
 
+  // PENDING by default — bot posts the public embed + opponent confirms
+  // or 2-min auto-confirm fires. No standings update yet.
   const now = new Date();
   const pairing = existing
     ? await prisma.pairing.update({
         where: { id: existing.id },
-        data: { gamesWonA, gamesWonB, status: "CONFIRMED", reporterId: reporter.id, reportedAt: now, confirmedAt: now },
+        data: { gamesWonA, gamesWonB, status: "PENDING", reporterId: reporter.id, reportedAt: now, confirmedAt: null },
       })
     : await prisma.pairing.create({
         data: {
           divisionId: division.id,
           playerAId, playerBId, gamesWonA, gamesWonB,
-          status: "CONFIRMED",
+          status: "PENDING",
           reporterId: reporter.id,
           reportedAt: now,
-          confirmedAt: now,
         },
       });
-  recomputeDivisionStandings(division.id).catch(() => {});
+  // Hand off the Discord-side work to the bot via pg-boss. Both jobs
+  // are idempotent on the worker side — auto-confirm no-ops if status
+  // already changed, post-pending no-ops if the message already exists.
+  enqueueReportPostPending(pairing.id).catch((err) => console.warn("[web report] post-pending enqueue:", err));
+  enqueueReportAutoConfirm(pairing.id).catch((err) => console.warn("[web report] auto-confirm enqueue:", err));
 
   return { ok: true, pairingId: pairing.id, created: !existing };
 }

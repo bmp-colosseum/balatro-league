@@ -1,14 +1,24 @@
 import {
+  ChannelType,
   EmbedBuilder,
   MessageFlags,
   SlashCommandBuilder,
+  ThreadAutoArchiveDuration,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
+  type TextChannel,
 } from "discord.js";
+import { announceResult } from "../announce.js";
 import { prisma } from "../db.js";
 import { getOrCreatePlayer } from "../players.js";
+import { enqueueReportAutoConfirm } from "../queue.js";
+import {
+  buildReportEmbed,
+  pendingButtons,
+  postPendingReport,
+} from "../report-flow.js";
 import { confirmSet, disputeSet, reportSet } from "../reporting.js";
-import { gamesFromResult, parsePairingResult } from "../scoring.js";
+import { recomputeDivisionStandings } from "../standings-cache.js";
 import type { ButtonHandler, SlashCommand } from "./types.js";
 
 const RESULT_CHOICES = [
@@ -36,16 +46,13 @@ export const report: SlashCommand = {
   async execute(interaction: ChatInputCommandInteraction) {
     const opponentUser = interaction.options.getUser("opponent", true);
     const resultStr = interaction.options.getString("result", true);
-    const result = parsePairingResult(resultStr);
-
-    if (!result) {
+    if (!["2-0", "1-1", "0-2"].includes(resultStr)) {
       await interaction.reply({
         content: `Invalid result \`${resultStr}\`. Use 2-0, 1-1, or 0-2.`,
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
-
     if (opponentUser.bot) {
       await interaction.reply({
         content: "Opponents must be real players, not bots.",
@@ -54,7 +61,7 @@ export const report: SlashCommand = {
       return;
     }
 
-    await interaction.deferReply();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const reporter = await getOrCreatePlayer(interaction.user);
     const opponent = await getOrCreatePlayer(opponentUser);
@@ -62,28 +69,24 @@ export const report: SlashCommand = {
     const r = await reportSet({
       reporterPlayerId: reporter.id,
       opponentPlayerId: opponent.id,
-      result,
+      result: resultStr as "2-0" | "1-1" | "0-2",
     });
     if (!r.ok) {
       await interaction.editReply(r.reason);
       return;
     }
 
-    const games = gamesFromResult(result);
-    const division = await prisma.division.findFirst({
-      where: { members: { some: { playerId: reporter.id } }, season: { isActive: true, visibility: "PUBLIC" } },
-    });
-    const displayed = `${games.a}-${games.b}`;
-    const embed = new EmbedBuilder()
-      .setTitle("✅ Match recorded")
-      .setDescription(
-        `<@${interaction.user.id}> **${displayed}** vs <@${opponentUser.id}>${division ? ` in **${division.name}**` : ""}.\n` +
-          `_Doesn't look right? Ask an admin to use \`/admin override-result set-id:${r.pairingId}\`._`,
-      )
-      .setColor(0x2ecc71)
-      .setFooter({ text: `Match ${r.pairingId}` });
+    // Post the public PENDING embed to #results + schedule the 2-min
+    // auto-confirm fallback. If the post fails, auto-confirm still fires
+    // from the pg-boss queue — reporter just doesn't get a confirm/dispute
+    // button visible to the opponent.
+    await postPendingReport(r.pairingId);
+    await enqueueReportAutoConfirm(r.pairingId);
 
-    await interaction.editReply({ embeds: [embed] });
+    await interaction.editReply(
+      `📝 Reported. Opponent has 2 minutes to confirm or dispute in #results, then it auto-confirms. ` +
+        `Match id: \`${r.pairingId}\``,
+    );
   },
 };
 
@@ -115,28 +118,70 @@ export const reportButtons: ButtonHandler = {
     });
     if (!pairing) return;
 
+    const reporterIsA = pairing.reporterId === pairing.playerAId;
+    const reporter = reporterIsA ? pairing.playerA : pairing.playerB;
+    const opponent = reporterIsA ? pairing.playerB : pairing.playerA;
+
     if (action === "confirm") {
-      const display = `${pairing.gamesWonA}-${pairing.gamesWonB}`;
-      const embed = new EmbedBuilder()
-        .setTitle("Match confirmed")
-        .setDescription(
-          `<@${pairing.playerA.discordId}> **${display}** <@${pairing.playerB.discordId}>\n` +
-            `Division: **${pairing.division.name}**`,
-        )
-        .setColor(0x2ecc71)
-        .setFooter({ text: `Match ${pairing.id}` });
-      await interaction.update({ embeds: [embed], components: [] });
+      // confirmSet already wrote status=CONFIRMED + recompute. Fire the
+      // announce here so the results-channel post + standings page
+      // align. Edit the embed to drop the buttons and show outcome.
+      announceResult(pairingId).catch(() => {});
+      recomputeDivisionStandings(pairing.divisionId).catch(() => {});
+      const embed = buildReportEmbed({
+        status: "CONFIRMED",
+        reporter,
+        opponent,
+        divisionName: pairing.division.name,
+        result: { gamesWonA: pairing.gamesWonA, gamesWonB: pairing.gamesWonB },
+        reporterIsA,
+        pairingId: pairing.id,
+      });
+      await interaction.update({ content: "", embeds: [embed], components: [] });
       return;
     }
 
-    const embed = new EmbedBuilder()
-      .setTitle("Match disputed")
-      .setDescription(
-        `<@${pairing.playerA.discordId}> vs <@${pairing.playerB.discordId}> in **${pairing.division.name}** — opponent disputed the reported result.\n` +
-          "An admin needs to use `/admin override-result` to resolve this.",
-      )
-      .setColor(0xe74c3c)
-      .setFooter({ text: `Match ${pairing.id}` });
-    await interaction.update({ embeds: [embed], components: [] });
+    // Dispute: spawn a public thread under the report channel and ping
+    // helpers. Players + anyone with #results visibility see the
+    // discussion; helpers mediate.
+    const embed = buildReportEmbed({
+      status: "DISPUTED",
+      reporter,
+      opponent,
+      divisionName: pairing.division.name,
+      result: { gamesWonA: pairing.gamesWonA, gamesWonB: pairing.gamesWonB },
+      reporterIsA,
+      pairingId: pairing.id,
+    });
+    await interaction.update({ content: "", embeds: [embed], components: [] });
+
+    // Best-effort thread spawn. interaction.message is the original
+    // report embed in #results — the thread spawns inside its channel
+    // (when supported by channel type).
+    if (interaction.channel && interaction.channel.type === ChannelType.GuildText) {
+      try {
+        const text = interaction.channel as TextChannel;
+        const thread = await text.threads.create({
+          name: `Dispute · ${reporter.displayName} vs ${opponent.displayName} · ${pairing.id.slice(-6)}`,
+          type: ChannelType.PublicThread,
+          autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
+          startMessage: interaction.message.id,
+        });
+        // Ping helper / admin roles in the thread so they get a notification.
+        const staffBindings = await prisma.roleBinding.findMany({
+          where: { tier: { in: ["ADMIN", "HELPER"] } },
+        });
+        const staffMentions = staffBindings.map((b) => `<@&${b.discordRoleId}>`).join(" ");
+        await thread.send({
+          content:
+            `${staffMentions ? staffMentions + "\n" : ""}` +
+            `<@${reporter.discordId}> reported **${reporter.displayName} ${pairing.gamesWonA}-${pairing.gamesWonB} ${opponent.displayName}** in **${pairing.division.name}**.\n` +
+            `<@${opponent.discordId}> disputed the result.\n\n` +
+            `Discuss what happened here. A helper will mediate and resolve via \`/admin override-result\` (CONFIRMED with the right score) or \`/admin undo-report\` (back to unplayed).`,
+        });
+      } catch (err) {
+        console.warn(`[report.dispute] couldn't spawn thread for ${pairingId}:`, err);
+      }
+    }
   },
 };

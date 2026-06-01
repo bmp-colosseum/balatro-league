@@ -264,6 +264,11 @@ model MatchSession {
   // 1, 2, or 3. 1 = one game and done. 2 = league default. 3 = play game 3
   // only if game 1 and 2 split (1-1 W-L).
   bestOf        Int               @default(2)
+  // True when this is a tiebreaker shootout (e.g. /start-match mode:shootout
+  // between two players tied for promo/relegation after a 1-1 regular-season
+  // h2h). Forces bestOf=1 and writes a Shootout row instead of a Pairing
+  // at COMPLETE. Mutually exclusive with isCasual in practice.
+  isShootout    Boolean           @default(false)
   threadId      String?           // Discord thread id (set once accepted)
   channelId     String?           // parent channel of the thread
 
@@ -417,6 +422,15 @@ model DivisionStandings {
 // Recorded by /admin record-shootout (Helper+) or /report-shootout
 // (self-service, auto-confirmed). Standings cache recomputes on any
 // Shootout write so the sort reflects the result immediately.
+// Tracks where the public report embed for a Pairing was posted, so the
+// 2-min auto-confirm job and the Confirm/Dispute button handlers can
+// re-edit it in place. Added alongside the opponent-confirms reporting
+// flow — was redundant when /report auto-confirmed immediately.
+//
+// Kept as direct columns on Pairing (vs a side table) because they're
+// 1:1 with the row's lifecycle and queried on every confirm/dispute
+// interaction.
+
 model Shootout {
   id          String   @id @default(cuid())
   divisionId  String
@@ -490,6 +504,12 @@ model Pairing {
   // If status=CONFIRMED via admin override, who and why
   adminOverrideBy String?
   adminOverrideReason String?
+  // Where the public report embed was posted (Discord IDs). Populated
+  // when /report or the web report submits and triggers a #results
+  // post; used by the 2-min auto-confirm cron + Confirm/Dispute buttons
+  // to edit the original embed in place.
+  reportChannelId String?
+  reportMessageId String?
 
   division     Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
   playerA      Player   @relation("PairingPlayerA", fields: [playerAId], references: [id])

@@ -81,3 +81,21 @@ export async function enqueueMmrSnapshot(job: {
     retryBackoff: true,
   });
 }
+
+// Web-side report just creates a PENDING Pairing; the bot owns the
+// public #results embed + the 2-min auto-confirm timer. These two
+// enqueues hand the rest of the flow off.
+export async function enqueueReportPostPending(pairingId: string): Promise<void> {
+  await ensureStarted();
+  await getBoss().send("report.post-pending", { pairingId }, { retryLimit: 2 });
+}
+
+const AUTO_CONFIRM_DELAY_SECONDS = 120;
+export async function enqueueReportAutoConfirm(pairingId: string): Promise<void> {
+  await ensureStarted();
+  await getBoss().send(
+    "report.auto-confirm",
+    { pairingId },
+    { startAfter: AUTO_CONFIRM_DELAY_SECONDS, retryLimit: 2 },
+  );
+}
