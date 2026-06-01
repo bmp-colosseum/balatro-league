@@ -7,9 +7,12 @@
 // rankings, presets, etc.) live on www.balatroleague.com.
 
 import {
+  ChannelType,
   MessageFlags,
+  PermissionFlagsBits,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
+  type TextChannel,
 } from "discord.js";
 import { announceResult } from "../announce.js";
 import { prisma } from "../db.js";
@@ -63,6 +66,17 @@ export const admin: SlashCommand = {
             .addChoices(...RESULT_CHOICES),
         )
         .addStringOption((opt) => opt.setName("reason").setDescription("Why").setRequired(true)),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("join-match")
+        .setDescription("Add yourself to a private match channel to mediate a dispute.")
+        .addStringOption((opt) =>
+          opt
+            .setName("match-id")
+            .setDescription("Match session ID — shown in the embed footer as 'Match {id}'")
+            .setRequired(true),
+        ),
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
@@ -70,8 +84,52 @@ export const admin: SlashCommand = {
     const sub = interaction.options.getSubcommand();
     if (sub === "record-set") return recordPairing(interaction);
     if (sub === "override-result") return forceResult(interaction);
+    if (sub === "join-match") return joinMatch(interaction);
   },
 };
+
+// Add the calling admin to a specific match channel's permission overwrites.
+// Match channels are private (only the 2 players see them by default), so
+// when a dispute comes in admin needs to opt themselves in. Players share
+// the match-id from the embed footer; admin pastes it here.
+async function joinMatch(interaction: ChatInputCommandInteraction) {
+  const matchId = interaction.options.getString("match-id", true).trim();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const session = await prisma.matchSession.findUnique({ where: { id: matchId } });
+  if (!session) {
+    await interaction.editReply(`No match session found with id \`${matchId}\`.`);
+    return;
+  }
+  if (!session.threadId) {
+    await interaction.editReply("That match doesn't have a dedicated channel yet (not accepted).");
+    return;
+  }
+  try {
+    const channel = await interaction.client.channels.fetch(session.threadId);
+    if (!channel || channel.type !== ChannelType.GuildText) {
+      await interaction.editReply("Match channel doesn't exist anymore — it may have been deleted.");
+      return;
+    }
+    const text = channel as TextChannel;
+    await text.permissionOverwrites.edit(
+      interaction.user.id,
+      { ViewChannel: true, SendMessages: true, ReadMessageHistory: true },
+      { reason: `Admin ${interaction.user.username} joining for mediation` },
+    );
+    await text.send(
+      `🛠️ <@${interaction.user.id}> joined to mediate. Players: explain the situation here.`,
+    );
+    await interaction.editReply(`Joined <#${session.threadId}>. Head over there to mediate.`);
+  } catch (err) {
+    console.warn("[admin join-match] failed:", err);
+    await interaction.editReply("Couldn't join — check the bot has Manage Channels and is above relevant roles.");
+  }
+  // Silence the unused-PermissionFlagsBits warning if no other reference
+  // is added later; explicit usage keeps the import alive for any future
+  // permission edits in this file.
+  void PermissionFlagsBits;
+}
 
 async function recordPairing(interaction: ChatInputCommandInteraction) {
   const p1User = interaction.options.getUser("p1", true);

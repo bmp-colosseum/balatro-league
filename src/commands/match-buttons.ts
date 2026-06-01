@@ -303,16 +303,13 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
     // Discord channel names: lowercase, no spaces, max ~100 chars.
     const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 20);
     const channelName = `match-${slug(playerA.displayName)}-vs-${slug(playerB.displayName)}-${suffix}`;
-    // Look up admin role IDs so staff can drop in to mediate disputes
-    // without needing the players to invite them manually.
-    const staffBindings = await prisma.roleBinding.findMany({
-      where: { tier: { in: ["ADMIN", "MOD"] } },
-    });
-    const staffRoleIds = staffBindings.map((b) => b.discordRoleId);
+    // Staff is NOT auto-added to match channels — keeps them genuinely
+    // private to the two players. Admins can opt themselves into a
+    // specific channel via /admin join-match when called for (dispute,
+    // mediation, etc).
     const created = await createGuildTextChannel(interaction.guildId, channelName, {
       parentId: category?.id,
       topic: `${playerA.displayName} vs ${playerB.displayName}${session.isCasual ? " · casual" : ""}`,
-      visibleToRoleIds: staffRoleIds,
       visibleToUserIds: [playerA.discordId, playerB.discordId],
     });
     if (created) matchChannelId = created.id;
