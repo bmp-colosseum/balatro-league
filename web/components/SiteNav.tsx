@@ -8,6 +8,7 @@ const PUBLIC_LINKS = [
   { href: "/standings", label: "Standings" },
   { href: "/players", label: "Players" },
   { href: "/seasons", label: "Past seasons" },
+  { href: "/how-to-play", label: "How to play" },
 ] as const;
 
 export async function SiteNav({ activePath }: { activePath: string }) {
@@ -17,7 +18,10 @@ export async function SiteNav({ activePath }: { activePath: string }) {
   const isAdmin = isLoggedIn ? await isAdminUser() : false;
 
   const links: { href: string; label: string }[] = [...PUBLIC_LINKS];
-  if (isLoggedIn) links.push({ href: "/me", label: "My profile" });
+  if (isLoggedIn) {
+    links.push({ href: "/report", label: "Report match" });
+    links.push({ href: "/me", label: "My profile" });
+  }
   if (isAdmin) links.push({ href: "/admin", label: "Admin" });
 
   return (

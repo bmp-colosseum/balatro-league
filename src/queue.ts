@@ -17,6 +17,7 @@
 // same Postgres tables; this file owns the workers.
 
 import { PgBoss, type Job } from "pg-boss";
+import { archiveStaleThreads } from "./archive-stale-threads.js";
 import { detectCurrentBmpSeason, fetchPlayerStats } from "./balatromp.js";
 import { resolveBackupChannelId } from "./backup-channel.js";
 import { resolveBotCommandsChannelId } from "./bot-commands-channel.js";
@@ -56,6 +57,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("backup.league");
   await boss.createQueue("report.post-pending");
   await boss.createQueue("report.auto-confirm");
+  await boss.createQueue("archive.stale-threads");
   console.log("[pg-boss] queue started");
 
   // Worker: send a DM to one user. Retried automatically on failure.
@@ -180,6 +182,18 @@ export async function initQueue(): Promise<void> {
       }
     },
   );
+
+  // Worker: sweep COMPLETE/CANCELLED MatchSession threads that the
+  // inline closeMatchChannel() never finished. Discord has a 1000
+  // active-thread soft cap; this keeps us from leaking into it when
+  // a closure failed (bot restart, 5xx, permissions blip).
+  await boss.work("archive.stale-threads", { batchSize: 1 }, async () => {
+    await archiveStaleThreads();
+  });
+  // Hourly at :15 — offset from the other crons so they don't all
+  // fire at once. Idempotent.
+  await boss.schedule("archive.stale-threads", "15 * * * *");
+  console.log("[pg-boss] scheduled archive.stale-threads @ :15 hourly");
 }
 
 export async function enqueueDm(job: DmJob): Promise<void> {

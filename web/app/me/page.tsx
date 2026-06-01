@@ -293,7 +293,8 @@ export default async function MePage({
                 </form>
               )}
               <p className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-                Reports are auto-confirmed and recorded immediately. If something looks wrong, ask an admin
+                Reports go to <strong>#results</strong> with Confirm + Dispute buttons. Your opponent has{" "}
+                <strong>2 minutes</strong> — if no one clicks, it auto-confirms. Mistake? Ask an admin
                 to use <code>/admin override-result</code> in Discord.
               </p>
             </div>

@@ -286,10 +286,20 @@ model MatchSession {
   expiresAt     DateTime?
   acceptedAt    DateTime?
   completedAt   DateTime?
+  // Set once the archive.stale-threads cron has locked + archived the
+  // session's Discord thread (or determined the thread is gone). Lets
+  // the sweep skip already-processed sessions cheaply. The inline
+  // closeMatchChannel() on completion sets this too on success so the
+  // cron has nothing to do for happy-path matches.
+  threadArchivedAt DateTime?
 
   @@index([state])
   @@index([threadId])
   @@index([state, expiresAt])
+  // Cron predicate: sweep COMPLETE/CANCELLED sessions whose thread
+  // hasn't been archived yet. Composite so the planner can walk the
+  // ones it cares about.
+  @@index([state, threadArchivedAt])
 }
 
 // Binding between a Discord role and a bot permission tier.

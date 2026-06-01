@@ -213,7 +213,16 @@ export default async function AdminDivisionDetail({
                 return (
                   <tr key={r.player.id}>
                     <td>{medal}</td>
-                    <td>{r.dropped ? <s>{r.player.displayName}</s> : r.player.displayName}{r.dropped && <span className="muted"> (dropped)</span>}</td>
+                    <td>
+                      {r.dropped ? (
+                        <s>
+                          <Link href={`/profile/${r.player.id}`} style={{ color: "var(--text)" }}>{r.player.displayName}</Link>
+                        </s>
+                      ) : (
+                        <Link href={`/profile/${r.player.id}`} style={{ color: "var(--text)" }}>{r.player.displayName}</Link>
+                      )}
+                      {r.dropped && <span className="muted"> (dropped)</span>}
+                    </td>
                     <td><strong>{r.points}</strong></td>
                     <td>{r.wins}-{r.draws}-{r.losses}</td>
                     <td>{r.gamesWon}-{r.gamesLost}</td>
@@ -256,7 +265,9 @@ export default async function AdminDivisionDetail({
                 return (
                   <tr key={m.id}>
                     <td>
-                      <strong>{m.player.displayName}</strong>
+                      <strong>
+                        <Link href={`/profile/${m.player.id}`} style={{ color: "var(--text)" }}>{m.player.displayName}</Link>
+                      </strong>
                       {isDropped && (
                         <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "#e74c3c", marginLeft: 6 }}>DROPPED</span>
                       )}

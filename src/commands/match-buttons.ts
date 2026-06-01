@@ -296,8 +296,16 @@ async function handleBanConfirm(interaction: ButtonInteraction, session: MatchSe
 // Close the match thread when the match completes: setLocked (no new
 // messages from members), then setArchived (collapsed in sidebar).
 // Discord then garbage-collects archived+inactive threads automatically.
-async function closeMatchChannel(interaction: AnyInteraction, channelId: string | null): Promise<void> {
+// Stamps MatchSession.threadArchivedAt on success so the
+// archive.stale-threads cron skips this row. Best-effort — failures
+// leave threadArchivedAt null so the cron picks it up later.
+async function closeMatchChannel(
+  interaction: AnyInteraction,
+  sessionId: string,
+  channelId: string | null,
+): Promise<void> {
   if (!channelId) return;
+  let ok = false;
   try {
     const channel = await interaction.client.channels.fetch(channelId);
     if (!channel) return;
@@ -305,6 +313,7 @@ async function closeMatchChannel(interaction: AnyInteraction, channelId: string 
       const thread = channel as ThreadChannel;
       await thread.setLocked(true, "Match complete").catch(() => {});
       await thread.setArchived(true, "Match complete").catch(() => {});
+      ok = true;
     } else if (channel.type === ChannelType.GuildText) {
       // Legacy: pre-revert per-match text channels. Lock @everyone + each
       // user overwrite so the channel becomes read-only. Admin can delete
@@ -319,10 +328,16 @@ async function closeMatchChannel(interaction: AnyInteraction, channelId: string 
             .catch(() => {});
         }
       }
+      ok = true;
     }
     void PermissionFlagsBits;
   } catch {
     // Thread may have been deleted manually; ignore.
+  }
+  if (ok) {
+    await prisma.matchSession
+      .update({ where: { id: sessionId }, data: { threadArchivedAt: new Date() } })
+      .catch(() => {});
   }
 }
 
@@ -682,7 +697,7 @@ async function finalizeMatch(
   // Casual /challenge — no Pairing write, no announce. Show result + close.
   if (session.isCasual || !session.divisionId) {
     await refreshMessage(interaction, updated);
-    closeMatchChannel(interaction, updated.threadId).catch(() => {});
+    closeMatchChannel(interaction, updated.id, updated.threadId).catch(() => {});
     return;
   }
 
@@ -708,7 +723,7 @@ async function finalizeMatch(
       update: { winnerId, recordedBy: interaction.user.id },
     });
     await refreshMessage(interaction, updated);
-    closeMatchChannel(interaction, updated.threadId).catch(() => {});
+    closeMatchChannel(interaction, updated.id, updated.threadId).catch(() => {});
     recomputeDivisionStandings(session.divisionId).catch(() => {});
     return;
   }
@@ -769,7 +784,7 @@ async function finalizeMatch(
   await refreshMessage(interaction, updated);
   // Lock the match channel + fire the auto-announce. Both are best-effort
   // and don't block the user-facing message update.
-  closeMatchChannel(interaction, updated.threadId).catch(() => {});
+  closeMatchChannel(interaction, updated.id, updated.threadId).catch(() => {});
   announceResult(pairing.id).catch(() => {});
   recomputeDivisionStandings(pairing.divisionId).catch(() => {});
 }
