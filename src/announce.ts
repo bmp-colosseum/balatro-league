@@ -7,19 +7,29 @@
 //   1. Webhook URL — POSTs directly to the channel webhook. Doesn't
 //      count against the bot's global 50/sec budget; route bucket is per
 //      webhook, not per channel. Preferred for high-volume / burst paths.
-//   2. Channel ID — falls back to bot REST channel.send via the
-//      gateway client. Counts against the global budget.
+//   2. Channel ID — uses @discordjs/rest with DISCORD_TOKEN. Works in
+//      ANY context (bot, web, standalone script) since it doesn't
+//      require the gateway client to be running. Counts against the
+//      bot's global rate limit budget but @discordjs/rest queues
+//      politely so a burst won't drop messages.
 //
 // Config precedence for each, season → global → env, so individual seasons
 // can post to their own channel without touching the global config:
 //   webhook: season.resultsWebhookUrl → LeagueConfig.ResultsWebhookUrl → env.RESULTS_WEBHOOK_URL
-//   channel: season.resultsChannelId  → env.RESULTS_CHANNEL_ID
+//   channel: season.resultsChannelId  → LeagueConfig.ResultsChannelId → env.RESULTS_CHANNEL_ID
 
-import { ChannelType, EmbedBuilder, type TextChannel } from "discord.js";
+import { REST } from "@discordjs/rest";
+import { Routes, type RESTPostAPIChannelMessageJSONBody } from "discord-api-types/v10";
+import { EmbedBuilder } from "discord.js";
 import { prisma } from "./db.js";
-import { tryGetDiscordClient } from "./discord.js";
 import { env } from "./env.js";
 import { getConfig, LeagueConfigKey } from "./league-config.js";
+
+let cachedRest: REST | null = null;
+function rest(): REST {
+  if (!cachedRest) cachedRest = new REST({ version: "10" }).setToken(env.DISCORD_TOKEN);
+  return cachedRest;
+}
 
 export async function announceResult(pairingId: string): Promise<void> {
   const pairing = await prisma.pairing.findUnique({
@@ -83,15 +93,14 @@ export async function announceResult(pairingId: string): Promise<void> {
     }
   }
 
-  // Bot REST fallback.
+  // REST fallback — works without a live gateway client, so this also
+  // fires correctly from standalone scripts (finish:season --announce
+  // etc.) where the bot's discord.js Client isn't initialized.
   if (!channelId) return;
-  const client = tryGetDiscordClient();
-  if (!client) return;
   try {
-    const channel = await client.channels.fetch(channelId);
-    if (!channel || channel.type !== ChannelType.GuildText) return;
-    await (channel as TextChannel).send({ embeds: [embed] });
+    const body: RESTPostAPIChannelMessageJSONBody = { embeds: [embed.toJSON()] };
+    await rest().post(Routes.channelMessages(channelId), { body });
   } catch (err) {
-    console.warn("Failed to announce result via bot:", err);
+    console.warn("[announceResult] REST post failed:", err);
   }
 }
