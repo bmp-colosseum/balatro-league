@@ -216,7 +216,7 @@ export default async function ProfilePage({
 
         {adminCtx && adminCtx.opponents.length > 0 && (
           <div className="card" style={{ borderColor: "#f1c40f" }}>
-            <strong style={{ color: "#f1c40f" }}>⚙ Admin: record a set for {profile.player.displayName}</strong>
+            <strong style={{ color: "#f1c40f" }}>⚙ Admin: record a match for {profile.player.displayName}</strong>
             <p className="muted" style={{ fontSize: 12 }}>
               In <strong>{adminCtx.divisionName}</strong>. Only unplayed opponents shown — to override
               an already-recorded set, use the division admin page.
@@ -279,7 +279,7 @@ export default async function ProfilePage({
                   </thead>
                   <tbody>
                     {h.matches.length === 0 ? (
-                      <tr><td colSpan={4} className="muted">No sets played yet.</td></tr>
+                      <tr><td colSpan={4} className="muted">No matches played yet.</td></tr>
                     ) : (
                       h.matches.map((m, i) => {
                         const date = m.confirmedAt ? m.confirmedAt.toISOString().slice(0, 10) : "—";

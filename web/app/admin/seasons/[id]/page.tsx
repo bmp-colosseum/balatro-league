@@ -284,7 +284,7 @@ export default async function SeasonDetailPage({
                             </strong>
                             <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
                               {d.members.length}/{d.targetSize ?? season.targetGroupSize}
-                              {!isDraft && ` · ${d.pairings.length}/${expectedSets} sets`}
+                              {!isDraft && ` · ${d.pairings.length}/${expectedSets} matches`}
                             </span>
                           </div>
                           {isDraft ? (

@@ -39,12 +39,12 @@ export default async function AdminHome() {
             <div className="grid grid-3">
               <div className="stat"><div className="label">Active season</div><div className="value" style={{ fontSize: 20 }}>{activeSeason.name}</div></div>
               <div className="stat"><div className="label">Divisions</div><div className="value">{activeSeason._count.divisions}</div></div>
-              <div className="stat"><div className="label">Sets confirmed</div><div className="value">{confirmed}</div></div>
+              <div className="stat"><div className="label">Matches confirmed</div><div className="value">{confirmed}</div></div>
             </div>
             <div className="grid grid-3" style={{ marginTop: 16 }}>
               <div className="stat"><div className="label">Players (total)</div><div className="value">{totalPlayers}</div></div>
               <div className="stat"><div className="label">Fake players</div><div className="value">{fakeCount}</div></div>
-              <div className="stat"><div className="label">Disputed sets</div><div className="value">{disputed}</div></div>
+              <div className="stat"><div className="label">Disputed matches</div><div className="value">{disputed}</div></div>
             </div>
           </>
         ) : (

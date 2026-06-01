@@ -77,7 +77,7 @@ export default async function SeasonDetailPage({
                       </thead>
                       <tbody>
                         {rows.length === 0 ? (
-                          <tr><td colSpan={5} className="muted">No sets played.</td></tr>
+                          <tr><td colSpan={5} className="muted">No matches played.</td></tr>
                         ) : (
                           rows.map((r, i) => {
                             const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;

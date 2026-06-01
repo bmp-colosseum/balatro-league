@@ -18,7 +18,7 @@ export default async function StandingsPage() {
             include: {
               members: { select: { playerId: true, status: true } },
               // Count CONFIRMED pairings so the division card can render
-              // a 'X/Y sets played' pill and a ✅ when the round-robin
+              // a 'X/Y matches played' pill and a ✅ when the round-robin
               // is complete. Cheap — Prisma _count is a single query.
               _count: { select: { pairings: { where: { status: "CONFIRMED" } } } },
             },
@@ -90,7 +90,7 @@ export default async function StandingsPage() {
                       ...r,
                       dropped: droppedIds.has(r.player.id),
                     }));
-                    // Expected sets = N*(N-1)/2 across active members; the
+                    // Expected matches = N*(N-1)/2 across active members; the
                     // division is "done" when confirmed = expected. Shows
                     // as a pill + ✅ on the card header.
                     const activeCount = div.members.filter((m) => m.status === "ACTIVE").length;
@@ -146,10 +146,12 @@ export default async function StandingsPage() {
                                   </Link>
                                 );
                                 const mmr = mmrByPlayerId.get(r.player.id);
-                                // ↑ for promotion position (#1, unless top tier).
-                                // ↓ for relegation position (last, unless bottom tier).
-                                const isPromoting = i === 0 && !isTopTier;
-                                const isRelegating = i === rows.length - 1 && !isBottomTier && rows.length > 1;
+                                // ↑/↓ only show when the division is COMPLETE — before
+                                // all matches have been played, position 1 / last position
+                                // isn't yet decided so showing the arrows would mislead
+                                // players into thinking promotion/relegation is locked in.
+                                const isPromoting = complete && i === 0 && !isTopTier;
+                                const isRelegating = complete && i === rows.length - 1 && !isBottomTier && rows.length > 1;
                                 const movementMarker = isPromoting ? (
                                   <span title="Promotion position" style={{ color: "#2ecc71" }}>↑</span>
                                 ) : isRelegating ? (
