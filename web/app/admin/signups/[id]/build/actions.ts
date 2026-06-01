@@ -31,11 +31,19 @@ function parseTierConfig(json: string): TierConfig[] {
 
 // Distribute ranked players top-down into tiers, snake-drafted within each tier.
 // Snake-draft balances skill across divisions in the same tier.
+//
+// Filling strategy: every division ends up with either `base` or `base+1`
+// players, where base = floor(N / totalDivs). Extras (the `N mod totalDivs`
+// players who push some divisions to base+1) go to the TOP tiers first —
+// upper tiers fill before lower ones overflow. Position-1 (Legendary etc.)
+// is special-cased to ALWAYS take exactly 1 player regardless of math,
+// since the elite single-division tier shouldn't ever balloon.
 function planByRating(
   ranked: Array<{ id: string; discordId: string; displayName: string; rating: number | null }>,
   tiers: TierConfig[],
   targetGroupSize: number,
 ): Array<{ tier: TierConfig; position: number; divisions: string[][] /* signup discordIds per division */ }> {
+  void targetGroupSize; // kept on signature for caller compat; new alg derives sizes dynamically
   // Sort by rating DESC (null = lowest, displayName as tiebreaker)
   const sorted = [...ranked].sort((a, b) => {
     const ra = a.rating ?? -1;
@@ -44,39 +52,74 @@ function planByRating(
     return a.displayName.localeCompare(b.displayName);
   });
 
+  if (sorted.length === 0 || tiers.length === 0) {
+    return tiers.map((tier, i) => ({
+      tier,
+      position: i + 1,
+      divisions: Array.from({ length: Math.max(1, tier.divisionCount) }, () => []),
+    }));
+  }
+
+  // Compute per-division capacities. The TOP tier (position 1) gets
+  // 1 player per division (single-elite-division convention). Every
+  // other division gets `base` or `base+1` where:
+  //   base = floor(remaining / remainingDivs)
+  //   extras = remaining - base*remainingDivs (added to upper-tier
+  //   divisions first)
+  const topTierDivs = Math.max(1, tiers[0]!.divisionCount);
+  const reservedForTop = Math.min(topTierDivs, sorted.length);
+  const remaining = sorted.length - reservedForTop;
+  const lowerTierDivCount = tiers.slice(1).reduce((sum, t) => sum + Math.max(1, t.divisionCount), 0);
+  const base = lowerTierDivCount === 0 ? 0 : Math.floor(remaining / lowerTierDivCount);
+  let extras = lowerTierDivCount === 0 ? 0 : remaining - base * lowerTierDivCount;
+
+  // Walk tiers top-down and decide how many players land in each division.
+  const divisionSizes: number[][] = tiers.map((t, ti) => {
+    const numDivs = Math.max(1, t.divisionCount);
+    if (ti === 0) {
+      // Top tier: 1 per division, capped by remaining sorted players.
+      return Array.from({ length: numDivs }, (_, i) => (i < reservedForTop ? 1 : 0));
+    }
+    return Array.from({ length: numDivs }, () => {
+      const extra = extras > 0 ? 1 : 0;
+      if (extras > 0) extras--;
+      return base + extra;
+    });
+  });
+
   const plan: ReturnType<typeof planByRating> = [];
   let cursor = 0;
   for (let i = 0; i < tiers.length; i++) {
     const tier = tiers[i]!;
-    const isLast = i === tiers.length - 1;
-    const capacity = isLast
-      ? sorted.length - cursor // bottom tier takes everyone left
-      : Math.min(tier.divisionCount * targetGroupSize, sorted.length - cursor);
-    const tierPlayers = sorted.slice(cursor, cursor + capacity).map((p) => p.discordId);
-    cursor += capacity;
-
-    // Snake-draft: P1→D1, P2→D2, P3→D2, P4→D1, P5→D1, ...
     const numDivs = Math.max(1, tier.divisionCount);
+    const sizes = divisionSizes[i]!;
+    const tierCapacity = sizes.reduce((s, n) => s + n, 0);
+    const tierPlayers = sorted.slice(cursor, cursor + tierCapacity).map((p) => p.discordId);
+    cursor += tierCapacity;
+
+    // Snake-draft within the tier respecting per-division size limits.
+    // Pass through `sizes` array as the cap per division — players are
+    // assigned round-robin until each division hits its cap.
     const divisions: string[][] = Array.from({ length: numDivs }, () => []);
-    tierPlayers.forEach((discordId, idx) => {
-      const round = Math.floor(idx / numDivs);
-      const slot = idx % numDivs;
-      const divIdx = round % 2 === 0 ? slot : numDivs - 1 - slot;
-      divisions[divIdx]!.push(discordId);
-    });
+    let playerIdx = 0;
+    let round = 0;
+    while (playerIdx < tierPlayers.length) {
+      const seq = round % 2 === 0
+        ? Array.from({ length: numDivs }, (_, k) => k)
+        : Array.from({ length: numDivs }, (_, k) => numDivs - 1 - k);
+      let placedThisRound = 0;
+      for (const slot of seq) {
+        if (playerIdx >= tierPlayers.length) break;
+        if (divisions[slot]!.length >= sizes[slot]!) continue;
+        divisions[slot]!.push(tierPlayers[playerIdx]!);
+        playerIdx++;
+        placedThisRound++;
+      }
+      if (placedThisRound === 0) break; // all divisions full
+      round++;
+    }
 
     plan.push({ tier, position: i + 1, divisions });
-    if (cursor >= sorted.length) {
-      // Fill remaining tiers as empty so admin still sees the shape
-      for (let j = i + 1; j < tiers.length; j++) {
-        plan.push({
-          tier: tiers[j]!,
-          position: j + 1,
-          divisions: Array.from({ length: Math.max(1, tiers[j]!.divisionCount) }, () => []),
-        });
-      }
-      break;
-    }
   }
   return plan;
 }
