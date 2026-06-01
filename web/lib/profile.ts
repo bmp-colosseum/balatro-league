@@ -5,6 +5,8 @@ import { prisma } from "./prisma";
 import { computeStandings } from "./standings";
 
 export interface MatchEntry {
+  pairingId: string;
+  status: "CONFIRMED" | "DISPUTED";
   opponentPlayerId: string;
   opponentDisplayName: string;
   myGames: number;
@@ -53,7 +55,10 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
           tier: true,
           members: { include: { player: true } },
           pairings: {
-            where: { status: "CONFIRMED" },
+            // Include DISPUTED so the profile shows the badge + the
+            // "update dispute" affordance. Standings still ignore
+            // non-CONFIRMED rows.
+            where: { status: { in: ["CONFIRMED", "DISPUTED"] } },
             include: { playerA: true, playerB: true },
             orderBy: { confirmedAt: "asc" },
           },
@@ -65,9 +70,12 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
 
   const history: SeasonHistoryEntry[] = [];
   for (const m of memberships) {
+    // Standings only count CONFIRMED — DISPUTED rows are visible in the
+    // history list but don't contribute points until resolved.
+    const confirmedPairings = m.division.pairings.filter((p) => p.status === "CONFIRMED");
     const rows = computeStandings(
       m.division.members.map((mm) => mm.player),
-      m.division.pairings.map((p) => ({
+      confirmedPairings.map((p) => ({
         playerAId: p.playerAId, playerBId: p.playerBId,
         gamesWonA: p.gamesWonA, gamesWonB: p.gamesWonB,
       })),
@@ -85,6 +93,8 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
       const outcome: MatchEntry["outcome"] =
         myGames > oppGames ? "WIN" : myGames < oppGames ? "LOSS" : "DRAW";
       myMatches.push({
+        pairingId: p.id,
+        status: p.status === "DISPUTED" ? "DISPUTED" : "CONFIRMED",
         opponentPlayerId: opponent.id,
         opponentDisplayName: opponent.displayName,
         myGames, opponentGames: oppGames, outcome,

@@ -131,21 +131,68 @@ export async function confirmSet(pairingId: string, actorPlayerId: string): Prom
   return { ok: true };
 }
 
-export async function disputeSet(pairingId: string, actorPlayerId: string): Promise<ResolveResult> {
+export interface DisputeOptions {
+  // Optional proposal — what the disputer says the result should have
+  // been. Surfaced to admin via /admin/disputes for a one-click accept.
+  // Pass null/undefined for "I dispute but don't have a specific number"
+  // (current Discord-button path).
+  proposedGamesWonA?: number | null;
+  proposedGamesWonB?: number | null;
+  reason?: string | null;
+}
+
+// Dispute a match. Either player can dispute. Allowed states:
+//   PENDING   — opponent rejecting a fresh report (original button path)
+//   CONFIRMED — either player saying "the recorded result is wrong"
+// Idempotent: re-disputing an already-DISPUTED row updates proposal/
+// reason in place rather than failing.
+export async function disputeSet(
+  pairingId: string,
+  actorPlayerId: string,
+  opts: DisputeOptions = {},
+): Promise<ResolveResult> {
   const pairing = await prisma.pairing.findUnique({ where: { id: pairingId } });
   if (!pairing) return { ok: false, reason: "Match not found." };
-  if (pairing.status !== "PENDING") {
-    return { ok: false, reason: `This match is ${pairing.status.toLowerCase()} — nothing to dispute.` };
-  }
-  if (pairing.reporterId === actorPlayerId) {
-    return { ok: false, reason: "Only the opponent can dispute a match." };
+  if (pairing.status === "CANCELLED") {
+    return { ok: false, reason: "This match was cancelled — nothing to dispute." };
   }
   if (pairing.playerAId !== actorPlayerId && pairing.playerBId !== actorPlayerId) {
-    return { ok: false, reason: "You're not part of this set." };
+    return { ok: false, reason: "You're not part of this match." };
   }
+  // Allow PENDING, CONFIRMED, DISPUTED (re-dispute with updated proposal).
+  // CANCELLED was handled above; any future status added to the enum
+  // falls through here so we'd notice immediately rather than silently
+  // allow disputes against it.
+  const status: string = pairing.status;
+  if (status !== "PENDING" && status !== "CONFIRMED" && status !== "DISPUTED") {
+    return { ok: false, reason: `Can't dispute a ${status.toLowerCase()} match.` };
+  }
+
+  // Sanity-check the proposal if supplied: must be a valid BO2 outcome.
+  // Anything weirder (3-0, negative, etc.) is rejected so /admin/disputes
+  // can trust the values to one-click accept.
+  if (opts.proposedGamesWonA != null && opts.proposedGamesWonB != null) {
+    const a = opts.proposedGamesWonA;
+    const b = opts.proposedGamesWonB;
+    const valid = (a === 2 && b === 0) || (a === 0 && b === 2) || (a === 1 && b === 1);
+    if (!valid) {
+      return { ok: false, reason: "Proposed result must be 2-0, 1-1, or 0-2." };
+    }
+  }
+
   await prisma.pairing.update({
     where: { id: pairingId },
-    data: { status: "DISPUTED" },
+    data: {
+      status: "DISPUTED",
+      disputedById: actorPlayerId,
+      disputedAt: new Date(),
+      disputeProposedGamesWonA: opts.proposedGamesWonA ?? null,
+      disputeProposedGamesWonB: opts.proposedGamesWonB ?? null,
+      disputeReason: opts.reason ?? null,
+      // Re-disputing should re-spawn a thread (the previous one may be
+      // resolved/archived). Clear the id so spawnDisputeThread acts.
+      disputeThreadId: null,
+    },
   });
   // Standings exclude non-CONFIRMED pairings, so flipping to DISPUTED
   // removes this set's contribution. Recompute so the cache reflects it.

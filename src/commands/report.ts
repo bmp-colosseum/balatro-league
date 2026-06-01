@@ -1,22 +1,15 @@
 import {
-  ChannelType,
-  EmbedBuilder,
   MessageFlags,
   SlashCommandBuilder,
-  ThreadAutoArchiveDuration,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
-  type TextChannel,
 } from "discord.js";
 import { announceResult } from "../announce.js";
 import { prisma } from "../db.js";
+import { spawnDisputeThread } from "../dispute-thread.js";
 import { getOrCreatePlayer } from "../players.js";
 import { enqueueReportAutoConfirm } from "../queue.js";
-import {
-  buildReportEmbed,
-  pendingButtons,
-  postPendingReport,
-} from "../report-flow.js";
+import { buildReportEmbed, postPendingReport } from "../report-flow.js";
 import { confirmSet, disputeSet, reportSet } from "../reporting.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
 import type { ButtonHandler, SlashCommand } from "./types.js";
@@ -140,9 +133,8 @@ export const reportButtons: ButtonHandler = {
       return;
     }
 
-    // Dispute: spawn a public thread under the report channel and ping
-    // helpers. Players + anyone with #results visibility see the
-    // discussion; helpers mediate.
+    // Dispute: update embed in place + delegate thread spawn. The shared
+    // spawnDisputeThread also fires from the web dispute flow.
     const embed = buildReportEmbed({
       status: "DISPUTED",
       reporter,
@@ -153,34 +145,8 @@ export const reportButtons: ButtonHandler = {
       pairingId: pairing.id,
     });
     await interaction.update({ content: "", embeds: [embed], components: [] });
-
-    // Best-effort thread spawn. interaction.message is the original
-    // report embed in #results — the thread spawns inside its channel
-    // (when supported by channel type).
-    if (interaction.channel && interaction.channel.type === ChannelType.GuildText) {
-      try {
-        const text = interaction.channel as TextChannel;
-        const thread = await text.threads.create({
-          name: `Dispute · ${reporter.displayName} vs ${opponent.displayName} · ${pairing.id.slice(-6)}`,
-          type: ChannelType.PublicThread,
-          autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
-          startMessage: interaction.message.id,
-        });
-        // Ping helper / admin roles in the thread so they get a notification.
-        const staffBindings = await prisma.roleBinding.findMany({
-          where: { tier: { in: ["ADMIN", "HELPER"] } },
-        });
-        const staffMentions = staffBindings.map((b) => `<@&${b.discordRoleId}>`).join(" ");
-        await thread.send({
-          content:
-            `${staffMentions ? staffMentions + "\n" : ""}` +
-            `<@${reporter.discordId}> reported **${reporter.displayName} ${pairing.gamesWonA}-${pairing.gamesWonB} ${opponent.displayName}** in **${pairing.division.name}**.\n` +
-            `<@${opponent.discordId}> disputed the result.\n\n` +
-            `Discuss what happened here. A helper will jump in to fix the result or roll it back to unplayed.`,
-        });
-      } catch (err) {
-        console.warn(`[report.dispute] couldn't spawn thread for ${pairingId}:`, err);
-      }
-    }
+    spawnDisputeThread(pairing.id, { skipEmbedEdit: true }).catch((err) =>
+      console.warn(`[report.dispute] thread spawn for ${pairingId}:`, err),
+    );
   },
 };

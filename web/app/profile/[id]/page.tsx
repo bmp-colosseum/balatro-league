@@ -8,20 +8,33 @@ import { loadPlayerHistory } from "@/lib/profile";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { recordSetForPlayer } from "@/app/admin/players/actions";
-import { castEasterEggVote } from "./actions";
+import { castEasterEggVote, submitProfileDispute } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ disputeOk?: string; disputeErr?: string }>;
 }) {
   const { id } = await params;
+  const { disputeOk, disputeErr } = await searchParams;
   const profile = await loadPlayerHistory(id);
   if (!profile) notFound();
 
   const t = profile.totals;
+
+  // Viewer-owned profile? Only the profile owner can dispute their own
+  // matches. We look up the viewer's player record via Discord ID and
+  // compare against the profile's player id.
+  const viewerSession = await auth();
+  const viewerDiscordId = (viewerSession?.user as { discordId?: string } | undefined)?.discordId;
+  const viewerPlayer = viewerDiscordId
+    ? await prisma.player.findUnique({ where: { discordId: viewerDiscordId }, select: { id: true } })
+    : null;
+  const isOwnProfile = !!viewerPlayer && viewerPlayer.id === profile.player.id;
 
   // Easter egg: if this profile belongs to Sanji, render the impeach /
   // don't-impeach poll under the totals strip. targetKey is a slug so
@@ -267,6 +280,17 @@ export default async function ProfilePage({
           <div className="stat"><div className="label">Losses (0-2)</div><div className="value">{t.losses}</div></div>
         </div>
 
+        {disputeOk && (
+          <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>
+            ✓ Dispute filed. A helper has been pinged in #results.
+          </div>
+        )}
+        {disputeErr && (
+          <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c" }}>
+            {disputeErr}
+          </div>
+        )}
+
         <h3 style={{ marginTop: 24 }}>Season history</h3>
         {profile.history.length === 0 ? (
           <div className="card muted">No season history yet.</div>
@@ -297,24 +321,57 @@ export default async function ProfilePage({
                       <th>Opponent</th>
                       <th>Score</th>
                       <th>Result</th>
+                      {isOwnProfile && h.isActive && <th></th>}
                     </tr>
                   </thead>
                   <tbody>
                     {h.matches.length === 0 ? (
-                      <tr><td colSpan={4} className="muted">No matches played yet.</td></tr>
+                      <tr><td colSpan={isOwnProfile && h.isActive ? 5 : 4} className="muted">No matches played yet.</td></tr>
                     ) : (
                       h.matches.map((m, i) => {
                         const date = m.confirmedAt ? m.confirmedAt.toISOString().slice(0, 10) : "—";
+                        const isDisputed = m.status === "DISPUTED";
                         const outcomePill =
-                          m.outcome === "WIN" ? { bg: "rgba(46,204,113,0.15)", fg: "#2ecc71", label: "W" }
+                          isDisputed ? { bg: "rgba(241,196,15,0.15)", fg: "#f1c40f", label: "DISPUTED" }
+                          : m.outcome === "WIN" ? { bg: "rgba(46,204,113,0.15)", fg: "#2ecc71", label: "W" }
                           : m.outcome === "LOSS" ? { bg: "rgba(231,76,60,0.15)", fg: "#e74c3c", label: "L" }
                           : { bg: "rgba(241,196,15,0.15)", fg: "#f1c40f", label: "D" };
                         return (
-                          <tr key={i}>
+                          <tr key={i} style={isDisputed ? { opacity: 0.7 } : undefined}>
                             <td>{date}</td>
                             <td><Link href={`/profile/${m.opponentPlayerId}`} style={{ color: "var(--text)" }}>{m.opponentDisplayName}</Link></td>
                             <td><strong>{m.myGames}–{m.opponentGames}</strong></td>
-                            <td><span className="pill" style={{ background: outcomePill.bg, color: outcomePill.fg }}>{outcomePill.label}</span></td>
+                            <td><span className="pill" style={{ background: outcomePill.bg, color: outcomePill.fg, fontSize: isDisputed ? 10 : undefined }}>{outcomePill.label}</span></td>
+                            {isOwnProfile && h.isActive && (
+                              <td>
+                                <details>
+                                  <summary style={{ cursor: "pointer", fontSize: 11, color: "var(--muted-text, #888)" }}>
+                                    {isDisputed ? "Update dispute" : "Dispute"}
+                                  </summary>
+                                  <form action={submitProfileDispute} style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4, minWidth: 200 }}>
+                                    <input type="hidden" name="pairingId" value={m.pairingId} />
+                                    <input type="hidden" name="profileId" value={profile.player.id} />
+                                    <label style={{ fontSize: 11 }} className="muted">What it should be (your POV):</label>
+                                    <select name="proposed" defaultValue="unsure" style={{ fontSize: 12 }}>
+                                      <option value="unsure">— not sure, let helper decide —</option>
+                                      <option value="2-0">2-0 (I won both)</option>
+                                      <option value="1-1">1-1 (draw)</option>
+                                      <option value="0-2">0-2 (I lost both)</option>
+                                    </select>
+                                    <textarea
+                                      name="reason"
+                                      rows={2}
+                                      placeholder="Optional context for the helper…"
+                                      maxLength={500}
+                                      style={{ fontSize: 12, width: "100%" }}
+                                    />
+                                    <button type="submit" className="secondary" style={{ fontSize: 11 }}>
+                                      Submit dispute
+                                    </button>
+                                  </form>
+                                </details>
+                              </td>
+                            )}
                           </tr>
                         );
                       })

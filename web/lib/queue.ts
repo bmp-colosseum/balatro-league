@@ -100,3 +100,10 @@ export async function enqueueReportAutoConfirm(pairingId: string): Promise<void>
     { startAfter: settings.reportAutoConfirmSeconds, retryLimit: 2 },
   );
 }
+
+// Spawns the Discord helper-mediation thread for a freshly-disputed
+// match. Bot owns the worker (Discord client lives there); web enqueues.
+export async function enqueueDisputeSpawnThread(pairingId: string): Promise<void> {
+  await ensureStarted();
+  await getBoss().send("dispute.spawn-thread", { pairingId }, { retryLimit: 2 });
+}

@@ -48,6 +48,7 @@ model Player {
   pairingsAsA     Pairing[] @relation("PairingPlayerA")
   pairingsAsB     Pairing[] @relation("PairingPlayerB")
   reportedPairings Pairing[] @relation("PairingReporter")
+  disputedPairings Pairing[] @relation("PairingDisputer")
   mmrSnapshots    PlayerMmrSnapshot[]
 
   @@index([rating])
@@ -531,10 +532,31 @@ model Pairing {
   reportChannelId String?
   reportMessageId String?
 
+  // Dispute details. All null for non-disputed pairings.
+  //   disputedById             — which player initiated the dispute
+  //   disputeProposedGamesWonA/B — what the disputer says it should be.
+  //                              Null if disputed without a proposed
+  //                              correction (legacy Discord-button path).
+  //                              Admin can one-click accept the proposal
+  //                              via /admin/disputes.
+  //   disputeReason            — free-text explanation, optional
+  //   disputedAt               — when the dispute was filed (NOT
+  //                              cleared on resolution; persists for audit)
+  //   disputeThreadId          — Discord thread spawned for helper
+  //                              mediation. Set after spawn so we don't
+  //                              double-create on re-dispute.
+  disputedById              String?
+  disputeProposedGamesWonA  Int?
+  disputeProposedGamesWonB  Int?
+  disputeReason             String?
+  disputedAt                DateTime?
+  disputeThreadId           String?
+
   division     Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
   playerA      Player   @relation("PairingPlayerA", fields: [playerAId], references: [id])
   playerB      Player   @relation("PairingPlayerB", fields: [playerBId], references: [id])
   reporter     Player?  @relation("PairingReporter", fields: [reporterId], references: [id])
+  disputer     Player?  @relation("PairingDisputer", fields: [disputedById], references: [id])
 
   @@unique([divisionId, playerAId, playerBId])
   @@index([divisionId, status])

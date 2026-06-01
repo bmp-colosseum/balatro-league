@@ -14,6 +14,7 @@ const ADMIN_LINKS: AdminLink[] = [
   { href: "/admin/rankings", label: "Rankings" },
   { href: "/admin/divisions", label: "Divisions" },
   { href: "/admin/deck-bans", label: "Deck Bans" },
+  { href: "/admin/disputes", label: "Disputes" },
   { href: "/admin/settings", label: "Settings" },
 ];
 

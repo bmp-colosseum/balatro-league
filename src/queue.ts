@@ -19,6 +19,7 @@
 import { PgBoss, type Job } from "pg-boss";
 import { archiveStaleThreads } from "./archive-stale-threads.js";
 import { detectCurrentBmpSeason, fetchPlayerStats } from "./balatromp.js";
+import { spawnDisputeThread } from "./dispute-thread.js";
 import { resolveBackupChannelId } from "./backup-channel.js";
 import { resolveBotCommandsChannelId } from "./bot-commands-channel.js";
 import { prisma } from "./db.js";
@@ -61,6 +62,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("report.auto-confirm");
   await boss.createQueue("archive.stale-threads");
   await boss.createQueue("devops.queue-stall-check");
+  await boss.createQueue("dispute.spawn-thread");
   console.log("[pg-boss] queue started");
 
   // Worker: send a DM to one user. Retried automatically on failure.
@@ -211,6 +213,27 @@ export async function initQueue(): Promise<void> {
   // repeats per queue.
   await boss.schedule("devops.queue-stall-check", "*/5 * * * *");
   console.log("[pg-boss] scheduled devops.queue-stall-check every 5min");
+
+  // Worker: spawn a Discord helper-mediation thread for a disputed
+  // pairing. Used by the web dispute flow (Discord button-driven
+  // disputes call spawnDisputeThread inline). Idempotent on
+  // Pairing.disputeThreadId — re-runs no-op once a thread exists.
+  await boss.work<{ pairingId: string }>(
+    "dispute.spawn-thread",
+    { batchSize: 3 },
+    async (jobs) => {
+      for (const job of jobs) {
+        await spawnDisputeThread(job.data.pairingId).catch((err) =>
+          console.warn(`[dispute.spawn-thread] ${job.data.pairingId}:`, err),
+        );
+      }
+    },
+  );
+}
+
+export async function enqueueDisputeSpawnThread(pairingId: string): Promise<void> {
+  if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
+  await boss.send("dispute.spawn-thread", { pairingId }, { retryLimit: 2 });
 }
 
 export async function enqueueDm(job: DmJob): Promise<void> {
