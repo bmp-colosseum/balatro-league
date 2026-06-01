@@ -15,6 +15,17 @@ import { loadDivisionStandings } from "@/lib/standings-cache";
 
 export type StandingsRowsForDivision = Awaited<ReturnType<typeof loadDivisionStandings>>;
 
+// Shootout result surfaced inline on the standings page so readers can
+// see at-a-glance who broke which tie without clicking through to the
+// division detail. Names are resolved at load time so the page render
+// stays dependency-light.
+export interface StandingsShootout {
+  id: string;
+  winnerName: string;
+  loserName: string;
+  recordedAt: Date;
+}
+
 export interface StandingsDivisionSummary {
   id: string;
   name: string;
@@ -23,6 +34,7 @@ export interface StandingsDivisionSummary {
   droppedMemberIds: string[];
   playedMatches: number;
   rows: StandingsRowsForDivision;
+  shootouts: StandingsShootout[];
 }
 
 export interface StandingsTierSummary {
@@ -92,6 +104,34 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
   );
   for (const [id, rows] of results) standingsByDivisionId.set(id, rows);
 
+  // All shootouts across this season's divisions in one round-trip.
+  // Shootout has no Player relation in the schema, so we batch the
+  // player-name lookup separately and stitch them together below.
+  const allShootouts = allDivIds.length === 0 ? [] : await prisma.shootout.findMany({
+    where: { divisionId: { in: allDivIds } },
+    orderBy: { recordedAt: "desc" },
+  });
+  const shootoutPlayerIds = new Set<string>();
+  for (const s of allShootouts) {
+    shootoutPlayerIds.add(s.playerAId);
+    shootoutPlayerIds.add(s.playerBId);
+  }
+  const shootoutPlayers = shootoutPlayerIds.size === 0 ? [] : await prisma.player.findMany({
+    where: { id: { in: [...shootoutPlayerIds] } },
+    select: { id: true, displayName: true },
+  });
+  const playerNameById = new Map(shootoutPlayers.map((p) => [p.id, p.displayName]));
+  const shootoutsByDivisionId = new Map<string, StandingsShootout[]>();
+  for (const s of allShootouts) {
+    const winnerName = playerNameById.get(s.winnerId);
+    const loserId = s.winnerId === s.playerAId ? s.playerBId : s.playerAId;
+    const loserName = playerNameById.get(loserId);
+    if (!winnerName || !loserName) continue; // orphan — hide rather than crash
+    const arr = shootoutsByDivisionId.get(s.divisionId) ?? [];
+    arr.push({ id: s.id, winnerName, loserName, recordedAt: s.recordedAt });
+    shootoutsByDivisionId.set(s.divisionId, arr);
+  }
+
   // BMP MMR column is opt-in. Skip the query entirely when hidden.
   let mmrByPlayerId = new Map<string, number>();
   if (opts.showBmpMmr) {
@@ -125,6 +165,7 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
       droppedMemberIds: d.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId),
       playedMatches: d._count.pairings,
       rows: standingsByDivisionId.get(d.id) ?? [],
+      shootouts: shootoutsByDivisionId.get(d.id) ?? [],
     })),
   }));
 

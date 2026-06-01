@@ -154,6 +154,17 @@ export default async function StandingsPage() {
                               )}
                             </tbody>
                           </table>
+                          {div.shootouts.length > 0 && (
+                            <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+                              <strong style={{ color: "#f1c40f" }}>⚔ Shootout{div.shootouts.length === 1 ? "" : "s"}:</strong>{" "}
+                              {div.shootouts.map((s, i) => (
+                                <span key={s.id}>
+                                  {i > 0 && " · "}
+                                  <strong>{s.winnerName}</strong> beat {s.loserName}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
