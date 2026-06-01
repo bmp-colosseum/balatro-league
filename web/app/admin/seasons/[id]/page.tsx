@@ -32,11 +32,13 @@ export default async function SeasonDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ imported?: string }>;
+  searchParams: Promise<{ imported?: string; "just-built"?: string }>;
 }) {
   await requireAdmin();
   const { id } = await params;
-  const { imported } = await searchParams;
+  const sp = await searchParams;
+  const imported = sp.imported;
+  const justBuilt = sp["just-built"] === "1";
   // Loaded inline (small table, cheap query) — not worth threading
   // through loadAdminSeasonDetail just for this picker.
   const rulesTemplates = await prisma.leagueRulesTemplate.findMany({
@@ -218,14 +220,25 @@ export default async function SeasonDetailPage({
                 before starting the league. Active/ended seasons keep the top-3
                 standings preview below. */}
             {!season.isActive && !season.endedAt && (
-              <div className="card" style={{ background: "rgba(241,196,15,0.08)", borderColor: "#f1c40f", marginTop: 12 }}>
-                <strong style={{ color: "#f1c40f" }}>📝 Draft mode</strong>
-                <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
-                  Review the auto-seeded placements below. Each player has a "Move
-                  to…" dropdown — use it to nudge people between divisions. Changes
-                  save immediately; you can leave and come back. When you're happy,
-                  click <strong>Activate season</strong> at the top to start the league.
-                </p>
+              <div className="card" style={{ background: justBuilt ? "rgba(46,204,113,0.10)" : "rgba(241,196,15,0.08)", borderColor: justBuilt ? "#2ecc71" : "#f1c40f", marginTop: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ flex: "1 1 280px" }}>
+                    <strong style={{ color: justBuilt ? "#2ecc71" : "#f1c40f" }}>
+                      {justBuilt ? "✓ Season built — review placements below" : "📝 Draft mode"}
+                    </strong>
+                    <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
+                      Each player has a "Move to…" dropdown — nudge people between divisions until
+                      you're happy with the shape. Changes save immediately. Click <strong>Lock in &amp; activate</strong>
+                      when ready to start the league.
+                    </p>
+                  </div>
+                  <form action={activateSeason}>
+                    <input type="hidden" name="id" value={season.id} />
+                    <button type="submit" style={{ background: "#2ecc71", color: "white", fontSize: 14, padding: "8px 16px", fontWeight: 600 }}>
+                      🔒 Lock in &amp; activate
+                    </button>
+                  </form>
+                </div>
               </div>
             )}
 

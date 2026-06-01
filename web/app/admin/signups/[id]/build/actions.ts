@@ -480,5 +480,9 @@ export async function buildSeason(formData: FormData) {
 
   revalidatePath("/admin/signups");
   revalidatePath("/admin/seasons");
-  redirect(`/admin/seasons`);
+  // Land on the new season's detail page (in draft mode) instead of
+  // the seasons index. The detail page is where admin reviews and
+  // tweaks division placements before activating — that's the natural
+  // next step in the workflow.
+  redirect(`/admin/seasons/${targetSeasonId}?just-built=1`);
 }
