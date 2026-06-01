@@ -48,29 +48,26 @@ export function TierEditor({
   // tiers with extras going to upper tiers first. Admin can see the
   // resulting shape live as they edit tier counts.
   const totalDivisions = rows.reduce((sum, r) => sum + Math.max(1, r.divisionCount), 0);
+  // Even distribution across ALL divisions (no special case for the
+  // top tier). For N signups across D total divisions:
+  //   base = floor(N / D), extras = N - base*D
+  // Each division gets `base` players. Extras (one each) go to the
+  // upper-tier divisions first so Legendary/Rare are full before
+  // Common takes leftovers.
   const projectedSizes: number[][] = (() => {
-    if (!signupCount || signupCount <= 0 || rows.length === 0) {
+    if (!signupCount || signupCount <= 0 || rows.length === 0 || totalDivisions === 0) {
       return rows.map((r) => Array.from({ length: Math.max(1, r.divisionCount) }, () => 0));
     }
-    const result: number[][] = [];
-    const topDivs = Math.max(1, rows[0]!.divisionCount);
-    const reservedTop = Math.min(topDivs, signupCount);
-    result.push(Array.from({ length: topDivs }, (_, i) => (i < reservedTop ? 1 : 0)));
-    const remaining = signupCount - reservedTop;
-    const lowerDivs = rows.slice(1).reduce((s, t) => s + Math.max(1, t.divisionCount), 0);
-    if (lowerDivs === 0) return result;
-    const base = Math.floor(remaining / lowerDivs);
-    let extras = remaining - base * lowerDivs;
-    for (let i = 1; i < rows.length; i++) {
-      const numDivs = Math.max(1, rows[i]!.divisionCount);
-      const arr = Array.from({ length: numDivs }, () => {
+    const base = Math.floor(signupCount / totalDivisions);
+    let extras = signupCount - base * totalDivisions;
+    return rows.map((row) => {
+      const numDivs = Math.max(1, row.divisionCount);
+      return Array.from({ length: numDivs }, () => {
         const e = extras > 0 ? 1 : 0;
         if (extras > 0) extras--;
         return base + e;
       });
-      result.push(arr);
-    }
-    return result;
+    });
   })();
   // Auto-suggest: position-1 tier stays 1 division (Legendary slot).
   // Remaining tiers split ceil((N-1)/6) divisions as evenly as

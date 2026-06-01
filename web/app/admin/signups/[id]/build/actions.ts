@@ -34,10 +34,9 @@ function parseTierConfig(json: string): TierConfig[] {
 //
 // Filling strategy: every division ends up with either `base` or `base+1`
 // players, where base = floor(N / totalDivs). Extras (the `N mod totalDivs`
-// players who push some divisions to base+1) go to the TOP tiers first —
-// upper tiers fill before lower ones overflow. Position-1 (Legendary etc.)
-// is special-cased to ALWAYS take exactly 1 player regardless of math,
-// since the elite single-division tier shouldn't ever balloon.
+// players who push some divisions to base+1) go to UPPER tiers first —
+// Legendary/Rare fill before Common takes leftovers. No special case for
+// the top tier — it's just another tier in the math.
 function planByRating(
   ranked: Array<{ id: string; discordId: string; displayName: string; rating: number | null }>,
   tiers: TierConfig[],
@@ -60,26 +59,11 @@ function planByRating(
     }));
   }
 
-  // Compute per-division capacities. The TOP tier (position 1) gets
-  // 1 player per division (single-elite-division convention). Every
-  // other division gets `base` or `base+1` where:
-  //   base = floor(remaining / remainingDivs)
-  //   extras = remaining - base*remainingDivs (added to upper-tier
-  //   divisions first)
-  const topTierDivs = Math.max(1, tiers[0]!.divisionCount);
-  const reservedForTop = Math.min(topTierDivs, sorted.length);
-  const remaining = sorted.length - reservedForTop;
-  const lowerTierDivCount = tiers.slice(1).reduce((sum, t) => sum + Math.max(1, t.divisionCount), 0);
-  const base = lowerTierDivCount === 0 ? 0 : Math.floor(remaining / lowerTierDivCount);
-  let extras = lowerTierDivCount === 0 ? 0 : remaining - base * lowerTierDivCount;
-
-  // Walk tiers top-down and decide how many players land in each division.
-  const divisionSizes: number[][] = tiers.map((t, ti) => {
+  const totalDivs = tiers.reduce((sum, t) => sum + Math.max(1, t.divisionCount), 0);
+  const base = totalDivs === 0 ? 0 : Math.floor(sorted.length / totalDivs);
+  let extras = totalDivs === 0 ? 0 : sorted.length - base * totalDivs;
+  const divisionSizes: number[][] = tiers.map((t) => {
     const numDivs = Math.max(1, t.divisionCount);
-    if (ti === 0) {
-      // Top tier: 1 per division, capped by remaining sorted players.
-      return Array.from({ length: numDivs }, (_, i) => (i < reservedForTop ? 1 : 0));
-    }
     return Array.from({ length: numDivs }, () => {
       const extra = extras > 0 ? 1 : 0;
       if (extras > 0) extras--;
