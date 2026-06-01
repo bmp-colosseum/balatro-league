@@ -4,6 +4,7 @@
 // comes from.
 
 import { prisma } from "@/lib/prisma";
+import { recomputeDivisionStandings } from "@/lib/standings-cache";
 
 export type ReportResultStr = "2-0" | "1-1" | "0-2";
 
@@ -84,6 +85,7 @@ export async function reportSetFromWeb(
           confirmedAt: now,
         },
       });
+  recomputeDivisionStandings(division.id).catch(() => {});
 
   return { ok: true, pairingId: pairing.id, created: !existing };
 }

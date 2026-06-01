@@ -5,6 +5,7 @@ import { activePublicSeason } from "./active-season.js";
 import { announceResult } from "./announce.js";
 import { prisma } from "./db.js";
 import { gamesFromResult, type PairingResult } from "./scoring.js";
+import { recomputeDivisionStandings } from "./standings-cache.js";
 
 export interface ReportInput {
   reporterPlayerId: string;
@@ -97,6 +98,7 @@ export async function reportSet(input: ReportInput): Promise<ReportResult> {
 
   // Fire-and-forget announcement (skipped for INTERNAL seasons)
   announceResult(pairing.id).catch(() => {});
+  recomputeDivisionStandings(division.id).catch(() => {});
 
   return { ok: true, pairingId: pairing.id, status: existing ? "REREPORTED" : "CREATED" };
 }
@@ -127,6 +129,7 @@ export async function confirmSet(pairingId: string, actorPlayerId: string): Prom
   });
   // Fire-and-forget — don't block the caller on Discord network round-trip
   announceResult(pairingId).catch(() => {});
+  recomputeDivisionStandings(pairing.divisionId).catch(() => {});
   return { ok: true };
 }
 
@@ -146,5 +149,8 @@ export async function disputeSet(pairingId: string, actorPlayerId: string): Prom
     where: { id: pairingId },
     data: { status: "DISPUTED" },
   });
+  // Standings exclude non-CONFIRMED pairings, so flipping to DISPUTED
+  // removes this set's contribution. Recompute so the cache reflects it.
+  recomputeDivisionStandings(pairing.divisionId).catch(() => {});
   return { ok: true };
 }

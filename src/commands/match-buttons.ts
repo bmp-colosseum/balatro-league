@@ -23,6 +23,7 @@ import { prisma } from "../db.js";
 import { env } from "../env.js";
 import { generatePool, presetForDivision } from "../match-config.js";
 import { renderMatch } from "../match-render.js";
+import { recomputeDivisionStandings } from "../standings-cache.js";
 import {
   emptyGameState,
   phaseFor,
@@ -719,4 +720,5 @@ async function finalizeMatch(
   // and don't block the user-facing message update.
   closeMatchChannel(interaction, updated.threadId).catch(() => {});
   announceResult(pairing.id).catch(() => {});
+  recomputeDivisionStandings(pairing.divisionId).catch(() => {});
 }

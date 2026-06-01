@@ -21,6 +21,7 @@ import { buildLeagueExport, exportFilename, serializeExport } from "../league-ex
 import { requireAdmin } from "../permissions.js";
 import { getOrCreatePlayer } from "../players.js";
 import { gamesFromResult, parsePairingResult } from "../scoring.js";
+import { recomputeDivisionStandings } from "../standings-cache.js";
 import type { SlashCommand } from "./types.js";
 
 const RESULT_CHOICES = [
@@ -244,6 +245,7 @@ async function recordPairing(interaction: ChatInputCommandInteraction) {
     },
   });
   announceResult(upserted.id).catch(() => {});
+  recomputeDivisionStandings(division.id).catch(() => {});
 
   await interaction.editReply(
     `Recorded: **${p1User.username} ${games.a}-${games.b} ${p2User.username}** in **${division.name}**.` +
@@ -286,6 +288,7 @@ async function forceResult(interaction: ChatInputCommandInteraction) {
     },
   });
   announceResult(pairingId).catch(() => {});
+  recomputeDivisionStandings(pairing.divisionId).catch(() => {});
 
   await interaction.editReply(
     `Force-resolved: **${pairing.playerA.displayName} ${games.a}-${games.b} ${pairing.playerB.displayName}** in **${pairing.division.name}**.\nReason: ${reason}`,

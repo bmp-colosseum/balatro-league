@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { computeStandings } from "@/lib/standings";
+import { loadDivisionStandings } from "@/lib/standings-cache";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 
@@ -16,17 +16,26 @@ export default async function StandingsPage() {
           divisions: {
             orderBy: { groupNumber: "asc" },
             include: {
-              members: { include: { player: true } },
-              pairings: {
-                where: { status: "CONFIRMED" },
-                select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
-              },
+              members: { select: { playerId: true, status: true } },
             },
           },
         },
       },
     },
   });
+
+  // Prefer the materialized standings cache for each division — falls
+  // back to live computation transparently for cold-cache divisions,
+  // which also warms them up for next time. Loaded in parallel so
+  // total wait time = slowest single division, not sum.
+  const standingsByDivisionId = new Map<string, Awaited<ReturnType<typeof loadDivisionStandings>>>();
+  if (season) {
+    const allDivIds = season.tiers.flatMap((t) => t.divisions.map((d) => d.id));
+    const results = await Promise.all(
+      allDivIds.map(async (id) => [id, await loadDivisionStandings(id)] as const),
+    );
+    for (const [id, rows] of results) standingsByDivisionId.set(id, rows);
+  }
 
   // Latest BMP MMR snapshot per player in this season (any season really —
   // pick the freshest captured row for each playerId). Empty map if there
@@ -63,10 +72,10 @@ export default async function StandingsPage() {
                     const droppedIds = new Set(
                       div.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId),
                     );
-                    const rows = computeStandings(
-                      div.members.map((m) => m.player),
-                      div.pairings,
-                    ).map((r) => ({ ...r, dropped: droppedIds.has(r.player.id) }));
+                    const rows = (standingsByDivisionId.get(div.id) ?? []).map((r) => ({
+                      ...r,
+                      dropped: droppedIds.has(r.player.id),
+                    }));
                     void tierColors;
                     return (
                       <div key={div.id} className="card">

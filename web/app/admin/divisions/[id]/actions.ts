@@ -8,6 +8,7 @@ import { resolveDiscordIdToDisplayName } from "@/lib/add-player";
 import { announceResult } from "@/lib/announce";
 import { addGuildMemberRole } from "@/lib/discord";
 import { placePlayerInDivision } from "@/lib/division-membership";
+import { recomputeDivisionStandings } from "@/lib/standings-cache";
 
 // Set a per-division target size override. Null clears the override and
 // falls back to Season.targetGroupSize at display time.
@@ -90,6 +91,7 @@ export async function dropDivisionMember(formData: FormData) {
       OR: [{ playerAId: playerId }, { playerBId: playerId }],
     },
   });
+  recomputeDivisionStandings(divisionId).catch(() => {});
   revalidatePath(`/admin/divisions/${divisionId}`);
 }
 
@@ -127,6 +129,7 @@ export async function removeDivisionMember(formData: FormData) {
   await prisma.divisionMember.deleteMany({
     where: { divisionId, playerId },
   });
+  recomputeDivisionStandings(divisionId).catch(() => {});
   revalidatePath(`/admin/divisions/${divisionId}`);
 }
 
@@ -260,6 +263,10 @@ export async function bulkRecordPairings(formData: FormData) {
     recorded++;
   }
 
+  // Bulk-record affected exactly one division (the form's divisionId).
+  // One recompute at the end is enough.
+  recomputeDivisionStandings(divisionId).catch(() => {});
+
   const summary = `recorded=${recorded}&errors=${encodeURIComponent(errors.slice(0, 10).join(" | "))}`;
   revalidatePath(`/admin/divisions/${divisionId}`);
   redirect(`/admin/divisions/${divisionId}?bulk=${encodeURIComponent(summary)}`);
@@ -312,6 +319,7 @@ export async function recordSet(formData: FormData) {
   });
   // Fire-and-forget Discord announce
   announceResult(recorded.id).catch((err) => console.warn("announceResult failed:", err));
+  recomputeDivisionStandings(divisionId).catch(() => {});
   revalidatePath(`/admin/divisions/${divisionId}`);
 }
 
@@ -333,6 +341,7 @@ export async function overridePairing(formData: FormData) {
     },
   });
   announceResult(updated.id).catch((err) => console.warn("announceResult failed:", err));
+  recomputeDivisionStandings(updated.divisionId).catch(() => {});
   revalidatePath(`/admin/divisions/${updated.divisionId}`);
 }
 
@@ -343,5 +352,6 @@ export async function deletePairing(formData: FormData) {
   const p = await prisma.pairing.findUnique({ where: { id: pairingId } });
   if (!p) return;
   await prisma.pairing.delete({ where: { id: pairingId } });
+  recomputeDivisionStandings(p.divisionId).catch(() => {});
   revalidatePath(`/admin/divisions/${p.divisionId}`);
 }

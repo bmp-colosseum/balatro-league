@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { announceResult } from "@/lib/announce";
 import { placePlayerInDivision } from "@/lib/division-membership";
+import { recomputeDivisionStandings } from "@/lib/standings-cache";
 
 type Result = "2-0" | "1-1" | "0-2";
 
@@ -82,6 +83,7 @@ export async function recordSetForPlayer(formData: FormData) {
     },
   });
   announceResult(recorded.id).catch(() => {});
+  recomputeDivisionStandings(divisionId).catch(() => {});
   revalidatePath("/admin/players");
   revalidatePath(`/admin/divisions/${divisionId}`);
 }
@@ -171,6 +173,7 @@ export async function dropPlayer(formData: FormData) {
       OR: [{ playerAId: playerId }, { playerBId: playerId }],
     },
   });
+  recomputeDivisionStandings(membership.divisionId).catch(() => {});
   revalidatePath("/admin/players");
 }
 
@@ -196,9 +199,19 @@ export async function deletePlayer(formData: FormData) {
   await requireAdmin();
   const playerId = String(formData.get("playerId") ?? "");
   if (!playerId) return;
+  // Collect affected divisions before the delete so we can recompute
+  // each one's standings after the player's pairings vanish.
+  const affected = await prisma.pairing.findMany({
+    where: { OR: [{ playerAId: playerId }, { playerBId: playerId }] },
+    select: { divisionId: true },
+    distinct: ["divisionId"],
+  });
   await prisma.pairing.deleteMany({
     where: { OR: [{ playerAId: playerId }, { playerBId: playerId }] },
   });
   await prisma.player.delete({ where: { id: playerId } });
+  for (const { divisionId } of affected) {
+    recomputeDivisionStandings(divisionId).catch(() => {});
+  }
   revalidatePath("/admin/players");
 }

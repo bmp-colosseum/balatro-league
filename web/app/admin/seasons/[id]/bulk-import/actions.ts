@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { addGuildMemberRole, resolveDisplayName } from "@/lib/discord";
 import { placePlayerInDivision } from "@/lib/division-membership";
+import { recomputeDivisionStandings } from "@/lib/standings-cache";
 
 // Minimal CSV parser supporting quoted fields (handles commas/newlines/quotes inside).
 function parseCsv(text: string): { headers: string[]; rows: Record<string, string>[] } {
@@ -74,6 +75,9 @@ export async function bulkImportSeason(formData: FormData) {
   const unknownDivisions = new Set<string>();
   const membersErrors: string[] = [];
   const transferred: string[] = [];
+  // Bulk import can touch many divisions in one go. Collect them and
+  // recompute standings once per division at the end of the pass.
+  const affectedDivisionIds = new Set<string>();
   // (divisionNameLower) → Map(challongeNameLower → Player)
   const nameToPlayerByDiv = new Map<string, Map<string, { id: string; discordId: string }>>();
   // (discordId) → Player
@@ -206,7 +210,11 @@ export async function bulkImportSeason(formData: FormData) {
         },
       });
       pairingsRecorded++;
+      affectedDivisionIds.add(div.id);
     }
+  }
+  for (const divId of affectedDivisionIds) {
+    recomputeDivisionStandings(divId).catch(() => {});
   }
 
   revalidatePath("/admin/seasons");
