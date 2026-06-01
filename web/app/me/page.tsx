@@ -270,7 +270,7 @@ export default async function MePage({
             </div>
 
             <div style={{ marginTop: 12 }}>
-              <strong>Report a set</strong>
+              <strong>Report a match</strong>
               {unplayedOpponents.length === 0 ? (
                 <p className="muted" style={{ marginTop: 4 }}>
                   No unplayed opponents — you've played everyone in your division.

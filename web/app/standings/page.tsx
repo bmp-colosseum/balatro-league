@@ -115,14 +115,18 @@ export default async function StandingsPage() {
                       }
                       if (current.length > 0) chains.push(current);
                     }
+                    // Shootout marker is TIER-INDEPENDENT — even a top-tier #1
+                    // tie needs resolving (someone has to be champion), and
+                    // even a bottom-tier last-place tie matters for "who
+                    // finished dead last". Arrows still respect tier below.
                     const promoTieRowSet = new Set<number>();
                     const relegationTieRowSet = new Set<number>();
                     for (const chain of chains) {
                       if (chain.length < 2) continue; // not a tie chain
-                      if (chain.includes(0) && !isTopTier) {
+                      if (chain.includes(0)) {
                         for (const idx of chain) promoTieRowSet.add(idx);
                       }
-                      if (chain.includes(rows.length - 1) && !isBottomTier) {
+                      if (chain.includes(rows.length - 1)) {
                         for (const idx of chain) relegationTieRowSet.add(idx);
                       }
                     }

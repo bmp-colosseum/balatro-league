@@ -259,7 +259,7 @@ export default async function AdminPlayersPage({
                 <th>Name</th>
                 <th>Rating</th>
                 <th>Division</th>
-                <th>Record set</th>
+                <th>Record match</th>
                 <th>Discord</th>
                 <th></th>
               </tr>

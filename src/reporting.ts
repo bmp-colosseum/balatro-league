@@ -113,12 +113,12 @@ export async function confirmSet(pairingId: string, actorPlayerId: string): Prom
     where: { id: pairingId },
     include: { playerA: true, playerB: true },
   });
-  if (!pairing) return { ok: false, reason: "Set not found." };
+  if (!pairing) return { ok: false, reason: "Match not found." };
   if (pairing.status !== "PENDING") {
-    return { ok: false, reason: `This set is ${pairing.status.toLowerCase()} — nothing to confirm.` };
+    return { ok: false, reason: `This match is ${pairing.status.toLowerCase()} — nothing to confirm.` };
   }
   if (pairing.reporterId === actorPlayerId) {
-    return { ok: false, reason: "Only the opponent can confirm a set." };
+    return { ok: false, reason: "Only the opponent can confirm a match." };
   }
   if (pairing.playerAId !== actorPlayerId && pairing.playerBId !== actorPlayerId) {
     return { ok: false, reason: "You're not part of this set." };
@@ -135,12 +135,12 @@ export async function confirmSet(pairingId: string, actorPlayerId: string): Prom
 
 export async function disputeSet(pairingId: string, actorPlayerId: string): Promise<ResolveResult> {
   const pairing = await prisma.pairing.findUnique({ where: { id: pairingId } });
-  if (!pairing) return { ok: false, reason: "Set not found." };
+  if (!pairing) return { ok: false, reason: "Match not found." };
   if (pairing.status !== "PENDING") {
-    return { ok: false, reason: `This set is ${pairing.status.toLowerCase()} — nothing to dispute.` };
+    return { ok: false, reason: `This match is ${pairing.status.toLowerCase()} — nothing to dispute.` };
   }
   if (pairing.reporterId === actorPlayerId) {
-    return { ok: false, reason: "Only the opponent can dispute a set." };
+    return { ok: false, reason: "Only the opponent can dispute a match." };
   }
   if (pairing.playerAId !== actorPlayerId && pairing.playerBId !== actorPlayerId) {
     return { ok: false, reason: "You're not part of this set." };
