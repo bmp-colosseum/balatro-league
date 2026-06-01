@@ -345,6 +345,47 @@ export async function overridePairing(formData: FormData) {
   revalidatePath(`/admin/divisions/${updated.divisionId}`);
 }
 
+// Record (or overwrite) a shootout result for two members in this
+// division. Mirrors the bot's /admin record-shootout flow but server-
+// side via a form action. Canonical player ordering matches the
+// Pairing convention so the unique constraint catches duplicates.
+export async function recordShootout(formData: FormData) {
+  await requireAdmin();
+  const divisionId = String(formData.get("divisionId") ?? "");
+  const p1Id = String(formData.get("p1") ?? "");
+  const p2Id = String(formData.get("p2") ?? "");
+  const winnerId = String(formData.get("winnerId") ?? "");
+  if (!divisionId || !p1Id || !p2Id || !winnerId) return;
+  if (p1Id === p2Id) return;
+  if (winnerId !== p1Id && winnerId !== p2Id) return;
+  const [canonA, canonB] = p1Id < p2Id ? [p1Id, p2Id] : [p2Id, p1Id];
+  await prisma.shootout.upsert({
+    where: {
+      divisionId_playerAId_playerBId: { divisionId, playerAId: canonA, playerBId: canonB },
+    },
+    create: { divisionId, playerAId: canonA, playerBId: canonB, winnerId, recordedBy: "web-dashboard" },
+    update: { winnerId, recordedBy: "web-dashboard" },
+  });
+  recomputeDivisionStandings(divisionId).catch(() => {});
+  revalidatePath(`/admin/divisions/${divisionId}`);
+}
+
+// Remove a shootout — sort falls back to the next tiebreaker (wins,
+// draws, alphabetical). Useful when an admin records a wrong winner.
+export async function deleteShootout(formData: FormData) {
+  await requireAdmin();
+  const divisionId = String(formData.get("divisionId") ?? "");
+  const p1Id = String(formData.get("p1") ?? "");
+  const p2Id = String(formData.get("p2") ?? "");
+  if (!divisionId || !p1Id || !p2Id) return;
+  const [canonA, canonB] = p1Id < p2Id ? [p1Id, p2Id] : [p2Id, p1Id];
+  await prisma.shootout.deleteMany({
+    where: { divisionId, playerAId: canonA, playerBId: canonB },
+  });
+  recomputeDivisionStandings(divisionId).catch(() => {});
+  revalidatePath(`/admin/divisions/${divisionId}`);
+}
+
 export async function deletePairing(formData: FormData) {
   await requireAdmin();
   const pairingId = String(formData.get("pairingId") ?? "");

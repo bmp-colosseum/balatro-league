@@ -686,6 +686,33 @@ async function finalizeMatch(
     return;
   }
 
+  // Shootout — write a Shootout row instead of a Pairing. Game 1's
+  // winner IS the shootout winner (it's BO1). Standings sort picks up
+  // the new shootout via the cache recompute below.
+  if (session.isShootout) {
+    const winnerId = aWins > bWins ? session.playerAId : session.playerBId;
+    const [canonA, canonB] = session.playerAId < session.playerBId
+      ? [session.playerAId, session.playerBId]
+      : [session.playerBId, session.playerAId];
+    await prisma.shootout.upsert({
+      where: {
+        divisionId_playerAId_playerBId: { divisionId: session.divisionId, playerAId: canonA, playerBId: canonB },
+      },
+      create: {
+        divisionId: session.divisionId,
+        playerAId: canonA,
+        playerBId: canonB,
+        winnerId,
+        recordedBy: interaction.user.id,
+      },
+      update: { winnerId, recordedBy: interaction.user.id },
+    });
+    await refreshMessage(interaction, updated);
+    closeMatchChannel(interaction, updated.threadId).catch(() => {});
+    recomputeDivisionStandings(session.divisionId).catch(() => {});
+    return;
+  }
+
   // League match — write the Pairing for the season standings.
   // For BO2 (league default) we use the standard 2-game tally. For BO1 a
   // single win is recorded as 2-0 (winner's perspective) so the standings

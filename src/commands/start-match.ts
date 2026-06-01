@@ -13,17 +13,31 @@ import { renderMatch } from "../match-render.js";
 import { getOrCreatePlayer } from "../players.js";
 import type { SlashCommand } from "./types.js";
 
+const MODE_CHOICES = [
+  { name: "League set (best of 2, default)", value: "league" },
+  { name: "Shootout (best of 1 — tiebreaker, writes Shootout)", value: "shootout" },
+] as const;
+
 export const startMatch: SlashCommand = {
   channelScope: "division-only",
   data: new SlashCommandBuilder()
     .setName("start-match")
-    .setDescription("Start a guided 2-game set against your opponent (ban/pick + auto-record).")
+    .setDescription("Start a guided set against your opponent (ban/pick + auto-record).")
     .addUserOption((opt) =>
       opt.setName("opponent").setDescription("The player you're facing").setRequired(true),
+    )
+    .addStringOption((opt) =>
+      opt
+        .setName("mode")
+        .setDescription("League set (BO2 default) or shootout tiebreaker (BO1)")
+        .setRequired(false)
+        .addChoices(...MODE_CHOICES),
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
     const opponentUser = interaction.options.getUser("opponent", true);
+    const mode = interaction.options.getString("mode") ?? "league";
+    const isShootout = mode === "shootout";
     if (opponentUser.id === interaction.user.id) {
       await interaction.reply({ content: "You can't start a match against yourself.", flags: MessageFlags.Ephemeral });
       return;
@@ -66,16 +80,33 @@ export const startMatch: SlashCommand = {
 
     const division = sharedMembership.division;
 
-    // Check existing CONFIRMED pairing — refuse to start a duplicate match
+    // For league mode, refuse a duplicate match. For shootout mode the
+    // regular-season Pairing SHOULD already exist (the 1-1 draw that
+    // triggered the need for a shootout in the first place) — so we
+    // allow the shootout flow to proceed even with an existing Pairing.
     const [playerAId, playerBId] = me.id < opp.id ? [me.id, opp.id] : [opp.id, me.id];
     const existing = await prisma.pairing.findUnique({
       where: { divisionId_playerAId_playerBId: { divisionId: division.id, playerAId, playerBId } },
     });
-    if (existing && existing.status === "CONFIRMED") {
+    if (!isShootout && existing && existing.status === "CONFIRMED") {
       await interaction.editReply(
-        `You've already played ${opponentUser.username} this season (${existing.gamesWonA}-${existing.gamesWonB}). Ask an admin to override if it needs replaying.`,
+        `You've already played ${opponentUser.username} this season (${existing.gamesWonA}-${existing.gamesWonB}). ` +
+          `If you're playing a tiebreaker, use \`mode: Shootout\` instead.`,
       );
       return;
+    }
+    // Shootout mode also wants to avoid a duplicate Shootout row — bail
+    // if one already exists.
+    if (isShootout) {
+      const existingShootout = await prisma.shootout.findUnique({
+        where: { divisionId_playerAId_playerBId: { divisionId: division.id, playerAId, playerBId } },
+      });
+      if (existingShootout) {
+        await interaction.editReply(
+          `A shootout result is already recorded for this pair. Ask a Helper to revise via \`/admin record-shootout\` if it's wrong.`,
+        );
+        return;
+      }
     }
 
     // Refuse if there's already an in-flight session between them
@@ -118,6 +149,11 @@ export const startMatch: SlashCommand = {
         state: "WAITING_ACCEPT",
         channelId: interaction.channelId,
         expiresAt,
+        // Shootout = 1-game tiebreaker. Same ban/pick flow but one
+        // game decides it, and finalizeMatch writes a Shootout row
+        // instead of a Pairing.
+        isShootout,
+        bestOf: isShootout ? 1 : 2,
       },
     });
 

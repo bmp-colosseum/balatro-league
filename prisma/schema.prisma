@@ -264,6 +264,11 @@ model MatchSession {
   // 1, 2, or 3. 1 = one game and done. 2 = league default. 3 = play game 3
   // only if game 1 and 2 split (1-1 W-L).
   bestOf        Int               @default(2)
+  // True when this is a tiebreaker shootout (e.g. /start-match mode:shootout
+  // between two players tied for promo/relegation after a 1-1 regular-season
+  // h2h). Forces bestOf=1 and writes a Shootout row instead of a Pairing
+  // at COMPLETE. Mutually exclusive with isCasual in practice.
+  isShootout    Boolean           @default(false)
   threadId      String?           // Discord thread id (set once accepted)
   channelId     String?           // parent channel of the thread
 

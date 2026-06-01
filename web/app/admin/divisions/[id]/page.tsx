@@ -11,10 +11,12 @@ import {
   bulkAddMembers,
   bulkRecordPairings,
   deletePairing,
+  deleteShootout,
   dropDivisionMember,
   overridePairing,
   reactivateDivisionMember,
   recordSet,
+  recordShootout,
   removeDivisionMember,
   setDivisionTargetSize,
 } from "./actions";
@@ -44,6 +46,7 @@ export default async function AdminDivisionDetail({
         include: { playerA: true, playerB: true },
         orderBy: [{ status: "asc" }, { reportedAt: "desc" }],
       },
+      shootouts: { select: { playerAId: true, playerBId: true, winnerId: true, recordedBy: true, recordedAt: true, notes: true } },
     },
   });
   if (!division) notFound();
@@ -58,7 +61,10 @@ export default async function AdminDivisionDetail({
       gamesWonA: p.gamesWonA,
       gamesWonB: p.gamesWonB,
     })),
+    division.shootouts,
   ).map((r) => ({ ...r, dropped: droppedIds.has(r.player.id) }));
+  // Lookup map for player display in the shootouts section.
+  const playerById = new Map(division.members.map((m) => [m.playerId, m.player]));
 
   // Unplayed matchups: active members with no Pairing row yet
   const activeMembers = division.members.filter((m) => m.status === "ACTIVE");
@@ -337,6 +343,71 @@ export default async function AdminDivisionDetail({
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Shootouts */}
+        <div className="card">
+          <strong>⚔ Shootouts ({division.shootouts.length})</strong>
+          <p className="muted" style={{ fontSize: 12 }}>
+            Tiebreakers for players tied on points whose regular-season set was a 1-1 draw.
+            Sort uses this between head-to-head and wins.
+          </p>
+          {division.shootouts.length > 0 && (
+            <table style={{ marginBottom: 12 }}>
+              <thead>
+                <tr><th>Players</th><th>Winner</th><th>Source</th><th></th></tr>
+              </thead>
+              <tbody>
+                {division.shootouts.map((s) => {
+                  const pA = playerById.get(s.playerAId);
+                  const pB = playerById.get(s.playerBId);
+                  const winner = s.winnerId === s.playerAId ? pA : pB;
+                  if (!pA || !pB || !winner) return null;
+                  return (
+                    <tr key={`${s.playerAId}-${s.playerBId}`}>
+                      <td>{pA.displayName} <span className="muted">vs</span> {pB.displayName}</td>
+                      <td><strong>{winner.displayName}</strong></td>
+                      <td style={{ fontSize: 11 }} className="muted">{s.recordedBy}</td>
+                      <td>
+                        <form action={deleteShootout}>
+                          <input type="hidden" name="divisionId" value={division.id} />
+                          <input type="hidden" name="p1" value={s.playerAId} />
+                          <input type="hidden" name="p2" value={s.playerBId} />
+                          <button type="submit" className="muted" style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontSize: 11 }}>
+                            delete
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+          <form action={recordShootout} style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
+            <input type="hidden" name="divisionId" value={division.id} />
+            <select name="p1" required defaultValue="" style={{ minWidth: 140 }}>
+              <option value="" disabled>p1…</option>
+              {division.members.map((m) => (
+                <option key={`s1-${m.playerId}`} value={m.playerId}>{m.player.displayName}</option>
+              ))}
+            </select>
+            <span className="muted">vs</span>
+            <select name="p2" required defaultValue="" style={{ minWidth: 140 }}>
+              <option value="" disabled>p2…</option>
+              {division.members.map((m) => (
+                <option key={`s2-${m.playerId}`} value={m.playerId}>{m.player.displayName}</option>
+              ))}
+            </select>
+            <span className="muted">winner:</span>
+            <select name="winnerId" required defaultValue="" style={{ minWidth: 140 }}>
+              <option value="" disabled>winner…</option>
+              {division.members.map((m) => (
+                <option key={`sw-${m.playerId}`} value={m.playerId}>{m.player.displayName}</option>
+              ))}
+            </select>
+            <button type="submit">Record shootout</button>
+          </form>
         </div>
 
         {/* Unplayed */}
