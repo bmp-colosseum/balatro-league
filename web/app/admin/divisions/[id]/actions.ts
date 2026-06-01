@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { resolveDiscordIdToDisplayName } from "@/lib/add-player";
-import { announceResult } from "@/lib/announce";
+import { enqueueAnnounceResult } from "@/lib/queue";
 import { addGuildMemberRole } from "@/lib/discord";
 import { placePlayerInDivision } from "@/lib/division-membership";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
@@ -318,7 +318,7 @@ export async function recordSet(formData: FormData) {
     },
   });
   // Fire-and-forget Discord announce
-  announceResult(recorded.id).catch((err) => console.warn("announceResult failed:", err));
+  enqueueAnnounceResult(recorded.id).catch((err) => console.warn("announceResult failed:", err));
   recomputeDivisionStandings(divisionId).catch(() => {});
   revalidatePath(`/admin/divisions/${divisionId}`);
 }
@@ -370,7 +370,7 @@ export async function setCrosstableCell(formData: FormData) {
   // Fire-and-forget Discord announce — same pattern as recordSet and
   // overridePairing. Resolves season-webhook -> LeagueConfig -> env,
   // posts the result. Failure here doesn't block the cell save.
-  announceResult(recorded.id).catch((err) => console.warn("[crosstable cell] announceResult failed:", err));
+  enqueueAnnounceResult(recorded.id).catch((err) => console.warn("[crosstable cell] announceResult failed:", err));
   recomputeDivisionStandings(divisionId).catch(() => {});
   revalidatePath(`/admin/divisions/${divisionId}`);
 }
@@ -409,7 +409,7 @@ export async function overridePairing(formData: FormData) {
       adminOverrideReason: "override via web dashboard",
     },
   });
-  announceResult(updated.id).catch((err) => console.warn("announceResult failed:", err));
+  enqueueAnnounceResult(updated.id).catch((err) => console.warn("announceResult failed:", err));
   recomputeDivisionStandings(updated.divisionId).catch(() => {});
   revalidatePath(`/admin/divisions/${updated.divisionId}`);
 }

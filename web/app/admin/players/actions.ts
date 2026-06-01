@@ -5,7 +5,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
-import { announceResult } from "@/lib/announce";
+import { enqueueAnnounceResult } from "@/lib/queue";
 import { placePlayerInDivision } from "@/lib/division-membership";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
 
@@ -82,7 +82,7 @@ export async function recordSetForPlayer(formData: FormData) {
       adminOverrideReason: "recorded via /admin/players (overwrite)",
     },
   });
-  announceResult(recorded.id).catch(() => {});
+  enqueueAnnounceResult(recorded.id).catch(() => {});
   recomputeDivisionStandings(divisionId).catch(() => {});
   revalidatePath("/admin/players");
   revalidatePath(`/admin/divisions/${divisionId}`);

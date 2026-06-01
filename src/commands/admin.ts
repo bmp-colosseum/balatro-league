@@ -16,7 +16,7 @@ import {
   type TextChannel,
 } from "discord.js";
 import { MatchSessionState } from "@prisma/client";
-import { announceResult } from "../announce.js";
+import { enqueueAnnounceResult } from "../queue.js";
 import { actorFromInteractionUser, recordAudit } from "../audit.js";
 import { activeSeasonMemberAutocomplete } from "./autocomplete.js";
 import { prisma } from "../db.js";
@@ -585,7 +585,7 @@ async function recordPairing(interaction: ChatInputCommandInteraction) {
       adminOverrideReason: reason ?? "admin record-set (overwrite)",
     },
   });
-  announceResult(upserted.id).catch(() => {});
+  enqueueAnnounceResult(upserted.id).catch(() => {});
   recomputeDivisionStandings(division.id).catch(() => {});
   recordAudit({
     actor: actorFromInteractionUser(interaction.user),
@@ -636,7 +636,7 @@ async function forceResult(interaction: ChatInputCommandInteraction) {
       adminOverrideReason: reason,
     },
   });
-  announceResult(pairingId).catch(() => {});
+  enqueueAnnounceResult(pairingId).catch(() => {});
   recomputeDivisionStandings(pairing.divisionId).catch(() => {});
   recordAudit({
     actor: actorFromInteractionUser(interaction.user),

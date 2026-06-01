@@ -18,7 +18,7 @@ import {
   type ThreadChannel,
 } from "discord.js";
 import { MatchSessionState, Prisma, type MatchSession } from "@prisma/client";
-import { announceResult } from "../announce.js";
+import { enqueueAnnounceResult } from "../queue.js";
 import { SYSTEM_ACTOR, recordAudit } from "../audit.js";
 import { isCanonicalDeck } from "../balatro-info.js";
 import { resolveChallengesChannelId } from "../challenges-channel.js";
@@ -969,7 +969,7 @@ async function finalizeMatch(
   // Lock the match channel + fire the auto-announce. Both are best-effort
   // and don't block the user-facing message update.
   closeMatchChannel(interaction, updated.id, updated.threadId).catch(() => {});
-  announceResult(pairing.id).catch(() => {});
+  enqueueAnnounceResult(pairing.id).catch(() => {});
   recomputeDivisionStandings(pairing.divisionId).catch(() => {});
 }
 

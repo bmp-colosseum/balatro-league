@@ -4,7 +4,7 @@ import {
   type ButtonInteraction,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import { announceResult } from "../announce.js";
+import { enqueueAnnounceResult } from "../queue.js";
 import { prisma } from "../db.js";
 import { spawnDisputeThread } from "../dispute-thread.js";
 import { getOrCreatePlayer } from "../players.js";
@@ -118,7 +118,7 @@ export const reportButtons: ButtonHandler = {
       // confirmSet already wrote status=CONFIRMED + recompute. Fire the
       // announce here so the results-channel post + standings page
       // align. Edit the embed to drop the buttons and show outcome.
-      announceResult(pairingId).catch(() => {});
+      enqueueAnnounceResult(pairingId).catch(() => {});
       recomputeDivisionStandings(pairing.divisionId).catch(() => {});
       const embed = buildReportEmbed({
         status: "CONFIRMED",

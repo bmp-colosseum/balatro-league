@@ -17,6 +17,7 @@
 // same Postgres tables; this file owns the workers.
 
 import { PgBoss, type Job } from "pg-boss";
+import { announceResult } from "./announce.js";
 import { archiveStaleThreads } from "./archive-stale-threads.js";
 import { detectCurrentBmpSeason, fetchPlayerStats } from "./balatromp.js";
 import { spawnDisputeThread } from "./dispute-thread.js";
@@ -76,6 +77,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("cleanup.strip-role");
   await boss.createQueue("award.champion-role");
   await boss.createQueue("dispute.spawn-thread");
+  await boss.createQueue("notify.announce-result");
   console.log("[pg-boss] queue started");
 
   // Worker: send a DM to one user. Retried automatically on failure.
@@ -95,6 +97,23 @@ export async function initQueue(): Promise<void> {
       const failures = results.filter((r) => r.status === "rejected");
       if (failures.length > 0) {
         console.warn(`[notify.dm] ${failures.length}/${jobs.length} failed:`, failures);
+      }
+    },
+  );
+
+  // Worker: announce one pairing result to the configured Discord
+  // channel/webhook. Serial (batchSize 1) and slow polling so a burst
+  // (e.g. finish:season --announce on 250 pairings) drips out at the
+  // worker's natural pace instead of hammering Discord. announceResult
+  // already handles its own webhook->REST fallback and is safe to call
+  // from this context. Retried twice on failure (transient network /
+  // 5xx from Discord), then dropped.
+  await boss.work<AnnounceResultJob>(
+    "notify.announce-result",
+    { batchSize: 1, pollingIntervalSeconds: 1 },
+    async (jobs: Job<AnnounceResultJob>[]) => {
+      for (const job of jobs) {
+        await announceResult(job.data.pairingId);
       }
     },
   );
@@ -283,6 +302,14 @@ export async function enqueueDisputeSpawnThread(pairingId: string): Promise<void
 export async function enqueueDm(job: DmJob): Promise<void> {
   if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
   await boss.send("notify.dm", job, { retryLimit: 3, retryBackoff: true });
+}
+
+export async function enqueueAnnounceResult(pairingId: string): Promise<void> {
+  if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
+  // Retry transient failures (network blips, Discord 5xx) twice with
+  // backoff. After that the announce is dropped — admin can manually
+  // re-trigger via overrideResult or an editable-crosstable touch.
+  await boss.send("notify.announce-result", { pairingId }, { retryLimit: 2, retryBackoff: true });
 }
 
 export async function enqueueReportPostPending(pairingId: string): Promise<void> {
@@ -511,6 +538,10 @@ function previousBmpSeason(s: string): string | null {
   const n = parseInt(m[1]!, 10);
   if (!Number.isFinite(n) || n <= 1) return null;
   return `season${n - 1}`;
+}
+
+interface AnnounceResultJob {
+  pairingId: string;
 }
 
 interface DmJob {

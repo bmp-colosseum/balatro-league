@@ -4,9 +4,9 @@
 // disputed, etc. Idempotent so retries are safe.
 
 import { ChannelType, type TextChannel } from "discord.js";
-import { announceResult } from "./announce.js";
 import { prisma } from "./db.js";
 import { tryGetDiscordClient } from "./discord.js";
+import { enqueueAnnounceResult } from "./queue.js";
 import { buildReportEmbed } from "./report-flow.js";
 import { recomputeDivisionStandings } from "./standings-cache.js";
 
@@ -27,7 +27,7 @@ export async function autoConfirmReport(pairingId: string): Promise<void> {
     data: { status: "CONFIRMED", confirmedAt: new Date() },
   });
   recomputeDivisionStandings(pairing.divisionId).catch(() => {});
-  announceResult(pairingId).catch(() => {});
+  enqueueAnnounceResult(pairingId).catch(() => {});
 
   // Edit the original embed to reflect the auto-confirm so players
   // see the outcome inline. Drop the buttons; the match is settled.

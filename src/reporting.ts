@@ -2,8 +2,8 @@
 // so the same validation runs no matter how the set is submitted.
 
 import { activePublicSeason } from "./active-season.js";
-import { announceResult } from "./announce.js";
 import { prisma } from "./db.js";
+import { enqueueAnnounceResult } from "./queue.js";
 import { gamesFromResult, type PairingResult } from "./scoring.js";
 import { recomputeDivisionStandings } from "./standings-cache.js";
 
@@ -126,7 +126,7 @@ export async function confirmSet(pairingId: string, actorPlayerId: string): Prom
     data: { status: "CONFIRMED", confirmedAt: new Date() },
   });
   // Fire-and-forget — don't block the caller on Discord network round-trip
-  announceResult(pairingId).catch(() => {});
+  enqueueAnnounceResult(pairingId).catch(() => {});
   recomputeDivisionStandings(pairing.divisionId).catch(() => {});
   return { ok: true };
 }

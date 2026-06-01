@@ -90,6 +90,19 @@ export async function enqueueReportPostPending(pairingId: string): Promise<void>
   await getBoss().send("report.post-pending", { pairingId }, { retryLimit: 2 });
 }
 
+// Enqueue an announce. Caller returns immediately — pg-boss worker on
+// the bot side picks it up and runs announceResult() at the queue's
+// natural rate (1/sec polling, batchSize 1). Far better than calling
+// announceResult inline because:
+//   - Caller doesn't block on Discord round-trip
+//   - Bursts (e.g. crosstable rapid-fire edits) drain at a controlled
+//     pace instead of hitting rate limits
+//   - Failures retry automatically with backoff
+export async function enqueueAnnounceResult(pairingId: string): Promise<void> {
+  await ensureStarted();
+  await getBoss().send("notify.announce-result", { pairingId }, { retryLimit: 2, retryBackoff: true });
+}
+
 export async function enqueueReportAutoConfirm(pairingId: string): Promise<void> {
   await ensureStarted();
   const { getLeagueSettings } = await import("@/lib/league-settings");

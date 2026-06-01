@@ -12,9 +12,26 @@
 //   npm run finish:season -- --season <seasonId> --seed 42
 
 import { prisma } from "../db.js";
-import { announceResult } from "../announce.js";
+import { PgBoss } from "pg-boss";
+import { env } from "../env.js";
 import { gamesFromResult, type PairingResult } from "../scoring.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
+
+// The script can't call initQueue() — that registers workers in this
+// process which would compete with the bot service for jobs (and
+// abandon them when the script exits). Instead, spin up a send-only
+// pg-boss client and let the bot's workers drain the queue.
+let sendOnlyBoss: PgBoss | null = null;
+async function getSendOnlyBoss(): Promise<PgBoss> {
+  if (sendOnlyBoss) return sendOnlyBoss;
+  sendOnlyBoss = new PgBoss({ connectionString: env.DATABASE_URL, schema: "pgboss" });
+  await sendOnlyBoss.start();
+  return sendOnlyBoss;
+}
+async function enqueueAnnounceResult(pairingId: string): Promise<void> {
+  const boss = await getSendOnlyBoss();
+  await boss.send("notify.announce-result", { pairingId }, { retryLimit: 2, retryBackoff: true });
+}
 
 interface Args {
   seasonId: string;
@@ -109,7 +126,7 @@ async function main(): Promise<void> {
           });
           created++;
           if (announce) {
-            await announceResult(created2.id).catch((err) => console.warn("[finish:season] announce failed:", err));
+            await enqueueAnnounceResult(created2.id).catch((err) => console.warn("[finish:season] announce failed:", err));
           }
         } else if (existing.status !== "CONFIRMED") {
           await prisma.pairing.update({
@@ -130,7 +147,7 @@ async function main(): Promise<void> {
           });
           confirmed++;
           if (announce) {
-            await announceResult(existing.id).catch((err) => console.warn("[finish:season] announce failed:", err));
+            await enqueueAnnounceResult(existing.id).catch((err) => console.warn("[finish:season] announce failed:", err));
           }
         }
       }
@@ -144,7 +161,11 @@ async function main(): Promise<void> {
   }
 
   console.log(`Done. ${created} created, ${confirmed} previously-pending confirmed across ${divisions.length} divisions.`);
+  if (announce) {
+    console.log(`Announces enqueued — bot worker will drain them at ~1/sec into the configured results channel.`);
+  }
   console.log(`Next: open /admin/seasons/${seasonId} and click End season.`);
+  if (sendOnlyBoss) await sendOnlyBoss.stop({ graceful: true });
   await prisma.$disconnect();
 }
 
