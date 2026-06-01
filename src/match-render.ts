@@ -134,8 +134,16 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
         : !game.rerollVoteByA && game.rerollVoteByB
         ? `\n\n🔄 **${b.displayName}** wants to reroll the pool. **${a.displayName}** click "Confirm reroll" to apply.`
         : "";
+    // Game 1's first-ban player is genuinely a coin flip; games 2+ were
+    // chosen by the loser of the previous game, so the "(coin toss)" tag
+    // is wrong there. Naming the picker would need a lookup into the
+    // previous game's winner — keep it simple, just say how it was decided.
+    const firstAttribution =
+      gameNumber === 1
+        ? `**${first.displayName}** bans first (coin toss).`
+        : `**${first.displayName}** bans first (chosen by the loser of game ${gameNumber - 1}).`;
     embed.setDescription(
-      `**${first.displayName}** bans first (coin toss).\n\n` +
+      `${firstAttribution}\n\n` +
         `**${whose.displayName}** to ban — pick **${expected}** combo(s) in the menu, then click Confirm.\n` +
         `Pool: ${remaining.length} combo(s) remaining.` +
         (pendingLabels.length > 0
