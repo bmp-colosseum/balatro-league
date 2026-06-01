@@ -9,7 +9,13 @@ import {
   StringSelectMenuBuilder,
 } from "discord.js";
 import type { MatchSession, Player } from "@prisma/client";
-import { deckDescription, stakeDescription } from "./balatro-info.js";
+import {
+  canonicalDeckIndex,
+  canonicalStakeIndex,
+  deckDescription,
+  stakeDescription,
+} from "./balatro-info.js";
+import { deckEmojiPartial } from "./balatro-emojis.js";
 import { parsePolicy, phaseFor, remainingCombos, type GameState } from "./match-session.js";
 import type { DeckEntry } from "./match-config.js";
 
@@ -154,13 +160,21 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
     // Multi-select dropdown of remaining combos; min == max means Discord
     // enforces an exact count of selections on submit. Default-mark the
     // pending picks so the menu remembers them across re-renders.
+    // Sort remaining combos by canonical order (deck A-Z, stake difficulty)
+    // for predictable scanning. The underlying pool index stays in
+    // `idx` so ban/select logic isn't affected — display order only.
+    const sortedRemaining = [...remaining].sort((x, y) => {
+      const d = canonicalDeckIndex(x.combo.deck) - canonicalDeckIndex(y.combo.deck);
+      if (d !== 0) return d;
+      return canonicalStakeIndex(x.combo.stake) - canonicalStakeIndex(y.combo.stake);
+    });
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId(`match:banselect:${s.id}`)
       .setPlaceholder(`Pick ${expected} combo(s) to ban`)
       .setMinValues(expected)
       .setMaxValues(expected)
       .addOptions(
-        remaining.map(({ idx, combo }) => {
+        sortedRemaining.map(({ idx, combo }) => {
           // Discord caps option description at 100 chars. Deck effect is
           // the more useful signal for a ban decision; stake just modifies
           // difficulty so we tack on a short tag when both fit.
@@ -175,6 +189,10 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
             value: String(idx),
             description: desc ? desc.slice(0, 100) : undefined,
             default: pending.includes(idx),
+            // Custom application emoji per deck — null when the PNG
+            // hasn't been uploaded yet, in which case the option just
+            // renders without an icon (still fully functional).
+            emoji: deckEmojiPartial(combo.deck),
           };
         }),
       );
@@ -204,13 +222,24 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
 
   if (phase.kind === "PICK") {
     const picker = phase.pickerId === a.id ? a : b;
+    // Sort remaining for display by canonical order (deck A-Z, stake
+    // difficulty). Pool index in `idx` stays intact so button payloads
+    // still reference the correct combo.
+    const sortedPickRemaining = [...remaining].sort((x, y) => {
+      const d = canonicalDeckIndex(x.combo.deck) - canonicalDeckIndex(y.combo.deck);
+      if (d !== 0) return d;
+      return canonicalStakeIndex(x.combo.stake) - canonicalStakeIndex(y.combo.stake);
+    });
     // Spell out each remaining combo's deck + stake effects in the embed
-    // so picker has full info without hovering a tooltip somewhere.
-    const optionLines = remaining.map(({ combo }, i) => {
+    // so picker has full info without hovering a tooltip somewhere. Deck
+    // emoji renders inline before the name when its PNG is uploaded.
+    const optionLines = sortedPickRemaining.map(({ combo }, i) => {
       const deckDesc = deckDescription(combo.deck);
       const stakeDesc = stakeDescription(combo.stake);
+      const deckIcon = deckEmojiPartial(combo.deck);
+      const iconPrefix = deckIcon ? `<:${deckIcon.name}:${deckIcon.id}> ` : "";
       return (
-        `**${i + 1}. ${combo.deck} / ${combo.stake}**` +
+        `**${i + 1}. ${iconPrefix}${combo.deck} / ${combo.stake}**` +
         (deckDesc ? `\n  · ${combo.deck}: ${deckDesc}` : "") +
         (stakeDesc ? `\n  · ${combo.stake} stake: ${stakeDesc}` : "")
       );
@@ -220,12 +249,15 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
         optionLines.join("\n\n"),
     );
     const rows = chunkButtons(
-      remaining.map(({ idx, combo }) =>
-        new ButtonBuilder()
+      sortedPickRemaining.map(({ idx, combo }) => {
+        const btn = new ButtonBuilder()
           .setCustomId(`match:pick:${s.id}:${idx}`)
           .setLabel(`${combo.deck} / ${combo.stake}`)
-          .setStyle(ButtonStyle.Success),
-      ),
+          .setStyle(ButtonStyle.Success);
+        const deckIcon = deckEmojiPartial(combo.deck);
+        if (deckIcon) btn.setEmoji({ id: deckIcon.id, name: deckIcon.name, animated: deckIcon.animated });
+        return btn;
+      }),
     );
     return { embeds: [embed], components: rows };
   }
