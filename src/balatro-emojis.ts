@@ -72,6 +72,11 @@ export function deckEmojiPartial(deckName: string): { id: string; name: string; 
   return e ? { id: e.id, name: e.name, animated: e.animated } : undefined;
 }
 
+export function stakeEmojiPartial(stakeName: string): { id: string; name: string; animated?: boolean } | undefined {
+  const e = emojiByName.get(stakeEmojiName(stakeName));
+  return e ? { id: e.id, name: e.name, animated: e.animated } : undefined;
+}
+
 // One-shot: list app emojis, upload any missing PNGs, populate the cache.
 // Safe to call repeatedly — already-uploaded emojis are skipped and PNGs
 // that don't exist on disk are silently skipped (admin uploads later).

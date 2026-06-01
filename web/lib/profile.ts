@@ -32,6 +32,9 @@ export interface MatchEntry {
   opponentGames: number;
   outcome: "WIN" | "DRAW" | "LOSS";
   confirmedAt: Date | null;
+  // True when this entry is a 1-game shootout tiebreaker, not a normal
+  // best-of-2 pairing. UI renders these with a "⚔ shootout" marker.
+  isShootout?: boolean;
 }
 
 export interface SeasonHistoryEntry {
@@ -151,6 +154,34 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
     else pairingsByDivision.set(p.divisionId, [p]);
   }
 
+  // Shootouts the player participated in across all those divisions.
+  // Shootout has no Player relation in the schema (kept simple — ids
+  // only), so we batch-fetch the opponent display names in one
+  // round-trip after this query.
+  const myShootouts = await prisma.shootout.findMany({
+    where: {
+      divisionId: { in: divisionIds },
+      OR: [{ playerAId: playerId }, { playerBId: playerId }],
+    },
+  });
+  const opponentIds = new Set<string>();
+  for (const s of myShootouts) {
+    opponentIds.add(s.playerAId === playerId ? s.playerBId : s.playerAId);
+  }
+  const opponentRows = opponentIds.size
+    ? await prisma.player.findMany({
+        where: { id: { in: [...opponentIds] } },
+        select: { id: true, displayName: true },
+      })
+    : [];
+  const playerNameById = new Map(opponentRows.map((p) => [p.id, p.displayName]));
+  const shootoutsByDivision = new Map<string, typeof myShootouts>();
+  for (const s of myShootouts) {
+    const bucket = shootoutsByDivision.get(s.divisionId);
+    if (bucket) bucket.push(s);
+    else shootoutsByDivision.set(s.divisionId, [s]);
+  }
+
   const history: SeasonHistoryEntry[] = [];
   for (const m of memberships) {
     const cached = standingsByDivision.get(m.divisionId);
@@ -159,7 +190,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
       ? cached.findIndex((r) => r.playerId === playerId) + 1
       : 0;
 
-    const matches: MatchEntry[] = (pairingsByDivision.get(m.divisionId) ?? []).map((p): MatchEntry => {
+    const pairingMatches: MatchEntry[] = (pairingsByDivision.get(m.divisionId) ?? []).map((p): MatchEntry => {
       const meIsA = p.playerAId === playerId;
       const opponent = meIsA ? p.playerB : p.playerA;
       const myGames = meIsA ? p.gamesWonA : p.gamesWonB;
@@ -177,6 +208,33 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
         confirmedAt: p.confirmedAt,
       };
     });
+    // Shootouts as MatchEntry rows. 1-game format → myGames/opponentGames
+    // are 0 or 1. Draw isn't possible for a shootout. UI distinguishes via
+    // isShootout flag.
+    const shootoutMatches: MatchEntry[] = (shootoutsByDivision.get(m.divisionId) ?? []).map((s): MatchEntry => {
+      const opponentId = s.playerAId === playerId ? s.playerBId : s.playerAId;
+      const opponentName = playerNameById.get(opponentId) ?? "Unknown";
+      const iWon = s.winnerId === playerId;
+      return {
+        pairingId: s.id,
+        status: "CONFIRMED",
+        opponentPlayerId: opponentId,
+        opponentDisplayName: opponentName,
+        myGames: iWon ? 1 : 0,
+        opponentGames: iWon ? 0 : 1,
+        outcome: iWon ? "WIN" : "LOSS",
+        confirmedAt: s.recordedAt,
+        isShootout: true,
+      };
+    });
+    // Combine + sort chronologically. Shootouts don't roll up into points
+    // (the cached row's wins/draws/losses/games don't reflect them — they're
+    // a tiebreaker only), so we DON'T add them to derived stats below.
+    const matches: MatchEntry[] = [...pairingMatches, ...shootoutMatches].sort((a, b) => {
+      const aT = a.confirmedAt?.getTime() ?? 0;
+      const bT = b.confirmedAt?.getTime() ?? 0;
+      return aT - bT;
+    });
 
     // Stats: prefer the cached row when present (authoritative — same
     // numbers as /standings). Fall back to deriving from the player's
@@ -185,7 +243,9 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
     // scoring, the cached row already reflects that — fallback path
     // would only fire for cold-cache divisions where points haven't
     // been computed yet anyway.
-    const confirmedMatches = matches.filter((mm) => mm.status === "CONFIRMED");
+    // Shootouts don't roll up into points/wins (they break ties, they're
+    // not a results row), so exclude them from the derived stats fallback.
+    const confirmedMatches = matches.filter((mm) => mm.status === "CONFIRMED" && !mm.isShootout);
     const derivedWins = confirmedMatches.filter((mm) => mm.outcome === "WIN").length;
     const derivedDraws = confirmedMatches.filter((mm) => mm.outcome === "DRAW").length;
     const derivedLosses = confirmedMatches.filter((mm) => mm.outcome === "LOSS").length;

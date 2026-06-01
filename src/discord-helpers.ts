@@ -149,11 +149,19 @@ export async function createGuildTextChannel(
 export async function postChannelMessage(
   channelId: string,
   content: string,
+  opts: { silent?: boolean } = {},
 ): Promise<string | null> {
   try {
     const channel = await getDiscordClient().channels.fetch(channelId);
     if (!channel || !channel.isTextBased() || !("send" in channel)) return null;
-    const msg = await channel.send({ content });
+    // silent=true keeps any <@id>/<@&id> in the message rendering as
+    // clickable mentions but DOESN'T fire a notification or in-app ping.
+    // Used by setup messages (bootstrap welcomes, etc.) where the
+    // reference is useful but pinging everyone in the channel is noise.
+    const msg = await channel.send({
+      content,
+      ...(opts.silent ? { allowedMentions: { parse: [] } } : {}),
+    });
     return msg.id;
   } catch (err) {
     console.warn(`[bot] postChannelMessage(${channelId}) failed:`, err);

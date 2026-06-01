@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
+import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import {
   ensureGuildCategory,
   lockChannelForEveryone,
@@ -73,7 +74,7 @@ export async function setSeasonResultsChannel(formData: FormData) {
 // season, and survives crashes mid-bootstrap. Idempotent per-division on
 // the worker side (skips divisions that already have both ids set).
 export async function bootstrapSeasonDiscord(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
@@ -123,6 +124,14 @@ export async function bootstrapSeasonDiscord(formData: FormData) {
     queued++;
   }
   console.log(`[bootstrap] queued ${queued} division bootstrap jobs for season ${season.name}`);
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "season.bootstrap-discord",
+    targetType: "Season",
+    targetId: id,
+    summary: `Bootstrapping Discord for "${season.name}" (${queued} divisions queued)`,
+    metadata: { queuedCount: queued, divisionCount: season.divisions.length },
+  });
 
   revalidatePath("/admin/seasons");
   revalidatePath(`/admin/seasons/${id}`);
@@ -133,7 +142,7 @@ export async function bootstrapSeasonDiscord(formData: FormData) {
 // Archive' category so the active categories aren't cluttered with
 // dead seasons. History stays readable.
 export async function archiveSeasonChannels(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
@@ -166,6 +175,14 @@ export async function archiveSeasonChannels(formData: FormData) {
     await lockChannelForEveryone(guildId, div.discordChannelId).catch(() => {});
     await setChannelParent(div.discordChannelId, archiveCategory.id).catch(() => {});
   }
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "season.archive-channels",
+    targetType: "Season",
+    targetId: id,
+    summary: `Archived Discord channels for "${season.name}" (${season.divisions.length} channels)`,
+    metadata: { channelCount: season.divisions.length, archiveCategoryId: archiveCategory.id },
+  });
 
   revalidatePath("/admin/seasons");
   revalidatePath(`/admin/seasons/${id}`);
@@ -181,7 +198,7 @@ export async function archiveSeasonChannels(formData: FormData) {
 // archived season channels still have a permission anchor. Admin can
 // delete the orphan roles manually if they want a cleaner role list.
 export async function stripSeasonDivisionRoles(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const guildId = process.env.DISCORD_GUILD_ID;
@@ -219,6 +236,14 @@ export async function stripSeasonDivisionRoles(formData: FormData) {
     }
   }
   console.log(`[strip-role] queued ${queued} role-remove jobs for season ${season.name}`);
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "role.strip",
+    targetType: "Season",
+    targetId: id,
+    summary: `Stripped division roles for "${season.name}" (${queued} jobs queued)`,
+    metadata: { queuedCount: queued },
+  });
   revalidatePath(`/admin/seasons/${id}`);
 }
 
@@ -236,7 +261,7 @@ export async function stripSeasonDivisionRoles(formData: FormData) {
 //     already has the role.
 // Run again after shootouts resolve to backfill the skipped divisions.
 export async function awardSeasonChampionRoles(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const guildId = process.env.DISCORD_GUILD_ID;
@@ -293,5 +318,13 @@ export async function awardSeasonChampionRoles(formData: FormData) {
     `[champion-roles] queued ${queued} for season ${season.name}` +
       (skipped > 0 ? `, skipped ${skipped} due to unresolved ties at #1` : ""),
   );
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "role.award-champion",
+    targetType: "Season",
+    targetId: id,
+    summary: `Awarded champion roles for "${season.name}" (${queued} awarded${skipped > 0 ? `, ${skipped} skipped due to ties` : ""})`,
+    metadata: { awardedCount: queued, skippedDueToTies: skipped },
+  });
   revalidatePath(`/admin/seasons/${id}`);
 }

@@ -19,6 +19,8 @@ import {
 } from "discord.js";
 import { MatchSessionState, Prisma, type MatchSession } from "@prisma/client";
 import { announceResult } from "../announce.js";
+import { SYSTEM_ACTOR, recordAudit } from "../audit.js";
+import { isCanonicalDeck } from "../balatro-info.js";
 import { resolveChallengesChannelId } from "../challenges-channel.js";
 import { prisma } from "../db.js";
 import { env } from "../env.js";
@@ -59,6 +61,38 @@ async function loadSession(id: string) {
   return prisma.matchSession.findUnique({ where: { id } });
 }
 
+// In-flight customCombo negotiation: one player proposes a deck+stake,
+// the other can accept / counter / cancel. Stored as JSON on
+// session.customComboProposal. Cleared once accepted (moves into
+// session.customCombo) or cancelled.
+type ProposalStatus = "building" | "pending";
+interface ComboProposal {
+  by: string;          // player id of the proposer
+  deck?: string;       // canonical deck name
+  stake?: string;      // must be in preset.stakes for this match
+  status: ProposalStatus;
+}
+
+function parseProposal(json: string | null): ComboProposal | null {
+  if (!json) return null;
+  try {
+    const v = JSON.parse(json);
+    if (
+      v &&
+      typeof v.by === "string" &&
+      (v.status === "building" || v.status === "pending")
+    ) {
+      const out: ComboProposal = { by: v.by, status: v.status };
+      if (typeof v.deck === "string") out.deck = v.deck;
+      if (typeof v.stake === "string") out.stake = v.stake;
+      return out;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function loadPlayers(session: { playerAId: string; playerBId: string }) {
   const [a, b] = await Promise.all([
     prisma.player.findUniqueOrThrow({ where: { id: session.playerAId } }),
@@ -84,9 +118,23 @@ async function updateSession(
 
 type AnyInteraction = ButtonInteraction | StringSelectMenuInteraction;
 
+// Resolve the stake list this match can use for a custom-combo proposal.
+// The preset for the season (or Default for casual) defines the allowed
+// stakes — proposer can only pick from those, even though decks are open
+// to the full canonical library.
+async function loadAllowedStakes(session: MatchSession): Promise<string[]> {
+  const preset = session.divisionId
+    ? await presetForDivision(session.divisionId)
+    : await prisma.matchConfigPreset.findUnique({ where: { name: "Default" } });
+  return preset?.stakes ?? [];
+}
+
 async function refreshMessage(interaction: AnyInteraction, session: MatchSession) {
   const { playerA, playerB } = await loadPlayers(session);
-  const { embeds, components } = renderMatch(session, playerA, playerB);
+  // Allowed stakes are only used by the combo-proposal UI in GAME_1_BAN,
+  // but it's cheap and harmless to always fetch.
+  const allowedStakes = session.state === "GAME_1_BAN" ? await loadAllowedStakes(session) : [];
+  const { embeds, components } = renderMatch(session, playerA, playerB, { allowedStakes });
   await interaction.update({ embeds, components });
 }
 
@@ -130,19 +178,32 @@ export const matchButtons: ButtonHandler = {
     if (action === "reroll") return handleReroll(interaction, session);
     if (action === "pick") return handlePick(interaction, session, parts[3]);
     if (action === "winner") return handleWinner(interaction, session, parts[3]);
+    // Combo negotiation buttons. propose-start enters the proposal flow;
+    // propose-submit/accept/counter/cancel manage state inside it.
+    if (action === "proposestart") return handleProposeStart(interaction, session);
+    if (action === "proposesubmit") return handleProposeSubmit(interaction, session);
+    if (action === "proposeaccept") return handleProposeAccept(interaction, session);
+    if (action === "proposecounter") return handleProposeCounter(interaction, session);
+    if (action === "proposecancel") return handleProposeCancel(interaction, session);
+    // Mutual-consent match cancel during the ban phase. Same shape as
+    // reroll: first click votes, second click confirms.
+    if (action === "cancelmatch") return handleCancelMatch(interaction, session);
 
     await reply(interaction, "That button didn't match anything we recognize — refresh Discord and try again.");
   },
 };
 
-// Multi-select for the ban phase. Player picks N decks from the dropdown
-// (Discord enforces the count via min/max), interaction lands here, we
-// stash the picks on game.pendingBans. They click the Confirm button
-// (matchButtons handler above) to actually apply them.
+// All match-related select menus share the 'match:' prefix; the second
+// segment of the custom id identifies the sub-action:
+//   match:banselect:<id>     — pending bans for the ban phase
+//   match:proposedeck:<id>   — proposer picks a deck for the custom combo
+//   match:proposestake:<id>  — proposer picks a stake for the custom combo
 export const matchSelectMenus: SelectMenuHandler = {
-  prefix: "match:banselect:",
+  prefix: "match:",
   async execute(interaction) {
-    const sessionId = interaction.customId.split(":")[2];
+    const parts = interaction.customId.split(":");
+    const action = parts[1];
+    const sessionId = parts[2];
     if (!sessionId) {
       await reply(interaction, "Something went wrong with that selection — try again, or ask an admin.");
       return;
@@ -152,7 +213,10 @@ export const matchSelectMenus: SelectMenuHandler = {
       await reply(interaction, "This match isn't active anymore — it may have timed out or been cancelled.");
       return;
     }
-    await handleBanSelect(interaction, session);
+    if (action === "banselect") return handleBanSelect(interaction, session);
+    if (action === "proposedeck") return handleProposeDeck(interaction, session);
+    if (action === "proposestake") return handleProposeStake(interaction, session);
+    await reply(interaction, "Unknown selection — refresh Discord and try again.");
   },
 };
 
@@ -474,6 +538,22 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
     threadId: matchChannelId,
   });
   if (!updated) return raceLost(interaction);
+  recordAudit({
+    actor: SYSTEM_ACTOR,
+    action: "match.start",
+    targetType: "MatchSession",
+    targetId: updated.id,
+    summary: `Match started: ${playerA.displayName} vs ${playerB.displayName}${session.isCasual ? " (casual)" : session.isShootout ? " (shootout)" : ""}`,
+    metadata: {
+      isCasual: session.isCasual,
+      isShootout: session.isShootout,
+      bestOf: session.bestOf,
+      customCombo: customCombo,
+      divisionId: session.divisionId,
+      playerAId: session.playerAId,
+      playerBId: session.playerBId,
+    },
+  });
 
   await refreshMessage(interaction, updated);
 
@@ -773,6 +853,26 @@ async function finalizeMatch(
     completedAt: new Date(),
   } as Prisma.MatchSessionUpdateManyMutationInput);
   if (!updated) return raceLost(interaction);
+  // Record completion in the audit log so we have an event per match —
+  // useful for "what happened today" admin views even when the result
+  // didn't go through a Pairing (casual / shootout).
+  recordAudit({
+    actor: SYSTEM_ACTOR,
+    action: "match.complete",
+    targetType: "MatchSession",
+    targetId: updated.id,
+    summary: `${playerA.displayName} ${aWins}-${bWins} ${playerB.displayName}${session.isCasual ? " (casual)" : session.isShootout ? " (shootout)" : ""}`,
+    metadata: {
+      isCasual: session.isCasual,
+      isShootout: session.isShootout,
+      bestOf: session.bestOf,
+      gamesWonA: aWins,
+      gamesWonB: bWins,
+      divisionId: session.divisionId,
+      playerAId: session.playerAId,
+      playerBId: session.playerBId,
+    },
+  });
 
   // Casual /challenge — no Pairing write, no announce. Show result + close.
   if (session.isCasual || !session.divisionId) {
@@ -867,4 +967,230 @@ async function finalizeMatch(
   closeMatchChannel(interaction, updated.id, updated.threadId).catch(() => {});
   announceResult(pairing.id).catch(() => {});
   recomputeDivisionStandings(pairing.divisionId).catch(() => {});
+}
+
+// === Custom-combo negotiation handlers ===
+// The proposal flow lives inside GAME_1_BAN — once game 1 starts the
+// custom combo is locked in for the whole match (every game uses it),
+// so re-negotiating mid-match doesn't make sense. handleProposeAccept
+// is what moves the agreed proposal into session.customCombo and jumps
+// past the ban/pick flow entirely.
+
+// Resolve which of the two players the actor is, replying with an
+// ephemeral error if they aren't one of them. Returns null on miss.
+async function actorPlayer(interaction: AnyInteraction, session: MatchSession) {
+  const { playerA, playerB } = await loadPlayers(session);
+  if (interaction.user.id === playerA.discordId) return { actor: playerA, other: playerB };
+  if (interaction.user.id === playerB.discordId) return { actor: playerB, other: playerA };
+  await reply(interaction, "Only the two players in this match can use these buttons.");
+  return null;
+}
+
+async function handleProposeStart(interaction: ButtonInteraction, session: MatchSession) {
+  if (session.state !== "GAME_1_BAN") {
+    return reply(interaction, "You can only propose a custom combo before game 1 starts.");
+  }
+  const ctx = await actorPlayer(interaction, session);
+  if (!ctx) return;
+  if (session.customComboProposal) {
+    return reply(interaction, "There's already a proposal in flight — finish or cancel it first.");
+  }
+  const proposal: ComboProposal = { by: ctx.actor.id, status: "building" };
+  const updated = await updateSession(session, { customComboProposal: JSON.stringify(proposal) });
+  if (!updated) return raceLost(interaction);
+  await refreshMessage(interaction, updated);
+}
+
+async function handleProposeDeck(interaction: StringSelectMenuInteraction, session: MatchSession) {
+  if (session.state !== "GAME_1_BAN") return reply(interaction, "Not in the proposal phase.");
+  const proposal = parseProposal(session.customComboProposal);
+  if (!proposal || proposal.status !== "building") {
+    return reply(interaction, "No proposal is being built right now.");
+  }
+  const ctx = await actorPlayer(interaction, session);
+  if (!ctx) return;
+  if (proposal.by !== ctx.actor.id) {
+    return reply(interaction, "Only the proposer can pick the deck. Counter the proposal to take over.");
+  }
+  const deck = interaction.values[0];
+  if (!deck || !isCanonicalDeck(deck)) {
+    return reply(interaction, "That deck isn't in our registry — pick a known deck.");
+  }
+  const updated = await updateSession(session, {
+    customComboProposal: JSON.stringify({ ...proposal, deck }),
+  });
+  if (!updated) return raceLost(interaction);
+  await refreshMessage(interaction, updated);
+}
+
+async function handleProposeStake(interaction: StringSelectMenuInteraction, session: MatchSession) {
+  if (session.state !== "GAME_1_BAN") return reply(interaction, "Not in the proposal phase.");
+  const proposal = parseProposal(session.customComboProposal);
+  if (!proposal || proposal.status !== "building") {
+    return reply(interaction, "No proposal is being built right now.");
+  }
+  const ctx = await actorPlayer(interaction, session);
+  if (!ctx) return;
+  if (proposal.by !== ctx.actor.id) {
+    return reply(interaction, "Only the proposer can pick the stake. Counter the proposal to take over.");
+  }
+  const stake = interaction.values[0];
+  const allowedStakes = await loadAllowedStakes(session);
+  if (!stake || !allowedStakes.includes(stake)) {
+    return reply(interaction, "That stake isn't in this season's preset — pick one from the menu.");
+  }
+  const updated = await updateSession(session, {
+    customComboProposal: JSON.stringify({ ...proposal, stake }),
+  });
+  if (!updated) return raceLost(interaction);
+  await refreshMessage(interaction, updated);
+}
+
+async function handleProposeSubmit(interaction: ButtonInteraction, session: MatchSession) {
+  if (session.state !== "GAME_1_BAN") return reply(interaction, "Not in the proposal phase.");
+  const proposal = parseProposal(session.customComboProposal);
+  if (!proposal || proposal.status !== "building") {
+    return reply(interaction, "No proposal to submit.");
+  }
+  const ctx = await actorPlayer(interaction, session);
+  if (!ctx) return;
+  if (proposal.by !== ctx.actor.id) {
+    return reply(interaction, "Only the proposer can submit this proposal.");
+  }
+  if (!proposal.deck || !proposal.stake) {
+    return reply(interaction, "Pick a deck and a stake first.");
+  }
+  const updated = await updateSession(session, {
+    customComboProposal: JSON.stringify({ ...proposal, status: "pending" }),
+  });
+  if (!updated) return raceLost(interaction);
+  await refreshMessage(interaction, updated);
+}
+
+async function handleProposeCounter(interaction: ButtonInteraction, session: MatchSession) {
+  if (session.state !== "GAME_1_BAN") return reply(interaction, "Not in the proposal phase.");
+  const proposal = parseProposal(session.customComboProposal);
+  if (!proposal || proposal.status !== "pending") {
+    return reply(interaction, "No pending proposal to counter.");
+  }
+  const ctx = await actorPlayer(interaction, session);
+  if (!ctx) return;
+  if (proposal.by === ctx.actor.id) {
+    return reply(interaction, "You're the proposer — wait for your opponent's response.");
+  }
+  // Flip ownership to the actor, drop their picks, drop back to building.
+  const next: ComboProposal = { by: ctx.actor.id, status: "building" };
+  const updated = await updateSession(session, { customComboProposal: JSON.stringify(next) });
+  if (!updated) return raceLost(interaction);
+  await refreshMessage(interaction, updated);
+}
+
+async function handleProposeCancel(interaction: ButtonInteraction, session: MatchSession) {
+  if (session.state !== "GAME_1_BAN") return reply(interaction, "Not in the proposal phase.");
+  if (!session.customComboProposal) {
+    return reply(interaction, "No proposal to cancel.");
+  }
+  const ctx = await actorPlayer(interaction, session);
+  if (!ctx) return;
+  const updated = await updateSession(session, { customComboProposal: null });
+  if (!updated) return raceLost(interaction);
+  await refreshMessage(interaction, updated);
+}
+
+// Mutual-consent cancel during the BAN phases. First click stores the
+// voter's vote in the current game's GameState; second click (from the
+// OTHER player) flips state to CANCELLED. Either player can withdraw
+// their vote by clicking again with the proposal still single-sided.
+async function handleCancelMatch(interaction: ButtonInteraction, session: MatchSession) {
+  const gameNum =
+    session.state === "GAME_1_BAN" ? 1 :
+    session.state === "GAME_2_BAN" ? 2 :
+    session.state === "GAME_3_BAN" ? 3 : 0;
+  if (gameNum === 0) {
+    return reply(interaction, "Cancel is only available during the ban phase.");
+  }
+  const ctx = await actorPlayer(interaction, session);
+  if (!ctx) return;
+  const gameField: "game1" | "game2" | "game3" = `game${gameNum}` as const;
+  const game = parseGame(session[gameField]);
+  if (!game) return reply(interaction, "Game state missing.");
+
+  const voterIsA = ctx.actor.id === session.playerAId;
+  const newGame: GameState = {
+    ...game,
+    cancelVoteByA: voterIsA ? true : game.cancelVoteByA,
+    cancelVoteByB: !voterIsA ? true : game.cancelVoteByB,
+  };
+
+  // Only one vote so far → save and wait for the other player.
+  if (!newGame.cancelVoteByA || !newGame.cancelVoteByB) {
+    const updated = await updateSession(session, {
+      [gameField]: JSON.stringify(newGame),
+    } as Prisma.MatchSessionUpdateManyMutationInput);
+    if (!updated) return raceLost(interaction);
+    return refreshMessage(interaction, updated);
+  }
+
+  // Both agreed → cancel the match. Lock the thread so it doesn't keep
+  // pinging people, then refresh the embed so the cancelled-state
+  // render replaces the buttons.
+  const updated = await updateSession(session, {
+    [gameField]: JSON.stringify(newGame),
+    state: MatchSessionState.CANCELLED,
+  } as Prisma.MatchSessionUpdateManyMutationInput);
+  if (!updated) return raceLost(interaction);
+  recordAudit({
+    actor: SYSTEM_ACTOR,
+    action: "match.cancel-player",
+    targetType: "MatchSession",
+    targetId: updated.id,
+    summary: `Both players agreed to cancel match ${updated.id.slice(-6)}`,
+    metadata: {
+      previousState: session.state,
+      playerAId: session.playerAId,
+      playerBId: session.playerBId,
+    },
+  });
+  await refreshMessage(interaction, updated);
+  closeMatchChannel(interaction, updated.id, updated.threadId).catch(() => {});
+}
+
+// Accept = the OTHER player agrees to the proposed combo. Snap into the
+// custom-combo skip-everything path: stamp customCombo, swap game1's
+// pool to the single agreed combo with pickedDeckIdx=0, jump state to
+// GAME_1_PLAYING. From here BO2/BO3 follows the existing
+// customCombo-skips-CHOOSE_FIRST logic in handleWinner.
+async function handleProposeAccept(interaction: ButtonInteraction, session: MatchSession) {
+  if (session.state !== "GAME_1_BAN") return reply(interaction, "Not in the proposal phase.");
+  const proposal = parseProposal(session.customComboProposal);
+  if (!proposal || proposal.status !== "pending") {
+    return reply(interaction, "No pending proposal to accept.");
+  }
+  const ctx = await actorPlayer(interaction, session);
+  if (!ctx) return;
+  if (proposal.by === ctx.actor.id) {
+    return reply(interaction, "You proposed this — the other player has to accept.");
+  }
+  if (!proposal.deck || !proposal.stake) {
+    return reply(interaction, "Proposal is incomplete — ask them to re-submit.");
+  }
+  // Re-validate at accept time so a stale proposal (e.g. preset changed
+  // since the proposal was built) still bounces.
+  const allowedStakes = await loadAllowedStakes(session);
+  if (!isCanonicalDeck(proposal.deck) || !allowedStakes.includes(proposal.stake)) {
+    return reply(interaction, "That combo is no longer valid — start a new proposal.");
+  }
+  const game1 = parseGame(session.game1);
+  if (!game1) return reply(interaction, "Game 1 state missing — start a new match.");
+  const combo = { deck: proposal.deck, stake: proposal.stake };
+  const newGame1: GameState = { firstId: game1.firstId, bans: [], pool: [combo], pickedDeckIdx: 0 };
+  const updated = await updateSession(session, {
+    customCombo: JSON.stringify(combo),
+    customComboProposal: null,
+    pool: JSON.stringify([combo]),
+    game1: JSON.stringify(newGame1),
+    state: MatchSessionState.GAME_1_PLAYING,
+  });
+  if (!updated) return raceLost(interaction);
+  await refreshMessage(interaction, updated);
 }

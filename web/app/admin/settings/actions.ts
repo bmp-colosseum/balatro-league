@@ -8,6 +8,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
+import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { invalidateLeagueSettingsCache } from "@/lib/league-settings";
 import { prisma } from "@/lib/prisma";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
@@ -25,7 +26,7 @@ const CONFIG_KEYS = {
 
 export async function saveLeagueSettings(formData: FormData) {
   const { user } = await requireAdmin();
-  const updatedBy = (user as { discordId?: string } | undefined)?.discordId ?? "admin";
+  const updatedBy = user.discordId;
 
   const fields: Array<[keyof typeof CONFIG_KEYS, number, number]> = [
     ["PointsFor20Win", parseInt(String(formData.get("PointsFor20Win") ?? ""), 10), 0],
@@ -60,6 +61,12 @@ export async function saveLeagueSettings(formData: FormData) {
     ),
   );
   invalidateLeagueSettingsCache();
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "league-settings.save",
+    summary: "Updated league rules (scoring + ban policy)",
+    metadata: Object.fromEntries(fields.map(([name, value]) => [name, value])),
+  });
 
   // Scoring change ⇒ standings cache is now stale. Recompute every
   // active-season division so /standings reflects the new rules

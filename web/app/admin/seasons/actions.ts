@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
+import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import {
   createChannelInvite,
   editChannelMessage,
@@ -43,7 +44,7 @@ function defaultDivisionNames(tier: TierConfig): string[] {
 }
 
 export async function createSeason(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
 
@@ -74,6 +75,14 @@ export async function createSeason(formData: FormData) {
       update: { config: JSON.stringify(configs), isLastUsed: true },
     });
   }
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "season.create",
+    targetType: "Season",
+    targetId: season.id,
+    summary: `Created season "${season.name}"`,
+    metadata: { visibility, targetGroupSize, minGroupSize, tierCount: configs.length, deadline: deadline?.toISOString() ?? null },
+  });
 
   revalidatePath("/admin/seasons");
 }
@@ -98,7 +107,7 @@ async function createTiersAndDivisionsFor(seasonId: string, configs: TierConfig[
 // player count). Refuses if tiers already exist — use delete-and-recreate
 // (manual on the page) for now.
 export async function configureTiers(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const seasonId = String(formData.get("seasonId") ?? "");
   const configs = parseConfig(String(formData.get("config") ?? ""));
   if (!seasonId || configs.length === 0) return;
@@ -112,11 +121,19 @@ export async function configureTiers(formData: FormData) {
     create: { name: LAST_USED_NAME, config: JSON.stringify(configs), isLastUsed: true },
     update: { config: JSON.stringify(configs), isLastUsed: true },
   });
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "season.configure-tiers",
+    targetType: "Season",
+    targetId: seasonId,
+    summary: `Configured ${configs.length} tier(s) (${configs.reduce((s, c) => s + c.divisionCount, 0)} divisions)`,
+    metadata: { tiers: configs.map((c) => ({ name: c.name, divisionCount: c.divisionCount })) },
+  });
   revalidatePath("/admin/seasons");
 }
 
 export async function activateSeason(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   const target = await prisma.season.findUnique({ where: { id } });
@@ -131,6 +148,14 @@ export async function activateSeason(formData: FormData) {
     });
   }
   await prisma.season.update({ where: { id }, data: { isActive: true, endedAt: null } });
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "season.activate",
+    targetType: "Season",
+    targetId: id,
+    summary: `Activated season "${target.name}"${prior ? ` (deactivated "${prior.name}")` : ""}`,
+    metadata: { previousActiveSeasonId: prior?.id ?? null, visibility: target.visibility },
+  });
   revalidatePath("/admin/seasons");
 }
 
@@ -138,14 +163,25 @@ export async function saveTemplate(formData: FormData) {
   await requireAdmin();
   const name = String(formData.get("templateName") ?? "").trim();
   const configJson = String(formData.get("config") ?? "");
+  // When `id` is present we're editing an existing template — let
+  // admin rename in place by updating both name and config. When
+  // absent we treat it as create-or-update-by-name (upsert).
+  const id = String(formData.get("id") ?? "").trim();
   if (!name) return;
   const configs = parseConfig(configJson);
   if (configs.length === 0) return;
-  await prisma.tierTemplate.upsert({
-    where: { name },
-    create: { name, config: JSON.stringify(configs), isLastUsed: false },
-    update: { config: JSON.stringify(configs) },
-  });
+  if (id) {
+    await prisma.tierTemplate.update({
+      where: { id },
+      data: { name, config: JSON.stringify(configs) },
+    });
+  } else {
+    await prisma.tierTemplate.upsert({
+      where: { name },
+      create: { name, config: JSON.stringify(configs), isLastUsed: false },
+      update: { config: JSON.stringify(configs) },
+    });
+  }
   revalidatePath("/admin/seasons");
   revalidatePath("/admin/seasons/templates");
 }
@@ -163,7 +199,7 @@ export async function deleteTemplate(formData: FormData) {
 // flag — clicking on an already-inactive season is a no-op for the season
 // state but still recomputes ratings.
 export async function endSeason(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
@@ -214,6 +250,14 @@ export async function endSeason(formData: FormData) {
       data: { isActive: false, endedAt: new Date() },
     }),
   ]);
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "season.end",
+    targetType: "Season",
+    targetId: season.id,
+    summary: `Ended season "${season.name}" (${season.divisions.length} divisions, ${deltas.length} rating updates)`,
+    metadata: { divisionCount: season.divisions.length, ratingUpdateCount: deltas.length },
+  });
 
   revalidatePath("/admin/seasons");
   revalidatePath("/admin/rankings");
@@ -277,7 +321,7 @@ function buildClosedSignupPayload(
 // resultingSeasonId is set immediately so the build step (later) populates
 // THIS season's existing divisions instead of creating a new one.
 export async function openSignupsForSeason(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const seasonId = String(formData.get("seasonId") ?? "");
   const channelId = String(formData.get("channelId") ?? "").trim();
   if (!seasonId || !channelId) redirect("/admin/seasons?err=missing-fields");
@@ -305,6 +349,14 @@ export async function openSignupsForSeason(formData: FormData) {
     redirect("/admin/seasons?err=signup-post-failed");
   }
   await prisma.signupRound.update({ where: { id: round.id }, data: { messageId } });
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "signup-round.open",
+    targetType: "SignupRound",
+    targetId: round.id,
+    summary: `Opened signups for "${season!.name}"`,
+    metadata: { seasonId: season!.id, channelId },
+  });
 
   // Fire-and-forget: DM everyone on the next-season interest list so they
   // know signups just opened. Don't block the admin form on this.
@@ -341,7 +393,7 @@ async function notifyNextSeasonSubscribers(seasonName: string, signupChannelId: 
 // Discord message so players see the closed-state embed (buttons disabled,
 // status updated). Previously only the DB was updated.
 export async function finalizeSignupsForSeason(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const seasonId = String(formData.get("seasonId") ?? "");
   if (!seasonId) return;
   const round = await prisma.signupRound.findFirst({
@@ -369,34 +421,73 @@ export async function finalizeSignupsForSeason(formData: FormData) {
     ),
   );
   console.log(`[mmr-snapshot] queued ${round.signups.length} snapshots for season ${seasonId}`);
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "signup-round.close",
+    targetType: "SignupRound",
+    targetId: round.id,
+    summary: `Closed signups for season (${round.signups.length} signed up)`,
+    metadata: { seasonId, signupCount: round.signups.length },
+  });
   revalidatePath("/admin/seasons");
   revalidatePath("/admin/signups");
 }
 
 export async function archiveSeason(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  const season = await prisma.season.findUnique({ where: { id } });
   await prisma.season.update({ where: { id }, data: { archivedAt: new Date() } });
+  if (season) {
+    recordAudit({
+      actor: actorFromAdminUser(user),
+      action: "season.archive",
+      targetType: "Season",
+      targetId: id,
+      summary: `Archived season "${season.name}"`,
+    });
+  }
   revalidatePath("/admin/seasons");
   revalidatePath("/seasons");
 }
 
 export async function unarchiveSeason(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  const season = await prisma.season.findUnique({ where: { id } });
   await prisma.season.update({ where: { id }, data: { archivedAt: null } });
+  if (season) {
+    recordAudit({
+      actor: actorFromAdminUser(user),
+      action: "season.unarchive",
+      targetType: "Season",
+      targetId: id,
+      summary: `Unarchived season "${season.name}"`,
+    });
+  }
   revalidatePath("/admin/seasons");
   revalidatePath("/seasons");
 }
 
 export async function renameSeason(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   const name = String(formData.get("name") ?? "").trim();
   if (!id || !name) return;
+  const prev = await prisma.season.findUnique({ where: { id } });
   await prisma.season.update({ where: { id }, data: { name } });
+  if (prev) {
+    recordAudit({
+      actor: actorFromAdminUser(user),
+      action: "season.rename",
+      targetType: "Season",
+      targetId: id,
+      summary: `Renamed "${prev.name}" → "${name}"`,
+      metadata: { previousName: prev.name, newName: name },
+    });
+  }
   revalidatePath("/admin/seasons");
 }
 
@@ -405,7 +496,7 @@ export async function renameSeason(formData: FormData) {
 // string (not a relation), so we manually clear any rounds pointing here
 // before deleting so they don't end up referencing a non-existent season.
 export async function deleteSeason(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   const confirm = String(formData.get("confirm") ?? "");
   if (!id) return;
@@ -420,6 +511,14 @@ export async function deleteSeason(formData: FormData) {
     data: { resultingSeasonId: null },
   });
   await prisma.season.delete({ where: { id } });
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "season.delete",
+    targetType: "Season",
+    targetId: id,
+    summary: `Deleted season "${season.name}"`,
+    metadata: { name: season.name, visibility: season.visibility, wasActive: season.isActive, endedAt: season.endedAt?.toISOString() ?? null },
+  });
   revalidatePath("/admin/seasons");
   redirect("/admin/seasons");
 }
@@ -429,7 +528,7 @@ export async function deleteSeason(formData: FormData) {
 // role bookkeeping are handled the same way as the bulk-import / add-by-id
 // flows. Used by the draft review UI on the season detail page.
 export async function moveDivisionMember(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const seasonId = String(formData.get("seasonId") ?? "");
   const playerId = String(formData.get("playerId") ?? "");
   const targetDivisionId = String(formData.get("targetDivisionId") ?? "");
@@ -439,31 +538,73 @@ export async function moveDivisionMember(formData: FormData) {
   // form posts.
   const target = await prisma.division.findUnique({
     where: { id: targetDivisionId },
-    select: { seasonId: true },
+    select: { seasonId: true, name: true },
   });
   if (!target || target.seasonId !== seasonId) return;
+  const fromMember = await prisma.divisionMember.findFirst({
+    where: { playerId, division: { seasonId } },
+    include: { division: { select: { id: true, name: true } }, player: { select: { displayName: true } } },
+  });
   const { placePlayerInDivision } = await import("@/lib/division-membership");
   await placePlayerInDivision(targetDivisionId, playerId);
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "division.move-member",
+    targetType: "DivisionMember",
+    targetId: playerId,
+    summary: `Moved ${fromMember?.player.displayName ?? "player"} → ${target.name}${fromMember ? ` (from ${fromMember.division.name})` : ""}`,
+    metadata: { seasonId, playerId, fromDivisionId: fromMember?.division.id ?? null, toDivisionId: targetDivisionId },
+  });
   revalidatePath(`/admin/seasons/${seasonId}`);
 }
 
 export async function setSeasonVisibility(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   const visibilityRaw = String(formData.get("visibility") ?? "");
   if (!id) return;
   const visibility = visibilityRaw === "INTERNAL" ? "INTERNAL" : "PUBLIC";
+  const prev = await prisma.season.findUnique({ where: { id }, select: { name: true, visibility: true } });
   await prisma.season.update({ where: { id }, data: { visibility } });
+  if (prev) {
+    recordAudit({
+      actor: actorFromAdminUser(user),
+      action: "season.set-visibility",
+      targetType: "Season",
+      targetId: id,
+      summary: `"${prev.name}" visibility: ${prev.visibility} → ${visibility}`,
+      metadata: { previous: prev.visibility, next: visibility },
+    });
+  }
   revalidatePath("/admin/seasons");
 }
 
 export async function setSeasonPreset(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   const presetIdRaw = String(formData.get("presetId") ?? "");
   if (!id) return;
   // Empty string from the "— Use Default —" option means clear the FK.
   const matchConfigPresetId = presetIdRaw === "" ? null : presetIdRaw;
+  const prev = await prisma.season.findUnique({
+    where: { id },
+    select: { name: true, matchConfigPresetId: true, matchConfigPreset: { select: { name: true } } },
+  });
   await prisma.season.update({ where: { id }, data: { matchConfigPresetId } });
+  if (prev) {
+    let nextName = "Default";
+    if (matchConfigPresetId) {
+      const next = await prisma.matchConfigPreset.findUnique({ where: { id: matchConfigPresetId }, select: { name: true } });
+      nextName = next?.name ?? matchConfigPresetId;
+    }
+    recordAudit({
+      actor: actorFromAdminUser(user),
+      action: "season.set-preset",
+      targetType: "Season",
+      targetId: id,
+      summary: `"${prev.name}" preset: ${prev.matchConfigPreset?.name ?? "Default"} → ${nextName}`,
+      metadata: { previousPresetId: prev.matchConfigPresetId, nextPresetId: matchConfigPresetId },
+    });
+  }
   revalidatePath("/admin/seasons");
 }

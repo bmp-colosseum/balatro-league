@@ -5,6 +5,7 @@ import { loadBuildSeasonPage } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
+import { DraggableRatingTable, type RatingRow } from "@/components/DraggableRatingTable";
 import { addSignupByDiscordId, autoFillRatingsFromMmr, buildSeason, refreshSignupMmrSnapshots, saveRatings } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -110,121 +111,42 @@ export default async function BuildSeasonPage({
             </div>
           </div>
           <p className="muted">
-            Sorted by BMP Ranked MMR (descending). For returners, "Last season"
-            shows their finishing rank — the strongest single signal you have for
-            placement. BMP MMR trend ("current → prior") flags players who improved
-            or slipped between seasons. Save ratings before building.
+            Smart initial order: returners (with a league rating) first, ranked by their rating;
+            then new players, ranked by BMP MMR. Drag rows to fine-tune, then Save &amp; lock —
+            the final order becomes each player's rating.
           </p>
-          <form action={saveRatings}>
-            <input type="hidden" name="roundId" value={round.id} />
-            <table>
-              <thead>
-                <tr>
-                  <th>Player</th>
-                  <th>Status</th>
-                  <th>Last season</th>
-                  <th>BMP Ranked MMR</th>
-                  <th style={{ width: 120 }}>Rating</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedSignups.length === 0 ? (
-                  <tr><td colSpan={5} className="muted">No signups in this round.</td></tr>
-                ) : sortedSignups.map((s) => {
-                  const player = playerByDiscordId.get(s.discordId);
-                  const isReturning = !!player;
-                  const prior = player ? priorByPlayerId.get(player.id) : undefined;
-                  const skipped = player ? skippedByPlayerId.get(player.id) ?? 0 : 0;
-                  const snapshot = snapshotByDiscordId.get(s.discordId);
-                  const priorSnap = priorSnapshotByDiscordId.get(s.discordId);
-                  return (
-                    <tr key={s.id}>
-                      <td>
-                        {/* Only returners have a Player record yet — new signups
-                            get one written during build, so we can't link them
-                            until then. */}
-                        {player ? (
-                          <Link href={`/profile/${player.id}`} style={{ color: "var(--text)" }}>
-                            <strong>{s.displayName}</strong>
-                          </Link>
-                        ) : (
-                          <strong>{s.displayName}</strong>
-                        )}
-                        {" "}
-                        <span className="muted" style={{ fontSize: 11 }}>{s.discordId}</span>
-                      </td>
-                      <td>
-                        {!isReturning ? (
-                          <span className="pill" style={{ background: "rgba(241,196,15,0.2)", color: "#f1c40f" }}>
-                            New
-                          </span>
-                        ) : skipped >= 1 ? (
-                          <span
-                            className="pill"
-                            style={{ background: "rgba(241,196,15,0.2)", color: "#f1c40f" }}
-                            title={`Played ${skipped + 1} season${skipped > 0 ? "s" : ""} ago, skipped the last ${skipped}`}
-                          >
-                            Gap · skipped {skipped}
-                          </span>
-                        ) : (
-                          <span className="pill" style={{ background: "rgba(52,152,219,0.2)", color: "#76c7ff" }}>
-                            Returning
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ fontSize: 12 }}>
-                        {prior ? (
-                          <span>
-                            <strong>{prior.divisionName}</strong>{" "}
-                            <span className="muted">
-                              · #{prior.rank}/{prior.totalMembers}
-                              {skipped >= 1 ? ` (${skipped + 1}s ago)` : ""}
-                            </span>
-                          </span>
-                        ) : (
-                          <span className="muted">—</span>
-                        )}
-                      </td>
-                      <td style={{ fontSize: 12 }}>
-                        {snapshot && snapshot.rankedMmr != null ? (
-                          <span>
-                            <strong>{snapshot.rankedMmr}</strong>
-                            {priorSnap && priorSnap.rankedMmr != null && priorSnap.rankedMmr !== snapshot.rankedMmr && (
-                              <span className="muted" style={{ fontSize: 11 }}>
-                                {" "}← {priorSnap.rankedMmr}
-                              </span>
-                            )}
-                            {" "}
-                            <span className="muted">
-                              ({snapshot.rankedTier} · {snapshot.totalGames}g · {snapshot.winRatePct}%)
-                            </span>
-                          </span>
-                        ) : snapshot?.fetchError ? (
-                          <span className="muted" title={snapshot.fetchError}>
-                            {snapshot.fetchError.length > 30
-                              ? `${snapshot.fetchError.slice(0, 27)}…`
-                              : snapshot.fetchError}
-                          </span>
-                        ) : (
-                          <span className="muted">—</span>
-                        )}
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          name={`rating:${s.discordId}`}
-                          defaultValue={player?.rating ?? snapshot?.rankedMmr ?? ""}
-                          placeholder={snapshot?.rankedMmr ? `${snapshot.rankedMmr}` : "unrated"}
-                          style={{ width: 100 }}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <button type="submit" style={{ marginTop: 12 }}>Save ratings</button>
-          </form>
+          {(() => {
+            const ratingRows: RatingRow[] = sortedSignups.map((s) => {
+              const player = playerByDiscordId.get(s.discordId);
+              const prior = player ? priorByPlayerId.get(player.id) : undefined;
+              const skipped = player ? skippedByPlayerId.get(player.id) ?? 0 : 0;
+              const snapshot = snapshotByDiscordId.get(s.discordId);
+              const priorSnap = priorSnapshotByDiscordId.get(s.discordId);
+              return {
+                discordId: s.discordId,
+                displayName: s.displayName,
+                playerId: player?.id,
+                status: !prior ? "NEW" : skipped >= 1 ? "GAP" : "RETURNING",
+                skippedSeasons: skipped,
+                prior: prior
+                  ? {
+                      divisionName: prior.divisionName,
+                      tierName: prior.tierName,
+                      rank: prior.rank,
+                      totalMembers: prior.totalMembers,
+                      seasonName: prior.seasonName,
+                    }
+                  : undefined,
+                bmpMmr: snapshot?.rankedMmr ?? null,
+                bmpTier: snapshot?.rankedTier ?? null,
+                bmpTotalGames: snapshot?.totalGames ?? null,
+                bmpWinRatePct: snapshot?.winRatePct ?? null,
+                priorBmpMmr: priorSnap?.rankedMmr ?? null,
+                bmpFetchError: snapshot?.fetchError ?? null,
+              };
+            });
+            return <DraggableRatingTable initial={ratingRows} formAction={saveRatings} roundId={round.id} />;
+          })()}
         </div>
 
         <div className="card">
@@ -280,7 +202,7 @@ export default async function BuildSeasonPage({
                   <button type="button" className="secondary">Manage templates</button>
                 </Link>
               </div>
-              <TierEditor initial={initialTiers} templates={templates} />
+              <TierEditor initial={initialTiers} templates={templates} signupCount={sortedSignups.length} />
             </div>
 
             <button type="submit" style={{ marginTop: 16 }}>

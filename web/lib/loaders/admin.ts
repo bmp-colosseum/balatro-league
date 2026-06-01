@@ -775,7 +775,26 @@ export async function loadBuildSeasonPage(roundId: string): Promise<BuildSeasonR
     skippedByPlayerId.set(pid, skipped);
   }
 
+  // Smart initial sort: returners (people with a real prior-season
+  // membership AND a Player.rating from end-season recompute) first,
+  // ordered by their rating desc. Then new players, ordered by BMP MMR
+  // desc. This gives admin a single ordered list where the strongest
+  // league signal (rating) ranks ahead of the weakest (BMP MMR) — and
+  // drag-to-reorder lets them tune from there.
   const sortedSignups = [...round.signups].sort((a, b) => {
+    const playerA = playerByDiscordId.get(a.discordId);
+    const playerB = playerByDiscordId.get(b.discordId);
+    const aIsReturner = playerA != null && priorByPlayerId.has(playerA.id);
+    const bIsReturner = playerB != null && priorByPlayerId.has(playerB.id);
+    // Returners always rank above non-returners — league signal > MMR.
+    if (aIsReturner !== bIsReturner) return aIsReturner ? -1 : 1;
+    if (aIsReturner && bIsReturner) {
+      // Both returners → sort by Player.rating desc (null = lowest).
+      const ra = playerA?.rating ?? -1;
+      const rb = playerB?.rating ?? -1;
+      if (ra !== rb) return rb - ra;
+    }
+    // Both new (or returners tied on rating) → BMP MMR desc.
     const aMmr = snapshotByDiscordId.get(a.discordId)?.rankedMmr ?? -1;
     const bMmr = snapshotByDiscordId.get(b.discordId)?.rankedMmr ?? -1;
     if (aMmr !== bMmr) return bMmr - aMmr;
@@ -946,7 +965,7 @@ export interface AdminSeasonsPageData {
 
 const DEFAULT_TIERS_FALLBACK = [
   { name: "Legendary", divisionCount: 1 },
-  { name: "Rare", divisionCount: 4 },
+  { name: "Rare", divisionCount: 6 },
   { name: "Uncommon", divisionCount: 6 },
   { name: "Common", divisionCount: 6 },
 ];

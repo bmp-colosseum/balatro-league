@@ -7,7 +7,7 @@ import {
   type TextChannel,
 } from "discord.js";
 import { activePublicSeason } from "../active-season.js";
-import { CANONICAL_DECKS, CANONICAL_STAKES, isCanonicalDeck } from "../balatro-info.js";
+import { actorFromInteractionUser, recordAudit } from "../audit.js";
 import { prisma } from "../db.js";
 import { getLeagueSettings } from "../league-settings.js";
 import { presetForSeason, seedDefaultPresetIfEmpty } from "../match-config.js";
@@ -19,9 +19,6 @@ const MODE_CHOICES = [
   { name: "League match (best of 2, default)", value: "league" },
   { name: "Shootout (1 game — for when you're tied with the opponent)", value: "shootout" },
 ] as const;
-
-const DECK_CHOICES = CANONICAL_DECKS.map((d) => ({ name: d.name, value: d.name }));
-const STAKE_CHOICES = CANONICAL_STAKES.map((s) => ({ name: s.name, value: s.name }));
 
 export const startMatch: SlashCommand = {
   channelScope: "division-only",
@@ -37,42 +34,12 @@ export const startMatch: SlashCommand = {
         .setDescription("League set (BO2 default) or shootout tiebreaker (BO1)")
         .setRequired(false)
         .addChoices(...MODE_CHOICES),
-    )
-    .addStringOption((opt) =>
-      opt
-        .setName("deck")
-        .setDescription("Skip ban/pick — play this exact deck (must also specify stake)")
-        .setRequired(false)
-        .addChoices(...DECK_CHOICES),
-    )
-    .addStringOption((opt) =>
-      opt
-        .setName("stake")
-        .setDescription("Skip ban/pick — play this exact stake (must also specify deck)")
-        .setRequired(false)
-        .addChoices(...STAKE_CHOICES),
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
     const opponentUser = interaction.options.getUser("opponent", true);
     const mode = interaction.options.getString("mode") ?? "league";
     const isShootout = mode === "shootout";
-    const customDeck = interaction.options.getString("deck") ?? null;
-    const customStake = interaction.options.getString("stake") ?? null;
-    if ((customDeck && !customStake) || (!customDeck && customStake)) {
-      await interaction.reply({
-        content: "If you're skipping ban/pick, specify BOTH deck and stake (or neither).",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-    if (customDeck && !isCanonicalDeck(customDeck)) {
-      await interaction.reply({
-        content: `"${customDeck}" isn't a recognized deck.`,
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
     if (opponentUser.id === interaction.user.id) {
       await interaction.reply({ content: "You can't start a match against yourself.", flags: MessageFlags.Ephemeral });
       return;
@@ -171,14 +138,6 @@ export const startMatch: SlashCommand = {
       );
       return;
     }
-    // Custom-combo stake must be in the season's preset.stakes — the
-    // league standardizes difficulty even when players agree on a deck.
-    if (customStake && !preset.stakes.includes(customStake)) {
-      await interaction.editReply(
-        `"${customStake}" stake isn't in this season's preset. Allowed stakes: ${preset.stakes.join(", ")}.`,
-      );
-      return;
-    }
 
     // Create the session — expiresAt is DB-backed so it survives bot restarts.
     // The accept handler checks it before doing anything else; the boot sweep
@@ -198,16 +157,24 @@ export const startMatch: SlashCommand = {
         // instead of a Pairing.
         isShootout,
         bestOf: isShootout ? 1 : 2,
-        // Pre-agreed deck/stake — opponent's Accept counts as agreement,
-        // ban/pick is skipped and every game uses this combo.
-        customCombo: customDeck && customStake
-          ? JSON.stringify({ deck: customDeck, stake: customStake })
-          : null,
       },
     });
 
     const { embeds, components } = renderMatch(session, me, opp);
     const message = await (interaction.channel as TextChannel).send({ embeds, components });
+    recordAudit({
+      actor: actorFromInteractionUser(interaction.user),
+      action: "match.create",
+      targetType: "MatchSession",
+      targetId: session.id,
+      summary: `Invited ${opp.displayName} to ${isShootout ? "a shootout" : "a league match"}`,
+      metadata: {
+        isShootout,
+        divisionId: division.id,
+        seasonId: season.id,
+        opponentDiscordId: opponentUser.id,
+      },
+    });
 
     await interaction.editReply(`Match invite posted: ${message.url}`);
   },

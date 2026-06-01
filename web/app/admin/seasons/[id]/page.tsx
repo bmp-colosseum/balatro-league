@@ -232,7 +232,7 @@ export default async function SeasonDetailPage({
                               <Link href={`/admin/divisions/${d.id}`} style={{ textDecoration: "none" }}>{d.name}</Link>
                             </strong>
                             <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
-                              {d.members.length}/{d.targetSize ?? season.targetGroupSize}
+                              {d.members.length} member{d.members.length === 1 ? "" : "s"}
                               {!isDraft && ` · ${d.pairings.length}/${expectedSets} matches`}
                             </span>
                           </div>

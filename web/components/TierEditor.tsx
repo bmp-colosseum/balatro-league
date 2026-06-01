@@ -23,16 +23,46 @@ export function TierEditor({
   templates,
   showTemplateLoader = true,
   configFieldName = "config",
+  signupCount,
 }: {
   initial: TierConfig[];
   templates?: Template[];
   showTemplateLoader?: boolean;
   configFieldName?: string;
+  // When known (build flow), enables the "Suggest from N signups"
+  // button that auto-computes division counts to keep every division
+  // around the target size with extras going to lower tiers.
+  signupCount?: number;
 }) {
   const [rows, setRows] = useState<TierConfig[]>(
     initial.length > 0 ? initial : [{ name: "", divisionCount: 1 }],
   );
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+
+  // Compute total slots at target=6/div for the current row config —
+  // shown next to the suggest button so admin sees capacity at a glance.
+  const totalCapacity = rows.reduce((sum, r) => sum + r.divisionCount * 6, 0);
+  // Auto-suggest: position-1 tier stays 1 division (Legendary slot).
+  // Remaining tiers split ceil((N-1)/6) divisions as evenly as
+  // possible, with extras going to LOWER tiers first (Common gets
+  // extras before Uncommon, Uncommon before Rare).
+  const suggestFromSignups = () => {
+    if (!signupCount || signupCount < 1 || rows.length === 0) return;
+    const next = rows.map((r) => ({ ...r }));
+    next[0]!.divisionCount = 1;
+    const lower = next.slice(1);
+    if (lower.length === 0) return;
+    const remaining = Math.max(0, signupCount - 1);
+    const divCount = Math.ceil(remaining / 6);
+    const base = Math.floor(divCount / lower.length);
+    const extras = divCount - base * lower.length;
+    // Fill lower tiers from the BACK (last tier = lowest = gets extras first).
+    for (let i = 0; i < lower.length; i++) {
+      const fromBack = lower.length - 1 - i;
+      lower[fromBack]!.divisionCount = base + (i < extras ? 1 : 0);
+    }
+    setRows([next[0]!, ...lower]);
+  };
 
   const addRow = () => setRows([...rows, { name: "", divisionCount: 1 }]);
   const removeRow = (idx: number) => {
@@ -151,9 +181,21 @@ export function TierEditor({
         </div>
       ))}
 
-      <button type="button" className="secondary" onClick={addRow} style={{ marginTop: 6 }}>
-        + Add tier
-      </button>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}>
+        <button type="button" className="secondary" onClick={addRow}>
+          + Add tier
+        </button>
+        {signupCount !== undefined && signupCount > 0 && (
+          <>
+            <button type="button" className="secondary" onClick={suggestFromSignups}>
+              ✨ Suggest from {signupCount} signup{signupCount === 1 ? "" : "s"}
+            </button>
+            <span className="muted" style={{ fontSize: 11 }}>
+              Capacity at 6/div: {totalCapacity}
+            </span>
+          </>
+        )}
+      </div>
 
       {/* Hidden field serializing current state; consumed by the parent form's server action. */}
       <input type="hidden" name={configFieldName} value={JSON.stringify(rows)} />

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
+import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { resolveDiscordIdToDisplayName } from "@/lib/add-player";
 import { placePlayerInDivision } from "@/lib/division-membership";
 import { enqueueMmrSnapshot } from "@/lib/queue";
@@ -174,6 +175,45 @@ export async function saveRatings(formData: FormData) {
   });
   if (!round) return;
 
+  // The drag-and-drop UI submits an `order` field — a JSON array of
+  // discord IDs in admin-chosen rank order. If present, derive each
+  // player's rating from their position so the visual order is the
+  // source of truth (no two players can tie). Highest position = #1
+  // = highest rating. We use a wide spread (10 per slot) so future
+  // manual nudges between two consecutive players don't have to
+  // reshuffle the whole list.
+  const orderRaw = formData.get("order");
+  if (typeof orderRaw === "string" && orderRaw.length > 0) {
+    let orderIds: string[] = [];
+    try {
+      const parsed = JSON.parse(orderRaw);
+      if (Array.isArray(parsed) && parsed.every((x) => typeof x === "string")) {
+        orderIds = parsed;
+      }
+    } catch {
+      // Bad JSON — fall back to legacy per-field path below.
+    }
+    if (orderIds.length > 0) {
+      const signupByDiscordId = new Map(round.signups.map((s) => [s.discordId, s]));
+      const N = orderIds.length;
+      for (let i = 0; i < orderIds.length; i++) {
+        const discordId = orderIds[i]!;
+        const signup = signupByDiscordId.get(discordId);
+        if (!signup) continue;
+        const rating = (N - i) * 10;
+        await prisma.player.upsert({
+          where: { discordId: signup.discordId },
+          create: { discordId: signup.discordId, displayName: signup.displayName, rating, ratingNote: "Set from build-page drag order" },
+          update: { rating, displayName: signup.displayName, ratingNote: "Set from build-page drag order" },
+        });
+      }
+      revalidatePath(`/admin/signups/${roundId}/build`);
+      return;
+    }
+  }
+
+  // Legacy path: per-row rating: input fields (kept for backward compat
+  // and the "Auto-fill from BMP MMR" flow which sets individual values).
   for (const signup of round.signups) {
     const raw = formData.get(`rating:${signup.discordId}`);
     if (raw === null) continue;
@@ -234,7 +274,7 @@ export async function addSignupByDiscordId(formData: FormData) {
 //      POPULATE the existing season's divisions. Form's tier config is
 //      ignored — we use the season's existing shape.
 export async function buildSeason(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
 
   const roundId = String(formData.get("roundId") ?? "");
   if (!roundId) return;
@@ -399,6 +439,32 @@ export async function buildSeason(formData: FormData) {
   await prisma.signupRound.update({
     where: { id: roundId },
     data: { status: "BUILT", resultingSeasonId: targetSeasonId },
+  });
+  // Snapshot the final shape for the audit log so we can see what was
+  // built without diffing against the now-mutable season state.
+  const finalShape = await prisma.season.findUnique({
+    where: { id: targetSeasonId },
+    select: {
+      name: true,
+      divisions: {
+        select: {
+          name: true,
+          _count: { select: { members: { where: { status: "ACTIVE" } } } },
+        },
+      },
+    },
+  });
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "season.build",
+    targetType: "Season",
+    targetId: targetSeasonId,
+    summary: `Built season "${finalShape?.name ?? targetSeasonId}" (${finalShape?.divisions.length ?? 0} divisions, ${players.length} signups placed)`,
+    metadata: {
+      roundId,
+      signupCount: players.length,
+      divisions: finalShape?.divisions.map((d) => ({ name: d.name, memberCount: d._count.members })) ?? [],
+    },
   });
 
   revalidatePath("/admin/signups");

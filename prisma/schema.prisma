@@ -281,13 +281,19 @@ model MatchSession {
   // rows from before this column existed). Stored on the session so an
   // in-flight match never breaks if an admin tweaks the policy mid-game.
   policy        String?
-  // Pre-agreed deck/stake combo specified by the initiator. JSON
-  // {deck, stake}. When set, the match skips ban/pick entirely —
-  // opponent's Accept = agreement to play this combo, and every game
-  // in the bestOf uses it. Lets players agree on non-standard combos
-  // (e.g. a deck not in the season's preset) without burning the
-  // ban/pick flow. Null = normal ban/pick path.
+  // Locked-in agreed deck/stake combo. Set ONLY when both players have
+  // agreed via the in-thread propose/accept flow (or via the legacy
+  // slash-command args, deprecated). JSON {deck, stake}. When set, the
+  // match skips ban/pick entirely — every game uses this combo. Null
+  // = normal ban/pick path.
   customCombo   String?
+  // In-flight proposal during negotiation. JSON: { by: playerId of the
+  // proposer, deck?: string, stake?: string, status: 'building' |
+  // 'pending' }. 'building' = proposer is still picking their deck or
+  // stake; 'pending' = proposal complete, waiting for the OTHER player
+  // to Accept / Counter / Cancel. Cleared once a proposal is agreed
+  // to (moved into customCombo) or cancelled.
+  customComboProposal String?
   game1         String?           // {firstId, bans: [...], pickedDeck, winnerId}
   game2         String?
   game3         String?           // populated only when bestOf=3 and game 1+2 split
@@ -574,4 +580,37 @@ model Pairing {
 
   @@unique([divisionId, playerAId, playerBId])
   @@index([divisionId, status])
+}
+
+// Append-only audit log of admin actions + key system events. Read by
+// /admin/audit. Never mutated after insert (no updatedAt). Both the bot
+// (via src/audit.ts) and the web app (via web/lib/audit.ts) call
+// recordAudit() to write rows.
+//
+// action: dot-separated canonical key, e.g.
+//   match.override, match.cancel-admin, match.cancel-player,
+//   season.create, season.end, season.build,
+//   role.strip, role.award-champion,
+//   config.set, role-binding.set,
+//   pairing.undo, pairing.record, shootout.record,
+//   signup-round.open, signup-round.close,
+//   match.start, match.complete
+// actor* describes who took the action. For system events that don't
+// have a human actor (cron jobs, auto-confirms) actorDiscordId is the
+// literal string "system" and actorName the job name.
+model AdminAuditEvent {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  actorDiscordId  String
+  actorName       String
+  action          String
+  targetType      String?  // "MatchSession" | "Season" | "Pairing" | "Player" | "LeagueConfig" | ...
+  targetId        String?
+  summary         String   // one-line human description
+  metadata        Json?    // structured payload — reason, before/after snapshots, etc.
+
+  @@index([createdAt])
+  @@index([actorDiscordId, createdAt])
+  @@index([action, createdAt])
+  @@index([targetType, targetId])
 }

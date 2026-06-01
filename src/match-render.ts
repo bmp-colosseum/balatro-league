@@ -10,12 +10,13 @@ import {
 } from "discord.js";
 import type { MatchSession, Player } from "@prisma/client";
 import {
+  CANONICAL_DECKS,
   canonicalDeckIndex,
   canonicalStakeIndex,
   deckDescription,
   stakeDescription,
 } from "./balatro-info.js";
-import { deckEmoji, deckEmojiPartial, stakeEmoji } from "./balatro-emojis.js";
+import { deckEmoji, deckEmojiPartial, stakeEmoji, stakeEmojiPartial } from "./balatro-emojis.js";
 import { parsePolicy, phaseFor, remainingCombos, type GameState } from "./match-session.js";
 import type { DeckEntry } from "./match-config.js";
 
@@ -29,10 +30,18 @@ function parseGame(json: string | null): GameState | null {
 // render only buttons. The Discord.js MessageComponentBuilder covers it.
 type ComponentRow = ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>;
 
+export interface RenderOptions {
+  // Allowed stakes for the custom-combo proposal stake select menu.
+  // Only consulted in GAME_1_BAN when a proposal is being built; ignored
+  // otherwise. Defaults to empty (no proposal UI possible without it).
+  allowedStakes?: string[];
+}
+
 export function renderMatch(
   session: MatchSession,
   playerA: Player,
   playerB: Player,
+  opts: RenderOptions = {},
 ): { embeds: EmbedBuilder[]; components: ComponentRow[] } {
   const game1 = parseGame(session.game1);
   const game2 = parseGame(session.game2);
@@ -59,7 +68,36 @@ export function renderMatch(
     return renderChooseFirst(session, playerA, playerB, game2);
   }
   if (!game) return renderError(session, playerA, playerB, "Game state missing");
-  return renderGame(session, playerA, playerB, game.pool, game, gameNum);
+  return renderGame(session, playerA, playerB, game.pool, game, gameNum, opts);
+}
+
+// Decode session.customComboProposal (JSON). Match-render only needs the
+// shape — the source of truth for the type lives in match-buttons.ts.
+interface ProposalForRender {
+  by: string;
+  deck?: string;
+  stake?: string;
+  status: "building" | "pending";
+}
+
+function parseProposalForRender(json: string | null): ProposalForRender | null {
+  if (!json) return null;
+  try {
+    const v = JSON.parse(json);
+    if (
+      v &&
+      typeof v.by === "string" &&
+      (v.status === "building" || v.status === "pending")
+    ) {
+      const out: ProposalForRender = { by: v.by, status: v.status };
+      if (typeof v.deck === "string") out.deck = v.deck;
+      if (typeof v.stake === "string") out.stake = v.stake;
+      return out;
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 function mention(player: Player): string {
@@ -126,7 +164,7 @@ function renderChooseFirst(s: MatchSession, a: Player, b: Player, g1: GameState 
   return { embeds: [embed], components: [row] };
 }
 
-function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], game: GameState, gameNumber: 1 | 2 | 3) {
+function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], game: GameState, gameNumber: 1 | 2 | 3, opts: RenderOptions = {}) {
   const policy = parsePolicy(s.policy);
   const phase = phaseFor(game, a.id, b.id, policy);
   const first = game.firstId === a.id ? a : b;
@@ -139,6 +177,18 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
     .setTitle(`🎮 Game ${gameNumber} — ${modeLabel}`)
     .setColor(colors[gameNumber])
     .setFooter({ text: `Match ${s.id}` });
+
+  // Game-1 ban phase: if a custom-combo proposal is in flight, replace
+  // the ban dropdown UI with the proposal UI. Either player can also
+  // KICK OFF a proposal from the ban phase via the "Propose custom
+  // combo" button — when no proposal exists, that button is appended
+  // to the normal ban controls.
+  if (phase.kind === "BAN" && gameNumber === 1) {
+    const proposal = parseProposalForRender(s.customComboProposal);
+    if (proposal) {
+      return renderProposal(s, a, b, proposal, opts.allowedStakes ?? []);
+    }
+  }
 
   if (phase.kind === "BAN") {
     const whose = phase.whoseBanId === a.id ? a : b;
@@ -158,6 +208,13 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
         ? `\n\n🔄 **${a.displayName}** wants to reroll the pool. **${b.displayName}** click "Confirm reroll" to apply.`
         : !game.rerollVoteByA && game.rerollVoteByB
         ? `\n\n🔄 **${b.displayName}** wants to reroll the pool. **${a.displayName}** click "Confirm reroll" to apply.`
+        : "";
+    // Single-player cancel-match vote reminder (mirrors reroll).
+    const cancelLine =
+      game.cancelVoteByA && !game.cancelVoteByB
+        ? `\n\n🛑 **${a.displayName}** wants to cancel this match. **${b.displayName}** click "Confirm cancel" to drop it.`
+        : !game.cancelVoteByA && game.cancelVoteByB
+        ? `\n\n🛑 **${b.displayName}** wants to cancel this match. **${a.displayName}** click "Confirm cancel" to drop it.`
         : "";
     // Game 1's first-ban player is genuinely a coin flip; games 2+ were
     // chosen by the loser of the previous game, so the "(coin toss)" tag
@@ -191,7 +248,8 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
         (pendingLabels.length > 0
           ? `\n\n**Pending**: ${pendingLabels.join(", ")} _(not yet applied)_`
           : "") +
-        rerollLine,
+        rerollLine +
+        cancelLine,
     );
     // Multi-select dropdown of remaining combos; min == max means Discord
     // enforces an exact count of selections on submit. Default-mark the
@@ -228,6 +286,10 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
       game.rerollVoteByA || game.rerollVoteByB
         ? "Confirm reroll"
         : "Reroll pool";
+    const cancelLabel =
+      game.cancelVoteByA || game.cancelVoteByB
+        ? "Confirm cancel"
+        : "Cancel match";
     const confirmRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(`match:banconfirm:${s.id}`)
@@ -238,7 +300,23 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
         .setCustomId(`match:reroll:${s.id}`)
         .setLabel(rerollLabel)
         .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`match:cancelmatch:${s.id}`)
+        .setLabel(cancelLabel)
+        .setStyle(ButtonStyle.Danger),
     );
+    // Either player can short-circuit the ban/pick flow by proposing a
+    // specific deck+stake combo for the entire match. Only shown in
+    // game 1's ban phase — once the match has started, the combo is
+    // locked in.
+    if (gameNumber === 1) {
+      confirmRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`match:proposestart:${s.id}`)
+          .setLabel("Propose custom combo")
+          .setStyle(ButtonStyle.Secondary),
+      );
+    }
     return {
       embeds: [embed],
       components: [
@@ -379,6 +457,116 @@ function renderError(s: MatchSession, a: Player, b: Player, msg: string) {
     .setColor(0xe74c3c);
   void a; void b;
   return { embeds: [embed], components: [] };
+}
+
+// Custom-combo negotiation UI rendered inside the GAME_1_BAN phase.
+// Two sub-states:
+//   building — proposer is still picking deck/stake (select menus + Submit/Cancel)
+//   pending  — proposal locked in, waiting for other player (Accept/Counter/Cancel)
+// Stake select pulls from the season's preset (`allowedStakes`); decks
+// can be ANY canonical deck from the full library per the project rules
+// (deck = open library, stake = preset-constrained).
+function renderProposal(
+  s: MatchSession,
+  a: Player,
+  b: Player,
+  proposal: ProposalForRender,
+  allowedStakes: string[],
+): { embeds: EmbedBuilder[]; components: ComponentRow[] } {
+  const proposer = proposal.by === a.id ? a : b;
+  const responder = proposal.by === a.id ? b : a;
+  const deckIcon = proposal.deck ? deckEmoji(proposal.deck) ?? "" : "";
+  const stakeIcon = proposal.stake ? stakeEmoji(proposal.stake) ?? "" : "";
+  const icons = [deckIcon, stakeIcon].filter(Boolean).join(" ");
+
+  const embed = new EmbedBuilder()
+    .setTitle("🎯 Custom combo proposal")
+    .setColor(proposal.status === "pending" ? 0xf1c40f : 0x95a5a6)
+    .setFooter({ text: `Match ${s.id}` });
+
+  if (proposal.status === "building") {
+    embed.setDescription(
+      `**${proposer.displayName}** is building a custom combo. Accepting one skips ban/pick — ` +
+        `every game of this match uses the agreed deck/stake.\n\n` +
+        `Deck: ${proposal.deck ? `${deckIcon} **${proposal.deck}**` : "_not picked_"}\n` +
+        `Stake: ${proposal.stake ? `${stakeIcon} **${proposal.stake}**` : "_not picked_"}\n\n` +
+        `${proposer.displayName} picks both, then submits. ${responder.displayName} responds with Accept/Counter/Cancel.`,
+    );
+    // Deck select — full canonical deck library, sorted A-Z.
+    const sortedDecks = [...CANONICAL_DECKS].sort((x, y) => x.name.localeCompare(y.name));
+    const deckSelect = new StringSelectMenuBuilder()
+      .setCustomId(`match:proposedeck:${s.id}`)
+      .setPlaceholder(proposal.deck ? `Deck: ${proposal.deck}` : "Pick a deck")
+      .setMinValues(1)
+      .setMaxValues(1)
+      .addOptions(
+        sortedDecks.slice(0, 25).map((d) => ({
+          label: d.name,
+          value: d.name,
+          description: d.description ? d.description.slice(0, 100) : undefined,
+          default: proposal.deck === d.name,
+          emoji: deckEmojiPartial(d.name),
+        })),
+      );
+    // Stake select — only stakes the season's preset allows.
+    const stakeOptions = allowedStakes.slice(0, 25).map((name) => ({
+      label: name,
+      value: name,
+      description: stakeDescription(name)?.slice(0, 100),
+      default: proposal.stake === name,
+      emoji: stakeEmojiPartial(name),
+    }));
+    const stakeSelect = new StringSelectMenuBuilder()
+      .setCustomId(`match:proposestake:${s.id}`)
+      .setPlaceholder(proposal.stake ? `Stake: ${proposal.stake}` : "Pick a stake")
+      .setMinValues(1)
+      .setMaxValues(1);
+    if (stakeOptions.length > 0) stakeSelect.addOptions(stakeOptions);
+    const ready = !!proposal.deck && !!proposal.stake;
+    const actions = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`match:proposesubmit:${s.id}`)
+        .setLabel(ready ? "Submit proposal" : "Pick deck + stake to submit")
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(!ready),
+      new ButtonBuilder()
+        .setCustomId(`match:proposecancel:${s.id}`)
+        .setLabel("Cancel")
+        .setStyle(ButtonStyle.Secondary),
+    );
+    const rows: ComponentRow[] = [
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(deckSelect),
+    ];
+    // If preset has no stakes, skip the row — proposer can't pick one.
+    if (stakeOptions.length > 0) {
+      rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(stakeSelect));
+    }
+    rows.push(actions);
+    return { embeds: [embed], components: rows };
+  }
+
+  // status === 'pending'
+  embed.setDescription(
+    `**${proposer.displayName}** proposes:\n\n` +
+      `${icons ? `${icons}  ` : ""}**${proposal.deck} / ${proposal.stake}**\n\n` +
+      `${responder.displayName}, accept to lock this combo in for all games of the match. ` +
+      `Counter to take over the proposal yourself, or cancel to go back to ban/pick.`,
+  );
+  const actions = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`match:proposeaccept:${s.id}`)
+      .setLabel("Accept")
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`match:proposecounter:${s.id}`)
+      .setLabel("Counter")
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId(`match:proposecancel:${s.id}`)
+      .setLabel("Cancel")
+      .setStyle(ButtonStyle.Secondary),
+  );
+  return { embeds: [embed], components: [actions] };
 }
 
 function chunkButtons(buttons: ButtonBuilder[]): ActionRowBuilder<ButtonBuilder>[] {

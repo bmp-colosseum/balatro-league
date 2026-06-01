@@ -143,7 +143,7 @@ export default async function AdminSeasonsPage({
                 </div>
                 <div className="muted" style={{ marginTop: 4 }}>{tierLine}</div>
                 <div className="muted">
-                  {players} player(s) · {sets} set(s) · group size {s.targetGroupSize} (min {s.minGroupSize})
+                  {players} player(s) · {sets} set(s)
                 </div>
                 <SeasonDeckPresetPicker
                   seasonId={s.id}

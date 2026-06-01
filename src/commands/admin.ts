@@ -15,7 +15,10 @@ import {
   type ChatInputCommandInteraction,
   type TextChannel,
 } from "discord.js";
+import { MatchSessionState } from "@prisma/client";
 import { announceResult } from "../announce.js";
+import { actorFromInteractionUser, recordAudit } from "../audit.js";
+import { activeSeasonMemberAutocomplete } from "./autocomplete.js";
 import { prisma } from "../db.js";
 import { buildLeagueExport, exportFilename, serializeExport } from "../league-export.js";
 import { requireAdmin, requireHelper } from "../permissions.js";
@@ -97,16 +100,47 @@ export const admin: SlashCommand = {
       sub
         .setName("record-shootout")
         .setDescription("Record a shootout winner to break a tied promo/relegation position.")
-        .addUserOption((opt) => opt.setName("p1").setDescription("First tied player").setRequired(true))
-        .addUserOption((opt) => opt.setName("p2").setDescription("Second tied player").setRequired(true))
-        .addUserOption((opt) => opt.setName("winner").setDescription("Whichever of p1 or p2 won the shootout").setRequired(true))
+        .addStringOption((opt) => opt.setName("p1").setDescription("First tied player").setRequired(true).setAutocomplete(true))
+        .addStringOption((opt) => opt.setName("p2").setDescription("Second tied player").setRequired(true).setAutocomplete(true))
+        .addStringOption((opt) =>
+          opt.setName("winner")
+            .setDescription("Which side won")
+            .setRequired(true)
+            .addChoices(
+              { name: "p1 won", value: "p1" },
+              { name: "p2 won", value: "p2" },
+            ),
+        )
         .addStringOption((opt) => opt.setName("notes").setDescription("Optional context").setRequired(false)),
     )
     .addSubcommand((sub) =>
       sub
         .setName("reload-emojis")
         .setDescription("Re-run the Balatro deck/stake emoji upload. Picks up new PNGs without a bot restart."),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("cancel-match")
+        .setDescription("Force-cancel a wedged match session (any state). Use when players are stuck.")
+        .addStringOption((opt) =>
+          opt.setName("match-id").setDescription("Match session id (shown in the embed footer)").setRequired(true),
+        )
+        .addStringOption((opt) =>
+          opt.setName("reason").setDescription("Why — recorded for audit").setRequired(true),
+        ),
     ),
+
+  // Only record-shootout has autocompleted options (p1 / p2). Other
+  // subcommands' autocomplete focus values fall through to an empty
+  // response, which is benign.
+  async autocomplete(interaction) {
+    const sub = interaction.options.getSubcommand();
+    if (sub === "record-shootout") {
+      await activeSeasonMemberAutocomplete(interaction);
+      return;
+    }
+    await interaction.respond([]);
+  },
 
   async execute(interaction: ChatInputCommandInteraction) {
     const sub = interaction.options.getSubcommand();
@@ -127,8 +161,69 @@ export const admin: SlashCommand = {
     if (sub === "override-result") return forceResult(interaction);
     if (sub === "export-results") return exportResults(interaction);
     if (sub === "reload-emojis") return reloadEmojis(interaction);
+    if (sub === "cancel-match") return cancelMatch(interaction);
   },
 };
+
+// Force-cancel a wedged match session — any state, even mid-game.
+// Players' mutual-consent cancel only works during the BAN phase; this
+// is the escape hatch when something gets stuck (disputed and players
+// gone, mid-pick with someone unreachable, etc). The session row stays
+// in the DB for audit — only the state flips to CANCELLED and the
+// match channel is locked.
+async function cancelMatch(interaction: ChatInputCommandInteraction) {
+  const matchId = interaction.options.getString("match-id", true).trim();
+  const reason = interaction.options.getString("reason", true).trim();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const session = await prisma.matchSession.findUnique({ where: { id: matchId } });
+  if (!session) {
+    await interaction.editReply(`No match session found with id \`${matchId}\`.`);
+    return;
+  }
+  if (session.state === MatchSessionState.COMPLETE) {
+    await interaction.editReply(
+      "That match is already complete — use `/admin override-result` to fix a recorded result.",
+    );
+    return;
+  }
+  if (session.state === MatchSessionState.CANCELLED) {
+    await interaction.editReply("That match is already cancelled.");
+    return;
+  }
+
+  await prisma.matchSession.update({
+    where: { id: matchId },
+    data: { state: MatchSessionState.CANCELLED },
+  });
+  recordAudit({
+    actor: actorFromInteractionUser(interaction.user),
+    action: "match.cancel-admin",
+    targetType: "MatchSession",
+    targetId: matchId,
+    summary: `Cancelled match ${matchId.slice(-6)} (was ${session.state})`,
+    metadata: { reason, previousState: session.state, threadId: session.threadId },
+  });
+
+  // Best-effort: post the reason into the match thread and lock it so
+  // players see what happened.
+  if (session.threadId) {
+    try {
+      const channel = await interaction.client.channels.fetch(session.threadId);
+      if (channel?.type === ChannelType.PrivateThread || channel?.type === ChannelType.PublicThread) {
+        await channel.send(
+          `🛑 Match cancelled by <@${interaction.user.id}> (admin). Reason: ${reason}`,
+        );
+        await channel.setLocked(true, `Admin cancel: ${reason}`).catch(() => {});
+        await channel.setArchived(true, "Admin cancel").catch(() => {});
+      }
+    } catch (err) {
+      console.warn("[admin cancel-match] failed to post/lock thread:", err);
+    }
+  }
+
+  await interaction.editReply(`✅ Cancelled match \`${matchId}\`. Reason recorded: ${reason}`);
+}
 
 // Re-run the application-emoji upload without restarting the bot.
 // Lets admin drop a new PNG in src/assets/balatro/, commit + deploy,
@@ -141,6 +236,11 @@ async function reloadEmojis(interaction: ChatInputCommandInteraction) {
     const { env } = await import("../env.js");
     await ensureBalatroEmojis(env.DISCORD_CLIENT_ID);
     await interaction.editReply("✅ Reloaded. Check the bot log for the upload summary.");
+    recordAudit({
+      actor: actorFromInteractionUser(interaction.user),
+      action: "emojis.reload",
+      summary: "Reloaded Balatro deck/stake application emojis",
+    });
   } catch (err) {
     console.warn("[admin reload-emojis] failed:", err);
     await interaction.editReply("❌ Reload failed — check the bot logs.");
@@ -198,6 +298,19 @@ async function undoReport(interaction: ChatInputCommandInteraction) {
   recomputeDivisionStandings(pairing.division.id).catch(() => {});
 
   const oldResult = `${pairing.gamesWonA}-${pairing.gamesWonB}`;
+  recordAudit({
+    actor: actorFromInteractionUser(interaction.user),
+    action: "pairing.undo",
+    targetType: "Pairing",
+    targetId: pairing.id,
+    summary: `Undid ${oldResult} set between ${p1.displayName} and ${p2.displayName} in ${pairing.division.name}`,
+    metadata: {
+      previous: { gamesWonA: pairing.gamesWonA, gamesWonB: pairing.gamesWonB, status: pairing.status },
+      divisionId: pairing.division.id,
+      divisionName: pairing.division.name,
+      seasonId: activeSeason.id,
+    },
+  });
   await interaction.editReply(
     `Undone: deleted the **${oldResult}** set between **${p1User.username}** and **${p2User.username}** ` +
       `in **${pairing.division.name}**. They can play and report again.`,
@@ -261,15 +374,23 @@ async function persistShootout(args: {
 }
 
 async function recordShootout(interaction: ChatInputCommandInteraction) {
-  const p1User = interaction.options.getUser("p1", true);
-  const p2User = interaction.options.getUser("p2", true);
-  const winnerUser = interaction.options.getUser("winner", true);
+  const p1DiscordId = interaction.options.getString("p1", true).trim();
+  const p2DiscordId = interaction.options.getString("p2", true).trim();
+  const winnerKey = interaction.options.getString("winner", true);
   const notes = interaction.options.getString("notes") ?? undefined;
+  if (!/^\d{17,20}$/.test(p1DiscordId) || !/^\d{17,20}$/.test(p2DiscordId)) {
+    await interaction.reply({
+      content: "Pick players from the autocomplete dropdowns — only active-season members are eligible.",
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+  const winnerDiscordId = winnerKey === "p1" ? p1DiscordId : p2DiscordId;
   await interaction.deferReply();
   const result = await persistShootout({
-    p1DiscordId: p1User.id,
-    p2DiscordId: p2User.id,
-    winnerDiscordId: winnerUser.id,
+    p1DiscordId,
+    p2DiscordId,
+    winnerDiscordId,
     recordedBy: interaction.user.id,
     notes,
   });
@@ -277,8 +398,22 @@ async function recordShootout(interaction: ChatInputCommandInteraction) {
     await interaction.editReply(result.error);
     return;
   }
+  recordAudit({
+    actor: actorFromInteractionUser(interaction.user),
+    action: "shootout.record",
+    targetType: "Shootout",
+    summary: `Shootout: ${result.winnerName} wins in ${result.divisionName}`,
+    metadata: {
+      p1DiscordId,
+      p2DiscordId,
+      winnerDiscordId,
+      divisionName: result.divisionName,
+      notes: notes ?? null,
+    },
+  });
+  const loserDiscordId = winnerDiscordId === p1DiscordId ? p2DiscordId : p1DiscordId;
   await interaction.editReply(
-    `⚔ Shootout recorded — **${result.winnerName}** beats <@${p1User.id === winnerUser.id ? p2User.id : p1User.id}> ` +
+    `⚔ Shootout recorded — **${result.winnerName}** beats <@${loserDiscordId}> ` +
       `in **${result.divisionName}**. Standings sort updated.` +
       (notes ? `\n_Notes: ${notes}_` : ""),
   );
@@ -299,12 +434,19 @@ async function exportResults(interaction: ChatInputCommandInteraction) {
     const buf = serializeExport(data);
     const filename = exportFilename();
     const attachment = new AttachmentBuilder(buf, { name: filename });
+    const pairings = data.seasons.reduce((sum, s) => sum + s.divisions.reduce((d, dv) => d + dv.pairings.length, 0), 0);
     await interaction.editReply({
       content:
         `📦 League snapshot: ${data.seasons.length} seasons, ${data.players.length} players, ` +
-        `${data.seasons.reduce((sum, s) => sum + s.divisions.reduce((d, dv) => d + dv.pairings.length, 0), 0)} pairings. ` +
+        `${pairings} pairings. ` +
         `File size ${(buf.length / 1024).toFixed(1)}KB.`,
       files: [attachment],
+    });
+    recordAudit({
+      actor: actorFromInteractionUser(interaction.user),
+      action: "league.export",
+      summary: `Exported league snapshot (${data.seasons.length} seasons, ${data.players.length} players)`,
+      metadata: { seasonCount: data.seasons.length, playerCount: data.players.length, pairingCount: pairings, sizeBytes: buf.length },
     });
   } catch (err) {
     console.warn("[admin export-results] failed:", err);
@@ -359,6 +501,14 @@ async function joinMatch(interaction: ChatInputCommandInteraction) {
       return;
     }
     await interaction.editReply(`Joined <#${session.threadId}>. Head over there to mediate.`);
+    recordAudit({
+      actor: actorFromInteractionUser(interaction.user),
+      action: "match.join",
+      targetType: "MatchSession",
+      targetId: matchId,
+      summary: `Joined match ${matchId.slice(-6)} as mediator`,
+      metadata: { threadId: session.threadId },
+    });
   } catch (err) {
     console.warn("[admin join-match] failed:", err);
     await interaction.editReply("Couldn't join — check the bot has Manage Threads / Manage Channels.");
@@ -437,6 +587,14 @@ async function recordPairing(interaction: ChatInputCommandInteraction) {
   });
   announceResult(upserted.id).catch(() => {});
   recomputeDivisionStandings(division.id).catch(() => {});
+  recordAudit({
+    actor: actorFromInteractionUser(interaction.user),
+    action: "pairing.record",
+    targetType: "Pairing",
+    targetId: upserted.id,
+    summary: `Recorded ${p1.displayName} ${games.a}-${games.b} ${p2.displayName} in ${division.name}`,
+    metadata: { result, reason: reason ?? null, divisionId: division.id, seasonId: activeSeason.id },
+  });
 
   await interaction.editReply(
     `Recorded: **${p1User.username} ${games.a}-${games.b} ${p2User.username}** in **${division.name}**.` +
@@ -480,6 +638,20 @@ async function forceResult(interaction: ChatInputCommandInteraction) {
   });
   announceResult(pairingId).catch(() => {});
   recomputeDivisionStandings(pairing.divisionId).catch(() => {});
+  recordAudit({
+    actor: actorFromInteractionUser(interaction.user),
+    action: "pairing.override",
+    targetType: "Pairing",
+    targetId: pairingId,
+    summary: `Override ${pairing.playerA.displayName} vs ${pairing.playerB.displayName}: ${pairing.gamesWonA}-${pairing.gamesWonB} → ${games.a}-${games.b}`,
+    metadata: {
+      previous: { gamesWonA: pairing.gamesWonA, gamesWonB: pairing.gamesWonB, status: pairing.status },
+      next: { gamesWonA: games.a, gamesWonB: games.b, status: "CONFIRMED" },
+      reason,
+      divisionId: pairing.divisionId,
+      divisionName: pairing.division.name,
+    },
+  });
 
   await interaction.editReply(
     `Force-resolved: **${pairing.playerA.displayName} ${games.a}-${games.b} ${pairing.playerB.displayName}** in **${pairing.division.name}**.\nReason: ${reason}`,

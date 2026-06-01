@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
+import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
 
@@ -34,13 +35,26 @@ export async function acceptDisputeProposal(formData: FormData) {
       gamesWonB: pairing.disputeProposedGamesWonB,
       status: "CONFIRMED",
       confirmedAt: new Date(),
-      adminOverrideBy: (user as { discordId?: string } | undefined)?.discordId ?? "web-dashboard",
+      adminOverrideBy: user.discordId,
       adminOverrideReason: pairing.disputeReason
         ? `Accepted disputer's proposal: ${pairing.disputeReason}`
         : "Accepted disputer's proposal",
     },
   });
   recomputeDivisionStandings(pairing.divisionId).catch(() => {});
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "dispute.accept-proposal",
+    targetType: "Pairing",
+    targetId: pairingId,
+    summary: `Accepted disputer's proposal: ${pairing.gamesWonA}-${pairing.gamesWonB} → ${pairing.disputeProposedGamesWonA}-${pairing.disputeProposedGamesWonB}`,
+    metadata: {
+      previous: { gamesWonA: pairing.gamesWonA, gamesWonB: pairing.gamesWonB },
+      next: { gamesWonA: pairing.disputeProposedGamesWonA, gamesWonB: pairing.disputeProposedGamesWonB },
+      disputeReason: pairing.disputeReason,
+      disputedById: pairing.disputedById,
+    },
+  });
   revalidatePath("/admin/disputes");
   revalidatePath("/standings");
   redirect("/admin/disputes?ok=accepted");
@@ -65,11 +79,23 @@ export async function rejectDispute(formData: FormData) {
     data: {
       status: "CONFIRMED",
       confirmedAt: pairing.confirmedAt ?? new Date(),
-      adminOverrideBy: (user as { discordId?: string } | undefined)?.discordId ?? "web-dashboard",
+      adminOverrideBy: user.discordId,
       adminOverrideReason: "Dispute rejected, original result kept",
     },
   });
   recomputeDivisionStandings(pairing.divisionId).catch(() => {});
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "dispute.reject",
+    targetType: "Pairing",
+    targetId: pairingId,
+    summary: `Rejected dispute, kept ${pairing.gamesWonA}-${pairing.gamesWonB}`,
+    metadata: {
+      result: { gamesWonA: pairing.gamesWonA, gamesWonB: pairing.gamesWonB },
+      disputeReason: pairing.disputeReason,
+      disputedById: pairing.disputedById,
+    },
+  });
   revalidatePath("/admin/disputes");
   revalidatePath("/standings");
   redirect("/admin/disputes?ok=rejected");

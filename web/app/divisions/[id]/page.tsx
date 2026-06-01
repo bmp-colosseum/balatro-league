@@ -18,7 +18,7 @@ export default async function PublicDivisionPage({
   const { id } = await params;
   const data = await loadDivisionPageData(id);
   if (!data) notFound();
-  const { division, standings, recentPairings, unplayed } = data;
+  const { division, standings, recentPairings, shootouts, unplayed } = data;
   const tc = tierColors(division.tierPosition);
 
   return (
@@ -92,6 +92,41 @@ export default async function PublicDivisionPage({
             </table>
           )}
         </div>
+
+        {shootouts.length > 0 && (
+          <div className="card">
+            <strong>⚔ Shootouts ({shootouts.length})</strong>
+            <p className="muted" style={{ marginTop: 4, fontSize: 12 }}>
+              1-game tiebreakers. Recorded when two players tied on points + drew their head-to-head.
+            </p>
+            <table style={{ marginTop: 8 }}>
+              <thead><tr><th>Date</th><th>Result</th><th></th></tr></thead>
+              <tbody>
+                {shootouts.map((s) => {
+                  const date = s.recordedAt.toISOString().slice(0, 10);
+                  return (
+                    <tr key={s.id}>
+                      <td className="muted">{date}</td>
+                      <td>
+                        <Link href={`/profile/${s.winner.id}`} style={{ color: "var(--text)" }}>
+                          <strong>{s.winner.displayName}</strong>
+                        </Link>
+                        {" "}beat{" "}
+                        <Link href={`/profile/${s.loser.id}`} style={{ color: "var(--text)" }}>
+                          {s.loser.displayName}
+                        </Link>
+                      </td>
+                      <td className="muted" style={{ fontSize: 11 }}>
+                        {s.selfReported ? "self-reported" : "mediator"}
+                        {s.notes ? ` · ${s.notes}` : ""}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {unplayed.length > 0 && (
           <div className="card">

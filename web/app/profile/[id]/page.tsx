@@ -259,6 +259,7 @@ export default async function ProfilePage({
                       h.matches.map((m, i) => {
                         const date = m.confirmedAt ? m.confirmedAt.toISOString().slice(0, 10) : "—";
                         const isDisputed = m.status === "DISPUTED";
+                        const isShootout = m.isShootout === true;
                         const outcomePill =
                           isDisputed ? { bg: "rgba(241,196,15,0.15)", fg: "#f1c40f", label: "DISPUTED" }
                           : m.outcome === "WIN" ? { bg: "rgba(46,204,113,0.15)", fg: "#2ecc71", label: "W" }
@@ -267,10 +268,17 @@ export default async function ProfilePage({
                         return (
                           <tr key={i} style={isDisputed ? { opacity: 0.7 } : undefined}>
                             <td>{date}</td>
-                            <td><Link href={`/profile/${m.opponentPlayerId}`} style={{ color: "var(--text)" }}>{m.opponentDisplayName}</Link></td>
+                            <td>
+                              {isShootout && <span title="Shootout (1-game tiebreaker)" style={{ marginRight: 4 }}>⚔</span>}
+                              <Link href={`/profile/${m.opponentPlayerId}`} style={{ color: "var(--text)" }}>{m.opponentDisplayName}</Link>
+                              {isShootout && <span className="muted" style={{ marginLeft: 6, fontSize: 11 }}>(shootout)</span>}
+                            </td>
                             <td><strong>{m.myGames}–{m.opponentGames}</strong></td>
                             <td><span className="pill" style={{ background: outcomePill.bg, color: outcomePill.fg, fontSize: isDisputed ? 10 : undefined }}>{outcomePill.label}</span></td>
-                            {isOwnProfile && h.isActive && (
+                            {isOwnProfile && h.isActive && isShootout && (
+                              <td className="muted" style={{ fontSize: 11 }}>—</td>
+                            )}
+                            {isOwnProfile && h.isActive && !isShootout && (
                               <td>
                                 <details>
                                   <summary style={{ cursor: "pointer", fontSize: 11, color: "var(--muted-text, #888)" }}>

@@ -657,7 +657,11 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
       ``,
       `Good luck. 🎴`,
     ].join("\n");
-    await postChannelMessage(channelId, welcome);
+    // silent=true: members still see the channel show up (they got the role)
+    // and the welcome message is there for reference when they visit, but no
+    // ping fires for the @mentions inside. Bootstrap shouldn't blast everyone
+    // — players discover the channel via their sidebar / the role, not a ping.
+    await postChannelMessage(channelId, welcome, { silent: true });
   }
 
   await prisma.division.update({

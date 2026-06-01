@@ -1,0 +1,257 @@
+// Append-only audit log viewer. Reads AdminAuditEvent and renders a
+// filterable, cursor-paginated table. Server-rendered; no client JS
+// needed — all filters are GET params on a form. Cursor is the
+// createdAt timestamp + id of the last row on the current page so
+// pagination survives concurrent inserts.
+
+import Link from "next/link";
+import type { Prisma } from "@prisma/client";
+import { requireAdmin } from "@/lib/admin";
+import { prisma } from "@/lib/prisma";
+import { SiteNav } from "@/components/SiteNav";
+import { AdminNav } from "@/components/AdminNav";
+
+export const dynamic = "force-dynamic";
+
+const PAGE_SIZE = 50;
+
+interface SearchParams {
+  actor?: string;
+  action?: string;
+  target?: string;
+  since?: string;
+  until?: string;
+  q?: string;
+  before?: string; // cursor: ISO timestamp of last row on previous page
+}
+
+function parseDate(input: string | undefined): Date | null {
+  if (!input) return null;
+  const d = new Date(input);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatTimestamp(d: Date): string {
+  return d.toISOString().replace("T", " ").slice(0, 19) + " UTC";
+}
+
+function buildSearchString(params: Record<string, string | undefined>): string {
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(params)) {
+    if (v && v.length > 0) parts.push(`${encodeURIComponent(k)}=${encodeURIComponent(v)}`);
+  }
+  return parts.length === 0 ? "" : `?${parts.join("&")}`;
+}
+
+export default async function AdminAuditPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  await requireAdmin();
+  const sp = await searchParams;
+
+  // Build the WHERE clause from filters.
+  const where: Prisma.AdminAuditEventWhereInput = {};
+  if (sp.actor) where.actorDiscordId = sp.actor;
+  if (sp.action) where.action = sp.action;
+  if (sp.target) where.targetType = sp.target;
+  const since = parseDate(sp.since);
+  const until = parseDate(sp.until);
+  if (since || until) {
+    where.createdAt = {
+      ...(since ? { gte: since } : {}),
+      ...(until ? { lte: until } : {}),
+    };
+  }
+  if (sp.q) {
+    where.summary = { contains: sp.q, mode: "insensitive" };
+  }
+  const before = parseDate(sp.before);
+  if (before) {
+    where.createdAt = { ...(where.createdAt as object | undefined), lt: before };
+  }
+
+  // Pull rows for this page + the distinct actor/action/target lists for
+  // the filter dropdowns. Distinct queries are cheap because of the
+  // indexes — and we cap at 200 just in case.
+  const [rows, actorRows, actionRows, targetRows, totalCount] = await Promise.all([
+    prisma.adminAuditEvent.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: PAGE_SIZE + 1, // one extra to know if there's a next page
+    }),
+    prisma.adminAuditEvent.findMany({
+      distinct: ["actorDiscordId"],
+      select: { actorDiscordId: true, actorName: true },
+      orderBy: { actorName: "asc" },
+      take: 200,
+    }),
+    prisma.adminAuditEvent.findMany({
+      distinct: ["action"],
+      select: { action: true },
+      orderBy: { action: "asc" },
+      take: 200,
+    }),
+    prisma.adminAuditEvent.findMany({
+      distinct: ["targetType"],
+      where: { targetType: { not: null } },
+      select: { targetType: true },
+      orderBy: { targetType: "asc" },
+      take: 200,
+    }),
+    prisma.adminAuditEvent.count({ where }),
+  ]);
+
+  const hasNextPage = rows.length > PAGE_SIZE;
+  const pageRows = hasNextPage ? rows.slice(0, PAGE_SIZE) : rows;
+  const nextCursor = hasNextPage ? pageRows[pageRows.length - 1]!.createdAt.toISOString() : null;
+
+  // Preserve current filters on the next-page link (everything except `before`).
+  const nextHref = nextCursor
+    ? `/admin/audit${buildSearchString({
+        actor: sp.actor,
+        action: sp.action,
+        target: sp.target,
+        since: sp.since,
+        until: sp.until,
+        q: sp.q,
+        before: nextCursor,
+      })}`
+    : null;
+  const firstPageHref = `/admin/audit${buildSearchString({
+    actor: sp.actor,
+    action: sp.action,
+    target: sp.target,
+    since: sp.since,
+    until: sp.until,
+    q: sp.q,
+  })}`;
+
+  return (
+    <>
+      <SiteNav activePath="/admin" />
+      <AdminNav activePath="/admin/audit" />
+      <main>
+        <h2>📜 Audit log</h2>
+        <p className="muted">
+          Append-only log of admin actions + key system events. Filters are GET params, so
+          you can bookmark / share a specific view.
+        </p>
+
+        <form method="get" action="/admin/audit" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, alignItems: "end", marginBottom: 16 }}>
+          <label>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Actor</div>
+            <select name="actor" defaultValue={sp.actor ?? ""}>
+              <option value="">All actors</option>
+              {actorRows.map((a) => (
+                <option key={a.actorDiscordId} value={a.actorDiscordId}>
+                  {a.actorName} {a.actorDiscordId === "system" ? "" : `· ${a.actorDiscordId.slice(-6)}`}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Action</div>
+            <select name="action" defaultValue={sp.action ?? ""}>
+              <option value="">All actions</option>
+              {actionRows.map((a) => (
+                <option key={a.action} value={a.action}>{a.action}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Target type</div>
+            <select name="target" defaultValue={sp.target ?? ""}>
+              <option value="">Any target</option>
+              {targetRows.map((t) => (
+                <option key={t.targetType!} value={t.targetType!}>{t.targetType}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Summary contains</div>
+            <input name="q" type="text" placeholder="text search…" defaultValue={sp.q ?? ""} />
+          </label>
+          <label>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Since</div>
+            <input name="since" type="datetime-local" defaultValue={sp.since ?? ""} />
+          </label>
+          <label>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Until</div>
+            <input name="until" type="datetime-local" defaultValue={sp.until ?? ""} />
+          </label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="submit">Apply</button>
+            <Link href="/admin/audit" className="secondary" style={{ alignSelf: "center" }}>Reset</Link>
+          </div>
+          <div className="muted" style={{ textAlign: "right", fontSize: 12 }}>
+            {totalCount.toLocaleString()} matching row(s)
+          </div>
+        </form>
+
+        {pageRows.length === 0 ? (
+          <p className="muted">No audit events match your filters.</p>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid #444", textAlign: "left" }}>
+                <th style={{ padding: "8px 4px", whiteSpace: "nowrap" }}>When</th>
+                <th style={{ padding: "8px 4px" }}>Actor</th>
+                <th style={{ padding: "8px 4px" }}>Action</th>
+                <th style={{ padding: "8px 4px" }}>Target</th>
+                <th style={{ padding: "8px 4px" }}>Summary</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageRows.map((row) => (
+                <tr key={row.id} style={{ borderBottom: "1px solid #2a2a2a", verticalAlign: "top" }}>
+                  <td style={{ padding: "6px 4px", whiteSpace: "nowrap", fontFamily: "monospace", color: "#888" }}>
+                    {formatTimestamp(row.createdAt)}
+                  </td>
+                  <td style={{ padding: "6px 4px", whiteSpace: "nowrap" }}>
+                    {row.actorDiscordId === "system" ? (
+                      <span className="muted">system</span>
+                    ) : (
+                      <span title={row.actorDiscordId}>{row.actorName}</span>
+                    )}
+                  </td>
+                  <td style={{ padding: "6px 4px", fontFamily: "monospace", fontSize: 12, color: "#bdc3c7" }}>
+                    {row.action}
+                  </td>
+                  <td style={{ padding: "6px 4px", fontFamily: "monospace", fontSize: 12, color: "#95a5a6" }}>
+                    {row.targetType ? `${row.targetType}${row.targetId ? ` ${row.targetId.slice(-6)}` : ""}` : "—"}
+                  </td>
+                  <td style={{ padding: "6px 4px" }}>
+                    {row.summary}
+                    {row.metadata != null && (
+                      <details style={{ marginTop: 4 }}>
+                        <summary className="muted" style={{ cursor: "pointer", fontSize: 11 }}>metadata</summary>
+                        <pre style={{ fontSize: 11, color: "#7f8c8d", marginTop: 4, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                          {JSON.stringify(row.metadata, null, 2)}
+                        </pre>
+                      </details>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
+          {sp.before ? (
+            <Link href={firstPageHref} className="secondary">← First page</Link>
+          ) : (
+            <span />
+          )}
+          {nextHref ? (
+            <Link href={nextHref} className="secondary">Next page →</Link>
+          ) : (
+            <span className="muted" style={{ fontSize: 12 }}>End of log</span>
+          )}
+        </div>
+      </main>
+    </>
+  );
+}

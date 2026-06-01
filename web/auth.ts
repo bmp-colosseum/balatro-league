@@ -8,6 +8,13 @@ import Discord from "next-auth/providers/discord";
 // (same Discord application as the bot uses). Explicit pass-through so we
 // don't need to rename to next-auth's AUTH_DISCORD_ID convention.
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Trust the request Host header for URL resolution. Required behind
+  // Railway's proxy — without this next-auth falls back to the
+  // container's internal bind (localhost:8080) when constructing the
+  // OAuth callback URL, which Discord then rejects.
+  // Equivalent to AUTH_TRUST_HOST=true but doesn't depend on env-var
+  // detection working correctly.
+  trustHost: true,
   providers: [
     Discord({
       clientId: process.env.DISCORD_CLIENT_ID,

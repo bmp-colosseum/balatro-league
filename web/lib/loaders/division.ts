@@ -33,6 +33,18 @@ export interface DivisionRecentPairing {
   gamesWonB: number;
 }
 
+// One row per shootout in this division. Surfaced as its own list on
+// the public page so readers can see how a tied pair was broken
+// without having to dig through standings logic.
+export interface DivisionShootout {
+  id: string;
+  recordedAt: Date;
+  winner: { id: string; displayName: string };
+  loser: { id: string; displayName: string };
+  notes: string | null;
+  selfReported: boolean;
+}
+
 export interface DivisionUnplayed {
   a: { id: string; displayName: string };
   b: { id: string; displayName: string };
@@ -51,6 +63,7 @@ export interface DivisionPageData {
   };
   standings: DivisionStandingRow[];
   recentPairings: DivisionRecentPairing[];
+  shootouts: DivisionShootout[];
   unplayed: DivisionUnplayed[];
 }
 
@@ -136,6 +149,30 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
     }
   }
 
+  // Shootouts — separate model from Pairing. We resolve the two players
+  // through the active-member list (which is already loaded) so we
+  // avoid an extra round trip per shootout.
+  const memberById = new Map(division.members.map((m) => [m.playerId, m.player]));
+  const rawShootouts = await prisma.shootout.findMany({
+    where: { divisionId },
+    orderBy: { recordedAt: "desc" },
+  });
+  const shootouts: DivisionShootout[] = rawShootouts.flatMap((s) => {
+    const a = memberById.get(s.playerAId);
+    const b = memberById.get(s.playerBId);
+    if (!a || !b) return [];
+    const winner = s.winnerId === a.id ? a : b;
+    const loser = s.winnerId === a.id ? b : a;
+    return [{
+      id: s.id,
+      recordedAt: s.recordedAt,
+      winner,
+      loser,
+      notes: s.notes ?? null,
+      selfReported: s.recordedBy === "self-report",
+    }];
+  });
+
   return {
     division: {
       id: division.id,
@@ -149,6 +186,7 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
     },
     standings,
     recentPairings,
+    shootouts,
     unplayed,
   };
 }

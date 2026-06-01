@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 const SEED = [
   { name: "Legendary", divisionCount: 1 },
-  { name: "Rare", divisionCount: 4 },
+  { name: "Rare", divisionCount: 6 },
   { name: "Uncommon", divisionCount: 6 },
   { name: "Common", divisionCount: 6 },
 ];
@@ -68,7 +68,25 @@ export default async function AdminTemplatesPage() {
                   </td>
                   <td><span className="muted">{t.config.map((c) => `${c.name}×${c.divisionCount}`).join(" · ")}</span></td>
                   <td>{t.updatedAt.toISOString().slice(0, 10)}</td>
-                  <td>
+                  <td style={{ display: "flex", gap: 6 }}>
+                    <details>
+                      <summary style={{ cursor: "pointer" }}>
+                        <span className="secondary" style={{ display: "inline-block", padding: "4px 8px" }}>Edit</span>
+                      </summary>
+                      {/* Inline edit form. saveTemplate sees the `id`
+                          field and updates in place (rename + relayout
+                          atomic). TierEditor renders this template's
+                          current config and emits JSON in the hidden
+                          `config` field on submit. */}
+                      <form action={saveTemplate} style={{ marginTop: 8, padding: 12, border: "1px solid var(--border)", borderRadius: 6, background: "var(--surface-2)", minWidth: 380 }}>
+                        <input type="hidden" name="id" value={t.id} />
+                        <label style={{ display: "block", marginBottom: 8 }}>
+                          Name <input name="templateName" defaultValue={t.name} required />
+                        </label>
+                        <TierEditor initial={t.config} showTemplateLoader={false} />
+                        <button type="submit" style={{ marginTop: 8 }}>Save changes</button>
+                      </form>
+                    </details>
                     <form action={deleteTemplate}>
                       <input type="hidden" name="id" value={t.id} />
                       <button type="submit" className="danger">Delete</button>
