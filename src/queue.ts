@@ -47,7 +47,9 @@ export async function initQueue(): Promise<void> {
   if (boss) return;
   boss = new PgBoss({
     connectionString: env.DATABASE_URL,
-    // Pg-boss installs its schema on first start. Idempotent.
+    // Pg-boss installs its schema on first start. Idempotent. Retention
+    // is per-queue in v12; defaults (7d on completed, 14d in created/
+    // retry state) are fine for our scale — pgboss.archive stays small.
     schema: "pgboss",
   });
   boss.on("error", (err: Error) => console.warn("[pg-boss] error:", err));

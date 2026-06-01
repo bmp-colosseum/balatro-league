@@ -101,6 +101,11 @@ export const admin: SlashCommand = {
         .addUserOption((opt) => opt.setName("p2").setDescription("Second tied player").setRequired(true))
         .addUserOption((opt) => opt.setName("winner").setDescription("Whichever of p1 or p2 won the shootout").setRequired(true))
         .addStringOption((opt) => opt.setName("notes").setDescription("Optional context").setRequired(false)),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("reload-emojis")
+        .setDescription("Re-run the Balatro deck/stake emoji upload. Picks up new PNGs without a bot restart."),
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
@@ -121,8 +126,26 @@ export const admin: SlashCommand = {
     if (!(await requireAdmin(interaction))) return;
     if (sub === "override-result") return forceResult(interaction);
     if (sub === "export-results") return exportResults(interaction);
+    if (sub === "reload-emojis") return reloadEmojis(interaction);
   },
 };
+
+// Re-run the application-emoji upload without restarting the bot.
+// Lets admin drop a new PNG in src/assets/balatro/, commit + deploy,
+// then run this to pick it up immediately instead of waiting for the
+// next natural restart.
+async function reloadEmojis(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  try {
+    const { ensureBalatroEmojis } = await import("../balatro-emojis.js");
+    const { env } = await import("../env.js");
+    await ensureBalatroEmojis(env.DISCORD_CLIENT_ID);
+    await interaction.editReply("✅ Reloaded. Check the bot log for the upload summary.");
+  } catch (err) {
+    console.warn("[admin reload-emojis] failed:", err);
+    await interaction.editReply("❌ Reload failed — check the bot logs.");
+  }
+}
 
 // Delete a pairing (any status) so the set goes back to unplayed.
 // Used when something was reported wrong before the game actually
