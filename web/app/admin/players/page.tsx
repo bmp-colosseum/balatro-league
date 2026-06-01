@@ -1,81 +1,50 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
+import {
+  loadAdminPlayersDivisionView,
+  loadAdminPlayersListView,
+  loadPlayersPageNav,
+  type AdminPlayersListSort,
+} from "@/lib/loaders/admin";
 import { tierColors } from "@/lib/tier-colors";
-import { computeStandings } from "@/lib/standings";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { addFakePlayer, deletePlayer, dropPlayer, recordSetForPlayer, reinstatePlayer, setPlayerDiscordId } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-type Sort = "name" | "rating-desc" | "rating-asc" | "ranked-only" | "unranked-only";
-
 export default async function AdminPlayersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ season?: string; division?: string; sort?: Sort }>;
+  searchParams: Promise<{ season?: string; division?: string; sort?: AdminPlayersListSort }>;
 }) {
   await requireAdmin();
   const { season: seasonId, division: divisionId, sort = "name" } = await searchParams;
+  const nav = await loadPlayersPageNav({ seasonId, divisionId });
 
-  // Season + division pickers
-  const seasons = await prisma.season.findMany({
-    where: { endedAt: null },
-    include: {
-      tiers: { orderBy: { position: "asc" }, include: { divisions: { orderBy: { groupNumber: "asc" } } } },
-    },
-    orderBy: [{ isActive: "desc" }, { startedAt: "desc" }],
-  });
-  const selectedSeason = seasonId ? seasons.find((s) => s.id === seasonId) : null;
-  const divisionsInSeason = selectedSeason
-    ? selectedSeason.tiers.flatMap((t) => t.divisions.map((d) => ({ id: d.id, name: d.name, tierPosition: t.position, tierName: t.name })))
-    : [];
-  const selectedDivisionMeta = divisionId ? divisionsInSeason.find((d) => d.id === divisionId) : null;
-
-  // Mode A — division scoped: show active + inactive sections with actions
-  if (selectedDivisionMeta) {
-    const division = await prisma.division.findUnique({
-      where: { id: selectedDivisionMeta.id },
-      include: {
-        season: true,
-        tier: true,
-        members: { include: { player: true } },
-        pairings: { where: { status: "CONFIRMED" } },
-      },
-    });
-    if (!division) return null;
-
-    const standings = computeStandings(
-      division.members.map((m) => m.player),
-      division.pairings.map((p) => ({ playerAId: p.playerAId, playerBId: p.playerBId, gamesWonA: p.gamesWonA, gamesWonB: p.gamesWonB })),
-    );
-    const standingByPlayer = new Map(standings.map((r, i) => [r.player.id, { rank: i + 1, points: r.points, wins: r.wins, draws: r.draws, losses: r.losses }]));
-
-    const active = division.members.filter((m) => m.status === "ACTIVE");
-    const inactive = division.members.filter((m) => m.status === "DROPPED");
-
+  // Mode A — division scoped
+  if (nav.selectedDivision) {
+    const view = await loadAdminPlayersDivisionView(nav.selectedDivision.id);
+    if (!view) return null;
     return (
       <>
         <SiteNav activePath="/admin" />
         <AdminNav activePath="/admin/players" />
         <main>
-          <PageHeader seasons={seasons} selectedSeasonId={seasonId} divisionsInSeason={divisionsInSeason} selectedDivisionId={divisionId} sort={sort} />
-
+          <PageHeader nav={nav} selectedSeasonId={seasonId} selectedDivisionId={divisionId} sort={sort} />
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 12 }}>
             <h3 style={{ margin: 0 }}>
-              <Link href={`/admin/divisions/${division.id}`} style={{ textDecoration: "none" }}>{division.name}</Link>
+              <Link href={`/admin/divisions/${view.division.id}`} style={{ textDecoration: "none" }}>{view.division.name}</Link>
             </h3>
             <span className="muted" style={{ fontSize: 12 }}>
-              tier {division.tier.position} ({division.tier.name}) · {division.season.name}
+              tier {view.division.tierPosition} ({view.division.tierName}) · {view.division.seasonName}
             </span>
-            <Link href={`/admin/divisions/${division.id}`} style={{ marginLeft: "auto", fontSize: 12 }}>
+            <Link href={`/admin/divisions/${view.division.id}`} style={{ marginLeft: "auto", fontSize: 12 }}>
               full division page →
             </Link>
           </div>
-
           <div className="card">
-            <strong>Active players ({active.length})</strong>
+            <strong>Active players ({view.active.length})</strong>
             <table style={{ marginTop: 8 }}>
               <thead>
                 <tr>
@@ -90,77 +59,66 @@ export default async function AdminPlayersPage({
                 </tr>
               </thead>
               <tbody>
-                {active.length === 0 ? (
+                {view.active.length === 0 ? (
                   <tr><td colSpan={8} className="muted">No active players in this division.</td></tr>
-                ) : active.map((m) => {
-                  const s = standingByPlayer.get(m.playerId);
-                  const playedThisPlayer = new Set(
-                    division.pairings
-                      .filter((p) => p.playerAId === m.playerId || p.playerBId === m.playerId)
-                      .map((p) => (p.playerAId === m.playerId ? p.playerBId : p.playerAId)),
-                  );
-                  const otherActives = active
-                    .filter((o) => o.playerId !== m.playerId)
-                    .filter((o) => !playedThisPlayer.has(o.playerId));
-                  return (
-                    <tr key={m.id}>
-                      <td style={{ width: 24 }}>{s && s.rank <= 3 ? ["🥇", "🥈", "🥉"][s.rank - 1] : ""}</td>
-                      <td>
-                        <Link href={`/profile/${m.player.id}`} style={{ color: "var(--text)" }}>
-                          <strong>{m.player.displayName}</strong>
-                        </Link>
-                        <div className="muted" style={{ fontSize: 10 }}>{m.player.discordId}</div>
-                      </td>
-                      <td>{s?.rank ?? "—"}</td>
-                      <td><strong>{s?.points ?? 0}</strong></td>
-                      <td>{s ? `${s.wins}-${s.draws}-${s.losses}` : "—"}</td>
-                      <td>{m.player.rating ?? <span className="muted">unranked</span>}</td>
-                      <td>
-                        <form action={recordSetForPlayer} style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                          <input type="hidden" name="divisionId" value={division.id} />
-                          <input type="hidden" name="playerId" value={m.player.id} />
-                          <span className="muted" style={{ fontSize: 11 }}>vs</span>
-                          <select name="opponentId" required style={{ fontSize: 11, maxWidth: 140 }}>
-                            <option value="">—</option>
-                            {otherActives.map((o) => (
-                              <option key={o.playerId} value={o.playerId}>{o.player.displayName}</option>
-                            ))}
-                          </select>
-                          <select name="result" defaultValue="2-0" style={{ fontSize: 11 }}>
-                            <option value="2-0">2-0 (won)</option>
-                            <option value="1-1">1-1</option>
-                            <option value="0-2">0-2 (lost)</option>
-                          </select>
-                          <button type="submit" className="secondary" style={{ fontSize: 11 }}>Record</button>
-                        </form>
-                      </td>
-                      <td>
-                        <form action={dropPlayer} style={{ display: "inline-block" }}>
-                          <input type="hidden" name="playerId" value={m.player.id} />
-                          <button type="submit" className="secondary" style={{ fontSize: 11 }}>Drop</button>
-                        </form>
-                      </td>
-                    </tr>
-                  );
-                })}
+                ) : view.active.map((m) => (
+                  <tr key={m.membershipId}>
+                    <td style={{ width: 24 }}>{m.rank && m.rank <= 3 ? ["🥇", "🥈", "🥉"][m.rank - 1] : ""}</td>
+                    <td>
+                      <Link href={`/profile/${m.playerId}`} style={{ color: "var(--text)" }}>
+                        <strong>{m.displayName}</strong>
+                      </Link>
+                      <div className="muted" style={{ fontSize: 10 }}>{m.discordId}</div>
+                    </td>
+                    <td>{m.rank ?? "—"}</td>
+                    <td><strong>{m.points}</strong></td>
+                    <td>{m.wins}-{m.draws}-{m.losses}</td>
+                    <td>{m.rating ?? <span className="muted">unranked</span>}</td>
+                    <td>
+                      <form action={recordSetForPlayer} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        <input type="hidden" name="divisionId" value={view.division.id} />
+                        <input type="hidden" name="playerId" value={m.playerId} />
+                        <span className="muted" style={{ fontSize: 11 }}>vs</span>
+                        <select name="opponentId" required style={{ fontSize: 11, maxWidth: 140 }}>
+                          <option value="">—</option>
+                          {m.unplayedOpponents.map((o) => (
+                            <option key={o.playerId} value={o.playerId}>{o.displayName}</option>
+                          ))}
+                        </select>
+                        <select name="result" defaultValue="2-0" style={{ fontSize: 11 }}>
+                          <option value="2-0">2-0 (won)</option>
+                          <option value="1-1">1-1</option>
+                          <option value="0-2">0-2 (lost)</option>
+                        </select>
+                        <button type="submit" className="secondary" style={{ fontSize: 11 }}>Record</button>
+                      </form>
+                    </td>
+                    <td>
+                      <form action={dropPlayer} style={{ display: "inline-block" }}>
+                        <input type="hidden" name="playerId" value={m.playerId} />
+                        <button type="submit" className="secondary" style={{ fontSize: 11 }}>Drop</button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
 
-          {inactive.length > 0 && (
+          {view.inactive.length > 0 && (
             <details className="card">
-              <summary style={{ cursor: "pointer" }}><strong>Inactive (dropped) — {inactive.length}</strong></summary>
+              <summary style={{ cursor: "pointer" }}><strong>Inactive (dropped) — {view.inactive.length}</strong></summary>
               <table style={{ marginTop: 8 }}>
                 <thead><tr><th>Player</th><th>Dropped</th><th>Discord</th><th></th></tr></thead>
                 <tbody>
-                  {inactive.map((m) => (
-                    <tr key={m.id}>
-                      <td><s>{m.player.displayName}</s></td>
+                  {view.inactive.map((m) => (
+                    <tr key={m.membershipId}>
+                      <td><s>{m.displayName}</s></td>
                       <td className="muted">{m.droppedAt?.toISOString().slice(0, 10) ?? "—"}</td>
-                      <td><span className="muted" style={{ fontSize: 11 }}>{m.player.discordId}</span></td>
+                      <td><span className="muted" style={{ fontSize: 11 }}>{m.discordId}</span></td>
                       <td>
                         <form action={reinstatePlayer} style={{ display: "inline-block" }}>
-                          <input type="hidden" name="playerId" value={m.player.id} />
+                          <input type="hidden" name="playerId" value={m.playerId} />
                           <button type="submit" className="secondary" style={{ fontSize: 11 }}>Reinstate</button>
                         </form>
                       </td>
@@ -175,62 +133,16 @@ export default async function AdminPlayersPage({
     );
   }
 
-  // Mode B — no division selected: all-players list with rating sort
-  const playersAll = await prisma.player.findMany({
-    include: {
-      memberships: {
-        where: selectedSeason
-          ? { division: { seasonId: selectedSeason.id } }
-          : { division: { season: { isActive: true } } },
-        include: { division: { include: { tier: true } } },
-      },
-    },
-  });
-  let players = playersAll;
-  if (selectedSeason) {
-    players = players.filter((p) => p.memberships.length > 0);
-  }
-
-  // For the season-scoped view, build a divisionId → active members map so
-  // we can render an inline "Record set vs..." form per player without
-  // N+1 queries per row.
-  const seasonForRecord = selectedSeason ?? (await prisma.season.findFirst({ where: { isActive: true } }));
-  const seasonDivisionMembers = seasonForRecord
-    ? await prisma.divisionMember.findMany({
-        where: { seasonId: seasonForRecord.id, status: "ACTIVE" },
-        include: { player: true },
-      })
-    : [];
-  const membersByDivision = new Map<string, Array<{ playerId: string; player: { id: string; displayName: string } }>>();
-  for (const m of seasonDivisionMembers) {
-    const list = membersByDivision.get(m.divisionId) ?? [];
-    list.push({ playerId: m.playerId, player: m.player });
-    membersByDivision.set(m.divisionId, list);
-  }
-  // Also build a "who has already played whom" set so the per-row record-set
-  // form only offers unplayed opponents. Override of an already-played set
-  // happens via /admin/divisions/[id] (where pairings are listed individually).
-  const seasonPairings = seasonForRecord
-    ? await prisma.pairing.findMany({
-        where: { status: "CONFIRMED", division: { seasonId: seasonForRecord.id } },
-        select: { divisionId: true, playerAId: true, playerBId: true },
-      })
-    : [];
-  const playedKey = (divisionId: string, a: string, b: string) =>
-    `${divisionId}|${a < b ? `${a}-${b}` : `${b}-${a}`}`;
-  const playedSet = new Set(seasonPairings.map((p) => playedKey(p.divisionId, p.playerAId, p.playerBId)));
-  if (sort === "ranked-only") players = players.filter((p) => p.rating != null);
-  if (sort === "unranked-only") players = players.filter((p) => p.rating == null);
-  if (sort === "rating-desc") players.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1) || a.displayName.localeCompare(b.displayName));
-  else if (sort === "rating-asc") players.sort((a, b) => (a.rating ?? -1) - (b.rating ?? -1) || a.displayName.localeCompare(b.displayName));
-  else players.sort((a, b) => a.displayName.localeCompare(b.displayName));
+  // Mode B — no division selected
+  const players = await loadAdminPlayersListView({ seasonId, sort });
+  const selectedSeasonName = nav.seasons.find((s) => s.id === seasonId)?.name;
 
   return (
     <>
       <SiteNav activePath="/admin" />
       <AdminNav activePath="/admin/players" />
       <main>
-        <PageHeader seasons={seasons} selectedSeasonId={seasonId} divisionsInSeason={divisionsInSeason} selectedDivisionId={divisionId} sort={sort} />
+        <PageHeader nav={nav} selectedSeasonId={seasonId} selectedDivisionId={divisionId} sort={sort} />
 
         <div className="card" style={{ marginTop: 12 }}>
           <strong>Add fake player</strong>
@@ -239,7 +151,7 @@ export default async function AdminPlayersPage({
             <input name="name" required placeholder="Alice" />
             <select name="divisionId" defaultValue="">
               <option value="">— unassigned —</option>
-              {divisionsInSeason.map((d) => (
+              {nav.divisionsInSelectedSeason.map((d) => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
             </select>
@@ -250,8 +162,8 @@ export default async function AdminPlayersPage({
         <div className="card">
           <strong>
             {players.length} player(s)
-            {selectedSeason && <> in {selectedSeason.name}</>}
-            {!selectedSeason && <> (active season only)</>}
+            {selectedSeasonName && <> in {selectedSeasonName}</>}
+            {!selectedSeasonName && <> (active season only)</>}
           </strong>
           <table style={{ marginTop: 8 }}>
             <thead>
@@ -267,82 +179,73 @@ export default async function AdminPlayersPage({
             <tbody>
               {players.length === 0 ? (
                 <tr><td colSpan={6} className="muted">No players match.</td></tr>
-              ) : players.map((p) => {
-                const membership = p.memberships[0];
-                const div = membership?.division;
-                const isDropped = membership?.status === "DROPPED";
-                const divisionMembers = div ? membersByDivision.get(div.id) ?? [] : [];
-                const opponents = divisionMembers
-                  .filter((m) => m.playerId !== p.id)
-                  .filter((m) => !div || !playedSet.has(playedKey(div.id, p.id, m.playerId)));
-                return (
-                  <tr key={p.id}>
-                    <td>
-                      <Link href={`/profile/${p.id}`} style={{ color: "var(--text)" }}>
-                        <strong>{p.displayName}</strong>
-                      </Link>
-                    </td>
-                    <td>{p.rating ?? <span className="muted">unranked</span>}</td>
-                    <td>
-                      {div ? (
-                        <>
-                          <Link href={`/admin/players?season=${div.seasonId}&division=${div.id}`} style={{ textDecoration: "none" }}>
-                            <TierPill name={div.name} position={div.tier.position} />
-                          </Link>
-                          {isDropped && (
-                            <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "#e74c3c", marginLeft: 6 }}>DROPPED</span>
-                          )}
-                        </>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
-                    </td>
-                    <td>
-                      {div && !isDropped && opponents.length > 0 ? (
-                        <form action={recordSetForPlayer} style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                          <input type="hidden" name="divisionId" value={div.id} />
-                          <input type="hidden" name="playerId" value={p.id} />
-                          <span className="muted" style={{ fontSize: 11 }}>vs</span>
-                          <select name="opponentId" required style={{ fontSize: 11, maxWidth: 140 }}>
-                            <option value="">—</option>
-                            {opponents.map((o) => (
-                              <option key={o.playerId} value={o.playerId}>{o.player.displayName}</option>
-                            ))}
-                          </select>
-                          <select name="result" defaultValue="2-0" style={{ fontSize: 11 }}>
-                            <option value="2-0">2-0</option>
-                            <option value="1-1">1-1</option>
-                            <option value="0-2">0-2</option>
-                          </select>
-                          <button type="submit" className="secondary" style={{ fontSize: 11 }}>Record</button>
-                        </form>
-                      ) : (
-                        <span className="muted" style={{ fontSize: 11 }}>—</span>
-                      )}
-                    </td>
-                    <td>
-                      <form action={setPlayerDiscordId} style={{ display: "flex", gap: 4 }}>
+              ) : players.map((p) => (
+                <tr key={p.id}>
+                  <td>
+                    <Link href={`/profile/${p.id}`} style={{ color: "var(--text)" }}>
+                      <strong>{p.displayName}</strong>
+                    </Link>
+                  </td>
+                  <td>{p.rating ?? <span className="muted">unranked</span>}</td>
+                  <td>
+                    {p.membership ? (
+                      <>
+                        <Link href={`/admin/players?season=${p.membership.seasonId}&division=${p.membership.divisionId}`} style={{ textDecoration: "none" }}>
+                          <TierPill name={p.membership.divisionName} position={p.membership.tierPosition} />
+                        </Link>
+                        {p.membership.dropped && (
+                          <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "#e74c3c", marginLeft: 6 }}>DROPPED</span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="muted">—</span>
+                    )}
+                  </td>
+                  <td>
+                    {p.membership && !p.membership.dropped && p.membership.unplayedOpponents.length > 0 ? (
+                      <form action={recordSetForPlayer} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        <input type="hidden" name="divisionId" value={p.membership.divisionId} />
                         <input type="hidden" name="playerId" value={p.id} />
-                        <input
-                          type="text"
-                          name="discordId"
-                          defaultValue={p.discordId}
-                          pattern="\d{17,20}"
-                          title="17-20 digits"
-                          style={{ fontSize: 11, width: 170, fontFamily: "ui-monospace, monospace" }}
-                        />
-                        <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+                        <span className="muted" style={{ fontSize: 11 }}>vs</span>
+                        <select name="opponentId" required style={{ fontSize: 11, maxWidth: 140 }}>
+                          <option value="">—</option>
+                          {p.membership.unplayedOpponents.map((o) => (
+                            <option key={o.playerId} value={o.playerId}>{o.displayName}</option>
+                          ))}
+                        </select>
+                        <select name="result" defaultValue="2-0" style={{ fontSize: 11 }}>
+                          <option value="2-0">2-0</option>
+                          <option value="1-1">1-1</option>
+                          <option value="0-2">0-2</option>
+                        </select>
+                        <button type="submit" className="secondary" style={{ fontSize: 11 }}>Record</button>
                       </form>
-                    </td>
-                    <td>
-                      <form action={deletePlayer}>
-                        <input type="hidden" name="playerId" value={p.id} />
-                        <button type="submit" className="secondary" style={{ fontSize: 11, color: "#e74c3c" }}>Delete</button>
-                      </form>
-                    </td>
-                  </tr>
-                );
-              })}
+                    ) : (
+                      <span className="muted" style={{ fontSize: 11 }}>—</span>
+                    )}
+                  </td>
+                  <td>
+                    <form action={setPlayerDiscordId} style={{ display: "flex", gap: 4 }}>
+                      <input type="hidden" name="playerId" value={p.id} />
+                      <input
+                        type="text"
+                        name="discordId"
+                        defaultValue={p.discordId}
+                        pattern="\d{17,20}"
+                        title="17-20 digits"
+                        style={{ fontSize: 11, width: 170, fontFamily: "ui-monospace, monospace" }}
+                      />
+                      <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+                    </form>
+                  </td>
+                  <td>
+                    <form action={deletePlayer}>
+                      <input type="hidden" name="playerId" value={p.id} />
+                      <button type="submit" className="secondary" style={{ fontSize: 11, color: "#e74c3c" }}>Delete</button>
+                    </form>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -352,17 +255,15 @@ export default async function AdminPlayersPage({
 }
 
 function PageHeader({
-  seasons,
+  nav,
   selectedSeasonId,
-  divisionsInSeason,
   selectedDivisionId,
   sort,
 }: {
-  seasons: Array<{ id: string; name: string; isActive: boolean }>;
+  nav: { seasons: Array<{ id: string; name: string; isActive: boolean }>; divisionsInSelectedSeason: Array<{ id: string; name: string }> };
   selectedSeasonId?: string;
-  divisionsInSeason: Array<{ id: string; name: string; tierPosition: number }>;
   selectedDivisionId?: string;
-  sort: Sort;
+  sort: AdminPlayersListSort;
 }) {
   return (
     <>
@@ -371,9 +272,9 @@ function PageHeader({
         <form method="get" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <strong>Season:</strong>
-            <select name="season" defaultValue={selectedSeasonId ?? ""} onChange={undefined}>
+            <select name="season" defaultValue={selectedSeasonId ?? ""}>
               <option value="">— pick a season —</option>
-              {seasons.map((s) => (
+              {nav.seasons.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}{s.isActive ? " (active)" : ""}</option>
               ))}
             </select>
@@ -383,7 +284,7 @@ function PageHeader({
               <strong>Division:</strong>
               <select name="division" defaultValue={selectedDivisionId ?? ""}>
                 <option value="">— all in season —</option>
-                {divisionsInSeason.map((d) => (
+                {nav.divisionsInSelectedSeason.map((d) => (
                   <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </select>

@@ -312,6 +312,273 @@ export async function loadDeckBansPage(selectedIdParam: string | undefined): Pro
   return { presets, selected };
 }
 
+// ── /admin/players ───────────────────────────────────────────────────
+
+export interface PlayersPageNav {
+  seasons: Array<{ id: string; name: string; isActive: boolean }>;
+  divisionsInSelectedSeason: Array<{ id: string; name: string; tierPosition: number; tierName: string }>;
+  selectedDivision: { id: string; name: string; tierPosition: number; tierName: string } | null;
+}
+
+// Header pickers: list of seasons + (if a season is selected) its
+// divisions. Cheap — used by both modes of /admin/players.
+export async function loadPlayersPageNav(opts: {
+  seasonId?: string;
+  divisionId?: string;
+}): Promise<PlayersPageNav> {
+  const seasons = await prisma.season.findMany({
+    where: { endedAt: null },
+    select: {
+      id: true,
+      name: true,
+      isActive: true,
+      tiers: {
+        orderBy: { position: "asc" },
+        select: {
+          name: true,
+          position: true,
+          divisions: { orderBy: { groupNumber: "asc" }, select: { id: true, name: true } },
+        },
+      },
+    },
+    orderBy: [{ isActive: "desc" }, { startedAt: "desc" }],
+  });
+  const selectedSeason = opts.seasonId ? seasons.find((s) => s.id === opts.seasonId) : null;
+  const divisionsInSelectedSeason = selectedSeason
+    ? selectedSeason.tiers.flatMap((t) =>
+        t.divisions.map((d) => ({
+          id: d.id,
+          name: d.name,
+          tierPosition: t.position,
+          tierName: t.name,
+        })),
+      )
+    : [];
+  const selectedDivision = opts.divisionId
+    ? divisionsInSelectedSeason.find((d) => d.id === opts.divisionId) ?? null
+    : null;
+  return {
+    seasons: seasons.map((s) => ({ id: s.id, name: s.name, isActive: s.isActive })),
+    divisionsInSelectedSeason,
+    selectedDivision,
+  };
+}
+
+export interface AdminDivisionMemberRow {
+  membershipId: string;
+  playerId: string;
+  displayName: string;
+  discordId: string;
+  rating: number | null;
+  droppedAt: Date | null;
+  status: "ACTIVE" | "DROPPED";
+  rank: number | null;
+  points: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  unplayedOpponents: Array<{ playerId: string; displayName: string }>;
+}
+
+export interface AdminPlayersDivisionView {
+  division: {
+    id: string;
+    name: string;
+    seasonId: string;
+    seasonName: string;
+    tierName: string;
+    tierPosition: number;
+  };
+  active: AdminDivisionMemberRow[];
+  inactive: AdminDivisionMemberRow[];
+}
+
+export async function loadAdminPlayersDivisionView(
+  divisionId: string,
+): Promise<AdminPlayersDivisionView | null> {
+  const division = await prisma.division.findUnique({
+    where: { id: divisionId },
+    include: {
+      season: { select: { id: true, name: true } },
+      tier: { select: { name: true, position: true } },
+      members: { include: { player: true } },
+      pairings: {
+        where: { status: "CONFIRMED" },
+        select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
+      },
+    },
+  });
+  if (!division) return null;
+
+  const standings = computeStandings(
+    division.members.map((m) => m.player),
+    division.pairings,
+  );
+  const standingByPlayer = new Map(
+    standings.map((r, i) => [r.player.id, { rank: i + 1, points: r.points, wins: r.wins, draws: r.draws, losses: r.losses }]),
+  );
+
+  const active = division.members.filter((m) => m.status === "ACTIVE");
+  const rowFor = (m: typeof division.members[number]): AdminDivisionMemberRow => {
+    const s = standingByPlayer.get(m.playerId);
+    const playedThisPlayer = new Set(
+      division.pairings
+        .filter((p) => p.playerAId === m.playerId || p.playerBId === m.playerId)
+        .map((p) => (p.playerAId === m.playerId ? p.playerBId : p.playerAId)),
+    );
+    const unplayed = active
+      .filter((o) => o.playerId !== m.playerId && !playedThisPlayer.has(o.playerId))
+      .map((o) => ({ playerId: o.playerId, displayName: o.player.displayName }));
+    return {
+      membershipId: m.id,
+      playerId: m.playerId,
+      displayName: m.player.displayName,
+      discordId: m.player.discordId,
+      rating: m.player.rating,
+      droppedAt: m.droppedAt,
+      status: m.status,
+      rank: s?.rank ?? null,
+      points: s?.points ?? 0,
+      wins: s?.wins ?? 0,
+      draws: s?.draws ?? 0,
+      losses: s?.losses ?? 0,
+      unplayedOpponents: unplayed,
+    };
+  };
+
+  return {
+    division: {
+      id: division.id,
+      name: division.name,
+      seasonId: division.season.id,
+      seasonName: division.season.name,
+      tierName: division.tier.name,
+      tierPosition: division.tier.position,
+    },
+    active: division.members.filter((m) => m.status === "ACTIVE").map(rowFor),
+    inactive: division.members.filter((m) => m.status === "DROPPED").map(rowFor),
+  };
+}
+
+export type AdminPlayersListSort = "name" | "rating-desc" | "rating-asc" | "ranked-only" | "unranked-only";
+
+export interface AdminPlayersListRow {
+  id: string;
+  displayName: string;
+  discordId: string;
+  rating: number | null;
+  membership: {
+    divisionId: string;
+    divisionName: string;
+    seasonId: string;
+    tierPosition: number;
+    dropped: boolean;
+    unplayedOpponents: Array<{ playerId: string; displayName: string }>;
+  } | null;
+}
+
+export async function loadAdminPlayersListView(opts: {
+  seasonId?: string;
+  sort: AdminPlayersListSort;
+}): Promise<AdminPlayersListRow[]> {
+  const selectedSeason = opts.seasonId
+    ? await prisma.season.findUnique({ where: { id: opts.seasonId }, select: { id: true } })
+    : await prisma.season.findFirst({ where: { isActive: true }, select: { id: true } });
+
+  const players = await prisma.player.findMany({
+    select: {
+      id: true,
+      discordId: true,
+      displayName: true,
+      rating: true,
+      memberships: {
+        where: selectedSeason
+          ? { division: { seasonId: selectedSeason.id } }
+          : { division: { season: { isActive: true } } },
+        select: {
+          status: true,
+          division: {
+            select: {
+              id: true,
+              name: true,
+              seasonId: true,
+              tier: { select: { position: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  let filtered = players;
+  // When a season is selected, restrict to its members; otherwise show
+  // every player (the active-season filter on memberships still trims
+  // the badge column for non-current players).
+  if (opts.seasonId) filtered = players.filter((p) => p.memberships.length > 0);
+
+  // For the inline "Record set vs ..." form per row, pre-compute the
+  // unplayed opponents for each (player, division) in one batch — avoids
+  // a per-row roundtrip.
+  let unplayedByKey = new Map<string, Array<{ playerId: string; displayName: string }>>();
+  if (selectedSeason) {
+    const members = await prisma.divisionMember.findMany({
+      where: { seasonId: selectedSeason.id, status: "ACTIVE" },
+      select: { divisionId: true, playerId: true, player: { select: { id: true, displayName: true } } },
+    });
+    const membersByDivision = new Map<string, Array<{ playerId: string; displayName: string }>>();
+    for (const m of members) {
+      const bucket = membersByDivision.get(m.divisionId) ?? [];
+      bucket.push({ playerId: m.playerId, displayName: m.player.displayName });
+      membersByDivision.set(m.divisionId, bucket);
+    }
+    const pairings = await prisma.pairing.findMany({
+      where: { status: "CONFIRMED", division: { seasonId: selectedSeason.id } },
+      select: { divisionId: true, playerAId: true, playerBId: true },
+    });
+    const playedKey = (divisionId: string, a: string, b: string) =>
+      `${divisionId}|${a < b ? `${a}-${b}` : `${b}-${a}`}`;
+    const playedSet = new Set(pairings.map((p) => playedKey(p.divisionId, p.playerAId, p.playerBId)));
+    for (const [divisionId, list] of membersByDivision) {
+      for (const meId of list.map((m) => m.playerId)) {
+        const unplayed = list
+          .filter((m) => m.playerId !== meId && !playedSet.has(playedKey(divisionId, meId, m.playerId)));
+        unplayedByKey.set(`${divisionId}|${meId}`, unplayed);
+      }
+    }
+  }
+
+  // Apply sort + filter modes.
+  let result = filtered.map((p): AdminPlayersListRow => {
+    const m = p.memberships[0];
+    const div = m?.division;
+    return {
+      id: p.id,
+      displayName: p.displayName,
+      discordId: p.discordId,
+      rating: p.rating,
+      membership: div
+        ? {
+            divisionId: div.id,
+            divisionName: div.name,
+            seasonId: div.seasonId,
+            tierPosition: div.tier.position,
+            dropped: m!.status === "DROPPED",
+            unplayedOpponents: unplayedByKey.get(`${div.id}|${p.id}`) ?? [],
+          }
+        : null,
+    };
+  });
+  if (opts.sort === "ranked-only") result = result.filter((p) => p.rating != null);
+  if (opts.sort === "unranked-only") result = result.filter((p) => p.rating == null);
+  if (opts.sort === "rating-desc") {
+    result.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1) || a.displayName.localeCompare(b.displayName));
+  } else if (opts.sort === "rating-asc") {
+    result.sort((a, b) => (a.rating ?? -1) - (b.rating ?? -1) || a.displayName.localeCompare(b.displayName));
+  } else {
+    result.sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }
+  return result;
+}
+
 // ── /admin/rankings ──────────────────────────────────────────────────
 
 export interface AdminRankingRow {
