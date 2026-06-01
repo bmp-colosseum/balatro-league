@@ -18,6 +18,7 @@
 
 import { PgBoss, type Job } from "pg-boss";
 import { fetchPlayerStats } from "./balatromp.js";
+import { resolveBotCommandsChannelId } from "./bot-commands-channel.js";
 import { prisma } from "./db.js";
 import { env } from "./env.js";
 import { tryGetDiscordClient } from "./discord.js";
@@ -27,6 +28,8 @@ import {
   createGuildTextChannel,
   postChannelMessage,
 } from "./discord-helpers.js";
+import { buildLeagueExport, exportFilename, serializeExport } from "./league-export.js";
+import { ChannelType, AttachmentBuilder } from "discord.js";
 
 let boss: PgBoss | null = null;
 
@@ -46,6 +49,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("bootstrap.division");
   await boss.createQueue("snapshot.mmr");
   await boss.createQueue("refresh.active-mmrs");
+  await boss.createQueue("backup.league");
   console.log("[pg-boss] queue started");
 
   // Worker: send a DM to one user. Retried automatically on failure.
@@ -115,11 +119,59 @@ export async function initQueue(): Promise<void> {
   // — gentle on balatromp's CDN.
   await boss.schedule("refresh.active-mmrs", "0 12 * * *");
   console.log("[pg-boss] scheduled refresh.active-mmrs @ 12:00 UTC daily");
+
+  // Weekly league backup: build JSON snapshot, post to bot-commands as
+  // an attachment. Off-platform redundancy in case Railway's Postgres
+  // loses data — admin scrolls back through bot-commands attachments.
+  await boss.work("backup.league", { batchSize: 1 }, async () => {
+    await runLeagueBackup();
+  });
+  // Mondays at 06:00 UTC. Idempotent like the refresh schedule.
+  await boss.schedule("backup.league", "0 6 * * 1");
+  console.log("[pg-boss] scheduled backup.league @ 06:00 UTC Mondays");
 }
 
 export async function enqueueDm(job: DmJob): Promise<void> {
   if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
   await boss.send("notify.dm", job, { retryLimit: 3, retryBackoff: true });
+}
+
+// Build snapshot, post to the bot-commands channel as a file. Shared
+// between the weekly cron and the /admin export-results command.
+export async function runLeagueBackup(): Promise<{
+  postedTo: string | null;
+  fileSize: number;
+  filename: string;
+}> {
+  const data = await buildLeagueExport();
+  const buf = serializeExport(data);
+  const filename = exportFilename();
+  const client = tryGetDiscordClient();
+  if (!client) {
+    console.warn("[backup.league] Discord client not ready; skipping post");
+    return { postedTo: null, fileSize: buf.length, filename };
+  }
+  const channelId = await resolveBotCommandsChannelId();
+  if (!channelId) {
+    console.warn("[backup.league] no bot-commands channel configured; skipping post");
+    return { postedTo: null, fileSize: buf.length, filename };
+  }
+  try {
+    const channel = await client.channels.fetch(channelId);
+    if (!channel || channel.type !== ChannelType.GuildText) {
+      console.warn(`[backup.league] channel ${channelId} not a text channel`);
+      return { postedTo: null, fileSize: buf.length, filename };
+    }
+    const attachment = new AttachmentBuilder(buf, { name: filename });
+    await channel.send({
+      content: `📦 Weekly league backup — ${data.seasons.length} seasons, ${data.players.length} players. Source of truth if Railway eats itself.`,
+      files: [attachment],
+    });
+    return { postedTo: channelId, fileSize: buf.length, filename };
+  } catch (err) {
+    console.warn("[backup.league] post failed:", err);
+    return { postedTo: null, fileSize: buf.length, filename };
+  }
 }
 
 // Re-snapshot every CURRENT participant — either everyone in the open

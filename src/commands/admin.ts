@@ -7,6 +7,7 @@
 // rankings, presets, etc.) live on www.balatroleague.com.
 
 import {
+  AttachmentBuilder,
   ChannelType,
   MessageFlags,
   PermissionFlagsBits,
@@ -16,6 +17,7 @@ import {
 } from "discord.js";
 import { announceResult } from "../announce.js";
 import { prisma } from "../db.js";
+import { buildLeagueExport, exportFilename, serializeExport } from "../league-export.js";
 import { requireAdmin } from "../permissions.js";
 import { getOrCreatePlayer } from "../players.js";
 import { gamesFromResult, parsePairingResult } from "../scoring.js";
@@ -77,6 +79,11 @@ export const admin: SlashCommand = {
             .setDescription("Match session ID — shown in the embed footer as 'Match {id}'")
             .setRequired(true),
         ),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("export-results")
+        .setDescription("Dump the league's restorable state as a JSON file attachment."),
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
@@ -85,8 +92,33 @@ export const admin: SlashCommand = {
     if (sub === "record-set") return recordPairing(interaction);
     if (sub === "override-result") return forceResult(interaction);
     if (sub === "join-match") return joinMatch(interaction);
+    if (sub === "export-results") return exportResults(interaction);
   },
 };
+
+// Build a fresh league snapshot and post it as an ephemeral attachment
+// reply so only the admin who ran the command sees the file. The weekly
+// cron-driven backup posts publicly to bot-commands; this command is
+// for ad-hoc dumps without spamming the channel.
+async function exportResults(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  try {
+    const data = await buildLeagueExport();
+    const buf = serializeExport(data);
+    const filename = exportFilename();
+    const attachment = new AttachmentBuilder(buf, { name: filename });
+    await interaction.editReply({
+      content:
+        `📦 League snapshot: ${data.seasons.length} seasons, ${data.players.length} players, ` +
+        `${data.seasons.reduce((sum, s) => sum + s.divisions.reduce((d, dv) => d + dv.pairings.length, 0), 0)} pairings. ` +
+        `File size ${(buf.length / 1024).toFixed(1)}KB.`,
+      files: [attachment],
+    });
+  } catch (err) {
+    console.warn("[admin export-results] failed:", err);
+    await interaction.editReply("Export failed — check bot logs.");
+  }
+}
 
 // Add the calling admin to a specific match channel's permission overwrites.
 // Match channels are private (only the 2 players see them by default), so
