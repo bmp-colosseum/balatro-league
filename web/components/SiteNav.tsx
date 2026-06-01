@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import { isAdminUser } from "@/lib/admin";
+import { BmpMmrToggle } from "@/components/BmpMmrToggle";
 
 const PUBLIC_LINKS = [
   { href: "/standings", label: "Standings" },
@@ -39,7 +40,8 @@ export async function SiteNav({ activePath }: { activePath: string }) {
           );
         })}
       </nav>
-      <span style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+      <span style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
+        <BmpMmrToggle returnTo={activePath || "/"} />
         {isLoggedIn ? (
           <>
             <Link href="/me" style={{ color: "var(--text)" }}>

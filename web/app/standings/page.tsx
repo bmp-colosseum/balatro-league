@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { getShowBmpMmr } from "@/lib/preferences";
 import { loadDivisionStandings } from "@/lib/standings-cache";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
@@ -48,12 +49,12 @@ export default async function StandingsPage() {
     for (const [id, rows] of results) standingsByDivisionId.set(id, rows);
   }
 
-  // Latest BMP MMR snapshot per player in this season (any season really —
-  // pick the freshest captured row for each playerId). Empty map if there
-  // are no snapshots yet; rows render '—' in that case.
-  const allPlayerIds = season?.tiers.flatMap((t) =>
-    t.divisions.flatMap((d) => d.members.map((m) => m.playerId)),
-  ) ?? [];
+  // BMP MMR column is opt-in via cookie. When hidden we skip the snapshot
+  // query entirely — saves a roundtrip when most viewers leave it off.
+  const showBmpMmr = await getShowBmpMmr();
+  const allPlayerIds = !showBmpMmr || !season
+    ? []
+    : season.tiers.flatMap((t) => t.divisions.flatMap((d) => d.members.map((m) => m.playerId)));
   const latestSnapshots = allPlayerIds.length === 0 ? [] : await prisma.playerMmrSnapshot.findMany({
     where: { playerId: { in: allPlayerIds } },
     orderBy: { capturedAt: "desc" },
@@ -162,13 +163,15 @@ export default async function StandingsPage() {
                               <th>Pts</th>
                               <th>W-D-L</th>
                               <th>Games</th>
-                              <th title="Each player's current Ranked MMR from balatromp.com — separate from your league ranking. Click a player to see their full BMP history.">BMP MMR</th>
+                              {showBmpMmr && (
+                                <th title="Each player's current Ranked MMR from balatromp.com — separate from your league ranking. Click a player to see their full BMP history.">BMP MMR</th>
+                              )}
                             </tr>
                           </thead>
                           <tbody>
                             {rows.length === 0 ? (
                               <tr>
-                                <td colSpan={6} className="muted">No matches played yet.</td>
+                                <td colSpan={showBmpMmr ? 6 : 5} className="muted">No matches played yet.</td>
                               </tr>
                             ) : (
                               rows.map((r, i) => {
@@ -210,7 +213,9 @@ export default async function StandingsPage() {
                                     <td><strong>{r.points}</strong></td>
                                     <td>{r.wins}-{r.draws}-{r.losses}</td>
                                     <td>{r.gamesWon}-{r.gamesLost}</td>
-                                    <td>{mmr != null ? mmr : <span className="muted">—</span>}</td>
+                                    {showBmpMmr && (
+                                      <td>{mmr != null ? mmr : <span className="muted">—</span>}</td>
+                                    )}
                                   </tr>
                                 );
                               })

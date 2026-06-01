@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { hasTier } from "@/lib/admin";
+import { getShowBmpMmr } from "@/lib/preferences";
 import { prisma } from "@/lib/prisma";
 import { loadPlayerHistory } from "@/lib/profile";
 import { tierColors } from "@/lib/tier-colors";
@@ -52,12 +53,17 @@ export default async function ProfilePage({
     }
   }
 
+  // BMP history is opt-in via the global cookie toggle (SiteNav button).
+  // When hidden, skip the snapshot queries entirely — saves DB load when
+  // the viewer doesn't care about external rankings.
+  const showBmpMmr = await getShowBmpMmr();
+
   // Full BMP Ranked history — one row per captured BMP season, freshest
   // capture per season (distinct on bmpSeason, ordered by capturedAt
   // desc). Worker auto-backfills any missing historical seasons on the
   // next refresh, so once it runs for this player they'll have a row
   // per season from season1 through current.
-  const bmpSeasonSnapshots = await prisma.playerMmrSnapshot.findMany({
+  const bmpSeasonSnapshots = !showBmpMmr ? [] : await prisma.playerMmrSnapshot.findMany({
     where: {
       OR: [{ playerId: profile.player.id }, { discordId: profile.player.discordId }],
       rankedMmr: { not: null },
@@ -77,15 +83,15 @@ export default async function ProfilePage({
   // Fallback: a player who's never been captured under an explicit
   // bmpSeason (legacy data or initial fetch before BmpCurrentSeason was
   // set) — pull their latest unlabeled snapshot so the card still renders.
-  const fallbackSnapshot = bmpSeasonSnapshots.length === 0
-    ? await prisma.playerMmrSnapshot.findFirst({
+  const fallbackSnapshot = !showBmpMmr || bmpSeasonSnapshots.length > 0
+    ? null
+    : await prisma.playerMmrSnapshot.findFirst({
         where: {
           OR: [{ playerId: profile.player.id }, { discordId: profile.player.discordId }],
           rankedMmr: { not: null },
         },
         orderBy: { capturedAt: "desc" },
-      })
-    : null;
+      });
 
   // Admin-only: if the viewer is an admin, surface a record-set form scoped
   // to this player's current division. Same opponent-filter rules as
