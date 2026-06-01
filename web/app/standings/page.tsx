@@ -97,10 +97,39 @@ export default async function StandingsPage() {
                     const expectedMatches = activeCount < 2 ? 0 : (activeCount * (activeCount - 1)) / 2;
                     const playedMatches = div._count.pairings;
                     const complete = expectedMatches > 0 && playedMatches >= expectedMatches;
-                    // Highlight promo/relegation positions in the rendered
-                    // standings. Top non-bottom: position 1 promotes. Bottom
-                    // non-top: last position relegates. Edge tiers don't
-                    // render the arrow since there's nowhere to go.
+                    // Group rows into tie chains. A new chain starts at any
+                    // row NOT flagged tiedWithPrev (the natural break point).
+                    // Then mark every row whose chain straddles the promo
+                    // boundary (index 0) or relegation boundary (last index)
+                    // — both/all players in the chain need to play shootouts.
+                    const chains: number[][] = [];
+                    {
+                      let current: number[] = [];
+                      for (let i = 0; i < rows.length; i++) {
+                        if (i === 0 || !rows[i]!.tiedWithPrev) {
+                          if (current.length > 0) chains.push(current);
+                          current = [i];
+                        } else {
+                          current.push(i);
+                        }
+                      }
+                      if (current.length > 0) chains.push(current);
+                    }
+                    const promoTieRowSet = new Set<number>();
+                    const relegationTieRowSet = new Set<number>();
+                    for (const chain of chains) {
+                      if (chain.length < 2) continue; // not a tie chain
+                      if (chain.includes(0) && !isTopTier) {
+                        for (const idx of chain) promoTieRowSet.add(idx);
+                      }
+                      if (chain.includes(rows.length - 1) && !isBottomTier) {
+                        for (const idx of chain) relegationTieRowSet.add(idx);
+                      }
+                    }
+                    // Highlight promo/relegation positions. Top non-bottom:
+                    // position 1 promotes. Bottom non-top: last position
+                    // relegates. Edge tiers and tied boundaries don't get
+                    // arrows because the outcome isn't decided yet.
                     void tierColors;
                     return (
                       <div key={div.id} className="card">
@@ -146,32 +175,22 @@ export default async function StandingsPage() {
                                   </Link>
                                 );
                                 const mmr = mmrByPlayerId.get(r.player.id);
-                                // ↑/↓ only show when (a) division is COMPLETE — before all
-                                // matches are in, positions shift every report — and (b) the
-                                // boundary isn't tied: a promo arrow is wrong if row 0 and
-                                // row 1 are tied, because the tie hasn't been resolved by a
-                                // shootout yet. Same for relegation arrow if last and
-                                // second-to-last are tied.
-                                const promoTied = rows.length > 1 && rows[1]?.tiedWithPrev;
-                                const relegationTied = rows[rows.length - 1]?.tiedWithPrev;
-                                const isPromoting = complete && i === 0 && !isTopTier && !promoTied;
-                                const isRelegating = complete && i === rows.length - 1 && !isBottomTier && rows.length > 1 && !relegationTied;
+                                // Arrows hide on tied boundaries — the chain's outcome
+                                // isn't decided until a shootout resolves it.
+                                const isPromoting = complete && i === 0 && !isTopTier && !promoTieRowSet.has(0);
+                                const isRelegating =
+                                  complete && i === rows.length - 1 && !isBottomTier && rows.length > 1 &&
+                                  !relegationTieRowSet.has(rows.length - 1);
                                 const movementMarker = isPromoting ? (
                                   <span title="Promotion position" style={{ color: "#2ecc71" }}>↑</span>
                                 ) : isRelegating ? (
                                   <span title="Relegation position" style={{ color: "#e74c3c" }}>↓</span>
                                 ) : null;
-                                // Shootout marker visibility:
-                                // 1. All matches in the division must be played (otherwise
-                                //    the tie isn't final and shootout is premature)
-                                // 2. The tie must be at a position that decides promo or
-                                //    relegation — index 1 (tied with #1 promo) if not top
-                                //    tier, OR last index (tied with last for relegation)
-                                //    if not bottom tier. Mid-table ties don't matter.
-                                // 3. tiedWithPrev means no shootout has been recorded yet.
-                                const isPromoBoundaryTie = i === 1 && !isTopTier;
-                                const isRelegationBoundaryTie = i === rows.length - 1 && !isBottomTier && rows.length > 1;
-                                const shootoutNeeded = complete && r.tiedWithPrev && (isPromoBoundaryTie || isRelegationBoundaryTie);
+                                // ⚔ on EVERY row in a boundary tie chain — both (or all
+                                // 3+) tied players need to play shootouts to resolve the
+                                // promo/relegation slot.
+                                const shootoutNeeded =
+                                  complete && (promoTieRowSet.has(i) || relegationTieRowSet.has(i));
                                 const shootoutMarker = shootoutNeeded ? (
                                   <span
                                     title="Tied for promotion/relegation — play a shootout and /report-shootout"
