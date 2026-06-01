@@ -16,10 +16,19 @@ export interface StandingRow {
   dropped?: boolean;  // marked when this row's member status is DROPPED
 }
 
-// Confirmed-only. Status filtering is the caller's job.
+export interface ShootoutInput {
+  playerAId: string;
+  playerBId: string;
+  winnerId: string;
+}
+
+// Confirmed-only. Status filtering is the caller's job. Shootouts (when
+// supplied) break ties that points + h2h can't resolve — winner sorts
+// above loser.
 export function computeStandings(
   players: Player[],
   pairings: Array<Pick<Pairing, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
+  shootouts: ShootoutInput[] = [],
 ): StandingRow[] {
   const byId = new Map<string, StandingRow>();
   for (const p of players) {
@@ -64,23 +73,39 @@ export function computeStandings(
     // any other combination is malformed; ignore.
   }
 
-  return sortStandings(Array.from(byId.values()), pairings);
+  return sortStandings(Array.from(byId.values()), pairings, shootouts);
 }
 
-// Sort rules: points DESC → head-to-head (2-0 only) → wins DESC → draws DESC
-// → displayName for stable order. Mirrors web/lib/standings.ts.
+// Sort rules: points DESC → head-to-head (2-0 only) → shootout result →
+// wins DESC → draws DESC → displayName for stable order. Mirrors
+// web/lib/standings.ts.
 function sortStandings(
   rows: StandingRow[],
   pairings: Array<Pick<Pairing, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
+  shootouts: ShootoutInput[],
 ): StandingRow[] {
   return rows.slice().sort((x, y) => {
     if (y.points !== x.points) return y.points - x.points;
     const h2h = headToHead(x.player.id, y.player.id, pairings);
     if (h2h !== 0) return h2h;
+    const shoot = shootoutBetween(x.player.id, y.player.id, shootouts);
+    if (shoot !== 0) return shoot;
     if (y.wins !== x.wins) return y.wins - x.wins;
     if (y.draws !== x.draws) return y.draws - x.draws;
     return x.player.displayName.localeCompare(y.player.displayName);
   });
+}
+
+function shootoutBetween(xId: string, yId: string, shootouts: ShootoutInput[]): number {
+  const found = shootouts.find(
+    (s) =>
+      (s.playerAId === xId && s.playerBId === yId) ||
+      (s.playerAId === yId && s.playerBId === xId),
+  );
+  if (!found) return 0;
+  if (found.winnerId === xId) return -1; // x sorts above y
+  if (found.winnerId === yId) return 1;
+  return 0;
 }
 
 function headToHead(

@@ -155,9 +155,20 @@ export default async function StandingsPage() {
                                 ) : isRelegating ? (
                                   <span title="Relegation position" style={{ color: "#e74c3c" }}>↓</span>
                                 ) : null;
+                                // tiedWithPrev means this row and the one above are
+                                // structurally tied AND no shootout has been recorded
+                                // between them. Visible nudge to play+report a shootout.
+                                const shootoutMarker = r.tiedWithPrev ? (
+                                  <span
+                                    title="Tied with the row above — play a shootout and /report-shootout"
+                                    style={{ color: "#f1c40f", marginLeft: 4 }}
+                                  >
+                                    ⚔
+                                  </span>
+                                ) : null;
                                 return (
                                   <tr key={r.player.id}>
-                                    <td>{medal}{movementMarker && <> {movementMarker}</>}</td>
+                                    <td>{medal}{movementMarker && <> {movementMarker}</>}{shootoutMarker}</td>
                                     <td>{r.dropped ? <s>{link}</s> : link}</td>
                                     <td><strong>{r.points}</strong></td>
                                     <td>{r.wins}-{r.draws}-{r.losses}</td>

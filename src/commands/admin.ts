@@ -92,6 +92,15 @@ export const admin: SlashCommand = {
         .setDescription("Remove a reported set so it's back to unplayed (for when something got reported wrong).")
         .addUserOption((opt) => opt.setName("p1").setDescription("Either player in the set").setRequired(true))
         .addUserOption((opt) => opt.setName("p2").setDescription("The other player").setRequired(true)),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("record-shootout")
+        .setDescription("Record a shootout winner to break a tied promo/relegation position.")
+        .addUserOption((opt) => opt.setName("p1").setDescription("First tied player").setRequired(true))
+        .addUserOption((opt) => opt.setName("p2").setDescription("Second tied player").setRequired(true))
+        .addUserOption((opt) => opt.setName("winner").setDescription("Whichever of p1 or p2 won the shootout").setRequired(true))
+        .addStringOption((opt) => opt.setName("notes").setDescription("Optional context").setRequired(false)),
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
@@ -99,11 +108,12 @@ export const admin: SlashCommand = {
     // Helper+ subcommands: dispute mediation work. League Helpers can
     // join match channels and record verbally-agreed results so they
     // can resolve a dispute end-to-end without escalating to an Admin.
-    if (sub === "join-match" || sub === "record-set" || sub === "undo-report") {
+    if (sub === "join-match" || sub === "record-set" || sub === "undo-report" || sub === "record-shootout") {
       if (!(await requireHelper(interaction))) return;
       if (sub === "join-match") return joinMatch(interaction);
       if (sub === "record-set") return recordPairing(interaction);
       if (sub === "undo-report") return undoReport(interaction);
+      if (sub === "record-shootout") return recordShootout(interaction);
     }
     // Admin+ subcommands: anything that overrides existing results or
     // exports sensitive data. Helpers can't accidentally rewrite a
@@ -170,6 +180,90 @@ async function undoReport(interaction: ChatInputCommandInteraction) {
       `in **${pairing.division.name}**. They can play and report again.`,
   );
 }
+
+// Shared helper: persist a Shootout for the active-season division
+// these two players are in. Used by both /admin record-shootout
+// (mediator-recorded) and /report-shootout (self-reported). Returns
+// the division name + winner display on success, or an error string.
+async function persistShootout(args: {
+  p1DiscordId: string;
+  p2DiscordId: string;
+  winnerDiscordId: string;
+  recordedBy: string; // discord user id, or "self-report"
+  notes?: string | null;
+}): Promise<{ ok: true; divisionName: string; winnerName: string } | { ok: false; error: string }> {
+  if (args.p1DiscordId === args.p2DiscordId) {
+    return { ok: false, error: "Pick two different players." };
+  }
+  if (args.winnerDiscordId !== args.p1DiscordId && args.winnerDiscordId !== args.p2DiscordId) {
+    return { ok: false, error: "Winner has to be either p1 or p2." };
+  }
+  const [p1, p2, winner, activeSeason] = await Promise.all([
+    prisma.player.findUnique({ where: { discordId: args.p1DiscordId } }),
+    prisma.player.findUnique({ where: { discordId: args.p2DiscordId } }),
+    prisma.player.findUnique({ where: { discordId: args.winnerDiscordId } }),
+    prisma.season.findFirst({ where: { isActive: true } }),
+  ]);
+  if (!p1 || !p2 || !winner) return { ok: false, error: "One or both players aren't in the league (no Player row)." };
+  if (!activeSeason) return { ok: false, error: "No active season." };
+
+  // Find the division where both players are members in this season.
+  const member = await prisma.divisionMember.findFirst({
+    where: { playerId: p1.id, division: { seasonId: activeSeason.id } },
+    include: { division: true },
+  });
+  if (!member) return { ok: false, error: `${p1.displayName} isn't in a division this season.` };
+  const otherInSameDiv = await prisma.divisionMember.findFirst({
+    where: { playerId: p2.id, divisionId: member.divisionId },
+  });
+  if (!otherInSameDiv) {
+    return { ok: false, error: `${p1.displayName} and ${p2.displayName} aren't in the same division — shootout only makes sense for tied opponents.` };
+  }
+
+  const [canonA, canonB] = p1.id < p2.id ? [p1.id, p2.id] : [p2.id, p1.id];
+  await prisma.shootout.upsert({
+    where: { divisionId_playerAId_playerBId: { divisionId: member.divisionId, playerAId: canonA, playerBId: canonB } },
+    create: {
+      divisionId: member.divisionId,
+      playerAId: canonA,
+      playerBId: canonB,
+      winnerId: winner.id,
+      recordedBy: args.recordedBy,
+      notes: args.notes ?? null,
+    },
+    update: { winnerId: winner.id, recordedBy: args.recordedBy, notes: args.notes ?? null },
+  });
+  recomputeDivisionStandings(member.divisionId).catch(() => {});
+  return { ok: true, divisionName: member.division.name, winnerName: winner.displayName };
+}
+
+async function recordShootout(interaction: ChatInputCommandInteraction) {
+  const p1User = interaction.options.getUser("p1", true);
+  const p2User = interaction.options.getUser("p2", true);
+  const winnerUser = interaction.options.getUser("winner", true);
+  const notes = interaction.options.getString("notes") ?? undefined;
+  await interaction.deferReply();
+  const result = await persistShootout({
+    p1DiscordId: p1User.id,
+    p2DiscordId: p2User.id,
+    winnerDiscordId: winnerUser.id,
+    recordedBy: interaction.user.id,
+    notes,
+  });
+  if (!result.ok) {
+    await interaction.editReply(result.error);
+    return;
+  }
+  await interaction.editReply(
+    `⚔ Shootout recorded — **${result.winnerName}** beats <@${p1User.id === winnerUser.id ? p2User.id : p1User.id}> ` +
+      `in **${result.divisionName}**. Standings sort updated.` +
+      (notes ? `\n_Notes: ${notes}_` : ""),
+  );
+}
+
+// Exported so /report-shootout (in src/commands/report.ts) can call the
+// same persistence helper without duplicating the validation logic.
+export const __shootoutHelper = persistShootout;
 
 // Build a fresh league snapshot and post it as an ephemeral attachment
 // reply so only the admin who ran the command sees the file. The weekly

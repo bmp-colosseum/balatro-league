@@ -6,13 +6,14 @@ import { league } from "./league.js";
 import { matchButtons, matchSelectMenus } from "./match-buttons.js";
 import { profile } from "./profile.js";
 import { report, reportButtons } from "./report.js";
+import { reportShootout } from "./report-shootout.js";
 import { schedule } from "./schedule.js";
 import { signupHandlers } from "./signup-buttons.js";
 import { standings } from "./standings.js";
 import { startMatch } from "./start-match.js";
 import type { ButtonHandler, SelectMenuHandler, SlashCommand } from "./types.js";
 
-export const slashCommands: SlashCommand[] = [help, report, standings, schedule, profile, league, startMatch, challenge, admin];
+export const slashCommands: SlashCommand[] = [help, report, reportShootout, standings, schedule, profile, league, startMatch, challenge, admin];
 
 export const buttonHandlers: ButtonHandler[] = [reportButtons, signupHandlers, matchButtons];
 

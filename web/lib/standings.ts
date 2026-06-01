@@ -15,14 +15,22 @@ export interface StandingRow {
   gamesLost: number;
   played: number;     // confirmed pairings
   dropped?: boolean;
-  // True when this row ties with the row above on points/wins/draws.
-  // Set by sortStandings; UI shows a marker so admin can manually break the tie.
+  // True when this row ties with the row above on points/wins/draws AND
+  // no shootout has been recorded between them. UI shows a ⚔ marker
+  // prompting admin to record one (or for players to play + report).
   tiedWithPrev?: boolean;
+}
+
+export interface ShootoutInput {
+  playerAId: string;
+  playerBId: string;
+  winnerId: string;
 }
 
 export function computeStandings(
   players: Player[],
   pairings: Array<Pick<Pairing, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
+  shootouts: ShootoutInput[] = [],
 ): StandingRow[] {
   const byId = new Map<string, StandingRow>();
   for (const p of players) {
@@ -51,32 +59,39 @@ export function computeStandings(
     }
   }
 
-  return sortStandings(Array.from(byId.values()), pairings);
+  return sortStandings(Array.from(byId.values()), pairings, shootouts);
 }
 
 // Sort: points DESC → head-to-head (if tied players already played) →
-// wins DESC → draws DESC → displayName for stable order. Unbreakable ties
-// flagged via tiedWithPrev so admin/UI can resolve via shootout.
+// shootout result → wins DESC → draws DESC → displayName for stable
+// order. Unbreakable ties (after all tiebreakers, including any recorded
+// shootout) are flagged via tiedWithPrev so UI can render the ⚔ marker.
 function sortStandings(
   rows: StandingRow[],
   pairings: Array<Pick<Pairing, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
+  shootouts: ShootoutInput[],
 ): StandingRow[] {
   const sorted = rows.slice().sort((x, y) => {
     if (y.points !== x.points) return y.points - x.points;
     const h2h = headToHead(x.player.id, y.player.id, pairings);
     if (h2h !== 0) return h2h;
+    const shoot = shootoutBetween(x.player.id, y.player.id, shootouts);
+    if (shoot !== 0) return shoot;
     if (y.wins !== x.wins) return y.wins - x.wins;
     if (y.draws !== x.draws) return y.draws - x.draws;
     return x.player.displayName.localeCompare(y.player.displayName);
   });
-  // Mark rows tied on the entire chain (points/h2h/wins/draws) — admin
-  // shootout territory.
+  // Mark rows tied on the entire chain — shootout-eligible territory.
+  // If a shootout exists for the pair, h2h/wins/draws being equal but
+  // shootout differing would have already separated them above; reaching
+  // here means no shootout exists or it didn't break the tie.
   for (let i = 1; i < sorted.length; i++) {
     const prev = sorted[i - 1]!;
     const cur = sorted[i]!;
     if (
       prev.points === cur.points &&
       headToHead(prev.player.id, cur.player.id, pairings) === 0 &&
+      shootoutBetween(prev.player.id, cur.player.id, shootouts) === 0 &&
       prev.wins === cur.wins &&
       prev.draws === cur.draws
     ) {
@@ -84,6 +99,18 @@ function sortStandings(
     }
   }
   return sorted;
+}
+
+function shootoutBetween(xId: string, yId: string, shootouts: ShootoutInput[]): number {
+  const found = shootouts.find(
+    (s) =>
+      (s.playerAId === xId && s.playerBId === yId) ||
+      (s.playerAId === yId && s.playerBId === xId),
+  );
+  if (!found) return 0;
+  if (found.winnerId === xId) return -1;
+  if (found.winnerId === yId) return 1;
+  return 0;
 }
 
 // Returns negative if x should sort BEFORE y (x won their match), positive

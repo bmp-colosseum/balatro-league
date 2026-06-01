@@ -39,10 +39,11 @@ export async function recomputeDivisionStandings(divisionId: string): Promise<vo
           gamesWonB: true,
         },
       },
+      shootouts: { select: { playerAId: true, playerBId: true, winnerId: true } },
     },
   });
   if (!div) return;
-  const rows = computeStandings(div.members.map((m) => m.player), div.pairings);
+  const rows = computeStandings(div.members.map((m) => m.player), div.pairings, div.shootouts);
   const payload: CachedRow[] = rows.map((r) => ({
     playerId: r.player.id,
     points: r.points,
@@ -73,10 +74,11 @@ export async function loadDivisionStandings(divisionId: string): Promise<Standin
           where: { status: "CONFIRMED" },
           select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
         },
+        shootouts: { select: { playerAId: true, playerBId: true, winnerId: true } },
       },
     });
     if (!div) return [];
-    const rows = computeStandings(div.members.map((m) => m.player), div.pairings);
+    const rows = computeStandings(div.members.map((m) => m.player), div.pairings, div.shootouts);
     const payload: CachedRow[] = rows.map((r) => ({
       playerId: r.player.id,
       points: r.points,

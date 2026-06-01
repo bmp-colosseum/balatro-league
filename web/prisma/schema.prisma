@@ -377,6 +377,7 @@ model Division {
   pairings    Pairing[]
 
   standings   DivisionStandings?
+  shootouts   Shootout[]
 
   @@unique([seasonId, tierId, groupNumber])
   @@index([seasonId])
@@ -405,6 +406,37 @@ model DivisionStandings {
   // Player rows so display name changes show immediately without a
   // cache rebuild.
   rowsJson   String
+}
+
+// Shootout result for a tied promo/relegation pair. Only consulted when
+// the standings sort can't separate two players via points + head-to-head
+// (i.e., they drew 1-1 against each other in the round-robin). Winner
+// sorts above loser. One shootout per pair per division — unique
+// constraint enforces that.
+//
+// Recorded by /admin record-shootout (Helper+) or /report-shootout
+// (self-service, auto-confirmed). Standings cache recomputes on any
+// Shootout write so the sort reflects the result immediately.
+model Shootout {
+  id          String   @id @default(cuid())
+  divisionId  String
+  division    Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  // Canonical order: playerAId < playerBId by id. Same ordering as
+  // Pairing so we can look up either pair (A,B) or (B,A) with the
+  // same key.
+  playerAId   String
+  playerBId   String
+  // Winner is one of playerAId or playerBId (enforced in app code,
+  // not at DB level — keep schema simple).
+  winnerId    String
+  recordedAt  DateTime @default(now())
+  // Discord ID of the admin/helper who recorded via /admin command,
+  // OR "self-report" if a player used /report-shootout.
+  recordedBy  String
+  notes       String?
+
+  @@unique([divisionId, playerAId, playerBId])
+  @@index([divisionId])
 }
 
 enum DivisionMemberStatus {
