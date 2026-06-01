@@ -323,20 +323,49 @@ async function snapshotPlayerMmr({ discordId, seasonId }: MmrSnapshotJob): Promi
   const currentBmpSeason = await getConfig(LeagueConfigKey.BmpCurrentSeason);
   // Always capture the current state.
   await fetchAndStore(discordId, player?.id ?? null, seasonId, currentBmpSeason);
-  // Previous-season capture is OPT-IN: past BMP seasons are frozen so
-  // re-fetching them once the data's on disk is wasted CDN budget.
-  // Admin flips BmpCapturePreviousSeason to "true" temporarily when
-  // they want to backfill (e.g. right after season N launches and
-  // want everyone to have a season N-1 row), then flips back off.
-  if (currentBmpSeason) {
-    const capturePrev = await getConfig(LeagueConfigKey.BmpCapturePreviousSeason);
-    if (capturePrev === "true") {
-      const prev = previousBmpSeason(currentBmpSeason);
-      if (prev) {
-        await fetchAndStore(discordId, player?.id ?? null, seasonId, prev);
-      }
-    }
+
+  if (!currentBmpSeason) return;
+  const currentN = parseSeasonNumber(currentBmpSeason);
+  if (!currentN || currentN <= 1) return;
+
+  // Backfill any missing historical BMP seasons (season1 through current-1)
+  // we don't already have a successful row for. Self-terminates per player:
+  // after the first refresh that backfills, future refreshes find every
+  // past season already captured and skip them. Past BMP seasons are
+  // frozen so one successful capture per (player, season) is forever.
+  const existing = await prisma.playerMmrSnapshot.findMany({
+    where: {
+      discordId,
+      bmpSeason: { not: null },
+      rankedMmr: { not: null },
+    },
+    select: { bmpSeason: true },
+    distinct: ["bmpSeason"],
+  });
+  const haveSeasons = new Set(existing.map((e) => e.bmpSeason).filter(Boolean));
+
+  for (let n = 1; n < currentN; n++) {
+    const tag = `season${n}`;
+    if (haveSeasons.has(tag)) continue;
+    await fetchAndStore(discordId, player?.id ?? null, seasonId, tag);
   }
+
+  // Opt-in force re-capture of previous season (and only previous — for
+  // wider re-captures, admin can null out the snapshots manually). Kept
+  // around for cases where the API briefly returned bad data we want to
+  // overwrite. Default off — backfill above handles new players.
+  if ((await getConfig(LeagueConfigKey.BmpCapturePreviousSeason)) === "true") {
+    const prev = previousBmpSeason(currentBmpSeason);
+    if (prev) await fetchAndStore(discordId, player?.id ?? null, seasonId, prev);
+  }
+}
+
+// "season6" → 6. Returns null if input isn't a recognized season pattern.
+function parseSeasonNumber(s: string): number | null {
+  const m = /^season(\d+)$/.exec(s);
+  if (!m) return null;
+  const n = parseInt(m[1]!, 10);
+  return Number.isFinite(n) ? n : null;
 }
 
 // Single fetch + insert. Splitting out so snapshotPlayerMmr can call it
