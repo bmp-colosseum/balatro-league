@@ -5,6 +5,7 @@ import { loadAdminDivisionDetail } from "@/lib/loaders/admin";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
+import { EditableCrosstable, type EditableCrosstableData } from "@/components/EditableCrosstable";
 import {
   addDivisionMemberByDiscordId,
   bulkAddMembers,
@@ -155,6 +156,46 @@ export default async function AdminDivisionDetail({
             <button type="submit">Add to division</button>
           </form>
         </div>
+
+        {/* Editable crosstable — same shape as the public read-only
+            version on /divisions/[id] but each cell is a number input.
+            Computed inline from members + pairings (no extra loader
+            query). Players ordered by standings rank so the matrix
+            matches the table below. */}
+        {(() => {
+          const crosstablePlayers = rows.length > 0
+            ? rows.map((r) => ({ id: r.player.id, displayName: r.player.displayName }))
+            : members.map((m) => ({ id: m.player.id, displayName: m.player.displayName }));
+          if (crosstablePlayers.length === 0) return null;
+          const idxById = new Map(crosstablePlayers.map((p, i) => [p.id, i]));
+          // -1 sentinel = no pairing recorded; null is reserved for the diagonal.
+          const matrix: Array<Array<number | null>> = crosstablePlayers.map((p) =>
+            crosstablePlayers.map((_, i) => (i === idxById.get(p.id) ? null : -1)),
+          );
+          for (const pair of pairings) {
+            if (pair.status !== "CONFIRMED") continue;
+            const aIdx = idxById.get(pair.playerAId);
+            const bIdx = idxById.get(pair.playerBId);
+            if (aIdx === undefined || bIdx === undefined) continue;
+            matrix[aIdx]![bIdx] = pair.gamesWonA;
+            matrix[bIdx]![aIdx] = pair.gamesWonB;
+          }
+          const data: EditableCrosstableData = {
+            divisionId: division.id,
+            players: crosstablePlayers,
+            cells: matrix,
+          };
+          return (
+            <div className="card">
+              <strong>Scoring matrix</strong>
+              <p className="muted" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
+                Edit any cell to record a result. Type 0 / 1 / 2 (games row player won), Enter or Tab to save.
+                The other player's mirror cell auto-fills. Clearing a cell deletes the pairing.
+              </p>
+              <EditableCrosstable initial={data} />
+            </div>
+          );
+        })()}
 
         {/* Standings */}
         <div className="card">
