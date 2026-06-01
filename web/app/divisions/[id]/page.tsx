@@ -6,6 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { loadDivisionPageData } from "@/lib/loaders/division";
 import { tierColors } from "@/lib/tier-colors";
+import { Crosstable } from "@/components/Crosstable";
 import { SiteNav } from "@/components/SiteNav";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ export default async function PublicDivisionPage({
   const { id } = await params;
   const data = await loadDivisionPageData(id);
   if (!data) notFound();
-  const { division, standings, recentPairings, shootouts, unplayed } = data;
+  const { division, standings, recentPairings, shootouts, unplayed, crosstable } = data;
   const tc = tierColors(division.tierPosition);
 
   return (
@@ -66,6 +67,16 @@ export default async function PublicDivisionPage({
             </tbody>
           </table>
         </div>
+
+        {crosstable.players.length > 0 && (
+          <div className="card">
+            <strong>Crosstable</strong>
+            <p className="muted" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
+              Games won — row beat column. Empty cells = not played yet. Points = total games won.
+            </p>
+            <Crosstable data={crosstable} />
+          </div>
+        )}
 
         <div className="card">
           <strong>Recent matches ({division.confirmedPairingCount})</strong>

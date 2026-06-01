@@ -47,6 +47,13 @@ export async function initQueue(): Promise<void> {
   if (boss) return;
   boss = new PgBoss({
     connectionString: env.DATABASE_URL,
+    // Cap pg-boss's own connection pool. Default is ~10; with ~11
+    // queue subscribers running concurrently the bot can easily eat
+    // 10 connections just for pg-boss BEFORE Prisma even opens its
+    // pool. Railway's free Postgres tier caps at ~22 connections
+    // shared between bot, web, pg-boss, and any seed scripts —
+    // budget pg-boss tight so the others have room.
+    max: 3,
     // Pg-boss installs its schema on first start. Idempotent. Retention
     // is per-queue in v12; defaults (7d on completed, 14d in created/
     // retry state) are fine for our scale — pgboss.archive stays small.
