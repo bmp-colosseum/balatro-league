@@ -57,5 +57,19 @@ export async function checkChannelScope(
     };
   }
 
+  if (scope === "bot-commands-only") {
+    const botCommandsChannelId = await resolveBotCommandsChannelId();
+    if (botCommandsChannelId && channelId === botCommandsChannelId) {
+      return { allowed: true };
+    }
+    const mention = botCommandsChannelId
+      ? `<#${botCommandsChannelId}>`
+      : "the bot-commands channel (admin: run /league set-bot-commands-channel)";
+    return {
+      allowed: false,
+      reason: `Run this in ${mention} — keeps casual/report commands separate from division play.`,
+    };
+  }
+
   return { allowed: true };
 }

@@ -18,7 +18,7 @@ const RESULT_CHOICES = [
 ] as const;
 
 export const report: SlashCommand = {
-  channelScope: "match-flow",
+  channelScope: "bot-commands-only",
   data: new SlashCommandBuilder()
     .setName("report")
     .setDescription("Report the result of your best-of-2 set against an opponent.")

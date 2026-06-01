@@ -16,14 +16,17 @@ export type CommandBuilder =
 // Where a command is allowed to run. Default ("any") means anywhere in
 // the guild.
 //
-//   "match-flow"     — division channels OR the bot-commands channel.
-//                      Right for /challenge (casual, no division) and
-//                      /report (reporting a known pair).
-//   "division-only"  — only division channels. Right for /start-match
-//                      since a league set is intrinsically scoped to
-//                      one division; running it elsewhere would have to
-//                      pick a division arbitrarily.
-export type ChannelScope = "any" | "match-flow" | "division-only";
+//   "match-flow"          — division channels OR bot-commands channel.
+//                           Currently no commands use this; retained
+//                           in case we want a hybrid command later.
+//   "division-only"       — only division channels. Right for
+//                           /start-match (league sets are intrinsically
+//                           scoped to one division).
+//   "bot-commands-only"   — only the configured bot-commands channel.
+//                           Right for /challenge and /report so they
+//                           don't get confused with /start-match in a
+//                           division channel.
+export type ChannelScope = "any" | "match-flow" | "division-only" | "bot-commands-only";
 
 export interface SlashCommand {
   data: CommandBuilder;
