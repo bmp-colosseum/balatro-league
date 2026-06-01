@@ -17,7 +17,7 @@
 // same Postgres tables; this file owns the workers.
 
 import { PgBoss, type Job } from "pg-boss";
-import { fetchPlayerStats } from "./balatromp.js";
+import { detectCurrentBmpSeason, fetchPlayerStats } from "./balatromp.js";
 import { resolveBackupChannelId } from "./backup-channel.js";
 import { resolveBotCommandsChannelId } from "./bot-commands-channel.js";
 import { prisma } from "./db.js";
@@ -29,7 +29,7 @@ import {
   createGuildTextChannel,
   postChannelMessage,
 } from "./discord-helpers.js";
-import { getConfig, LeagueConfigKey } from "./league-config.js";
+import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
 import { buildLeagueExport, exportFilename, serializeExport } from "./league-export.js";
 import { ChannelType, AttachmentBuilder } from "discord.js";
 
@@ -112,6 +112,10 @@ export async function initQueue(): Promise<void> {
     "refresh.active-mmrs",
     { batchSize: 1 },
     async () => {
+      // Refresh BMP current-season detection before fanning out snapshots
+      // so the per-player captures use the latest 'current' label without
+      // admin intervention when BMP launches a new season.
+      await ensureBmpCurrentSeasonDetected();
       await refreshActiveMmrs();
     },
   );
@@ -121,6 +125,13 @@ export async function initQueue(): Promise<void> {
   // — gentle on balatromp's CDN.
   await boss.schedule("refresh.active-mmrs", "0 12 * * *");
   console.log("[pg-boss] scheduled refresh.active-mmrs @ 12:00 UTC daily");
+
+  // One-shot at boot: detect BMP current season so first-deploy admin
+  // doesn't have to set LeagueConfig manually. The cron handler runs
+  // this again on each refresh so the config stays current going forward.
+  ensureBmpCurrentSeasonDetected().catch((err) =>
+    console.warn("[bmp] initial season detect failed:", err),
+  );
 
   // Daily league backup: build JSON snapshot, post to bot-commands as
   // an attachment. Off-platform redundancy in case Railway's Postgres
@@ -293,6 +304,20 @@ async function fetchAndStore(
       fetchError: error,
     },
   });
+}
+
+// Detect BMP's current season from their leaderboards page and update
+// LeagueConfig.BmpCurrentSeason if it changed. Best-effort — failures
+// leave the existing config alone. Called at bot boot + at the start
+// of each daily refresh cron so per-player snapshots always use the
+// latest 'current' season label without admin intervention.
+async function ensureBmpCurrentSeasonDetected(): Promise<void> {
+  const detected = await detectCurrentBmpSeason();
+  if (!detected) return;
+  const stored = await getConfig(LeagueConfigKey.BmpCurrentSeason);
+  if (stored === detected) return;
+  await setConfig(LeagueConfigKey.BmpCurrentSeason, detected, "auto-detect");
+  console.log(`[bmp] current season ${stored ? `updated ${stored} → ${detected}` : `set to ${detected}`}`);
 }
 
 // "season6" → "season5". Returns null if input isn't a recognized

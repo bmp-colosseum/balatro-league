@@ -116,6 +116,30 @@ interface RankedRecord {
   peak_streak?: number;
 }
 
+// Auto-detect the currently-active BMP season by scraping the leaderboards
+// page, which renders a season picker with every season as an option. The
+// highest seasonN value is the current. Returns null if the page is
+// unreachable or no seasons are found (defensive — caller can fall back
+// to a previously-stored LeagueConfig value).
+export async function detectCurrentBmpSeason(): Promise<string | null> {
+  try {
+    const res = await fetch("https://balatromp.com/leaderboards", {
+      headers: { "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    let maxN = 0;
+    for (const m of html.matchAll(/season(\d+)/gi)) {
+      const n = parseInt(m[1]!, 10);
+      if (Number.isFinite(n) && n > maxN) maxN = n;
+    }
+    return maxN > 0 ? `season${maxN}` : null;
+  } catch {
+    return null;
+  }
+}
+
 // Threshold-based Balatro MP tiers. Higher tiers (Foil top-50, Holographic
 // top-10, Polychrome top-5, Negative top-1) are placement-based, not MMR
 // thresholds — we don't compute those here; high-MMR players just read
