@@ -14,8 +14,8 @@ import { getOrCreatePlayer } from "../players.js";
 import type { SlashCommand } from "./types.js";
 
 const MODE_CHOICES = [
-  { name: "League set (best of 2, default)", value: "league" },
-  { name: "Shootout (best of 1 — tiebreaker, writes Shootout)", value: "shootout" },
+  { name: "League match (best of 2, default)", value: "league" },
+  { name: "Shootout (1 game — for when you're tied with the opponent)", value: "shootout" },
 ] as const;
 
 export const startMatch: SlashCommand = {

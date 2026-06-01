@@ -84,8 +84,7 @@ export const report: SlashCommand = {
     await enqueueReportAutoConfirm(r.pairingId);
 
     await interaction.editReply(
-      `📝 Reported. Opponent has 2 minutes to confirm or dispute in #results, then it auto-confirms. ` +
-        `Match id: \`${r.pairingId}\``,
+      `📝 Reported. Your opponent has 2 minutes in #results to confirm or dispute — if they don't respond, it auto-confirms.`,
     );
   },
 };
@@ -98,7 +97,7 @@ export const reportButtons: ButtonHandler = {
     const action = parts[1];
     const pairingId = parts[2];
     if (!pairingId || (action !== "confirm" && action !== "dispute")) {
-      await interaction.reply({ content: "Malformed button id.", flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: "This button looks broken — refresh Discord and try again.", flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -177,7 +176,7 @@ export const reportButtons: ButtonHandler = {
             `${staffMentions ? staffMentions + "\n" : ""}` +
             `<@${reporter.discordId}> reported **${reporter.displayName} ${pairing.gamesWonA}-${pairing.gamesWonB} ${opponent.displayName}** in **${pairing.division.name}**.\n` +
             `<@${opponent.discordId}> disputed the result.\n\n` +
-            `Discuss what happened here. A helper will mediate and resolve via \`/admin override-result\` (CONFIRMED with the right score) or \`/admin undo-report\` (back to unplayed).`,
+            `Discuss what happened here. A helper will jump in to fix the result or roll it back to unplayed.`,
         });
       } catch (err) {
         console.warn(`[report.dispute] couldn't spawn thread for ${pairingId}:`, err);

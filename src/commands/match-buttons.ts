@@ -96,13 +96,13 @@ export const matchButtons: ButtonHandler = {
     const action = parts[1];
     const sessionId = parts[2];
     if (!sessionId) {
-      await reply(interaction, "Malformed button.");
+      await reply(interaction, "This button looks broken — refresh Discord, or ask an admin if it keeps happening.");
       return;
     }
 
     const session = await loadSession(sessionId);
     if (!session) {
-      await reply(interaction, "Match session not found.");
+      await reply(interaction, "This match isn't active anymore — it may have timed out or been cancelled.");
       return;
     }
 
@@ -114,7 +114,7 @@ export const matchButtons: ButtonHandler = {
     if (action === "pick") return handlePick(interaction, session, parts[3]);
     if (action === "winner") return handleWinner(interaction, session, parts[3]);
 
-    await reply(interaction, "Unknown match action.");
+    await reply(interaction, "That button didn't match anything we recognize — refresh Discord and try again.");
   },
 };
 
@@ -127,12 +127,12 @@ export const matchSelectMenus: SelectMenuHandler = {
   async execute(interaction) {
     const sessionId = interaction.customId.split(":")[2];
     if (!sessionId) {
-      await reply(interaction, "Malformed select menu.");
+      await reply(interaction, "Something went wrong with that selection — try again, or ask an admin.");
       return;
     }
     const session = await loadSession(sessionId);
     if (!session) {
-      await reply(interaction, "Match session not found.");
+      await reply(interaction, "This match isn't active anymore — it may have timed out or been cancelled.");
       return;
     }
     await handleBanSelect(interaction, session);
@@ -238,7 +238,7 @@ async function handleReroll(interaction: ButtonInteraction, session: MatchSessio
     ? await presetForDivision(session.divisionId)
     : await prisma.matchConfigPreset.findUnique({ where: { name: "Default" } });
   if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) {
-    return reply(interaction, "Deck preset is missing or empty — ask an admin.");
+    return reply(interaction, "The deck pool isn't set up for this match — ask an admin to configure decks/stakes.");
   }
   const priorDecks = new Set<string>();
   const g1 = parseGame(session.game1);
@@ -362,7 +362,7 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
     ? await presetForDivision(session.divisionId)
     : await prisma.matchConfigPreset.findUnique({ where: { name: "Default" } });
   if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) {
-    return reply(interaction, "Deck preset is missing or empty — ask an admin to set one before accepting.");
+    return reply(interaction, "The deck pool isn't set up for this season — ask an admin to configure decks/stakes before accepting.");
   }
   const game1Pool = generatePool(preset.decks, preset.stakes);
 
@@ -468,7 +468,7 @@ async function handleChooseFirst(interaction: ButtonInteraction, session: MatchS
   if (!isGame2 && !isGame3) {
     return reply(interaction, "Not waiting for a first-ban choice.");
   }
-  if (!firstIdRaw) return reply(interaction, "Malformed button.");
+  if (!firstIdRaw) return reply(interaction, "This button looks broken — refresh Discord and try again.");
 
   // Loser of the PREVIOUS game chooses who bans first in the next.
   const prevGame = parseGame(isGame2 ? session.game1 : session.game2);
@@ -488,7 +488,7 @@ async function handleChooseFirst(interaction: ButtonInteraction, session: MatchS
     ? await presetForDivision(session.divisionId)
     : await prisma.matchConfigPreset.findUnique({ where: { name: "Default" } });
   if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) {
-    return reply(interaction, "Deck preset is missing or empty — ask an admin.");
+    return reply(interaction, "The deck pool isn't set up for this match — ask an admin to configure decks/stakes.");
   }
   // Collect every deck NAME that appeared in any prior game's pool so the
   // new pool can avoid them (variety across games). generatePool falls
@@ -517,7 +517,7 @@ async function handleChooseFirst(interaction: ButtonInteraction, session: MatchS
 }
 
 async function handlePick(interaction: ButtonInteraction, session: MatchSession, idxRaw: string | undefined) {
-  if (!idxRaw) return reply(interaction, "Malformed button.");
+  if (!idxRaw) return reply(interaction, "This button looks broken — refresh Discord and try again.");
   const idx = parseInt(idxRaw, 10);
   if (Number.isNaN(idx)) return reply(interaction, "Invalid index.");
 
@@ -558,7 +558,7 @@ async function handlePick(interaction: ButtonInteraction, session: MatchSession,
 }
 
 async function handleWinner(interaction: ButtonInteraction, session: MatchSession, winnerIdRaw: string | undefined) {
-  if (!winnerIdRaw) return reply(interaction, "Malformed button.");
+  if (!winnerIdRaw) return reply(interaction, "This button looks broken — refresh Discord and try again.");
   if (winnerIdRaw !== session.playerAId && winnerIdRaw !== session.playerBId) {
     return reply(interaction, "Invalid winner.");
   }

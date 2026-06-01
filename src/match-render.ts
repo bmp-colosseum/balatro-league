@@ -237,8 +237,7 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
         `⚠️ **Disputed** — players voted for different winners.\n` +
         `${voteLine(game.voteByA, a)}\n` +
         `${voteLine(game.voteByB, b)}\n\n` +
-        `Talk it out and click again, OR ask an admin to run ` +
-        `\`/admin override-result\` with match id \`${s.id}\`.`;
+        `Talk it out and click again, OR ask an admin to step in and fix the result.`;
     } else if (game.voteByA || game.voteByB) {
       description +=
         `Vote for the winner. Match advances when both agree.\n` +

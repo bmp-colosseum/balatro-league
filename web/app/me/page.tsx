@@ -172,9 +172,6 @@ export default async function MePage({
           <img src={avatarUrl} alt="" style={{ width: 64, height: 64, borderRadius: "50%" }} />
           <div>
             <div style={{ fontSize: 18, fontWeight: 600 }}>{user.name ?? "(unknown)"}</div>
-            <div className="muted">
-              Discord ID: <code>{user.discordId}</code>
-            </div>
             {player ? (
               <div style={{ marginTop: 4 }}>
                 <span className="pill" style={{ background: "rgba(46,204,113,0.15)", color: "#2ecc71" }}>Linked</span>{" "}
