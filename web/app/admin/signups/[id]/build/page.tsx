@@ -169,7 +169,15 @@ export default async function BuildSeasonPage({
                 bmpFetchError: snapshot?.fetchError ?? null,
               };
             });
-            return <DraggableRatingTable initial={ratingRows} formAction={saveRatings} roundId={round.id} />;
+            // Remount-key derived from the data so the client component
+            // resets its internal drag state whenever the server pushes
+            // new ratings (e.g. after auto-fill / overwrite from BMP MMR).
+            // Otherwise useState(initial) keeps the stale drag order even
+            // though the server-rendered prop has changed.
+            const remountKey = ratingRows
+              .map((r) => `${r.discordId}:${r.leagueRating ?? "x"}:${r.bmpMmr ?? "x"}`)
+              .join("|");
+            return <DraggableRatingTable key={remountKey} initial={ratingRows} formAction={saveRatings} roundId={round.id} />;
           })()}
         </div>
 

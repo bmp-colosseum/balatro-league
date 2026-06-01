@@ -277,8 +277,16 @@ export default async function SeasonDetailPage({
                   divisionId: d.id,
                 })),
               );
+              // Remount key so the client component resets its drag
+              // state when the server pushes new placements (e.g. after
+              // a move via the dropdown, or rebuild). Otherwise
+              // useState(initialMembers) keeps the stale view.
+              const remountKey = editorMembers
+                .map((m) => `${m.playerId}@${m.divisionId}`)
+                .join("|");
               return (
                 <DraggableDivisionsEditor
+                  key={remountKey}
                   seasonId={season.id}
                   tiers={editorTiers}
                   divisions={editorDivisions}
