@@ -16,7 +16,7 @@
     "seed:test-league": "tsx src/scripts/seed-test-league.ts",
     "seed:returners-from": "tsx src/scripts/seed-returners-from.ts",
     "sim:season": "tsx src/scripts/sim-season.ts",
-    "finish:season": "tsx src/scripts/finish-season.ts",
+    "finish:season": "node dist/scripts/finish-season.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
