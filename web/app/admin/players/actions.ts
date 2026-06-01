@@ -102,13 +102,10 @@ export async function addFakePlayer(formData: FormData) {
   });
 
   if (divisionId) {
-    const div = await prisma.division.findUnique({
-      where: { id: divisionId },
-      include: { season: true, _count: { select: { members: true } } },
-    });
-    if (div && div._count.members < (div.targetSize ?? div.season.targetGroupSize)) {
-      await placePlayerInDivision(div.id, player.id);
-    }
+    // No size gate — admin add-flow respects the admin's intent.
+    // Division size is whatever's in it, not a configured limit.
+    const div = await prisma.division.findUnique({ where: { id: divisionId } });
+    if (div) await placePlayerInDivision(div.id, player.id);
   }
   revalidatePath("/admin/players");
 }
@@ -126,17 +123,11 @@ export async function movePlayer(formData: FormData) {
   if (!playerId) return;
 
   if (divisionId) {
-    const div = await prisma.division.findUnique({
-      where: { id: divisionId },
-      include: { season: true },
-    });
+    // No size gate — see createMockPlayer comment. Division "target
+    // size" is informational, not a hard cap on placement.
+    const div = await prisma.division.findUnique({ where: { id: divisionId } });
     if (!div) return;
-    const count = await prisma.divisionMember.count({
-      where: { divisionId: div.id, NOT: { playerId } },
-    });
-    if (count < (div.targetSize ?? div.season.targetGroupSize)) {
-      await placePlayerInDivision(div.id, playerId);
-    }
+    await placePlayerInDivision(div.id, playerId);
   } else {
     // Empty divisionId = remove from active season (preserves old behavior for the "— remove —" option)
     const active = await prisma.season.findFirst({ where: { isActive: true } });
