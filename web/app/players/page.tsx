@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
-import { isMockPlayer } from "@/lib/mock";
+import { loadPlayersList } from "@/lib/loaders/players";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 
@@ -14,16 +13,7 @@ export default async function PlayersPage() {
   const session = await auth();
   if (!session?.user) redirect("/auth/signin?from=/players");
 
-  const allPlayers = await prisma.player.findMany({
-    include: {
-      memberships: {
-        where: { division: { season: { isActive: true, visibility: "PUBLIC" } } },
-        include: { division: { include: { tier: true } } },
-      },
-    },
-    orderBy: { displayName: "asc" },
-  });
-  const players = allPlayers.filter((p) => !isMockPlayer(p));
+  const players = await loadPlayersList();
 
   return (
     <>
@@ -42,36 +32,31 @@ export default async function PlayersPage() {
               {players.length === 0 ? (
                 <tr><td colSpan={2} className="muted">No players yet.</td></tr>
               ) : (
-                players.map((p) => {
-                  const membership = p.memberships[0];
-                  const div = membership?.division;
-                  const dropped = membership?.status === "DROPPED";
-                  return (
-                    <tr key={p.id}>
-                      <td>
-                        <Link href={`/profile/${p.id}`} style={{ color: "var(--text)" }}>
-                          {p.displayName}
-                        </Link>
-                      </td>
-                      <td>
-                        {div ? (
-                          <>
-                            <Link href={`/seasons/${div.seasonId}`} className="muted" style={{ textDecoration: "none" }}>
-                              <TierPill name={div.name} position={div.tier.position} />
-                            </Link>
-                            {dropped && (
-                              <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "#e74c3c", marginLeft: 6 }}>
-                                DROPPED
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          <span className="muted">— not in current season —</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
+                players.map((p) => (
+                  <tr key={p.id}>
+                    <td>
+                      <Link href={`/profile/${p.id}`} style={{ color: "var(--text)" }}>
+                        {p.displayName}
+                      </Link>
+                    </td>
+                    <td>
+                      {p.membership ? (
+                        <>
+                          <Link href={`/seasons/${p.membership.division.seasonId}`} className="muted" style={{ textDecoration: "none" }}>
+                            <TierPill name={p.membership.division.name} position={p.membership.division.tierPosition} />
+                          </Link>
+                          {p.membership.dropped && (
+                            <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "#e74c3c", marginLeft: 6 }}>
+                              DROPPED
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="muted">— not in current season —</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>

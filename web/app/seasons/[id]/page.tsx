@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { computeStandings } from "@/lib/standings";
+import { loadSeasonDetail } from "@/lib/loaders/seasons";
 import { SiteNav } from "@/components/SiteNav";
 
 export const dynamic = "force-dynamic";
@@ -12,27 +11,7 @@ export default async function SeasonDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const season = await prisma.season.findFirst({
-    where: { id, visibility: "PUBLIC" },
-    include: {
-      tiers: {
-        orderBy: { position: "asc" },
-        include: {
-          divisions: {
-            orderBy: { groupNumber: "asc" },
-            include: {
-              members: { include: { player: true } },
-              pairings: {
-                where: { status: "CONFIRMED" },
-                select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
-
+  const season = await loadSeasonDetail(id);
   if (!season) notFound();
 
   const period = season.endedAt
@@ -58,50 +37,41 @@ export default async function SeasonDetailPage({
           <section key={tier.id} style={{ marginTop: 24 }}>
             <h3>{tier.name}</h3>
             <div className="grid grid-2">
-              {tier.divisions.map((div) => {
-                const droppedIds = new Set(
-                  div.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId),
-                );
-                const rows = computeStandings(
-                  div.members.map((m) => m.player),
-                  div.pairings,
-                ).map((r) => ({ ...r, dropped: droppedIds.has(r.player.id) }));
-                return (
-                  <div key={div.id} className="card">
-                    <strong>
-                      <Link href={`/divisions/${div.id}`} style={{ textDecoration: "none" }}>{div.name}</Link>
-                    </strong>
-                    <table style={{ marginTop: 8 }}>
-                      <thead>
-                        <tr><th></th><th>Player</th><th>Pts</th><th>W-D-L</th><th>Games</th></tr>
-                      </thead>
-                      <tbody>
-                        {rows.length === 0 ? (
-                          <tr><td colSpan={5} className="muted">No matches played.</td></tr>
-                        ) : (
-                          rows.map((r, i) => {
-                            const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
-                            const link = (
-                              <Link href={`/profile/${r.player.id}`} style={{ color: "var(--text)" }}>
-                                {r.player.displayName}
-                              </Link>
-                            );
-                            return (
-                              <tr key={r.player.id}>
-                                <td>{medal}</td>
-                                <td>{r.dropped ? <s>{link}</s> : link}</td>
-                                <td><strong>{r.points}</strong></td>
-                                <td>{r.wins}-{r.draws}-{r.losses}</td>
-                                <td>{r.gamesWon}-{r.gamesLost}</td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })}
+              {tier.divisions.map((div) => (
+                <div key={div.id} className="card">
+                  <strong>
+                    <Link href={`/divisions/${div.id}`} style={{ textDecoration: "none" }}>{div.name}</Link>
+                  </strong>
+                  <table style={{ marginTop: 8 }}>
+                    <thead>
+                      <tr><th></th><th>Player</th><th>Pts</th><th>W-D-L</th><th>Games</th></tr>
+                    </thead>
+                    <tbody>
+                      {div.rows.length === 0 ? (
+                        <tr><td colSpan={5} className="muted">No matches played.</td></tr>
+                      ) : (
+                        div.rows.map((r, i) => {
+                          const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
+                          const link = (
+                            <Link href={`/profile/${r.player.id}`} style={{ color: "var(--text)" }}>
+                              {r.player.displayName}
+                            </Link>
+                          );
+                          return (
+                            <tr key={r.player.id}>
+                              <td>{medal}</td>
+                              <td>{r.dropped ? <s>{link}</s> : link}</td>
+                              <td><strong>{r.points}</strong></td>
+                              <td>{r.wins}-{r.draws}-{r.losses}</td>
+                              <td>{r.gamesWon}-{r.gamesLost}</td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
             </div>
           </section>
         ))}

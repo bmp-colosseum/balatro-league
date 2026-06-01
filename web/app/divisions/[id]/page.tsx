@@ -4,8 +4,7 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { computeStandings } from "@/lib/standings";
+import { loadDivisionPageData } from "@/lib/loaders/division";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 
@@ -17,49 +16,10 @@ export default async function PublicDivisionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-
-  const division = await prisma.division.findFirst({
-    where: { id, season: { visibility: "PUBLIC" } },
-    include: {
-      season: true,
-      tier: true,
-      members: { include: { player: true }, orderBy: { joinedAt: "asc" } },
-      pairings: {
-        where: { status: "CONFIRMED" },
-        include: { playerA: true, playerB: true },
-        orderBy: { confirmedAt: "desc" },
-      },
-    },
-  });
-  if (!division) notFound();
-
-  const droppedIds = new Set(
-    division.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId),
-  );
-  const rows = computeStandings(
-    division.members.map((m) => m.player),
-    division.pairings.map((p) => ({
-      playerAId: p.playerAId,
-      playerBId: p.playerBId,
-      gamesWonA: p.gamesWonA,
-      gamesWonB: p.gamesWonB,
-    })),
-  ).map((r) => ({ ...r, dropped: droppedIds.has(r.player.id) }));
-
-  // Compute unplayed matchups across ACTIVE members
-  const active = division.members.filter((m) => m.status === "ACTIVE");
-  const playedKey = (a: string, b: string) => (a < b ? `${a}-${b}` : `${b}-${a}`);
-  const playedSet = new Set(division.pairings.map((p) => playedKey(p.playerAId, p.playerBId)));
-  const unplayed: Array<{ a: typeof active[number]["player"]; b: typeof active[number]["player"] }> = [];
-  for (let i = 0; i < active.length; i++) {
-    for (let j = i + 1; j < active.length; j++) {
-      const a = active[i]!.player;
-      const b = active[j]!.player;
-      if (!playedSet.has(playedKey(a.id, b.id))) unplayed.push({ a, b });
-    }
-  }
-
-  const tc = tierColors(division.tier.position);
+  const data = await loadDivisionPageData(id);
+  if (!data) notFound();
+  const { division, standings, recentPairings, unplayed } = data;
+  const tc = tierColors(division.tierPosition);
 
   return (
     <>
@@ -67,14 +27,14 @@ export default async function PublicDivisionPage({
       <main>
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           <h2 style={{ margin: 0 }}>{division.name}</h2>
-          <span className="pill" style={{ background: tc.bg, color: tc.fg }}>{division.tier.name}</span>
+          <span className="pill" style={{ background: tc.bg, color: tc.fg }}>{division.tierName}</span>
           <Link href={`/seasons/${division.seasonId}`} className="muted">
-            {division.season.name}
+            {division.seasonName}
           </Link>
           <Link href="/standings" style={{ marginLeft: "auto" }}>← all standings</Link>
         </div>
         <div className="muted" style={{ marginTop: 4 }}>
-          {active.length} active player(s) · {division.pairings.length} set(s) played · {unplayed.length} remaining
+          {division.activeCount} active player(s) · {division.confirmedPairingCount} set(s) played · {unplayed.length} remaining
         </div>
 
         <div className="card">
@@ -84,9 +44,9 @@ export default async function PublicDivisionPage({
               <tr><th></th><th>Player</th><th>Pts</th><th>W-D-L</th><th>Games</th></tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
+              {standings.length === 0 ? (
                 <tr><td colSpan={5} className="muted">No matches played yet.</td></tr>
-              ) : rows.map((r, i) => {
+              ) : standings.map((r, i) => {
                 const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
                 const link = (
                   <Link href={`/profile/${r.player.id}`} style={{ color: "var(--text)" }}>
@@ -108,15 +68,15 @@ export default async function PublicDivisionPage({
         </div>
 
         <div className="card">
-          <strong>Recent matches ({division.pairings.length})</strong>
-          {division.pairings.length === 0 ? (
+          <strong>Recent matches ({division.confirmedPairingCount})</strong>
+          {recentPairings.length === 0 ? (
             <p className="muted" style={{ marginTop: 4 }}>No matches played yet.</p>
           ) : (
             <table style={{ marginTop: 8 }}>
               <thead><tr><th>Date</th><th>Result</th></tr></thead>
               <tbody>
-                {division.pairings.slice(0, 30).map((p) => {
-                  const date = p.confirmedAt ? p.confirmedAt.toISOString().slice(0, 10) : "—";
+                {recentPairings.map((p) => {
+                  const date = p.date ? p.date.toISOString().slice(0, 10) : "—";
                   return (
                     <tr key={p.id}>
                       <td className="muted">{date}</td>

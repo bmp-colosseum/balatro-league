@@ -1,20 +1,11 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { loadSeasonsIndex } from "@/lib/loaders/seasons";
 import { SiteNav } from "@/components/SiteNav";
 
 export const dynamic = "force-dynamic";
 
 export default async function SeasonsPage() {
-  const seasons = await prisma.season.findMany({
-    // Archived seasons stay accessible by direct URL but are hidden from
-    // the index — they clutter the season list otherwise.
-    where: { visibility: "PUBLIC", archivedAt: null },
-    include: {
-      _count: { select: { divisions: true } },
-      divisions: { include: { _count: { select: { members: true, pairings: true } } } },
-    },
-    orderBy: [{ isActive: "desc" }, { startedAt: "desc" }],
-  });
+  const seasons = await loadSeasonsIndex();
 
   return (
     <>
@@ -26,8 +17,6 @@ export default async function SeasonsPage() {
         ) : (
           <div className="grid grid-2">
             {seasons.map((s) => {
-              const players = s.divisions.reduce((sum, d) => sum + d._count.members, 0);
-              const sets = s.divisions.reduce((sum, d) => sum + d._count.pairings, 0);
               const period = s.endedAt
                 ? `${s.startedAt.toISOString().slice(0, 10)} → ${s.endedAt.toISOString().slice(0, 10)}`
                 : `Started ${s.startedAt.toISOString().slice(0, 10)}`;
@@ -52,7 +41,7 @@ export default async function SeasonsPage() {
                     <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "#c0c8cb" }}>FINISHED</span>
                   )}
                   <div className="muted" style={{ marginTop: 6 }}>{period}</div>
-                  <div className="muted">{s._count.divisions} divisions · {players} players · {sets} matches</div>
+                  <div className="muted">{s.divisionCount} divisions · {s.playerCount} players · {s.pairingCount} matches</div>
                 </Link>
               );
             })}
