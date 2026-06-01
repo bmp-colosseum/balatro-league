@@ -45,5 +45,17 @@ export async function checkChannelScope(
     };
   }
 
+  if (scope === "division-only") {
+    const div = await prisma.division.findFirst({
+      where: { discordChannelId: channelId },
+      select: { id: true },
+    });
+    if (div) return { allowed: true };
+    return {
+      allowed: false,
+      reason: "Run this in your division channel — league matches are scoped to a division.",
+    };
+  }
+
   return { allowed: true };
 }

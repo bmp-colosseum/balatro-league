@@ -14,7 +14,7 @@ import { getOrCreatePlayer } from "../players.js";
 import type { SlashCommand } from "./types.js";
 
 export const startMatch: SlashCommand = {
-  channelScope: "match-flow",
+  channelScope: "division-only",
   data: new SlashCommandBuilder()
     .setName("start-match")
     .setDescription("Start a guided 2-game set against your opponent (ban/pick + auto-record).")

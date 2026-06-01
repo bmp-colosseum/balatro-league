@@ -13,11 +13,17 @@ export type CommandBuilder =
   | SlashCommandOptionsOnlyBuilder
   | SlashCommandSubcommandsOnlyBuilder;
 
-// Where a command is allowed to run. Default ("any") means anywhere in the
-// guild. "match-flow" restricts to division channels OR the configured
-// bot-commands channel (BOT_COMMANDS_CHANNEL_ID env var) — used for the
-// matchmaking commands so they don't get spammed in random channels.
-export type ChannelScope = "any" | "match-flow";
+// Where a command is allowed to run. Default ("any") means anywhere in
+// the guild.
+//
+//   "match-flow"     — division channels OR the bot-commands channel.
+//                      Right for /challenge (casual, no division) and
+//                      /report (reporting a known pair).
+//   "division-only"  — only division channels. Right for /start-match
+//                      since a league set is intrinsically scoped to
+//                      one division; running it elsewhere would have to
+//                      pick a division arbitrarily.
+export type ChannelScope = "any" | "match-flow" | "division-only";
 
 export interface SlashCommand {
   data: CommandBuilder;
