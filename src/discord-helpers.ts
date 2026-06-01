@@ -88,6 +88,14 @@ export async function createGuildTextChannel(
     const visibleRoles = opts?.visibleToRoleIds?.filter(Boolean) ?? [];
     const visibleUsers = opts?.visibleToUserIds?.filter(Boolean) ?? [];
     const hasAnyOverwrite = visibleRoles.length > 0 || visibleUsers.length > 0;
+    // ALWAYS include the bot itself in private channels — otherwise the
+    // @everyone deny ViewChannel applies to it too and it can't post
+    // the match flow into the channel it just created. Trickled silently
+    // before this fix: channel appeared, message didn't.
+    const botUserId = getDiscordClient().user?.id;
+    if (hasAnyOverwrite && botUserId && !visibleUsers.includes(botUserId)) {
+      visibleUsers.push(botUserId);
+    }
     const permissionOverwrites = hasAnyOverwrite
       ? [
           { id: guildId, type: 0 as const, deny: [PermissionFlagsBits.ViewChannel] },
