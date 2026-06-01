@@ -274,6 +274,12 @@ model MatchSession {
 
   // JSON blobs so we can evolve state shape without migrations.
   pool          String?           // [{deck, stake}, ...] generated at accept
+  // Snapshot of the league match policy at session-create time: JSON of
+  // {firstPlayerBans, secondPlayerBans, poolSize, picksFromRemaining}.
+  // Null = fall back to current LeagueSettings defaults (covers legacy
+  // rows from before this column existed). Stored on the session so an
+  // in-flight match never breaks if an admin tweaks the policy mid-game.
+  policy        String?
   game1         String?           // {firstId, bans: [...], pickedDeck, winnerId}
   game2         String?
   game3         String?           // populated only when bestOf=3 and game 1+2 split

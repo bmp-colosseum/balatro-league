@@ -9,6 +9,7 @@
 // warms naturally as divisions get rendered or new results land.
 
 import { prisma } from "./db.js";
+import { getLeagueSettings } from "./league-settings.js";
 import { computeStandings, type StandingRow } from "./standings.js";
 
 interface CachedRow {
@@ -43,7 +44,8 @@ export async function recomputeDivisionStandings(divisionId: string): Promise<vo
     },
   });
   if (!div) return;
-  const rows = computeStandings(div.members.map((m) => m.player), div.pairings, div.shootouts);
+  const { scoring } = await getLeagueSettings();
+  const rows = computeStandings(div.members.map((m) => m.player), div.pairings, div.shootouts, scoring);
   const payload: CachedRow[] = rows.map((r) => ({
     playerId: r.player.id,
     points: r.points,
@@ -78,7 +80,8 @@ export async function loadDivisionStandings(divisionId: string): Promise<Standin
       },
     });
     if (!div) return [];
-    const rows = computeStandings(div.members.map((m) => m.player), div.pairings, div.shootouts);
+    const { scoring } = await getLeagueSettings();
+    const rows = computeStandings(div.members.map((m) => m.player), div.pairings, div.shootouts, scoring);
     const payload: CachedRow[] = rows.map((r) => ({
       playerId: r.player.id,
       points: r.points,

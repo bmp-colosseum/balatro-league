@@ -35,6 +35,7 @@ import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
 import { buildLeagueExport, exportFilename, serializeExport } from "./league-export.js";
 import { postPendingReport } from "./report-flow.js";
 import { autoConfirmReport } from "./report-auto-confirm.js";
+import { getLeagueSettings } from "./league-settings.js";
 import { ChannelType, AttachmentBuilder } from "discord.js";
 
 let boss: PgBoss | null = null;
@@ -222,13 +223,13 @@ export async function enqueueReportPostPending(pairingId: string): Promise<void>
   await boss.send("report.post-pending", { pairingId }, { retryLimit: 2 });
 }
 
-const AUTO_CONFIRM_DELAY_SECONDS = 120;
 export async function enqueueReportAutoConfirm(pairingId: string): Promise<void> {
   if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
+  const settings = await getLeagueSettings();
   await boss.send(
     "report.auto-confirm",
     { pairingId },
-    { startAfter: AUTO_CONFIRM_DELAY_SECONDS, retryLimit: 2 },
+    { startAfter: settings.reportAutoConfirmSeconds, retryLimit: 2 },
   );
 }
 

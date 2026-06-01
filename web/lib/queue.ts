@@ -90,12 +90,13 @@ export async function enqueueReportPostPending(pairingId: string): Promise<void>
   await getBoss().send("report.post-pending", { pairingId }, { retryLimit: 2 });
 }
 
-const AUTO_CONFIRM_DELAY_SECONDS = 120;
 export async function enqueueReportAutoConfirm(pairingId: string): Promise<void> {
   await ensureStarted();
+  const { getLeagueSettings } = await import("@/lib/league-settings");
+  const settings = await getLeagueSettings();
   await getBoss().send(
     "report.auto-confirm",
     { pairingId },
-    { startAfter: AUTO_CONFIRM_DELAY_SECONDS, retryLimit: 2 },
+    { startAfter: settings.reportAutoConfirmSeconds, retryLimit: 2 },
   );
 }

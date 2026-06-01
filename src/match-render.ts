@@ -10,7 +10,7 @@ import {
 } from "discord.js";
 import type { MatchSession, Player } from "@prisma/client";
 import { deckDescription, stakeDescription } from "./balatro-info.js";
-import { phaseFor, remainingCombos, type GameState } from "./match-session.js";
+import { parsePolicy, phaseFor, remainingCombos, type GameState } from "./match-session.js";
 import type { DeckEntry } from "./match-config.js";
 
 function parseGame(json: string | null): GameState | null {
@@ -102,7 +102,8 @@ function renderChooseFirst(s: MatchSession, a: Player, b: Player, g1: GameState 
 }
 
 function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], game: GameState, gameNumber: 1 | 2 | 3) {
-  const phase = phaseFor(game, a.id, b.id, pool.length);
+  const policy = parsePolicy(s.policy);
+  const phase = phaseFor(game, a.id, b.id, policy);
   const first = game.firstId === a.id ? a : b;
   const otherPlayer = game.firstId === a.id ? b : a;
   const remaining = remainingCombos(pool, game.bans);

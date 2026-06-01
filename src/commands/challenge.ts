@@ -10,6 +10,7 @@ import {
   type TextChannel,
 } from "discord.js";
 import { prisma } from "../db.js";
+import { getLeagueSettings } from "../league-settings.js";
 import { renderMatch } from "../match-render.js";
 import { getOrCreatePlayer } from "../players.js";
 import type { SlashCommand } from "./types.js";
@@ -76,7 +77,8 @@ export const challenge: SlashCommand = {
     }
 
     // Casual session — no division, no season.
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    const settings = await getLeagueSettings();
+    const expiresAt = new Date(Date.now() + settings.matchInviteExpiryMinutes * 60 * 1000);
     const session = await prisma.matchSession.create({
       data: {
         playerAId: me.id,

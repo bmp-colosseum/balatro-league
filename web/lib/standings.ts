@@ -1,9 +1,7 @@
 // Pure functions for computing standings. Mirrors the bot's src/standings.ts.
 
 import type { Pairing, Player } from "@prisma/client";
-
-const POINTS_FOR_2_0_WIN = 3;
-const POINTS_FOR_1_1_DRAW = 1;
+import { DEFAULTS, type ScoringConfig } from "@/lib/league-settings";
 
 export interface StandingRow {
   player: Player;
@@ -31,6 +29,7 @@ export function computeStandings(
   players: Player[],
   pairings: Array<Pick<Pairing, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
   shootouts: ShootoutInput[] = [],
+  scoring: ScoringConfig = DEFAULTS.scoring,
 ): StandingRow[] {
   const byId = new Map<string, StandingRow>();
   for (const p of players) {
@@ -50,11 +49,16 @@ export function computeStandings(
     b.gamesWon += pr.gamesWonB; b.gamesLost += pr.gamesWonA;
 
     if (pr.gamesWonA === 2 && pr.gamesWonB === 0) {
-      a.points += POINTS_FOR_2_0_WIN; a.wins++; b.losses++;
+      a.points += scoring.pointsFor20Win;
+      b.points += scoring.pointsForLoss;
+      a.wins++; b.losses++;
     } else if (pr.gamesWonA === 0 && pr.gamesWonB === 2) {
-      b.points += POINTS_FOR_2_0_WIN; b.wins++; a.losses++;
+      b.points += scoring.pointsFor20Win;
+      a.points += scoring.pointsForLoss;
+      b.wins++; a.losses++;
     } else if (pr.gamesWonA === 1 && pr.gamesWonB === 1) {
-      a.points += POINTS_FOR_1_1_DRAW; b.points += POINTS_FOR_1_1_DRAW;
+      a.points += scoring.pointsFor11Draw;
+      b.points += scoring.pointsFor11Draw;
       a.draws++; b.draws++;
     }
   }

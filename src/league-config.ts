@@ -37,6 +37,28 @@ export const LeagueConfigKey = {
   // env.DEVOPS_CHANNEL_ID → LeagueConfig.DevopsChannelId → null (alerts
   // log-only). Bootstrap auto-creates if neither is set.
   DevopsChannelId: "devops_channel_id",
+
+  // ── Tunable league rules (all integers, stored as strings) ───────────
+  // Scoring: points awarded per match outcome. Defaults 3/1/0 mirror the
+  // current Dunk-original rules. Admin can change mid-season if needed —
+  // the standings cache picks up the new values on the next recompute.
+  PointsFor20Win: "points_for_2_0_win",
+  PointsFor11Draw: "points_for_1_1_draw",
+  PointsForLoss: "points_for_loss",
+
+  // Match ban/pick policy. The flow is fixed (first bans 1, second bans
+  // SecondPlayerBans, first bans (FirstPlayerBans - 1), second picks
+  // from remainder) but the totals are tunable. Constraint enforced at
+  // read time: poolSize - FirstPlayerBans - SecondPlayerBans must be >= 1.
+  FirstPlayerBans: "first_player_bans",
+  SecondPlayerBans: "second_player_bans",
+  MatchPoolSize: "match_pool_size",
+
+  // Timeouts. MatchInviteExpiryMinutes covers /start-match and /challenge
+  // invite acceptance windows. ReportAutoConfirmSeconds is the grace
+  // period before a PENDING report auto-confirms in #results.
+  MatchInviteExpiryMinutes: "match_invite_expiry_minutes",
+  ReportAutoConfirmSeconds: "report_auto_confirm_seconds",
 } as const;
 
 export type LeagueConfigKey = (typeof LeagueConfigKey)[keyof typeof LeagueConfigKey];

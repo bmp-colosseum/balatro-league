@@ -2,7 +2,7 @@
 // from /standings, /admin previews, the sim script, and end-of-season promotion logic.
 
 import type { Pairing, Player } from "@prisma/client";
-import { POINTS_FOR_1_1_DRAW, POINTS_FOR_2_0_WIN } from "./scoring.js";
+import { DEFAULTS, type ScoringConfig } from "./league-settings.js";
 
 export interface StandingRow {
   player: Player;
@@ -24,11 +24,13 @@ export interface ShootoutInput {
 
 // Confirmed-only. Status filtering is the caller's job. Shootouts (when
 // supplied) break ties that points + h2h can't resolve — winner sorts
-// above loser.
+// above loser. scoring is optional; admin-tunable per LeagueSettings,
+// defaults to 3/1/0 when not passed (sim/legacy callers).
 export function computeStandings(
   players: Player[],
   pairings: Array<Pick<Pairing, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
   shootouts: ShootoutInput[] = [],
+  scoring: ScoringConfig = DEFAULTS.scoring,
 ): StandingRow[] {
   const byId = new Map<string, StandingRow>();
   for (const p of players) {
@@ -57,16 +59,18 @@ export function computeStandings(
     b.gamesLost += pr.gamesWonA;
 
     if (pr.gamesWonA === 2 && pr.gamesWonB === 0) {
-      a.points += POINTS_FOR_2_0_WIN;
+      a.points += scoring.pointsFor20Win;
+      b.points += scoring.pointsForLoss;
       a.wins++;
       b.losses++;
     } else if (pr.gamesWonA === 0 && pr.gamesWonB === 2) {
-      b.points += POINTS_FOR_2_0_WIN;
+      b.points += scoring.pointsFor20Win;
+      a.points += scoring.pointsForLoss;
       b.wins++;
       a.losses++;
     } else if (pr.gamesWonA === 1 && pr.gamesWonB === 1) {
-      a.points += POINTS_FOR_1_1_DRAW;
-      b.points += POINTS_FOR_1_1_DRAW;
+      a.points += scoring.pointsFor11Draw;
+      b.points += scoring.pointsFor11Draw;
       a.draws++;
       b.draws++;
     }

@@ -54,12 +54,49 @@ export function emptyGameState(firstId: string, pool: DeckEntry[]): GameState {
   return { firstId, bans: [], pool };
 }
 
-// How many bans the second player makes, and the first player's two ban steps.
-// 9-pool: first bans 1, second bans 3, first bans 3, first picks 1 of 2 left.
-//   First player total bans: 4. Second player total bans: 3. Picks: 1.
-export const FIRST_PLAYER_BAN_TOTAL = 4;  // 1 then 3
+// Default ban counts when no policy is supplied. Real flows pass the
+// session-stamped policy so admin tweaks don't disrupt in-flight games.
+// Pattern: first bans 1, second bans SECOND_TOTAL, first bans
+// (FIRST_TOTAL - 1), second picks from the remainder.
+export const FIRST_PLAYER_BAN_TOTAL = 4;
 export const SECOND_PLAYER_BAN_TOTAL = 3;
 export const PICKS = 1;
+
+// Policy snapshot — what's stamped on each MatchSession at create time.
+// Stays static for that session even if the admin changes LeagueSettings
+// mid-match. Reads back via parsePolicy(session.policy) ?? DEFAULTS.
+export interface BanPickPolicy {
+  firstPlayerBans: number;   // total bans across the first player's two ban steps
+  secondPlayerBans: number;  // second player's single ban step
+  poolSize: number;          // total combos in the generated pool
+}
+
+export const DEFAULT_POLICY: BanPickPolicy = {
+  firstPlayerBans: FIRST_PLAYER_BAN_TOTAL,
+  secondPlayerBans: SECOND_PLAYER_BAN_TOTAL,
+  poolSize: 9,
+};
+
+export function parsePolicy(json: string | null): BanPickPolicy {
+  if (!json) return DEFAULT_POLICY;
+  try {
+    const p = JSON.parse(json) as Partial<BanPickPolicy>;
+    if (
+      typeof p.firstPlayerBans === "number" &&
+      typeof p.secondPlayerBans === "number" &&
+      typeof p.poolSize === "number"
+    ) {
+      return {
+        firstPlayerBans: p.firstPlayerBans,
+        secondPlayerBans: p.secondPlayerBans,
+        poolSize: p.poolSize,
+      };
+    }
+  } catch {
+    // fall through
+  }
+  return DEFAULT_POLICY;
+}
 
 export type Phase =
   | { kind: "BAN"; whoseBanId: string; remainingForThem: number; totalDone: number }
@@ -67,46 +104,54 @@ export type Phase =
   | { kind: "PLAYING" }
   | { kind: "DONE" };
 
-// Given current game state + the two player IDs in this match, return what
-// phase the game is in and who's acting. Used to render the embed + decide
-// which buttons are clickable.
+// Given current game state, player IDs, and the session's stamped ban
+// policy, return what phase the game is in and who's acting. Used to
+// render the embed + decide which buttons are clickable. Policy is read
+// from MatchSession.policy at the call site (parsePolicy + pass in).
 export function phaseFor(
   game: GameState,
   playerAId: string,
   playerBId: string,
-  poolSize: number,
+  policy: BanPickPolicy,
 ): Phase {
   const otherId = game.firstId === playerAId ? playerBId : playerAId;
   const banCount = game.bans.length;
+  const { firstPlayerBans, secondPlayerBans, poolSize } = policy;
   if (game.winnerId) return { kind: "DONE" };
   if (game.pickedDeckIdx !== undefined) return { kind: "PLAYING" };
 
-  // First-player ban 1 step
+  // Step 1: first player bans 1
   if (banCount === 0) {
     return { kind: "BAN", whoseBanId: game.firstId, remainingForThem: 1, totalDone: 0 };
   }
-  // Second-player ban 3 steps
-  if (banCount >= 1 && banCount < 1 + SECOND_PLAYER_BAN_TOTAL) {
+  // Step 2: second player bans secondPlayerBans
+  if (banCount >= 1 && banCount < 1 + secondPlayerBans) {
     const done = banCount - 1;
     return {
       kind: "BAN",
       whoseBanId: otherId,
-      remainingForThem: SECOND_PLAYER_BAN_TOTAL - done,
+      remainingForThem: secondPlayerBans - done,
       totalDone: banCount,
     };
   }
-  // First-player ban 3 more
-  if (banCount >= 1 + SECOND_PLAYER_BAN_TOTAL && banCount < 1 + SECOND_PLAYER_BAN_TOTAL + 3) {
-    const done = banCount - (1 + SECOND_PLAYER_BAN_TOTAL);
+  // Step 3: first player bans (firstPlayerBans - 1) more
+  const remainingFirstBans = firstPlayerBans - 1;
+  if (
+    banCount >= 1 + secondPlayerBans &&
+    banCount < 1 + secondPlayerBans + remainingFirstBans
+  ) {
+    const done = banCount - (1 + secondPlayerBans);
     return {
       kind: "BAN",
       whoseBanId: game.firstId,
-      remainingForThem: 3 - done,
+      remainingForThem: remainingFirstBans - done,
       totalDone: banCount,
     };
   }
-  // All bans done — SECOND player picks
-  if (banCount >= poolSize - 2) {
+  // All bans done — second player picks from what's left
+  const totalBans = firstPlayerBans + secondPlayerBans;
+  const remaining = poolSize - totalBans;
+  if (banCount >= totalBans && remaining >= 1) {
     return { kind: "PICK", pickerId: otherId };
   }
   // Shouldn't reach here

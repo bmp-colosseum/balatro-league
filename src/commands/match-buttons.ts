@@ -22,11 +22,13 @@ import { announceResult } from "../announce.js";
 import { resolveChallengesChannelId } from "../challenges-channel.js";
 import { prisma } from "../db.js";
 import { env } from "../env.js";
+import { getLeagueSettings } from "../league-settings.js";
 import { generatePool, presetForDivision } from "../match-config.js";
 import { renderMatch } from "../match-render.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
 import {
   emptyGameState,
+  parsePolicy,
   phaseFor,
   remainingCombos,
   type GameState,
@@ -165,7 +167,7 @@ async function loadBanContext(
     await reply(interaction, "Game state missing.");
     return null;
   }
-  const phase = phaseFor(game, session.playerAId, session.playerBId, game.pool.length);
+  const phase = phaseFor(game, session.playerAId, session.playerBId, parsePolicy(session.policy));
   if (phase.kind !== "BAN") {
     await reply(interaction, "Not a ban phase.");
     return null;
@@ -247,7 +249,10 @@ async function handleReroll(interaction: ButtonInteraction, session: MatchSessio
     const g2 = parseGame(session.game2);
     if (g2?.pool) g2.pool.forEach((e) => priorDecks.add(e.deck));
   }
-  const newPool = generatePool(preset.decks, preset.stakes, undefined, undefined, [...priorDecks]);
+  // Use the session's stamped pool size so a reroll honors whatever
+  // policy was locked in at accept time, not the current admin config.
+  const policy = parsePolicy(session.policy);
+  const newPool = generatePool(preset.decks, preset.stakes, policy.poolSize, undefined, [...priorDecks]);
   const rerolledGame: GameState = {
     firstId: game.firstId,
     bans: [],
@@ -278,7 +283,7 @@ async function handleBanConfirm(interaction: ButtonInteraction, session: MatchSe
     bans: [...ctx.game.bans, ...pending],
     pendingBans: undefined,
   };
-  const newPhase = phaseFor(newGame, session.playerAId, session.playerBId, newGame.pool.length);
+  const newPhase = phaseFor(newGame, session.playerAId, session.playerBId, parsePolicy(session.policy));
   let newState: MatchSessionState = session.state;
   if (newPhase.kind === "PICK") {
     newState = ctx.gameNum === 1 ? MatchSessionState.GAME_1_PICK
@@ -364,7 +369,18 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
   if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) {
     return reply(interaction, "The deck pool isn't set up for this season — ask an admin to configure decks/stakes before accepting.");
   }
-  const game1Pool = generatePool(preset.decks, preset.stakes);
+  // Read the current league settings once and stamp the resulting
+  // policy onto the session — that snapshot stays valid for this
+  // match's full lifetime even if an admin changes the config later.
+  const settings = await getLeagueSettings();
+  const game1Pool = generatePool(preset.decks, preset.stakes, settings.matchPolicy.poolSize);
+  const policySnapshot = {
+    firstPlayerBans: settings.matchPolicy.firstPlayerBans,
+    secondPlayerBans: settings.matchPolicy.secondPlayerBans,
+    // Stamp actual pool length, not requested — generatePool can return
+    // fewer combos if filtering left too few.
+    poolSize: game1Pool.length,
+  };
 
   const { playerA } = await loadPlayers(session);
   const firstId = Math.random() < 0.5 ? playerA.id : playerB.id;
@@ -424,6 +440,7 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
     // session.pool is kept in sync with game1's pool for legacy callers;
     // game2/game3 each get their own fresh pool generated at ChooseFirst.
     pool: JSON.stringify(game1Pool),
+    policy: JSON.stringify(policySnapshot),
     game1: JSON.stringify(emptyGameState(firstId, game1Pool)),
     threadId: matchChannelId,
   });
@@ -500,10 +517,12 @@ async function handleChooseFirst(interaction: ButtonInteraction, session: MatchS
     const game2 = parseGame(session.game2);
     if (game2?.pool) game2.pool.forEach((e) => priorDecks.add(e.deck));
   }
+  // Game 2/3 reuse the session's stamped pool size — same policy across
+  // every game of the match, even if admin tweaks config mid-series.
   const freshPool = generatePool(
     preset.decks,
     preset.stakes,
-    undefined,
+    parsePolicy(session.policy).poolSize,
     undefined,
     [...priorDecks],
   );
@@ -538,7 +557,7 @@ async function handlePick(interaction: ButtonInteraction, session: MatchSession,
     return reply(interaction, "That combo isn't in the remaining 2.");
   }
 
-  const phase = phaseFor(game, session.playerAId, session.playerBId, pool.length);
+  const phase = phaseFor(game, session.playerAId, session.playerBId, parsePolicy(session.policy));
   if (phase.kind !== "PICK") return reply(interaction, "Not a pick phase.");
   const picker = await prisma.player.findUniqueOrThrow({ where: { id: phase.pickerId } });
   if (!(await requireActor(interaction, picker.discordId))) return;
