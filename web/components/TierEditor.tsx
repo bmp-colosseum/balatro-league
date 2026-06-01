@@ -42,6 +42,36 @@ export function TierEditor({
   // Compute total slots at target=6/div for the current row config —
   // shown next to the suggest button so admin sees capacity at a glance.
   const totalCapacity = rows.reduce((sum, r) => sum + r.divisionCount * 6, 0);
+  // Project the actual per-tier division sizes the build will produce
+  // given the current signup count. Mirrors planByRating's even-fill
+  // algorithm: top tier = 1/div, remaining N-1 distributed across lower
+  // tiers with extras going to upper tiers first. Admin can see the
+  // resulting shape live as they edit tier counts.
+  const totalDivisions = rows.reduce((sum, r) => sum + Math.max(1, r.divisionCount), 0);
+  const projectedSizes: number[][] = (() => {
+    if (!signupCount || signupCount <= 0 || rows.length === 0) {
+      return rows.map((r) => Array.from({ length: Math.max(1, r.divisionCount) }, () => 0));
+    }
+    const result: number[][] = [];
+    const topDivs = Math.max(1, rows[0]!.divisionCount);
+    const reservedTop = Math.min(topDivs, signupCount);
+    result.push(Array.from({ length: topDivs }, (_, i) => (i < reservedTop ? 1 : 0)));
+    const remaining = signupCount - reservedTop;
+    const lowerDivs = rows.slice(1).reduce((s, t) => s + Math.max(1, t.divisionCount), 0);
+    if (lowerDivs === 0) return result;
+    const base = Math.floor(remaining / lowerDivs);
+    let extras = remaining - base * lowerDivs;
+    for (let i = 1; i < rows.length; i++) {
+      const numDivs = Math.max(1, rows[i]!.divisionCount);
+      const arr = Array.from({ length: numDivs }, () => {
+        const e = extras > 0 ? 1 : 0;
+        if (extras > 0) extras--;
+        return base + e;
+      });
+      result.push(arr);
+    }
+    return result;
+  })();
   // Auto-suggest: position-1 tier stays 1 division (Legendary slot).
   // Remaining tiers split ceil((N-1)/6) divisions as evenly as
   // possible, with extras going to LOWER tiers first (Common gets
@@ -191,11 +221,66 @@ export function TierEditor({
               ✨ Suggest from {signupCount} signup{signupCount === 1 ? "" : "s"}
             </button>
             <span className="muted" style={{ fontSize: 11 }}>
-              Capacity at 6/div: {totalCapacity}
+              {totalDivisions} div{totalDivisions === 1 ? "" : "s"} · capacity at 6/div: {totalCapacity}
+              {signupCount > totalCapacity && (
+                <span style={{ color: "#f1c40f", marginLeft: 4 }}>
+                  ({signupCount - totalCapacity} over — bottom tier absorbs)
+                </span>
+              )}
+              {signupCount < totalCapacity && (
+                <span style={{ color: "#95a5a6", marginLeft: 4 }}>
+                  ({totalCapacity - signupCount} slots free)
+                </span>
+              )}
             </span>
           </>
         )}
       </div>
+
+      {/* Live preview of what the build will produce — per-tier division
+          sizes computed with the same algorithm as planByRating so admin
+          sees the exact shape before clicking Build. */}
+      {signupCount !== undefined && signupCount > 0 && rows.length > 0 && totalDivisions > 0 && (
+        <div style={{
+          marginTop: 8,
+          padding: 8,
+          border: "1px solid var(--border)",
+          borderRadius: 4,
+          background: "var(--surface-2)",
+          fontSize: 11,
+        }}>
+          <strong style={{ fontSize: 12, color: "#76c7ff" }}>Projected placement</strong>
+          <div className="muted" style={{ fontSize: 10, marginBottom: 4 }}>
+            How {signupCount} signup{signupCount === 1 ? "" : "s"} will fill into this shape (even distribution, extras to upper tiers)
+          </div>
+          {rows.map((row, idx) => {
+            const sizes = projectedSizes[idx] ?? [];
+            const tierTotal = sizes.reduce((s, n) => s + n, 0);
+            const avg = sizes.length > 0 ? tierTotal / sizes.length : 0;
+            const warning = sizes.length === 0
+              ? null
+              : avg < 4
+                ? { color: "#e74c3c", text: "too few" }
+                : avg > 7
+                  ? { color: "#e74c3c", text: "too many" }
+                  : avg < 5
+                    ? { color: "#f1c40f", text: "below target" }
+                    : null;
+            return (
+              <div key={idx} style={{ display: "flex", alignItems: "center", gap: 6, fontVariantNumeric: "tabular-nums" }}>
+                <span style={{ width: 100, color: "#bdc3c7" }}>{row.name || `Tier ${idx + 1}`}:</span>
+                <span style={{ flex: "0 0 auto" }}>
+                  {sizes.length === 0 ? "—" : sizes.join(" / ")}
+                </span>
+                <span className="muted" style={{ marginLeft: 6 }}>
+                  ({tierTotal} player{tierTotal === 1 ? "" : "s"} across {sizes.length} div{sizes.length === 1 ? "" : "s"})
+                </span>
+                {warning && <span style={{ color: warning.color, marginLeft: 4 }}>⚠ {warning.text}</span>}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Hidden field serializing current state; consumed by the parent form's server action. */}
       <input type="hidden" name={configFieldName} value={JSON.stringify(rows)} />
