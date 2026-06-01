@@ -403,6 +403,13 @@ model Division {
   // Optional Discord role + channel IDs the bot manages for this division
   discordRoleId    String?
   discordChannelId String?
+  // End-of-season champion role + winner. Set when admin clicks
+  // 'Award champion roles' on an ended season. Role persists forever
+  // as a bragging-rights badge. championPlayerId is the rank-1
+  // finisher — null when admin hasn't awarded yet OR the division had
+  // an unresolved tie at #1 (skipped, re-runnable after shootout).
+  championRoleId    String?
+  championPlayerId  String?
 
   season      Season            @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   tier        Tier              @relation(fields: [tierId], references: [id], onDelete: Cascade)

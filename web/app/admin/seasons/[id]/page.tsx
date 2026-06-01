@@ -20,7 +20,7 @@ import {
   setSeasonPreset,
   setSeasonVisibility,
 } from "../actions";
-import { archiveSeasonChannels, bootstrapSeasonDiscord, setSeasonDiscordCategory, setSeasonResultsChannel, setSeasonResultsWebhook, stripSeasonDivisionRoles } from "../bootstrap-actions";
+import { archiveSeasonChannels, awardSeasonChampionRoles, bootstrapSeasonDiscord, setSeasonDiscordCategory, setSeasonResultsChannel, setSeasonResultsWebhook, stripSeasonDivisionRoles } from "../bootstrap-actions";
 import { cloneSeasonAsDraft } from "../clone-actions";
 
 export const dynamic = "force-dynamic";
@@ -330,6 +330,24 @@ export default async function SeasonDetailPage({
             <form action={archiveSeasonChannels}>
               <input type="hidden" name="id" value={season.id} />
               <button type="submit" className="secondary">Archive division channels →</button>
+            </form>
+          </div>
+        )}
+
+        {season.endedAt && season.divisions.length > 0 && (
+          <div className="card" style={{ marginTop: 16, borderColor: "#f1c40f" }}>
+            <strong style={{ color: "#f1c40f" }}>🏆 Award champion roles</strong>
+            <p className="muted" style={{ fontSize: 12 }}>
+              For each division, give the rank-1 finisher a permanent
+              <code> 🏆 {season.name} · &lt;Division&gt; Champion</code> role (gold, mentionable).
+              Persists forever as a bragging-rights badge. Idempotent: re-running
+              after a shootout resolves a previously-skipped tie at #1 will pick
+              up just that division. Divisions with unresolved ties at #1 are
+              skipped entirely until the shootout fixes the tie.
+            </p>
+            <form action={awardSeasonChampionRoles}>
+              <input type="hidden" name="id" value={season.id} />
+              <button type="submit" className="secondary">Award champion roles →</button>
             </form>
           </div>
         )}

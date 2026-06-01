@@ -64,6 +64,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("archive.stale-threads");
   await boss.createQueue("devops.queue-stall-check");
   await boss.createQueue("cleanup.strip-role");
+  await boss.createQueue("award.champion-role");
   await boss.createQueue("dispute.spawn-thread");
   console.log("[pg-boss] queue started");
 
@@ -214,6 +215,21 @@ export async function initQueue(): Promise<void> {
       for (const job of jobs) {
         const { guildId, discordId, roleId } = job.data;
         await removeGuildMemberRoleViaBot(guildId, discordId, roleId);
+      }
+    },
+  );
+
+  // Worker: award one division-champion role. Creates the role if it
+  // doesn't exist yet, assigns to the winning player, persists the
+  // role id on Division.championRoleId so re-runs are idempotent.
+  // Color is hardcoded gold (0xFFD700). Mentionable so winners can
+  // ping the role to flex.
+  await boss.work<AwardChampionRoleJob>(
+    "award.champion-role",
+    { batchSize: 2, pollingIntervalSeconds: 2 },
+    async (jobs: Job<AwardChampionRoleJob>[]) => {
+      for (const job of jobs) {
+        await awardChampionRole(job.data);
       }
     },
   );
@@ -491,6 +507,45 @@ interface StripRoleJob {
   guildId: string;
   discordId: string;
   roleId: string;
+}
+
+interface AwardChampionRoleJob {
+  guildId: string;
+  divisionId: string;
+  winnerDiscordId: string;
+  roleName: string;
+}
+
+// Create-or-reuse the per-division champion role + assign to the winner.
+// Idempotent on division.championRoleId — if a role id is already
+// persisted, we just re-assign rather than creating a duplicate. If the
+// role was manually deleted, we'd see an error on assign + create a
+// fresh one; admin re-runs the action to recover.
+async function awardChampionRole({
+  guildId,
+  divisionId,
+  winnerDiscordId,
+  roleName,
+}: AwardChampionRoleJob): Promise<void> {
+  const division = await prisma.division.findUnique({ where: { id: divisionId } });
+  if (!division) return;
+  let roleId = division.championRoleId;
+  if (!roleId) {
+    const created = await createGuildRole(guildId, roleName, {
+      color: 0xffd700, // gold
+      mentionable: true,
+    });
+    if (!created) {
+      console.warn(`[award.champion-role] failed to create role for division ${divisionId}`);
+      return;
+    }
+    roleId = created.id;
+    await prisma.division.update({ where: { id: divisionId }, data: { championRoleId: roleId } });
+  }
+  const assigned = await addGuildMemberRole(guildId, winnerDiscordId, roleId);
+  if (!assigned) {
+    console.warn(`[award.champion-role] role assign failed for ${winnerDiscordId} on division ${divisionId}`);
+  }
 }
 
 interface BootstrapDivisionJob {

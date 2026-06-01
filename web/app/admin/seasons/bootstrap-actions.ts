@@ -8,7 +8,8 @@ import {
   lockChannelForEveryone,
   setChannelParent,
 } from "@/lib/discord";
-import { enqueueBootstrapDivision, enqueueStripDivisionRole } from "@/lib/queue";
+import { enqueueAwardChampionRole, enqueueBootstrapDivision, enqueueStripDivisionRole } from "@/lib/queue";
+import { computeStandings } from "@/lib/standings";
 
 // Save (or clear) the Discord category id a season's division channels
 // should be nested under.
@@ -218,5 +219,79 @@ export async function stripSeasonDivisionRoles(formData: FormData) {
     }
   }
   console.log(`[strip-role] queued ${queued} role-remove jobs for season ${season.name}`);
+  revalidatePath(`/admin/seasons/${id}`);
+}
+
+// Award per-division champion roles. For each division in the season:
+//   1. Compute standings.
+//   2. If row 0 and row 1 are tied (row 1 has tiedWithPrev = true), skip
+//      that division — there's an unresolved tie at the top, no clear
+//      champion yet. Re-running picks it up once the tie is resolved.
+//   3. Otherwise: enqueue a job to create the role + assign to row 0.
+//
+// Idempotent at every layer:
+//   - Division.championRoleId persists the created role's id so re-runs
+//     don't create duplicates.
+//   - addGuildMemberRole is idempotent — Discord no-ops if the player
+//     already has the role.
+// Run again after shootouts resolve to backfill the skipped divisions.
+export async function awardSeasonChampionRoles(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const guildId = process.env.DISCORD_GUILD_ID;
+  if (!guildId) {
+    console.warn("DISCORD_GUILD_ID not set; skipping champion roles");
+    return;
+  }
+  const season = await prisma.season.findUnique({
+    where: { id },
+    include: {
+      divisions: {
+        include: {
+          members: { where: { status: "ACTIVE" }, include: { player: true } },
+          pairings: {
+            where: { status: "CONFIRMED" },
+            select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
+          },
+        },
+      },
+    },
+  });
+  if (!season) return;
+
+  let queued = 0;
+  let skipped = 0;
+  for (const div of season.divisions) {
+    if (div.members.length === 0) continue;
+    const standings = computeStandings(div.members.map((m) => m.player), div.pairings);
+    if (standings.length === 0) continue;
+    // Unresolved tie at #1 → skip. row[1].tiedWithPrev means rows 0+1
+    // are tied on points/h2h/wins/draws, so no clear champion yet.
+    if (standings[1]?.tiedWithPrev) {
+      skipped++;
+      continue;
+    }
+    const winner = standings[0];
+    if (!winner) continue;
+    // Persist the winner upfront so admin can see it on the season page
+    // even if the role-assign Discord call is delayed by the queue.
+    await prisma.division.update({
+      where: { id: div.id },
+      data: { championPlayerId: winner.player.id },
+    });
+    const roleName = `🏆 ${season.name} · ${div.name} Champion`;
+    await enqueueAwardChampionRole({
+      guildId,
+      divisionId: div.id,
+      winnerDiscordId: winner.player.discordId,
+      roleName,
+    }).catch((err) => console.warn(`[champion-roles] enqueue failed for ${div.id}:`, err));
+    queued++;
+  }
+  console.log(
+    `[champion-roles] queued ${queued} for season ${season.name}` +
+      (skipped > 0 ? `, skipped ${skipped} due to unresolved ties at #1` : ""),
+  );
   revalidatePath(`/admin/seasons/${id}`);
 }

@@ -120,3 +120,16 @@ export async function enqueueStripDivisionRole(job: {
   await ensureStarted();
   await getBoss().send("cleanup.strip-role", job, { retryLimit: 2, retryBackoff: true });
 }
+
+// Award the per-division champion role to one winner. Bot worker creates
+// the role on demand (storing the id on Division.championRoleId for
+// idempotent re-runs) + assigns to the winner.
+export async function enqueueAwardChampionRole(job: {
+  guildId: string;
+  divisionId: string;
+  winnerDiscordId: string;
+  roleName: string;
+}): Promise<void> {
+  await ensureStarted();
+  await getBoss().send("award.champion-role", job, { retryLimit: 2, retryBackoff: true });
+}
