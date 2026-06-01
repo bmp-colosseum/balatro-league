@@ -98,6 +98,24 @@ model PlayerMmrSnapshot {
   @@index([seasonId])
 }
 
+// Light-weight kv-ish vote table for player-page easter eggs (e.g. the
+// "impeach Sanji" buttons). targetKey identifies who's being voted on
+// (just a string slug — no FK so we can add new targets without a
+// migration), side is "yes" / "no". Unique on (targetKey, voterDiscordId)
+// so each logged-in user can only vote once per target; submitting the
+// opposite side just updates the existing row.
+model EasterEggVote {
+  id              String   @id @default(cuid())
+  targetKey       String
+  voterDiscordId  String
+  side            String   // "yes" | "no"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([targetKey, voterDiscordId])
+  @@index([targetKey, side])
+}
+
 enum SeasonVisibility {
   PUBLIC    // shown to players via /report, /standings, /me, public web pages
   INTERNAL  // hidden — admins-only on the dashboard. Use for testing without polluting the real league.
@@ -343,9 +361,35 @@ model Division {
   members     DivisionMember[]
   pairings    Pairing[]
 
+  standings   DivisionStandings?
+
   @@unique([seasonId, tierId, groupNumber])
   @@index([seasonId])
   @@index([tierId])
+  // Hot path: command-channels.ts looks up "is this channel a division
+  // channel" on every match-flow slash command. Index avoids a seq scan
+  // even though the table is small.
+  @@index([discordChannelId])
+}
+
+// Materialized standings cache: precomputed StandingRow[] for one
+// division, kept in sync via recomputeDivisionStandings() called from
+// every place that writes a Pairing. Reads hit this instead of running
+// computeStandings on raw pairings each page-load.
+//
+// Cold-cache reads (no row yet) fall back to computing on the fly and
+// populating the cache as a side effect, so we don't need a one-shot
+// backfill migration — the cache warms naturally as divisions get
+// visited or new Pairings get written.
+model DivisionStandings {
+  divisionId String   @id
+  division   Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  computedAt DateTime @default(now()) @updatedAt
+  // JSON-serialized CachedStandingRow[] — minimal payload (player ids
+  // + numeric stats, no display names). Render-time join hydrates
+  // Player rows so display name changes show immediately without a
+  // cache rebuild.
+  rowsJson   String
 }
 
 enum DivisionMemberStatus {

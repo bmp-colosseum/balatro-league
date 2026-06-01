@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { auth } from "@/auth";
 import { hasTier } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { loadPlayerHistory } from "@/lib/profile";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { recordSetForPlayer } from "@/app/admin/players/actions";
+import { castEasterEggVote } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +21,36 @@ export default async function ProfilePage({
   if (!profile) notFound();
 
   const t = profile.totals;
+
+  // Easter egg: if this profile belongs to Sanji, render the impeach /
+  // don't-impeach poll under the totals strip. targetKey is a slug so
+  // we can add new targets later without a schema change. Detection is
+  // a case-insensitive substring on displayName so 'Sanji', 'sanji',
+  // 'Budget Sanji | JOIN PPTT!!!!' all match. Voting requires Discord
+  // OAuth login; one vote per logged-in user, switching sides updates.
+  const isSanji = profile.player.displayName.toLowerCase().includes("sanji");
+  const session = isSanji ? await auth() : null;
+  const voterDiscordId = (session?.user as { discordId?: string } | undefined)?.discordId;
+  let yesVotes = 0;
+  let noVotes = 0;
+  let myVote: "yes" | "no" | null = null;
+  if (isSanji) {
+    const counts = await prisma.easterEggVote.groupBy({
+      by: ["side"],
+      where: { targetKey: "sanji" },
+      _count: { side: true },
+    });
+    for (const c of counts) {
+      if (c.side === "yes") yesVotes = c._count.side;
+      if (c.side === "no") noVotes = c._count.side;
+    }
+    if (voterDiscordId) {
+      const mine = await prisma.easterEggVote.findUnique({
+        where: { targetKey_voterDiscordId: { targetKey: "sanji", voterDiscordId } },
+      });
+      if (mine?.side === "yes" || mine?.side === "no") myVote = mine.side;
+    }
+  }
 
   // BMP Ranked MMR snapshots — show current and previous LEAGUE seasons
   // side by side so players can see trend (improving, slipping). Falls
@@ -70,6 +102,61 @@ export default async function ProfilePage({
           <div className="stat"><div className="label">Total points</div><div className="value">{t.points}</div></div>
           <div className="stat"><div className="label">Best rank</div><div className="value">{t.bestRank ? `#${t.bestRank}` : "—"}</div></div>
         </div>
+
+        {isSanji && (
+          <div className="card" style={{ marginTop: 16, borderColor: "#e67e22" }}>
+            <strong style={{ color: "#e67e22" }}>⚖️ Should we impeach {profile.player.displayName}?</strong>
+            <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <form action={castEasterEggVote} style={{ display: "inline" }}>
+                <input type="hidden" name="targetKey" value="sanji" />
+                <input type="hidden" name="playerId" value={profile.player.id} />
+                <input type="hidden" name="side" value="yes" />
+                <button
+                  type="submit"
+                  disabled={!voterDiscordId}
+                  style={{
+                    background: myVote === "yes" ? "#c0392b" : "rgba(231,76,60,0.2)",
+                    color: myVote === "yes" ? "#fff" : "#e74c3c",
+                    border: "1px solid #e74c3c",
+                    padding: "6px 12px",
+                    borderRadius: 4,
+                    cursor: voterDiscordId ? "pointer" : "not-allowed",
+                    fontWeight: 600,
+                  }}
+                >
+                  🔨 Impeach ({yesVotes})
+                </button>
+              </form>
+              <form action={castEasterEggVote} style={{ display: "inline" }}>
+                <input type="hidden" name="targetKey" value="sanji" />
+                <input type="hidden" name="playerId" value={profile.player.id} />
+                <input type="hidden" name="side" value="no" />
+                <button
+                  type="submit"
+                  disabled={!voterDiscordId}
+                  style={{
+                    background: myVote === "no" ? "#27ae60" : "rgba(46,204,113,0.2)",
+                    color: myVote === "no" ? "#fff" : "#2ecc71",
+                    border: "1px solid #2ecc71",
+                    padding: "6px 12px",
+                    borderRadius: 4,
+                    cursor: voterDiscordId ? "pointer" : "not-allowed",
+                    fontWeight: 600,
+                  }}
+                >
+                  🕊️ Keep ({noVotes})
+                </button>
+              </form>
+              <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
+                {voterDiscordId
+                  ? myVote
+                    ? `You voted ${myVote === "yes" ? "impeach" : "keep"} — click the other to switch.`
+                    : "Cast your one vote."
+                  : "Sign in with Discord to vote."}
+              </span>
+            </div>
+          </div>
+        )}
 
         {(seasonSnapshots.length > 0 || fallbackSnapshot) && (
           <div className="card" style={{ marginTop: 16 }}>
