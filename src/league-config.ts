@@ -5,6 +5,12 @@ import { prisma } from "./db.js";
 
 export const LeagueConfigKey = {
   ResultsWebhookUrl: "results_webhook_url",
+  // Channel where match results post (used when no webhook is set OR
+  // when webhook delivery falls through). Resolved as
+  // Season.resultsChannelId → LeagueConfig.ResultsChannelId →
+  // env.RESULTS_CHANNEL_ID. Right-click channel in Discord → Copy
+  // Channel ID. Bot must have Send Messages permission there.
+  ResultsChannelId: "results_channel_id",
   // Channel where match-flow commands (/start-match, /challenge, /report)
   // are allowed in addition to division channels. Resolved as
   // env.BOT_COMMANDS_CHANNEL_ID → LeagueConfig.BotCommandsChannelId →

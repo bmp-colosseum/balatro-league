@@ -35,7 +35,10 @@ export async function announceResult(pairingId: string): Promise<void> {
     season.resultsWebhookUrl ||
     (await getConfig(LeagueConfigKey.ResultsWebhookUrl)) ||
     env.RESULTS_WEBHOOK_URL;
-  const channelId = season.resultsChannelId || env.RESULTS_CHANNEL_ID;
+  const channelId =
+    season.resultsChannelId ||
+    (await getConfig(LeagueConfigKey.ResultsChannelId)) ||
+    env.RESULTS_CHANNEL_ID;
   if (!webhookUrl && !channelId) return;
 
   let title: string;

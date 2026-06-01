@@ -18,6 +18,7 @@ import { prisma } from "@/lib/prisma";
 import { postChannelMessage } from "@/lib/discord";
 
 const LEAGUE_CONFIG_KEY_RESULTS_WEBHOOK = "results_webhook_url";
+const LEAGUE_CONFIG_KEY_RESULTS_CHANNEL = "results_channel_id";
 
 export async function announceResult(pairingId: string): Promise<void> {
   const pairing = await prisma.pairing.findUnique({
@@ -28,15 +29,21 @@ export async function announceResult(pairingId: string): Promise<void> {
   if (pairing.division.season.visibility !== "PUBLIC") return;
 
   const season = pairing.division.season;
-  const globalWebhookRow = await prisma.leagueConfig.findUnique({
-    where: { key: LEAGUE_CONFIG_KEY_RESULTS_WEBHOOK },
+  // Both global keys in one round trip.
+  const configRows = await prisma.leagueConfig.findMany({
+    where: { key: { in: [LEAGUE_CONFIG_KEY_RESULTS_WEBHOOK, LEAGUE_CONFIG_KEY_RESULTS_CHANNEL] } },
   });
+  const configByKey = new Map(configRows.map((r) => [r.key, r.value]));
   const webhookUrl =
     season.resultsWebhookUrl ||
-    globalWebhookRow?.value ||
+    configByKey.get(LEAGUE_CONFIG_KEY_RESULTS_WEBHOOK) ||
     process.env.RESULTS_WEBHOOK_URL ||
     null;
-  const channelId = season.resultsChannelId || process.env.RESULTS_CHANNEL_ID || null;
+  const channelId =
+    season.resultsChannelId ||
+    configByKey.get(LEAGUE_CONFIG_KEY_RESULTS_CHANNEL) ||
+    process.env.RESULTS_CHANNEL_ID ||
+    null;
   if (!webhookUrl && !channelId) return;
 
   let title: string;
