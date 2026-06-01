@@ -1,6 +1,7 @@
 import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
 import { ensureBackupChannel } from "./backup-channel.js";
 import { ensureBalatroEmojis } from "./balatro-emojis.js";
+import { ensureCommandsRegistered } from "./commands/register.js";
 import { ensureBotCommandsChannel } from "./bot-commands-channel.js";
 import { ensureChallengesChannel } from "./challenges-channel.js";
 import { ensureDevopsChannel } from "./devops-channel.js";
@@ -108,6 +109,12 @@ ensureBotCommandsChannel().catch((err) => console.warn("[bot-commands] init fail
 // it picks them up. Missing PNGs are silently skipped.
 ensureBalatroEmojis(env.DISCORD_CLIENT_ID).catch((err) =>
   console.warn("[balatro-emojis] init failed:", err),
+);
+// Auto-register slash commands if the command shape changed since last
+// boot. Hash-gated so a normal restart is a free no-op — only burns a
+// Discord API call when commands actually changed.
+ensureCommandsRegistered().catch((err) =>
+  console.warn("[register] auto-register failed:", err),
 );
 // Same pattern for the private backup channel — sensitive content
 // (full pairings + season config) should not land in public bot-commands.

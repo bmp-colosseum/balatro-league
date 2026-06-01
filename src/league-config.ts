@@ -59,6 +59,12 @@ export const LeagueConfigKey = {
   // period before a PENDING report auto-confirms in #results.
   MatchInviteExpiryMinutes: "match_invite_expiry_minutes",
   ReportAutoConfirmSeconds: "report_auto_confirm_seconds",
+
+  // Hash of the slash-command shapes last registered with Discord. Used
+  // by ensureCommandsRegistered() at bot boot to skip the register call
+  // when nothing has changed — saves a Discord API round-trip + keeps us
+  // well clear of the ~200/day global-command rate limit.
+  LastCommandsHash: "last_commands_hash",
 } as const;
 
 export type LeagueConfigKey = (typeof LeagueConfigKey)[keyof typeof LeagueConfigKey];
