@@ -107,27 +107,38 @@ async function joinMatch(interaction: ChatInputCommandInteraction) {
   }
   try {
     const channel = await interaction.client.channels.fetch(session.threadId);
-    if (!channel || channel.type !== ChannelType.GuildText) {
-      await interaction.editReply("Match channel doesn't exist anymore — it may have been deleted.");
+    if (!channel) {
+      await interaction.editReply("Match channel/thread doesn't exist anymore — it may have been deleted.");
       return;
     }
-    const text = channel as TextChannel;
-    await text.permissionOverwrites.edit(
-      interaction.user.id,
-      { ViewChannel: true, SendMessages: true, ReadMessageHistory: true },
-      { reason: `Admin ${interaction.user.username} joining for mediation` },
-    );
-    await text.send(
-      `🛠️ <@${interaction.user.id}> joined to mediate. Players: explain the situation here.`,
-    );
+    if (channel.type === ChannelType.PrivateThread || channel.type === ChannelType.PublicThread) {
+      // Threads: add the admin as a member. Private Threads need explicit
+      // membership; Public Threads they can already see but the message
+      // confirms presence to players.
+      await channel.members.add(interaction.user.id, `Admin ${interaction.user.username} mediating`);
+      await channel.send(
+        `🛠️ <@${interaction.user.id}> joined to mediate. Players: explain the situation here.`,
+      );
+    } else if (channel.type === ChannelType.GuildText) {
+      // Legacy per-match text channels (pre-thread revert).
+      const text = channel as TextChannel;
+      await text.permissionOverwrites.edit(
+        interaction.user.id,
+        { ViewChannel: true, SendMessages: true, ReadMessageHistory: true },
+        { reason: `Admin ${interaction.user.username} mediating` },
+      );
+      await text.send(
+        `🛠️ <@${interaction.user.id}> joined to mediate. Players: explain the situation here.`,
+      );
+    } else {
+      await interaction.editReply("Match channel type is unsupported (not a thread or text channel).");
+      return;
+    }
     await interaction.editReply(`Joined <#${session.threadId}>. Head over there to mediate.`);
   } catch (err) {
     console.warn("[admin join-match] failed:", err);
-    await interaction.editReply("Couldn't join — check the bot has Manage Channels and is above relevant roles.");
+    await interaction.editReply("Couldn't join — check the bot has Manage Threads / Manage Channels.");
   }
-  // Silence the unused-PermissionFlagsBits warning if no other reference
-  // is added later; explicit usage keeps the import alive for any future
-  // permission edits in this file.
   void PermissionFlagsBits;
 }
 

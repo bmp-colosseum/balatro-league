@@ -7,6 +7,7 @@ import { env } from "./env.js";
 import { startHealthCheck } from "./healthcheck.js";
 import { startMatchSweep } from "./match-sweep.js";
 import { initQueue } from "./queue.js";
+import { attachRateLimitLogging } from "./rate-limit-logger.js";
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
@@ -88,6 +89,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 setDiscordClient(client);
+attachRateLimitLogging(client);
 startHealthCheck();
 startMatchSweep();
 await client.login(env.DISCORD_TOKEN);
