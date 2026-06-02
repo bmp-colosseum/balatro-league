@@ -4,10 +4,13 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { auth } from "@/auth";
 import { loadDivisionPageData } from "@/lib/loaders/division";
+import { prisma } from "@/lib/prisma";
 import { tierColors } from "@/lib/tier-colors";
 import { Crosstable } from "@/components/Crosstable";
 import { SiteNav } from "@/components/SiteNav";
+import { reportFromDivisionAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +24,41 @@ export default async function PublicDivisionPage({
   if (!data) notFound();
   const { division, standings, recentPairings, shootouts, unplayed, crosstable } = data;
   const tc = tierColors(division.tierPosition);
+
+  // Viewer-specific: if the viewer is a player in this division and has
+  // any unplayed opponents, surface the report-a-match dropdown right
+  // on this page so they don't have to navigate to /me or /profile.
+  const session = await auth();
+  const viewerDiscordId = (session?.user as { discordId?: string } | undefined)?.discordId ?? null;
+  const viewerReportable: { divisionName: string; opponents: Array<{ playerId: string; displayName: string }> } | null = await (async () => {
+    if (!viewerDiscordId) return null;
+    const viewerPlayer = await prisma.player.findUnique({
+      where: { discordId: viewerDiscordId },
+      select: { id: true },
+    });
+    if (!viewerPlayer) return null;
+    const membership = await prisma.divisionMember.findFirst({
+      where: { playerId: viewerPlayer.id, divisionId: id, status: "ACTIVE" },
+      select: { id: true },
+    });
+    if (!membership) return null;
+    const myPairings = await prisma.pairing.findMany({
+      where: {
+        divisionId: id,
+        status: "CONFIRMED",
+        OR: [{ playerAId: viewerPlayer.id }, { playerBId: viewerPlayer.id }],
+      },
+      select: { playerAId: true, playerBId: true },
+    });
+    const played = new Set<string>();
+    for (const p of myPairings) {
+      played.add(p.playerAId === viewerPlayer.id ? p.playerBId : p.playerAId);
+    }
+    const opponents = standings
+      .filter((r) => r.player.id !== viewerPlayer.id && !played.has(r.player.id) && !r.dropped)
+      .map((r) => ({ playerId: r.player.id, displayName: r.player.displayName }));
+    return { divisionName: division.name, opponents };
+  })();
 
   return (
     <>
@@ -37,6 +75,31 @@ export default async function PublicDivisionPage({
         <div className="muted" style={{ marginTop: 4 }}>
           {division.activeCount} active player(s) · {division.confirmedPairingCount} set(s) played · {unplayed.length} remaining
         </div>
+
+        {viewerReportable && viewerReportable.opponents.length > 0 && (
+          <div className="card">
+            <strong>Report a match</strong>
+            <form action={reportFromDivisionAction} style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <input type="hidden" name="divisionId" value={id} />
+              <span className="muted" style={{ fontSize: 12 }}>vs</span>
+              <select name="opponentId" required style={{ flex: "1 1 200px" }}>
+                <option value="">— pick an opponent —</option>
+                {viewerReportable.opponents.map((o) => (
+                  <option key={o.playerId} value={o.playerId}>{o.displayName}</option>
+                ))}
+              </select>
+              <select name="result" required defaultValue="2-0">
+                <option value="2-0">2-0 (I won both)</option>
+                <option value="1-1">1-1 (draw)</option>
+                <option value="0-2">0-2 (I lost both)</option>
+              </select>
+              <button type="submit">Report</button>
+            </form>
+            <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
+              Reports go to <strong>#results</strong> with Confirm + Dispute buttons. Auto-confirms after 2 min.
+            </p>
+          </div>
+        )}
 
         <div className="card">
           <strong>Standings</strong>
