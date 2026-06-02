@@ -25,12 +25,12 @@
   ],
   "stakes": [
     { "name": "White", "description": "Base difficulty" },
-    { "name": "Red", "description": "Small Blind gives no reward" },
-    { "name": "Green", "description": "Required score scales faster" },
-    { "name": "Black", "description": "Eternal Jokers appear (can't be sold)" },
+    { "name": "Red", "description": "Small Blind gives no reward money" },
+    { "name": "Green", "description": "Required score scales faster each Ante" },
+    { "name": "Black", "description": "30% chance for Eternal Jokers in shops/packs (can't be sold or destroyed)" },
     { "name": "Blue", "description": "-1 discard" },
-    { "name": "Purple", "description": "Required score scales even faster" },
-    { "name": "Orange", "description": "Booster Pack +$1 cost" },
-    { "name": "Gold", "description": "-1 hand size" }
+    { "name": "Purple", "description": "Required score scales even faster each Ante" },
+    { "name": "Orange", "description": "30% chance for Perishable Jokers (debuffed after 5 rounds)" },
+    { "name": "Gold", "description": "30% chance for Rental Jokers (costs $3 per round)" }
   ]
 }
