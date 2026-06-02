@@ -106,6 +106,55 @@ async function createTiersAndDivisionsFor(seasonId: string, configs: TierConfig[
 // "skip tier setup" then configured after signups close so admin sees the
 // player count). Refuses if tiers already exist — use delete-and-recreate
 // (manual on the page) for now.
+// Add a new empty division to a tier. Draft-mode only — once the
+// season is active or ended, adding empty divisions risks orphaning
+// pairings (Pairing.divisionId points at the source, players who
+// got moved would lose their match history visibility). For active-
+// season needs, admin can delete + rebuild from draft.
+export async function addDivisionToTier(formData: FormData) {
+  const { user } = await requireAdmin();
+  const seasonId = String(formData.get("seasonId") ?? "");
+  const tierId = String(formData.get("tierId") ?? "");
+  if (!seasonId || !tierId) return;
+  const season = await prisma.season.findUnique({ where: { id: seasonId } });
+  if (!season) redirect("/admin/seasons?err=season-not-found");
+  if (season!.isActive || season!.endedAt) {
+    redirect(`/admin/seasons/${seasonId}?err=${encodeURIComponent("Can't add divisions to an active or ended season — only during draft.")}`);
+  }
+  const tier = await prisma.tier.findUnique({ where: { id: tierId } });
+  if (!tier || tier.seasonId !== seasonId) {
+    redirect(`/admin/seasons/${seasonId}?err=${encodeURIComponent("That tier isn't part of this season.")}`);
+  }
+  // Pick the next groupNumber + auto-name. If the tier currently has
+  // a single division named just the tier name (e.g. "Legendary"),
+  // we still increment — the new one becomes "Legendary 2" and admin
+  // can rename the first one if they want consistency.
+  const existing = await prisma.division.findMany({
+    where: { tierId },
+    select: { groupNumber: true },
+    orderBy: { groupNumber: "desc" },
+    take: 1,
+  });
+  const nextGroup = (existing[0]?.groupNumber ?? 0) + 1;
+  const created = await prisma.division.create({
+    data: {
+      seasonId,
+      tierId,
+      groupNumber: nextGroup,
+      name: `${tier!.name} ${nextGroup}`,
+    },
+  });
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "division.add",
+    targetType: "Division",
+    targetId: created.id,
+    summary: `Added empty division "${created.name}" to "${tier!.name}" in draft season`,
+    metadata: { seasonId, tierId, name: created.name, groupNumber: nextGroup },
+  });
+  revalidatePath(`/admin/seasons/${seasonId}`);
+}
+
 export async function configureTiers(formData: FormData) {
   const { user } = await requireAdmin();
   const seasonId = String(formData.get("seasonId") ?? "");

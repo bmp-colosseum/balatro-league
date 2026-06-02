@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { moveDivisionMember } from "@/app/admin/seasons/actions";
 import { addLatePlayerToDivision } from "@/app/admin/seasons/actions";
+import { addDivisionToTier } from "@/app/admin/seasons/actions";
 
 export interface EditorMember {
   id: string;
@@ -170,6 +171,17 @@ export function DraggableDivisionsEditor({
                 {tierDivs.length > 0 && ` · ~${avgPerDiv.toFixed(1)}/div (target 5–6, capacity ${target})`}
               </span>
               {warning && <span style={{ fontSize: 11, color: warning.color }}>⚠ {warning.text}</span>}
+              <form
+                action={addDivisionToTier}
+                onPointerDown={(e) => e.stopPropagation()}
+                style={{ marginLeft: "auto" }}
+              >
+                <input type="hidden" name="seasonId" value={seasonId} />
+                <input type="hidden" name="tierId" value={tier.id} />
+                <button type="submit" className="secondary" style={{ fontSize: 11, padding: "2px 8px" }}>
+                  + Add division
+                </button>
+              </form>
             </h4>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 8 }}>
               {tierDivs.map((d) => {
