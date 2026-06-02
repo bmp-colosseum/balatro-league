@@ -54,13 +54,13 @@ export async function announceResult(pairingId: string): Promise<void> {
   let title: string;
   let color: number;
   if (pairing.gamesWonA === 2 && pairing.gamesWonB === 0) {
-    title = `🏆 ${pairing.playerA.displayName} swept ${pairing.playerB.displayName}`;
+    title = `🏆 ${pairing.playerA.displayName} beats ${pairing.playerB.displayName}`;
     color = 0x2ecc71;
   } else if (pairing.gamesWonB === 2 && pairing.gamesWonA === 0) {
-    title = `🏆 ${pairing.playerB.displayName} swept ${pairing.playerA.displayName}`;
+    title = `🏆 ${pairing.playerB.displayName} beats ${pairing.playerA.displayName}`;
     color = 0x2ecc71;
   } else {
-    title = `🤝 ${pairing.playerA.displayName} 1-1 ${pairing.playerB.displayName}`;
+    title = `🤝 ${pairing.playerA.displayName} draws ${pairing.playerB.displayName}`;
     color = 0xf1c40f;
   }
 
@@ -74,7 +74,43 @@ export async function announceResult(pairingId: string): Promise<void> {
     .setFooter({ text: `Set ${pairing.id}` })
     .setTimestamp(new Date());
 
-  // Prefer webhook — keeps announces out of the bot's global rate limit pool.
+  // Dispute button — visible inline so a player who sees their result
+  // and disagrees can flag it without leaving the channel. Routes to
+  // the existing report:dispute handler in src/commands/report.ts which
+  // already accepts CONFIRMED pairings (kicks off the dispute flow).
+  const components = [
+    {
+      type: 1, // ACTION_ROW
+      components: [
+        {
+          type: 2, // BUTTON
+          style: 4, // DANGER (red)
+          label: "Dispute this result",
+          custom_id: `report:dispute:${pairing.id}`,
+        },
+      ],
+    },
+  ];
+
+  // Bot REST is the preferred path because it can attach interactive
+  // components (the Dispute button). User-created webhook URLs CAN'T
+  // — only application-owned webhooks support components, and that's
+  // more setup than just using the bot identity directly.
+  if (channelId) {
+    try {
+      const body: RESTPostAPIChannelMessageJSONBody = { embeds: [embed.toJSON()], components };
+      await rest().post(Routes.channelMessages(channelId), { body });
+      return;
+    } catch (err) {
+      console.warn("[announceResult] REST post failed:", err);
+      // Fall through to webhook if configured — better to post without
+      // a button than not post at all.
+    }
+  }
+
+  // Webhook fallback — posts the embed without the dispute button
+  // (webhooks don't carry interactive components reliably). Useful
+  // when no channel id is configured at all.
   if (webhookUrl) {
     try {
       const res = await fetch(webhookUrl, {
@@ -83,24 +119,10 @@ export async function announceResult(pairingId: string): Promise<void> {
         body: JSON.stringify({ embeds: [embed.toJSON()] }),
       });
       if (!res.ok) {
-        console.warn(`Webhook announce failed: ${res.status} ${await res.text()}`);
-        // Fall through to bot-side fallback below if also configured.
-      } else {
-        return;
+        console.warn(`[announceResult] webhook failed: ${res.status} ${await res.text()}`);
       }
     } catch (err) {
-      console.warn("Webhook announce errored:", err);
+      console.warn("[announceResult] webhook errored:", err);
     }
-  }
-
-  // REST fallback — works without a live gateway client, so this also
-  // fires correctly from standalone scripts (finish:season --announce
-  // etc.) where the bot's discord.js Client isn't initialized.
-  if (!channelId) return;
-  try {
-    const body: RESTPostAPIChannelMessageJSONBody = { embeds: [embed.toJSON()] };
-    await rest().post(Routes.channelMessages(channelId), { body });
-  } catch (err) {
-    console.warn("[announceResult] REST post failed:", err);
   }
 }
