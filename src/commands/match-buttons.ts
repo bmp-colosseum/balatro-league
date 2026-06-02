@@ -25,7 +25,7 @@ import { resolveChallengesChannelId } from "../challenges-channel.js";
 import { prisma } from "../db.js";
 import { env } from "../env.js";
 import { getLeagueSettings, getLeagueSettingsForSeason } from "../league-settings.js";
-import { generatePool, presetForDivision, seedDefaultPresetIfEmpty } from "../match-config.js";
+import { CASUAL_PRESET_NAME, DEFAULT_PRESET_NAME, generatePool, presetForDivision, seedCasualPresetIfEmpty, seedDefaultPresetIfEmpty } from "../match-config.js";
 import { renderMatch } from "../match-render.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
 import {
@@ -125,7 +125,7 @@ type AnyInteraction = ButtonInteraction | StringSelectMenuInteraction;
 async function loadAllowedStakes(session: MatchSession): Promise<string[]> {
   const preset = session.divisionId
     ? await presetForDivision(session.divisionId)
-    : await prisma.matchConfigPreset.findUnique({ where: { name: "Default" } });
+    : await prisma.matchConfigPreset.findUnique({ where: { name: CASUAL_PRESET_NAME } });
   return preset?.stakes ?? [];
 }
 
@@ -318,7 +318,7 @@ async function handleReroll(interaction: ButtonInteraction, session: MatchSessio
   // Both agreed → regenerate the pool.
   const preset = session.divisionId
     ? await presetForDivision(session.divisionId)
-    : await prisma.matchConfigPreset.findUnique({ where: { name: "Default" } });
+    : await prisma.matchConfigPreset.findUnique({ where: { name: CASUAL_PRESET_NAME } });
   if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) {
     return reply(interaction, "The deck pool isn't set up for this match — ask an admin to configure decks/stakes.");
   }
@@ -446,19 +446,26 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
   // so phaseFor immediately reads PLAYING.
   const customCombo = session.customCombo ? parseCustomCombo(session.customCombo) : null;
 
-  // Casual /challenge matches have no divisionId — fall back to the
-  // global Default preset. Auto-seed it from the stock Balatro
-  // decks/stakes if no preset exists at all (covers the case where
-  // a player's first interaction with the bot was /challenge — the
-  // /start-match command seeds on its own path).
-  await seedDefaultPresetIfEmpty().catch((err) =>
-    console.warn("[handleAccept] seedDefaultPresetIfEmpty failed:", err),
-  );
+  // League /start-match → division's preset (falls back to Default).
+  // Casual /challenge → dedicated 'Casual' preset, independent of any
+  // season config. Both auto-seed from stock Balatro decks/stakes if
+  // they don't exist yet, so admin doesn't have to set them up before
+  // the first match.
+  if (session.divisionId) {
+    await seedDefaultPresetIfEmpty().catch((err) =>
+      console.warn("[handleAccept] seedDefaultPresetIfEmpty failed:", err),
+    );
+  } else {
+    await seedCasualPresetIfEmpty().catch((err) =>
+      console.warn("[handleAccept] seedCasualPresetIfEmpty failed:", err),
+    );
+  }
   const preset = session.divisionId
     ? await presetForDivision(session.divisionId)
-    : await prisma.matchConfigPreset.findUnique({ where: { name: "Default" } });
+    : await prisma.matchConfigPreset.findUnique({ where: { name: CASUAL_PRESET_NAME } });
   if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) {
-    return reply(interaction, "The deck pool isn't set up for this season — ask an admin to configure decks/stakes before accepting.");
+    const which = session.divisionId ? "this season's preset" : `the '${CASUAL_PRESET_NAME}' preset for casual challenges`;
+    return reply(interaction, `The deck pool isn't set up — ask an admin to configure decks/stakes for ${which} before accepting.`);
   }
   // Read the current league settings once and stamp the resulting
   // policy onto the session — that snapshot stays valid for this
@@ -623,7 +630,7 @@ async function handleChooseFirst(interaction: ButtonInteraction, session: MatchS
   // from the same configured decks/stakes the match was set up with.
   const preset = session.divisionId
     ? await presetForDivision(session.divisionId)
-    : await prisma.matchConfigPreset.findUnique({ where: { name: "Default" } });
+    : await prisma.matchConfigPreset.findUnique({ where: { name: CASUAL_PRESET_NAME } });
   if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) {
     return reply(interaction, "The deck pool isn't set up for this match — ask an admin to configure decks/stakes.");
   }

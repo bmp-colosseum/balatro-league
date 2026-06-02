@@ -9,6 +9,12 @@ import defaults from "./data/match-defaults.json" with { type: "json" };
 
 export const DEFAULT_POOL_SIZE = 9;
 export const DEFAULT_PRESET_NAME = "Default";
+// Dedicated preset name for /challenge (casual) matches. Lives
+// separately from "Default" so admin can tweak casual rules without
+// affecting any season that uses the Default preset as fallback.
+// Auto-seeded with the stock Balatro decks/stakes the first time
+// it's needed (same pattern as Default).
+export const CASUAL_PRESET_NAME = "Casual";
 
 export interface DeckEntry {
   deck: string;
@@ -73,28 +79,17 @@ function shuffle<T>(arr: T[], rand: () => number): T[] {
   return a;
 }
 
-// Auto-seed the Default preset with Balatro's stock decks/stakes when
-// needed. Two cases handled:
-//   1. No presets at all — create Default with the stock list
-//   2. Default exists but its decks OR stakes array is empty — fill it
-//      (covers the case where admin created it via UI without adding
-//      any decks, or a migration left it empty)
-// Idempotent: a Default with non-empty decks AND stakes is left alone.
-export async function seedDefaultPresetIfEmpty(): Promise<void> {
-  const existing = await prisma.matchConfigPreset.findUnique({
-    where: { name: DEFAULT_PRESET_NAME },
-  });
+// Auto-seed a named preset with Balatro's stock decks/stakes if it
+// doesn't exist or has empty decks/stakes arrays. Idempotent — a
+// fully-populated preset is left alone.
+async function seedNamedPresetIfEmpty(name: string): Promise<void> {
+  const existing = await prisma.matchConfigPreset.findUnique({ where: { name } });
   if (!existing) {
     await prisma.matchConfigPreset.create({
-      data: {
-        name: DEFAULT_PRESET_NAME,
-        decks: defaults.decks,
-        stakes: defaults.stakes,
-      },
+      data: { name, decks: defaults.decks, stakes: defaults.stakes },
     });
     return;
   }
-  // Default exists — backfill any empty fields.
   const needsDecks = existing.decks.length === 0;
   const needsStakes = existing.stakes.length === 0;
   if (needsDecks || needsStakes) {
@@ -106,4 +101,12 @@ export async function seedDefaultPresetIfEmpty(): Promise<void> {
       },
     });
   }
+}
+
+export async function seedDefaultPresetIfEmpty(): Promise<void> {
+  await seedNamedPresetIfEmpty(DEFAULT_PRESET_NAME);
+}
+
+export async function seedCasualPresetIfEmpty(): Promise<void> {
+  await seedNamedPresetIfEmpty(CASUAL_PRESET_NAME);
 }

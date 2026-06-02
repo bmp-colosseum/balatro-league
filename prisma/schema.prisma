@@ -309,6 +309,11 @@ model MatchSession {
   pairingId     String?           // populated when COMPLETE (only for league matches)
 
   createdAt     DateTime          @default(now())
+  // Bumps automatically on every Prisma update via @updatedAt.
+  // Used by match-sweep to find stale sessions (no activity for 24h)
+  // and auto-cancel them, so abandoned mid-game sessions don't stick
+  // around forever.
+  updatedAt     DateTime          @updatedAt @default(now())
   // When the invite expires (WAITING_ACCEPT only). Survives bot restarts —
   // the previous setTimeout-only approach lost timers on every deploy.
   expiresAt     DateTime?
