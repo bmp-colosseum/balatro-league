@@ -25,7 +25,7 @@ import { resolveChallengesChannelId } from "../challenges-channel.js";
 import { prisma } from "../db.js";
 import { env } from "../env.js";
 import { getLeagueSettings, getLeagueSettingsForSeason } from "../league-settings.js";
-import { generatePool, presetForDivision } from "../match-config.js";
+import { generatePool, presetForDivision, seedDefaultPresetIfEmpty } from "../match-config.js";
 import { renderMatch } from "../match-render.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
 import {
@@ -446,7 +446,13 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
   const customCombo = session.customCombo ? parseCustomCombo(session.customCombo) : null;
 
   // Casual /challenge matches have no divisionId — fall back to the
-  // global Default preset.
+  // global Default preset. Auto-seed it from the stock Balatro
+  // decks/stakes if no preset exists at all (covers the case where
+  // a player's first interaction with the bot was /challenge — the
+  // /start-match command seeds on its own path).
+  await seedDefaultPresetIfEmpty().catch((err) =>
+    console.warn("[handleAccept] seedDefaultPresetIfEmpty failed:", err),
+  );
   const preset = session.divisionId
     ? await presetForDivision(session.divisionId)
     : await prisma.matchConfigPreset.findUnique({ where: { name: "Default" } });
