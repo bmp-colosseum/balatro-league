@@ -29,8 +29,12 @@ function parseTierConfig(json: string): TierConfig[] {
   }
 }
 
-// Distribute ranked players top-down into tiers, snake-drafted within each tier.
-// Snake-draft balances skill across divisions in the same tier.
+// Distribute ranked players top-down into tiers, filling each division
+// in rank order. Rare 1 takes the top 5 Rare ranks, Rare 2 the next 5,
+// ..., Rare 6 the bottom 5. (Previously snake-drafted to balance skill
+// across same-tier divisions, but that made entering rank diverge wildly
+// from ending rank since the per-division end-season recompute reranks
+// every player to their division's rank slot.)
 //
 // Filling strategy: every division ends up with either `base` or `base+1`
 // players, where base = floor(N / totalDivs). Extras (the `N mod totalDivs`
@@ -78,30 +82,16 @@ function planByRating(
     const tier = tiers[i]!;
     const numDivs = Math.max(1, tier.divisionCount);
     const sizes = divisionSizes[i]!;
-    const tierCapacity = sizes.reduce((s, n) => s + n, 0);
-    const tierPlayers = sorted.slice(cursor, cursor + tierCapacity).map((p) => p.discordId);
-    cursor += tierCapacity;
 
-    // Snake-draft within the tier respecting per-division size limits.
-    // Pass through `sizes` array as the cap per division — players are
-    // assigned round-robin until each division hits its cap.
-    const divisions: string[][] = Array.from({ length: numDivs }, () => []);
-    let playerIdx = 0;
-    let round = 0;
-    while (playerIdx < tierPlayers.length) {
-      const seq = round % 2 === 0
-        ? Array.from({ length: numDivs }, (_, k) => k)
-        : Array.from({ length: numDivs }, (_, k) => numDivs - 1 - k);
-      let placedThisRound = 0;
-      for (const slot of seq) {
-        if (playerIdx >= tierPlayers.length) break;
-        if (divisions[slot]!.length >= sizes[slot]!) continue;
-        divisions[slot]!.push(tierPlayers[playerIdx]!);
-        playerIdx++;
-        placedThisRound++;
-      }
-      if (placedThisRound === 0) break; // all divisions full
-      round++;
+    // Sequential fill: division 0 takes the next `sizes[0]` players in
+    // rank order, division 1 takes the next `sizes[1]`, etc. So Rare 1
+    // gets the strongest Rare players, Rare 6 gets the weakest.
+    const divisions: string[][] = [];
+    for (let d = 0; d < numDivs; d++) {
+      const size = sizes[d]!;
+      const slice = sorted.slice(cursor, cursor + size).map((p) => p.discordId);
+      cursor += size;
+      divisions.push(slice);
     }
 
     plan.push({ tier, position: i + 1, divisions });
