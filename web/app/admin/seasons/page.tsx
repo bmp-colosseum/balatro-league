@@ -19,6 +19,8 @@ import {
 import { bootstrapSeasonDiscord, setSeasonDiscordCategory } from "./bootstrap-actions";
 import { SeasonDeckPresetPicker } from "@/components/SeasonDeckPresetPicker";
 import { listGuildTextChannels } from "@/lib/discord";
+import { formatSeasonLabel, nextSeasonNumber } from "@/lib/format-season";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +47,7 @@ export default async function AdminSeasonsPage({
     listGuildTextChannels,
     guildId: process.env.DISCORD_GUILD_ID,
   });
+  const nextNumber = await nextSeasonNumber(prisma);
 
   return (
     <>
@@ -63,12 +66,14 @@ export default async function AdminSeasonsPage({
         <div className="card">
           <strong>Create new season</strong>
           <p className="muted">
-            Just name + settings here. Tier shape is configured later, after signups
-            close, so you can split divisions based on the actual player count.
-            (You can still set it now if you already know.)
+            Next up: <strong>Season {nextNumber}</strong>. Number is assigned
+            automatically — provide an optional subtitle and settings here. Tier
+            shape is configured later, after signups close, so you can split
+            divisions based on the actual player count. (You can still set it now
+            if you already know.)
           </p>
           <form action={createSeason}>
-            <label>Name <input name="name" required placeholder="Season 2" /></label>
+            <label>Subtitle <input name="subtitle" placeholder="Optional subtitle (e.g. 'Launch')" /></label>
             <label>Deadline (UTC) <input name="deadline" type="datetime-local" /></label>
             <label>Group size <input name="targetGroupSize" type="number" min={2} max={20} defaultValue={5} /></label>
             <label>Min group <input name="minGroupSize" type="number" min={2} max={20} defaultValue={3} /></label>
@@ -114,7 +119,7 @@ export default async function AdminSeasonsPage({
               <div key={s.id} className="card">
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                   <Link href={`/admin/seasons/${s.id}`} style={{ fontSize: 16, fontWeight: 600, textDecoration: "none" }}>
-                    {s.name} <span className="muted" style={{ fontSize: 11, fontWeight: 400 }}>→ manage</span>
+                    {formatSeasonLabel(s)} <span className="muted" style={{ fontSize: 11, fontWeight: 400 }}>→ manage</span>
                   </Link>
                   {s.isActive ? (
                     <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "#2ecc71" }}>ACTIVE</span>
@@ -237,8 +242,8 @@ export default async function AdminSeasonsPage({
                   </summary>
                   <form action={deleteSeason} style={{ marginTop: 6, display: "flex", gap: 6, alignItems: "center" }}>
                     <input type="hidden" name="id" value={s.id} />
-                    <span className="muted" style={{ fontSize: 11 }}>Type season name to confirm:</span>
-                    <input type="text" name="confirm" placeholder={s.name} required style={{ flex: 1, fontSize: 11 }} />
+                    <span className="muted" style={{ fontSize: 11 }}>Type "{formatSeasonLabel(s)}" to confirm:</span>
+                    <input type="text" name="confirm" placeholder={formatSeasonLabel(s)} required style={{ flex: 1, fontSize: 11 }} />
                     <button type="submit" style={{ fontSize: 11, background: "#e74c3c", color: "white", border: "none" }}>
                       Delete
                     </button>
@@ -258,7 +263,6 @@ export default async function AdminSeasonsPage({
 
 interface LifecycleSeason {
   id: string;
-  name: string;
   isActive: boolean;
   endedAt: Date | null;
 }

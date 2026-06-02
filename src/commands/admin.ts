@@ -25,6 +25,7 @@ import { requireAdmin, requireHelper } from "../permissions.js";
 import { getOrCreatePlayer } from "../players.js";
 import { gamesFromResult, parsePairingResult } from "../scoring.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
+import { formatSeasonLabel } from "../format-season.js";
 import type { SlashCommand } from "./types.js";
 
 const RESULT_CHOICES = [
@@ -288,7 +289,7 @@ async function undoReport(interaction: ChatInputCommandInteraction) {
   });
   if (!pairing) {
     await interaction.editReply(
-      `No set between **${p1User.username}** and **${p2User.username}** in ${activeSeason.name} — nothing to undo.`,
+      `No set between **${p1User.username}** and **${p2User.username}** in ${formatSeasonLabel(activeSeason)} — nothing to undo.`,
     );
     return;
   }

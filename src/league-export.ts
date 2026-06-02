@@ -20,7 +20,8 @@ interface ExportPlayer {
 
 interface ExportSeason {
   id: string;
-  name: string;
+  number: number;
+  subtitle: string | null;
   startedAt: string;
   endedAt: string | null;
   archivedAt: string | null;
@@ -124,7 +125,8 @@ export async function buildLeagueExport(): Promise<LeagueExport> {
     players,
     seasons: seasons.map((s) => ({
       id: s.id,
-      name: s.name,
+      number: s.number,
+      subtitle: s.subtitle,
       startedAt: s.startedAt.toISOString(),
       endedAt: s.endedAt ? s.endedAt.toISOString() : null,
       archivedAt: s.archivedAt ? s.archivedAt.toISOString() : null,

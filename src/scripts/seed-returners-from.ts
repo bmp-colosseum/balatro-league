@@ -15,6 +15,7 @@
 //   npm run seed:returners-from -- --from <id> --new 20 --skip-rate 0.15 --seed 7
 
 import { prisma } from "../db.js";
+import { formatSeasonLabel } from "../format-season.js";
 
 interface Args {
   fromSeasonId: string;
@@ -102,9 +103,10 @@ async function main(): Promise<void> {
     console.error(`Season ${args.fromSeasonId} not found.`);
     process.exit(1);
   }
+  const prevSeasonLabel = formatSeasonLabel(prevSeason);
   if (!prevSeason.endedAt) {
     console.warn(
-      `Warning: season "${prevSeason.name}" hasn't been ended yet (endedAt is null). ` +
+      `Warning: season "${prevSeasonLabel}" hasn't been ended yet (endedAt is null). ` +
         `The build flow uses endedAt to identify "prior" data — you probably want to End it first.`,
     );
   }
@@ -121,7 +123,7 @@ async function main(): Promise<void> {
     }
   }
 
-  const roundName = `Returners from ${prevSeason.name} (${new Date().toISOString().slice(0, 16)})`;
+  const roundName = `Returners from ${prevSeasonLabel} (${new Date().toISOString().slice(0, 16)})`;
   const round = await prisma.signupRound.create({
     data: {
       name: roundName,
@@ -199,7 +201,7 @@ async function main(): Promise<void> {
 
   console.log(`\n✓ Seeded ${returners.length} returners + ${args.newSignups} new signups.`);
   if (args.skipRate > 0) {
-    console.log(`  (skip-rate ${args.skipRate}: some season-${prevSeason.name} players sat this one out)`);
+    console.log(`  (skip-rate ${args.skipRate}: some ${prevSeasonLabel} players sat this one out)`);
   }
   console.log(`\nNext: /admin/signups/${round.id}/build`);
   await prisma.$disconnect();

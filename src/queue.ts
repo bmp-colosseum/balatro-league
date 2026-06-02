@@ -37,6 +37,7 @@ import {
 } from "./discord-helpers.js";
 import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
 import { buildLeagueExport, exportFilename, serializeExport } from "./league-export.js";
+import { formatSeasonLabel } from "./format-season.js";
 import { postPendingReport } from "./report-flow.js";
 import { autoConfirmReport } from "./report-auto-confirm.js";
 import { getLeagueSettings } from "./league-settings.js";
@@ -633,11 +634,12 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
   });
   const staffRoleIds = staffBindings.map((b) => b.discordRoleId);
 
+  const seasonLabel = formatSeasonLabel(div.season);
   // 1) Role — persist immediately so a crash before channel-create doesn't
   // strand the role on a re-run.
   let roleId = div.discordRoleId;
   if (!roleId) {
-    const role = await createGuildRole(guildId, `${div.season.name} · ${div.name}`, { mentionable: true });
+    const role = await createGuildRole(guildId, `${seasonLabel} · ${div.name}`, { mentionable: true });
     if (!role) throw new Error(`createGuildRole failed for division ${div.id}`);
     roleId = role.id;
     await prisma.division.update({ where: { id: div.id }, data: { discordRoleId: roleId } });
@@ -655,13 +657,13 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
     const channelName = div.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
     let channel = await createGuildTextChannel(guildId, channelName, {
       parentId,
-      topic: `${div.season.name} — ${div.tier.name} tier, division ${div.name}`,
+      topic: `${seasonLabel} — ${div.tier.name} tier, division ${div.name}`,
       visibleToRoleIds: [roleId, ...staffRoleIds],
     });
     if (!channel && parentId) {
       console.warn(`[bootstrap.division] ${channelName} couldn't fit under category — falling back to top level`);
       channel = await createGuildTextChannel(guildId, channelName, {
-        topic: `${div.season.name} — ${div.tier.name} tier, division ${div.name} (overflow)`,
+        topic: `${seasonLabel} — ${div.tier.name} tier, division ${div.name} (overflow)`,
         visibleToRoleIds: [roleId, ...staffRoleIds],
       });
     }
@@ -679,7 +681,7 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
     const totalMatchesInDivision = (div.members.length * (div.members.length - 1)) / 2;
     const welcome = [
       `# 🃏 Welcome to ${div.name}`,
-      `_${div.season.name} · ${div.tier.name} tier_`,
+      `_${seasonLabel} · ${div.tier.name} tier_`,
       ``,
       mentions,
       ``,

@@ -7,6 +7,7 @@
 // five conditional Prisma calls inline.
 
 import { prisma } from "@/lib/prisma";
+import { formatSeasonLabel } from "@/lib/format-season";
 
 export interface ProfileViewer {
   discordId: string | null;
@@ -219,7 +220,7 @@ async function loadOwnActiveDivision(playerId: string): Promise<OwnActiveDivisio
           id: true,
           name: true,
           seasonId: true,
-          season: { select: { name: true } },
+          season: { select: { number: true, subtitle: true } },
           members: {
             where: { status: "ACTIVE" },
             select: { playerId: true, player: { select: { id: true, displayName: true } } },
@@ -249,7 +250,7 @@ async function loadOwnActiveDivision(playerId: string): Promise<OwnActiveDivisio
     divisionId: div.id,
     divisionName: div.name,
     seasonId: div.seasonId,
-    seasonName: div.season.name,
+    seasonName: formatSeasonLabel(div.season),
     reportableOpponents,
   };
 }

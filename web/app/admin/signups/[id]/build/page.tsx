@@ -7,6 +7,8 @@ import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
 import { DraggableRatingTable, type RatingRow } from "@/components/DraggableRatingTable";
 import { addSignupByDiscordId, autoFillRatingsFromMmr, buildSeason, refreshSignupMmrSnapshots, saveRatings } from "./actions";
+import { nextSeasonNumber } from "@/lib/format-season";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +31,6 @@ export default async function BuildSeasonPage({
     sortedSignups,
     playerByDiscordId,
     snapshotByDiscordId,
-    priorSnapshotByDiscordId,
     priorByPlayerId,
     skippedByPlayerId,
     templates,
@@ -38,6 +39,7 @@ export default async function BuildSeasonPage({
     totalSlots,
     playerCount,
   } = result;
+  const nextNumber = await nextSeasonNumber(prisma);
 
   return (
     <>
@@ -113,16 +115,8 @@ export default async function BuildSeasonPage({
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               <form action={autoFillRatingsFromMmr}>
                 <input type="hidden" name="roundId" value={round.id} />
-                <input type="hidden" name="mode" value="missing" />
                 <button type="submit" className="secondary" style={{ fontSize: 12 }} title="Sets rating = BMP MMR only for players who don't already have a rating. Leaves returners' league ratings alone.">
                   Fill missing ratings from BMP MMR
-                </button>
-              </form>
-              <form action={autoFillRatingsFromMmr}>
-                <input type="hidden" name="roundId" value={round.id} />
-                <input type="hidden" name="mode" value="overwrite" />
-                <button type="submit" className="danger" style={{ fontSize: 12 }} title="DESTRUCTIVE: replaces EVERY player's rating with their BMP MMR — including returners whose rating came from end-of-season.">
-                  Overwrite ALL with BMP MMR
                 </button>
               </form>
               <form action={refreshSignupMmrSnapshots}>
@@ -144,7 +138,6 @@ export default async function BuildSeasonPage({
               const prior = player ? priorByPlayerId.get(player.id) : undefined;
               const skipped = player ? skippedByPlayerId.get(player.id) ?? 0 : 0;
               const snapshot = snapshotByDiscordId.get(s.discordId);
-              const priorSnap = priorSnapshotByDiscordId.get(s.discordId);
               return {
                 discordId: s.discordId,
                 displayName: s.displayName,
@@ -165,7 +158,6 @@ export default async function BuildSeasonPage({
                 bmpTier: snapshot?.rankedTier ?? null,
                 bmpTotalGames: snapshot?.totalGames ?? null,
                 bmpWinRatePct: snapshot?.winRatePct ?? null,
-                priorBmpMmr: priorSnap?.rankedMmr ?? null,
                 bmpFetchError: snapshot?.fetchError ?? null,
               };
             });
@@ -191,8 +183,8 @@ export default async function BuildSeasonPage({
             <input type="hidden" name="roundId" value={round.id} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <label>
-                Season name
-                <input name="name" required placeholder={`Season ${new Date().getFullYear()}`} style={{ width: "100%" }} />
+                Subtitle (optional) — will create <strong>Season {nextNumber}</strong>
+                <input name="subtitle" placeholder="Optional subtitle (e.g. 'Launch')" style={{ width: "100%" }} />
               </label>
               <label>
                 Deadline (UTC, optional)

@@ -138,7 +138,14 @@ enum SeasonVisibility {
 
 model Season {
   id          String   @id @default(cuid())
-  name        String
+  // Sequential season number — required and globally unique. The
+  // user-facing label is derived as "Season {number}" (with optional
+  // " — {subtitle}" suffix), so seasons are identified by their number
+  // and not by free-form name. See formatSeasonLabel() helpers.
+  number      Int      @unique
+  // Optional human subtitle, e.g. "Launch" or "Anniversary". Null for
+  // the default label of just "Season N".
+  subtitle    String?
   startedAt   DateTime @default(now())
   // Hard deadline. Season auto-ends at min(deadline, all-pairings-confirmed).
   deadline    DateTime?

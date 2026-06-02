@@ -10,6 +10,7 @@ import { requireAdmin, requireOwnerOrDevops } from "@/lib/admin";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { invalidateLeagueSettingsCache } from "@/lib/league-settings";
 import { prisma } from "@/lib/prisma";
+import { formatSeasonLabel } from "@/lib/format-season";
 
 const NUMERIC_FIELDS = [
   ["matchInviteExpiryMinutes", 1],
@@ -118,7 +119,7 @@ export async function setSeasonRulesTemplate(formData: FormData) {
   const templateIdRaw = String(formData.get("leagueRulesTemplateId") ?? "").trim();
   if (!seasonId) return;
   const leagueRulesTemplateId = templateIdRaw === "" ? null : templateIdRaw;
-  const season = await prisma.season.findUnique({ where: { id: seasonId }, select: { name: true } });
+  const season = await prisma.season.findUnique({ where: { id: seasonId }, select: { number: true, subtitle: true } });
   await prisma.season.update({ where: { id: seasonId }, data: { leagueRulesTemplateId } });
   invalidateLeagueSettingsCache();
   if (season) {
@@ -132,7 +133,7 @@ export async function setSeasonRulesTemplate(formData: FormData) {
       action: "season.set-rules-template",
       targetType: "Season",
       targetId: seasonId,
-      summary: `"${season.name}" rules template: ${templateName}`,
+      summary: `"${formatSeasonLabel(season)}" rules template: ${templateName}`,
       metadata: { leagueRulesTemplateId },
     });
   }

@@ -22,6 +22,7 @@
 // authoritative.
 
 import { prisma } from "./prisma";
+import { formatSeasonLabel } from "./format-season";
 
 export interface MatchEntry {
   pairingId: string;
@@ -98,7 +99,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
           name: true,
           seasonId: true,
           tier: { select: { name: true, position: true } },
-          season: { select: { id: true, name: true, isActive: true } },
+          season: { select: { id: true, number: true, subtitle: true, isActive: true } },
         },
       },
     },
@@ -254,7 +255,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
 
     history.push({
       seasonId: m.division.season.id,
-      seasonName: m.division.season.name,
+      seasonName: formatSeasonLabel(m.division.season),
       isActive: m.division.season.isActive,
       divisionId: m.division.id,
       divisionName: m.division.name,

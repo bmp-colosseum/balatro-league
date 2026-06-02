@@ -12,6 +12,7 @@
 import { prisma } from "@/lib/prisma";
 import { computeStandings } from "@/lib/standings";
 import { computeRatingDeltas, type DivisionForRating } from "@/lib/end-season";
+import { formatSeasonLabel } from "@/lib/format-season";
 
 const MOCK_PREFIXES = ["mock-", "sim-"];
 function isMockId(id: string) {
@@ -122,7 +123,7 @@ export async function loadAdminHomeStats(): Promise<AdminHomeStats> {
   const [activeSeason, totalPlayers, allDiscordIds, confirmed, disputed] = await Promise.all([
     prisma.season.findFirst({
       where: { isActive: true },
-      select: { id: true, name: true, _count: { select: { divisions: true } } },
+      select: { id: true, number: true, subtitle: true, _count: { select: { divisions: true } } },
     }),
     prisma.player.count(),
     prisma.player.findMany({ select: { discordId: true } }),
@@ -131,7 +132,7 @@ export async function loadAdminHomeStats(): Promise<AdminHomeStats> {
   ]);
   return {
     activeSeason: activeSeason
-      ? { id: activeSeason.id, name: activeSeason.name, divisionCount: activeSeason._count.divisions }
+      ? { id: activeSeason.id, name: formatSeasonLabel(activeSeason), divisionCount: activeSeason._count.divisions }
       : null,
     totalPlayers,
     fakePlayerCount: allDiscordIds.filter((p) => isMockId(p.discordId)).length,
@@ -243,7 +244,7 @@ export async function loadEndSeasonPreview(seasonId: string): Promise<EndSeasonP
   }));
 
   return {
-    season: { id: season.id, name: season.name },
+    season: { id: season.id, name: formatSeasonLabel(season) },
     unfinishedPairings,
     divisions,
     deltasByPlayer,
@@ -263,7 +264,8 @@ export async function loadBulkImportSeasonContext(seasonId: string): Promise<Bul
     where: { id: seasonId },
     select: {
       id: true,
-      name: true,
+      number: true,
+      subtitle: true,
       divisions: {
         orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
         select: { id: true, name: true },
@@ -271,7 +273,7 @@ export async function loadBulkImportSeasonContext(seasonId: string): Promise<Bul
     },
   });
   if (!season) return null;
-  return season;
+  return { id: season.id, name: formatSeasonLabel(season), divisions: season.divisions };
 }
 
 // ── /admin/deck-bans ─────────────────────────────────────────────────
@@ -347,7 +349,8 @@ export async function loadPlayersPageNav(opts: {
     where: { endedAt: null },
     select: {
       id: true,
-      name: true,
+      number: true,
+      subtitle: true,
       isActive: true,
       tiers: {
         orderBy: { position: "asc" },
@@ -375,7 +378,7 @@ export async function loadPlayersPageNav(opts: {
     ? divisionsInSelectedSeason.find((d) => d.id === opts.divisionId) ?? null
     : null;
   return {
-    seasons: seasons.map((s) => ({ id: s.id, name: s.name, isActive: s.isActive })),
+    seasons: seasons.map((s) => ({ id: s.id, name: formatSeasonLabel(s), isActive: s.isActive })),
     divisionsInSelectedSeason,
     selectedDivision,
   };
@@ -416,7 +419,7 @@ export async function loadAdminPlayersDivisionView(
   const division = await prisma.division.findUnique({
     where: { id: divisionId },
     include: {
-      season: { select: { id: true, name: true } },
+      season: { select: { id: true, number: true, subtitle: true } },
       tier: { select: { name: true, position: true } },
       members: { include: { player: true } },
       pairings: {
@@ -468,7 +471,7 @@ export async function loadAdminPlayersDivisionView(
       id: division.id,
       name: division.name,
       seasonId: division.season.id,
-      seasonName: division.season.name,
+      seasonName: formatSeasonLabel(division.season),
       tierName: division.tier.name,
       tierPosition: division.tier.position,
     },
@@ -644,7 +647,6 @@ export interface BuildSeasonPageData {
   sortedSignups: BuildSeasonSignup[];
   playerByDiscordId: Map<string, BuildSeasonPlayerRow>;
   snapshotByDiscordId: Map<string, BuildSeasonSnapshot>;
-  priorSnapshotByDiscordId: Map<string, BuildSeasonSnapshot>;
   priorByPlayerId: Map<string, BuildSeasonPriorInfo>;
   skippedByPlayerId: Map<string, number>;
   templates: Array<{
@@ -730,11 +732,6 @@ export async function loadBuildSeasonPage(roundId: string): Promise<BuildSeasonR
   const snapshotByDiscordId = new Map(
     Array.from(snapshotsByDiscordId.entries()).map(([did, arr]) => [did, stripDid(arr[0]!)] as const),
   );
-  const priorSnapshotByDiscordId = new Map(
-    Array.from(snapshotsByDiscordId.entries())
-      .filter(([, arr]) => arr.length >= 2)
-      .map(([did, arr]) => [did, stripDid(arr[1]!)] as const),
-  );
 
   // Last-season rank for returners.
   const returnerPlayerIds = existingPlayers.map((p) => p.id);
@@ -744,7 +741,7 @@ export async function loadBuildSeasonPage(roundId: string): Promise<BuildSeasonR
       division: {
         include: {
           tier: true,
-          season: { select: { id: true, name: true, startedAt: true } },
+          season: { select: { id: true, number: true, subtitle: true, startedAt: true } },
           members: { where: { status: "ACTIVE" }, include: { player: true } },
           pairings: {
             where: { status: "CONFIRMED" },
@@ -776,7 +773,7 @@ export async function loadBuildSeasonPage(roundId: string): Promise<BuildSeasonR
       totalMembers: div.members.length,
       divisionName: div.name,
       tierName: div.tier.name,
-      seasonName: div.season.name,
+      seasonName: formatSeasonLabel(div.season),
       seasonStartedAt: div.season.startedAt,
     });
   }
@@ -830,7 +827,6 @@ export async function loadBuildSeasonPage(roundId: string): Promise<BuildSeasonR
     sortedSignups,
     playerByDiscordId,
     snapshotByDiscordId,
-    priorSnapshotByDiscordId,
     priorByPlayerId,
     skippedByPlayerId,
     templates,
@@ -1127,7 +1123,7 @@ export async function loadAdminDivisionDetail(
   const division = await prisma.division.findUnique({
     where: { id: divisionId },
     include: {
-      season: { select: { id: true, name: true, targetGroupSize: true } },
+      season: { select: { id: true, number: true, subtitle: true, targetGroupSize: true } },
       tier: { select: { name: true, position: true } },
       members: { include: { player: true }, orderBy: { joinedAt: "asc" } },
       pairings: {
@@ -1183,7 +1179,7 @@ export async function loadAdminDivisionDetail(
       name: division.name,
       targetSize: division.targetSize,
       seasonId: division.season.id,
-      seasonName: division.season.name,
+      seasonName: formatSeasonLabel(division.season),
       seasonTargetGroupSize: division.season.targetGroupSize,
       tierName: division.tier.name,
       tierPosition: division.tier.position,
@@ -1284,7 +1280,8 @@ export async function loadAdminDivisionsIndex(): Promise<AdminDivisionsPageData>
     where: { isActive: true },
     select: {
       id: true,
-      name: true,
+      number: true,
+      subtitle: true,
       targetGroupSize: true,
       tiers: {
         orderBy: { position: "asc" },
@@ -1321,7 +1318,7 @@ export async function loadAdminDivisionsIndex(): Promise<AdminDivisionsPageData>
     })),
   }));
   return {
-    season: { id: season.id, name: season.name, targetGroupSize: season.targetGroupSize },
+    season: { id: season.id, name: formatSeasonLabel(season), targetGroupSize: season.targetGroupSize },
     tiers,
   };
 }

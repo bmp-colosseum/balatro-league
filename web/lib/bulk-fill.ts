@@ -13,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 import { recordAudit, type AuditActor } from "@/lib/audit";
 import { enqueueAnnounceResult } from "@/lib/queue";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
+import { formatSeasonLabel } from "@/lib/format-season";
 
 export interface BulkFillOptions {
   seasonId: string;
@@ -66,9 +67,10 @@ export async function bulkFillSeason(opts: BulkFillOptions): Promise<BulkFillRes
 
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
-    select: { id: true, name: true },
+    select: { id: true, number: true, subtitle: true },
   });
   if (!season) throw new Error(`Season ${seasonId} not found`);
+  const seasonLabel = formatSeasonLabel(season);
 
   const divisions = await prisma.division.findMany({
     where: { seasonId },
@@ -148,12 +150,12 @@ export async function bulkFillSeason(opts: BulkFillOptions): Promise<BulkFillRes
     action: "season.bulk-fill",
     targetType: "Season",
     targetId: seasonId,
-    summary: `Bulk-filled ${created + confirmedFromPending} pairings in "${season.name}" (seed ${seed}${announce ? ", announces enqueued" : ""})`,
+    summary: `Bulk-filled ${created + confirmedFromPending} pairings in "${seasonLabel}" (seed ${seed}${announce ? ", announces enqueued" : ""})`,
     metadata: { seed, announce, created, confirmedFromPending, divisionCount: divisions.length, announceEnqueued },
   });
 
   return {
-    seasonName: season.name,
+    seasonName: seasonLabel,
     divisionCount: divisions.length,
     created,
     confirmedFromPending,

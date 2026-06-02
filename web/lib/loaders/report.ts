@@ -14,6 +14,7 @@
 // pairing table; we do one findMany and partition in JS).
 
 import { prisma } from "@/lib/prisma";
+import { formatSeasonLabel } from "@/lib/format-season";
 
 export interface ReportOpponent {
   playerId: string;
@@ -68,7 +69,7 @@ export async function loadReportPageData(discordId: string): Promise<ReportPageD
           id: true,
           name: true,
           tier: { select: { name: true, position: true } },
-          season: { select: { name: true } },
+          season: { select: { number: true, subtitle: true } },
           members: {
             where: { status: "ACTIVE" },
             select: { playerId: true, player: { select: { displayName: true } } },
@@ -147,7 +148,7 @@ export async function loadReportPageData(discordId: string): Promise<ReportPageD
     division: {
       divisionId: div.id,
       divisionName: div.name,
-      seasonName: div.season.name,
+      seasonName: formatSeasonLabel(div.season),
       tierName: div.tier.name,
       tierPosition: div.tier.position,
       reportableOpponents,

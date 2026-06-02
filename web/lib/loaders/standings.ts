@@ -12,6 +12,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { loadDivisionStandings } from "@/lib/standings-cache";
+import { formatSeasonLabel } from "@/lib/format-season";
 
 export type StandingsRowsForDivision = Awaited<ReturnType<typeof loadDivisionStandings>>;
 
@@ -59,7 +60,8 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
     where: { isActive: true, visibility: "PUBLIC" },
     select: {
       id: true,
-      name: true,
+      number: true,
+      subtitle: true,
       tiers: {
         orderBy: { position: "asc" },
         select: {
@@ -170,7 +172,7 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
   }));
 
   return {
-    season: { id: season.id, name: season.name },
+    season: { id: season.id, name: formatSeasonLabel(season) },
     tiers,
     minTierPosition,
     maxTierPosition,

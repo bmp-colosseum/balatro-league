@@ -8,6 +8,7 @@ import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { resolveDiscordIdToDisplayName } from "@/lib/add-player";
 import { placePlayerInDivision } from "@/lib/division-membership";
 import { enqueueMmrSnapshot } from "@/lib/queue";
+import { formatSeasonLabel, nextSeasonNumber } from "@/lib/format-season";
 
 interface TierConfig {
   name: string;
@@ -129,18 +130,15 @@ export async function refreshSignupMmrSnapshots(formData: FormData) {
 // Pre-fill league ranks from each signup's latest BMP Ranked MMR
 // snapshot. Rating is now a rank (1 = best), so we sort signups by
 // BMP MMR DESC and write the resulting position as the rank.
-// Modes:
-//   - "missing" — only fills players who don't already have a rank.
-//     Existing returners are untouched. New players get ranks
-//     starting AFTER the highest existing rank.
-//   - "overwrite" — re-ranks EVERY signup by BMP MMR, starting at 1.
-//     Use when you want to re-baseline from MMR (e.g. mid-season test
-//     drift, or first season with no league history).
+//
+// ONLY fills players who don't already have a rank — existing returners'
+// league ratings are never overwritten by this path. New players get
+// ranks appended after the highest existing rank, sorted among themselves
+// by BMP MMR DESC.
 export async function autoFillRatingsFromMmr(formData: FormData) {
   await requireAdmin();
   const roundId = String(formData.get("roundId") ?? "");
   if (!roundId) return;
-  const mode = String(formData.get("mode") ?? "missing") === "overwrite" ? "overwrite" : "missing";
   const round = await prisma.signupRound.findUnique({
     where: { id: roundId },
     include: { signups: { where: { withdrawn: false } } },
@@ -158,30 +156,7 @@ export async function autoFillRatingsFromMmr(formData: FormData) {
   });
   const playerByDiscordId = new Map(existingPlayers.map((p) => [p.discordId, p]));
 
-  if (mode === "overwrite") {
-    // Sort ALL signups by BMP MMR DESC, write rank 1..N. Unrated
-    // signups (no MMR snapshot) sort to the bottom.
-    const sorted = [...round.signups].sort((a, b) => {
-      const am = mmrByDiscordId.get(a.discordId) ?? -1;
-      const bm = mmrByDiscordId.get(b.discordId) ?? -1;
-      if (am !== bm) return bm - am;
-      return a.signedUpAt.getTime() - b.signedUpAt.getTime();
-    });
-    for (let i = 0; i < sorted.length; i++) {
-      const signup = sorted[i]!;
-      const rank = i + 1;
-      await prisma.player.upsert({
-        where: { discordId: signup.discordId },
-        create: { discordId: signup.discordId, displayName: signup.displayName, rating: rank, ratingNote: "Overwritten: ranked by BMP MMR" },
-        update: { rating: rank, displayName: signup.displayName, ratingNote: "Overwritten: ranked by BMP MMR" },
-      });
-    }
-    console.log(`[auto-fill-ratings mode=overwrite] re-ranked all ${sorted.length} signups`);
-    revalidatePath(`/admin/signups/${roundId}/build`);
-    return;
-  }
-
-  // missing mode: returners keep their existing rank, unranked players
+  // Returners keep their existing rank, unranked players
   // get ranks appended at the bottom, sorted among themselves by BMP MMR.
   const maxExistingRank = existingPlayers.reduce((max, p) => (p.rating != null && p.rating > max ? p.rating : max), 0);
   const unranked = round.signups.filter((s) => {
@@ -206,7 +181,7 @@ export async function autoFillRatingsFromMmr(formData: FormData) {
     });
     filled++;
   }
-  console.log(`[auto-fill-ratings mode=missing] ranked ${filled} unrated signups`);
+  console.log(`[auto-fill-ratings] ranked ${filled} unrated signups`);
   revalidatePath(`/admin/signups/${roundId}/build`);
 }
 
@@ -418,10 +393,11 @@ export async function buildSeason(formData: FormData) {
     targetSeasonId = existing.id;
   } else {
     // Create-new mode (original behavior)
-    const seasonName = String(formData.get("name") ?? "").trim();
+    const subtitleRaw = String(formData.get("subtitle") ?? "").trim();
+    const subtitle = subtitleRaw.length > 0 ? subtitleRaw : null;
     const tiersJson = String(formData.get("config") ?? "");
     const tiers = parseTierConfig(tiersJson);
-    if (!seasonName || tiers.length === 0) return;
+    if (tiers.length === 0) return;
 
     const targetGroupSize = Math.max(2, parseInt(String(formData.get("targetGroupSize")), 10) || 5);
     const minGroupSize = Math.max(2, parseInt(String(formData.get("minGroupSize")), 10) || 3);
@@ -442,9 +418,11 @@ export async function buildSeason(formData: FormData) {
       targetGroupSize,
     );
 
+    const number = await nextSeasonNumber(prisma);
     const season = await prisma.season.create({
       data: {
-        name: seasonName,
+        number,
+        subtitle,
         deadline,
         isActive: false,
         targetGroupSize,
@@ -491,7 +469,8 @@ export async function buildSeason(formData: FormData) {
   const finalShape = await prisma.season.findUnique({
     where: { id: targetSeasonId },
     select: {
-      name: true,
+      number: true,
+      subtitle: true,
       divisions: {
         select: {
           name: true,
@@ -505,7 +484,7 @@ export async function buildSeason(formData: FormData) {
     action: "season.build",
     targetType: "Season",
     targetId: targetSeasonId,
-    summary: `Built season "${finalShape?.name ?? targetSeasonId}" (${finalShape?.divisions.length ?? 0} divisions, ${players.length} signups placed)`,
+    summary: `Built season "${finalShape ? formatSeasonLabel(finalShape) : targetSeasonId}" (${finalShape?.divisions.length ?? 0} divisions, ${players.length} signups placed)`,
     metadata: {
       roundId,
       signupCount: players.length,

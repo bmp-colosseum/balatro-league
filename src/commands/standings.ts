@@ -9,6 +9,7 @@ import { prisma } from "../db.js";
 import { computeStandings, formatDivisionField, formatStandingsTable } from "../standings.js";
 import { tierEmbedColor } from "../tiers.js";
 import { divisionNameAutocomplete } from "./autocomplete.js";
+import { formatSeasonLabel } from "../format-season.js";
 import type { SlashCommand } from "./types.js";
 
 export const standings: SlashCommand = {
@@ -38,7 +39,7 @@ export const standings: SlashCommand = {
     if (divisionArg) {
       return renderSingleDivision(interaction, activeSeason.id, divisionArg);
     }
-    return renderAllDivisions(interaction, activeSeason.id, activeSeason.name, activeSeason.targetGroupSize);
+    return renderAllDivisions(interaction, activeSeason.id, formatSeasonLabel(activeSeason), activeSeason.targetGroupSize);
   },
 };
 

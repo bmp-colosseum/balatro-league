@@ -5,6 +5,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { loadDivisionStandings } from "@/lib/standings-cache";
+import { formatSeasonLabel } from "@/lib/format-season";
 
 export interface SeasonIndexEntry {
   id: string;
@@ -22,7 +23,8 @@ export async function loadSeasonsIndex(): Promise<SeasonIndexEntry[]> {
     where: { visibility: "PUBLIC", archivedAt: null },
     select: {
       id: true,
-      name: true,
+      number: true,
+      subtitle: true,
       isActive: true,
       startedAt: true,
       endedAt: true,
@@ -33,7 +35,7 @@ export async function loadSeasonsIndex(): Promise<SeasonIndexEntry[]> {
   });
   return seasons.map((s) => ({
     id: s.id,
-    name: s.name,
+    name: formatSeasonLabel(s),
     isActive: s.isActive,
     startedAt: s.startedAt,
     endedAt: s.endedAt,
@@ -82,7 +84,8 @@ export async function loadSeasonDetail(seasonId: string): Promise<SeasonDetailDa
     where: { id: seasonId, visibility: "PUBLIC" },
     select: {
       id: true,
-      name: true,
+      number: true,
+      subtitle: true,
       isActive: true,
       startedAt: true,
       endedAt: true,
@@ -138,7 +141,7 @@ export async function loadSeasonDetail(seasonId: string): Promise<SeasonDetailDa
 
   return {
     id: season.id,
-    name: season.name,
+    name: formatSeasonLabel(season),
     isActive: season.isActive,
     startedAt: season.startedAt,
     endedAt: season.endedAt,

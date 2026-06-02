@@ -6,6 +6,12 @@
 // Safe to re-run — it upserts and won't duplicate.
 
 import { prisma } from "../db.js";
+import { formatSeasonLabel } from "../format-season.js";
+
+// Use a large negative-ish marker number to keep the test season out of
+// the way of real auto-numbered seasons. Fine to reuse across re-runs of
+// the seed because the script upserts by id.
+const TEST_SEASON_NUMBER = 9001;
 
 const [yourId, opponentId, yourName = "You", opponentName = "Opponent"] = process.argv.slice(2);
 
@@ -20,7 +26,8 @@ const season = await prisma.season.upsert({
   where: { id: "test-season" },
   create: {
     id: "test-season",
-    name: "Test Season",
+    number: TEST_SEASON_NUMBER,
+    subtitle: "Test",
     deadline: new Date("2026-06-13T18:00:00Z"),
     isActive: true,
   },
@@ -72,7 +79,7 @@ for (const p of [me, opp]) {
 }
 
 console.log("Seeded test data:");
-console.log(`  Season:   ${season.name} (${season.id})`);
+console.log(`  Season:   ${formatSeasonLabel(season)} (${season.id})`);
 console.log(`  Division: ${division.name} (${division.id})`);
 console.log(`  Players:  ${me.displayName} (${me.discordId}) vs ${opp.displayName} (${opp.discordId})`);
 console.log("\nNow try `/report` in your Discord server.");

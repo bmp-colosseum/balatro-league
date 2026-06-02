@@ -29,23 +29,36 @@ const here = dirname(fileURLToPath(import.meta.url));
 const outDir = join(here, "out");
 
 function parseArgs(argv) {
-  let seasonName = null;
+  let seasonNumber = null;
   let seasonId = null;
   let dryRun = false;
   for (const a of argv.slice(2)) {
     if (a === "--dry-run") dryRun = true;
-    else if (a.startsWith("--season=")) seasonName = a.slice("--season=".length);
+    else if (a.startsWith("--season=")) {
+      const raw = a.slice("--season=".length);
+      const parsed = Number(raw);
+      if (!Number.isInteger(parsed)) {
+        console.error(`--season expects an integer season number, got ${raw}`);
+        process.exit(1);
+      }
+      seasonNumber = parsed;
+    }
     else if (a.startsWith("--season-id=")) seasonId = a.slice("--season-id=".length);
     else {
       console.error(`Unknown arg: ${a}`);
       process.exit(1);
     }
   }
-  if (!seasonName && !seasonId) {
-    console.error("Pass --season=\"Season Name\" or --season-id=cl...");
+  if (seasonNumber == null && !seasonId) {
+    console.error("Pass --season=<integer> or --season-id=cl...");
     process.exit(1);
   }
-  return { seasonName, seasonId, dryRun };
+  return { seasonNumber, seasonId, dryRun };
+}
+
+function seasonLabel(season) {
+  const base = `Season ${season.number}`;
+  return season.subtitle ? `${base} — ${season.subtitle}` : base;
 }
 
 // Minimal CSV parser that handles quoted fields with commas/quotes inside.
@@ -86,7 +99,7 @@ function norm(s) {
 }
 
 async function main() {
-  const { seasonName, seasonId, dryRun } = parseArgs(process.argv);
+  const { seasonNumber, seasonId, dryRun } = parseArgs(process.argv);
 
   const participantsCsv = readFileSync(join(outDir, "participants.csv"), "utf8");
   const matchesCsv = readFileSync(join(outDir, "matches.csv"), "utf8");
@@ -100,12 +113,12 @@ async function main() {
   try {
     const season = seasonId
       ? await prisma.season.findUnique({ where: { id: seasonId }, include: { divisions: true } })
-      : await prisma.season.findFirst({ where: { name: seasonName }, include: { divisions: true } });
+      : await prisma.season.findUnique({ where: { number: seasonNumber }, include: { divisions: true } });
     if (!season) {
-      console.error(`Season not found (${seasonId ?? seasonName}). Create it on /admin/seasons first.`);
+      console.error(`Season not found (${seasonId ?? `#${seasonNumber}`}). Create it on /admin/seasons first.`);
       process.exit(1);
     }
-    console.log(`Target season: "${season.name}" (id ${season.id}) — ${season.divisions.length} divisions`);
+    console.log(`Target season: "${seasonLabel(season)}" (id ${season.id}) — ${season.divisions.length} divisions`);
 
     // division name (lowercased+trimmed) → Division row
     const divByName = new Map(season.divisions.map((d) => [norm(d.name), d]));
@@ -232,7 +245,7 @@ async function main() {
 
     if (unknownDivisions.size > 0) {
       console.log("");
-      console.log(`⚠ Unknown divisions (no matching Division row in season "${season.name}"):`);
+      console.log(`⚠ Unknown divisions (no matching Division row in season "${seasonLabel(season)}"):`);
       for (const d of unknownDivisions) console.log(`  - "${d}"`);
       console.log("Fix: rename the divisions on the seasons page to match Challonge, or fix the CSV.");
     }

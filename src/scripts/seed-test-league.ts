@@ -22,6 +22,10 @@
 
 import { prisma } from "../db.js";
 
+// Marker we stash in Season.subtitle for prior test-league seasons so
+// the reset path can find + nuke them without trampling real seasons.
+const TEST_LEAGUE_SUBTITLE_PREFIX = "Test League ";
+
 type Scenario = "fresh" | "refresh" | "gap";
 
 interface Args {
@@ -103,9 +107,9 @@ async function resetTestLeagueData(): Promise<void> {
     { playerB: { discordId: { startsWith: "tl-" } } },
   ]}});
   await prisma.divisionMember.deleteMany({ where: { player: { discordId: { startsWith: "tl-" } } } });
-  await prisma.division.deleteMany({ where: { season: { name: { startsWith: "Test League " } } } });
-  await prisma.tier.deleteMany({ where: { season: { name: { startsWith: "Test League " } } } });
-  await prisma.season.deleteMany({ where: { name: { startsWith: "Test League " } } });
+  await prisma.division.deleteMany({ where: { season: { subtitle: { startsWith: TEST_LEAGUE_SUBTITLE_PREFIX } } } });
+  await prisma.tier.deleteMany({ where: { season: { subtitle: { startsWith: TEST_LEAGUE_SUBTITLE_PREFIX } } } });
+  await prisma.season.deleteMany({ where: { subtitle: { startsWith: TEST_LEAGUE_SUBTITLE_PREFIX } } });
   await prisma.player.deleteMany({ where: { discordId: { startsWith: "tl-" } } });
 }
 
@@ -139,12 +143,21 @@ async function createPriorSeasonAndMembership(
     update: {},
   });
   const ps = spec.priorSeason!;
-  const seasonName = `Test League S${10 - ps.seasonsAgo} (prior)`;
-  let cached = priorSeasonsByName.get(seasonName);
+  // Stable identifier per (seasonsAgo) — same logical season collapses
+  // across all signups in this run. The actual stored fields are number +
+  // subtitle ("Test League prior").
+  const seasonKey = `prior-S${10 - ps.seasonsAgo}`;
+  let cached = priorSeasonsByName.get(seasonKey);
   if (!cached) {
+    // Pick a unique number outside the live-season range. Each run is
+    // run inside resetTestLeagueData so collisions are bounded; reserve
+    // 9000-series for the test-league prior seasons.
+    const baseNumber = 9000;
+    const number = baseNumber + (10 - ps.seasonsAgo);
     const season = await prisma.season.create({
       data: {
-        name: seasonName,
+        number,
+        subtitle: `${TEST_LEAGUE_SUBTITLE_PREFIX}S${10 - ps.seasonsAgo} (prior)`,
         isActive: false,
         archivedAt: new Date(),
         visibility: "INTERNAL",
@@ -152,7 +165,7 @@ async function createPriorSeasonAndMembership(
       },
     });
     cached = { id: season.id, tiers: new Map(), divisions: new Map() };
-    priorSeasonsByName.set(seasonName, cached);
+    priorSeasonsByName.set(seasonKey, cached);
   }
   let tierId = cached.tiers.get(ps.tierName);
   if (!tierId) {

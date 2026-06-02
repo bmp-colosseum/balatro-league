@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
+import { formatSeasonLabel, nextSeasonNumber } from "@/lib/format-season";
 import {
   createChannelInvite,
   editChannelMessage,
@@ -45,8 +46,8 @@ function defaultDivisionNames(tier: TierConfig): string[] {
 
 export async function createSeason(formData: FormData) {
   const { user } = await requireAdmin();
-  const name = String(formData.get("name") ?? "").trim();
-  if (!name) return;
+  const subtitleRaw = String(formData.get("subtitle") ?? "").trim();
+  const subtitle = subtitleRaw.length > 0 ? subtitleRaw : null;
 
   // Tier config is now OPTIONAL — admin can skip setup and configure tiers
   // later once they see how many players signed up.
@@ -63,8 +64,9 @@ export async function createSeason(formData: FormData) {
   const minGroupSize = Math.max(2, parseInt(String(formData.get("minGroupSize")), 10) || 3);
   const visibility = formData.get("visibility") === "INTERNAL" ? "INTERNAL" : "PUBLIC";
 
+  const number = await nextSeasonNumber(prisma);
   const season = await prisma.season.create({
-    data: { name, deadline, isActive: false, targetGroupSize, minGroupSize, visibility },
+    data: { number, subtitle, deadline, isActive: false, targetGroupSize, minGroupSize, visibility },
   });
 
   if (configs.length > 0) {
@@ -80,7 +82,7 @@ export async function createSeason(formData: FormData) {
     action: "season.create",
     targetType: "Season",
     targetId: season.id,
-    summary: `Created season "${season.name}"`,
+    summary: `Created season "${formatSeasonLabel(season)}"`,
     metadata: { visibility, targetGroupSize, minGroupSize, tierCount: configs.length, deadline: deadline?.toISOString() ?? null },
   });
 
@@ -202,7 +204,7 @@ export async function activateSeason(formData: FormData) {
     action: "season.activate",
     targetType: "Season",
     targetId: id,
-    summary: `Activated season "${target.name}"${prior ? ` (deactivated "${prior.name}")` : ""}`,
+    summary: `Activated season "${formatSeasonLabel(target)}"${prior ? ` (deactivated "${formatSeasonLabel(prior)}")` : ""}`,
     metadata: { previousActiveSeasonId: prior?.id ?? null, visibility: target.visibility },
   });
   revalidatePath("/admin/seasons");
@@ -306,7 +308,7 @@ export async function endSeason(formData: FormData) {
     action: "season.end",
     targetType: "Season",
     targetId: season.id,
-    summary: `Ended season "${season.name}" (${season.divisions.length} divisions, ${deltas.length} rating updates)`,
+    summary: `Ended season "${formatSeasonLabel(season)}" (${season.divisions.length} divisions, ${deltas.length} rating updates)`,
     metadata: { divisionCount: season.divisions.length, ratingUpdateCount: deltas.length },
   });
 
@@ -383,9 +385,10 @@ export async function openSignupsForSeason(formData: FormData) {
   const season = await prisma.season.findUnique({ where: { id: seasonId } });
   if (!season) redirect("/admin/seasons?err=season-not-found");
 
+  const seasonLabel = formatSeasonLabel(season!);
   const round = await prisma.signupRound.create({
     data: {
-      name: `${season!.name} Signups`,
+      name: `${seasonLabel} Signups`,
       guildId,
       channelId,
       messageId: "pending",
@@ -405,13 +408,13 @@ export async function openSignupsForSeason(formData: FormData) {
     action: "signup-round.open",
     targetType: "SignupRound",
     targetId: round.id,
-    summary: `Opened signups for "${season!.name}"`,
+    summary: `Opened signups for "${seasonLabel}"`,
     metadata: { seasonId: season!.id, channelId },
   });
 
   // Fire-and-forget: DM everyone on the next-season interest list so they
   // know signups just opened. Don't block the admin form on this.
-  notifyNextSeasonSubscribers(season!.name, channelId).catch((err) =>
+  notifyNextSeasonSubscribers(seasonLabel, channelId).catch((err) =>
     console.warn("notifyNextSeasonSubscribers failed:", err),
   );
 
@@ -496,7 +499,7 @@ export async function archiveSeason(formData: FormData) {
       action: "season.archive",
       targetType: "Season",
       targetId: id,
-      summary: `Archived season "${season.name}"`,
+      summary: `Archived season "${formatSeasonLabel(season)}"`,
     });
   }
   revalidatePath("/admin/seasons");
@@ -515,7 +518,7 @@ export async function unarchiveSeason(formData: FormData) {
       action: "season.unarchive",
       targetType: "Season",
       targetId: id,
-      summary: `Unarchived season "${season.name}"`,
+      summary: `Unarchived season "${formatSeasonLabel(season)}"`,
     });
   }
   revalidatePath("/admin/seasons");
@@ -525,18 +528,22 @@ export async function unarchiveSeason(formData: FormData) {
 export async function renameSeason(formData: FormData) {
   const { user } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
-  const name = String(formData.get("name") ?? "").trim();
-  if (!id || !name) return;
+  // Renaming a season now means editing the optional subtitle — the
+  // sequential `Season {number}` prefix is immutable.
+  const subtitleRaw = String(formData.get("subtitle") ?? "").trim();
+  const subtitle = subtitleRaw.length > 0 ? subtitleRaw : null;
+  if (!id) return;
   const prev = await prisma.season.findUnique({ where: { id } });
-  await prisma.season.update({ where: { id }, data: { name } });
+  await prisma.season.update({ where: { id }, data: { subtitle } });
   if (prev) {
+    const next = { number: prev.number, subtitle };
     recordAudit({
       actor: actorFromAdminUser(user),
       action: "season.rename",
       targetType: "Season",
       targetId: id,
-      summary: `Renamed "${prev.name}" → "${name}"`,
-      metadata: { previousName: prev.name, newName: name },
+      summary: `Renamed "${formatSeasonLabel(prev)}" → "${formatSeasonLabel(next)}"`,
+      metadata: { previousSubtitle: prev.subtitle, newSubtitle: subtitle },
     });
   }
   revalidatePath("/admin/seasons");
@@ -553,9 +560,11 @@ export async function deleteSeason(formData: FormData) {
   if (!id) return;
   const season = await prisma.season.findUnique({ where: { id } });
   if (!season) return;
-  // Require typing the season name to confirm — protects against fat-fingering
-  if (confirm.trim() !== season.name.trim()) {
-    redirect(`/admin/seasons?err=${encodeURIComponent("Confirmation name didn't match — season not deleted.")}`);
+  // Require typing the season label (e.g. "Season 4") to confirm — protects
+  // against fat-fingering.
+  const seasonLabel = formatSeasonLabel(season);
+  if (confirm.trim() !== seasonLabel.trim()) {
+    redirect(`/admin/seasons?err=${encodeURIComponent("Confirmation didn't match — season not deleted.")}`);
   }
   await prisma.signupRound.updateMany({
     where: { resultingSeasonId: id },
@@ -567,8 +576,8 @@ export async function deleteSeason(formData: FormData) {
     action: "season.delete",
     targetType: "Season",
     targetId: id,
-    summary: `Deleted season "${season.name}"`,
-    metadata: { name: season.name, visibility: season.visibility, wasActive: season.isActive, endedAt: season.endedAt?.toISOString() ?? null },
+    summary: `Deleted season "${seasonLabel}"`,
+    metadata: { number: season.number, subtitle: season.subtitle, visibility: season.visibility, wasActive: season.isActive, endedAt: season.endedAt?.toISOString() ?? null },
   });
   revalidatePath("/admin/seasons");
   redirect("/admin/seasons");
@@ -664,7 +673,7 @@ export async function setSeasonVisibility(formData: FormData) {
   const visibilityRaw = String(formData.get("visibility") ?? "");
   if (!id) return;
   const visibility = visibilityRaw === "INTERNAL" ? "INTERNAL" : "PUBLIC";
-  const prev = await prisma.season.findUnique({ where: { id }, select: { name: true, visibility: true } });
+  const prev = await prisma.season.findUnique({ where: { id }, select: { number: true, subtitle: true, visibility: true } });
   await prisma.season.update({ where: { id }, data: { visibility } });
   if (prev) {
     recordAudit({
@@ -672,7 +681,7 @@ export async function setSeasonVisibility(formData: FormData) {
       action: "season.set-visibility",
       targetType: "Season",
       targetId: id,
-      summary: `"${prev.name}" visibility: ${prev.visibility} → ${visibility}`,
+      summary: `"${formatSeasonLabel(prev)}" visibility: ${prev.visibility} → ${visibility}`,
       metadata: { previous: prev.visibility, next: visibility },
     });
   }
@@ -688,7 +697,7 @@ export async function setSeasonPreset(formData: FormData) {
   const matchConfigPresetId = presetIdRaw === "" ? null : presetIdRaw;
   const prev = await prisma.season.findUnique({
     where: { id },
-    select: { name: true, matchConfigPresetId: true, matchConfigPreset: { select: { name: true } } },
+    select: { number: true, subtitle: true, matchConfigPresetId: true, matchConfigPreset: { select: { name: true } } },
   });
   await prisma.season.update({ where: { id }, data: { matchConfigPresetId } });
   if (prev) {
@@ -702,7 +711,7 @@ export async function setSeasonPreset(formData: FormData) {
       action: "season.set-preset",
       targetType: "Season",
       targetId: id,
-      summary: `"${prev.name}" preset: ${prev.matchConfigPreset?.name ?? "Default"} → ${nextName}`,
+      summary: `"${formatSeasonLabel(prev)}" preset: ${prev.matchConfigPreset?.name ?? "Default"} → ${nextName}`,
       metadata: { previousPresetId: prev.matchConfigPresetId, nextPresetId: matchConfigPresetId },
     });
   }

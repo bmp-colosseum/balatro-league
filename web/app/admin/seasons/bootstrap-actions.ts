@@ -11,6 +11,7 @@ import {
 } from "@/lib/discord";
 import { enqueueAwardChampionRole, enqueueBootstrapDivision, enqueueStripDivisionRole } from "@/lib/queue";
 import { computeStandings } from "@/lib/standings";
+import { formatSeasonLabel } from "@/lib/format-season";
 
 // Save (or clear) the Discord category id a season's division channels
 // should be nested under.
@@ -104,8 +105,9 @@ export async function bootstrapSeasonDiscord(formData: FormData) {
   // season gets a clean home (instead of all divisions dumped in #general
   // or whatever the bot's nearest category is). Done sync so the worker
   // jobs see the parent id immediately.
+  const seasonLabel = formatSeasonLabel(season);
   if (!season.discordCategoryId) {
-    const cat = await ensureGuildCategory(guildId, `🃏 ${season.name}`);
+    const cat = await ensureGuildCategory(guildId, `🃏 ${seasonLabel}`);
     if (cat) {
       await prisma.season.update({
         where: { id: season.id },
@@ -123,13 +125,13 @@ export async function bootstrapSeasonDiscord(formData: FormData) {
     await enqueueBootstrapDivision({ divisionId: div.id, guildId });
     queued++;
   }
-  console.log(`[bootstrap] queued ${queued} division bootstrap jobs for season ${season.name}`);
+  console.log(`[bootstrap] queued ${queued} division bootstrap jobs for season ${seasonLabel}`);
   recordAudit({
     actor: actorFromAdminUser(user),
     action: "season.bootstrap-discord",
     targetType: "Season",
     targetId: id,
-    summary: `Bootstrapping Discord for "${season.name}" (${queued} divisions queued)`,
+    summary: `Bootstrapping Discord for "${seasonLabel}" (${queued} divisions queued)`,
     metadata: { queuedCount: queued, divisionCount: season.divisions.length },
   });
 
@@ -162,9 +164,10 @@ export async function archiveSeasonChannels(formData: FormData) {
   });
   if (!season) return;
 
-  const archiveCategory = await ensureGuildCategory(guildId, `📦 ${season.name} Archive`);
+  const seasonLabel = formatSeasonLabel(season);
+  const archiveCategory = await ensureGuildCategory(guildId, `📦 ${seasonLabel} Archive`);
   if (!archiveCategory) {
-    console.warn(`[archive] couldn't create archive category for ${season.name}`);
+    console.warn(`[archive] couldn't create archive category for ${seasonLabel}`);
     return;
   }
 
@@ -180,7 +183,7 @@ export async function archiveSeasonChannels(formData: FormData) {
     action: "season.archive-channels",
     targetType: "Season",
     targetId: id,
-    summary: `Archived Discord channels for "${season.name}" (${season.divisions.length} channels)`,
+    summary: `Archived Discord channels for "${seasonLabel}" (${season.divisions.length} channels)`,
     metadata: { channelCount: season.divisions.length, archiveCategoryId: archiveCategory.id },
   });
 
@@ -235,13 +238,14 @@ export async function stripSeasonDivisionRoles(formData: FormData) {
       queued++;
     }
   }
-  console.log(`[strip-role] queued ${queued} role-remove jobs for season ${season.name}`);
+  const seasonLabel = formatSeasonLabel(season);
+  console.log(`[strip-role] queued ${queued} role-remove jobs for season ${seasonLabel}`);
   recordAudit({
     actor: actorFromAdminUser(user),
     action: "role.strip",
     targetType: "Season",
     targetId: id,
-    summary: `Stripped division roles for "${season.name}" (${queued} jobs queued)`,
+    summary: `Stripped division roles for "${seasonLabel}" (${queued} jobs queued)`,
     metadata: { queuedCount: queued },
   });
   revalidatePath(`/admin/seasons/${id}`);
@@ -305,7 +309,7 @@ export async function awardSeasonChampionRoles(formData: FormData) {
       where: { id: div.id },
       data: { championPlayerId: winner.player.id },
     });
-    const roleName = `🏆 ${season.name} · ${div.name} Champion`;
+    const roleName = `🏆 ${formatSeasonLabel(season)} · ${div.name} Champion`;
     await enqueueAwardChampionRole({
       guildId,
       divisionId: div.id,
@@ -314,8 +318,9 @@ export async function awardSeasonChampionRoles(formData: FormData) {
     }).catch((err) => console.warn(`[champion-roles] enqueue failed for ${div.id}:`, err));
     queued++;
   }
+  const seasonLabel = formatSeasonLabel(season);
   console.log(
-    `[champion-roles] queued ${queued} for season ${season.name}` +
+    `[champion-roles] queued ${queued} for season ${seasonLabel}` +
       (skipped > 0 ? `, skipped ${skipped} due to unresolved ties at #1` : ""),
   );
   recordAudit({
@@ -323,7 +328,7 @@ export async function awardSeasonChampionRoles(formData: FormData) {
     action: "role.award-champion",
     targetType: "Season",
     targetId: id,
-    summary: `Awarded champion roles for "${season.name}" (${queued} awarded${skipped > 0 ? `, ${skipped} skipped due to ties` : ""})`,
+    summary: `Awarded champion roles for "${seasonLabel}" (${queued} awarded${skipped > 0 ? `, ${skipped} skipped due to ties` : ""})`,
     metadata: { awardedCount: queued, skippedDueToTies: skipped },
   });
   revalidatePath(`/admin/seasons/${id}`);

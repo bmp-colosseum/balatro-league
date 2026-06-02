@@ -37,7 +37,6 @@ export interface RatingRow {
   bmpTier: string | null;
   bmpTotalGames: number | null;
   bmpWinRatePct: number | null;
-  priorBmpMmr: number | null;
   bmpFetchError: string | null;
 }
 
@@ -150,9 +149,6 @@ export function DraggableRatingTable({
       return (b.bmpMmr ?? -1) - (a.bmpMmr ?? -1);
     }));
   };
-  const sortByBmpMmr = () => {
-    setRows([...rows].sort((a, b) => (b.bmpMmr ?? -1) - (a.bmpMmr ?? -1)));
-  };
   const sortByLeagueRating = () => {
     setRows([...rows].sort((a, b) => {
       // Rank ASC. Unranked sort to the bottom.
@@ -187,9 +183,6 @@ export function DraggableRatingTable({
         <button type="button" className="secondary" style={{ fontSize: 11, padding: "2px 8px" }} onClick={sortByLeagueRating}>
           League rating only
         </button>
-        <button type="button" className="secondary" style={{ fontSize: 11, padding: "2px 8px" }} onClick={sortByBmpMmr}>
-          BMP MMR only
-        </button>
         <span className="muted" style={{ fontSize: 11, alignSelf: "center" }}>
           (sort overrides manual drag — Save preserves it)
         </span>
@@ -217,7 +210,6 @@ export function DraggableRatingTable({
             const pill = STATUS_PILL[r.status];
             const isDragged = dragIdx === i;
             const isHovered = hoverIdx === i && dragIdx !== null && dragIdx !== i;
-            const mmrDelta = r.bmpMmr != null && r.priorBmpMmr != null ? r.bmpMmr - r.priorBmpMmr : null;
             return (
               <tr
                 key={r.discordId}
@@ -294,13 +286,6 @@ export function DraggableRatingTable({
                   {r.bmpMmr != null ? (
                     <span>
                       <strong>{r.bmpMmr}</strong>
-                      {mmrDelta !== null && mmrDelta !== 0 && (
-                        <span
-                          style={{ color: mmrDelta > 0 ? "#2ecc71" : "#e74c3c", marginLeft: 4, fontSize: 11 }}
-                        >
-                          {mmrDelta > 0 ? "↑" : "↓"}{Math.abs(mmrDelta)}
-                        </span>
-                      )}
                       {r.bmpTier && (
                         <span className="muted" style={{ marginLeft: 6 }}>
                           ({r.bmpTier}{r.bmpTotalGames ? ` · ${r.bmpTotalGames}g` : ""}{r.bmpWinRatePct != null ? ` · ${r.bmpWinRatePct}%` : ""})

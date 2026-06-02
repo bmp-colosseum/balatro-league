@@ -7,6 +7,7 @@ import {
 import { activePublicSeason } from "../active-season.js";
 import { prisma } from "../db.js";
 import { getOrCreatePlayer } from "../players.js";
+import { formatSeasonLabel } from "../format-season.js";
 import type { SlashCommand } from "./types.js";
 
 export const schedule: SlashCommand = {
@@ -104,7 +105,7 @@ export const schedule: SlashCommand = {
     const embed = new EmbedBuilder()
       .setTitle(`Your schedule — ${div.name}`)
       .setColor(0x5865f2)
-      .setDescription(`Season: **${activeSeason.name}**\n${progressLine}`)
+      .setDescription(`Season: **${formatSeasonLabel(activeSeason)}**\n${progressLine}`)
       .addFields(
         ...(theyReported.length ? [{ name: `⚠️ Awaiting your confirmation (${theyReported.length})`, value: fmt(theyReported) }] : []),
         ...(remaining.length ? [{ name: `🎮 Still to play (${remaining.length})`, value: fmt(remaining) }] : []),
@@ -114,7 +115,7 @@ export const schedule: SlashCommand = {
       );
 
     if (theyReported.length === 0 && remaining.length === 0 && youReported.length === 0 && disputed.length === 0) {
-      embed.setDescription(`Season: **${activeSeason.name}**\n\n🎉 You're done — all your sets are confirmed!`);
+      embed.setDescription(`Season: **${formatSeasonLabel(activeSeason)}**\n\n🎉 You're done — all your sets are confirmed!`);
     }
 
     await interaction.editReply({ embeds: [embed] });

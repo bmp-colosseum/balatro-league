@@ -11,6 +11,8 @@ import { prisma } from "../db.js";
 import { gamesFromResult, type PairingResult } from "../scoring.js";
 import { computeStandings, formatStandingsTable } from "../standings.js";
 
+const SIM_SUBTITLE_PREFIX = "Sim ";
+
 interface Args {
   divisions: number;
   playersPerDiv: number;
@@ -58,18 +60,22 @@ async function main() {
 
   if (args.reset) {
     console.log("Resetting prior sim data...");
-    await prisma.pairing.deleteMany({ where: { division: { season: { name: { startsWith: "Sim " } } } } });
-    await prisma.divisionMember.deleteMany({ where: { division: { season: { name: { startsWith: "Sim " } } } } });
-    await prisma.division.deleteMany({ where: { season: { name: { startsWith: "Sim " } } } });
-    await prisma.season.deleteMany({ where: { name: { startsWith: "Sim " } } });
+    await prisma.pairing.deleteMany({ where: { division: { season: { subtitle: { startsWith: SIM_SUBTITLE_PREFIX } } } } });
+    await prisma.divisionMember.deleteMany({ where: { division: { season: { subtitle: { startsWith: SIM_SUBTITLE_PREFIX } } } } });
+    await prisma.division.deleteMany({ where: { season: { subtitle: { startsWith: SIM_SUBTITLE_PREFIX } } } });
+    await prisma.season.deleteMany({ where: { subtitle: { startsWith: SIM_SUBTITLE_PREFIX } } });
     await prisma.player.deleteMany({ where: { discordId: { startsWith: "sim-" } } });
   }
 
-  const seasonName = `Sim ${new Date().toISOString().replace(/[:.]/g, "-")}`;
-  console.log(`\nCreating season "${seasonName}" with ${args.divisions} divisions × ${args.playersPerDiv} players (seed ${args.seed})\n`);
+  const subtitle = `${SIM_SUBTITLE_PREFIX}${new Date().toISOString().replace(/[:.]/g, "-")}`;
+  // Pick a fresh number outside the real-season range; max+1 over the
+  // existing seasons is the simplest local approach.
+  const agg = await prisma.season.aggregate({ _max: { number: true } });
+  const number = (agg._max.number ?? 0) + 1;
+  console.log(`\nCreating season "Season ${number} — ${subtitle}" with ${args.divisions} divisions × ${args.playersPerDiv} players (seed ${args.seed})\n`);
 
   const season = await prisma.season.create({
-    data: { name: seasonName, isActive: false }, // mark inactive so real /report doesn't see it
+    data: { number, subtitle, isActive: false }, // mark inactive so real /report doesn't see it
   });
 
   // Spread divisions across tiers for variety: first → Legendary, then Rare, Uncommon, Common.

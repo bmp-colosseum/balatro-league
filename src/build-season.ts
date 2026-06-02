@@ -225,7 +225,7 @@ export async function planSeason(roundId: string, opts: PlanOpts = {}): Promise<
 
 export async function commitSeason(
   roundId: string,
-  seasonName: string,
+  subtitle: string | null,
   deadline: Date | null,
   opts: PlanOpts = {},
 ): Promise<{ seasonId: string; tiersCreated: number; divisionsCreated: number; playersPlaced: number; unassigned: number }> {
@@ -241,9 +241,12 @@ export async function commitSeason(
   if (!round) throw new Error(`No signup round ${roundId}`);
   const signupById = new Map(round.signups.map((s) => [s.id, s]));
 
+  const agg = await prisma.season.aggregate({ _max: { number: true } });
+  const number = (agg._max.number ?? 0) + 1;
   const season = await prisma.season.create({
     data: {
-      name: seasonName,
+      number,
+      subtitle,
       deadline,
       isActive: false,
       targetGroupSize,

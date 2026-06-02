@@ -11,6 +11,7 @@ import { TierEditor } from "@/components/TierEditor";
 import { tierColors } from "@/lib/tier-colors";
 import { computeStandings } from "@/lib/standings";
 import { listGuildTextChannels } from "@/lib/discord";
+import { formatSeasonLabel } from "@/lib/format-season";
 import {
   activateSeason,
   addLatePlayerToDivision,
@@ -71,14 +72,16 @@ export default async function SeasonDetailPage({
       <main>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <Link href="/admin/seasons" className="muted" style={{ fontSize: 12 }}>← All seasons</Link>
-          <form action={renameSeason} style={{ display: "flex", gap: 4 }}>
+          <h2 style={{ margin: 0, fontSize: 20 }}>Season {season.number}</h2>
+          <form action={renameSeason} style={{ display: "flex", gap: 4, alignItems: "center" }}>
             <input type="hidden" name="id" value={season.id} />
+            <span className="muted" style={{ fontSize: 12 }}>—</span>
             <input
               type="text"
-              name="name"
-              defaultValue={season.name}
-              required
-              style={{ fontSize: 20, fontWeight: 600, padding: "2px 6px", minWidth: 280 }}
+              name="subtitle"
+              defaultValue={season.subtitle ?? ""}
+              placeholder="Optional subtitle (e.g. 'Launch')"
+              style={{ fontSize: 16, padding: "2px 6px", minWidth: 240 }}
             />
             <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
           </form>
@@ -432,7 +435,7 @@ export default async function SeasonDetailPage({
           <div className="card" style={{ marginTop: 16 }}>
             <strong>📦 Archive Discord channels</strong>
             <p className="muted" style={{ fontSize: 12 }}>
-              Season's ended — move every division channel into a <code>📦 {season.name} Archive</code>
+              Season's ended — move every division channel into a <code>📦 {formatSeasonLabel(season)} Archive</code>
               category and lock them (read-only). History stays, channels just stop cluttering
               the active categories. Idempotent — safe to re-run if some channels failed last time.
             </p>
@@ -448,7 +451,7 @@ export default async function SeasonDetailPage({
             <strong style={{ color: "#f1c40f" }}>🏆 Award champion roles</strong>
             <p className="muted" style={{ fontSize: 12 }}>
               For each division, give the rank-1 finisher a permanent
-              <code> 🏆 {season.name} · &lt;Division&gt; Champion</code> role (gold, mentionable).
+              <code> 🏆 {formatSeasonLabel(season)} · &lt;Division&gt; Champion</code> role (gold, mentionable).
               Persists forever as a bragging-rights badge. Idempotent: re-running
               after a shootout resolves a previously-skipped tie at #1 will pick
               up just that division. Divisions with unresolved ties at #1 are
@@ -482,8 +485,8 @@ export default async function SeasonDetailPage({
           <summary style={{ cursor: "pointer", color: "#e74c3c", fontSize: 12 }}>Danger zone</summary>
           <form action={deleteSeason} style={{ marginTop: 6, display: "flex", gap: 6, alignItems: "center" }}>
             <input type="hidden" name="id" value={season.id} />
-            <span className="muted" style={{ fontSize: 11 }}>Type season name to confirm:</span>
-            <input type="text" name="confirm" placeholder={season.name} required style={{ flex: 1, fontSize: 11 }} />
+            <span className="muted" style={{ fontSize: 11 }}>Type "{formatSeasonLabel(season)}" to confirm:</span>
+            <input type="text" name="confirm" placeholder={formatSeasonLabel(season)} required style={{ flex: 1, fontSize: 11 }} />
             <button type="submit" style={{ fontSize: 11, background: "#e74c3c", color: "white", border: "none" }}>
               Delete season
             </button>
@@ -499,7 +502,7 @@ export default async function SeasonDetailPage({
 
 // ---- Inline components (duplicated from seasons list for now; will dedupe later) ----
 
-interface LifecycleSeason { id: string; name: string; isActive: boolean; endedAt: Date | null }
+interface LifecycleSeason { id: string; isActive: boolean; endedAt: Date | null }
 interface LifecycleRound { id: string; status: string; channelId: string; _count: { signups: number } }
 interface LifecycleChannel { id: string; name: string }
 

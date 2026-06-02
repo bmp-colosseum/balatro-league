@@ -10,6 +10,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { loadDivisionStandings } from "@/lib/standings-cache";
+import { formatSeasonLabel } from "@/lib/format-season";
 
 export interface DivisionStandingRow {
   player: { id: string; displayName: string; rating: number | null };
@@ -77,7 +78,7 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
       name: true,
       seasonId: true,
       tier: { select: { name: true, position: true } },
-      season: { select: { name: true } },
+      season: { select: { number: true, subtitle: true } },
       members: {
         select: {
           playerId: true,
@@ -178,7 +179,7 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
       id: division.id,
       name: division.name,
       seasonId: division.seasonId,
-      seasonName: division.season.name,
+      seasonName: formatSeasonLabel(division.season),
       tierName: division.tier.name,
       tierPosition: division.tier.position,
       activeCount: activeMembers.length,

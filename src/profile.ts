@@ -3,6 +3,7 @@
 import { type Player } from "@prisma/client";
 import { prisma } from "./db.js";
 import { computeStandings } from "./standings.js";
+import { formatSeasonLabel } from "./format-season.js";
 
 export interface MatchEntry {
   opponentPlayerId: string;
@@ -99,7 +100,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
 
     history.push({
       seasonId: m.division.season.id,
-      seasonName: m.division.season.name,
+      seasonName: formatSeasonLabel(m.division.season),
       isActive: m.division.season.isActive,
       divisionName: m.division.name,
       tierName: m.division.tier.name,

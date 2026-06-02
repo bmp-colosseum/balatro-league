@@ -11,6 +11,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { getLeagueSettingsForSeason, type ScoringConfig } from "@/lib/league-settings";
+import { formatSeasonLabel } from "@/lib/format-season";
 
 export interface MeStandingsRow {
   points: number;
@@ -94,7 +95,7 @@ async function loadActiveDivisionContext(
           name: true,
           seasonId: true,
           tier: { select: { name: true, position: true } },
-          season: { select: { name: true } },
+          season: { select: { number: true, subtitle: true } },
           // All ACTIVE members so we can list opponents. Player rows are
           // tiny — id + displayName.
           members: {
@@ -164,7 +165,7 @@ async function loadActiveDivisionContext(
     divisionId: div.id,
     divisionName: div.name,
     seasonId: div.seasonId,
-    seasonName: div.season.name,
+    seasonName: formatSeasonLabel(div.season),
     tierName: div.tier.name,
     tierPosition: div.tier.position,
     reportableOpponents,
