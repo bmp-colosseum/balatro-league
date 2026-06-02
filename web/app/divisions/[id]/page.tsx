@@ -94,67 +94,6 @@ export default async function PublicDivisionPage({
           </table>
         </div>
 
-        <div className="card">
-          <strong>Recent matches ({division.confirmedPairingCount})</strong>
-          {recentPairings.length === 0 ? (
-            <p className="muted" style={{ marginTop: 4 }}>No matches played yet.</p>
-          ) : (
-            <table style={{ marginTop: 8 }}>
-              <thead><tr><th>Date</th><th>Result</th></tr></thead>
-              <tbody>
-                {recentPairings.map((p) => {
-                  const date = p.date ? p.date.toISOString().slice(0, 10) : "—";
-                  return (
-                    <tr key={p.id}>
-                      <td className="muted">{date}</td>
-                      <td>
-                        <Link href={`/profile/${p.playerA.id}`} style={{ color: "var(--text)" }}>{p.playerA.displayName}</Link>
-                        {" "}<strong>{p.gamesWonA}-{p.gamesWonB}</strong>{" "}
-                        <Link href={`/profile/${p.playerB.id}`} style={{ color: "var(--text)" }}>{p.playerB.displayName}</Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        {shootouts.length > 0 && (
-          <div className="card">
-            <strong>⚔ Shootouts ({shootouts.length})</strong>
-            <p className="muted" style={{ marginTop: 4, fontSize: 12 }}>
-              1-game tiebreakers. Recorded when two players tied on points + drew their head-to-head.
-            </p>
-            <table style={{ marginTop: 8 }}>
-              <thead><tr><th>Date</th><th>Result</th><th></th></tr></thead>
-              <tbody>
-                {shootouts.map((s) => {
-                  const date = s.recordedAt.toISOString().slice(0, 10);
-                  return (
-                    <tr key={s.id}>
-                      <td className="muted">{date}</td>
-                      <td>
-                        <Link href={`/profile/${s.winner.id}`} style={{ color: "var(--text)" }}>
-                          <strong>{s.winner.displayName}</strong>
-                        </Link>
-                        {" "}beat{" "}
-                        <Link href={`/profile/${s.loser.id}`} style={{ color: "var(--text)" }}>
-                          {s.loser.displayName}
-                        </Link>
-                      </td>
-                      <td className="muted" style={{ fontSize: 11 }}>
-                        {s.selfReported ? "self-reported" : "mediator"}
-                        {s.notes ? ` · ${s.notes}` : ""}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
         {unplayed.length > 0 && (
           <div className="card">
             <strong>Remaining ({unplayed.length})</strong>
@@ -216,6 +155,67 @@ export default async function PublicDivisionPage({
                 );
               })}
             </ul>
+          </div>
+        )}
+
+        <div className="card">
+          <strong>Recent matches ({division.confirmedPairingCount})</strong>
+          {recentPairings.length === 0 ? (
+            <p className="muted" style={{ marginTop: 4 }}>No matches played yet.</p>
+          ) : (
+            <table style={{ marginTop: 8 }}>
+              <thead><tr><th>Date</th><th>Result</th></tr></thead>
+              <tbody>
+                {recentPairings.map((p) => {
+                  const date = p.date ? p.date.toISOString().slice(0, 10) : "—";
+                  return (
+                    <tr key={p.id}>
+                      <td className="muted">{date}</td>
+                      <td>
+                        <Link href={`/profile/${p.playerA.id}`} style={{ color: "var(--text)" }}>{p.playerA.displayName}</Link>
+                        {" "}<strong>{p.gamesWonA}-{p.gamesWonB}</strong>{" "}
+                        <Link href={`/profile/${p.playerB.id}`} style={{ color: "var(--text)" }}>{p.playerB.displayName}</Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {shootouts.length > 0 && (
+          <div className="card">
+            <strong>⚔ Shootouts ({shootouts.length})</strong>
+            <p className="muted" style={{ marginTop: 4, fontSize: 12 }}>
+              1-game tiebreakers. Recorded when two players tied on points + drew their head-to-head.
+            </p>
+            <table style={{ marginTop: 8 }}>
+              <thead><tr><th>Date</th><th>Result</th><th></th></tr></thead>
+              <tbody>
+                {shootouts.map((s) => {
+                  const date = s.recordedAt.toISOString().slice(0, 10);
+                  return (
+                    <tr key={s.id}>
+                      <td className="muted">{date}</td>
+                      <td>
+                        <Link href={`/profile/${s.winner.id}`} style={{ color: "var(--text)" }}>
+                          <strong>{s.winner.displayName}</strong>
+                        </Link>
+                        {" "}beat{" "}
+                        <Link href={`/profile/${s.loser.id}`} style={{ color: "var(--text)" }}>
+                          {s.loser.displayName}
+                        </Link>
+                      </td>
+                      <td className="muted" style={{ fontSize: 11 }}>
+                        {s.selfReported ? "self-reported" : "mediator"}
+                        {s.notes ? ` · ${s.notes}` : ""}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </main>
