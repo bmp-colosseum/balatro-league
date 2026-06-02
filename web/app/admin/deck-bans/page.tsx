@@ -33,9 +33,15 @@ export default async function DeckSelectionPage({
       <main>
         <h2>Deck Bans presets</h2>
         <p className="muted">
-          A preset is a named set of decks + stakes that <code>/start-match</code> samples
-          combos from for the ban/pick flow. Seasons pick which preset to use (set on each
-          season's card); seasons without a preset fall back to <strong>Default</strong>.
+          A preset is a named set of decks + stakes the ban/pick flow samples combos from.
+          Two presets are special:
+        </p>
+        <ul className="muted" style={{ marginTop: -4, fontSize: 13 }}>
+          <li><strong>Default</strong> — used by <code>/start-match</code> for any season that hasn't picked a specific preset.</li>
+          <li><strong>Casual</strong> — used by <code>/challenge</code> (casual non-league matches). Edit independently of Default.</li>
+        </ul>
+        <p className="muted" style={{ fontSize: 13 }}>
+          Both auto-seed with the stock Balatro decks/stakes on first use. Other presets can be created and assigned per-season from the season detail page.
         </p>
 
         {presets.length === 0 ? (
