@@ -395,8 +395,9 @@ async function handleBanConfirm(interaction: ButtonInteraction, session: MatchSe
 // is in the match thread once the buttons have been clicked.
 //
 // Stamps MatchSession.threadArchivedAt on success so the
-// archive.stale-threads cron skips this row. Best-effort — failures
-// leave threadArchivedAt null so the cron picks it up later.
+// match-sweep leaked-thread pass skips this row. Best-effort —
+// failures leave threadArchivedAt null so the next sweep tick
+// picks it up.
 //
 // Legacy GuildText channels (pre-revert per-match text channels) are
 // NOT deleted — they're locked instead so admin can clean them up by

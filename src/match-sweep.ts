@@ -1,7 +1,7 @@
 // Periodic sweep for stale match sessions. Runs on bot boot (to catch
 // expirations that happened during a redeploy) and every minute thereafter.
 //
-// Two passes:
+// Three passes:
 //   1. WAITING_ACCEPT past expiresAt → cancel (5 min default expiry,
 //      handleAccept also checks but the sweep is the safety net when
 //      nobody clicks at all).
@@ -9,8 +9,14 @@
 //      'abandoned'. Catches mid-game sessions where players ghosted —
 //      otherwise they'd sit in GAME_1_PLAYING or similar forever and
 //      keep their threads alive.
+//   3. COMPLETE/CANCELLED sessions where the inline thread delete never
+//      stamped threadArchivedAt (bot was offline at the moment, Discord
+//      5xx, perms briefly revoked). Tries the delete again. Marks
+//      threadArchivedAt regardless of outcome so we don't hammer a
+//      broken thread forever.
 //
-// Both paths lock + archive the Discord thread immediately on cancel.
+// All three passes delete threads via REST so the sweep works even
+// without a connected gateway client.
 
 import { REST } from "@discordjs/rest";
 import { Routes } from "discord-api-types/v10";
@@ -119,12 +125,62 @@ export async function sweepIdleSessions(): Promise<number> {
   return stale.length;
 }
 
+// Safety-net pass: COMPLETE or CANCELLED sessions whose threadId is
+// still set but threadArchivedAt is null mean the inline delete never
+// stamped success. Try again. Mark threadArchivedAt regardless of
+// outcome (success → great; failure → don't keep retrying forever).
+//
+// Capped at 50/tick so a backlog from a long bot outage doesn't burst
+// hundreds of Discord deletes in one minute. The next tick picks up
+// the next 50.
+const COMPLETED_SWEEP_BATCH = 50;
+
+export async function sweepLeakedThreads(): Promise<number> {
+  const leaked = await prisma.matchSession.findMany({
+    where: {
+      state: { in: ["COMPLETE", "CANCELLED"] },
+      threadId: { not: null },
+      threadArchivedAt: null,
+    },
+    select: { id: true, threadId: true },
+    orderBy: { updatedAt: "asc" },
+    take: COMPLETED_SWEEP_BATCH,
+  });
+  if (leaked.length === 0) return 0;
+
+  let deleted = 0;
+  for (const session of leaked) {
+    if (!session.threadId) continue;
+    try {
+      await rest().delete(Routes.channel(session.threadId));
+      deleted++;
+    } catch (err) {
+      logDiscordError("match-sweep.leaked.deleteThread", err, {
+        threadId: session.threadId,
+        sessionId: session.id,
+      });
+    }
+    // Stamp regardless — if the delete failed (thread already gone,
+    // perms revoked), retrying every minute just wastes API budget.
+    await prisma.matchSession.update({
+      where: { id: session.id },
+      data: { threadArchivedAt: new Date() },
+    }).catch(() => {});
+  }
+  if (deleted > 0 || leaked.length > 0) {
+    console.log(`[match-sweep leaked] processed ${leaked.length} thread(s), deleted ${deleted}`);
+  }
+  return leaked.length;
+}
+
 export function startMatchSweep(): void {
-  // Run both passes once immediately on boot.
+  // Run all passes once immediately on boot.
   sweepExpiredInvites().catch((err) => console.warn("[match-sweep] boot expiry sweep failed:", err));
   sweepIdleSessions().catch((err) => console.warn("[match-sweep] boot idle sweep failed:", err));
+  sweepLeakedThreads().catch((err) => console.warn("[match-sweep] boot leaked sweep failed:", err));
   setInterval(() => {
     sweepExpiredInvites().catch((err) => console.warn("[match-sweep] expiry tick failed:", err));
     sweepIdleSessions().catch((err) => console.warn("[match-sweep] idle tick failed:", err));
+    sweepLeakedThreads().catch((err) => console.warn("[match-sweep] leaked tick failed:", err));
   }, SWEEP_INTERVAL_MS);
 }

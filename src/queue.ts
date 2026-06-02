@@ -18,7 +18,6 @@
 
 import { PgBoss, type Job } from "pg-boss";
 import { announceResult } from "./announce.js";
-import { archiveStaleThreads } from "./archive-stale-threads.js";
 import { detectCurrentBmpSeason, fetchPlayerStats } from "./balatromp.js";
 import { spawnDisputeThread } from "./dispute-thread.js";
 import { resolveBackupChannelId } from "./backup-channel.js";
@@ -73,7 +72,6 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("backup.league");
   await boss.createQueue("report.post-pending");
   await boss.createQueue("report.auto-confirm");
-  await boss.createQueue("archive.stale-threads");
   await boss.createQueue("devops.queue-stall-check");
   await boss.createQueue("cleanup.strip-role");
   await boss.createQueue("award.champion-role");
@@ -221,17 +219,10 @@ export async function initQueue(): Promise<void> {
     },
   );
 
-  // Worker: sweep COMPLETE/CANCELLED MatchSession threads that the
-  // inline closeMatchChannel() never finished. Discord has a 1000
-  // active-thread soft cap; this keeps us from leaking into it when
-  // a closure failed (bot restart, 5xx, permissions blip).
-  await boss.work("archive.stale-threads", { batchSize: 1 }, async () => {
-    await archiveStaleThreads();
-  });
-  // Hourly at :15 — offset from the other crons so they don't all
-  // fire at once. Idempotent.
-  await boss.schedule("archive.stale-threads", "15 * * * *");
-  console.log("[pg-boss] scheduled archive.stale-threads @ :15 hourly");
+  // Leaked-thread cleanup used to live here as an hourly pg-boss cron.
+  // It's been folded into match-sweep's 60s interval (sweepLeakedThreads),
+  // which already handles thread deletion for expired/idle sessions —
+  // single code path, faster recovery, one less queue to maintain.
 
   // Worker: strip ONE division role from ONE player. Fanned out by the
   // end-of-season cleanup admin action so a 100-player season doesn't
