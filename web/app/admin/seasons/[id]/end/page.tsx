@@ -32,12 +32,12 @@ export default async function EndSeasonPreviewPage({
           </Link>
         </div>
         <p className="muted">
-          Preview of new rankings (1 = best). Players are ranked by tier, then division, then
-          finishing position within their division — so top of Rare 1 sits just below the
-          bottom of Legendary, and bottom of Rare 1 sits just above top of Rare 2. Next
-          season's build sorts by rank, so top finishers land at the front of their tier
-          (closest to promotion) and bottom finishers at the back (closest to relegation).
-          Dropped players keep their current ranking.
+          Preview of new rankings (1 = best). Each division's top finisher promotes to the
+          previous division (↑ green on /standings); bottom finisher relegates to the next
+          division (↓ red). Middle finishers keep their position. So top of Rare 1 moves
+          into Legendary's bottom slot, bottom of Legendary drops to top of Rare 1, bottom
+          of Rare 1 swaps with top of Rare 2, and so on. Dropped players keep their current
+          ranking.
         </p>
 
         {unfinishedPairings > 0 && (

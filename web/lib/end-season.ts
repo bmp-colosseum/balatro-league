@@ -38,21 +38,21 @@ export function computeRatingDeltas(
   divisions: DivisionForRating[],
 ): RatingDelta[] {
   void numTiers;
-  // Stable per-division ordering: each (tier, division, finish-position)
-  // triple maps to one rank. NO interleaving across divisions within a
-  // tier — Rare 1's top finisher gets rank 7, all of Rare 1 ranks 7-12,
-  // then Rare 2 ranks 13-18, etc. This keeps ranks stable year-over-
-  // year if a player finishes in the same position in the same
-  // division.
+  // Algorithm:
+  //   1. Initial rank: sort by (tier asc, divisionGroup asc, finish asc).
+  //      Rare 1 takes ranks 7-11, Rare 2 takes 12-16, etc. — the
+  //      sequential-fill build flow's inverse, so a player finishing
+  //      in the same position in the same division gets the same rank.
+  //   2. Promo/relegate chain swap: walk every adjacent division pair
+  //      in the chain (Legendary → Rare 1 → Rare 2 → ... → Common 6)
+  //      and swap the bottom finisher of the upper division with the
+  //      top finisher of the lower division. This is the same promo
+  //      (↑ green) / relegate (↓ red) movement shown on /standings —
+  //      top of each div promotes to the previous div, bottom of each
+  //      div relegates to the next div. Middle players keep their rank.
   //
-  // Promotion / relegation is implicit:
-  //   - Top finishers naturally get the LOWEST rank within their
-  //     tier's range (closest to the tier above)
-  //   - Bottom finishers naturally get the HIGHEST rank within their
-  //     tier's range (closest to the tier below)
-  // When next season's planByRating sorts by rank ASC, the boundary
-  // players are positioned to be picked up by adjacent tiers in the
-  // build flow — admin can drag the rest as needed.
+  // DROPPED players keep their existing rank (no penalty). Ranks are
+  // integers 1..N over ACTIVE players only.
   interface FlatEntry {
     playerId: string;
     displayName: string;
@@ -69,8 +69,6 @@ export function computeRatingDeltas(
     );
     const oldByPlayer = new Map(div.members.map((m) => [m.playerId, m.currentRating]));
     const active = div.standings.filter((row) => !droppedSet.has(row.player.id));
-    // Fallback to array index if groupNumber wasn't supplied — at least
-    // gives a stable per-call ordering.
     const groupNumber = div.divisionGroupNumber ?? divIdx + 1;
     active.forEach((row, idx) => {
       entries.push({
@@ -84,14 +82,49 @@ export function computeRatingDeltas(
       });
     });
   });
-  // Sort: tier asc → division group asc → finish asc.
   entries.sort((a, b) => {
     if (a.tierPosition !== b.tierPosition) return a.tierPosition - b.tierPosition;
     if (a.divisionGroupNumber !== b.divisionGroupNumber) return a.divisionGroupNumber - b.divisionGroupNumber;
     return a.finishPosition - b.finishPosition;
   });
-  return entries.map((e, i) => {
-    const newRating = i + 1;
+
+  // playerId → rank (1-based, position in `entries` after initial sort).
+  const rankByPlayer = new Map<string, number>();
+  entries.forEach((e, i) => rankByPlayer.set(e.playerId, i + 1));
+
+  // Group entries by their division's (tier, group) so we can find
+  // top/bottom of each. Insertion order = chain order because `entries`
+  // is already sorted by (tier, group, finish).
+  const divisionChain: { key: string; players: string[] }[] = [];
+  const divKeyIndex = new Map<string, number>();
+  for (const e of entries) {
+    const key = `${e.tierPosition}:${e.divisionGroupNumber}`;
+    let idx = divKeyIndex.get(key);
+    if (idx === undefined) {
+      idx = divisionChain.length;
+      divKeyIndex.set(key, idx);
+      divisionChain.push({ key, players: [] });
+    }
+    divisionChain[idx]!.players.push(e.playerId);
+  }
+
+  // For each adjacent pair (A, B) in the chain, swap A's bottom with
+  // B's top. Skip pairs where either side has <2 players — there's no
+  // meaningful "top + bottom" distinction to swap.
+  for (let i = 0; i < divisionChain.length - 1; i++) {
+    const a = divisionChain[i]!.players;
+    const b = divisionChain[i + 1]!.players;
+    if (a.length < 2 || b.length < 2) continue;
+    const bottomA = a[a.length - 1]!;
+    const topB = b[0]!;
+    const rA = rankByPlayer.get(bottomA)!;
+    const rB = rankByPlayer.get(topB)!;
+    rankByPlayer.set(bottomA, rB);
+    rankByPlayer.set(topB, rA);
+  }
+
+  return entries.map((e) => {
+    const newRating = rankByPlayer.get(e.playerId)!;
     return {
       playerId: e.playerId,
       displayName: e.displayName,
