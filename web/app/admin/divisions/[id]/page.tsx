@@ -5,7 +5,6 @@ import { loadAdminDivisionDetail } from "@/lib/loaders/admin";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
-import { EditableCrosstable, type EditableCrosstableData } from "@/components/EditableCrosstable";
 import {
   addDivisionMemberByDiscordId,
   bulkAddMembers,
@@ -157,42 +156,90 @@ export default async function AdminDivisionDetail({
           </form>
         </div>
 
-        {/* Editable crosstable — same shape as the public read-only
-            version on /divisions/[id] but each cell is a number input.
-            Computed inline from members + pairings (no extra loader
-            query). Players ordered by standings rank so the matrix
-            matches the table below. */}
+        {/* Match progress grid — read-only "who's played whom" so admin
+            can see at-a-glance who still owes matches. Filled cell =
+            played, empty = still owed. Editing happens in the Pairings
+            section below (per-row record/override forms). */}
         {(() => {
-          const crosstablePlayers = rows.length > 0
+          const gridPlayers = rows.length > 0
             ? rows.map((r) => ({ id: r.player.id, displayName: r.player.displayName }))
             : members.map((m) => ({ id: m.player.id, displayName: m.player.displayName }));
-          if (crosstablePlayers.length === 0) return null;
-          const idxById = new Map(crosstablePlayers.map((p, i) => [p.id, i]));
-          // -1 sentinel = no pairing recorded; null is reserved for the diagonal.
-          const matrix: Array<Array<number | null>> = crosstablePlayers.map((p) =>
-            crosstablePlayers.map((_, i) => (i === idxById.get(p.id) ? null : -1)),
+          if (gridPlayers.length === 0) return null;
+          const idxById = new Map(gridPlayers.map((p, i) => [p.id, i]));
+          // 0 = unplayed, 1 = played (with confirmed result). Diagonal is -1.
+          const played: number[][] = gridPlayers.map((p) =>
+            gridPlayers.map((_, i) => (i === idxById.get(p.id) ? -1 : 0)),
           );
+          // Per-cell tooltip text — "Alice 2-0 Bob" etc.
+          const tooltips: string[][] = gridPlayers.map(() => gridPlayers.map(() => ""));
           for (const pair of pairings) {
             if (pair.status !== "CONFIRMED") continue;
             const aIdx = idxById.get(pair.playerAId);
             const bIdx = idxById.get(pair.playerBId);
             if (aIdx === undefined || bIdx === undefined) continue;
-            matrix[aIdx]![bIdx] = pair.gamesWonA;
-            matrix[bIdx]![aIdx] = pair.gamesWonB;
+            played[aIdx]![bIdx] = 1;
+            played[bIdx]![aIdx] = 1;
+            const aName = gridPlayers[aIdx]!.displayName;
+            const bName = gridPlayers[bIdx]!.displayName;
+            tooltips[aIdx]![bIdx] = `${aName} ${pair.gamesWonA}-${pair.gamesWonB} ${bName}`;
+            tooltips[bIdx]![aIdx] = `${bName} ${pair.gamesWonB}-${pair.gamesWonA} ${aName}`;
           }
-          const data: EditableCrosstableData = {
-            divisionId: division.id,
-            players: crosstablePlayers,
-            cells: matrix,
-          };
+          const totalPossible = (gridPlayers.length * (gridPlayers.length - 1)) / 2;
+          const totalPlayed = pairings.filter((p) => p.status === "CONFIRMED").length;
           return (
             <div className="card">
-              <strong>Scoring matrix</strong>
-              <p className="muted" style={{ fontSize: 12, marginTop: 4, marginBottom: 0 }}>
-                Edit any cell to record a result. Type 0 / 1 / 2 (games row player won), Enter or Tab to save.
-                The other player's mirror cell auto-fills. Clearing a cell deletes the pairing.
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <strong>Match progress</strong>
+                <span className="muted" style={{ fontSize: 11 }}>
+                  {totalPlayed} of {totalPossible} matches played
+                </span>
+              </div>
+              <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 6 }}>
+                Filled = match recorded, empty = still owed. Hover for the score. Record results below.
               </p>
-              <EditableCrosstable initial={data} />
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ borderCollapse: "collapse", fontSize: 11 }}>
+                  <tbody>
+                    {gridPlayers.map((rowPlayer, ri) => (
+                      <tr key={rowPlayer.id}>
+                        <td style={{
+                          padding: "2px 8px 2px 0",
+                          textAlign: "right",
+                          whiteSpace: "nowrap",
+                          color: "var(--text)",
+                          fontWeight: 500,
+                          maxWidth: 140,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}>
+                          {rowPlayer.displayName}
+                        </td>
+                        {gridPlayers.map((_, ci) => {
+                          const state = played[ri]![ci]!;
+                          const bg = state === -1
+                            ? "transparent"
+                            : state === 1
+                              ? "#2ecc71"
+                              : "rgba(149,165,166,0.20)";
+                          return (
+                            <td
+                              key={ci}
+                              title={state === 1 ? tooltips[ri]![ci] : state === -1 ? "" : `vs ${gridPlayers[ci]!.displayName} — not yet played`}
+                              style={{
+                                width: 16,
+                                height: 16,
+                                background: bg,
+                                border: state === -1 ? "none" : "1px solid var(--border)",
+                                borderRadius: 2,
+                              }}
+                            />
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           );
         })()}
