@@ -615,19 +615,9 @@ model LeagueRulesTemplate {
   name                     String   @unique
   isDefault                Boolean  @default(false)
 
-  // Scoring per pairing — see web/lib/league-settings.ts for the
-  // pointsFromGames math that consumes these.
-  pointsFor20Win           Int      @default(3)
-  pointsFor11Draw          Int      @default(1)
-  pointsForLoss            Int      @default(0)
-
-  // Ban/pick policy. Pool size minus first+second bans must leave at
-  // least 1 combo for the picker; UI validates on save.
-  firstPlayerBans          Int      @default(4)
-  secondPlayerBans         Int      @default(3)
-  matchPoolSize            Int      @default(9)
-
-  // Timeouts
+  // Timeouts. Scoring (3/1/0) and ban/pick policy (4/3/9/2) are
+  // hardcoded constants in web/lib/league-settings.ts — not stored
+  // per-template.
   matchInviteExpiryMinutes Int      @default(5)
   reportAutoConfirmSeconds Int      @default(120)
 

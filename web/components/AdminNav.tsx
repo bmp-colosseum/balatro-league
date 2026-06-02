@@ -1,11 +1,15 @@
 // Secondary nav strip shown on /admin/* pages.
+// Async so it can hide the "Rules" link from non-DevOps users.
 
 import Link from "next/link";
+import { auth } from "@/auth";
+import { hasDevOpsBinding } from "@/lib/admin";
 
 interface AdminLink {
   href: string;
   label: string;
   exact?: boolean;
+  devOpsOnly?: boolean;
 }
 const ADMIN_LINKS: AdminLink[] = [
   { href: "/admin", label: "Dashboard", exact: true },
@@ -15,17 +19,28 @@ const ADMIN_LINKS: AdminLink[] = [
   { href: "/admin/divisions", label: "Divisions" },
   { href: "/admin/deck-bans", label: "Deck Bans" },
   { href: "/admin/disputes", label: "Disputes" },
-  { href: "/admin/settings", label: "Rules" },
+  { href: "/admin/settings", label: "Rules", devOpsOnly: true },
   { href: "/admin/config", label: "Config" },
   { href: "/admin/audit", label: "Audit" },
 ];
 
-export function AdminNav({ activePath }: { activePath: string }) {
+async function canSeeDevOpsLinks(): Promise<boolean> {
+  const session = await auth();
+  const user = session?.user as { discordId?: string } | undefined;
+  const isOwner =
+    !!process.env.LEAGUE_OWNER_DISCORD_ID &&
+    user?.discordId === process.env.LEAGUE_OWNER_DISCORD_ID;
+  if (isOwner) return true;
+  return hasDevOpsBinding();
+}
+
+export async function AdminNav({ activePath }: { activePath: string }) {
+  const showDevOps = await canSeeDevOpsLinks();
   return (
     <div className="subnav">
       <div className="subnav-inner">
         <nav>
-          {ADMIN_LINKS.map((link) => {
+          {ADMIN_LINKS.filter((l) => !l.devOpsOnly || showDevOps).map((link) => {
             const isActive = link.exact
               ? activePath === link.href
               : activePath.startsWith(link.href);

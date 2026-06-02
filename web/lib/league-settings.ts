@@ -1,17 +1,9 @@
-// Reads the league rules — scoring + ban policy + timeouts — from
-// LeagueRulesTemplate. Templates replace the old per-key LeagueConfig
-// rows so admin can save multiple named rule sets and pick one per
-// season (e.g. "Standard" for the main league, "Casual" for a relaxed
-// off-season run).
-//
-// Two callers:
-//   getLeagueSettings()                — the default template (for
-//                                        flows with no season context)
-//   getLeagueSettingsForSeason(id)     — the season's specific template,
-//                                        falls back to default
-//
-// Hardcoded DEFAULTS still exist as the floor when no template exists
-// at all (fresh DB before the migration seeded one).
+// Reads the league rules. Scoring (3/1/0) and ban/pick policy
+// (4/3/9/2) are HARDCODED constants — not configurable from the UI.
+// LeagueRulesTemplate now only carries the two timeout fields
+// (matchInviteExpiryMinutes, reportAutoConfirmSeconds); templates
+// still exist so a season can opt into different timeouts via
+// Season.leagueRulesTemplateId.
 
 import type { LeagueRulesTemplate } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -92,27 +84,9 @@ export function invalidateLeagueSettingsCache(): void {
 
 function templateToSettings(template: LeagueRulesTemplate | null | undefined): LeagueSettings {
   if (!template) return DEFAULTS;
-  const remaining = template.matchPoolSize - template.firstPlayerBans - template.secondPlayerBans;
-  if (remaining < 1) {
-    console.warn(
-      `[league-settings] template "${template.name}" has invalid policy ` +
-        `(pool ${template.matchPoolSize}, first ${template.firstPlayerBans}, ` +
-        `second ${template.secondPlayerBans}); falling back to hardcoded defaults`,
-    );
-    return DEFAULTS;
-  }
   return {
-    scoring: {
-      pointsFor20Win: template.pointsFor20Win,
-      pointsFor11Draw: template.pointsFor11Draw,
-      pointsForLoss: template.pointsForLoss,
-    },
-    matchPolicy: {
-      firstPlayerBans: template.firstPlayerBans,
-      secondPlayerBans: template.secondPlayerBans,
-      poolSize: template.matchPoolSize,
-      picksFromRemaining: remaining,
-    },
+    scoring: DEFAULTS.scoring,
+    matchPolicy: DEFAULTS.matchPolicy,
     matchInviteExpiryMinutes: template.matchInviteExpiryMinutes,
     reportAutoConfirmSeconds: template.reportAutoConfirmSeconds,
   };

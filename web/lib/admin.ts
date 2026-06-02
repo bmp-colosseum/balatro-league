@@ -67,3 +67,33 @@ export async function requireAdmin() {
 export async function isAdminUser(): Promise<boolean> {
   return hasTier("ADMIN");
 }
+
+// DevOps access is checked explicitly (not via hasTier) because DEVOPS
+// sits OUTSIDE the league-admin ladder — a user who is ADMIN does NOT
+// automatically have DevOps access. DevOps is a separate, parallel
+// "infra" role for config that league mods/helpers shouldn't see or
+// touch (e.g. timeouts, integrations).
+export async function hasDevOpsBinding(): Promise<boolean> {
+  const session = await auth();
+  if (!session?.user) return false;
+  const user = session.user as { discordId?: string };
+  if (!user.discordId || !process.env.DISCORD_GUILD_ID) return false;
+  const member = await fetchGuildMember(process.env.DISCORD_GUILD_ID, user.discordId);
+  if (!member) return false;
+  const bindings = await prisma.roleBinding.findMany({
+    where: { discordRoleId: { in: member.roles }, tier: "DEVOPS" },
+    select: { id: true },
+  });
+  return bindings.length > 0;
+}
+
+// Page-level gate for DevOps-only pages. OWNER (env-pinned) passes
+// unconditionally; otherwise the user must have a DEVOPS role binding.
+export async function requireOwnerOrDevops() {
+  const session = await auth();
+  if (!session?.user) redirect("/auth/signin");
+  const user = session.user as { discordId: string; name?: string | null };
+  const isOwner = !!process.env.LEAGUE_OWNER_DISCORD_ID && user.discordId === process.env.LEAGUE_OWNER_DISCORD_ID;
+  if (!isOwner && !(await hasDevOpsBinding())) redirect("/me?err=devops-only");
+  return { session, user };
+}

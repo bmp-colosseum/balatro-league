@@ -1,13 +1,10 @@
-// Reads the league rules — scoring + ban policy + timeouts — from
-// LeagueRulesTemplate. Templates replace the old per-key LeagueConfig
-// rows for these fields. Two callers:
-//   getLeagueSettings()                — the default template (no
-//                                        season context: /challenge,
-//                                        global standings recompute)
-//   getLeagueSettingsForSeason(id)     — the season's specific template,
-//                                        falls back to default
+// Reads the league rules. Scoring (3/1/0) and ban/pick policy
+// (4/3/9/2) are HARDCODED constants — not configurable from the UI.
+// LeagueRulesTemplate now only carries the two timeout fields
+// (matchInviteExpiryMinutes, reportAutoConfirmSeconds); templates
+// still exist so a season can opt into different timeouts via
+// Season.leagueRulesTemplateId.
 //
-// Hardcoded DEFAULTS are the floor when no template exists at all.
 // Match sessions stamp their policy at accept time so in-flight games
 // don't break when an admin edits or swaps templates mid-season.
 
@@ -76,27 +73,9 @@ export function invalidateLeagueSettingsCache(): void {
 
 function templateToSettings(template: LeagueRulesTemplate | null | undefined): LeagueSettings {
   if (!template) return DEFAULTS;
-  const remaining = template.matchPoolSize - template.firstPlayerBans - template.secondPlayerBans;
-  if (remaining < 1) {
-    console.warn(
-      `[league-settings] template "${template.name}" has invalid policy ` +
-        `(pool ${template.matchPoolSize}, first ${template.firstPlayerBans}, ` +
-        `second ${template.secondPlayerBans}); falling back to hardcoded defaults`,
-    );
-    return DEFAULTS;
-  }
   return {
-    scoring: {
-      pointsFor20Win: template.pointsFor20Win,
-      pointsFor11Draw: template.pointsFor11Draw,
-      pointsForLoss: template.pointsForLoss,
-    },
-    matchPolicy: {
-      firstPlayerBans: template.firstPlayerBans,
-      secondPlayerBans: template.secondPlayerBans,
-      poolSize: template.matchPoolSize,
-      picksFromRemaining: remaining,
-    },
+    scoring: DEFAULTS.scoring,
+    matchPolicy: DEFAULTS.matchPolicy,
     matchInviteExpiryMinutes: template.matchInviteExpiryMinutes,
     reportAutoConfirmSeconds: template.reportAutoConfirmSeconds,
   };
