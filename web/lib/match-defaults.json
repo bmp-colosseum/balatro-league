@@ -2,7 +2,7 @@
   "decks": [
     "Red", "Blue", "Yellow", "Green", "Black",
     "Magic", "Nebula", "Ghost", "Abandoned", "Checkered",
-    "Zodiac", "Painted", "Anaglyph", "Plasma", "Erratic", "Violet"
+    "Zodiac", "Painted", "Anaglyph", "Plasma", "Erratic", "Violet", "Orange"
   ],
   "stakes": ["White", "Green", "Black", "Purple", "Gold"]
 }
