@@ -50,25 +50,6 @@ export interface DivisionUnplayed {
   b: { id: string; displayName: string };
 }
 
-// Crosstable / scoring matrix. Each row is a player; each cell shows the
-// games that row-player won against the column-player from their pairing
-// (or null if they haven't played yet, or undefined for the diagonal).
-// `totalGamesWon` is the sum across the row — equivalent to gamesWon on
-// the standings row, recomputed here so the crosstable is self-contained.
-export interface CrosstableCell {
-  gamesWon: number | null;
-  pairingId: string | null;
-}
-export interface CrosstableRow {
-  player: { id: string; displayName: string };
-  cells: Array<CrosstableCell | null>; // null at diagonal index
-  totalGamesWon: number;
-}
-export interface Crosstable {
-  players: Array<{ id: string; displayName: string }>;
-  rows: CrosstableRow[];
-}
-
 export interface DivisionPageData {
   division: {
     id: string;
@@ -84,7 +65,6 @@ export interface DivisionPageData {
   recentPairings: DivisionRecentPairing[];
   shootouts: DivisionShootout[];
   unplayed: DivisionUnplayed[];
-  crosstable: Crosstable;
 }
 
 const RECENT_PAIRINGS_LIMIT = 30;
@@ -193,30 +173,6 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
     }];
   });
 
-  // Build the crosstable. Players are ordered the SAME as standings
-  // (point-ranked) so the matrix matches what readers see above.
-  // Rendered with the diagonal blank.
-  const crosstablePlayers = standings.length > 0
-    ? standings.map((s) => s.player)
-    : activeMembers.map((m) => m.player);
-  const idxByPlayerId = new Map(crosstablePlayers.map((p, i) => [p.id, i]));
-  const crosstableRows: CrosstableRow[] = crosstablePlayers.map((p) => ({
-    player: p,
-    cells: crosstablePlayers.map((_, i) => (i === idxByPlayerId.get(p.id) ? null : { gamesWon: null, pairingId: null })),
-    totalGamesWon: 0,
-  }));
-  for (const p of pairings) {
-    const aIdx = idxByPlayerId.get(p.playerAId);
-    const bIdx = idxByPlayerId.get(p.playerBId);
-    if (aIdx === undefined || bIdx === undefined) continue;
-    const aRow = crosstableRows[aIdx]!;
-    const bRow = crosstableRows[bIdx]!;
-    aRow.cells[bIdx] = { gamesWon: p.gamesWonA, pairingId: p.id };
-    bRow.cells[aIdx] = { gamesWon: p.gamesWonB, pairingId: p.id };
-    aRow.totalGamesWon += p.gamesWonA;
-    bRow.totalGamesWon += p.gamesWonB;
-  }
-
   return {
     division: {
       id: division.id,
@@ -232,6 +188,5 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
     recentPairings,
     shootouts,
     unplayed,
-    crosstable: { players: crosstablePlayers, rows: crosstableRows },
   };
 }
