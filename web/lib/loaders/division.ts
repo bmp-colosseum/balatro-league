@@ -12,7 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { loadDivisionStandings } from "@/lib/standings-cache";
 
 export interface DivisionStandingRow {
-  player: { id: string; displayName: string };
+  player: { id: string; displayName: string; rating: number | null };
   points: number;
   wins: number;
   draws: number;
@@ -98,7 +98,7 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
   // Cached standings — same source as /standings, no recompute.
   const standingsRows = await loadDivisionStandings(divisionId);
   const standings: DivisionStandingRow[] = standingsRows.map((r) => ({
-    player: { id: r.player.id, displayName: r.player.displayName },
+    player: { id: r.player.id, displayName: r.player.displayName, rating: r.player.rating },
     points: r.points,
     wins: r.wins,
     draws: r.draws,
