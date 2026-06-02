@@ -122,9 +122,18 @@ async function renderAllDivisions(
         div.members.map((m) => m.player),
         div.pairings,
       ).map((r) => ({ ...r, dropped: droppedIds.has(r.player.id) }));
+      // Compact progress bar: matches played vs expected round-robin total.
+      const activeCount = div.members.filter((m) => m.status === "ACTIVE").length;
+      const expectedMatches = activeCount < 2 ? 0 : (activeCount * (activeCount - 1)) / 2;
+      const playedMatches = div.pairings.length;
+      const barWidth = 12;
+      const pct = expectedMatches === 0 ? 0 : playedMatches / expectedMatches;
+      const filled = Math.round(pct * barWidth);
+      const bar = "█".repeat(filled) + "░".repeat(barWidth - filled);
+      const progressLine = `\`${bar}\` ${playedMatches}/${expectedMatches}\n`;
       embed.addFields({
         name: div.name,
-        value: formatDivisionField(rows, targetGroupSize),
+        value: progressLine + formatDivisionField(rows, targetGroupSize),
         inline: false,
       });
     }

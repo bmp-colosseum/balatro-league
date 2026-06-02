@@ -90,10 +90,21 @@ export const schedule: SlashCommand = {
         .join("\n");
     }
 
+    // ASCII progress bar — counts matches that are "settled" from
+    // the player's POV (CONFIRMED + their own pending reports +
+    // disputes count as advanced state, only "remaining" is unstarted).
+    const settled = done.length + youReported.length + theyReported.length + disputed.length;
+    const totalMatches = settled + remaining.length;
+    const pct = totalMatches === 0 ? 0 : Math.round((settled / totalMatches) * 100);
+    const barWidth = 20;
+    const filled = Math.round((pct / 100) * barWidth);
+    const bar = "█".repeat(filled) + "░".repeat(barWidth - filled);
+    const progressLine = `\`${bar}\` **${settled}/${totalMatches}** matches (${pct}%)`;
+
     const embed = new EmbedBuilder()
       .setTitle(`Your schedule — ${div.name}`)
       .setColor(0x5865f2)
-      .setDescription(`Season: **${activeSeason.name}**`)
+      .setDescription(`Season: **${activeSeason.name}**\n${progressLine}`)
       .addFields(
         ...(theyReported.length ? [{ name: `⚠️ Awaiting your confirmation (${theyReported.length})`, value: fmt(theyReported) }] : []),
         ...(remaining.length ? [{ name: `🎮 Still to play (${remaining.length})`, value: fmt(remaining) }] : []),
