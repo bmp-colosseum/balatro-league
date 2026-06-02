@@ -607,6 +607,13 @@ model Pairing {
   disputedAt                DateTime?
   disputeThreadId           String?
 
+  // True if AT LEAST one of the games in this pairing was forfeited via
+  // the opponent-DC button instead of a normal winner vote. Doesn't
+  // affect standings math (a DC-win still scores 2-0 the same way) —
+  // surfaced on history/admin views so audit can spot serial DC'ers.
+  // Per-game DC attribution lives in the MatchSession GameState JSON.
+  hadDc                     Boolean       @default(false)
+
   division     Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
   playerA      Player   @relation("PairingPlayerA", fields: [playerAId], references: [id])
   playerB      Player   @relation("PairingPlayerB", fields: [playerBId], references: [id])

@@ -54,6 +54,11 @@ export interface GameState {
   // that — the row sticks around for audit.
   cancelVoteByA?: boolean;
   cancelVoteByB?: boolean;
+  // If non-null, this game was forfeited because the named player
+  // disconnected mid-game. winnerId is also set (to the OTHER player)
+  // so phase resolution and standings work normally — the field is
+  // additive metadata for the announce + history view.
+  dcByPlayerId?: string;
 }
 
 export function emptyGameState(firstId: string, pool: DeckEntry[]): GameState {

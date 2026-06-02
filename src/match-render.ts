@@ -408,7 +408,16 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
         .setLabel(`${b.displayName} won`)
         .setStyle(ButtonStyle.Primary),
     );
-    return { embeds: [embed], components: [row] };
+    // DC button. For shootouts, the click handler refuses the auto-
+    // forfeit and explains admin review is needed — we still surface
+    // the button so players know the path exists.
+    const dcRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`match:dc:${s.id}`)
+        .setLabel("Opponent DC'd")
+        .setStyle(ButtonStyle.Secondary),
+    );
+    return { embeds: [embed], components: [row, dcRow] };
   }
 
   // Done — shouldn't reach here mid-game

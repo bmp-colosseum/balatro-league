@@ -68,6 +68,20 @@ export async function archiveStaleThreads(): Promise<{
           await thread.setLocked(true, "Match complete (cron sweep)").catch((err) =>
             logDiscordError("archive-stale-threads.setLocked", err, { threadId: s.threadId!, sessionId: s.id }),
           );
+          // Boot every non-bot member from the thread before archiving
+          // so it disappears from their sidebar. Best-effort per member.
+          try {
+            const members = await thread.members.fetch();
+            const botId = client.user?.id;
+            for (const m of members.values()) {
+              if (botId && m.id === botId) continue;
+              await thread.members.remove(m.id).catch((err) =>
+                logDiscordError("archive-stale-threads.removeMember", err, { threadId: s.threadId!, userId: m.id, sessionId: s.id }),
+              );
+            }
+          } catch (err) {
+            logDiscordError("archive-stale-threads.fetchMembers", err, { threadId: s.threadId!, sessionId: s.id });
+          }
           await thread.setArchived(true, "Match complete (cron sweep)").catch((err) =>
             logDiscordError("archive-stale-threads.setArchived", err, { threadId: s.threadId!, sessionId: s.id }),
           );

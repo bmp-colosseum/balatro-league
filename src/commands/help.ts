@@ -15,6 +15,7 @@ const PLAYER_COMMANDS = [
   { cmd: "/schedule", desc: "Matches you still need to play this season" },
   { cmd: "/start-match @opponent", desc: "Guided best-of-2 match: bot picks the deck/stake via ban/pick" },
   { cmd: "/report @opponent result:2-0|1-1|0-2", desc: "Log a played match (auto-confirmed)" },
+  { cmd: "/helper [reason]", desc: "Call a moderator into the current thread/channel" },
 ];
 
 const ADMIN_COMMANDS = [

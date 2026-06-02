@@ -180,6 +180,7 @@ export const matchButtons: ButtonHandler = {
     if (action === "reroll") return handleReroll(interaction, session);
     if (action === "pick") return handlePick(interaction, session, parts[3]);
     if (action === "winner") return handleWinner(interaction, session, parts[3]);
+    if (action === "dc") return handleDc(interaction, session);
     // Combo negotiation buttons. propose-start enters the proposal flow;
     // propose-submit/accept/counter/cancel manage state inside it.
     if (action === "proposestart") return handleProposeStart(interaction, session);
@@ -403,6 +404,24 @@ async function closeMatchChannel(
       await thread.setLocked(true, "Match complete").catch((err) =>
         logDiscordError("closeMatchChannel.setLocked", err, { threadId: channelId, sessionId }),
       );
+      // Kick every non-bot member out of the thread BEFORE archiving so
+      // the players' sidebars don't keep showing the completed thread.
+      // Archived threads remain visible in members' "archived" view
+      // unless they're not a member, so removing them is the cleanest
+      // way to make the thread "disappear" from the players' UI.
+      // Best-effort per member; one failure doesn't stop the rest.
+      try {
+        const members = await thread.members.fetch();
+        const botId = interaction.client.user?.id;
+        for (const m of members.values()) {
+          if (botId && m.id === botId) continue;
+          await thread.members.remove(m.id).catch((err) =>
+            logDiscordError("closeMatchChannel.removeMember", err, { threadId: channelId, userId: m.id, sessionId }),
+          );
+        }
+      } catch (err) {
+        logDiscordError("closeMatchChannel.fetchMembers", err, { threadId: channelId, sessionId });
+      }
       await thread.setArchived(true, "Match complete").catch((err) =>
         logDiscordError("closeMatchChannel.setArchived", err, { threadId: channelId, sessionId }),
       );
@@ -843,6 +862,97 @@ async function handleWinner(interaction: ButtonInteraction, session: MatchSessio
   return finalizeMatch(interaction, session, newGame, "game3");
 }
 
+// Opponent-DC report. League match: forfeits the CURRENT game only;
+// the series continues normally (game 2 plays out after a game 1 DC).
+// Shootout: refuses to auto-forfeit and tells the clicker to use
+// /helper since the rules around shootout DCs need admin judgment.
+// Only operable in a PLAYING phase — during BAN/PICK the right path
+// is /helper (no game has actually been played yet).
+async function handleDc(interaction: ButtonInteraction, session: MatchSession) {
+  const isGame1 = session.state === "GAME_1_PLAYING";
+  const isGame2 = session.state === "GAME_2_PLAYING";
+  const isGame3 = session.state === "GAME_3_PLAYING";
+  if (!isGame1 && !isGame2 && !isGame3) {
+    return reply(
+      interaction,
+      "DC reports only work once a game is being played. If the opponent went dark during bans/picks, use `/helper` instead.",
+    );
+  }
+  const { playerA, playerB } = await loadPlayers(session);
+  if (interaction.user.id !== playerA.discordId && interaction.user.id !== playerB.discordId) {
+    return reply(interaction, "Only the two players in this match can report a DC.");
+  }
+  if (session.isShootout) {
+    return reply(
+      interaction,
+      "Shootout DCs need admin review — use `/helper` so a moderator can decide the outcome. The shootout rules don't auto-forfeit.",
+    );
+  }
+
+  const gameField: "game1" | "game2" | "game3" = isGame1 ? "game1" : isGame2 ? "game2" : "game3";
+  const gameJson = session[gameField];
+  const game = parseGame(gameJson);
+  if (!game) return reply(interaction, "Game state missing.");
+
+  const reporterIsA = interaction.user.id === playerA.discordId;
+  const reporterId = reporterIsA ? session.playerAId : session.playerBId;
+  const dcerId = reporterIsA ? session.playerBId : session.playerAId;
+  // Auto-fill BOTH votes to the reporter so the rest of the flow
+  // (advance to next game / finalize) treats it like a confirmed
+  // result. The DC'er can dispute via the existing /report dispute
+  // path on the Pairing once it's written.
+  const newGame: GameState = {
+    ...game,
+    voteByA: reporterId,
+    voteByB: reporterId,
+    winnerId: reporterId,
+    dcByPlayerId: dcerId,
+    disputed: false,
+  };
+
+  // Same advance logic as handleWinner — we duplicate the next-game
+  // wiring rather than refactoring into a shared helper since the DC
+  // path is narrower (no custom-combo skip, BO2-only).
+  if (isGame1) {
+    const updated = await updateSession(session, {
+      game1: JSON.stringify(newGame),
+      state: MatchSessionState.GAME_2_CHOOSE_FIRST,
+    });
+    if (!updated) return raceLost(interaction);
+    await refreshMessage(interaction, updated);
+    return reply(
+      interaction,
+      "Recorded as a DC win for you in game 1. Game 2 still plays normally — the opponent can dispute the result if they come back online.",
+    );
+  }
+
+  if (isGame2) {
+    if (session.bestOf === 3) {
+      const winsFor = (id: string) => {
+        const g1 = parseGame(session.game1)?.winnerId;
+        const g3 = parseGame(session.game3)?.winnerId;
+        let count = 0;
+        if (g1 === id) count++;
+        if (newGame.winnerId === id) count++;
+        if (g3 === id) count++;
+        return count;
+      };
+      if (winsFor(session.playerAId) === 1 && winsFor(session.playerBId) === 1) {
+        const updated = await updateSession(session, {
+          game2: JSON.stringify(newGame),
+          state: MatchSessionState.GAME_3_CHOOSE_FIRST,
+        });
+        if (!updated) return raceLost(interaction);
+        await refreshMessage(interaction, updated);
+        return reply(interaction, "Recorded as a DC win for you in game 2. Series goes to game 3.");
+      }
+    }
+    return finalizeMatch(interaction, session, newGame, "game2");
+  }
+
+  return finalizeMatch(interaction, session, newGame, "game3");
+}
+
 async function finalizeMatch(
   interaction: ButtonInteraction,
   session: MatchSession,
@@ -948,6 +1058,14 @@ async function finalizeMatch(
   const gamesWonB = canonA === session.playerAId ? gamesB : gamesA;
 
   const reporter = interaction.user.id === playerA.discordId ? playerA : playerB;
+  // Any game in this series get won via the DC button? Persist as a
+  // top-level flag on the Pairing so audit / history surfaces can
+  // filter without parsing every GameState JSON.
+  const hadDc =
+    !!parseGame(session.game1)?.dcByPlayerId ||
+    !!parseGame(session.game2)?.dcByPlayerId ||
+    !!parseGame(session.game3)?.dcByPlayerId ||
+    !!finalGame.dcByPlayerId;
   const pairing = await prisma.pairing.upsert({
     where: {
       divisionId_playerAId_playerBId: {
@@ -966,6 +1084,7 @@ async function finalizeMatch(
       reporterId: reporter.id,
       reportedAt: new Date(),
       confirmedAt: new Date(),
+      hadDc,
     },
     update: {
       gamesWonA,
@@ -973,6 +1092,7 @@ async function finalizeMatch(
       status: "CONFIRMED",
       reporterId: reporter.id,
       reportedAt: new Date(),
+      hadDc,
       confirmedAt: new Date(),
     },
   });
