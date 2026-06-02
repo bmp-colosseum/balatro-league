@@ -131,9 +131,10 @@ async function loadAllowedStakes(session: MatchSession): Promise<string[]> {
 
 async function refreshMessage(interaction: AnyInteraction, session: MatchSession) {
   const { playerA, playerB } = await loadPlayers(session);
-  // Allowed stakes are only used by the combo-proposal UI in GAME_1_BAN,
-  // but it's cheap and harmless to always fetch.
-  const allowedStakes = session.state === "GAME_1_BAN" ? await loadAllowedStakes(session) : [];
+  // Allowed stakes feed the combo-proposal UI in ANY BAN phase (proposals
+  // can happen per-game now). Cheap to always fetch.
+  const isBanPhase = session.state === "GAME_1_BAN" || session.state === "GAME_2_BAN" || session.state === "GAME_3_BAN";
+  const allowedStakes = isBanPhase ? await loadAllowedStakes(session) : [];
   const { embeds, components } = renderMatch(session, playerA, playerB, { allowedStakes });
   await interaction.update({ embeds, components });
 }
@@ -986,6 +987,16 @@ async function finalizeMatch(
 // is what moves the agreed proposal into session.customCombo and jumps
 // past the ban/pick flow entirely.
 
+// Map state → 1/2/3 game number, or 0 if not in a ban phase.
+// Centralized so propose-* handlers can target the CURRENT game's
+// fields (game1/game2/game3) instead of always game1.
+function banPhaseGameNum(state: MatchSessionState): 1 | 2 | 3 | 0 {
+  if (state === MatchSessionState.GAME_1_BAN) return 1;
+  if (state === MatchSessionState.GAME_2_BAN) return 2;
+  if (state === MatchSessionState.GAME_3_BAN) return 3;
+  return 0;
+}
+
 // Resolve which of the two players the actor is, replying with an
 // ephemeral error if they aren't one of them. Returns null on miss.
 async function actorPlayer(interaction: AnyInteraction, session: MatchSession) {
@@ -997,8 +1008,8 @@ async function actorPlayer(interaction: AnyInteraction, session: MatchSession) {
 }
 
 async function handleProposeStart(interaction: ButtonInteraction, session: MatchSession) {
-  if (session.state !== "GAME_1_BAN") {
-    return reply(interaction, "You can only propose a custom combo before game 1 starts.");
+  if (banPhaseGameNum(session.state) === 0) {
+    return reply(interaction, "You can only propose a custom combo during a ban phase.");
   }
   const ctx = await actorPlayer(interaction, session);
   if (!ctx) return;
@@ -1012,7 +1023,7 @@ async function handleProposeStart(interaction: ButtonInteraction, session: Match
 }
 
 async function handleProposeDeck(interaction: StringSelectMenuInteraction, session: MatchSession) {
-  if (session.state !== "GAME_1_BAN") return reply(interaction, "Not in the proposal phase.");
+  if (banPhaseGameNum(session.state) === 0) return reply(interaction, "Not in a ban phase.");
   const proposal = parseProposal(session.customComboProposal);
   if (!proposal || proposal.status !== "building") {
     return reply(interaction, "No proposal is being built right now.");
@@ -1034,7 +1045,7 @@ async function handleProposeDeck(interaction: StringSelectMenuInteraction, sessi
 }
 
 async function handleProposeStake(interaction: StringSelectMenuInteraction, session: MatchSession) {
-  if (session.state !== "GAME_1_BAN") return reply(interaction, "Not in the proposal phase.");
+  if (banPhaseGameNum(session.state) === 0) return reply(interaction, "Not in a ban phase.");
   const proposal = parseProposal(session.customComboProposal);
   if (!proposal || proposal.status !== "building") {
     return reply(interaction, "No proposal is being built right now.");
@@ -1057,7 +1068,7 @@ async function handleProposeStake(interaction: StringSelectMenuInteraction, sess
 }
 
 async function handleProposeSubmit(interaction: ButtonInteraction, session: MatchSession) {
-  if (session.state !== "GAME_1_BAN") return reply(interaction, "Not in the proposal phase.");
+  if (banPhaseGameNum(session.state) === 0) return reply(interaction, "Not in a ban phase.");
   const proposal = parseProposal(session.customComboProposal);
   if (!proposal || proposal.status !== "building") {
     return reply(interaction, "No proposal to submit.");
@@ -1078,7 +1089,7 @@ async function handleProposeSubmit(interaction: ButtonInteraction, session: Matc
 }
 
 async function handleProposeCounter(interaction: ButtonInteraction, session: MatchSession) {
-  if (session.state !== "GAME_1_BAN") return reply(interaction, "Not in the proposal phase.");
+  if (banPhaseGameNum(session.state) === 0) return reply(interaction, "Not in a ban phase.");
   const proposal = parseProposal(session.customComboProposal);
   if (!proposal || proposal.status !== "pending") {
     return reply(interaction, "No pending proposal to counter.");
@@ -1096,7 +1107,7 @@ async function handleProposeCounter(interaction: ButtonInteraction, session: Mat
 }
 
 async function handleProposeCancel(interaction: ButtonInteraction, session: MatchSession) {
-  if (session.state !== "GAME_1_BAN") return reply(interaction, "Not in the proposal phase.");
+  if (banPhaseGameNum(session.state) === 0) return reply(interaction, "Not in a ban phase.");
   if (!session.customComboProposal) {
     return reply(interaction, "No proposal to cancel.");
   }
@@ -1165,13 +1176,14 @@ async function handleCancelMatch(interaction: ButtonInteraction, session: MatchS
   closeMatchChannel(interaction, updated.id, updated.threadId).catch(() => {});
 }
 
-// Accept = the OTHER player agrees to the proposed combo. Snap into the
-// custom-combo skip-everything path: stamp customCombo, swap game1's
-// pool to the single agreed combo with pickedDeckIdx=0, jump state to
-// GAME_1_PLAYING. From here BO2/BO3 follows the existing
-// customCombo-skips-CHOOSE_FIRST logic in handleWinner.
+// Accept = the OTHER player agrees to the proposed combo. Replaces the
+// CURRENT game's pool with the single agreed combo (pickedDeckIdx=0)
+// and jumps the session to that game's PLAYING state. The combo
+// applies to THIS game only — next game starts fresh in BAN, so
+// players can mix ban/pick with custom combos across the match.
 async function handleProposeAccept(interaction: ButtonInteraction, session: MatchSession) {
-  if (session.state !== "GAME_1_BAN") return reply(interaction, "Not in the proposal phase.");
+  const gameNum = banPhaseGameNum(session.state);
+  if (gameNum === 0) return reply(interaction, "Not in a ban phase.");
   const proposal = parseProposal(session.customComboProposal);
   if (!proposal || proposal.status !== "pending") {
     return reply(interaction, "No pending proposal to accept.");
@@ -1190,17 +1202,20 @@ async function handleProposeAccept(interaction: ButtonInteraction, session: Matc
   if (!isCanonicalDeck(proposal.deck) || !allowedStakes.includes(proposal.stake)) {
     return reply(interaction, "That combo is no longer valid — start a new proposal.");
   }
-  const game1 = parseGame(session.game1);
-  if (!game1) return reply(interaction, "Game 1 state missing — start a new match.");
+  const gameField: "game1" | "game2" | "game3" = `game${gameNum}` as const;
+  const currentGame = parseGame(session[gameField]);
+  if (!currentGame) return reply(interaction, `Game ${gameNum} state missing — refresh Discord and try again.`);
   const combo = { deck: proposal.deck, stake: proposal.stake };
-  const newGame1: GameState = { firstId: game1.firstId, bans: [], pool: [combo], pickedDeckIdx: 0 };
+  const newGame: GameState = { firstId: currentGame.firstId, bans: [], pool: [combo], pickedDeckIdx: 0 };
+  const playingState =
+    gameNum === 1 ? MatchSessionState.GAME_1_PLAYING :
+    gameNum === 2 ? MatchSessionState.GAME_2_PLAYING :
+    MatchSessionState.GAME_3_PLAYING;
   const updated = await updateSession(session, {
-    customCombo: JSON.stringify(combo),
     customComboProposal: null,
-    pool: JSON.stringify([combo]),
-    game1: JSON.stringify(newGame1),
-    state: MatchSessionState.GAME_1_PLAYING,
-  });
+    [gameField]: JSON.stringify(newGame),
+    state: playingState,
+  } as Prisma.MatchSessionUpdateManyMutationInput);
   if (!updated) return raceLost(interaction);
   await refreshMessage(interaction, updated);
 }

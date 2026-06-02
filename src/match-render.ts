@@ -183,7 +183,7 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
   // KICK OFF a proposal from the ban phase via the "Propose custom
   // combo" button — when no proposal exists, that button is appended
   // to the normal ban controls.
-  if (phase.kind === "BAN" && gameNumber === 1) {
+  if (phase.kind === "BAN") {
     const proposal = parseProposalForRender(s.customComboProposal);
     if (proposal) {
       return renderProposal(s, a, b, proposal, opts.allowedStakes ?? []);
@@ -309,17 +309,15 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
         .setStyle(ButtonStyle.Danger),
     );
     // Either player can short-circuit the ban/pick flow by proposing a
-    // specific deck+stake combo for the entire match. Only shown in
-    // game 1's ban phase — once the match has started, the combo is
-    // locked in.
-    if (gameNumber === 1) {
-      confirmRow.addComponents(
-        new ButtonBuilder()
-          .setCustomId(`match:proposestart:${s.id}`)
-          .setLabel("Propose custom combo")
-          .setStyle(ButtonStyle.Secondary),
-      );
-    }
+    // specific deck+stake combo. Available on every game's ban phase —
+    // each game is independent, so game 2 can be ban/pick even if
+    // game 1 was a custom combo (and vice versa).
+    confirmRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`match:proposestart:${s.id}`)
+        .setLabel("Propose custom combo")
+        .setStyle(ButtonStyle.Secondary),
+    );
     return {
       embeds: [embed],
       components: [
