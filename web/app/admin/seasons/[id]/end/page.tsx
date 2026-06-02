@@ -55,9 +55,9 @@ export default async function EndSeasonPreviewPage({
                 <tr>
                   <th>#</th>
                   <th>Player</th>
-                  <th>Old</th>
-                  <th>New</th>
-                  <th>Δ</th>
+                  <th title="Rank before this end-season recompute (1 = best)">Old rank</th>
+                  <th title="Rank after this end-season recompute (1 = best)">New rank</th>
+                  <th title="↑ = climbed in rank, ↓ = dropped">Movement</th>
                 </tr>
               </thead>
               <tbody>
@@ -77,8 +77,14 @@ export default async function EndSeasonPreviewPage({
                       </tr>
                     );
                   }
-                  const positive = delta.delta > 0;
-                  const negative = delta.delta < 0;
+                  // Rating is now a rank (1 = best). A NEGATIVE delta
+                  // means the player MOVED UP (e.g. went from rank 5 to
+                  // rank 1 → delta = -4). Color + arrow flip accordingly:
+                  // movement toward 1 (lower number) is green/↑, away is
+                  // red/↓.
+                  const improved = delta.delta < 0;
+                  const worsened = delta.delta > 0;
+                  const positions = Math.abs(delta.delta);
                   return (
                     <tr key={row.player.id}>
                       <td>{idx + 1}</td>
@@ -87,10 +93,10 @@ export default async function EndSeasonPreviewPage({
                           <strong>{row.player.displayName}</strong>
                         </Link>
                       </td>
-                      <td>{delta.oldRating ?? "—"}</td>
-                      <td>{delta.newRating}</td>
-                      <td style={{ color: positive ? "#2ecc71" : negative ? "#e74c3c" : undefined }}>
-                        {delta.delta > 0 ? "+" : ""}{delta.delta}
+                      <td>{delta.oldRating != null ? `#${delta.oldRating}` : "—"}</td>
+                      <td>#{delta.newRating}</td>
+                      <td style={{ color: improved ? "#2ecc71" : worsened ? "#e74c3c" : undefined }}>
+                        {improved ? `↑ ${positions}` : worsened ? `↓ ${positions}` : "—"}
                       </td>
                     </tr>
                   );
