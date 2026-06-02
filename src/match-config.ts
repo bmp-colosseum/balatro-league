@@ -73,17 +73,37 @@ function shuffle<T>(arr: T[], rand: () => number): T[] {
   return a;
 }
 
-// Auto-seed the Default preset with Balatro's stock decks/stakes if no
-// presets exist yet. Called on first /start-match so admins can always run
-// a match without first visiting the admin UI.
+// Auto-seed the Default preset with Balatro's stock decks/stakes when
+// needed. Two cases handled:
+//   1. No presets at all — create Default with the stock list
+//   2. Default exists but its decks OR stakes array is empty — fill it
+//      (covers the case where admin created it via UI without adding
+//      any decks, or a migration left it empty)
+// Idempotent: a Default with non-empty decks AND stakes is left alone.
 export async function seedDefaultPresetIfEmpty(): Promise<void> {
-  const count = await prisma.matchConfigPreset.count();
-  if (count > 0) return;
-  await prisma.matchConfigPreset.create({
-    data: {
-      name: DEFAULT_PRESET_NAME,
-      decks: defaults.decks,
-      stakes: defaults.stakes,
-    },
+  const existing = await prisma.matchConfigPreset.findUnique({
+    where: { name: DEFAULT_PRESET_NAME },
   });
+  if (!existing) {
+    await prisma.matchConfigPreset.create({
+      data: {
+        name: DEFAULT_PRESET_NAME,
+        decks: defaults.decks,
+        stakes: defaults.stakes,
+      },
+    });
+    return;
+  }
+  // Default exists — backfill any empty fields.
+  const needsDecks = existing.decks.length === 0;
+  const needsStakes = existing.stakes.length === 0;
+  if (needsDecks || needsStakes) {
+    await prisma.matchConfigPreset.update({
+      where: { id: existing.id },
+      data: {
+        ...(needsDecks ? { decks: defaults.decks } : {}),
+        ...(needsStakes ? { stakes: defaults.stakes } : {}),
+      },
+    });
+  }
 }
