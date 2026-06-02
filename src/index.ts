@@ -17,8 +17,46 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds],
 });
 
-client.once(Events.ClientReady, (c) => {
+client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag}`);
+  // Boot-time permission audit. Logs whether the bot has the perms it
+  // needs in the configured guild — useful when threads aren't closing,
+  // channels aren't being created, etc. We name each perm we care about
+  // and check it against the bot's effective permissions.
+  if (env.DISCORD_GUILD_ID) {
+    try {
+      const guild = await c.guilds.fetch(env.DISCORD_GUILD_ID);
+      const me = await guild.members.fetchMe();
+      const needed: Array<[string, bigint]> = [
+        ["ViewChannel", 1n << 10n],
+        ["SendMessages", 1n << 11n],
+        ["ManageChannels", 1n << 4n],
+        ["ManageThreads", 1n << 34n],
+        ["CreatePublicThreads", 1n << 35n],
+        ["CreatePrivateThreads", 1n << 36n],
+        ["SendMessagesInThreads", 1n << 38n],
+        ["ManageRoles", 1n << 28n],
+        ["ManageMessages", 1n << 13n],
+        ["UseExternalEmojis", 1n << 18n],
+      ];
+      const perms = me.permissions.bitfield;
+      const missing: string[] = [];
+      const present: string[] = [];
+      for (const [name, bit] of needed) {
+        if ((perms & bit) === bit) present.push(name);
+        else missing.push(name);
+      }
+      console.log(`[perms] guild=${guild.name} bot=${me.user.tag}`);
+      console.log(`[perms]   present: ${present.join(", ") || "(none)"}`);
+      if (missing.length > 0) {
+        console.warn(`[perms] ⚠ MISSING: ${missing.join(", ")} — these will silently fail when used.`);
+      } else {
+        console.log(`[perms]   missing: (none)`);
+      }
+    } catch (err) {
+      console.warn("[perms] failed to fetch guild membership for audit:", err);
+    }
+  }
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {

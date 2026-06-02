@@ -25,6 +25,7 @@ import { resolveChallengesChannelId } from "../challenges-channel.js";
 import { prisma } from "../db.js";
 import { env } from "../env.js";
 import { getLeagueSettings, getLeagueSettingsForSeason } from "../league-settings.js";
+import { logDiscordError } from "../log-discord-error.js";
 import { CASUAL_PRESET_NAME, DEFAULT_PRESET_NAME, generatePool, presetForDivision, seedCasualPresetIfEmpty, seedDefaultPresetIfEmpty } from "../match-config.js";
 import { renderMatch } from "../match-render.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
@@ -393,11 +394,18 @@ async function closeMatchChannel(
   let ok = false;
   try {
     const channel = await interaction.client.channels.fetch(channelId);
-    if (!channel) return;
+    if (!channel) {
+      console.warn(`[closeMatchChannel] channel ${channelId} not found for session ${sessionId}`);
+      return;
+    }
     if (channel.type === ChannelType.PrivateThread || channel.type === ChannelType.PublicThread) {
       const thread = channel as ThreadChannel;
-      await thread.setLocked(true, "Match complete").catch(() => {});
-      await thread.setArchived(true, "Match complete").catch(() => {});
+      await thread.setLocked(true, "Match complete").catch((err) =>
+        logDiscordError("closeMatchChannel.setLocked", err, { threadId: channelId, sessionId }),
+      );
+      await thread.setArchived(true, "Match complete").catch((err) =>
+        logDiscordError("closeMatchChannel.setArchived", err, { threadId: channelId, sessionId }),
+      );
       ok = true;
     } else if (channel.type === ChannelType.GuildText) {
       // Legacy: pre-revert per-match text channels. Lock @everyone + each
@@ -405,19 +413,21 @@ async function closeMatchChannel(
       // these by hand whenever.
       const text = channel as TextChannel;
       const guildId = text.guild.id;
-      await text.permissionOverwrites.edit(guildId, { SendMessages: false }).catch(() => {});
+      await text.permissionOverwrites.edit(guildId, { SendMessages: false }).catch((err) =>
+        logDiscordError("closeMatchChannel.lockEveryone", err, { channelId, guildId, sessionId }),
+      );
       for (const ow of text.permissionOverwrites.cache.values()) {
         if (ow.type === 1) {
           await text.permissionOverwrites
             .edit(ow.id, { ViewChannel: true, SendMessages: false })
-            .catch(() => {});
+            .catch((err) => logDiscordError("closeMatchChannel.lockMember", err, { channelId, userId: ow.id, sessionId }));
         }
       }
       ok = true;
     }
     void PermissionFlagsBits;
-  } catch {
-    // Thread may have been deleted manually; ignore.
+  } catch (err) {
+    logDiscordError("closeMatchChannel.fetch", err, { channelId, sessionId });
   }
   if (ok) {
     await prisma.matchSession

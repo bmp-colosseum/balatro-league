@@ -13,6 +13,7 @@
 import { ChannelType, type ThreadChannel } from "discord.js";
 import { prisma } from "./db.js";
 import { tryGetDiscordClient } from "./discord.js";
+import { logDiscordError } from "./log-discord-error.js";
 
 const GRACE_HOURS = 24;
 const MAX_PER_RUN = 50;
@@ -64,8 +65,12 @@ export async function archiveStaleThreads(): Promise<{
         if (thread.archived) {
           outcome = "already";
         } else {
-          await thread.setLocked(true, "Match complete (cron sweep)").catch(() => {});
-          await thread.setArchived(true, "Match complete (cron sweep)").catch(() => {});
+          await thread.setLocked(true, "Match complete (cron sweep)").catch((err) =>
+            logDiscordError("archive-stale-threads.setLocked", err, { threadId: s.threadId!, sessionId: s.id }),
+          );
+          await thread.setArchived(true, "Match complete (cron sweep)").catch((err) =>
+            logDiscordError("archive-stale-threads.setArchived", err, { threadId: s.threadId!, sessionId: s.id }),
+          );
           outcome = "archived";
         }
       } else {

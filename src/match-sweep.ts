@@ -16,6 +16,7 @@ import { REST } from "@discordjs/rest";
 import { Routes } from "discord-api-types/v10";
 import { prisma } from "./db.js";
 import { env } from "./env.js";
+import { logDiscordError } from "./log-discord-error.js";
 
 const SWEEP_INTERVAL_MS = 60 * 1000;
 const IDLE_CANCEL_HOURS = 24;
@@ -65,7 +66,10 @@ export async function sweepExpiredInvites(): Promise<number> {
           data: { threadArchivedAt: new Date() },
         }).catch(() => {});
       } catch (err) {
-        console.warn(`[match-sweep] thread close ${session.threadId} failed:`, err);
+        logDiscordError("match-sweep.expiredInvite.closeThread", err, {
+          threadId: session.threadId,
+          sessionId: session.id,
+        });
       }
     }
   }
@@ -109,7 +113,10 @@ export async function sweepIdleSessions(): Promise<number> {
           data: { threadArchivedAt: new Date() },
         }).catch(() => {});
       } catch (err) {
-        console.warn(`[match-sweep idle] thread close ${session.threadId} failed:`, err);
+        logDiscordError("match-sweep.idle.closeThread", err, {
+          threadId: session.threadId,
+          sessionId: session.id,
+        });
       }
     }
   }
