@@ -257,6 +257,7 @@ export async function endSeason(formData: FormData) {
     include: {
       tiers: { orderBy: { position: "asc" } },
       divisions: {
+        orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
         include: {
           tier: true,
           members: {
@@ -273,6 +274,7 @@ export async function endSeason(formData: FormData) {
     const players = d.members.map((m) => m.player);
     return {
       tierPosition: d.tier.position,
+      divisionGroupNumber: d.groupNumber,
       members: d.members.map((m) => ({
         playerId: m.playerId,
         status: m.status,

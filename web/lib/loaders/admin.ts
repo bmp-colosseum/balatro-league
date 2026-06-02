@@ -216,6 +216,7 @@ export async function loadEndSeasonPreview(seasonId: string): Promise<EndSeasonP
     const players = d.members.map((m) => m.player);
     return {
       tierPosition: d.tier.position,
+      divisionGroupNumber: d.groupNumber,
       members: d.members.map((m) => ({
         playerId: m.playerId,
         status: m.status,

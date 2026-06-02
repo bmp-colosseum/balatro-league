@@ -32,9 +32,12 @@ export default async function EndSeasonPreviewPage({
           </Link>
         </div>
         <p className="muted">
-          Preview of rating changes. Top finishers in each tier get rating ≈ the tier above them
-          (sets up natural promotion next season); bottom finishers get rating ≈ the tier below
-          them. Dropped players keep their current rating.
+          Preview of new rankings (1 = best). Players are ranked by tier, then division, then
+          finishing position within their division — so top of Rare 1 sits just below the
+          bottom of Legendary, and bottom of Rare 1 sits just above top of Rare 2. Next
+          season's build sorts by rank, so top finishers land at the front of their tier
+          (closest to promotion) and bottom finishers at the back (closest to relegation).
+          Dropped players keep their current ranking.
         </p>
 
         {unfinishedPairings > 0 && (
