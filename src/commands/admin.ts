@@ -215,11 +215,12 @@ async function cancelMatch(interaction: ChatInputCommandInteraction) {
         await channel.send(
           `🛑 Match cancelled by <@${interaction.user.id}> (admin). Reason: ${reason}`,
         );
-        await channel.setLocked(true, `Admin cancel: ${reason}`).catch(() => {});
-        await channel.setArchived(true, "Admin cancel").catch(() => {});
+        // Delete the thread outright — admin cancel is terminal,
+        // nothing to preserve.
+        await channel.delete(`Admin cancel: ${reason}`).catch(() => {});
       }
     } catch (err) {
-      console.warn("[admin cancel-match] failed to post/lock thread:", err);
+      console.warn("[admin cancel-match] failed to post/delete thread:", err);
     }
   }
 

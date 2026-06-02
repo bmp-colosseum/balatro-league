@@ -51,22 +51,19 @@ export async function sweepExpiredInvites(): Promise<number> {
       console.warn(`[match-sweep] cancel ${session.id} failed:`, err);
     });
 
-    // Close the thread immediately so the abandoned invite doesn't
-    // sit open. setLocked + setArchived via REST works even without
-    // a live gateway client. Best-effort — failures (thread deleted,
-    // permissions revoked) leave threadArchivedAt null so the 24h
-    // stale-threads cron can retry.
+    // Delete the abandoned thread immediately — no point keeping an
+    // expired-invite shell around. REST works even without a live
+    // gateway client. Best-effort — failures leave threadArchivedAt
+    // null so the 24h stale-threads cron can retry.
     if (session.threadId) {
       try {
-        await rest().patch(Routes.channel(session.threadId), {
-          body: { locked: true, archived: true },
-        });
+        await rest().delete(Routes.channel(session.threadId));
         await prisma.matchSession.update({
           where: { id: session.id },
           data: { threadArchivedAt: new Date() },
         }).catch(() => {});
       } catch (err) {
-        logDiscordError("match-sweep.expiredInvite.closeThread", err, {
+        logDiscordError("match-sweep.expiredInvite.deleteThread", err, {
           threadId: session.threadId,
           sessionId: session.id,
         });
@@ -105,15 +102,13 @@ export async function sweepIdleSessions(): Promise<number> {
     });
     if (session.threadId) {
       try {
-        await rest().patch(Routes.channel(session.threadId), {
-          body: { locked: true, archived: true },
-        });
+        await rest().delete(Routes.channel(session.threadId));
         await prisma.matchSession.update({
           where: { id: session.id },
           data: { threadArchivedAt: new Date() },
         }).catch(() => {});
       } catch (err) {
-        logDiscordError("match-sweep.idle.closeThread", err, {
+        logDiscordError("match-sweep.idle.deleteThread", err, {
           threadId: session.threadId,
           sessionId: session.id,
         });

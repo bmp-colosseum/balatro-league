@@ -388,12 +388,19 @@ async function handleBanConfirm(interaction: ButtonInteraction, session: MatchSe
   await refreshMessage(interaction, updated);
 }
 
-// Close the match thread when the match completes: setLocked (no new
-// messages from members), then setArchived (collapsed in sidebar).
-// Discord then garbage-collects archived+inactive threads automatically.
+// Close the match thread when the match completes. For private/public
+// threads we just DELETE — the result lives on the Pairing row + the
+// #results announce + the audit log, and disputes spawn their own
+// dedicated thread (Pairing.disputeThreadId), so nothing of value
+// is in the match thread once the buttons have been clicked.
+//
 // Stamps MatchSession.threadArchivedAt on success so the
 // archive.stale-threads cron skips this row. Best-effort — failures
 // leave threadArchivedAt null so the cron picks it up later.
+//
+// Legacy GuildText channels (pre-revert per-match text channels) are
+// NOT deleted — they're locked instead so admin can clean them up by
+// hand if any are still around.
 async function closeMatchChannel(
   interaction: AnyInteraction,
   sessionId: string,
@@ -409,31 +416,10 @@ async function closeMatchChannel(
     }
     if (channel.type === ChannelType.PrivateThread || channel.type === ChannelType.PublicThread) {
       const thread = channel as ThreadChannel;
-      await thread.setLocked(true, "Match complete").catch((err) =>
-        logDiscordError("closeMatchChannel.setLocked", err, { threadId: channelId, sessionId }),
+      await thread.delete("Match complete").then(
+        () => { ok = true; },
+        (err: unknown) => logDiscordError("closeMatchChannel.delete", err, { threadId: channelId, sessionId }),
       );
-      // Kick every non-bot member out of the thread BEFORE archiving so
-      // the players' sidebars don't keep showing the completed thread.
-      // Archived threads remain visible in members' "archived" view
-      // unless they're not a member, so removing them is the cleanest
-      // way to make the thread "disappear" from the players' UI.
-      // Best-effort per member; one failure doesn't stop the rest.
-      try {
-        const members = await thread.members.fetch();
-        const botId = interaction.client.user?.id;
-        for (const m of members.values()) {
-          if (botId && m.id === botId) continue;
-          await thread.members.remove(m.id).catch((err) =>
-            logDiscordError("closeMatchChannel.removeMember", err, { threadId: channelId, userId: m.id, sessionId }),
-          );
-        }
-      } catch (err) {
-        logDiscordError("closeMatchChannel.fetchMembers", err, { threadId: channelId, sessionId });
-      }
-      await thread.setArchived(true, "Match complete").catch((err) =>
-        logDiscordError("closeMatchChannel.setArchived", err, { threadId: channelId, sessionId }),
-      );
-      ok = true;
     } else if (channel.type === ChannelType.GuildText) {
       // Legacy: pre-revert per-match text channels. Lock @everyone + each
       // user overwrite so the channel becomes read-only. Admin can delete

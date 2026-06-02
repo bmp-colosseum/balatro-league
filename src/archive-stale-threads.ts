@@ -1,14 +1,18 @@
-// Safety-net cron: lock + archive Discord threads for MatchSessions
-// that have completed or been cancelled but whose thread is still
-// open. The inline closeMatchChannel() on completion handles the
-// happy path; this catches the cases where that call failed (bot
-// restart mid-completion, Discord 5xx, etc.) so we don't leak
-// active threads against the 1000-thread soft cap.
+// Safety-net cron: delete Discord threads for MatchSessions that have
+// completed or been cancelled but whose thread is still around. The
+// inline closeMatchChannel() on completion handles the happy path;
+// this catches the cases where that call failed (bot restart
+// mid-completion, Discord 5xx, etc.) so we don't leak active threads
+// against the 1000-thread soft cap.
 //
 // Idempotent: marks MatchSession.threadArchivedAt once processed so
 // subsequent sweeps skip the session. Even unrecoverable failures
 // (thread deleted, permissions revoked, channel gone) mark the row
 // — otherwise the cron would hammer the same broken thread forever.
+//
+// Naming note: the column is still threadArchivedAt for backwards
+// compatibility with existing rows; the action it represents is now
+// "deleted" (or "no longer needing attention" in failure cases).
 
 import { ChannelType, type ThreadChannel } from "discord.js";
 import { prisma } from "./db.js";
@@ -62,30 +66,12 @@ export async function archiveStaleThreads(): Promise<{
         channel.type === ChannelType.PublicThread
       ) {
         const thread = channel as ThreadChannel;
-        if (thread.archived) {
-          outcome = "already";
-        } else {
-          await thread.setLocked(true, "Match complete (cron sweep)").catch((err) =>
-            logDiscordError("archive-stale-threads.setLocked", err, { threadId: s.threadId!, sessionId: s.id }),
-          );
-          // Boot every non-bot member from the thread before archiving
-          // so it disappears from their sidebar. Best-effort per member.
-          try {
-            const members = await thread.members.fetch();
-            const botId = client.user?.id;
-            for (const m of members.values()) {
-              if (botId && m.id === botId) continue;
-              await thread.members.remove(m.id).catch((err) =>
-                logDiscordError("archive-stale-threads.removeMember", err, { threadId: s.threadId!, userId: m.id, sessionId: s.id }),
-              );
-            }
-          } catch (err) {
-            logDiscordError("archive-stale-threads.fetchMembers", err, { threadId: s.threadId!, sessionId: s.id });
-          }
-          await thread.setArchived(true, "Match complete (cron sweep)").catch((err) =>
-            logDiscordError("archive-stale-threads.setArchived", err, { threadId: s.threadId!, sessionId: s.id }),
-          );
+        try {
+          await thread.delete("Match complete (cron sweep)");
           outcome = "archived";
+        } catch (err) {
+          logDiscordError("archive-stale-threads.delete", err, { threadId: s.threadId!, sessionId: s.id });
+          outcome = "vanished";
         }
       } else {
         // Not a thread (legacy per-match text channel). Nothing to do here;
