@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { disputeMatchFromWeb, type DisputeResultStr } from "@/lib/report";
+import { disputeMatchFromWeb, reportSetFromWeb, type DisputeResultStr, type ReportResultStr } from "@/lib/report";
 
 // Vote on a player-page easter egg (currently just the Sanji impeachment
 // joke). Gated to logged-in Discord users — unique constraint on
@@ -63,4 +63,25 @@ export async function submitProfileDispute(formData: FormData) {
   revalidatePath("/standings");
   revalidatePath("/me");
   redirect(`/profile/${profileId}?disputeOk=1`);
+}
+
+// Report a match from the profile page's 'Report a match' dropdown
+// (only rendered when isOwnProfile is true). Same backend as the /me
+// dropdown, redirect lands you back on your profile.
+export async function reportFromProfileAction(formData: FormData) {
+  const session = await auth();
+  const discordId = (session?.user as { discordId?: string } | undefined)?.discordId;
+  const profileId = String(formData.get("profileId") ?? "");
+  if (!discordId) redirect(`/profile/${profileId}?reportErr=not-logged-in`);
+  const opponentId = String(formData.get("opponentId") ?? "");
+  const result = String(formData.get("result") ?? "") as ReportResultStr;
+  if (!opponentId || !["2-0", "1-1", "0-2"].includes(result)) {
+    redirect(`/profile/${profileId}?reportErr=missing-fields`);
+  }
+  const r = await reportSetFromWeb(discordId!, opponentId, result);
+  if (!r.ok) redirect(`/profile/${profileId}?reportErr=${encodeURIComponent(r.reason)}`);
+  revalidatePath(`/profile/${profileId}`);
+  revalidatePath("/standings");
+  revalidatePath("/me");
+  redirect(`/profile/${profileId}?reportOk=1`);
 }

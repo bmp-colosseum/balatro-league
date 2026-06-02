@@ -8,7 +8,7 @@ import { loadPlayerHistory } from "@/lib/profile";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { recordSetForPlayer } from "@/app/admin/players/actions";
-import { castEasterEggVote, submitProfileDispute } from "./actions";
+import { castEasterEggVote, reportFromProfileAction, submitProfileDispute } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +31,7 @@ export default async function ProfilePage({
     (viewerSession?.user as { discordId?: string } | undefined)?.discordId ?? null;
   const showBmpMmr = await getShowBmpMmr();
   const isAdmin = await hasTier("ADMIN");
-  const { viewer, sanji, bmpSeasonSnapshots, fallbackSnapshot, adminCtx } = await loadProfileExtras({
+  const { viewer, sanji, bmpSeasonSnapshots, fallbackSnapshot, adminCtx, ownActiveDivision } = await loadProfileExtras({
     profilePlayerId: profile.player.id,
     profileDiscordId: profile.player.discordId,
     profileDisplayName: profile.player.displayName,
@@ -52,6 +52,46 @@ export default async function ProfilePage({
           <div className="stat"><div className="label">Seasons</div><div className="value">{t.seasons}</div></div>
           <div className="stat"><div className="label">Total points</div><div className="value">{t.points}</div></div>
         </div>
+
+        {/* Own profile + active division → report-a-match dropdown.
+            Same UX as /me, just lives here so the player can stay on
+            their profile while logging results. */}
+        {isOwnProfile && ownActiveDivision && (
+          <div className="card" style={{ marginTop: 16 }}>
+            <strong>Report a match — {ownActiveDivision.divisionName}</strong>
+            <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+              Season: {ownActiveDivision.seasonName}
+            </div>
+            {ownActiveDivision.reportableOpponents.length === 0 ? (
+              <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
+                No unplayed opponents — you've played everyone in your division.
+              </p>
+            ) : (
+              <>
+                <form action={reportFromProfileAction} style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <input type="hidden" name="profileId" value={profile.player.id} />
+                  <span className="muted" style={{ fontSize: 12 }}>vs</span>
+                  <select name="opponentId" required style={{ flex: "1 1 200px" }}>
+                    <option value="">— pick an opponent —</option>
+                    {ownActiveDivision.reportableOpponents.map((o) => (
+                      <option key={o.playerId} value={o.playerId}>{o.displayName}</option>
+                    ))}
+                  </select>
+                  <select name="result" required defaultValue="2-0">
+                    <option value="2-0">2-0 (I won both)</option>
+                    <option value="1-1">1-1 (draw)</option>
+                    <option value="0-2">0-2 (I lost both)</option>
+                  </select>
+                  <button type="submit">Report</button>
+                </form>
+                <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
+                  Reports go to <strong>#results</strong> with Confirm + Dispute buttons. If no one
+                  clicks within 2 minutes, the result auto-confirms.
+                </p>
+              </>
+            )}
+          </div>
+        )}
 
         {isSanji && (
           <div className="card" style={{ marginTop: 16, borderColor: "#e67e22" }}>

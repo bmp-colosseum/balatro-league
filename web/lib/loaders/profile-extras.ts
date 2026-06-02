@@ -44,12 +44,25 @@ export interface AdminRecordContext {
   opponents: Array<{ playerId: string; displayName: string }>;
 }
 
+// Active-season division context for the profile OWNER — drives the
+// "report a match" dropdown that lets them log results without
+// leaving their profile. Only populated when the viewer IS the profile
+// owner AND they have an ACTIVE membership in a PUBLIC season.
+export interface OwnActiveDivision {
+  divisionId: string;
+  divisionName: string;
+  seasonId: string;
+  seasonName: string;
+  reportableOpponents: Array<{ playerId: string; displayName: string }>;
+}
+
 export interface ProfileExtras {
   viewer: ProfileViewer;
   sanji: SanjiVoteData;
   bmpSeasonSnapshots: ProfileBmpSnapshot[];
   fallbackSnapshot: ProfileBmpSnapshot | null;
   adminCtx: AdminRecordContext | null;
+  ownActiveDivision: OwnActiveDivision | null;
 }
 
 export async function loadProfileExtras(opts: {
@@ -161,11 +174,18 @@ export async function loadProfileExtras(opts: {
   const myVote: "yes" | "no" | null =
     myVoteRow?.side === "yes" || myVoteRow?.side === "no" ? myVoteRow.side : null;
 
+  const isOwnProfile = !!viewerPlayer && viewerPlayer.id === profilePlayerId;
+  // Only compute the "report a match" context when the viewer IS the
+  // profile owner — saves a roundtrip for every random viewer.
+  const ownActiveDivision = isOwnProfile
+    ? await loadOwnActiveDivision(profilePlayerId)
+    : null;
+
   return {
     viewer: {
       discordId: viewerDiscordId,
       playerId: viewerPlayer?.id ?? null,
-      isOwnProfile: !!viewerPlayer && viewerPlayer.id === profilePlayerId,
+      isOwnProfile,
       isAdmin: isViewerAdmin,
     },
     sanji: {
@@ -178,6 +198,59 @@ export async function loadProfileExtras(opts: {
     bmpSeasonSnapshots: sortedSnapshots,
     fallbackSnapshot,
     adminCtx,
+    ownActiveDivision,
+  };
+}
+
+// Same shape as /me's loadActiveDivisionContext but returns the
+// OwnActiveDivision interface so the profile page can render the
+// 'report a match' dropdown. Only PUBLIC active seasons — INTERNAL
+// test seasons don't surface to player-facing UI.
+async function loadOwnActiveDivision(playerId: string): Promise<OwnActiveDivision | null> {
+  const membership = await prisma.divisionMember.findFirst({
+    where: {
+      playerId,
+      status: "ACTIVE",
+      division: { season: { isActive: true, visibility: "PUBLIC" } },
+    },
+    select: {
+      division: {
+        select: {
+          id: true,
+          name: true,
+          seasonId: true,
+          season: { select: { name: true } },
+          members: {
+            where: { status: "ACTIVE" },
+            select: { playerId: true, player: { select: { id: true, displayName: true } } },
+          },
+        },
+      },
+    },
+  });
+  if (!membership) return null;
+  const div = membership.division;
+  const myPairings = await prisma.pairing.findMany({
+    where: {
+      divisionId: div.id,
+      status: "CONFIRMED",
+      OR: [{ playerAId: playerId }, { playerBId: playerId }],
+    },
+    select: { playerAId: true, playerBId: true },
+  });
+  const played = new Set<string>();
+  for (const p of myPairings) {
+    played.add(p.playerAId === playerId ? p.playerBId : p.playerAId);
+  }
+  const reportableOpponents = div.members
+    .filter((m) => m.playerId !== playerId && !played.has(m.playerId))
+    .map((m) => ({ playerId: m.playerId, displayName: m.player.displayName }));
+  return {
+    divisionId: div.id,
+    divisionName: div.name,
+    seasonId: div.seasonId,
+    seasonName: div.season.name,
+    reportableOpponents,
   };
 }
 
