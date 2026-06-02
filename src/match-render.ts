@@ -225,12 +225,15 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
         ? `**${first.displayName}** bans first (coin toss).`
         : `**${first.displayName}** bans first (chosen by the loser of game ${gameNumber - 1}).`;
     // Sort remaining combos by canonical order (deck A-Z, stake difficulty)
-    // for predictable scanning. The underlying pool index stays in
-    // `idx` so ban/select logic isn't affected — display order only.
+    // Sort by stake difficulty first (White → Gold), then deck A-Z
+    // within each stake. Matches BMP's grouping so players don't have
+    // to context-switch between this UI and balatromp.com. Underlying
+    // pool index stays in `idx` so ban/select logic isn't affected —
+    // display order only.
     const sortedRemaining = [...remaining].sort((x, y) => {
-      const d = canonicalDeckIndex(x.combo.deck) - canonicalDeckIndex(y.combo.deck);
-      if (d !== 0) return d;
-      return canonicalStakeIndex(x.combo.stake) - canonicalStakeIndex(y.combo.stake);
+      const s = canonicalStakeIndex(x.combo.stake) - canonicalStakeIndex(y.combo.stake);
+      if (s !== 0) return s;
+      return canonicalDeckIndex(x.combo.deck) - canonicalDeckIndex(y.combo.deck);
     });
     // BMP-style numbered list with deck + stake emojis inline so players see
     // every option visually without expanding the dropdown.
@@ -328,13 +331,13 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
 
   if (phase.kind === "PICK") {
     const picker = phase.pickerId === a.id ? a : b;
-    // Sort remaining for display by canonical order (deck A-Z, stake
-    // difficulty). Pool index in `idx` stays intact so button payloads
-    // still reference the correct combo.
+    // Sort: stake difficulty first, then deck A-Z. Same grouping as
+    // the ban menu above (and BMP) so the pick options sit in the
+    // same visual order players already scanned.
     const sortedPickRemaining = [...remaining].sort((x, y) => {
-      const d = canonicalDeckIndex(x.combo.deck) - canonicalDeckIndex(y.combo.deck);
-      if (d !== 0) return d;
-      return canonicalStakeIndex(x.combo.stake) - canonicalStakeIndex(y.combo.stake);
+      const s = canonicalStakeIndex(x.combo.stake) - canonicalStakeIndex(y.combo.stake);
+      if (s !== 0) return s;
+      return canonicalDeckIndex(x.combo.deck) - canonicalDeckIndex(y.combo.deck);
     });
     // Spell out each remaining combo's deck + stake effects in the embed
     // so picker has full info without hovering a tooltip somewhere. Both
