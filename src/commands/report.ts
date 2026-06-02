@@ -170,7 +170,7 @@ function buildDisputeModal(pairingId: string, proposal: string): ModalBuilder {
   const reasonInput = new TextInputBuilder()
     .setCustomId("reason")
     .setLabel("Reason (helper will see this)")
-    .setPlaceholder("Game 2 was a draw, opponent miscounted, etc.")
+    .setPlaceholder("Explain what's wrong with the reported result")
     .setStyle(TextInputStyle.Paragraph)
     .setMaxLength(500)
     .setRequired(true);
