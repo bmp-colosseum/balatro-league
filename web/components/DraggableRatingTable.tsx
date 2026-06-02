@@ -28,6 +28,12 @@ export interface RatingRow {
     rank: number;
     totalMembers: number;
     seasonName: string;
+    // Snapshot of Player.rating at the END of that prior season.
+    // Doesn't shift when later seasons recompute Player.rating, so
+    // admin sees "they finished as global #47" even if Player.rating
+    // has since drifted. Null for memberships predating the
+    // finalGlobalRank column.
+    finalGlobalRank: number | null;
   };
   // Player.rating — comes from end-of-season recompute for returners,
   // null for brand-new signups. Used by the "Sort by league rating"
@@ -257,6 +263,15 @@ export function DraggableRatingTable({
                     <span>
                       <strong>{r.prior.divisionName}</strong>{" "}
                       <span className="muted">#{r.prior.rank}/{r.prior.totalMembers}</span>
+                      {r.prior.finalGlobalRank != null && (
+                        <span
+                          className="muted"
+                          style={{ fontSize: 11, marginLeft: 6 }}
+                          title="Global league rank when that season ended."
+                        >
+                          · global #{r.prior.finalGlobalRank}
+                        </span>
+                      )}
                       <br />
                       <span className="muted" style={{ fontSize: 11 }}>{r.prior.seasonName}</span>
                     </span>

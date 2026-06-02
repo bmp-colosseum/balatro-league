@@ -151,6 +151,7 @@ export default async function BuildSeasonPage({
                       rank: prior.rank,
                       totalMembers: prior.totalMembers,
                       seasonName: prior.seasonName,
+                      finalGlobalRank: prior.finalGlobalRank,
                     }
                   : undefined,
                 leagueRating: player?.rating ?? null,

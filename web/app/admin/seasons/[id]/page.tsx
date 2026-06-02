@@ -63,6 +63,7 @@ export default async function SeasonDetailPage({
     totalConfirmed,
     totalExpected,
     channels,
+    memberContext,
   } = data;
 
   return (
@@ -272,19 +273,28 @@ export default async function SeasonDetailPage({
                 tierId: d.tierId,
               }));
               const editorMembers: EditorMember[] = season.divisions.flatMap((d) =>
-                d.members.map((m) => ({
-                  id: m.id,
-                  playerId: m.player.id,
-                  playerName: m.player.displayName,
-                  divisionId: d.id,
-                })),
+                d.members.map((m) => {
+                  const ctx = memberContext.get(m.player.id);
+                  return {
+                    id: m.id,
+                    playerId: m.player.id,
+                    playerName: m.player.displayName,
+                    divisionId: d.id,
+                    draftOrder: m.draftOrder,
+                    leagueRating: ctx?.leagueRating ?? m.player.rating,
+                    bmpMmr: ctx?.bmpMmr ?? null,
+                    bmpTier: ctx?.bmpTier ?? null,
+                    priorFinalGlobalRank: ctx?.priorFinalGlobalRank ?? null,
+                  };
+                }),
               );
               // Remount key so the client component resets its drag
               // state when the server pushes new placements (e.g. after
               // a move via the dropdown, or rebuild). Otherwise
-              // useState(initialMembers) keeps the stale view.
+              // useState(initialMembers) keeps the stale view. Includes
+              // draftOrder so within-division reorders also remount.
               const remountKey = editorMembers
-                .map((m) => `${m.playerId}@${m.divisionId}`)
+                .map((m) => `${m.playerId}@${m.divisionId}#${m.draftOrder}`)
                 .join("|");
               return (
                 <DraggableDivisionsEditor

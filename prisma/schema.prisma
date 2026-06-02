@@ -541,6 +541,15 @@ model DivisionMember {
   // ended" without losing the history when Season 5 rewrites the same
   // Player.rating field. Null until that season's endSeason runs.
   finalGlobalRank Int?
+  // Per-division ordering during draft mode. Admin drags rows between
+  // and within division cards on /admin/seasons/[id]; this is the
+  // tiebreaker that determines the display + drop position. After a
+  // season activates, this field is functionally inert — round-robin
+  // standings don't care about the seed order — but it's still set so
+  // re-opening the draft view (e.g., for an unended season) keeps the
+  // last-known shape. Defaults to 0; rebalanced per-division on every
+  // positional move.
+  draftOrder    Int                 @default(0)
 
   division      Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
   player        Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)

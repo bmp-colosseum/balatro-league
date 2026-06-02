@@ -48,6 +48,12 @@ export interface SeasonHistoryEntry {
   tierPosition: number;
   rank: number;          // 0 when no cache row exists (cold or dropped)
   totalMembers: number;
+  // Snapshot of the player's global rank (= Player.rating) at the
+  // moment THIS season ended. Null if the season hasn't ended yet OR
+  // ended before the snapshot column existed (no backfill). Used to
+  // show "Season 4 final global rank: 47" on the history view —
+  // doesn't shift when later seasons rewrite Player.rating.
+  finalGlobalRank: number | null;
   points: number;
   wins: number;
   draws: number;
@@ -93,6 +99,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
     select: {
       status: true,
       divisionId: true,
+      finalGlobalRank: true,
       division: {
         select: {
           id: true,
@@ -263,6 +270,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
       tierPosition: m.division.tier.position,
       rank: myRank,
       totalMembers: cached?.length ?? 0,
+      finalGlobalRank: m.finalGlobalRank,
       points: myCached?.points ?? derivedWins * 3 + derivedDraws * 1,
       wins: myCached?.wins ?? derivedWins,
       draws: myCached?.draws ?? derivedDraws,

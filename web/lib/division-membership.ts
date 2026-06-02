@@ -63,9 +63,28 @@ export async function placePlayerInDivision(
     };
   }
 
+  // Place newly-added members at the END of the target division's
+  // draftOrder sequence so the draft UI gets a deterministic position
+  // (and so they don't collide with the default 0 on existing rows).
+  // Only set draftOrder on CREATE — moving an existing member here
+  // (via the late-add form re-adding a player) should keep their
+  // current position, since this code path isn't the positional drag.
+  const maxOrderRow = await prisma.divisionMember.findFirst({
+    where: { divisionId: division.id },
+    orderBy: { draftOrder: "desc" },
+    select: { draftOrder: true },
+  });
+  const nextOrder = (maxOrderRow?.draftOrder ?? 0) + 1;
+
   await prisma.divisionMember.upsert({
     where: { divisionId_playerId: { divisionId: division.id, playerId } },
-    create: { divisionId: division.id, seasonId: division.seasonId, playerId, status: "ACTIVE" },
+    create: {
+      divisionId: division.id,
+      seasonId: division.seasonId,
+      playerId,
+      status: "ACTIVE",
+      draftOrder: nextOrder,
+    },
     update: { status: "ACTIVE", droppedAt: null, dropoutReason: null },
   });
 

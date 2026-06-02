@@ -2,7 +2,7 @@
 
 // Drag-and-drop editor for division placements in draft mode.
 // Replaces the per-row Move-to dropdown with grab-the-player /
-// drop-on-target-division. Uses pointer events so it works on touch
+// drop-on-target-row. Uses pointer events so it works on touch
 // + desktop equally.
 //
 // The Move-to dropdown stays inside each row as a fallback for
@@ -11,10 +11,16 @@
 // Optimistic UI: the dropped player visually moves into the new
 // division immediately, then the server action is fired in a
 // transition. On failure the state reverts.
+//
+// Drop targeting is finer than "did we hover the division card":
+// we track each row's bounding rect and pick the target index based
+// on which row's midpoint the cursor is above (cursor above row N's
+// midpoint → insert at N; below → insert at N+1). The cursor below
+// the last row maps to index = members.length (append).
 
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
-import { moveDivisionMember } from "@/app/admin/seasons/actions";
+import { moveDivisionMember, moveDivisionMemberToPosition } from "@/app/admin/seasons/actions";
 import { addLatePlayerToDivision } from "@/app/admin/seasons/actions";
 import { addDivisionToTier } from "@/app/admin/seasons/actions";
 
@@ -23,6 +29,15 @@ export interface EditorMember {
   playerId: string;
   playerName: string;
   divisionId: string;
+  draftOrder: number;
+  // Per-row context fields rendered as inline chips. Null = no data
+  // (e.g. new player, no BMP profile, first-time signup). The
+  // component renders muted placeholders for nulls rather than
+  // omitting the chip entirely, so column widths stay stable.
+  leagueRating: number | null;
+  bmpMmr: number | null;
+  bmpTier: string | null;
+  priorFinalGlobalRank: number | null;
 }
 
 export interface EditorDivision {
@@ -47,6 +62,20 @@ const tierHeuristic = (avg: number): { color: string; text: string } | null => {
   return null;
 };
 
+// Colors for the BMP tier chip — mirror balatromp.com's tier names.
+// Fall back to a neutral grey for unknown / null tiers.
+function bmpTierColor(tier: string | null): string {
+  if (!tier) return "#888";
+  const t = tier.toLowerCase();
+  if (t.includes("diamond")) return "#76c7ff";
+  if (t.includes("platinum")) return "#c0c8cb";
+  if (t.includes("gold")) return "#f1c40f";
+  if (t.includes("silver")) return "#bdc3c7";
+  if (t.includes("bronze")) return "#cd7f32";
+  if (t.includes("glass")) return "#9bdcff";
+  return "#888";
+}
+
 export function DraggableDivisionsEditor({
   seasonId,
   tiers,
@@ -61,8 +90,17 @@ export function DraggableDivisionsEditor({
   const [members, setMembers] = useState<EditorMember[]>(initialMembers);
   const [dragPlayerId, setDragPlayerId] = useState<string | null>(null);
   const [hoverDivId, setHoverDivId] = useState<string | null>(null);
+  // Index within the hovered division's member list where the
+  // dragged row would land if dropped right now. Null = no valid
+  // hover yet.
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [, startTransition] = useTransition();
   const divRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
+  // Row refs keyed by `${divisionId}:${memberId}` so we can recover
+  // both the per-row rect AND its position within the division
+  // during pointermove. Cleared and rebuilt on every render via the
+  // ref callback below.
+  const rowRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
   // The drag has to clear a small movement threshold before we treat it
   // as a real drag — otherwise touching a row to read its name would
   // immediately start dragging.
@@ -89,45 +127,114 @@ export function DraggableDivisionsEditor({
       }
       return;
     }
-    // Find which division the cursor is over
-    let found: string | null = null;
+    // Find which division the cursor is over.
+    let foundDiv: string | null = null;
     for (const [id, el] of divRefs.current) {
       if (!el) continue;
       const r = el.getBoundingClientRect();
       if (e.clientY >= r.top && e.clientY <= r.bottom && e.clientX >= r.left && e.clientX <= r.right) {
-        found = id;
+        foundDiv = id;
         break;
       }
     }
-    if (found !== hoverDivId) setHoverDivId(found);
+    if (foundDiv !== hoverDivId) setHoverDivId(foundDiv);
+
+    // Find which row in that division the cursor is over (by
+    // midpoint). Cursor above row N's midpoint → index = N;
+    // below → index = N+1. Past the last row → append.
+    let foundIndex: number | null = null;
+    if (foundDiv) {
+      const divMembers = byDivision.get(foundDiv) ?? [];
+      let landed = false;
+      for (let i = 0; i < divMembers.length; i++) {
+        const m = divMembers[i]!;
+        const el = rowRefs.current.get(`${foundDiv}:${m.id}`);
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        const mid = (r.top + r.bottom) / 2;
+        if (e.clientY < mid) {
+          foundIndex = i;
+          landed = true;
+          break;
+        }
+      }
+      if (!landed) foundIndex = divMembers.length;
+    }
+    if (foundIndex !== hoverIndex) setHoverIndex(foundIndex);
+
     if (e.pointerType === "touch") e.preventDefault();
   };
 
   const finishDrag = () => {
-    if (dragPlayerId === null || hoverDivId === null) {
-      cancelDrag();
-      return;
-    }
-    const currentDivId = members.find((m) => m.playerId === dragPlayerId)?.divisionId;
-    if (!currentDivId || currentDivId === hoverDivId) {
+    if (dragPlayerId === null || hoverDivId === null || hoverIndex === null) {
       cancelDrag();
       return;
     }
     const playerId = dragPlayerId;
     const targetDivId = hoverDivId;
+    const targetIndex = hoverIndex;
+    const sourceMember = members.find((m) => m.playerId === playerId);
+    if (!sourceMember) {
+      cancelDrag();
+      return;
+    }
+
+    // Compute the post-move membership shape so the optimistic
+    // update matches what the server will produce. We rebuild the
+    // dragged member's divisionId + draftOrder, then renumber
+    // draftOrder in the target division (and source if cross-div)
+    // to match the spliced sequence.
+    const isCrossDiv = sourceMember.divisionId !== targetDivId;
+    const targetMembers = members
+      .filter((m) => m.divisionId === targetDivId && m.playerId !== playerId)
+      .sort((a, b) => a.draftOrder - b.draftOrder);
+    const insertAt = Math.max(0, Math.min(targetIndex, targetMembers.length));
+
+    // Cheap no-op detection: same-division drop on its current slot
+    // doesn't need a server roundtrip.
+    if (!isCrossDiv) {
+      const currentIdx = members
+        .filter((m) => m.divisionId === targetDivId)
+        .sort((a, b) => a.draftOrder - b.draftOrder)
+        .findIndex((m) => m.playerId === playerId);
+      if (currentIdx === insertAt) {
+        cancelDrag();
+        return;
+      }
+    }
+
     const prevMembers = members;
-    // Optimistic update so the row visually moves immediately.
-    setMembers(members.map((m) => (m.playerId === playerId ? { ...m, divisionId: targetDivId } : m)));
+    const newTargetOrder = [
+      ...targetMembers.slice(0, insertAt),
+      sourceMember,
+      ...targetMembers.slice(insertAt),
+    ];
+    const targetById = new Map<string, number>();
+    newTargetOrder.forEach((m, i) => targetById.set(m.playerId, i));
+    const nextMembers = members.map((m): EditorMember => {
+      if (m.playerId === playerId) {
+        return { ...m, divisionId: targetDivId, draftOrder: insertAt };
+      }
+      if (m.divisionId === targetDivId) {
+        return { ...m, draftOrder: targetById.get(m.playerId) ?? m.draftOrder };
+      }
+      return m;
+    });
+
+    setMembers(nextMembers);
     setDragPlayerId(null);
     setHoverDivId(null);
+    setHoverIndex(null);
     pending.current = null;
+
     startTransition(async () => {
       try {
         const fd = new FormData();
         fd.append("seasonId", seasonId);
         fd.append("playerId", playerId);
         fd.append("targetDivisionId", targetDivId);
-        await moveDivisionMember(fd);
+        fd.append("targetIndex", String(insertAt));
+        await moveDivisionMemberToPosition(fd);
       } catch (err) {
         console.warn("[draggable-divisions] move failed, reverting:", err);
         setMembers(prevMembers);
@@ -138,15 +245,21 @@ export function DraggableDivisionsEditor({
   const cancelDrag = () => {
     setDragPlayerId(null);
     setHoverDivId(null);
+    setHoverIndex(null);
     pending.current = null;
   };
 
-  // Bucket members by division for rendering.
+  // Bucket members by division for rendering. Within a division
+  // they're sorted by draftOrder so optimistic reorders surface
+  // immediately without waiting for the server response.
   const byDivision = new Map<string, EditorMember[]>();
   for (const m of members) {
     const arr = byDivision.get(m.divisionId) ?? [];
     arr.push(m);
     byDivision.set(m.divisionId, arr);
+  }
+  for (const arr of byDivision.values()) {
+    arr.sort((a, b) => a.draftOrder - b.draftOrder);
   }
 
   return (
@@ -190,7 +303,11 @@ export function DraggableDivisionsEditor({
                 const currentDivOfDrag = dragPlayerId
                   ? members.find((m) => m.playerId === dragPlayerId)?.divisionId
                   : null;
-                const isValidDrop = isDropTarget && currentDivOfDrag !== d.id;
+                const isValidDrop = isDropTarget;
+                // Active drop index — only render the indicator
+                // line if we're actively hovering this division AND
+                // dragging.
+                const activeIndex = isDropTarget ? hoverIndex : null;
                 return (
                   <div
                     key={d.id}
@@ -198,8 +315,8 @@ export function DraggableDivisionsEditor({
                     className="card"
                     style={{
                       margin: 0,
-                      outline: isValidDrop ? "2px solid #2ecc71" : isDropTarget ? "2px solid #888" : undefined,
-                      background: isValidDrop ? "rgba(46,204,113,0.05)" : undefined,
+                      outline: isValidDrop ? (currentDivOfDrag === d.id ? "2px solid #76c7ff" : "2px solid #2ecc71") : undefined,
+                      background: isValidDrop ? (currentDivOfDrag === d.id ? "rgba(118,199,255,0.04)" : "rgba(46,204,113,0.05)") : undefined,
                       transition: "outline 100ms, background 100ms",
                     }}
                   >
@@ -217,11 +334,13 @@ export function DraggableDivisionsEditor({
                       </div>
                     ) : (
                       <div style={{ marginTop: 4 }}>
-                        {divMembers.map((m) => {
+                        {divMembers.map((m, idx) => {
                           const isDragged = dragPlayerId === m.playerId;
+                          const showLineAbove = activeIndex === idx;
                           return (
                             <div
                               key={m.id}
+                              ref={(el) => { rowRefs.current.set(`${d.id}:${m.id}`, el); }}
                               onPointerDown={(e) => onRowPointerDown(e, m.playerId, d.id)}
                               style={{
                                 display: "flex",
@@ -234,16 +353,18 @@ export function DraggableDivisionsEditor({
                                 userSelect: "none",
                                 fontSize: 12,
                                 borderRadius: 3,
+                                borderTop: showLineAbove ? "2px solid #76c7ff" : "2px solid transparent",
                               }}
                             >
                               <span style={{ color: "#888" }} title="Drag to move">⋮⋮</span>
                               <Link
                                 href={`/profile/${m.playerId}`}
-                                style={{ color: "var(--text)" }}
+                                style={{ color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                                 onPointerDown={(e) => e.stopPropagation()}
                               >
                                 {m.playerName}
                               </Link>
+                              <MemberChips member={m} />
                               <select
                                 title="Or pick a target division from the dropdown (accessibility fallback)"
                                 onPointerDown={(e) => e.stopPropagation()}
@@ -266,9 +387,9 @@ export function DraggableDivisionsEditor({
                                   e.currentTarget.value = "";
                                 }}
                                 defaultValue=""
-                                style={{ marginLeft: "auto", fontSize: 11, padding: "1px 4px", maxWidth: 100 }}
+                                style={{ marginLeft: 4, fontSize: 11, padding: "1px 4px", maxWidth: 72 }}
                               >
-                                <option value="" disabled>Move to…</option>
+                                <option value="" disabled>↪</option>
                                 {divisions.filter((other) => other.id !== d.id).map((other) => (
                                   <option key={other.id} value={other.id}>{other.name}</option>
                                 ))}
@@ -276,6 +397,13 @@ export function DraggableDivisionsEditor({
                             </div>
                           );
                         })}
+                        {/* Implicit drop target after the last row.
+                            When the cursor is past the last row's
+                            midpoint, activeIndex === divMembers.length
+                            and we render the bottom indicator line. */}
+                        {activeIndex === divMembers.length && (
+                          <div style={{ borderTop: "2px solid #76c7ff", margin: "0 4px" }} />
+                        )}
                       </div>
                     )}
                     {/* Late-add form lives outside the drag flow */}
@@ -303,5 +431,59 @@ export function DraggableDivisionsEditor({
         );
       })}
     </div>
+  );
+}
+
+// Inline per-row context chips: league rank, BMP MMR + tier, and
+// (for returners only) prior-season finishing global rank. Compact
+// styling — 11px chips, neutral palette — so they fit on a 280px
+// division card without breaking the layout.
+function MemberChips({ member }: { member: EditorMember }) {
+  const tierColor = bmpTierColor(member.bmpTier);
+  return (
+    <span
+      style={{
+        marginLeft: "auto",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        fontSize: 11,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span
+        title="Current league rank (Player.rating)"
+        style={{
+          color: member.leagueRating == null ? "#666" : "var(--text)",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {member.leagueRating == null ? "L —" : `L#${member.leagueRating}`}
+      </span>
+      {member.bmpMmr != null && (
+        <span
+          title={`Latest BMP MMR${member.bmpTier ? ` (${member.bmpTier})` : ""}`}
+          style={{
+            color: tierColor,
+            fontVariantNumeric: "tabular-nums",
+            background: "rgba(255,255,255,0.04)",
+            padding: "0 4px",
+            borderRadius: 3,
+          }}
+        >
+          🃏 {member.bmpMmr}
+          {member.bmpTier ? <span style={{ marginLeft: 2, opacity: 0.85 }}>{member.bmpTier}</span> : null}
+        </span>
+      )}
+      {member.priorFinalGlobalRank != null && (
+        <span
+          className="muted"
+          title="Global rank when their last season ended"
+          style={{ fontSize: 10, fontVariantNumeric: "tabular-nums" }}
+        >
+          (was #{member.priorFinalGlobalRank})
+        </span>
+      )}
+    </span>
   );
 }

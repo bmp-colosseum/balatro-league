@@ -620,6 +620,11 @@ export interface BuildSeasonPriorInfo {
   tierName: string;
   seasonName: string;
   seasonStartedAt: Date;
+  // Snapshot of Player.rating at the moment that prior season ended.
+  // Null for memberships predating the finalGlobalRank column or
+  // still-active seasons. Surfaced on the build page so admin sees
+  // "they finished as global #47" while deciding placement.
+  finalGlobalRank: number | null;
 }
 
 export interface BuildSeasonSignup {
@@ -694,13 +699,24 @@ export async function loadBuildSeasonPage(roundId: string): Promise<BuildSeasonR
   });
   const playerByDiscordId = new Map(existingPlayers.map((p) => [p.discordId, p]));
 
-  // BMP MMR snapshots — fetch once, group in JS to get latest + 2nd-latest
-  // per discord id without a second distinct query.
+  // BMP MMR snapshots. Picking strategy per discord id (in order):
+  //   1. The current BMP season's snapshot if it has a non-null mmr
+  //   2. The most-recent prior BMP season's snapshot with non-null mmr
+  //      (e.g. player skipped current season but played last one)
+  //   3. Null — no usable MMR data anywhere
+  // This is the "fall back to previous season when current is missing"
+  // behavior — a player who hasn't played the live BMP season still
+  // shows their last-season MMR as the placement proxy.
+  //
+  // bmpSeason is a tag like "season6"; we sort by the numeric suffix
+  // so "season10" beats "season9", then by capturedAt DESC as the
+  // tiebreaker for repeat captures of the same season.
   const allSnapshots = discordIds.length === 0 ? [] : await prisma.playerMmrSnapshot.findMany({
     where: { discordId: { in: discordIds }, rankedMmr: { not: null } },
     orderBy: { capturedAt: "desc" },
     select: {
       discordId: true,
+      bmpSeason: true,
       rankedMmr: true,
       rankedTier: true,
       totalGames: true,
@@ -712,11 +728,28 @@ export async function loadBuildSeasonPage(roundId: string): Promise<BuildSeasonR
       fetchError: true,
     },
   });
+  // Extract numeric suffix from a bmpSeason tag ("season6" → 6). Null
+  // tag → -Infinity so it sorts last.
+  const seasonNum = (tag: string | null): number => {
+    if (!tag) return -Infinity;
+    const m = /^season(\d+)$/.exec(tag);
+    return m ? parseInt(m[1]!, 10) : -Infinity;
+  };
   const snapshotsByDiscordId = new Map<string, typeof allSnapshots>();
   for (const s of allSnapshots) {
     const arr = snapshotsByDiscordId.get(s.discordId) ?? [];
     arr.push(s);
     snapshotsByDiscordId.set(s.discordId, arr);
+  }
+  // Sort each player's snapshots so [0] is the preferred one (latest
+  // tagged season, falling back to ad-hoc captures by recency).
+  for (const arr of snapshotsByDiscordId.values()) {
+    arr.sort((a, b) => {
+      const na = seasonNum(a.bmpSeason);
+      const nb = seasonNum(b.bmpSeason);
+      if (na !== nb) return nb - na;
+      return b.capturedAt.getTime() - a.capturedAt.getTime();
+    });
   }
   const stripDid = (s: typeof allSnapshots[number]): BuildSeasonSnapshot => ({
     rankedMmr: s.rankedMmr,
@@ -738,6 +771,10 @@ export async function loadBuildSeasonPage(roundId: string): Promise<BuildSeasonR
   const priorMemberships = returnerPlayerIds.length === 0 ? [] : await prisma.divisionMember.findMany({
     where: { playerId: { in: returnerPlayerIds }, status: "ACTIVE" },
     include: {
+      // finalGlobalRank doesn't come through `include` by default —
+      // pull it explicitly via `select` would force restating every
+      // field, so leave include in place and rely on Prisma surfacing
+      // scalar fields automatically.
       division: {
         include: {
           tier: true,
@@ -775,6 +812,7 @@ export async function loadBuildSeasonPage(roundId: string): Promise<BuildSeasonR
       tierName: div.tier.name,
       seasonName: formatSeasonLabel(div.season),
       seasonStartedAt: div.season.startedAt,
+      finalGlobalRank: m.finalGlobalRank,
     });
   }
 
@@ -860,6 +898,9 @@ export interface AdminSeasonDetailData {
   totalConfirmed: number;
   totalExpected: number;
   channels: Array<{ id: string; name: string }>;
+  // Keyed by playerId — looked up by the draft editor to render
+  // per-row chips (league rank, BMP MMR, prior-season global rank).
+  memberContext: Map<string, AdminSeasonMemberContext>;
 }
 
 async function fetchAdminSeasonDetail(id: string) {
@@ -871,13 +912,30 @@ async function fetchAdminSeasonDetail(id: string) {
         orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
         include: {
           tier: true,
-          members: { include: { player: true } },
+          // Members within a division come back in draft-mode display
+          // order: explicit draftOrder ASC, then joinedAt ASC as the
+          // tiebreaker for legacy rows that share order 0.
+          members: {
+            include: { player: true },
+            orderBy: [{ draftOrder: "asc" }, { joinedAt: "asc" }],
+          },
           pairings: { where: { status: "CONFIRMED" } },
         },
       },
       matchConfigPreset: true,
     },
   });
+}
+
+// Per-player context for the draft editor — current league rank
+// (Player.rating), latest BMP MMR snapshot, and the most-recently-
+// ENDED prior season's final global rank. Bundled separately from the
+// raw season include so we don't fan out N+1 queries in the loader.
+export interface AdminSeasonMemberContext {
+  leagueRating: number | null;
+  bmpMmr: number | null;
+  bmpTier: string | null;
+  priorFinalGlobalRank: number | null;
 }
 
 export async function loadAdminSeasonDetail(
@@ -930,6 +988,12 @@ export async function loadAdminSeasonDetail(
   const needsChannels = !signupRound && !season.endedAt;
   const channels = needsChannels && opts.guildId ? await opts.listGuildTextChannels(opts.guildId) : [];
 
+  // Build per-member context (league rank, BMP MMR, prior season's
+  // final global rank) in batched queries. Pages that don't render
+  // the draft editor (ended / active seasons) still get the map —
+  // it's cheap and keeps the return shape uniform.
+  const memberContext = await buildAdminSeasonMemberContext(season);
+
   return {
     season,
     presets,
@@ -941,7 +1005,96 @@ export async function loadAdminSeasonDetail(
     totalConfirmed,
     totalExpected,
     channels,
+    memberContext,
   };
+}
+
+// Batched per-player lookups for the draft editor: current league
+// rank (Player.rating), latest BMP MMR snapshot (via the same
+// season-preferring strategy as loadBuildSeasonPage), and most-
+// recently-ENDED prior season's finalGlobalRank.
+async function buildAdminSeasonMemberContext(season: {
+  id: string;
+  startedAt: Date;
+  divisions: Array<{ members: Array<{ playerId: string; player: { id: string; discordId: string; rating: number | null } }> }>;
+}): Promise<Map<string, AdminSeasonMemberContext>> {
+  const playerIds = season.divisions.flatMap((d) => d.members.map((m) => m.playerId));
+  if (playerIds.length === 0) return new Map();
+  const discordIds = season.divisions.flatMap((d) => d.members.map((m) => m.player.discordId));
+
+  // Latest BMP MMR snapshot per discordId. Same season-preferring
+  // logic as loadBuildSeasonPage: numeric bmpSeason DESC then
+  // capturedAt DESC.
+  const snapshots = await prisma.playerMmrSnapshot.findMany({
+    where: { discordId: { in: discordIds }, rankedMmr: { not: null } },
+    select: { discordId: true, bmpSeason: true, rankedMmr: true, rankedTier: true, capturedAt: true },
+  });
+  const seasonNum = (tag: string | null): number => {
+    if (!tag) return -Infinity;
+    const m = /^season(\d+)$/.exec(tag);
+    return m ? parseInt(m[1]!, 10) : -Infinity;
+  };
+  const snapsByDiscord = new Map<string, typeof snapshots>();
+  for (const s of snapshots) {
+    const arr = snapsByDiscord.get(s.discordId) ?? [];
+    arr.push(s);
+    snapsByDiscord.set(s.discordId, arr);
+  }
+  for (const arr of snapsByDiscord.values()) {
+    arr.sort((a, b) => {
+      const na = seasonNum(a.bmpSeason);
+      const nb = seasonNum(b.bmpSeason);
+      if (na !== nb) return nb - na;
+      return b.capturedAt.getTime() - a.capturedAt.getTime();
+    });
+  }
+
+  // Prior-season finalGlobalRank — most recent ended season the
+  // player was a member of whose endedAt < this season's startedAt.
+  // Excludes the current season explicitly (would be null during
+  // draft anyway; we want their last completed standing).
+  const priorMemberships = await prisma.divisionMember.findMany({
+    where: {
+      playerId: { in: playerIds },
+      finalGlobalRank: { not: null },
+      division: {
+        season: {
+          endedAt: { not: null, lt: season.startedAt },
+          NOT: { id: season.id },
+        },
+      },
+    },
+    select: {
+      playerId: true,
+      finalGlobalRank: true,
+      division: { select: { season: { select: { endedAt: true } } } },
+    },
+  });
+  // Reduce to one most-recently-ended membership per player.
+  const priorByPlayerId = new Map<string, { endedAt: Date; finalGlobalRank: number }>();
+  for (const m of priorMemberships) {
+    if (m.finalGlobalRank == null) continue;
+    const endedAt = m.division.season.endedAt;
+    if (!endedAt) continue;
+    const cur = priorByPlayerId.get(m.playerId);
+    if (!cur || endedAt > cur.endedAt) {
+      priorByPlayerId.set(m.playerId, { endedAt, finalGlobalRank: m.finalGlobalRank });
+    }
+  }
+
+  const result = new Map<string, AdminSeasonMemberContext>();
+  for (const d of season.divisions) {
+    for (const m of d.members) {
+      const snap = snapsByDiscord.get(m.player.discordId)?.[0];
+      result.set(m.playerId, {
+        leagueRating: m.player.rating,
+        bmpMmr: snap?.rankedMmr ?? null,
+        bmpTier: snap?.rankedTier ?? null,
+        priorFinalGlobalRank: priorByPlayerId.get(m.playerId)?.finalGlobalRank ?? null,
+      });
+    }
+  }
+  return result;
 }
 
 // ── /admin/seasons (index) ───────────────────────────────────────────

@@ -687,6 +687,137 @@ export async function addLatePlayerToDivision(formData: FormData) {
   revalidatePath(`/admin/seasons/${division!.seasonId}`);
 }
 
+// Drop-anywhere positional move: dragged a player to a specific row
+// index in a target division (cross-division OR within-division
+// reorder). The simpler moveDivisionMember just appends to the end —
+// this one rewrites every member's draftOrder in the target division
+// to reflect the new sequence.
+//
+// Refuses on active/ended seasons — draft ordering doesn't matter
+// once play has started, and we don't want to surprise admins by
+// accepting moves whose effect would be silently invisible.
+export async function moveDivisionMemberToPosition(formData: FormData) {
+  const { user } = await requireAdmin();
+  const seasonId = String(formData.get("seasonId") ?? "");
+  const playerId = String(formData.get("playerId") ?? "");
+  const targetDivisionId = String(formData.get("targetDivisionId") ?? "");
+  const targetIndexRaw = parseInt(String(formData.get("targetIndex") ?? ""), 10);
+  if (!seasonId || !playerId || !targetDivisionId || Number.isNaN(targetIndexRaw)) return;
+
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    select: { id: true, isActive: true, endedAt: true },
+  });
+  if (!season) redirect("/admin/seasons?err=season-not-found");
+  if (season!.isActive || season!.endedAt) {
+    redirect(`/admin/seasons/${seasonId}?err=${encodeURIComponent("Can't reorder players in an active or ended season — only during draft.")}`);
+  }
+
+  const targetDivision = await prisma.division.findUnique({
+    where: { id: targetDivisionId },
+    select: { id: true, seasonId: true, name: true, discordRoleId: true },
+  });
+  if (!targetDivision || targetDivision.seasonId !== seasonId) return;
+
+  const moving = await prisma.divisionMember.findFirst({
+    where: { playerId, division: { seasonId } },
+    include: {
+      division: { select: { id: true, name: true, discordRoleId: true } },
+      player: { select: { id: true, discordId: true, displayName: true } },
+    },
+  });
+  if (!moving) return;
+
+  const isCrossDivision = moving.divisionId !== targetDivision.id;
+
+  // Snapshot current target-division order (excluding the moving
+  // member if it lives here today) so we can splice cleanly.
+  const targetMembers = await prisma.divisionMember.findMany({
+    where: { divisionId: targetDivision.id },
+    orderBy: [{ draftOrder: "asc" }, { joinedAt: "asc" }],
+    select: { id: true, playerId: true },
+  });
+  const filtered = targetMembers.filter((m) => m.playerId !== playerId);
+  const insertAt = Math.max(0, Math.min(targetIndexRaw, filtered.length));
+
+  // Rebuild the new order as a list of memberIds. If cross-division,
+  // we don't have a target-member id for the moving player yet —
+  // upsert below will resolve that. Track it by playerId for the
+  // post-upsert pass that writes draftOrder.
+  const newOrderPlayerIds = [
+    ...filtered.slice(0, insertAt).map((m) => m.playerId),
+    playerId,
+    ...filtered.slice(insertAt).map((m) => m.playerId),
+  ];
+
+  // Cross-division Discord role bookkeeping (only when actually
+  // changing divisions). Same shape as placePlayerInDivision but
+  // inlined so the entire move runs in one transaction below.
+  let previousRoleRemoved = false;
+  if (isCrossDivision) {
+    const guildId = process.env.DISCORD_GUILD_ID;
+    if (guildId && moving.division.discordRoleId) {
+      const { removeGuildMemberRole } = await import("@/lib/discord");
+      previousRoleRemoved = await removeGuildMemberRole(
+        guildId,
+        moving.player.discordId,
+        moving.division.discordRoleId,
+      );
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    if (isCrossDivision) {
+      // Move the membership row across divisions. We can't simply
+      // update divisionId because of the (divisionId, playerId)
+      // unique constraint colliding if a stale row exists — defensively
+      // delete+create-or-update to match placePlayerInDivision semantics.
+      await tx.divisionMember.delete({ where: { id: moving.id } });
+      await tx.divisionMember.upsert({
+        where: { divisionId_playerId: { divisionId: targetDivision.id, playerId } },
+        create: {
+          divisionId: targetDivision.id,
+          seasonId,
+          playerId,
+          status: "ACTIVE",
+          draftOrder: insertAt,
+        },
+        update: { status: "ACTIVE", droppedAt: null, dropoutReason: null },
+      });
+    }
+    // Rewrite draftOrder for every member of the target division so
+    // the resulting sequence matches newOrderPlayerIds exactly.
+    for (let i = 0; i < newOrderPlayerIds.length; i++) {
+      const pid = newOrderPlayerIds[i]!;
+      await tx.divisionMember.updateMany({
+        where: { divisionId: targetDivision.id, playerId: pid },
+        data: { draftOrder: i },
+      });
+    }
+  });
+
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "division.move-to-position",
+    targetType: "DivisionMember",
+    targetId: playerId,
+    summary: isCrossDivision
+      ? `Moved ${moving.player.displayName} → ${targetDivision.name} @ #${insertAt + 1} (from ${moving.division.name})`
+      : `Reordered ${moving.player.displayName} within ${targetDivision.name} → #${insertAt + 1}`,
+    metadata: {
+      seasonId,
+      playerId,
+      fromDivisionId: moving.division.id,
+      toDivisionId: targetDivision.id,
+      targetIndex: insertAt,
+      crossDivision: isCrossDivision,
+      previousRoleRemoved,
+    },
+  });
+
+  revalidatePath(`/admin/seasons/${seasonId}`);
+}
+
 export async function moveDivisionMember(formData: FormData) {
   const { user } = await requireAdmin();
   const seasonId = String(formData.get("seasonId") ?? "");

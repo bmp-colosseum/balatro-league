@@ -289,6 +289,14 @@ export default async function ProfilePage({
                   )}
                   <span style={{ marginLeft: "auto" }} className="muted">
                     Rank {rankStr} · {h.points} pts · {h.wins}-{h.draws}-{h.losses} · {h.gamesWon}-{h.gamesLost} games
+                    {h.finalGlobalRank != null && (
+                      <span
+                        title="Global league rank when this season ended. Doesn't shift when later seasons recompute Player.rating."
+                        style={{ marginLeft: 8 }}
+                      >
+                        · global #{h.finalGlobalRank}
+                      </span>
+                    )}
                   </span>
                 </div>
                 <table>
