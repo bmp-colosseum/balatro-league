@@ -620,8 +620,12 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
   if (div.members.length === 0) return;
 
   const parentId = div.season.discordCategoryId ?? undefined;
+  // OWNER tier is included so a non-Administrator owner role still gets
+  // explicit channel access. Discord Administrator perm holders see
+  // everything anyway, but binding OWNER without Administrator is a
+  // valid pattern and shouldn't lock them out.
   const staffBindings = await prisma.roleBinding.findMany({
-    where: { tier: { in: ["ADMIN", "HELPER"] } },
+    where: { tier: { in: ["OWNER", "ADMIN", "HELPER"] } },
   });
   const staffRoleIds = staffBindings.map((b) => b.discordRoleId);
 

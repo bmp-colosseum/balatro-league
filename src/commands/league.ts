@@ -11,6 +11,7 @@ import {
 } from "discord.js";
 import { PermissionTier } from "@prisma/client";
 import { prisma } from "../db.js";
+import { PERM_PRESETS } from "../discord-helpers.js";
 import { clearConfig, LeagueConfigKey, setConfig } from "../league-config.js";
 import { requireOwner } from "../permissions.js";
 import type { SlashCommand } from "./types.js";
@@ -281,6 +282,11 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
         reused.push(`#league-backups`);
         return existing;
       }
+      // OWNER tier role(s) — bound after bootstrap usually. Include now
+      // so first-pass bootstrap doesn't lock them out if already bound.
+      // (Existing channels' overwrites don't auto-update on later role
+      // binding changes — that's a separate gap to address if it bites.)
+      const ownerBindings = await prisma.roleBinding.findMany({ where: { tier: "OWNER" } });
       const ch = await guild.channels.create({
         name: "league-backups",
         type: ChannelType.GuildText,
@@ -288,11 +294,12 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
         topic: "📦 Daily JSON snapshots of restorable league state. Staff-only.",
         permissionOverwrites: [
           { id: guild.roles.everyone.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-          { id: adminRole.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-          { id: helperRole.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-          // Bot itself needs view+send to upload the daily attachment;
-          // @everyone deny applies to it too without this override.
-          { id: interaction.client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+          { id: adminRole.id, allow: [...PERM_PRESETS.MEMBER_ALLOW] },
+          { id: helperRole.id, allow: [...PERM_PRESETS.MEMBER_ALLOW] },
+          ...ownerBindings.map((b) => ({ id: b.discordRoleId, allow: [...PERM_PRESETS.MEMBER_ALLOW] })),
+          // Bot itself needs the wider BOT_ALLOW set to upload the
+          // daily attachment + manage its own messages.
+          { id: interaction.client.user.id, allow: [...PERM_PRESETS.BOT_ALLOW] },
         ],
       });
       created.push(`#league-backups (private, staff-only)`);
@@ -323,9 +330,10 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
         topic: "🔧 Infra alerts: queue stalls, rate-limit floods, anything tech. DevOps-only.",
         permissionOverwrites: [
           { id: guild.roles.everyone.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-          { id: devopsRole.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-          // Bot itself needs view+send to post the actual alerts.
-          { id: interaction.client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+          { id: devopsRole.id, allow: [...PERM_PRESETS.MEMBER_ALLOW] },
+          // Bot itself needs the wider BOT_ALLOW set so it can manage
+          // its own alert messages (edit/delete) in addition to posting.
+          { id: interaction.client.user.id, allow: [...PERM_PRESETS.BOT_ALLOW] },
         ],
       });
       created.push(`#devops (private, DevOps-only)`);

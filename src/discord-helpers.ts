@@ -8,6 +8,41 @@
 // so callers (workers, sweepers) decide whether to retry vs continue.
 
 import { ChannelType, PermissionFlagsBits, type CategoryChannel, type Guild } from "discord.js";
+
+// Permission sets used by the bootstrap. Granting these explicitly via
+// overwrite means league functionality doesn't quietly break when the
+// server admin restricts @everyone defaults (e.g. removing
+// UseApplicationCommands at the server level would otherwise prevent
+// slash commands from working in division channels).
+//
+// MEMBER_ALLOW: what a player needs to participate fully in their
+// division channel — see history, post, attach screenshots, use slash
+// commands, react with emoji.
+//
+// BOT_ALLOW: what the bot needs in any channel it created (including
+// match-flow surfaces). Mirrors the boot-audit perm list + the thread
+// management it does post-match.
+const MEMBER_ALLOW = [
+  PermissionFlagsBits.ViewChannel,
+  PermissionFlagsBits.SendMessages,
+  PermissionFlagsBits.SendMessagesInThreads,
+  PermissionFlagsBits.ReadMessageHistory,
+  PermissionFlagsBits.EmbedLinks,
+  PermissionFlagsBits.AttachFiles,
+  PermissionFlagsBits.AddReactions,
+  PermissionFlagsBits.UseExternalEmojis,
+  PermissionFlagsBits.UseApplicationCommands,
+];
+
+const BOT_ALLOW = [
+  ...MEMBER_ALLOW,
+  PermissionFlagsBits.ManageMessages,
+  PermissionFlagsBits.ManageThreads,
+  PermissionFlagsBits.CreatePrivateThreads,
+  PermissionFlagsBits.CreatePublicThreads,
+];
+
+export const PERM_PRESETS = { MEMBER_ALLOW, BOT_ALLOW } as const;
 import { getDiscordClient } from "./discord.js";
 
 async function getGuild(guildId: string): Promise<Guild> {
@@ -123,12 +158,18 @@ export async function createGuildTextChannel(
           ...visibleRoles.map((id) => ({
             id,
             type: 0 as const,
-            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+            // Full MEMBER_ALLOW set so slash commands, embeds, history,
+            // attachments etc. work regardless of @everyone server-
+            // level defaults.
+            allow: [...MEMBER_ALLOW],
           })),
           ...visibleUsers.map((id) => ({
             id,
             type: 1 as const,
-            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+            // The bot is added as a user overwrite; give it the wider
+            // BOT_ALLOW set so it can also manage threads + delete its
+            // own messages from inside the channel it created.
+            allow: id === botUserId ? [...BOT_ALLOW] : [...MEMBER_ALLOW],
           })),
         ]
       : undefined;
