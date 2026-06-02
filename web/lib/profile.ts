@@ -68,7 +68,26 @@ export interface SeasonHistoryEntry {
 export interface PlayerHistory {
   player: { id: string; discordId: string; displayName: string; rating: number | null };
   history: SeasonHistoryEntry[];
-  totals: { seasons: number; wins: number; draws: number; losses: number; points: number; bestRank: number | null };
+  totals: {
+    seasons: number;
+    wins: number;
+    draws: number;
+    losses: number;
+    points: number;
+    bestRank: number | null;
+    // Match-level rates across the career — what % of CONFIRMED matches
+    // ended 2-0 for / 1-1 / 0-2 for. Null when the player has zero
+    // confirmed matches (can't divide by zero).
+    winRatePct: number | null;
+    drawRatePct: number | null;
+    lossRatePct: number | null;
+    // Game-level rate: gamesWon / (gamesWon + gamesLost). Finer-grained
+    // than the match-level rate — a 2-0/0-2/1-1 player has match win%
+    // of 33 but game win% of 50.
+    gameWinRatePct: number | null;
+    totalMatches: number;
+    totalGames: number;
+  };
 }
 
 // Shape of the JSON payload written by recomputeDivisionStandings.
@@ -283,20 +302,48 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
     });
   }
 
+  const totalWins = history.reduce((s, h) => s + h.wins, 0);
+  const totalDraws = history.reduce((s, h) => s + h.draws, 0);
+  const totalLosses = history.reduce((s, h) => s + h.losses, 0);
+  const totalGamesWon = history.reduce((s, h) => s + h.gamesWon, 0);
+  const totalGamesLost = history.reduce((s, h) => s + h.gamesLost, 0);
+  const totalMatches = totalWins + totalDraws + totalLosses;
+  const totalGames = totalGamesWon + totalGamesLost;
+  const pct = (n: number, d: number) => (d === 0 ? null : Math.round((n / d) * 100));
+
   const totals = {
     seasons: history.length,
-    wins: history.reduce((s, h) => s + h.wins, 0),
-    draws: history.reduce((s, h) => s + h.draws, 0),
-    losses: history.reduce((s, h) => s + h.losses, 0),
+    wins: totalWins,
+    draws: totalDraws,
+    losses: totalLosses,
     points: history.reduce((s, h) => s + h.points, 0),
     bestRank: history
       .filter((h) => h.rank > 0)
       .reduce<number | null>((best, h) => (best === null || h.rank < best ? h.rank : best), null),
+    winRatePct: pct(totalWins, totalMatches),
+    drawRatePct: pct(totalDraws, totalMatches),
+    lossRatePct: pct(totalLosses, totalMatches),
+    gameWinRatePct: pct(totalGamesWon, totalGames),
+    totalMatches,
+    totalGames,
   };
 
   return { player, history, totals };
 }
 
 function emptyTotals(): PlayerHistory["totals"] {
-  return { seasons: 0, wins: 0, draws: 0, losses: 0, points: 0, bestRank: null };
+  return {
+    seasons: 0,
+    wins: 0,
+    draws: 0,
+    losses: 0,
+    points: 0,
+    bestRank: null,
+    winRatePct: null,
+    drawRatePct: null,
+    lossRatePct: null,
+    gameWinRatePct: null,
+    totalMatches: 0,
+    totalGames: 0,
+  };
 }

@@ -9,8 +9,20 @@ import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { recordSetForPlayer } from "@/app/admin/players/actions";
 import { castEasterEggVote, reportFromProfileAction, submitProfileDispute } from "./actions";
+import type { SeasonHistoryEntry } from "@/lib/profile";
 
 export const dynamic = "force-dynamic";
+
+// Builds the hover tooltip for a season card's "W-D-L" inline number.
+// Spells out the rates explicitly so a glance over a player's career
+// can answer "is that win count from a few seasons or one good one".
+function seasonRateTooltip(h: SeasonHistoryEntry): string {
+  if (h.played === 0) return "No confirmed matches yet this season.";
+  const win = Math.round((h.wins / h.played) * 100);
+  const draw = Math.round((h.draws / h.played) * 100);
+  const loss = Math.round((h.losses / h.played) * 100);
+  return `Win ${win}% · Draw ${draw}% · Loss ${loss}% (${h.played} matches)`;
+}
 
 export default async function ProfilePage({
   params,
@@ -256,6 +268,40 @@ export default async function ProfilePage({
           <div className="stat"><div className="label">Draws (1-1)</div><div className="value">{t.draws}</div></div>
           <div className="stat"><div className="label">Losses (0-2)</div><div className="value">{t.losses}</div></div>
         </div>
+        {t.totalMatches > 0 && (
+          <div className="grid grid-3" style={{ marginTop: 8 }}>
+            <div
+              className="stat"
+              title={`${t.wins}/${t.totalMatches} matches won 2-0`}
+            >
+              <div className="label">Win rate</div>
+              <div className="value">{t.winRatePct}%</div>
+            </div>
+            <div
+              className="stat"
+              title={`${t.draws}/${t.totalMatches} matches drew 1-1`}
+            >
+              <div className="label">Draw rate</div>
+              <div className="value">{t.drawRatePct}%</div>
+            </div>
+            <div
+              className="stat"
+              title={`${t.losses}/${t.totalMatches} matches lost 0-2`}
+            >
+              <div className="label">Loss rate</div>
+              <div className="value">{t.lossRatePct}%</div>
+            </div>
+          </div>
+        )}
+        {t.totalGames > 0 && (
+          <div
+            className="muted"
+            style={{ marginTop: 6, fontSize: 12 }}
+            title="Game-level win rate: gamesWon / (gamesWon + gamesLost). Finer-grained than the match rate."
+          >
+            Game win rate: <strong>{t.gameWinRatePct}%</strong> (across {t.totalGames} games)
+          </div>
+        )}
 
         {disputeOk && (
           <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>
@@ -288,7 +334,16 @@ export default async function ProfilePage({
                     <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "#e74c3c" }}>DROPPED</span>
                   )}
                   <span style={{ marginLeft: "auto" }} className="muted">
-                    Rank {rankStr} · {h.points} pts · {h.wins}-{h.draws}-{h.losses} · {h.gamesWon}-{h.gamesLost} games
+                    Rank {rankStr} · {h.points} pts ·{" "}
+                    <span title={seasonRateTooltip(h)}>
+                      {h.wins}-{h.draws}-{h.losses}
+                      {h.played > 0 && (
+                        <span style={{ marginLeft: 4, fontSize: 11 }}>
+                          ({Math.round((h.wins / h.played) * 100)}% win)
+                        </span>
+                      )}
+                    </span>{" "}
+                    · {h.gamesWon}-{h.gamesLost} games
                     {h.finalGlobalRank != null && (
                       <span
                         title="Global league rank when this season ended. Doesn't shift when later seasons recompute Player.rating."

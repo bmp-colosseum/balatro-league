@@ -3,8 +3,25 @@ import { loadStandingsPageData } from "@/lib/loaders/standings";
 import { getShowBmpMmr } from "@/lib/preferences";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
+import type { StandingRow } from "@/lib/standings";
 
 export const dynamic = "force-dynamic"; // Always fresh — DB writes happen out-of-band via the bot
+
+// Tooltips so the raw W-D-L / Games cells double as rate views on hover
+// without bloating the visible column count.
+function standingRateTooltip(r: StandingRow): string {
+  if (r.played === 0) return "No matches played yet.";
+  const win = Math.round((r.wins / r.played) * 100);
+  const draw = Math.round((r.draws / r.played) * 100);
+  const loss = Math.round((r.losses / r.played) * 100);
+  return `Win ${win}% · Draw ${draw}% · Loss ${loss}% (${r.played} matches)`;
+}
+function gameRateTooltip(r: StandingRow): string {
+  const total = r.gamesWon + r.gamesLost;
+  if (total === 0) return "No games played yet.";
+  const winRate = Math.round((r.gamesWon / total) * 100);
+  return `Game win rate ${winRate}% (${r.gamesWon}/${total})`;
+}
 
 export default async function StandingsPage() {
   const showBmpMmr = await getShowBmpMmr();
@@ -145,8 +162,8 @@ export default async function StandingsPage() {
                                       <td>{r.dropped ? <s>{link}</s> : link}</td>
                                       <td className="muted">{r.player.rating != null ? `#${r.player.rating}` : "—"}</td>
                                       <td><strong>{r.points}</strong></td>
-                                      <td>{r.wins}-{r.draws}-{r.losses}</td>
-                                      <td>{r.gamesWon}-{r.gamesLost}</td>
+                                      <td title={standingRateTooltip(r)}>{r.wins}-{r.draws}-{r.losses}</td>
+                                      <td title={gameRateTooltip(r)}>{r.gamesWon}-{r.gamesLost}</td>
                                       {showBmpMmr && (
                                         <td>{mmr != null ? mmr : <span className="muted">—</span>}</td>
                                       )}
