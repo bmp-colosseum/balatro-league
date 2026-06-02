@@ -1,39 +1,45 @@
-// Deck/stake preset config + pool generation for /start-match.
-// A MatchConfigPreset is the named set of decks + stakes admins curate.
-// Each Season optionally picks a preset (Season.matchConfigPresetId);
-// if a season hasn't picked one, /start-match falls back to the preset
-// named "Default" (auto-created via seedDefaultPresetIfEmpty).
+// Deck/stake preset config + pool generation.
+//
+// Presets are named bundles of decks + stakes. The NAME has no
+// semantic meaning — admin can call them whatever they want. Which
+// preset is the "season default" and which is the "casual default"
+// is configured via LeagueConfig pointers:
+//   season_default_preset_id  — fallback for /start-match when a
+//                               season doesn't pick a specific one
+//   casual_preset_id          — used by /challenge
+// Both pointers can be moved freely on /admin/deck-bans.
 
 import { prisma } from "./db.js";
 import defaults from "./data/match-defaults.json" with { type: "json" };
+import { getConfig, LeagueConfigKey } from "./league-config.js";
 
 export const DEFAULT_POOL_SIZE = 9;
-export const DEFAULT_PRESET_NAME = "Default";
-// Dedicated preset name for /challenge (casual) matches. Lives
-// separately from "Default" so admin can tweak casual rules without
-// affecting any season that uses the Default preset as fallback.
-// Auto-seeded with the stock Balatro decks/stakes the first time
-// it's needed (same pattern as Default).
-export const CASUAL_PRESET_NAME = "Casual";
+
+// Name used by the one-shot auto-seed when NO presets exist at all.
+// Admin can rename it freely afterwards — nothing depends on this
+// string being a specific value at runtime.
+const STOCK_SEED_NAME = "Stock";
 
 export interface DeckEntry {
   deck: string;
   stake: string;
 }
 
-// Resolve which preset a season uses. Returns null if no preset is set AND
-// no Default preset exists.
+// Resolve which preset a season uses for /start-match:
+//   1. Season.matchConfigPresetId — admin's per-season choice
+//   2. LeagueConfig.SeasonDefaultPresetId — league-wide fallback
+//   3. Any single existing preset (last-resort if config is empty)
+// Returns null if no presets exist anywhere.
 export async function presetForSeason(seasonId: string) {
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
     include: { matchConfigPreset: true },
   });
   if (season?.matchConfigPreset) return season.matchConfigPreset;
-  return prisma.matchConfigPreset.findUnique({ where: { name: DEFAULT_PRESET_NAME } });
+  return resolveDefaultSeasonPreset();
 }
 
-// Same as presetForSeason, but starting from a division id (the join the
-// match-buttons flow has on hand).
+// Same as presetForSeason, but starting from a division id.
 export async function presetForDivision(divisionId: string) {
   const division = await prisma.division.findUnique({
     where: { id: divisionId },
@@ -41,6 +47,31 @@ export async function presetForDivision(divisionId: string) {
   });
   if (!division) return null;
   return presetForSeason(division.seasonId);
+}
+
+// /challenge resolution — purely config-driven, no season context.
+//   1. LeagueConfig.CasualPresetId — admin's chosen casual preset
+//   2. Any single existing preset (last-resort)
+export async function presetForCasualMatch() {
+  const id = await getConfig(LeagueConfigKey.CasualPresetId);
+  if (id) {
+    const preset = await prisma.matchConfigPreset.findUnique({ where: { id } });
+    if (preset) return preset;
+  }
+  return firstExistingPreset();
+}
+
+async function resolveDefaultSeasonPreset() {
+  const id = await getConfig(LeagueConfigKey.SeasonDefaultPresetId);
+  if (id) {
+    const preset = await prisma.matchConfigPreset.findUnique({ where: { id } });
+    if (preset) return preset;
+  }
+  return firstExistingPreset();
+}
+
+async function firstExistingPreset() {
+  return prisma.matchConfigPreset.findFirst({ orderBy: { createdAt: "asc" } });
 }
 
 // Cartesian product of (deck × stake), shuffled and sliced. No duplicate combos.
@@ -79,34 +110,53 @@ function shuffle<T>(arr: T[], rand: () => number): T[] {
   return a;
 }
 
-// Auto-seed a named preset with Balatro's stock decks/stakes if it
-// doesn't exist or has empty decks/stakes arrays. Idempotent — a
-// fully-populated preset is left alone.
-async function seedNamedPresetIfEmpty(name: string): Promise<void> {
-  const existing = await prisma.matchConfigPreset.findUnique({ where: { name } });
-  if (!existing) {
-    await prisma.matchConfigPreset.create({
-      data: { name, decks: defaults.decks, stakes: defaults.stakes },
+// One-shot bootstrap. If NO presets exist at all, create a single
+// 'Stock' preset with the stock Balatro decks/stakes and point BOTH
+// config keys at it so /start-match and /challenge can resolve a
+// preset on day one. Admin can rename, edit, add more presets, or
+// move the pointers afterwards — none of that depends on the name.
+//
+// If presets already exist but the config keys aren't set yet (e.g.
+// fresh deploy on top of a prior schema), point the keys at whichever
+// preset exists so the resolvers don't hit null.
+export async function bootstrapPresetsAndPointers(): Promise<void> {
+  const presetCount = await prisma.matchConfigPreset.count();
+  let anchor = await firstExistingPreset();
+
+  if (presetCount === 0) {
+    anchor = await prisma.matchConfigPreset.create({
+      data: { name: STOCK_SEED_NAME, decks: defaults.decks, stakes: defaults.stakes },
     });
-    return;
-  }
-  const needsDecks = existing.decks.length === 0;
-  const needsStakes = existing.stakes.length === 0;
-  if (needsDecks || needsStakes) {
+  } else if (anchor && (anchor.decks.length === 0 || anchor.stakes.length === 0)) {
+    // Existing-but-empty preset — backfill so the resolver doesn't
+    // return a useless row.
     await prisma.matchConfigPreset.update({
-      where: { id: existing.id },
+      where: { id: anchor.id },
       data: {
-        ...(needsDecks ? { decks: defaults.decks } : {}),
-        ...(needsStakes ? { stakes: defaults.stakes } : {}),
+        ...(anchor.decks.length === 0 ? { decks: defaults.decks } : {}),
+        ...(anchor.stakes.length === 0 ? { stakes: defaults.stakes } : {}),
       },
     });
   }
-}
 
-export async function seedDefaultPresetIfEmpty(): Promise<void> {
-  await seedNamedPresetIfEmpty(DEFAULT_PRESET_NAME);
-}
+  if (!anchor) return;
 
-export async function seedCasualPresetIfEmpty(): Promise<void> {
-  await seedNamedPresetIfEmpty(CASUAL_PRESET_NAME);
+  // Point the LeagueConfig keys at the anchor preset, but ONLY if
+  // they're currently unset — admin's existing choices win.
+  const existingSeasonId = await getConfig(LeagueConfigKey.SeasonDefaultPresetId);
+  const existingCasualId = await getConfig(LeagueConfigKey.CasualPresetId);
+  if (!existingSeasonId) {
+    await prisma.leagueConfig.upsert({
+      where: { key: LeagueConfigKey.SeasonDefaultPresetId },
+      create: { key: LeagueConfigKey.SeasonDefaultPresetId, value: anchor.id, updatedBy: "bootstrap" },
+      update: { value: anchor.id },
+    });
+  }
+  if (!existingCasualId) {
+    await prisma.leagueConfig.upsert({
+      where: { key: LeagueConfigKey.CasualPresetId },
+      create: { key: LeagueConfigKey.CasualPresetId, value: anchor.id, updatedBy: "bootstrap" },
+      update: { value: anchor.id },
+    });
+  }
 }

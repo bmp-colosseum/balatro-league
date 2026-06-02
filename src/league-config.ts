@@ -71,6 +71,16 @@ export const LeagueConfigKey = {
   // when nothing has changed — saves a Discord API round-trip + keeps us
   // well clear of the ~200/day global-command rate limit.
   LastCommandsHash: "last_commands_hash",
+
+  // Pointers from semantic role → preset id. Preset names carry no
+  // meaning; what matters is which preset these pointers reference.
+  //   SeasonDefaultPresetId — fallback for /start-match when a season
+  //                           hasn't picked a per-season preset.
+  //   CasualPresetId        — used by /challenge.
+  // Bootstrap creates a single 'Stock' preset and points both keys at
+  // it on first run. Admin can repoint either one on /admin/deck-bans.
+  SeasonDefaultPresetId: "season_default_preset_id",
+  CasualPresetId: "casual_preset_id",
 } as const;
 
 export type LeagueConfigKey = (typeof LeagueConfigKey)[keyof typeof LeagueConfigKey];

@@ -10,7 +10,7 @@ import { activePublicSeason } from "../active-season.js";
 import { actorFromInteractionUser, recordAudit } from "../audit.js";
 import { prisma } from "../db.js";
 import { getLeagueSettingsForSeason } from "../league-settings.js";
-import { presetForSeason, seedDefaultPresetIfEmpty } from "../match-config.js";
+import { bootstrapPresetsAndPointers, presetForSeason } from "../match-config.js";
 import { renderMatch } from "../match-render.js";
 import { getOrCreatePlayer } from "../players.js";
 import type { SlashCommand } from "./types.js";
@@ -129,12 +129,13 @@ export const startMatch: SlashCommand = {
       return;
     }
 
-    // Resolve the season's match-config preset (or auto-create Default on first run).
-    await seedDefaultPresetIfEmpty();
+    // Resolve the season's match-config preset (or bootstrap a stock
+    // preset + config pointers on first run).
+    await bootstrapPresetsAndPointers();
     const preset = await presetForSeason(season.id);
     if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) {
       await interaction.editReply(
-        "This season's match config preset is empty or missing — ask an admin to set one in `/admin/match-config` and assign it to the season.",
+        "This season's match config preset is empty or missing — ask an admin to pick a preset on `/admin/deck-bans` and (optionally) assign one to this season.",
       );
       return;
     }

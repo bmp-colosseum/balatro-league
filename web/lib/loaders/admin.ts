@@ -287,19 +287,29 @@ export interface DeckBansPresetSummary {
 export interface DeckBansPageData {
   presets: DeckBansPresetSummary[];
   selected: DeckBansPresetSummary | null;
+  // Which preset id (if any) is currently pointed to by each role key.
+  // Either may be null on a fresh install before bootstrap has run.
+  seasonDefaultPresetId: string | null;
+  casualPresetId: string | null;
 }
 
 export async function loadDeckBansPage(selectedIdParam: string | undefined): Promise<DeckBansPageData> {
-  const rows = await prisma.matchConfigPreset.findMany({
-    orderBy: { name: "asc" },
-    select: {
-      id: true,
-      name: true,
-      decks: true,
-      stakes: true,
-      _count: { select: { seasons: true } },
-    },
-  });
+  const [rows, configRows] = await Promise.all([
+    prisma.matchConfigPreset.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        decks: true,
+        stakes: true,
+        _count: { select: { seasons: true } },
+      },
+    }),
+    prisma.leagueConfig.findMany({
+      where: { key: { in: ["season_default_preset_id", "casual_preset_id"] } },
+      select: { key: true, value: true },
+    }),
+  ]);
   const presets: DeckBansPresetSummary[] = rows.map((p) => ({
     id: p.id,
     name: p.name,
@@ -310,7 +320,13 @@ export async function loadDeckBansPage(selectedIdParam: string | undefined): Pro
   const selected = selectedIdParam
     ? presets.find((p) => p.id === selectedIdParam) ?? null
     : presets[0] ?? null;
-  return { presets, selected };
+  const configByKey = new Map(configRows.map((r) => [r.key, r.value]));
+  return {
+    presets,
+    selected,
+    seasonDefaultPresetId: configByKey.get("season_default_preset_id") ?? null,
+    casualPresetId: configByKey.get("casual_preset_id") ?? null,
+  };
 }
 
 // ── /admin/players ───────────────────────────────────────────────────

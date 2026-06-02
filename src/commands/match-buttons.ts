@@ -26,7 +26,7 @@ import { prisma } from "../db.js";
 import { env } from "../env.js";
 import { getLeagueSettings, getLeagueSettingsForSeason } from "../league-settings.js";
 import { logDiscordError } from "../log-discord-error.js";
-import { CASUAL_PRESET_NAME, DEFAULT_PRESET_NAME, generatePool, presetForDivision, seedCasualPresetIfEmpty, seedDefaultPresetIfEmpty } from "../match-config.js";
+import { bootstrapPresetsAndPointers, generatePool, presetForCasualMatch, presetForDivision } from "../match-config.js";
 import { renderMatch } from "../match-render.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
 import {
@@ -120,13 +120,13 @@ async function updateSession(
 type AnyInteraction = ButtonInteraction | StringSelectMenuInteraction;
 
 // Resolve the stake list this match can use for a custom-combo proposal.
-// The preset for the season (or Default for casual) defines the allowed
-// stakes — proposer can only pick from those, even though decks are open
-// to the full canonical library.
+// The preset for the season (league) or the configured casual preset
+// (challenge) defines the allowed stakes — proposer can only pick from
+// those, even though decks are open to the full canonical library.
 async function loadAllowedStakes(session: MatchSession): Promise<string[]> {
   const preset = session.divisionId
     ? await presetForDivision(session.divisionId)
-    : await prisma.matchConfigPreset.findUnique({ where: { name: CASUAL_PRESET_NAME } });
+    : await presetForCasualMatch();
   return preset?.stakes ?? [];
 }
 
@@ -319,7 +319,7 @@ async function handleReroll(interaction: ButtonInteraction, session: MatchSessio
   // Both agreed → regenerate the pool.
   const preset = session.divisionId
     ? await presetForDivision(session.divisionId)
-    : await prisma.matchConfigPreset.findUnique({ where: { name: CASUAL_PRESET_NAME } });
+    : await presetForCasualMatch();
   if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) {
     return reply(interaction, "The deck pool isn't set up for this match — ask an admin to configure decks/stakes.");
   }
@@ -456,26 +456,19 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
   // so phaseFor immediately reads PLAYING.
   const customCombo = session.customCombo ? parseCustomCombo(session.customCombo) : null;
 
-  // League /start-match → division's preset (falls back to Default).
-  // Casual /challenge → dedicated 'Casual' preset, independent of any
-  // season config. Both auto-seed from stock Balatro decks/stakes if
-  // they don't exist yet, so admin doesn't have to set them up before
-  // the first match.
-  if (session.divisionId) {
-    await seedDefaultPresetIfEmpty().catch((err) =>
-      console.warn("[handleAccept] seedDefaultPresetIfEmpty failed:", err),
-    );
-  } else {
-    await seedCasualPresetIfEmpty().catch((err) =>
-      console.warn("[handleAccept] seedCasualPresetIfEmpty failed:", err),
-    );
-  }
+  // League /start-match → division's preset (uses the season-default
+  // pointer as fallback). Casual /challenge → the preset pointed at by
+  // the casual config key. Bootstrap is a no-op once a preset+pointers
+  // exist, so safe to call on every accept.
+  await bootstrapPresetsAndPointers().catch((err) =>
+    console.warn("[handleAccept] bootstrapPresetsAndPointers failed:", err),
+  );
   const preset = session.divisionId
     ? await presetForDivision(session.divisionId)
-    : await prisma.matchConfigPreset.findUnique({ where: { name: CASUAL_PRESET_NAME } });
+    : await presetForCasualMatch();
   if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) {
-    const which = session.divisionId ? "this season's preset" : `the '${CASUAL_PRESET_NAME}' preset for casual challenges`;
-    return reply(interaction, `The deck pool isn't set up — ask an admin to configure decks/stakes for ${which} before accepting.`);
+    const which = session.divisionId ? "this season's preset" : "the casual-match preset";
+    return reply(interaction, `The deck pool isn't set up — ask an admin to configure decks/stakes for ${which} on \`/admin/deck-bans\` before accepting.`);
   }
   // Read the current league settings once and stamp the resulting
   // policy onto the session — that snapshot stays valid for this
@@ -640,7 +633,7 @@ async function handleChooseFirst(interaction: ButtonInteraction, session: MatchS
   // from the same configured decks/stakes the match was set up with.
   const preset = session.divisionId
     ? await presetForDivision(session.divisionId)
-    : await prisma.matchConfigPreset.findUnique({ where: { name: CASUAL_PRESET_NAME } });
+    : await presetForCasualMatch();
   if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) {
     return reply(interaction, "The deck pool isn't set up for this match — ask an admin to configure decks/stakes.");
   }

@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { requireAdmin } from "@/lib/admin";
 import { loadDeckBansPage } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
@@ -13,10 +13,14 @@ import {
   removeDeck,
   removeStake,
   renamePreset,
-  seedDefaultPreset,
+  seedStockPreset,
+  setPresetRole,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
+
+const SEASON_DEFAULT_PRESET_ID_KEY = "season_default_preset_id";
+const CASUAL_PRESET_ID_KEY = "casual_preset_id";
 
 export default async function DeckSelectionPage({
   searchParams,
@@ -25,24 +29,43 @@ export default async function DeckSelectionPage({
 }) {
   await requireAdmin();
   const { preset: presetIdParam } = await searchParams;
-  const { presets, selected } = await loadDeckBansPage(presetIdParam);
+  const { presets, selected, seasonDefaultPresetId, casualPresetId } = await loadDeckBansPage(presetIdParam);
+
+  const seasonDefaultName = presets.find((p) => p.id === seasonDefaultPresetId)?.name ?? null;
+  const casualName = presets.find((p) => p.id === casualPresetId)?.name ?? null;
 
   return (
     <>
       <SiteNav activePath="/admin" />
       <AdminNav activePath="/admin/deck-bans" />
       <main>
-        <h2>Deck Bans presets</h2>
+        <h2>Deck/stake presets</h2>
         <p className="muted">
           A preset is a named set of decks + stakes the ban/pick flow samples combos from.
-          Two presets are special:
+          Names are arbitrary — what matters is which preset each <strong>role</strong> points at:
         </p>
         <ul className="muted" style={{ marginTop: -4, fontSize: 13 }}>
-          <li><strong>Default</strong> — used by <code>/start-match</code> for any season that hasn't picked a specific preset.</li>
-          <li><strong>Casual</strong> — used by <code>/challenge</code> (casual non-league matches). Edit independently of Default.</li>
+          <li>
+            <strong>Season default</strong>{" "}
+            {seasonDefaultName ? (
+              <>→ <code>{seasonDefaultName}</code></>
+            ) : (
+              <em>(unset — falls back to whichever preset exists)</em>
+            )}{" "}
+            — used by <code>/start-match</code> for any season that hasn't picked its own preset.
+          </li>
+          <li>
+            <strong>Casual</strong>{" "}
+            {casualName ? (
+              <>→ <code>{casualName}</code></>
+            ) : (
+              <em>(unset — falls back to whichever preset exists)</em>
+            )}{" "}
+            — used by <code>/challenge</code>. Edit independently of the season default.
+          </li>
         </ul>
         <p className="muted" style={{ fontSize: 13 }}>
-          Both auto-seed with the stock Balatro decks/stakes on first use. Other presets can be created and assigned per-season from the season detail page.
+          A stock 'Stock' preset is auto-seeded on first use and both pointers are set to it. Repoint either pointer below by editing a preset.
         </p>
         <div className="card" style={{ fontSize: 12 }}>
           <strong>Stock seed</strong>
@@ -62,17 +85,28 @@ export default async function DeckSelectionPage({
             <strong>No presets yet</strong>
             <p className="muted">Create one with Balatro's stock decks/stakes, or start from scratch.</p>
             <div style={{ display: "flex", gap: 8 }}>
-              <form action={seedDefaultPreset}>
-                <button type="submit">Seed a Default preset (15 decks, 8 stakes)</button>
+              <form action={seedStockPreset}>
+                <button type="submit">
+                  Seed a 'Stock' preset ({defaults.decks.length} decks, {defaults.stakes.length} stakes)
+                </button>
               </form>
               <CreatePresetForm seedAvailable={false} />
             </div>
           </div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: 16 }}>
-            <PresetSidebar presets={presets} selectedId={selected?.id ?? null} />
+            <PresetSidebar
+              presets={presets}
+              selectedId={selected?.id ?? null}
+              seasonDefaultPresetId={seasonDefaultPresetId}
+              casualPresetId={casualPresetId}
+            />
             {selected ? (
-              <PresetEditor preset={selected} />
+              <PresetEditor
+                preset={selected}
+                isSeasonDefault={selected.id === seasonDefaultPresetId}
+                isCasual={selected.id === casualPresetId}
+              />
             ) : (
               <div className="card muted">Pick a preset from the left, or create a new one.</div>
             )}
@@ -86,9 +120,13 @@ export default async function DeckSelectionPage({
 function PresetSidebar({
   presets,
   selectedId,
+  seasonDefaultPresetId,
+  casualPresetId,
 }: {
   presets: Array<{ id: string; name: string; seasonCount: number }>;
   selectedId: string | null;
+  seasonDefaultPresetId: string | null;
+  casualPresetId: string | null;
 }) {
   return (
     <div className="card" style={{ alignSelf: "start" }}>
@@ -96,6 +134,9 @@ function PresetSidebar({
       <ul style={{ marginTop: 8, padding: 0, listStyle: "none" }}>
         {presets.map((p) => {
           const isActive = p.id === selectedId;
+          const tags: string[] = [];
+          if (p.id === seasonDefaultPresetId) tags.push("season default");
+          if (p.id === casualPresetId) tags.push("casual");
           return (
             <li key={p.id} style={{ marginBottom: 4 }}>
               <Link
@@ -109,7 +150,14 @@ function PresetSidebar({
                   textDecoration: "none",
                 }}
               >
-                <div>{p.name}</div>
+                <div>
+                  {p.name}
+                  {tags.length > 0 && (
+                    <span className="muted" style={{ fontSize: 10, marginLeft: 6 }}>
+                      ({tags.join(", ")})
+                    </span>
+                  )}
+                </div>
                 <div className="muted" style={{ fontSize: 11 }}>
                   {p.seasonCount} season{p.seasonCount === 1 ? "" : "s"} using this
                 </div>
@@ -141,8 +189,12 @@ function CreatePresetForm({ seedAvailable }: { seedAvailable: boolean }) {
 
 function PresetEditor({
   preset,
+  isSeasonDefault,
+  isCasual,
 }: {
   preset: { id: string; name: string; decks: string[]; stakes: string[] };
+  isSeasonDefault: boolean;
+  isCasual: boolean;
 }) {
   const totalCombos = preset.decks.length * preset.stakes.length;
   return (
@@ -169,6 +221,22 @@ function PresetEditor({
             <span style={{ color: "#e74c3c" }}> ⚠ need at least 9 for a normal match.</span>
           )}
         </p>
+        <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <form action={setPresetRole}>
+            <input type="hidden" name="id" value={preset.id} />
+            <input type="hidden" name="role" value={SEASON_DEFAULT_PRESET_ID_KEY} />
+            <button type="submit" disabled={isSeasonDefault}>
+              {isSeasonDefault ? "✓ Used as season default" : "Use as season default"}
+            </button>
+          </form>
+          <form action={setPresetRole}>
+            <input type="hidden" name="id" value={preset.id} />
+            <input type="hidden" name="role" value={CASUAL_PRESET_ID_KEY} />
+            <button type="submit" disabled={isCasual}>
+              {isCasual ? "✓ Used for casual /challenge" : "Use for casual /challenge"}
+            </button>
+          </form>
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
