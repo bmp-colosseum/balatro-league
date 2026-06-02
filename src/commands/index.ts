@@ -5,7 +5,7 @@ import { help } from "./help.js";
 import { league } from "./league.js";
 import { matchButtons, matchSelectMenus } from "./match-buttons.js";
 import { profile } from "./profile.js";
-import { disputeModal, report, reportButtons } from "./report.js";
+import { disputeModal, disputeSelect, report, reportButtons } from "./report.js";
 import { reportShootout } from "./report-shootout.js";
 import { schedule } from "./schedule.js";
 import { signupHandlers } from "./signup-buttons.js";
@@ -17,6 +17,6 @@ export const slashCommands: SlashCommand[] = [help, report, reportShootout, stan
 
 export const buttonHandlers: ButtonHandler[] = [reportButtons, signupHandlers, matchButtons];
 
-export const selectMenuHandlers: SelectMenuHandler[] = [matchSelectMenus];
+export const selectMenuHandlers: SelectMenuHandler[] = [matchSelectMenus, disputeSelect];
 
 export const modalHandlers: ModalHandler[] = [disputeModal];

@@ -3,11 +3,13 @@ import {
   MessageFlags,
   ModalBuilder,
   SlashCommandBuilder,
+  StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
   type ModalSubmitInteraction,
+  type StringSelectMenuInteraction,
 } from "discord.js";
 import { enqueueAnnounceResult } from "../queue.js";
 import { prisma } from "../db.js";
@@ -17,7 +19,7 @@ import { enqueueReportAutoConfirm } from "../queue.js";
 import { buildReportEmbed, postPendingReport } from "../report-flow.js";
 import { confirmSet, disputeSet, reportSet } from "../reporting.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
-import type { ButtonHandler, ModalHandler, SlashCommand } from "./types.js";
+import type { ButtonHandler, ModalHandler, SelectMenuHandler, SlashCommand } from "./types.js";
 
 const RESULT_CHOICES = [
   { name: "2-0 (I won both games)", value: "2-0" },
@@ -99,13 +101,26 @@ export const reportButtons: ButtonHandler = {
       return;
     }
 
-    // Dispute opens a modal so the player can supply a reason + propose
-    // what the result should be. Bot processes the modal-submit
-    // interaction below (disputeModal). Confirm is fire-and-forget as
-    // before.
+    // Dispute is a two-step flow: first an ephemeral select menu asks
+    // what they think the result SHOULD be, then a modal collects the
+    // reason. Two steps because Discord modals don't support select
+    // menus — only text inputs — and we want a clean dropdown for the
+    // proposed result instead of typed-and-validated text.
     if (action === "dispute") {
-      const modal = buildDisputeModal(pairingId);
-      await interaction.showModal(modal);
+      const select = new StringSelectMenuBuilder()
+        .setCustomId(`dispute-select:${pairingId}`)
+        .setPlaceholder("What SHOULD the result have been?")
+        .addOptions(
+          { label: "I won 2-0", value: "2-0" },
+          { label: "It was a draw (1-1)", value: "1-1" },
+          { label: "I lost 0-2", value: "0-2" },
+          { label: "Not sure — let helper decide", value: "unsure" },
+        );
+      await interaction.reply({
+        content: "Pick what you think the result should be — next step asks for the reason.",
+        components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)],
+        flags: MessageFlags.Ephemeral,
+      });
       return;
     }
 
@@ -144,71 +159,74 @@ export const reportButtons: ButtonHandler = {
   },
 };
 
-// Dispute modal — three fields, all optional but at least one filled
-// is helpful. Reason is what helper sees first; proposed result lets
-// the admin one-click accept via /admin/disputes if it agrees with
-// the player's interpretation.
-function buildDisputeModal(pairingId: string): ModalBuilder {
+// Dispute modal — just the reason text field. Proposed result is
+// captured in the customId via the preceding select-menu step.
+// Format: dispute-modal:<pairingId>:<proposal>
+//   proposal is "2-0" | "1-1" | "0-2" | "unsure".
+function buildDisputeModal(pairingId: string, proposal: string): ModalBuilder {
   const modal = new ModalBuilder()
-    .setCustomId(`dispute-modal:${pairingId}`)
-    .setTitle("Dispute this result");
+    .setCustomId(`dispute-modal:${pairingId}:${proposal}`)
+    .setTitle("Why are you disputing?");
   const reasonInput = new TextInputBuilder()
     .setCustomId("reason")
-    .setLabel("Why is the result wrong?")
-    .setPlaceholder("Game 2 ended differently than reported, opponent miscounted, etc.")
+    .setLabel("Reason (helper will see this)")
+    .setPlaceholder("Game 2 was a draw, opponent miscounted, etc.")
     .setStyle(TextInputStyle.Paragraph)
     .setMaxLength(500)
-    .setRequired(false);
-  const proposedInput = new TextInputBuilder()
-    .setCustomId("proposed")
-    .setLabel("What SHOULD it be? (2-0, 1-1, 0-2, or blank)")
-    .setPlaceholder("Type 2-0 if you won both, 1-1 if it was a draw, 0-2 if you lost both")
-    .setStyle(TextInputStyle.Short)
-    .setMaxLength(10)
-    .setRequired(false);
+    .setRequired(true);
   modal.addComponents(
     new ActionRowBuilder<TextInputBuilder>().addComponents(reasonInput),
-    new ActionRowBuilder<TextInputBuilder>().addComponents(proposedInput),
   );
   return modal;
 }
 
-// Modal submit handler — parses the reason + proposed result, calls
-// disputeSet with both, updates the original message in place.
+// Step 2 of the dispute flow: the user picked a proposed result from
+// the dropdown the Dispute button posted. Open the reason-only modal,
+// stashing their proposal in the modal's customId so the modal-submit
+// handler knows what they picked.
+export const disputeSelect: SelectMenuHandler = {
+  prefix: "dispute-select:",
+  async execute(interaction: StringSelectMenuInteraction) {
+    const pairingId = interaction.customId.split(":")[1];
+    const proposal = interaction.values[0];
+    if (!pairingId || !proposal) {
+      await interaction.reply({ content: "Pick a result from the dropdown.", flags: MessageFlags.Ephemeral });
+      return;
+    }
+    await interaction.showModal(buildDisputeModal(pairingId, proposal));
+  },
+};
+
+// Modal submit handler. customId format: dispute-modal:<pairingId>:<proposal>
+//   proposal = "2-0" | "1-1" | "0-2" | "unsure"
+// Parses the reason from the form, maps the proposal (from disputer's
+// POV) to canonical A/B games-won, calls disputeSet.
 export const disputeModal: ModalHandler = {
   prefix: "dispute-modal:",
   async execute(interaction: ModalSubmitInteraction) {
-    const pairingId = interaction.customId.split(":")[1];
-    if (!pairingId) {
+    const parts = interaction.customId.split(":");
+    const pairingId = parts[1];
+    const proposal = parts[2];
+    if (!pairingId || !proposal) {
       await interaction.reply({ content: "Modal looks broken — refresh Discord and try again.", flags: MessageFlags.Ephemeral });
       return;
     }
     const reason = interaction.fields.getTextInputValue("reason").trim();
-    const proposedRaw = interaction.fields.getTextInputValue("proposed").trim();
-    // Parse the proposed result if non-empty. Tolerate 2:0, 2 0, etc.
+
+    // Map disputer's proposal ('I won 2-0') to canonical A/B games-won.
     let proposedGamesWonA: number | undefined;
     let proposedGamesWonB: number | undefined;
-    if (proposedRaw) {
-      const match = proposedRaw.match(/^([012])\s*[-:\s]\s*([012])$/);
-      if (!match || !match[1] || !match[2]) {
-        await interaction.reply({
-          content: "Proposed result must be 2-0, 1-1, or 0-2 (or leave it blank).",
-          flags: MessageFlags.Ephemeral,
-        });
+    if (proposal !== "unsure") {
+      const map: Record<string, { a: number; b: number }> = {
+        "2-0": { a: 2, b: 0 },
+        "1-1": { a: 1, b: 1 },
+        "0-2": { a: 0, b: 2 },
+      };
+      const fromActorPov = map[proposal];
+      if (!fromActorPov) {
+        await interaction.reply({ content: "Invalid proposal.", flags: MessageFlags.Ephemeral });
         return;
       }
-      const a = parseInt(match[1], 10);
-      const b = parseInt(match[2], 10);
-      if (!((a === 2 && b === 0) || (a === 1 && b === 1) || (a === 0 && b === 2))) {
-        await interaction.reply({
-          content: "Only 2-0, 1-1, or 0-2 are valid match results.",
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-      // The form input is from the DISPUTER'S point of view (they say
-      // "I won 2-0"), so map to canonical A/B by checking who they
-      // are on the pairing. Lookup the pairing now.
       const p = await prisma.pairing.findUnique({ where: { id: pairingId } });
       if (!p) {
         await interaction.reply({ content: "Match not found.", flags: MessageFlags.Ephemeral });
@@ -216,8 +234,8 @@ export const disputeModal: ModalHandler = {
       }
       const actor = await getOrCreatePlayer(interaction.user);
       const actorIsA = p.playerAId === actor.id;
-      proposedGamesWonA = actorIsA ? a : b;
-      proposedGamesWonB = actorIsA ? b : a;
+      proposedGamesWonA = actorIsA ? fromActorPov.a : fromActorPov.b;
+      proposedGamesWonB = actorIsA ? fromActorPov.b : fromActorPov.a;
     }
 
     const actor = await getOrCreatePlayer(interaction.user);
@@ -230,6 +248,16 @@ export const disputeModal: ModalHandler = {
       await interaction.reply({ content: r.reason, flags: MessageFlags.Ephemeral });
       return;
     }
+    // The modal is launched from the ephemeral dropdown reply, not
+    // from the original announce/report embed — even when the modal
+    // is from a message, .update() needs the isFromMessage() type
+    // guard to be available on ModalSubmitInteraction.
+    const confirmation = `✓ Dispute filed. A helper has been pinged${proposal === "unsure" ? "" : ` and your proposed result (${proposal}) is on record`}. They'll respond in the dispute thread.`;
+    if (interaction.isFromMessage()) {
+      await interaction.update({ content: confirmation, components: [] });
+    } else {
+      await interaction.reply({ content: confirmation, flags: MessageFlags.Ephemeral });
+    }
     const pairing = await prisma.pairing.findUnique({
       where: { id: pairingId },
       include: { playerA: true, playerB: true, division: true },
@@ -238,7 +266,9 @@ export const disputeModal: ModalHandler = {
     const reporterIsA = pairing.reporterId === pairing.playerAId;
     const reporter = reporterIsA ? pairing.playerA : pairing.playerB;
     const opponent = reporterIsA ? pairing.playerB : pairing.playerA;
-    const embed = buildReportEmbed({
+    // Build embed for logging/thread purposes only — we don't have a
+    // handle on the original announce embed to update from here.
+    const _embed = buildReportEmbed({
       status: "DISPUTED",
       reporter,
       opponent,
@@ -247,16 +277,9 @@ export const disputeModal: ModalHandler = {
       reporterIsA,
       pairingId: pairing.id,
     });
-    // The button was attached to the announce embed (or the report
-    // embed) — update edits whichever message the modal was launched
-    // from. isFromMessage() narrows the type so the update() call is
-    // available (only valid for modals shown from a component
-    // interaction, which is always our case here).
-    if (interaction.isFromMessage()) {
-      await interaction.update({ content: "", embeds: [embed], components: [] });
-    } else {
-      await interaction.reply({ content: "Dispute filed — a helper will look at it shortly.", flags: MessageFlags.Ephemeral });
-    }
+    // (update already happened above; just mark _embed as
+    // intentionally unused so the lint+tsc don't complain.)
+    void _embed;
     spawnDisputeThread(pairing.id, { skipEmbedEdit: true }).catch((err) =>
       console.warn(`[dispute-modal] thread spawn for ${pairingId}:`, err),
     );
