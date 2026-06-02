@@ -4,6 +4,7 @@ import { loadDeckBansPage } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { CANONICAL_DECKS, CANONICAL_STAKES, deckDescription, stakeDescription } from "@/lib/balatro-info";
+import defaults from "@/lib/match-defaults.json";
 import {
   addDeck,
   addStake,
@@ -43,6 +44,18 @@ export default async function DeckSelectionPage({
         <p className="muted" style={{ fontSize: 13 }}>
           Both auto-seed with the stock Balatro decks/stakes on first use. Other presets can be created and assigned per-season from the season detail page.
         </p>
+        <div className="card" style={{ fontSize: 12 }}>
+          <strong>Stock seed</strong>
+          <p style={{ marginTop: 4 }}>
+            <strong>Decks ({defaults.decks.length}):</strong> {defaults.decks.join(", ")}
+          </p>
+          <p>
+            <strong>Stakes ({defaults.stakes.length}):</strong> {defaults.stakes.join(", ")}
+          </p>
+          <p className="muted">
+            {defaults.decks.length * defaults.stakes.length} combos available to the bot's 9-pick sampler.
+          </p>
+        </div>
 
         {presets.length === 0 ? (
           <div className="card">
