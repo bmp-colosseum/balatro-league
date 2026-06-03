@@ -14,6 +14,7 @@ import {
   addRoleBinding,
   clearConfigValue,
   removeRoleBinding,
+  runMatchSweepAction,
   setConfigValue,
 } from "./actions";
 
@@ -40,8 +41,13 @@ const BMP_KEYS = [
 // page is for the channels/webhooks/BMP/role-binding stuff that was
 // previously SQL-only.
 
-export default async function AdminConfigPage() {
+export default async function AdminConfigPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sweepOk?: string }>;
+}) {
   await requireAdmin();
+  const { sweepOk } = await searchParams;
   const [configRows, roleBindings] = await Promise.all([
     prisma.leagueConfig.findMany(),
     prisma.roleBinding.findMany({ orderBy: { tier: "asc" } }),
@@ -59,6 +65,26 @@ export default async function AdminConfigPage() {
           form-based now. Changes apply immediately (LeagueConfig has a ~30s in-memory
           cache on the bot side, so rules tweaks take up to that long to propagate).
         </p>
+
+        {sweepOk && (
+          <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>
+            ✓ Sweep complete. {sweepOk}
+          </div>
+        )}
+
+        <div className="card">
+          <strong>Match-thread sweep</strong>
+          <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            The bot runs this every minute. Click here to fire it on demand — useful
+            if the bot is down, or if you can see stale threads and want them flushed now.
+            Three passes: expired invites (WAITING_ACCEPT past expiry), idle sessions
+            (no activity for 24h+), and leaked threads (finished/cancelled sessions whose
+            thread close failed). Hits Discord REST directly; no bot needed.
+          </p>
+          <form action={runMatchSweepAction} style={{ marginTop: 8 }}>
+            <button type="submit" className="secondary">Run sweep now</button>
+          </form>
+        </div>
 
         <ConfigSection title="Channels & external" keys={CHANNEL_KEYS} valueByKey={valueByKey} />
         <ConfigSection title="BMP / balatromp.com" keys={BMP_KEYS} valueByKey={valueByKey} />

@@ -325,6 +325,20 @@ export async function listGuildTextChannels(guildId: string): Promise<DiscordCha
   }
 }
 
+// Delete a channel (thread or regular). Returns true on success or if
+// the channel was already gone (404 treated as success — the cleanup
+// goal is reached). Returns false on real errors (perms, network).
+export async function deleteChannel(channelId: string): Promise<boolean> {
+  try {
+    await rest().delete(Routes.channel(channelId));
+    return true;
+  } catch (err) {
+    if (isNotFound(err)) return true;
+    console.warn(`Discord deleteChannel(${channelId}) failed:`, err);
+    return false;
+  }
+}
+
 // True for the discord.js DiscordAPIError shape when Discord returns 404.
 function isNotFound(err: unknown): boolean {
   return (
