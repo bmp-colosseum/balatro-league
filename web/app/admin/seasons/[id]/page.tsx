@@ -106,71 +106,6 @@ export default async function SeasonDetailPage({
           </div>
         )}
 
-        <div className="card">
-          <strong>Settings</strong>
-          <div style={{ marginTop: 8 }}>
-            <SeasonDeckPresetPicker
-              seasonId={season.id}
-              presets={presets}
-              initialPresetId={season.matchConfigPresetId}
-              defaultPreset={defaultPreset}
-              saveAction={setSeasonPreset}
-            />
-          </div>
-          <form action={setSeasonRulesTemplate} style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-            <input type="hidden" name="seasonId" value={season.id} />
-            <label className="muted" style={{ fontSize: 12 }}>Rules template:</label>
-            <select name="leagueRulesTemplateId" defaultValue={season.leagueRulesTemplateId ?? ""} style={{ fontSize: 12 }}>
-              <option value="">— Use default —</option>
-              {rulesTemplates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.isDefault ? "★ " : ""}{t.name}
-                </option>
-              ))}
-            </select>
-            <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
-            <Link href="/admin/settings" className="muted" style={{ fontSize: 11 }}>Manage templates →</Link>
-          </form>
-          <details style={{ marginTop: 8 }}>
-            <summary className="muted" style={{ cursor: "pointer", fontSize: 12 }}>Discord overrides for this season</summary>
-            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
-              <form action={setSeasonDiscordCategory} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <input type="hidden" name="id" value={season.id} />
-                <input
-                  type="text"
-                  name="discordCategoryId"
-                  defaultValue={season.discordCategoryId ?? ""}
-                  placeholder="Category ID for division channels (auto-created if blank)"
-                  style={{ flex: 1, fontSize: 12 }}
-                />
-                <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
-              </form>
-              <form action={setSeasonResultsWebhook} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <input type="hidden" name="id" value={season.id} />
-                <input
-                  type="text"
-                  name="resultsWebhookUrl"
-                  defaultValue={season.resultsWebhookUrl ?? ""}
-                  placeholder="Results webhook URL (falls back to global if blank)"
-                  style={{ flex: 1, fontSize: 12 }}
-                />
-                <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
-              </form>
-              <form action={setSeasonResultsChannel} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <input type="hidden" name="id" value={season.id} />
-                <input
-                  type="text"
-                  name="resultsChannelId"
-                  defaultValue={season.resultsChannelId ?? ""}
-                  placeholder="Results channel ID for bot-REST fallback (optional)"
-                  style={{ flex: 1, fontSize: 12 }}
-                />
-                <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
-              </form>
-            </div>
-          </details>
-        </div>
-
         {season.divisions.length === 0 ? (
           <div className="card">
             <strong>⚙ Configure tier shape</strong>
@@ -453,6 +388,71 @@ export default async function SeasonDetailPage({
             </form>
           </div>
         )}
+
+        <div className="card">
+          <strong>Settings</strong>
+          <div style={{ marginTop: 8 }}>
+            <SeasonDeckPresetPicker
+              seasonId={season.id}
+              presets={presets}
+              initialPresetId={season.matchConfigPresetId}
+              defaultPreset={defaultPreset}
+              saveAction={setSeasonPreset}
+            />
+          </div>
+          <form action={setSeasonRulesTemplate} style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            <input type="hidden" name="seasonId" value={season.id} />
+            <label className="muted" style={{ fontSize: 12 }}>Rules template:</label>
+            <select name="leagueRulesTemplateId" defaultValue={season.leagueRulesTemplateId ?? ""} style={{ fontSize: 12 }}>
+              <option value="">— Use default —</option>
+              {rulesTemplates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.isDefault ? "★ " : ""}{t.name}
+                </option>
+              ))}
+            </select>
+            <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+            <Link href="/admin/settings" className="muted" style={{ fontSize: 11 }}>Manage templates →</Link>
+          </form>
+          <details style={{ marginTop: 8 }}>
+            <summary className="muted" style={{ cursor: "pointer", fontSize: 12 }}>Discord overrides for this season</summary>
+            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+              <form action={setSeasonDiscordCategory} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input type="hidden" name="id" value={season.id} />
+                <input
+                  type="text"
+                  name="discordCategoryId"
+                  defaultValue={season.discordCategoryId ?? ""}
+                  placeholder="Category ID for division channels (auto-created if blank)"
+                  style={{ flex: 1, fontSize: 12 }}
+                />
+                <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+              </form>
+              <form action={setSeasonResultsWebhook} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input type="hidden" name="id" value={season.id} />
+                <input
+                  type="text"
+                  name="resultsWebhookUrl"
+                  defaultValue={season.resultsWebhookUrl ?? ""}
+                  placeholder="Results webhook URL (falls back to global if blank)"
+                  style={{ flex: 1, fontSize: 12 }}
+                />
+                <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+              </form>
+              <form action={setSeasonResultsChannel} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input type="hidden" name="id" value={season.id} />
+                <input
+                  type="text"
+                  name="resultsChannelId"
+                  defaultValue={season.resultsChannelId ?? ""}
+                  placeholder="Results channel ID for bot-REST fallback (optional)"
+                  style={{ flex: 1, fontSize: 12 }}
+                />
+                <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+              </form>
+            </div>
+          </details>
+        </div>
 
         <LifecycleActions
           season={season}
