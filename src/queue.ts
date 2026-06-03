@@ -77,6 +77,18 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("award.champion-role");
   await boss.createQueue("dispute.spawn-thread");
   await boss.createQueue("notify.announce-result");
+
+  // One-shot cleanup for retired queues. archive.stale-threads was the
+  // pre-5c2bc7c hourly cron that got merged into match-sweep's 60s
+  // interval. Its cron schedule row + accumulated jobs (no worker
+  // listens anymore) stay in pg-boss forever unless we explicitly
+  // delete them. unschedule + deleteQueue are idempotent — keeping
+  // them on every boot is cheap insurance.
+  for (const retired of ["archive.stale-threads"]) {
+    await boss.unschedule(retired).catch(() => {});
+    await boss.deleteQueue(retired).catch(() => {});
+  }
+
   console.log("[pg-boss] queue started");
 
   // Worker: send a DM to one user. Retried automatically on failure.
