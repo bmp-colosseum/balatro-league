@@ -20,6 +20,7 @@ const ADMIN_LINKS: AdminLink[] = [
   { href: "/admin/disputes", label: "Disputes" },
   { href: "/admin/settings", label: "Rules", devOpsOnly: true },
   { href: "/admin/config", label: "Config" },
+  { href: "/admin/ops", label: "Ops", devOpsOnly: true },
   { href: "/admin/audit", label: "Audit" },
 ];
 
