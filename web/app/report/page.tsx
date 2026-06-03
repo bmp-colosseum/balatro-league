@@ -108,9 +108,11 @@ export default async function ReportPage({
         )}
 
         {player && division && recentMatches.length > 0 && (
-          <div className="card">
-            <strong>Your recent matches</strong>
-            <p className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+          <details className="card">
+            <summary style={{ cursor: "pointer" }}>
+              <strong>Your recent matches ({recentMatches.length})</strong>
+            </summary>
+            <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>
               Made a mistake or got an unfair confirm? Click Dispute to flag it for a helper.
               Tell them what it should have been and they can one-click apply your correction.
             </p>
@@ -173,7 +175,7 @@ export default async function ReportPage({
                 })}
               </tbody>
             </table>
-          </div>
+          </details>
         )}
       </main>
     </>
