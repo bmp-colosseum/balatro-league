@@ -707,7 +707,7 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
       `**What to do**`,
       `• Play **every other person** in this list once — best-of-2 (**${matchesPerPlayer} matches per player**, ${totalMatchesInDivision} total in this division).`,
       `• Schedule in this channel. DMs work too.`,
-      `• Use \`/start-match @opponent\` for the guided ban/pick flow (the bot picks the deck/stake for you), OR just play in Balatro and use \`/report @opponent result:2-0|1-1|0-2\` to log it.`,
+      `• Use \`/start-match @opponent\` for the guided ban/pick flow — bot walks you both through banning and picking decks/stakes for each game. OR just play in Balatro on your own and use \`/report @opponent result:2-0|1-1|0-2\` to log it.`,
       ``,
       `**Standings + your schedule:** <https://www.balatroleague.com/divisions/${div.id}>`,
       ``,

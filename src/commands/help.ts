@@ -13,7 +13,7 @@ const PLAYER_COMMANDS = [
   { cmd: "/standings", desc: "Current division standings" },
   { cmd: "/profile [player]", desc: "Match history + ranks (defaults to you)" },
   { cmd: "/schedule", desc: "Matches you still need to play this season" },
-  { cmd: "/start-match @opponent", desc: "Guided best-of-2 match: bot picks the deck/stake via ban/pick" },
+  { cmd: "/start-match @opponent", desc: "Guided best-of-2 match: bot walks you through ban/pick for each game" },
   { cmd: "/report @opponent result:2-0|1-1|0-2", desc: "Log a played match (auto-confirmed)" },
   { cmd: "/helper [reason]", desc: "Call a moderator into the current thread/channel" },
   { cmd: "/random-deck", desc: "Roll a random deck + stake from the league's default pool" },

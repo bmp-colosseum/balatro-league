@@ -260,7 +260,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       "• `/standings` — current division table",
       "• `/profile` — your match history & ranks",
       "• `/schedule` — sets you still need to play",
-      "• `/start-match @opponent` — guided ban/pick flow (bot picks the deck/stake)",
+      "• `/start-match @opponent` — bot walks you and your opponent through ban/pick for each game",
       "• `/report @opponent result:2-0` — log a played set (auto-confirmed)",
       "• `/help` — full command list",
       "",
