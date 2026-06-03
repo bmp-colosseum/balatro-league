@@ -10,6 +10,7 @@ const PUBLIC_LINKS = [
   { href: "/standings", label: "Standings" },
   { href: "/players", label: "Players" },
   { href: "/seasons", label: "Past seasons" },
+  { href: "/join", label: "Join" },
 ] as const;
 
 export async function SiteNav({ activePath }: { activePath: string }) {

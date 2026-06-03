@@ -81,6 +81,14 @@ export const LeagueConfigKey = {
   // it on first run. Admin can repoint either one on /admin/deck-bans.
   SeasonDefaultPresetId: "season_default_preset_id",
   CasualPresetId: "casual_preset_id",
+
+  // Public-facing Discord server invite URL (e.g. https://discord.gg/abc).
+  // Shown on the website's /join page so prospective players can find
+  // the server without first having to know someone in it. Admin sets
+  // this once via /admin/config; not auto-generated since server-wide
+  // invites have their own lifecycle (admin may want a never-expiring
+  // vanity URL or a limited-uses promo invite, etc.).
+  DiscordServerInviteUrl: "discord_server_invite_url",
 } as const;
 
 export type LeagueConfigKey = (typeof LeagueConfigKey)[keyof typeof LeagueConfigKey];

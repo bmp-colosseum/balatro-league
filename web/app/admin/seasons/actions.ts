@@ -372,13 +372,13 @@ function buildSignupPayload(round: { id: string; name: string }): {
   embeds: MessageEmbed[];
   components: ComponentActionRow[];
 } {
+  // Public embed surfaces COUNT only — roster lives behind admin auth
+  // on /admin/signups/[id]/build. See signupEmbed() on the bot side
+  // for the matching live-update format.
   const embed: MessageEmbed = {
     title: `🃏  ${round.name}`,
     description: "Click below to register. Withdraw anytime before sign-ups close.",
-    fields: [
-      { name: "Status", value: "**0 signed up**", inline: false },
-      { name: "Players", value: "_No one yet — be the first!_", inline: false },
-    ],
+    fields: [{ name: "Status", value: "**0 signed up**", inline: false }],
     color: 0x5865f2,
     footer: { text: `Round ${round.id}` },
   };
@@ -398,15 +398,11 @@ function buildClosedSignupPayload(
   round: { id: string; name: string },
   signups: Array<{ discordId: string }>,
 ): { embeds: MessageEmbed[]; components: ComponentActionRow[] } {
-  const playerList = signups.length
-    ? signups.map((s, i) => `${i + 1}. <@${s.discordId}>`).join("\n")
-    : "_No one signed up._";
   const embed: MessageEmbed = {
     title: `🃏  ${round.name}`,
     description: "Sign-ups are closed.",
     fields: [
       { name: "Status", value: `**${signups.length} signed up — sign-ups closed**`, inline: false },
-      { name: "Players", value: playerList, inline: false },
     ],
     color: 0x99aab5,
     footer: { text: `Round ${round.id}` },

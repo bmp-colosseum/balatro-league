@@ -6,10 +6,11 @@ import type { Signup, SignupRound } from "@prisma/client";
 
 export function signupEmbed(round: SignupRound, signups: Signup[]): EmbedBuilder {
   const active = signups.filter((s) => !s.withdrawn);
-  const list = active.length
-    ? active.map((s, i) => `${i + 1}. <@${s.discordId}>`).join("\n")
-    : "_No one yet — be the first!_";
 
+  // Public embed only surfaces the COUNT — not the player list. The
+  // roster is admin/helper-only via /admin/signups/[id]/build. Hiding
+  // individual names lets people sign up without worrying about who
+  // else has committed.
   const status =
     round.status === "OPEN"
       ? `**${active.length} signed up**`
@@ -20,10 +21,7 @@ export function signupEmbed(round: SignupRound, signups: Signup[]): EmbedBuilder
   return new EmbedBuilder()
     .setTitle(`🃏  ${round.name}`)
     .setDescription("Click below to register. Withdraw anytime before sign-ups close.")
-    .addFields(
-      { name: "Status", value: status, inline: false },
-      { name: "Players", value: list, inline: false },
-    )
+    .addFields({ name: "Status", value: status, inline: false })
     .setColor(round.status === "OPEN" ? 0x5865f2 : 0x99aab5)
     .setFooter({ text: `Round ${round.id}` });
 }
