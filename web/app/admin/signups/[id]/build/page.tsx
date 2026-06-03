@@ -187,8 +187,8 @@ export default async function BuildSeasonPage({
                 Subtitle (optional) — will create <strong>Season {nextNumber}</strong>
                 <input name="subtitle" placeholder="Optional subtitle (e.g. 'Launch')" style={{ width: "100%" }} />
               </label>
-              <label>
-                Deadline (UTC, optional)
+              <label title="Rough target for when the season ends — planning marker, not strictly enforced.">
+                Target end (local time, optional)
                 <input name="deadline" type="datetime-local" style={{ width: "100%" }} />
               </label>
               <label>

@@ -202,7 +202,12 @@ export default async function AdminSeasonsPage({
           </p>
           <form action={createSeason}>
             <label>Subtitle <input name="subtitle" placeholder="Optional subtitle (e.g. 'Launch')" /></label>
-            <label>Deadline (UTC) <input name="deadline" type="datetime-local" /></label>
+            <label
+              title="Rough target for when the season ends — used as a planning marker, not strictly enforced. Time is interpreted in your local timezone."
+            >
+              Target end (local time)
+              <input name="deadline" type="datetime-local" />
+            </label>
             <label>Group size <input name="targetGroupSize" type="number" min={2} max={20} defaultValue={5} /></label>
             <label>Min group <input name="minGroupSize" type="number" min={2} max={20} defaultValue={3} /></label>
 

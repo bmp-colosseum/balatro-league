@@ -404,10 +404,13 @@ export async function buildSeason(formData: FormData) {
     const matchConfigPresetIdRaw = String(formData.get("matchConfigPresetId") ?? "");
     const matchConfigPresetId = matchConfigPresetIdRaw === "" ? null : matchConfigPresetIdRaw;
 
+    // datetime-local submits in the admin's local timezone; parse
+    // without forcing UTC so the stored Date reflects the wall time
+    // the admin actually typed.
     let deadline: Date | null = null;
     const deadlineStr = String(formData.get("deadline") ?? "");
     if (deadlineStr) {
-      const d = new Date(deadlineStr + "Z");
+      const d = new Date(deadlineStr);
       if (!Number.isNaN(d.getTime())) deadline = d;
     }
 

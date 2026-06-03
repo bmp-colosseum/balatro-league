@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { DraggableDivisionsEditor, type EditorMember, type EditorTier } from "@/components/DraggableDivisionsEditor";
+import { LocalDateTime } from "@/components/LocalDateTime";
 import { SeasonDeckPresetPicker } from "@/components/SeasonDeckPresetPicker";
 import { TierEditor } from "@/components/TierEditor";
 import { tierColors } from "@/lib/tier-colors";
@@ -97,7 +98,19 @@ export default async function SeasonDetailPage({
         </div>
         <div className="muted" style={{ marginTop: 4 }}>
           {season.tiers.length} tier(s) · {season.divisions.length} division(s) · {totalMembers} player(s) · {totalConfirmed}/{totalExpected} set(s)
-          {season.endedAt && <> · ended {season.endedAt.toISOString().slice(0, 10)}</>}
+          {season.deadline && (
+            <>
+              {" "}·{" "}
+              <span title="Rough target for when this season ends — not strictly enforced.">
+                target end <LocalDateTime iso={season.deadline.toISOString()} style="date" />
+              </span>
+            </>
+          )}
+          {season.endedAt && (
+            <>
+              {" "}·{" "}ended <LocalDateTime iso={season.endedAt.toISOString()} style="date" />
+            </>
+          )}
         </div>
 
         {imported && (
