@@ -26,9 +26,11 @@ import { REST } from "@discordjs/rest";
 import { Routes } from "discord-api-types/v10";
 import { resolveAnnouncementsChannelId } from "./announcements-channel.js";
 import { prisma } from "./db.js";
+import { ensureGuildCategory } from "./discord-helpers.js";
 import { env } from "./env.js";
 import { formatSeasonLabel } from "./format-season.js";
 import { logDiscordError } from "./log-discord-error.js";
+import { enqueueBootstrapDivision } from "./queue.js";
 import { recordAudit, SYSTEM_ACTOR } from "./audit.js";
 
 const SWEEP_INTERVAL_MS = 60 * 1000;
@@ -226,6 +228,52 @@ export async function sweepScheduledStarts(): Promise<number> {
           previousActiveSeasonId: prior?.id ?? null,
         },
       });
+      // Auto-bootstrap Discord (per-division roles + channels). Mirrors
+      // web's runSeasonDiscordBootstrap — ensure the season category
+      // exists, then enqueue one bootstrap.division job per division
+      // that isn't already fully set up. Empty divisions are skipped.
+      // Best-effort: failures here don't block the activation itself.
+      if (env.DISCORD_GUILD_ID) {
+        try {
+          const full = await prisma.season.findUnique({
+            where: { id: season.id },
+            include: {
+              divisions: {
+                orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
+                select: {
+                  id: true,
+                  discordRoleId: true,
+                  discordChannelId: true,
+                  _count: { select: { members: { where: { status: "ACTIVE" } } } },
+                },
+              },
+            },
+          });
+          if (full) {
+            if (!full.discordCategoryId) {
+              const cat = await ensureGuildCategory(env.DISCORD_GUILD_ID, `🃏 ${label}`);
+              if (cat) {
+                await prisma.season.update({
+                  where: { id: full.id },
+                  data: { discordCategoryId: cat.id },
+                });
+              }
+            }
+            let queued = 0;
+            for (const div of full.divisions) {
+              if (div.discordRoleId && div.discordChannelId) continue;
+              if (div._count.members === 0) continue;
+              await enqueueBootstrapDivision({ divisionId: div.id, guildId: env.DISCORD_GUILD_ID });
+              queued++;
+            }
+            if (queued > 0) {
+              console.log(`[match-sweep scheduled-start] queued ${queued} division bootstrap jobs for ${label}`);
+            }
+          }
+        } catch (err) {
+          console.warn(`[match-sweep scheduled-start] Discord bootstrap failed for ${season.id}:`, err);
+        }
+      }
       // Best-effort announcement post.
       const channelId = await resolveAnnouncementsChannelId().catch(() => null);
       if (channelId) {

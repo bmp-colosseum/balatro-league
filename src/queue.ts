@@ -303,6 +303,15 @@ export async function enqueueDisputeSpawnThread(pairingId: string): Promise<void
   await boss.send("dispute.spawn-thread", { pairingId }, { retryLimit: 2 });
 }
 
+// Mirror of web/lib/queue.ts's enqueueBootstrapDivision. The web admin
+// uses it when admin clicks "Set up divisions"; the bot uses it when
+// the scheduled-start sweep auto-activates a season. Same job shape,
+// same worker (bootstrap.division below).
+export async function enqueueBootstrapDivision(job: { divisionId: string; guildId: string }): Promise<void> {
+  if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
+  await boss.send("bootstrap.division", job, { retryLimit: 2 });
+}
+
 export async function enqueueDm(job: DmJob): Promise<void> {
   if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
   await boss.send("notify.dm", job, { retryLimit: 3, retryBackoff: true });

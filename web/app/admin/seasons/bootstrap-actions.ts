@@ -13,6 +13,69 @@ import { enqueueAwardChampionRole, enqueueBootstrapDivision, enqueueStripDivisio
 import { computeStandings } from "@/lib/standings";
 import { formatSeasonLabel } from "@/lib/format-season";
 
+// Core of the season-bootstrap work, callable from:
+//   - the admin "Set up divisions" button (bootstrapSeasonDiscord)
+//   - the activate flow (performSeasonActivation auto-runs this)
+// Idempotent: divisions already fully set up are skipped, empty
+// divisions are skipped, and the season-category create only fires
+// once.
+//
+// Returns the number of bootstrap jobs queued, or null when the
+// guild/season context is missing (caller logs a warning).
+export async function runSeasonDiscordBootstrap(seasonId: string): Promise<number | null> {
+  const guildId = process.env.DISCORD_GUILD_ID;
+  if (!guildId) {
+    console.warn("DISCORD_GUILD_ID not set; skipping season Discord bootstrap");
+    return null;
+  }
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    include: {
+      divisions: {
+        orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
+        select: {
+          id: true,
+          discordRoleId: true,
+          discordChannelId: true,
+          _count: { select: { members: { where: { status: "ACTIVE" } } } },
+        },
+      },
+    },
+  });
+  if (!season) return null;
+
+  // If admin didn't set a category id, auto-create '🃏 Season Name' so
+  // each season gets a clean home. Done synchronously so the worker
+  // jobs see the parent id immediately.
+  const seasonLabel = formatSeasonLabel(season);
+  if (!season.discordCategoryId) {
+    const cat = await ensureGuildCategory(guildId, `🃏 ${seasonLabel}`);
+    if (cat) {
+      await prisma.season.update({
+        where: { id: season.id },
+        data: { discordCategoryId: cat.id },
+      });
+    }
+  }
+
+  let queued = 0;
+  for (const div of season.divisions) {
+    if (div.discordRoleId && div.discordChannelId) continue;
+    if (div._count.members === 0) continue;
+    await enqueueBootstrapDivision({ divisionId: div.id, guildId });
+    queued++;
+  }
+  return queued;
+}
+
+async function getSeasonLabelOrEmpty(id: string): Promise<string> {
+  const s = await prisma.season.findUnique({
+    where: { id },
+    select: { number: true, subtitle: true },
+  });
+  return s ? formatSeasonLabel(s) : "";
+}
+
 // Save (or clear) the Discord category id a season's division channels
 // should be nested under.
 export async function setSeasonDiscordCategory(formData: FormData) {
@@ -78,53 +141,9 @@ export async function bootstrapSeasonDiscord(formData: FormData) {
   const { user } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
-
-  const guildId = process.env.DISCORD_GUILD_ID;
-  if (!guildId) {
-    console.warn("DISCORD_GUILD_ID not set; skipping bootstrap");
-    return;
-  }
-
-  const season = await prisma.season.findUnique({
-    where: { id },
-    include: {
-      divisions: {
-        orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
-        select: {
-          id: true,
-          discordRoleId: true,
-          discordChannelId: true,
-          _count: { select: { members: { where: { status: "ACTIVE" } } } },
-        },
-      },
-    },
-  });
-  if (!season) return;
-
-  // If admin didn't set a category id, auto-create '🃏 Season Name' so each
-  // season gets a clean home (instead of all divisions dumped in #general
-  // or whatever the bot's nearest category is). Done sync so the worker
-  // jobs see the parent id immediately.
-  const seasonLabel = formatSeasonLabel(season);
-  if (!season.discordCategoryId) {
-    const cat = await ensureGuildCategory(guildId, `🃏 ${seasonLabel}`);
-    if (cat) {
-      await prisma.season.update({
-        where: { id: season.id },
-        data: { discordCategoryId: cat.id },
-      });
-    }
-  }
-
-  // Enqueue one job per division that isn't already fully set up. Empty
-  // divisions are skipped the same way the old sync loop skipped them.
-  let queued = 0;
-  for (const div of season.divisions) {
-    if (div.discordRoleId && div.discordChannelId) continue;
-    if (div._count.members === 0) continue;
-    await enqueueBootstrapDivision({ divisionId: div.id, guildId });
-    queued++;
-  }
+  const queued = await runSeasonDiscordBootstrap(id);
+  if (queued === null) return;
+  const seasonLabel = await getSeasonLabelOrEmpty(id);
   console.log(`[bootstrap] queued ${queued} division bootstrap jobs for season ${seasonLabel}`);
   recordAudit({
     actor: actorFromAdminUser(user),
@@ -132,7 +151,7 @@ export async function bootstrapSeasonDiscord(formData: FormData) {
     targetType: "Season",
     targetId: id,
     summary: `Bootstrapping Discord for "${seasonLabel}" (${queued} divisions queued)`,
-    metadata: { queuedCount: queued, divisionCount: season.divisions.length },
+    metadata: { queuedCount: queued },
   });
 
   revalidatePath("/admin/seasons");

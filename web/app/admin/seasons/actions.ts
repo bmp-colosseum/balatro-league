@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { actorFromAdminUser, recordAudit, type AuditActor } from "@/lib/audit";
+import { runSeasonDiscordBootstrap } from "./bootstrap-actions";
 import { formatSeasonLabel, nextSeasonNumber } from "@/lib/format-season";
 import {
   createChannelInvite,
@@ -285,6 +286,14 @@ export async function performSeasonActivation(
     summary: `Activated season "${formatSeasonLabel(target)}"${prior ? ` (deactivated "${formatSeasonLabel(prior)}")` : ""}${source === "scheduled" ? " — auto-triggered by scheduledStartAt" : ""}`,
     metadata: { previousActiveSeasonId: prior?.id ?? null, source },
   });
+  // Auto-bootstrap Discord (per-division roles + channels). Idempotent —
+  // skips divisions that already have role + channel IDs. Best-effort:
+  // if the guild config is missing or the enqueue fails, the activation
+  // still succeeds and admin can re-run via the season detail page.
+  await runSeasonDiscordBootstrap(seasonId).catch((err) =>
+    console.warn("[season.activate] Discord bootstrap enqueue failed:", err),
+  );
+
   // Best-effort announcement. Fire even when no channel is configured —
   // the call short-circuits cleanly without failing activation.
   await postSeasonStartAnnouncement(target.id, formatSeasonLabel(target)).catch((err) =>
