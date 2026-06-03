@@ -105,7 +105,7 @@ export async function setSeasonResultsWebhook(formData: FormData) {
     where: { id },
     data: { resultsWebhookUrl: raw === "" ? null : raw },
   });
-  revalidatePath(`/admin/seasons/${id}`);
+  revalidatePath(`/seasons/${id}`);
 }
 
 // Save (or clear) per-season override for the results channel id used by
@@ -122,7 +122,7 @@ export async function setSeasonResultsChannel(formData: FormData) {
     where: { id },
     data: { resultsChannelId: raw === "" ? null : raw },
   });
-  revalidatePath(`/admin/seasons/${id}`);
+  revalidatePath(`/seasons/${id}`);
 }
 
 // Bootstrap Discord channels + roles for every division in a season.
@@ -155,7 +155,7 @@ export async function bootstrapSeasonDiscord(formData: FormData) {
   });
 
   revalidatePath("/admin/seasons");
-  revalidatePath(`/admin/seasons/${id}`);
+  revalidatePath(`/seasons/${id}`);
 }
 
 // Close out a season's Discord presence: lock every division channel
@@ -207,7 +207,7 @@ export async function archiveSeasonChannels(formData: FormData) {
   });
 
   revalidatePath("/admin/seasons");
-  revalidatePath(`/admin/seasons/${id}`);
+  revalidatePath(`/seasons/${id}`);
 }
 
 // Strip the per-division role from every member of every division in a
@@ -267,7 +267,7 @@ export async function stripSeasonDivisionRoles(formData: FormData) {
     summary: `Stripped division roles for "${seasonLabel}" (${queued} jobs queued)`,
     metadata: { queuedCount: queued },
   });
-  revalidatePath(`/admin/seasons/${id}`);
+  revalidatePath(`/seasons/${id}`);
 }
 
 // Award per-division champion roles. For each division in the season:
@@ -350,5 +350,5 @@ export async function awardSeasonChampionRoles(formData: FormData) {
     summary: `Awarded champion roles for "${seasonLabel}" (${queued} awarded${skipped > 0 ? `, ${skipped} skipped due to ties` : ""})`,
     metadata: { awardedCount: queued, skippedDueToTies: skipped },
   });
-  revalidatePath(`/admin/seasons/${id}`);
+  revalidatePath(`/seasons/${id}`);
 }

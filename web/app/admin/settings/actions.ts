@@ -137,5 +137,5 @@ export async function setSeasonRulesTemplate(formData: FormData) {
       metadata: { leagueRulesTemplateId },
     });
   }
-  revalidatePath(`/admin/seasons/${seasonId}`);
+  revalidatePath(`/seasons/${seasonId}`);
 }

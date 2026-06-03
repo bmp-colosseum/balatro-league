@@ -245,5 +245,5 @@ export async function bulkImportSeason(formData: FormData) {
   }
 
   // Clean import → take admin to the season overview where they can verify everything
-  redirect(`/admin/seasons/${seasonId}?imported=1`);
+  redirect(`/seasons/${seasonId}?imported=1`);
 }

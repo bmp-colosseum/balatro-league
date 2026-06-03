@@ -52,7 +52,7 @@ export default async function AdminDivisionsPage() {
                       return (
                         <Link
                           key={d.id}
-                          href={`/admin/divisions/${d.id}`}
+                          href={`/divisions/${d.id}`}
                           style={{
                             display: "block",
                             padding: 14,

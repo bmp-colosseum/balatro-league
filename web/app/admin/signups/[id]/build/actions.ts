@@ -499,5 +499,5 @@ export async function buildSeason(formData: FormData) {
   // the seasons index. The detail page is where admin reviews and
   // tweaks division placements before activating — that's the natural
   // next step in the workflow.
-  redirect(`/admin/seasons/${targetSeasonId}?just-built=1`);
+  redirect(`/seasons/${targetSeasonId}?just-built=1`);
 }

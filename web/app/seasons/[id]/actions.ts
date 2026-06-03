@@ -1,10 +1,9 @@
 "use server";
 
-// Admin-only server actions for the past-season detail page.
-// Currently just the final-rank override: admin can correct a
-// player's finalGlobalRank for a given season (and, if this is the
-// most-recent ended season, propagate the change to Player.rating
-// so it flows into the next season's build).
+// Admin-only server actions for the season detail page (public + admin
+// surfaces merged). Lifecycle / cross-page actions (createSeason,
+// activateSeason, etc.) still live in app/admin/seasons/actions.ts —
+// only the detail-page-specific finalGlobalRank override is here.
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";

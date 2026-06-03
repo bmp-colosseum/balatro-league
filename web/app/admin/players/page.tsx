@@ -34,12 +34,12 @@ export default async function AdminPlayersPage({
           <PageHeader nav={nav} selectedSeasonId={seasonId} selectedDivisionId={divisionId} sort={sort} />
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 12 }}>
             <h3 style={{ margin: 0 }}>
-              <Link href={`/admin/divisions/${view.division.id}`} style={{ textDecoration: "none" }}>{view.division.name}</Link>
+              <Link href={`/divisions/${view.division.id}`} style={{ textDecoration: "none" }}>{view.division.name}</Link>
             </h3>
             <span className="muted" style={{ fontSize: 12 }}>
               tier {view.division.tierPosition} ({view.division.tierName}) · {view.division.seasonName}
             </span>
-            <Link href={`/admin/divisions/${view.division.id}`} style={{ marginLeft: "auto", fontSize: 12 }}>
+            <Link href={`/divisions/${view.division.id}`} style={{ marginLeft: "auto", fontSize: 12 }}>
               full division page →
             </Link>
           </div>

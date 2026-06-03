@@ -322,7 +322,7 @@ export function DraggableDivisionsEditor({
                   >
                     <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                       <strong>
-                        <Link href={`/admin/divisions/${d.id}`} style={{ textDecoration: "none" }}>{d.name}</Link>
+                        <Link href={`/divisions/${d.id}`} style={{ textDecoration: "none" }}>{d.name}</Link>
                       </strong>
                       <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
                         {divMembers.length} member{divMembers.length === 1 ? "" : "s"}

@@ -70,7 +70,7 @@ export default async function AdminDisputesPage({
                     {" vs "}
                     <Link href={`/profile/${d.playerB.id}`} style={{ color: "var(--text)" }}>{d.playerB.displayName}</Link>
                   </strong>
-                  <Link href={`/admin/divisions/${d.divisionId}`} className="muted" style={{ fontSize: 12 }}>
+                  <Link href={`/divisions/${d.divisionId}`} className="muted" style={{ fontSize: 12 }}>
                     {d.divisionName} · {d.tierName}
                   </Link>
                   <span className="muted" style={{ marginLeft: "auto", fontSize: 11 }}>
@@ -129,7 +129,7 @@ export default async function AdminDisputesPage({
                       Keep original
                     </button>
                   </form>
-                  <Link href={`/admin/divisions/${d.divisionId}`} className="muted" style={{ fontSize: 12, alignSelf: "center", marginLeft: "auto" }}>
+                  <Link href={`/divisions/${d.divisionId}`} className="muted" style={{ fontSize: 12, alignSelf: "center", marginLeft: "auto" }}>
                     Custom edit on division page →
                   </Link>
                   {d.disputeThreadId && (

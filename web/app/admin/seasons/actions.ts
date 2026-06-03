@@ -126,11 +126,11 @@ export async function addDivisionToTier(formData: FormData) {
   const season = await prisma.season.findUnique({ where: { id: seasonId } });
   if (!season) redirect("/admin/seasons?err=season-not-found");
   if (season!.isActive || season!.endedAt) {
-    redirect(`/admin/seasons/${seasonId}?err=${encodeURIComponent("Can't add divisions to an active or ended season — only during draft.")}`);
+    redirect(`/seasons/${seasonId}?err=${encodeURIComponent("Can't add divisions to an active or ended season — only during draft.")}`);
   }
   const tier = await prisma.tier.findUnique({ where: { id: tierId } });
   if (!tier || tier.seasonId !== seasonId) {
-    redirect(`/admin/seasons/${seasonId}?err=${encodeURIComponent("That tier isn't part of this season.")}`);
+    redirect(`/seasons/${seasonId}?err=${encodeURIComponent("That tier isn't part of this season.")}`);
   }
   // Pick the next groupNumber + auto-name. If the tier currently has
   // a single division named just the tier name (e.g. "Legendary"),
@@ -159,7 +159,7 @@ export async function addDivisionToTier(formData: FormData) {
     summary: `Added empty division "${created.name}" to "${tier!.name}" in draft season`,
     metadata: { seasonId, tierId, name: created.name, groupNumber: nextGroup },
   });
-  revalidatePath(`/admin/seasons/${seasonId}`);
+  revalidatePath(`/seasons/${seasonId}`);
 }
 
 // Remove an empty division. Draft-mode only (matches addDivisionToTier
@@ -183,14 +183,14 @@ export async function deleteDivision(formData: FormData) {
   }
   if (division!.season.isActive || division!.season.endedAt) {
     redirect(
-      `/admin/seasons/${division!.season.id}?err=${encodeURIComponent(
+      `/seasons/${division!.season.id}?err=${encodeURIComponent(
         "Can't delete a division from an active or ended season — only during draft.",
       )}`,
     );
   }
   if (division!._count.members > 0) {
     redirect(
-      `/admin/seasons/${division!.season.id}?err=${encodeURIComponent(
+      `/seasons/${division!.season.id}?err=${encodeURIComponent(
         `"${division!.name}" still has ${division!._count.members} member(s). Move them to other divisions first, then delete.`,
       )}`,
     );
@@ -200,7 +200,7 @@ export async function deleteDivision(formData: FormData) {
   // we refuse rather than orphan match history.
   if (division!._count.pairings > 0) {
     redirect(
-      `/admin/seasons/${division!.season.id}?err=${encodeURIComponent(
+      `/seasons/${division!.season.id}?err=${encodeURIComponent(
         `"${division!.name}" has match history attached. Refusing to delete.`,
       )}`,
     );
@@ -214,7 +214,7 @@ export async function deleteDivision(formData: FormData) {
     summary: `Removed empty division "${division!.name}" from "${division!.tier.name}" in draft season`,
     metadata: { seasonId: division!.season.id, name: division!.name },
   });
-  revalidatePath(`/admin/seasons/${division!.season.id}`);
+  revalidatePath(`/seasons/${division!.season.id}`);
 }
 
 export async function configureTiers(formData: FormData) {
@@ -329,7 +329,7 @@ export async function setSeasonScheduledStart(formData: FormData) {
   if (!target) return;
   if (target.isActive || target.endedAt) {
     redirect(
-      `/admin/seasons/${id}?err=${encodeURIComponent(
+      `/seasons/${id}?err=${encodeURIComponent(
         "Can't schedule a start for an already-active or ended season.",
       )}`,
     );
@@ -337,7 +337,7 @@ export async function setSeasonScheduledStart(formData: FormData) {
   // datetime-local input — parse as local time (no Z suffix).
   const when = new Date(whenStr);
   if (Number.isNaN(when.getTime())) {
-    redirect(`/admin/seasons/${id}?err=${encodeURIComponent("Invalid date/time.")}`);
+    redirect(`/seasons/${id}?err=${encodeURIComponent("Invalid date/time.")}`);
   }
   await prisma.season.update({ where: { id }, data: { scheduledStartAt: when } });
   recordAudit({
@@ -348,7 +348,7 @@ export async function setSeasonScheduledStart(formData: FormData) {
     summary: `Scheduled "${formatSeasonLabel(target)}" to auto-start ${when.toISOString()}`,
     metadata: { scheduledStartAt: when.toISOString() },
   });
-  revalidatePath(`/admin/seasons/${id}`);
+  revalidatePath(`/seasons/${id}`);
   revalidatePath("/admin/seasons");
 }
 
@@ -367,7 +367,7 @@ export async function clearSeasonScheduledStart(formData: FormData) {
     summary: `Cleared scheduled start for "${formatSeasonLabel(target)}"`,
     metadata: { previousScheduledStartAt: target.scheduledStartAt.toISOString() },
   });
-  revalidatePath(`/admin/seasons/${id}`);
+  revalidatePath(`/seasons/${id}`);
   revalidatePath("/admin/seasons");
 }
 
@@ -848,7 +848,7 @@ export async function addLatePlayerToDivision(formData: FormData) {
     const { resolveDiscordIdToDisplayName } = await import("@/lib/add-player");
     const resolved = await resolveDiscordIdToDisplayName(guildId, discordIdRaw);
     if ("error" in resolved) {
-      redirect(`/admin/seasons/${division!.seasonId}?err=${encodeURIComponent(resolved.error)}`);
+      redirect(`/seasons/${division!.seasonId}?err=${encodeURIComponent(resolved.error)}`);
     }
     displayName = resolved.displayName;
   }
@@ -868,7 +868,7 @@ export async function addLatePlayerToDivision(formData: FormData) {
     summary: `Added ${displayName} to ${division!.name} (late signup)`,
     metadata: { seasonId: division!.seasonId, divisionId: division!.id, discordId: discordIdRaw },
   });
-  revalidatePath(`/admin/seasons/${division!.seasonId}`);
+  revalidatePath(`/seasons/${division!.seasonId}`);
 }
 
 // Drop-anywhere positional move: dragged a player to a specific row
@@ -894,7 +894,7 @@ export async function moveDivisionMemberToPosition(formData: FormData) {
   });
   if (!season) redirect("/admin/seasons?err=season-not-found");
   if (season!.isActive || season!.endedAt) {
-    redirect(`/admin/seasons/${seasonId}?err=${encodeURIComponent("Can't reorder players in an active or ended season — only during draft.")}`);
+    redirect(`/seasons/${seasonId}?err=${encodeURIComponent("Can't reorder players in an active or ended season — only during draft.")}`);
   }
 
   const targetDivision = await prisma.division.findUnique({
@@ -999,7 +999,7 @@ export async function moveDivisionMemberToPosition(formData: FormData) {
     },
   });
 
-  revalidatePath(`/admin/seasons/${seasonId}`);
+  revalidatePath(`/seasons/${seasonId}`);
 }
 
 export async function moveDivisionMember(formData: FormData) {
@@ -1030,7 +1030,7 @@ export async function moveDivisionMember(formData: FormData) {
     summary: `Moved ${fromMember?.player.displayName ?? "player"} → ${target.name}${fromMember ? ` (from ${fromMember.division.name})` : ""}`,
     metadata: { seasonId, playerId, fromDivisionId: fromMember?.division.id ?? null, toDivisionId: targetDivisionId },
   });
-  revalidatePath(`/admin/seasons/${seasonId}`);
+  revalidatePath(`/seasons/${seasonId}`);
 }
 
 export async function setSeasonPreset(formData: FormData) {

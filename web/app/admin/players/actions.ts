@@ -85,7 +85,7 @@ export async function recordSetForPlayer(formData: FormData) {
   enqueueAnnounceResult(recorded.id).catch(() => {});
   recomputeDivisionStandings(divisionId).catch(() => {});
   revalidatePath("/admin/players");
-  revalidatePath(`/admin/divisions/${divisionId}`);
+  revalidatePath(`/divisions/${divisionId}`);
 }
 
 const MOCK_PREFIX = "mock-";

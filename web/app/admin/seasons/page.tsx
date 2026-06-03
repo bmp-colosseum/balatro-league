@@ -113,7 +113,7 @@ export default async function AdminSeasonsPage({
                       borderBottom: "1px solid var(--border, rgba(255,255,255,0.05))",
                     }}
                   >
-                    <Link href={`/admin/seasons/${s.id}`} style={{ textDecoration: "none", fontWeight: 600 }}>
+                    <Link href={`/seasons/${s.id}`} style={{ textDecoration: "none", fontWeight: 600 }}>
                       {label}
                     </Link>
                     <span className="pill" style={{ background: status.bg, color: status.fg, fontSize: 10 }}>
@@ -244,7 +244,7 @@ export default async function AdminSeasonsPage({
             return (
               <div key={s.id} className="card">
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <Link href={`/admin/seasons/${s.id}`} style={{ fontSize: 16, fontWeight: 600, textDecoration: "none" }}>
+                  <Link href={`/seasons/${s.id}`} style={{ fontSize: 16, fontWeight: 600, textDecoration: "none" }}>
                     {formatSeasonLabel(s)} <span className="muted" style={{ fontSize: 11, fontWeight: 400 }}>→ manage</span>
                   </Link>
                   {s.isActive ? (
@@ -272,7 +272,7 @@ export default async function AdminSeasonsPage({
                       {s.divisions.map((d) => (
                         <Link
                           key={d.id}
-                          href={`/admin/divisions/${d.id}`}
+                          href={`/divisions/${d.id}`}
                           style={{
                             fontSize: 11,
                             padding: "2px 8px",
