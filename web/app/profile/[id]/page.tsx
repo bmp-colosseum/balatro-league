@@ -305,6 +305,87 @@ export default async function ProfilePage({
           </div>
         )}
 
+        {/* "Vs you" head-to-head — only when looking at someone else's
+            profile and we have at least one match between us. */}
+        {(() => {
+          if (isOwnProfile || !viewer.playerId) return null;
+          const h2h = profile.headToHeads.find(
+            (h) => h.opponentPlayerId === viewer.playerId,
+          );
+          if (!h2h) return null;
+          return (
+            <div className="card" style={{ marginTop: 16, borderColor: "#76c7ff" }}>
+              <strong style={{ color: "#76c7ff" }}>vs you</strong>
+              <p style={{ marginTop: 4, marginBottom: 0 }}>
+                <strong>{h2h.wins}W</strong> – <strong>{h2h.draws}D</strong> – <strong>{h2h.losses}L</strong>{" "}
+                across {h2h.totalMatches} matches (game record {h2h.gamesWon}-{h2h.gamesLost}).{" "}
+                <span className="muted" style={{ fontSize: 12 }}>From your perspective.</span>
+              </p>
+            </div>
+          );
+        })()}
+
+        {/* Deck + stake performance cards. Apply a minimum-games filter
+            (5+ games) so a 100%/1 deck doesn't shout louder than a
+            real signal. */}
+        {profile.deckPerformance.filter((d) => d.gamesTotal >= 5).length > 0 && (
+          <div className="grid grid-2" style={{ marginTop: 16 }}>
+            <div className="card">
+              <strong>Deck performance</strong>
+              <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
+                Games (won / total) per deck. 5-game minimum filter.
+              </p>
+              <table className="table-dense" style={{ width: "100%", fontSize: 12 }}>
+                <tbody>
+                  {profile.deckPerformance
+                    .filter((d) => d.gamesTotal >= 5)
+                    .slice(0, 10)
+                    .map((d) => (
+                      <tr key={d.name}>
+                        <td>{d.name}</td>
+                        <td style={{ textAlign: "right" }} className="muted">
+                          {d.gamesWon}/{d.gamesTotal}
+                        </td>
+                        <td style={{ textAlign: "right", width: 50 }}>
+                          <strong style={{ color: d.winRatePct >= 50 ? "#2ecc71" : "#e74c3c" }}>
+                            {d.winRatePct}%
+                          </strong>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+            {profile.stakePerformance.filter((s) => s.gamesTotal >= 5).length > 0 && (
+              <div className="card">
+                <strong>Stake performance</strong>
+                <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
+                  Games (won / total) per stake. 5-game minimum filter.
+                </p>
+                <table className="table-dense" style={{ width: "100%", fontSize: 12 }}>
+                  <tbody>
+                    {profile.stakePerformance
+                      .filter((s) => s.gamesTotal >= 5)
+                      .map((s) => (
+                        <tr key={s.name}>
+                          <td>{s.name}</td>
+                          <td style={{ textAlign: "right" }} className="muted">
+                            {s.gamesWon}/{s.gamesTotal}
+                          </td>
+                          <td style={{ textAlign: "right", width: 50 }}>
+                            <strong style={{ color: s.winRatePct >= 50 ? "#2ecc71" : "#e74c3c" }}>
+                              {s.winRatePct}%
+                            </strong>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
         <h3 style={{ marginTop: 24 }}>Season history</h3>
         {profile.history.length === 0 ? (
           <div className="card muted">No season history yet.</div>
@@ -402,7 +483,31 @@ export default async function ProfilePage({
                               <Link href={`/profile/${m.opponentPlayerId}`} style={{ color: "var(--text)" }}>{m.opponentDisplayName}</Link>
                               {isShootout && <span className="muted" style={{ marginLeft: 6, fontSize: 11 }}>(shootout)</span>}
                             </td>
-                            <td><strong>{m.myGames}–{m.opponentGames}</strong></td>
+                            <td>
+                              <strong>{m.myGames}–{m.opponentGames}</strong>
+                              {m.games.length > 0 && (
+                                <div className="muted" style={{ fontSize: 10, marginTop: 2 }}>
+                                  {m.games.map((g, gi) => (
+                                    <span key={gi} style={{ marginRight: 6 }}>
+                                      <span style={{ opacity: 0.6 }}>g{g.num}</span>{" "}
+                                      <span
+                                        title={`${g.deck} / ${g.stake}${g.iWon === null ? "" : g.iWon ? " · won" : " · lost"}`}
+                                        style={{
+                                          color:
+                                            g.iWon === true
+                                              ? "#2ecc71"
+                                              : g.iWon === false
+                                              ? "#e74c3c"
+                                              : undefined,
+                                        }}
+                                      >
+                                        {g.deck}/{g.stake}
+                                      </span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
                             <td><span className="pill" style={{ background: outcomePill.bg, color: outcomePill.fg, fontSize: isDisputed ? 10 : undefined }}>{outcomePill.label}</span></td>
                             {isOwnProfile && h.isActive && isShootout && (
                               <td className="muted" style={{ fontSize: 11 }}>—</td>

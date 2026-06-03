@@ -24,6 +24,18 @@
 import { prisma } from "./prisma";
 import { formatSeasonLabel } from "./format-season";
 
+export interface GamePlayed {
+  // 1, 2, or 3 — index into the match's games. Shootouts only have
+  // game 1.
+  num: 1 | 2 | 3;
+  deck: string;
+  stake: string;
+  // True/false from this player's perspective. Null if the game's
+  // winnerId wasn't recorded (rare — disputes, custom-combo edge
+  // cases). UI hides indeterminate games rather than guessing.
+  iWon: boolean | null;
+}
+
 export interface MatchEntry {
   pairingId: string;
   status: "CONFIRMED" | "DISPUTED";
@@ -36,6 +48,10 @@ export interface MatchEntry {
   // True when this entry is a 1-game shootout tiebreaker, not a normal
   // best-of-2 pairing. UI renders these with a "⚔ shootout" marker.
   isShootout?: boolean;
+  // Per-game deck/stake breakdown when the match went through
+  // /start-match (MatchSession recorded). Empty array for /report-only
+  // matches and admin record-set matches — no session = no deck data.
+  games: GamePlayed[];
 }
 
 export interface SeasonHistoryEntry {
@@ -70,6 +86,30 @@ export interface SeasonHistoryEntry {
   matches: MatchEntry[];
 }
 
+// One row per unique deck (or stake) this player has played, with
+// game-level win counts. Sorted by win rate desc with minimum-games
+// filter applied at the caller so rare-sample decks don't dominate.
+export interface PerComboPerformance {
+  name: string;
+  gamesWon: number;
+  gamesTotal: number;
+  winRatePct: number;
+}
+
+// Aggregate record against one specific opponent across all confirmed
+// matches in any season. Match-level (W/D/L) and game-level
+// (gamesWon/gamesLost) both surfaced.
+export interface HeadToHead {
+  opponentPlayerId: string;
+  opponentDisplayName: string;
+  wins: number;
+  draws: number;
+  losses: number;
+  totalMatches: number;
+  gamesWon: number;
+  gamesLost: number;
+}
+
 export interface PlayerHistory {
   player: { id: string; discordId: string; displayName: string; rating: number | null };
   history: SeasonHistoryEntry[];
@@ -93,6 +133,16 @@ export interface PlayerHistory {
     totalMatches: number;
     totalGames: number;
   };
+  // Per-deck and per-stake win rates aggregated from MatchSession
+  // game JSON. Only games that went through /start-match contribute
+  // (admin record-set + /report-only matches don't have deck info).
+  // Empty arrays when the player has zero recorded games.
+  deckPerformance: PerComboPerformance[];
+  stakePerformance: PerComboPerformance[];
+  // Head-to-head records against every player this person has played.
+  // Sorted by totalMatches desc. UI typically shows just the top N or
+  // filters to the viewer-vs-profile-owner row.
+  headToHeads: HeadToHead[];
 }
 
 // Shape of the JSON payload written by recomputeDivisionStandings.
@@ -108,6 +158,16 @@ interface CachedRow {
   gamesWon: number;
   gamesLost: number;
   played: number;
+}
+
+// Subset of the bot-side GameState we need on the web for deck/stake
+// extraction. Kept minimal so a schema drift on the bot side doesn't
+// quietly break the loader — extra fields are ignored.
+interface GameStateMin {
+  pool?: Array<{ deck: string; stake: string }>;
+  pickedDeckIdx?: number;
+  winnerId?: string;
+  dcByPlayerId?: string;
 }
 
 export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory | null> {
@@ -143,7 +203,14 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
     orderBy: { joinedAt: "desc" },
   });
   if (memberships.length === 0) {
-    return { player, history: [], totals: emptyTotals() };
+    return {
+      player,
+      history: [],
+      totals: emptyTotals(),
+      deckPerformance: [],
+      stakePerformance: [],
+      headToHeads: [],
+    };
   }
   const divisionIds = memberships.map((m) => m.divisionId);
 
@@ -192,6 +259,75 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
     else pairingsByDivision.set(p.divisionId, [p]);
   }
 
+  // For per-match deck/stake breakdown + per-deck/stake aggregates,
+  // join the MatchSession rows that resulted in these pairings. A
+  // pairing may have no session (admin record-set, /report-only) —
+  // those just won't contribute deck data.
+  const sessions = myPairings.length === 0 ? [] : await prisma.matchSession.findMany({
+    where: { pairingId: { in: myPairings.map((p) => p.id) } },
+    select: {
+      pairingId: true,
+      playerAId: true,
+      playerBId: true,
+      game1: true,
+      game2: true,
+      game3: true,
+    },
+  });
+  const sessionsByPairingId = new Map<string, typeof sessions[number]>();
+  for (const s of sessions) {
+    if (s.pairingId) sessionsByPairingId.set(s.pairingId, s);
+  }
+
+  // Aggregate per-deck + per-stake game counts across this player's
+  // career. iterated inline below as we walk the matches.
+  const deckAgg = new Map<string, { won: number; total: number }>();
+  const stakeAgg = new Map<string, { won: number; total: number }>();
+  const bumpAgg = (
+    map: Map<string, { won: number; total: number }>,
+    key: string,
+    won: boolean,
+  ) => {
+    const cur = map.get(key) ?? { won: 0, total: 0 };
+    cur.total += 1;
+    if (won) cur.won += 1;
+    map.set(key, cur);
+  };
+
+  // Extract this player's games from a session — returns the per-game
+  // breakdown to attach to the MatchEntry AND folds the aggregates.
+  // dcByPlayerId games are excluded from per-deck/stake stats since
+  // they weren't actually played (forfeit by disconnect).
+  function gamesFromSession(
+    session: typeof sessions[number],
+  ): GamePlayed[] {
+    const result: GamePlayed[] = [];
+    const meIsA = session.playerAId === playerId;
+    const meId = meIsA ? session.playerAId : session.playerBId;
+    for (const [num, json] of [
+      [1, session.game1] as const,
+      [2, session.game2] as const,
+      [3, session.game3] as const,
+    ]) {
+      if (!json) continue;
+      let game: GameStateMin | null = null;
+      try { game = JSON.parse(json) as GameStateMin; } catch { continue; }
+      if (!game) continue;
+      const idx = game.pickedDeckIdx;
+      if (idx === undefined || !game.pool || !game.pool[idx]) continue;
+      const combo = game.pool[idx];
+      const winnerId = game.winnerId ?? null;
+      const iWon = winnerId == null ? null : winnerId === meId;
+      result.push({ num: num as 1 | 2 | 3, deck: combo.deck, stake: combo.stake, iWon });
+      // Skip aggregates if winner indeterminate OR forfeit (DC).
+      if (iWon === null) continue;
+      if (game.dcByPlayerId) continue;
+      bumpAgg(deckAgg, combo.deck, iWon);
+      bumpAgg(stakeAgg, combo.stake, iWon);
+    }
+    return result;
+  }
+
   // Shootouts the player participated in across all those divisions.
   // Shootout has no Player relation in the schema (kept simple — ids
   // only), so we batch-fetch the opponent display names in one
@@ -235,6 +371,8 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
       const oppGames = meIsA ? p.gamesWonB : p.gamesWonA;
       const outcome: MatchEntry["outcome"] =
         myGames > oppGames ? "WIN" : myGames < oppGames ? "LOSS" : "DRAW";
+      const session = sessionsByPairingId.get(p.id);
+      const games = session ? gamesFromSession(session) : [];
       return {
         pairingId: p.id,
         status: p.status === "DISPUTED" ? "DISPUTED" : "CONFIRMED",
@@ -244,6 +382,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
         opponentGames: oppGames,
         outcome,
         confirmedAt: p.confirmedAt,
+        games,
       };
     });
     // Shootouts as MatchEntry rows. 1-game format → myGames/opponentGames
@@ -263,6 +402,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
         outcome: iWon ? "WIN" : "LOSS",
         confirmedAt: s.recordedAt,
         isShootout: true,
+        games: [], // shootouts don't have ban/pick combos stored — skip
       };
     });
     // Combine + sort chronologically. Shootouts don't roll up into points
@@ -340,7 +480,69 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
     totalGames,
   };
 
-  return { player, history, totals };
+  // Per-deck + per-stake performance from the aggregated counts. Sort
+  // by win rate desc within (sample size desc) so a 100%/2 doesn't
+  // shadow a 75%/12 — the larger sample wins ties. UI applies its
+  // own minimum-games filter so we surface all data here.
+  const buildPerf = (agg: Map<string, { won: number; total: number }>): PerComboPerformance[] =>
+    [...agg.entries()]
+      .map(([name, c]) => ({
+        name,
+        gamesWon: c.won,
+        gamesTotal: c.total,
+        winRatePct: c.total === 0 ? 0 : Math.round((c.won / c.total) * 100),
+      }))
+      .sort((a, b) => {
+        if (a.winRatePct !== b.winRatePct) return b.winRatePct - a.winRatePct;
+        return b.gamesTotal - a.gamesTotal;
+      });
+  const deckPerformance = buildPerf(deckAgg);
+  const stakePerformance = buildPerf(stakeAgg);
+
+  // Head-to-head: group pairings by opponent, sum match outcomes +
+  // game totals. Shootouts excluded — they're tiebreakers, not
+  // recorded as career H2H wins. Disputed pairings included but use
+  // the current gamesWonA/B which may be the disputer's proposed
+  // values; UI doesn't distinguish.
+  const h2hByOpp = new Map<
+    string,
+    { displayName: string; wins: number; draws: number; losses: number; gamesWon: number; gamesLost: number }
+  >();
+  for (const p of myPairings) {
+    if (p.status !== "CONFIRMED") continue;
+    const meIsA = p.playerAId === playerId;
+    const opp = meIsA ? p.playerB : p.playerA;
+    const myG = meIsA ? p.gamesWonA : p.gamesWonB;
+    const oppG = meIsA ? p.gamesWonB : p.gamesWonA;
+    const cur = h2hByOpp.get(opp.id) ?? {
+      displayName: opp.displayName,
+      wins: 0,
+      draws: 0,
+      losses: 0,
+      gamesWon: 0,
+      gamesLost: 0,
+    };
+    if (myG > oppG) cur.wins++;
+    else if (myG < oppG) cur.losses++;
+    else cur.draws++;
+    cur.gamesWon += myG;
+    cur.gamesLost += oppG;
+    h2hByOpp.set(opp.id, cur);
+  }
+  const headToHeads: HeadToHead[] = [...h2hByOpp.entries()]
+    .map(([opponentPlayerId, v]) => ({
+      opponentPlayerId,
+      opponentDisplayName: v.displayName,
+      wins: v.wins,
+      draws: v.draws,
+      losses: v.losses,
+      totalMatches: v.wins + v.draws + v.losses,
+      gamesWon: v.gamesWon,
+      gamesLost: v.gamesLost,
+    }))
+    .sort((a, b) => b.totalMatches - a.totalMatches);
+
+  return { player, history, totals, deckPerformance, stakePerformance, headToHeads };
 }
 
 function emptyTotals(): PlayerHistory["totals"] {
