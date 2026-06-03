@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { SiteNav } from "@/components/SiteNav";
-import { loadStatsPageData, type StatsLeaderRow, type StatsDeckRow } from "@/lib/loaders/stats";
+import { loadStatsPageData, type StatsLeaderRow, type StatsDeckRow, type StatsBanRow } from "@/lib/loaders/stats";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +84,15 @@ export default async function StatsPage() {
         <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
           Per-player deck + stake win rates live on each <Link href="/players">player's profile</Link>.
         </p>
+
+        <h3 style={{ marginTop: 24 }}>Most-banned decks + stakes</h3>
+        <div className="grid grid-2">
+          <BanCard title="Most-banned decks" rows={data.mostBannedDecks} />
+          <BanCard title="Most-banned stakes" rows={data.mostBannedStakes} />
+        </div>
+        <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+          Ban rate = bans ÷ pool appearances. Decks with fewer than 5 appearances are filtered out.
+        </p>
       </main>
     </>
   );
@@ -125,6 +134,41 @@ function LeaderCard({
                 </tr>
               );
             })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function BanCard({ title, rows }: { title: string; rows: StatsBanRow[] }) {
+  return (
+    <div className="card">
+      <strong>{title}</strong>
+      {rows.length === 0 ? (
+        <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>No data yet.</div>
+      ) : (
+        <table className="table-dense" style={{ width: "100%", fontSize: 13, marginTop: 8 }}>
+          <thead>
+            <tr>
+              <th></th>
+              <th>Name</th>
+              <th style={{ textAlign: "right" }}>Bans</th>
+              <th style={{ textAlign: "right" }}>Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.name}>
+                <td style={{ width: 24 }} className="muted">{i + 1}.</td>
+                <td>{r.name}</td>
+                <td style={{ textAlign: "right" }}>
+                  <strong>{r.bansTotal}</strong>
+                  <span className="muted" style={{ fontSize: 11 }}> / {r.appearancesTotal}</span>
+                </td>
+                <td style={{ textAlign: "right" }} className="muted">{r.banRatePct}%</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       )}

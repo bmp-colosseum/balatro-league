@@ -18,6 +18,16 @@ export interface StatsDeckRow {
   winRatePct: number;
 }
 
+export interface StatsBanRow {
+  name: string;
+  // Total times this deck/stake was banned across all confirmed games.
+  bansTotal: number;
+  // How often this deck/stake appeared in a game's pool (sample size).
+  appearancesTotal: number;
+  // bans / appearances — "when this shows up, how often is it banned?"
+  banRatePct: number;
+}
+
 export interface StatsStreakRow {
   playerId: string;
   displayName: string;
@@ -35,6 +45,8 @@ export interface StatsPageData {
   mostPlayedStakes: StatsDeckRow[];
   bestStakes: StatsDeckRow[];
   worstStakes: StatsDeckRow[];
+  mostBannedDecks: StatsBanRow[];
+  mostBannedStakes: StatsBanRow[];
   longestActiveStreaks: StatsStreakRow[];
 }
 
@@ -43,6 +55,7 @@ interface GameStateMin {
   pickedDeckIdx?: number;
   winnerId?: string;
   dcByPlayerId?: string;
+  bans?: number[];
 }
 
 // Minimum games threshold for "best/worst" deck/stake lists so a 1-game
@@ -129,15 +142,39 @@ export async function loadStatsPageData(): Promise<StatsPageData> {
       });
   const deckAgg = new Map<string, { won: number; total: number }>();
   const stakeAgg = new Map<string, { won: number; total: number }>();
+  // Ban counters track two things per deck/stake: total bans and total
+  // pool appearances. Ban rate = bans / appearances tells you "when this
+  // shows up, how often does someone nuke it" — a stronger signal than
+  // raw counts because popular decks naturally appear in more pools.
+  const deckBans = new Map<string, { bans: number; appearances: number }>();
+  const stakeBans = new Map<string, { bans: number; appearances: number }>();
   for (const s of sessions) {
     for (const json of [s.game1, s.game2, s.game3]) {
       if (!json) continue;
       let game: GameStateMin | null = null;
       try { game = JSON.parse(json) as GameStateMin; } catch { continue; }
       if (!game) continue;
+      if (game.dcByPlayerId) continue;
+      // Appearance + ban tally over the full pool — independent of
+      // whether a deck was picked. Skip games without a real pool
+      // (custom-combo proposals + DC games have a length-1 placeholder
+      // pool which doesn't reflect ban behavior).
+      if (game.pool && game.pool.length > 1) {
+        const banSet = new Set(game.bans ?? []);
+        for (let i = 0; i < game.pool.length; i++) {
+          const combo = game.pool[i]!;
+          const dBan = deckBans.get(combo.deck) ?? { bans: 0, appearances: 0 };
+          dBan.appearances++;
+          if (banSet.has(i)) dBan.bans++;
+          deckBans.set(combo.deck, dBan);
+          const sBan = stakeBans.get(combo.stake) ?? { bans: 0, appearances: 0 };
+          sBan.appearances++;
+          if (banSet.has(i)) sBan.bans++;
+          stakeBans.set(combo.stake, sBan);
+        }
+      }
       const idx = game.pickedDeckIdx;
       if (idx === undefined || !game.pool || !game.pool[idx]) continue;
-      if (game.dcByPlayerId) continue;
       const combo = game.pool[idx];
       const dRow = deckAgg.get(combo.deck) ?? { won: 0, total: 0 };
       dRow.total++;
@@ -179,6 +216,32 @@ export async function loadStatsPageData(): Promise<StatsPageData> {
     .sort((a, b) => b.gamesTotal - a.gamesTotal);
   const mostPlayedDecks = sortedDecks.slice(0, 10);
   const mostPlayedStakes = sortedStakes.slice(0, 10);
+
+  // Most-banned decks/stakes — sort by raw ban count so the leaderboard
+  // is comparable to "most played" (both popularity-weighted). banRatePct
+  // is also exposed so the UI can show "30% banned when present" for
+  // colour. Decks with fewer than 5 appearances are filtered to keep
+  // single-game flukes off the board.
+  const sortedBannedDecks: StatsBanRow[] = [...deckBans.entries()]
+    .filter(([, c]) => c.appearances >= 5)
+    .map(([name, c]) => ({
+      name,
+      bansTotal: c.bans,
+      appearancesTotal: c.appearances,
+      banRatePct: c.appearances === 0 ? 0 : Math.round((c.bans / c.appearances) * 100),
+    }))
+    .sort((a, b) => b.bansTotal - a.bansTotal);
+  const sortedBannedStakes: StatsBanRow[] = [...stakeBans.entries()]
+    .filter(([, c]) => c.appearances >= 5)
+    .map(([name, c]) => ({
+      name,
+      bansTotal: c.bans,
+      appearancesTotal: c.appearances,
+      banRatePct: c.appearances === 0 ? 0 : Math.round((c.bans / c.appearances) * 100),
+    }))
+    .sort((a, b) => b.bansTotal - a.bansTotal);
+  const mostBannedDecks = sortedBannedDecks.slice(0, 10);
+  const mostBannedStakes = sortedBannedStakes.slice(0, 10);
   // Best/worst kept empty — no useful league-wide reading. The per-
   // player versions on /profile/[id] cover the case where it matters.
   const bestDecks: StatsDeckRow[] = [];
@@ -280,6 +343,8 @@ export async function loadStatsPageData(): Promise<StatsPageData> {
     mostPlayedStakes,
     bestStakes,
     worstStakes,
+    mostBannedDecks,
+    mostBannedStakes,
     longestActiveStreaks,
   };
 }
