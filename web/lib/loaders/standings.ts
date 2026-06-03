@@ -135,6 +135,17 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
   }
 
   // BMP MMR column is opt-in. Skip the query entirely when hidden.
+  //
+  // Picking strategy mirrors loadBuildSeasonPage:
+  //   1. Filter to snapshots that ACTUALLY have a ranked MMR — otherwise
+  //      a recent failed/empty capture would shadow a valid earlier one
+  //      (distinct on playerId picks whatever the most recent row was,
+  //      including the null one).
+  //   2. Within remaining snapshots per player, prefer the highest
+  //      bmpSeason number (so current BMP season wins over previous),
+  //      then most recent capturedAt as the tiebreaker. A player who
+  //      skipped the current BMP season but played last one still gets
+  //      their last-season MMR shown.
   let mmrByPlayerId = new Map<string, number>();
   if (opts.showBmpMmr) {
     const allPlayerIds = season.tiers.flatMap((t) =>
@@ -142,16 +153,36 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
     );
     if (allPlayerIds.length > 0) {
       const snapshots = await prisma.playerMmrSnapshot.findMany({
-        where: { playerId: { in: allPlayerIds } },
+        where: { playerId: { in: allPlayerIds }, rankedMmr: { not: null } },
         orderBy: { capturedAt: "desc" },
-        distinct: ["playerId"],
-        select: { playerId: true, rankedMmr: true },
+        select: { playerId: true, bmpSeason: true, rankedMmr: true, capturedAt: true },
       });
-      mmrByPlayerId = new Map(
-        snapshots
-          .filter((s) => s.playerId && s.rankedMmr != null)
-          .map((s) => [s.playerId!, s.rankedMmr!] as const),
-      );
+      // Group per playerId, then pick the preferred snapshot by
+      // (bmpSeason number desc, capturedAt desc). Doing this in JS
+      // rather than at the DB layer because Prisma can't sort + distinct
+      // by a derived field (the numeric suffix of bmpSeason).
+      const seasonNum = (tag: string | null): number => {
+        if (!tag) return -Infinity;
+        const m = /^season(\d+)$/.exec(tag);
+        return m ? parseInt(m[1]!, 10) : -Infinity;
+      };
+      const byPlayer = new Map<string, typeof snapshots>();
+      for (const s of snapshots) {
+        if (!s.playerId) continue;
+        const arr = byPlayer.get(s.playerId) ?? [];
+        arr.push(s);
+        byPlayer.set(s.playerId, arr);
+      }
+      for (const [pid, arr] of byPlayer) {
+        arr.sort((a, b) => {
+          const na = seasonNum(a.bmpSeason);
+          const nb = seasonNum(b.bmpSeason);
+          if (na !== nb) return nb - na;
+          return b.capturedAt.getTime() - a.capturedAt.getTime();
+        });
+        const best = arr[0];
+        if (best?.rankedMmr != null) mmrByPlayerId.set(pid, best.rankedMmr);
+      }
     }
   }
 
