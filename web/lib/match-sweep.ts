@@ -5,7 +5,7 @@
 // threads without waiting for the next 1-minute tick.
 
 import { prisma } from "@/lib/prisma";
-import { deleteChannel, listGuildActiveThreads } from "@/lib/discord";
+import { deleteChannel, listArchivedThreadsInChannel, listGuildActiveThreads } from "@/lib/discord";
 
 const IDLE_CANCEL_HOURS = 24;
 
@@ -14,8 +14,18 @@ export interface MatchSweepResult {
   idleSessionsCancelled: number;
   leakedThreadsProcessed: number;
   leakedThreadsDeleted: number;
-  orphanThreadsFound?: number;
-  orphanThreadsDeleted?: number;
+  // Manual-pass diagnostics — present only when includeOrphans is true.
+  // Make it easy to tell "found 0" from "couldn't even look" when the
+  // pass returns 0 orphans.
+  orphan?: {
+    guildIdConfigured: boolean;
+    matchParentChannels: number;
+    activeThreadsInGuild: number;
+    activeThreadsUnderMatchParents: number;
+    archivedThreadsUnderMatchParents: number;
+    orphanThreadsFound: number;
+    orphanThreadsDeleted: number;
+  };
 }
 
 // Pass 1: WAITING_ACCEPT sessions past their expiresAt → mark
@@ -103,17 +113,25 @@ async function sweepLeakedThreads(): Promise<{ processed: number; deleted: numbe
 
 // Pass 4 (manual-only): scan Discord for threads under known match-
 // parent channels (challenges channel + division channels) that have
-// NO MatchSession row tracking them — orphans from before tracking,
-// from a manual /thread create, or any other gap. The auto-sweep on
-// the bot doesn't run this because listGuildActiveThreads is a guild-
-// wide REST hit; the manual button is the right place to spend it.
-async function sweepOrphanThreads(): Promise<{ found: number; deleted: number }> {
+// NO MatchSession row tracking them. Scans BOTH active and archived
+// threads — Discord auto-archives idle threads after their
+// autoArchiveDuration, so a "stale" thread the admin sees is usually
+// archived, not active. Listing archived is per-parent-channel and
+// paginated, which is why this pass is manual-only (too expensive for
+// a 1-minute cron, fine for a button press).
+async function sweepOrphanThreads(): Promise<NonNullable<MatchSweepResult["orphan"]>> {
   const guildId = process.env.DISCORD_GUILD_ID;
-  if (!guildId) return { found: 0, deleted: 0 };
+  const base = {
+    guildIdConfigured: !!guildId,
+    matchParentChannels: 0,
+    activeThreadsInGuild: 0,
+    activeThreadsUnderMatchParents: 0,
+    archivedThreadsUnderMatchParents: 0,
+    orphanThreadsFound: 0,
+    orphanThreadsDeleted: 0,
+  };
+  if (!guildId) return base;
 
-  // Set of parent channel IDs we consider "match-parent" — only orphans
-  // under these get cleaned. Restricted scope so unrelated threads
-  // elsewhere in the guild aren't touched.
   const challengesParent = (
     await prisma.leagueConfig.findUnique({ where: { key: "challenges_channel_id" } })
   )?.value;
@@ -126,31 +144,50 @@ async function sweepOrphanThreads(): Promise<{ found: number; deleted: number }>
   for (const d of divisionChannels) {
     if (d.discordChannelId) matchParentIds.add(d.discordChannelId);
   }
-  if (matchParentIds.size === 0) return { found: 0, deleted: 0 };
+  base.matchParentChannels = matchParentIds.size;
+  if (matchParentIds.size === 0) return base;
 
-  const threads = await listGuildActiveThreads(guildId);
-  const matchThreads = threads.filter((t) => t.parentId && matchParentIds.has(t.parentId));
-  if (matchThreads.length === 0) return { found: 0, deleted: 0 };
+  // Active threads (guild-wide, then filter).
+  const activeAll = await listGuildActiveThreads(guildId);
+  base.activeThreadsInGuild = activeAll.length;
+  const activeUnderParents = activeAll.filter(
+    (t) => t.parentId && matchParentIds.has(t.parentId),
+  );
+  base.activeThreadsUnderMatchParents = activeUnderParents.length;
+
+  // Archived threads (per-parent-channel; Discord doesn't have a guild
+  // endpoint for these).
+  const archivedUnderParents: Array<{ id: string; name: string; parentId: string }> = [];
+  for (const parentId of matchParentIds) {
+    const archived = await listArchivedThreadsInChannel(parentId);
+    archivedUnderParents.push(...archived);
+  }
+  base.archivedThreadsUnderMatchParents = archivedUnderParents.length;
+
+  const allUnderParents = [...activeUnderParents, ...archivedUnderParents];
+  if (allUnderParents.length === 0) return base;
 
   const trackedIds = new Set(
     (await prisma.matchSession.findMany({
-      where: { threadId: { in: matchThreads.map((t) => t.id) } },
+      where: { threadId: { in: allUnderParents.map((t) => t.id) } },
       select: { threadId: true },
     }))
       .map((s) => s.threadId)
       .filter((id): id is string => !!id),
   );
 
-  const orphans = matchThreads.filter((t) => !trackedIds.has(t.id));
+  const orphans = allUnderParents.filter((t) => !trackedIds.has(t.id));
+  base.orphanThreadsFound = orphans.length;
   let deleted = 0;
   for (const t of orphans) {
     const ok = await deleteChannel(t.id);
     if (ok) deleted++;
   }
+  base.orphanThreadsDeleted = deleted;
   if (orphans.length > 0) {
     console.log(`[match-sweep orphans] found ${orphans.length}, deleted ${deleted}`);
   }
-  return { found: orphans.length, deleted };
+  return base;
 }
 
 export async function runMatchSweep(opts: { includeOrphans?: boolean } = {}): Promise<MatchSweepResult> {
@@ -165,9 +202,7 @@ export async function runMatchSweep(opts: { includeOrphans?: boolean } = {}): Pr
     leakedThreadsDeleted,
   };
   if (opts.includeOrphans) {
-    const { found, deleted } = await sweepOrphanThreads();
-    result.orphanThreadsFound = found;
-    result.orphanThreadsDeleted = deleted;
+    result.orphan = await sweepOrphanThreads();
   }
   return result;
 }

@@ -21,6 +21,7 @@ import { runMatchSweep } from "@/lib/match-sweep";
 export async function runMatchSweepAction() {
   const { user } = await requireOwnerOrDevops();
   const result = await runMatchSweep({ includeOrphans: true });
+  const o = result.orphan;
   recordAudit({
     actor: actorFromAdminUser(user),
     action: "match-sweep.manual",
@@ -30,15 +31,13 @@ export async function runMatchSweepAction() {
       `Manual match-thread sweep: ${result.expiredInvitesCancelled} expired invite(s), ` +
       `${result.idleSessionsCancelled} idle session(s), ${result.leakedThreadsProcessed} leaked thread(s) processed ` +
       `(${result.leakedThreadsDeleted} deleted), ` +
-      `${result.orphanThreadsFound ?? 0} orphan thread(s) found (${result.orphanThreadsDeleted ?? 0} deleted)`,
-    metadata: { ...result },
+      `${o?.orphanThreadsFound ?? 0} orphan thread(s) found (${o?.orphanThreadsDeleted ?? 0} deleted)`,
+    metadata: { ...result, ...(o ?? {}) },
   });
   revalidatePath("/admin/ops");
-  const summary = encodeURIComponent(
-    `Expired invites: ${result.expiredInvitesCancelled} · ` +
-      `Idle: ${result.idleSessionsCancelled} · ` +
-      `Leaked: ${result.leakedThreadsDeleted}/${result.leakedThreadsProcessed} · ` +
-      `Orphans: ${result.orphanThreadsDeleted ?? 0}/${result.orphanThreadsFound ?? 0}`,
-  );
-  redirect(`/admin/ops?sweepOk=${summary}`);
+  // Pack diagnostics into a query param. Page renders them verbatim so
+  // we can tell "found 0 because nothing exists" from "found 0 because
+  // we couldn't even look (no GUILD_ID, no parents, etc)".
+  const diag = encodeURIComponent(JSON.stringify({ ...result, ...(o ?? {}) }));
+  redirect(`/admin/ops?sweepDiag=${diag}`);
 }

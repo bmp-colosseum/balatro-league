@@ -347,6 +347,39 @@ export async function listGuildActiveThreads(
   }
 }
 
+// List ARCHIVED public threads under a specific parent channel.
+// Discord paginates with `before` (a timestamp); we walk up to 5 pages
+// (500 threads) which is overkill for our scale. Used by the manual
+// sweep to find threads Discord auto-archived but never deleted.
+export async function listArchivedThreadsInChannel(
+  channelId: string,
+): Promise<Array<{ id: string; name: string; parentId: string }>> {
+  const collected: Array<{ id: string; name: string; parentId: string }> = [];
+  let before: string | undefined;
+  for (let page = 0; page < 5; page++) {
+    try {
+      const path = before
+        ? `/channels/${channelId}/threads/archived/public?before=${encodeURIComponent(before)}&limit=100`
+        : `/channels/${channelId}/threads/archived/public?limit=100`;
+      const result = (await rest().get(path as `/${string}`)) as {
+        threads: Array<{ id: string; name?: string; thread_metadata?: { archive_timestamp?: string } }>;
+        has_more?: boolean;
+      };
+      for (const t of result.threads) {
+        collected.push({ id: t.id, name: t.name ?? "", parentId: channelId });
+      }
+      if (!result.has_more || result.threads.length === 0) break;
+      const last = result.threads[result.threads.length - 1];
+      before = last?.thread_metadata?.archive_timestamp;
+      if (!before) break;
+    } catch (err) {
+      console.warn(`Discord listArchivedThreadsInChannel(${channelId}) failed:`, err);
+      break;
+    }
+  }
+  return collected;
+}
+
 // Delete a channel (thread or regular). Returns true on success or if
 // the channel was already gone (404 treated as success — the cleanup
 // goal is reached). Returns false on real errors (perms, network).
