@@ -325,6 +325,28 @@ export async function listGuildTextChannels(guildId: string): Promise<DiscordCha
   }
 }
 
+// List all active (non-archived) threads in the guild. Includes
+// threads under any parent channel; caller filters to the relevant
+// subset. APIThreadList.members is ignored — we only need thread ids
+// and parent ids.
+export async function listGuildActiveThreads(
+  guildId: string,
+): Promise<Array<{ id: string; name: string; parentId: string | null }>> {
+  try {
+    const result = (await rest().get(Routes.guildActiveThreads(guildId))) as {
+      threads: Array<{ id: string; name?: string; parent_id?: string | null }>;
+    };
+    return result.threads.map((t) => ({
+      id: t.id,
+      name: t.name ?? "",
+      parentId: t.parent_id ?? null,
+    }));
+  } catch (err) {
+    console.warn(`Discord listGuildActiveThreads failed:`, err);
+    return [];
+  }
+}
+
 // Delete a channel (thread or regular). Returns true on success or if
 // the channel was already gone (404 treated as success — the cleanup
 // goal is reached). Returns false on real errors (perms, network).

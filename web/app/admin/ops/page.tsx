@@ -37,12 +37,16 @@ export default async function AdminOpsPage({
         <div className="card">
           <strong>Match-thread sweep</strong>
           <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-            The bot runs this every minute. Click here to fire it on demand — useful
-            if the bot is down, or if you can see stale threads and want them flushed now.
-            Three passes: expired invites (WAITING_ACCEPT past expiry), idle sessions
-            (no activity for 24h+), and leaked threads (finished/cancelled sessions whose
-            thread close failed). Hits Discord REST directly; no bot needed.
+            The bot runs the first three passes every minute. This button fires all
+            four on demand — useful when the bot is down, or to catch the gap the
+            cron can&apos;t see.
           </p>
+          <ul className="muted" style={{ fontSize: 12, marginTop: 4, paddingLeft: 18 }}>
+            <li><strong>Expired invites</strong> — WAITING_ACCEPT sessions past their expiry, cancel + delete thread.</li>
+            <li><strong>Idle sessions</strong> — any non-terminal session with no activity for 24h+, cancel + delete thread.</li>
+            <li><strong>Leaked threads</strong> — finished/cancelled sessions whose inline thread-close failed; retry delete.</li>
+            <li><strong>Orphan threads</strong> (manual-only) — Discord threads under the challenges channel or any division channel that have no MatchSession row. Catches gaps where tracking was missed; auto-deletes.</li>
+          </ul>
           <form action={runMatchSweepAction} style={{ marginTop: 8 }}>
             <button type="submit" className="secondary">Run sweep now</button>
           </form>
