@@ -202,6 +202,43 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       create: { key: "announcements_channel_id", value: announcementsChan.id, updatedBy: interaction.user.id },
       update: { value: announcementsChan.id, updatedBy: interaction.user.id },
     });
+    await prisma.leagueConfig.upsert({
+      where: { key: "results_channel_id" },
+      create: { key: "results_channel_id", value: resultsChan.id, updatedBy: interaction.user.id },
+      update: { value: resultsChan.id, updatedBy: interaction.user.id },
+    });
+
+    // Auto-create a Match Results webhook on #results so the announce
+    // path uses the webhook (preferred — gives nicer formatting + no
+    // rate-limit risk on the bot's own user). Only fires when the
+    // LeagueConfig key isn't already set so re-running bootstrap
+    // doesn't keep spawning duplicate webhooks. Falls back silently
+    // when the bot lacks Manage Webhooks — admin can run
+    // /league setup-results-webhook later.
+    const existingWebhook = await prisma.leagueConfig.findUnique({
+      where: { key: "results_webhook_url" },
+    });
+    if (!existingWebhook && resultsChan.type === ChannelType.GuildText) {
+      try {
+        const wh = await (resultsChan as TextChannel).createWebhook({
+          name: "Match Results",
+          reason: `Auto-created by /league bootstrap-server (by ${interaction.user.tag})`,
+        });
+        if (wh.url) {
+          await prisma.leagueConfig.upsert({
+            where: { key: "results_webhook_url" },
+            create: { key: "results_webhook_url", value: wh.url, updatedBy: interaction.user.id },
+            update: { value: wh.url, updatedBy: interaction.user.id },
+          });
+          created.push("results-channel webhook");
+        }
+      } catch (err) {
+        console.warn(
+          `[bootstrap] couldn't auto-create results webhook (needs Manage Webhooks): ${(err as Error).message}`,
+        );
+        // Non-fatal — admin can wire it up later via /league setup-results-webhook
+      }
+    }
 
     // Always (re-)seed #league-info with a pinned 'how it works' message.
     // If the bot already pinned one, edit it in place so re-running bootstrap
