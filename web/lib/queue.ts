@@ -90,6 +90,15 @@ export async function enqueueReportPostPending(pairingId: string): Promise<void>
   await getBoss().send("report.post-pending", { pairingId }, { retryLimit: 2 });
 }
 
+// Trigger the bot to rebuild the pinned #league-info message. Mirror
+// of the bot-side enqueueLeagueInfoRefresh. Fire from any web action
+// that changes the "current state" reflected in the pinned content
+// (signup open/close, season activate/end).
+export async function enqueueLeagueInfoRefresh(): Promise<void> {
+  await ensureStarted();
+  await getBoss().send("league-info.refresh", {}, { retryLimit: 2 });
+}
+
 // Enqueue an announce. Caller returns immediately — pg-boss worker on
 // the bot side picks it up and runs announceResult() at the queue's
 // natural rate (1/sec polling, batchSize 1). Far better than calling

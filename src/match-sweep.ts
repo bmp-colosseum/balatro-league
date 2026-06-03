@@ -30,7 +30,7 @@ import { ensureGuildCategory } from "./discord-helpers.js";
 import { env } from "./env.js";
 import { formatSeasonLabel } from "./format-season.js";
 import { logDiscordError } from "./log-discord-error.js";
-import { enqueueBootstrapDivision } from "./queue.js";
+import { enqueueBootstrapDivision, enqueueLeagueInfoRefresh } from "./queue.js";
 import { recordAudit, SYSTEM_ACTOR } from "./audit.js";
 
 const SWEEP_INTERVAL_MS = 60 * 1000;
@@ -287,6 +287,11 @@ export async function sweepScheduledStarts(): Promise<number> {
           });
         }
       }
+      // Refresh #league-info so the dynamic block reflects the new
+      // active season. Best-effort — failure doesn't block activation.
+      await enqueueLeagueInfoRefresh().catch((err) =>
+        console.warn("[match-sweep scheduled-start] league-info refresh enqueue failed:", err),
+      );
       console.log(`[match-sweep scheduled-start] activated season ${season.id} (${label})`);
     } catch (err) {
       console.warn(`[match-sweep scheduled-start] failed for ${season.id}:`, err);

@@ -15,6 +15,7 @@ import { prisma } from "../db.js";
 import { PERM_PRESETS } from "../discord-helpers.js";
 import { clearConfig, LeagueConfigKey, setConfig } from "../league-config.js";
 import { requireOwner } from "../permissions.js";
+import { enqueueLeagueInfoRefresh } from "../queue.js";
 import type { SlashCommand } from "./types.js";
 
 const WEBHOOK_URL_RE = /^https:\/\/(discord\.com|discordapp\.com)\/api\/(v\d+\/)?webhooks\/\d+\/[\w-]+$/;
@@ -222,6 +223,11 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       create: { key: "results_channel_id", value: resultsChan.id, updatedBy: interaction.user.id },
       update: { value: resultsChan.id, updatedBy: interaction.user.id },
     });
+    await prisma.leagueConfig.upsert({
+      where: { key: "league_info_channel_id" },
+      create: { key: "league_info_channel_id", value: infoChan.id, updatedBy: interaction.user.id },
+      update: { value: infoChan.id, updatedBy: interaction.user.id },
+    });
 
     // Auto-create a Match Results webhook on #results so the announce
     // path uses the webhook (preferred — gives nicer formatting + no
@@ -281,19 +287,33 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       "",
       "**Website:** <https://www.balatroleague.com> — standings, profiles, signup, settings.",
     ].join("\n");
+    // Trigger the league-info pinned message refresh via the queue
+    // worker (composes static intro + dynamic state). Falls back to a
+    // synchronous post if the queue isn't reachable so first-time
+    // bootstrap still produces a visible message.
+    let refreshQueued = false;
     try {
-      const pinned = await infoChan.messages.fetchPinned();
-      const existing = pinned.find((m) => m.author.id === interaction.client.user.id);
-      if (existing) {
-        await existing.edit({ content: intro });
-        reused.push(`#league-info pinned intro (refreshed)`);
-      } else {
-        const msg = await infoChan.send({ content: intro });
-        await msg.pin().catch(() => { /* MANAGE_MESSAGES may be missing */ });
-        created.push(`#league-info pinned intro`);
+      await enqueueLeagueInfoRefresh();
+      refreshQueued = true;
+      reused.push("#league-info pinned message (queued refresh)");
+    } catch (qErr) {
+      console.warn(`[bootstrap] league-info refresh enqueue failed: ${(qErr as Error).message}`);
+    }
+    if (!refreshQueued) {
+      try {
+        const pinned = await infoChan.messages.fetchPinned();
+        const existing = pinned.find((m) => m.author.id === interaction.client.user.id);
+        if (existing) {
+          await existing.edit({ content: intro });
+          reused.push(`#league-info pinned intro (refreshed inline)`);
+        } else {
+          const msg = await infoChan.send({ content: intro });
+          await msg.pin().catch(() => { /* MANAGE_MESSAGES may be missing */ });
+          created.push(`#league-info pinned intro`);
+        }
+      } catch (e) {
+        console.warn(`[bootstrap] couldn't seed/refresh intro in #league-info: ${(e as Error).message}`);
       }
-    } catch (e) {
-      console.warn(`[bootstrap] couldn't seed/refresh intro in #league-info: ${(e as Error).message}`);
     }
 
     async function ensureRole(name: string, reason: string) {

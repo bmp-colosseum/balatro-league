@@ -96,6 +96,13 @@ export const LeagueConfigKey = {
   // auto-create resolution as BotCommandsChannelId. Public channel —
   // every server member can see and read but only the bot posts.
   AnnouncementsChannelId: "announcements_channel_id",
+
+  // Channel where the bot maintains a self-updating pinned "league
+  // info" message: static rules + intro on top, dynamic current-state
+  // block below (signups open / season N live / season N ended).
+  // Persisted from /league bootstrap-server; the refresh worker
+  // re-edits the pinned message on signup/season events.
+  LeagueInfoChannelId: "league_info_channel_id",
 } as const;
 
 export type LeagueConfigKey = (typeof LeagueConfigKey)[keyof typeof LeagueConfigKey];

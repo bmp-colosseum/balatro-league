@@ -14,7 +14,7 @@ import {
   type ComponentActionRow,
   type MessageEmbed,
 } from "@/lib/discord";
-import { enqueueDm, enqueueMmrSnapshot } from "@/lib/queue";
+import { enqueueDm, enqueueLeagueInfoRefresh, enqueueMmrSnapshot } from "@/lib/queue";
 import { computeRatingDeltas, type DivisionForRating } from "@/lib/end-season";
 import { computeStandings } from "@/lib/standings";
 
@@ -287,6 +287,11 @@ export async function performSeasonActivation(
   await postSeasonStartAnnouncement(target.id, formatSeasonLabel(target)).catch((err) =>
     console.warn("[season.activate] announcement post failed:", err),
   );
+
+  // Refresh #league-info so the "Season N is live" block appears.
+  await enqueueLeagueInfoRefresh().catch((err) =>
+    console.warn("[season.activate] league-info refresh enqueue failed:", err),
+  );
 }
 
 // Post a "season is now live" message to the configured announcements
@@ -490,6 +495,11 @@ export async function endSeason(formData: FormData) {
     metadata: { divisionCount: season.divisions.length, ratingUpdateCount: deltas.length },
   });
 
+  // Refresh #league-info so the "Season N ended" block appears.
+  await enqueueLeagueInfoRefresh().catch((err) =>
+    console.warn("[season.end] league-info refresh enqueue failed:", err),
+  );
+
   revalidatePath("/admin/seasons");
   revalidatePath("/admin/players");
   redirect("/admin/seasons");
@@ -614,6 +624,11 @@ export async function openSignupsForSeason(formData: FormData) {
     console.warn("notifyNextSeasonSubscribers failed:", err),
   );
 
+  // Refresh #league-info so the "Signups open" block appears.
+  await enqueueLeagueInfoRefresh().catch((err) =>
+    console.warn("[signups.open] league-info refresh enqueue failed:", err),
+  );
+
   revalidatePath("/admin/seasons");
 }
 
@@ -706,6 +721,13 @@ export async function finalizeSignupsForSeason(formData: FormData) {
     summary: `Closed signups for season (${round.signups.length} signed up)`,
     metadata: { seasonId, signupCount: round.signups.length },
   });
+
+  // Refresh #league-info so the "Signups open" block disappears and
+  // (if no other season is active) the "no season running" block returns.
+  await enqueueLeagueInfoRefresh().catch((err) =>
+    console.warn("[signups.close] league-info refresh enqueue failed:", err),
+  );
+
   revalidatePath("/admin/seasons");
   revalidatePath("/admin/signups");
 }

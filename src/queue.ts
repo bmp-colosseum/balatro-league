@@ -24,6 +24,7 @@ import { resolveBackupChannelId } from "./backup-channel.js";
 import { resolveDevopsChannelId } from "./devops-channel.js";
 import { resolveBotCommandsChannelId } from "./bot-commands-channel.js";
 import { prisma } from "./db.js";
+import { composeLeagueInfoContent } from "./league-info-content.js";
 import { env } from "./env.js";
 import { checkQueueStalls } from "./devops-alarm.js";
 import { tryGetDiscordClient } from "./discord.js";
@@ -77,6 +78,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("award.champion-role");
   await boss.createQueue("dispute.spawn-thread");
   await boss.createQueue("notify.announce-result");
+  await boss.createQueue("league-info.refresh");
 
   // One-shot cleanup for retired queues. archive.stale-threads was the
   // pre-5c2bc7c hourly cron that got merged into match-sweep's 60s
@@ -126,6 +128,18 @@ export async function initQueue(): Promise<void> {
       for (const job of jobs) {
         await announceResult(job.data.pairingId);
       }
+    },
+  );
+
+  // Worker: rebuild the pinned #league-info message. Coalesces multi-
+  // ple triggers (signups close + scheduled-start fire at once) — the
+  // worker just composes from current DB state and edits the pin, so
+  // running it 3x in succession produces the same content.
+  await boss.work(
+    "league-info.refresh",
+    { batchSize: 1, pollingIntervalSeconds: 2 },
+    async () => {
+      await refreshLeagueInfoPinned();
     },
   );
 
@@ -310,6 +324,15 @@ export async function enqueueDisputeSpawnThread(pairingId: string): Promise<void
 export async function enqueueBootstrapDivision(job: { divisionId: string; guildId: string }): Promise<void> {
   if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
   await boss.send("bootstrap.division", job, { retryLimit: 2 });
+}
+
+// Trigger the bot to rebuild the pinned #league-info message. Triggered
+// by web actions (signup open/close, season activate/end) and by the
+// bot's own scheduled-start sweep. Coalesces if multiple fire at once —
+// retries are idempotent (we just rebuild + edit again).
+export async function enqueueLeagueInfoRefresh(): Promise<void> {
+  if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
+  await boss.send("league-info.refresh", {}, { retryLimit: 2 });
 }
 
 export async function enqueueDm(job: DmJob): Promise<void> {
@@ -527,6 +550,54 @@ async function fetchAndStore(
       fetchError: error,
     },
   });
+}
+
+// Rebuild + edit the pinned #league-info message. Idempotent — pulls
+// fresh DB state via composeLeagueInfoContent every invocation, so
+// multiple triggers fold into the same result. Looks for the bot's
+// own pinned message first; falls back to posting + pinning a new one
+// if none exists.
+async function refreshLeagueInfoPinned(): Promise<void> {
+  const channelId = await getConfig(LeagueConfigKey.LeagueInfoChannelId);
+  if (!channelId) {
+    console.warn("[league-info.refresh] no LeagueInfoChannelId set — skipping");
+    return;
+  }
+  const client = tryGetDiscordClient();
+  if (!client) {
+    console.warn("[league-info.refresh] Discord client not ready — skipping");
+    return;
+  }
+  const channel = await client.channels.fetch(channelId).catch(() => null);
+  if (!channel || !channel.isTextBased() || !("send" in channel)) {
+    console.warn(`[league-info.refresh] channel ${channelId} not found or unusable`);
+    return;
+  }
+  const content = await composeLeagueInfoContent();
+  try {
+    const pinned = await (channel as { messages: { fetchPinned: () => Promise<Map<string, { id: string; author: { id: string }; edit: (o: { content: string }) => Promise<unknown>; }> | unknown> } }).messages.fetchPinned();
+    // discord.js returns a Collection (Map-like). Find the bot's own
+    // pinned message — that's the one to edit.
+    let botMessage: { edit: (o: { content: string }) => Promise<unknown> } | null = null;
+    if (pinned && typeof (pinned as { values?: () => Iterable<unknown> }).values === "function") {
+      for (const msg of (pinned as { values: () => Iterable<{ author: { id: string }; edit: (o: { content: string }) => Promise<unknown> }> }).values()) {
+        if (msg.author.id === client.user?.id) {
+          botMessage = msg;
+          break;
+        }
+      }
+    }
+    if (botMessage) {
+      await botMessage.edit({ content });
+      console.log(`[league-info.refresh] edited pinned message in ${channelId}`);
+    } else {
+      const sent = await (channel as { send: (o: { content: string }) => Promise<{ id: string; pin: () => Promise<unknown> }> }).send({ content });
+      await sent.pin().catch((err: unknown) => console.warn("[league-info.refresh] pin failed:", err));
+      console.log(`[league-info.refresh] posted + pinned new message in ${channelId}`);
+    }
+  } catch (err) {
+    console.warn(`[league-info.refresh] failed: ${(err as Error).message}`);
+  }
 }
 
 // Detect BMP's current season from their leaderboards page and update
