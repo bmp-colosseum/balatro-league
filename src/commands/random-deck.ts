@@ -53,8 +53,7 @@ export const randomDeck: SlashCommand = {
         ...(stakeDesc
           ? [{ name: `${stakeIcon} ${stake}`.trim(), value: stakeDesc, inline: false }]
           : []),
-      )
-      .setFooter({ text: `Rolled from "${preset.name}" preset` });
+      );
 
     await interaction.reply({ embeds: [embed] });
   },
