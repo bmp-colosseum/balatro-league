@@ -266,7 +266,7 @@ async function undoReport(interaction: ChatInputCommandInteraction) {
     await interaction.reply({ content: "Same player twice — pick two different players.", flags: MessageFlags.Ephemeral });
     return;
   }
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const [p1, p2, activeSeason] = await Promise.all([
     prisma.player.findUnique({ where: { discordId: p1User.id } }),
@@ -394,7 +394,7 @@ async function recordShootout(interaction: ChatInputCommandInteraction) {
     return;
   }
   const winnerDiscordId = winnerKey === "p1" ? p1DiscordId : p2DiscordId;
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const result = await persistShootout({
     p1DiscordId,
     p2DiscordId,
@@ -540,7 +540,7 @@ async function recordPairing(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const activeSeason = await prisma.season.findFirst({ where: { isActive: true } });
   if (!activeSeason) {
@@ -621,7 +621,7 @@ async function forceResult(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const pairing = await prisma.pairing.findUnique({
     where: { id: pairingId },

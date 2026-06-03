@@ -53,7 +53,7 @@ export const startMatch: SlashCommand = {
       return;
     }
 
-    await interaction.deferReply();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const season = await activePublicSeason();
     if (!season) {

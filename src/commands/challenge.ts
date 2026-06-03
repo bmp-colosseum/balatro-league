@@ -25,7 +25,9 @@ const BO_CHOICES = [
 ] as const;
 
 export const challenge: SlashCommand = {
-  channelScope: "bot-commands-only",
+  // No channelScope — the reply is ephemeral and the challenge thread
+  // spawns under the dedicated #challenges channel (or current channel
+  // as fallback), so it's safe to run from anywhere.
   data: new SlashCommandBuilder()
     .setName("challenge")
     .setDescription("Casual best-of-N match against another player (not recorded to the league).")
@@ -57,7 +59,7 @@ export const challenge: SlashCommand = {
       return;
     }
 
-    await interaction.deferReply();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const me = await getOrCreatePlayer(interaction.user);
     const opp = await getOrCreatePlayer(opponentUser);

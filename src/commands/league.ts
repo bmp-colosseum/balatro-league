@@ -197,7 +197,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     const signupChan = await ensureChannel("signups", "Signup embeds posted here by the web admin. Players click the button to register.");
     const resultsChan = await ensureChannel("results", "Auto-posted by the bot whenever a match is recorded.");
     const chatChan = await ensureChannel("league-chat", "General league chat. Match scheduling, banter, etc.");
-    const botCmdChan = await ensureChannel("bot-commands", "Use match-flow commands here when you're not in a division channel: /challenge, /report.");
+    const botCmdChan = await ensureChannel("bot-commands", "General bot commands: /random-deck, /profile, /standings, etc. League commands are ephemeral so you can run them anywhere.");
     const announcementsChan = await ensureChannel(
       "announcements",
       "League-wide announcements: season starts, recaps, league news. Bot-posted, read-only for members.",
@@ -630,7 +630,7 @@ async function checkSetup(interaction: ChatInputCommandInteraction) {
 async function setRole(interaction: ChatInputCommandInteraction) {
   const tier = interaction.options.getString("tier", true) as PermissionTier;
   const role = interaction.options.getRole("role", true);
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   await prisma.roleBinding.upsert({
     where: { discordRoleId: role.id },
     create: { discordRoleId: role.id, tier, createdBy: interaction.user.id },
@@ -641,7 +641,7 @@ async function setRole(interaction: ChatInputCommandInteraction) {
 
 async function unsetRole(interaction: ChatInputCommandInteraction) {
   const role = interaction.options.getRole("role", true);
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const existing = await prisma.roleBinding.findUnique({ where: { discordRoleId: role.id } });
   if (!existing) {
     await interaction.editReply(`<@&${role.id}> isn't bound to any tier.`);

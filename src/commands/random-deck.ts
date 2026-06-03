@@ -55,6 +55,6 @@ export const randomDeck: SlashCommand = {
           : []),
       );
 
-    await interaction.reply({ embeds: [embed] });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },
 };

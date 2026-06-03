@@ -28,7 +28,9 @@ const RESULT_CHOICES = [
 ] as const;
 
 export const report: SlashCommand = {
-  channelScope: "bot-commands-only",
+  // No channelScope — the ack reply is ephemeral and the public embed
+  // gets posted to the resolved #results channel, so it's safe to run
+  // from any channel.
   data: new SlashCommandBuilder()
     .setName("report")
     .setDescription("Report the result of your best-of-2 match against an opponent.")

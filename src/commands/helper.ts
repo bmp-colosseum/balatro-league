@@ -11,6 +11,7 @@
 
 import {
   ChannelType,
+  MessageFlags,
   PermissionFlagsBits,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
@@ -82,7 +83,7 @@ export const helper: SlashCommand = {
 
   async execute(interaction: ChatInputCommandInteraction) {
     if (!interaction.guild) {
-      await interaction.reply({ content: "Run this in a server channel, not DMs.", ephemeral: true });
+      await interaction.reply({ content: "Run this in a server channel, not DMs.", flags: MessageFlags.Ephemeral });
       return;
     }
     const reason = interaction.options.getString("reason")?.trim() ?? "";
@@ -94,9 +95,12 @@ export const helper: SlashCommand = {
       reason,
     });
     if ("error" in result) {
-      await interaction.reply({ content: result.error, ephemeral: true });
+      await interaction.reply({ content: result.error, flags: MessageFlags.Ephemeral });
       return;
     }
+    // The ping itself stays public — helpers need to see it, and the
+    // whole point of /helper is to summon attention. The runner gets the
+    // public message as their reply since they're already in-thread.
     await interaction.reply({ content: result.content });
   },
 };

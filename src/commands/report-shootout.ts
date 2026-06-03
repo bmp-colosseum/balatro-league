@@ -29,7 +29,7 @@ const WINNER_CHOICES = [
 ] as const;
 
 export const reportShootout: SlashCommand = {
-  channelScope: "bot-commands-only",
+  // No channelScope — ephemeral ack, no public side-effect channel needed.
   data: new SlashCommandBuilder()
     .setName("report-shootout")
     .setDescription("Record the result of a 1-game shootout against a tied opponent.")
@@ -65,7 +65,7 @@ export const reportShootout: SlashCommand = {
       return;
     }
     const winnerDiscordId = winnerKey === "self" ? interaction.user.id : opponentDiscordId;
-    await interaction.deferReply();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const result = await __shootoutHelper({
       p1DiscordId: interaction.user.id,
       p2DiscordId: opponentDiscordId,
