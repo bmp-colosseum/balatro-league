@@ -64,7 +64,6 @@ export default async function PublicDivisionPage({
               <tr>
                 <th></th>
                 <th>Player</th>
-                <th title="League-wide rank (1 = best player in the league). Updated at end of season.">Overall</th>
                 <th>Pts</th>
                 <th>W-D-L</th>
                 <th>Games</th>
@@ -72,7 +71,7 @@ export default async function PublicDivisionPage({
             </thead>
             <tbody>
               {standings.length === 0 ? (
-                <tr><td colSpan={6} className="muted">No matches played yet.</td></tr>
+                <tr><td colSpan={5} className="muted">No matches played yet.</td></tr>
               ) : standings.map((r, i) => {
                 const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
                 const link = (
@@ -84,7 +83,6 @@ export default async function PublicDivisionPage({
                   <tr key={r.player.id}>
                     <td>{medal}</td>
                     <td>{r.dropped ? <s>{link}</s> : link}{r.dropped && <span className="muted"> (dropped)</span>}</td>
-                    <td className="muted">{r.player.rating != null ? `#${r.player.rating}` : "—"}</td>
                     <td><strong>{r.points}</strong></td>
                     <td>{r.wins}-{r.draws}-{r.losses}</td>
                     <td>{r.gamesWon}-{r.gamesLost}</td>

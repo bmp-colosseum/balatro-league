@@ -253,7 +253,6 @@ export default async function AdminDivisionDetail({
               <tr>
                 <th></th>
                 <th>Player</th>
-                <th title="League-wide rank (1 = best player in the league). Updated at end of season.">Overall</th>
                 <th>Pts</th>
                 <th>W-D-L</th>
                 <th>Games</th>
@@ -262,7 +261,7 @@ export default async function AdminDivisionDetail({
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={7} className="muted">No confirmed matches yet.</td></tr>
+                <tr><td colSpan={6} className="muted">No confirmed matches yet.</td></tr>
               ) : rows.map((r, i) => {
                 const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
                 return (
@@ -278,7 +277,6 @@ export default async function AdminDivisionDetail({
                       )}
                       {r.dropped && <span className="muted"> (dropped)</span>}
                     </td>
-                    <td className="muted">{r.player.rating != null ? `#${r.player.rating}` : "—"}</td>
                     <td><strong>{r.points}</strong></td>
                     <td>{r.wins}-{r.draws}-{r.losses}</td>
                     <td>{r.gamesWon}-{r.gamesLost}</td>

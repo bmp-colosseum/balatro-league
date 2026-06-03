@@ -5,7 +5,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
-import { enqueueAnnounceResult } from "@/lib/queue";
+import { enqueueAnnounceResult, enqueueMmrSnapshot } from "@/lib/queue";
 import { placePlayerInDivision } from "@/lib/division-membership";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
 
@@ -204,5 +204,40 @@ export async function deletePlayer(formData: FormData) {
   for (const { divisionId } of affected) {
     recomputeDivisionStandings(divisionId).catch(() => {});
   }
+  revalidatePath("/admin/players");
+}
+
+// Manual trigger for the same fanout the daily cron does — enqueue a
+// fresh BMP MMR snapshot for every active-season member. Same scope as
+// the 12:00 UTC cron in src/queue.ts: past-season players aren't
+// refreshed because their snapshots are historical and immutable.
+export async function refreshActiveSeasonMmrs() {
+  await requireAdmin();
+  const activeSeason = await prisma.season.findFirst({
+    where: { isActive: true, endedAt: null },
+    orderBy: { startedAt: "desc" },
+    include: {
+      divisions: {
+        include: {
+          members: {
+            where: { status: "ACTIVE" },
+            include: { player: { select: { discordId: true } } },
+          },
+        },
+      },
+    },
+  });
+  if (!activeSeason) return;
+  const seen = new Set<string>();
+  for (const div of activeSeason.divisions) {
+    for (const m of div.members) {
+      if (seen.has(m.player.discordId)) continue;
+      seen.add(m.player.discordId);
+      await enqueueMmrSnapshot({ discordId: m.player.discordId, seasonId: activeSeason.id }).catch(
+        (err) => console.warn(`[admin-refresh-mmr] enqueue failed for ${m.player.discordId}:`, err),
+      );
+    }
+  }
+  console.log(`[admin-refresh-mmr] queued ${seen.size} for active season ${activeSeason.id}`);
   revalidatePath("/admin/players");
 }

@@ -61,15 +61,6 @@ export default async function ProfilePage({
         <h2>{profile.player.displayName}</h2>
 
         <div className="grid grid-2">
-          <div
-            className="stat"
-            title="League-wide rank (1 = best player in the league). Updated at end of season."
-          >
-            <div className="label">Overall rank</div>
-            <div className="value">
-              {profile.player.rating != null ? `#${profile.player.rating}` : <span className="muted">—</span>}
-            </div>
-          </div>
           <div className="stat"><div className="label">Seasons</div><div className="value">{t.seasons}</div></div>
           <div className="stat"><div className="label">Total points</div><div className="value">{t.points}</div></div>
         </div>

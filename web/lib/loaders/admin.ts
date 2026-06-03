@@ -1368,66 +1368,6 @@ export async function loadAdminDivisionDetail(
   };
 }
 
-// ── /admin/rankings ──────────────────────────────────────────────────
-
-export interface AdminRankingRow {
-  id: string;
-  discordId: string;
-  displayName: string;
-  rating: number | null;
-  ratingNote: string | null;
-  division: { name: string; tierPosition: number } | null;
-  latestMmr: { rankedMmr: number | null; rankedTier: string | null } | null;
-}
-
-export async function loadAdminRankings(): Promise<AdminRankingRow[]> {
-  const players = await prisma.player.findMany({
-    select: {
-      id: true,
-      discordId: true,
-      displayName: true,
-      rating: true,
-      ratingNote: true,
-      memberships: {
-        where: { division: { season: { isActive: true } } },
-        select: {
-          division: {
-            select: {
-              name: true,
-              tier: { select: { position: true } },
-            },
-          },
-        },
-      },
-    },
-    orderBy: [{ rating: { sort: "desc", nulls: "last" } }, { displayName: "asc" }],
-  });
-  const playerIds = players.map((p) => p.id);
-  const snapshots = playerIds.length === 0 ? [] : await prisma.playerMmrSnapshot.findMany({
-    where: { playerId: { in: playerIds } },
-    orderBy: { capturedAt: "desc" },
-    distinct: ["playerId"],
-    select: { playerId: true, rankedMmr: true, rankedTier: true },
-  });
-  const snapshotByPlayerId = new Map(
-    snapshots.filter((s) => s.playerId).map((s) => [s.playerId!, { rankedMmr: s.rankedMmr, rankedTier: s.rankedTier }] as const),
-  );
-  return players.map((p) => {
-    const m = p.memberships[0];
-    return {
-      id: p.id,
-      discordId: p.discordId,
-      displayName: p.displayName,
-      rating: p.rating,
-      ratingNote: p.ratingNote,
-      division: m
-        ? { name: m.division.name, tierPosition: m.division.tier.position }
-        : null,
-      latestMmr: snapshotByPlayerId.get(p.id) ?? null,
-    };
-  });
-}
-
 export async function loadAdminDivisionsIndex(): Promise<AdminDivisionsPageData> {
   const season = await prisma.season.findFirst({
     where: { isActive: true },

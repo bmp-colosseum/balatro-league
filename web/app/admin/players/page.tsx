@@ -9,7 +9,7 @@ import {
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
-import { addFakePlayer, deletePlayer, dropPlayer, recordSetForPlayer, reinstatePlayer, setPlayerDiscordId } from "./actions";
+import { addFakePlayer, deletePlayer, dropPlayer, recordSetForPlayer, refreshActiveSeasonMmrs, reinstatePlayer, setPlayerDiscordId } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -161,6 +161,22 @@ export default async function AdminPlayersPage({
             </select>
             <button type="submit">Add</button>
           </form>
+        </div>
+
+        <div className="card">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+            <strong>BMP MMR snapshots</strong>
+            <form action={refreshActiveSeasonMmrs}>
+              <button type="submit" className="secondary" style={{ fontSize: 12 }}>
+                Refresh BMP MMRs (active season)
+              </button>
+            </form>
+          </div>
+          <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
+            Auto-refreshes daily @ 12:00 UTC for current-season players. Click for an on-demand
+            refresh — fans out a snapshot job per player, drains at ~1 req/3sec, so a full season
+            takes a few minutes.
+          </p>
         </div>
 
         <div className="card">

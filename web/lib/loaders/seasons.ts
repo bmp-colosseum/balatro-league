@@ -54,6 +54,9 @@ export interface SeasonDetailStandingRow {
   gamesWon: number;
   gamesLost: number;
   dropped: boolean;
+  // Set when the season has been ended (computed by computeRatingDeltas
+  // + written by endSeason). Null while the season is in-progress.
+  finalGlobalRank: number | null;
 }
 
 export interface SeasonDetailDivision {
@@ -101,7 +104,7 @@ export async function loadSeasonDetail(seasonId: string): Promise<SeasonDetailDa
               id: true,
               name: true,
               groupNumber: true,
-              members: { select: { playerId: true, status: true } },
+              members: { select: { playerId: true, status: true, finalGlobalRank: true } },
             },
           },
         },
@@ -125,6 +128,9 @@ export async function loadSeasonDetail(seasonId: string): Promise<SeasonDetailDa
       const droppedIds = new Set(
         d.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId),
       );
+      const finalRankByPlayer = new Map(
+        d.members.map((m) => [m.playerId, m.finalGlobalRank]),
+      );
       const rows = (byDiv.get(d.id) ?? []).map((r): SeasonDetailStandingRow => ({
         player: { id: r.player.id, displayName: r.player.displayName },
         points: r.points,
@@ -134,6 +140,7 @@ export async function loadSeasonDetail(seasonId: string): Promise<SeasonDetailDa
         gamesWon: r.gamesWon,
         gamesLost: r.gamesLost,
         dropped: droppedIds.has(r.player.id),
+        finalGlobalRank: finalRankByPlayer.get(r.player.id) ?? null,
       }));
       return { id: d.id, name: d.name, groupNumber: d.groupNumber, rows };
     }),

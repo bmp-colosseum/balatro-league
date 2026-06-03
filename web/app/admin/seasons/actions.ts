@@ -342,7 +342,7 @@ export async function endSeason(formData: FormData) {
   });
 
   revalidatePath("/admin/seasons");
-  revalidatePath("/admin/rankings");
+  revalidatePath("/admin/players");
   redirect("/admin/seasons");
 }
 

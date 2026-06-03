@@ -115,7 +115,6 @@ export default async function StandingsPage() {
                               <tr>
                                 <th></th>
                                 <th>Player</th>
-                                <th title="League-wide rank (1 = best player in the league). Updated at end of season.">Overall</th>
                                 <th>Pts</th>
                                 <th>W-D-L</th>
                                 <th title="Match win rate: % of confirmed matches won 2-0.">Match W%</th>
@@ -129,7 +128,7 @@ export default async function StandingsPage() {
                             <tbody>
                               {rows.length === 0 ? (
                                 <tr>
-                                  <td colSpan={showBmpMmr ? 9 : 8} className="muted">No matches played yet.</td>
+                                  <td colSpan={showBmpMmr ? 8 : 7} className="muted">No matches played yet.</td>
                                 </tr>
                               ) : (
                                 rows.map((r, i) => {
@@ -163,7 +162,6 @@ export default async function StandingsPage() {
                                     <tr key={r.player.id}>
                                       <td>{medal}{movementMarker && <> {movementMarker}</>}{shootoutMarker}</td>
                                       <td>{r.dropped ? <s>{link}</s> : link}</td>
-                                      <td className="muted">{r.player.rating != null ? `#${r.player.rating}` : "—"}</td>
                                       <td><strong>{r.points}</strong></td>
                                       <td title={standingRateTooltip(r)}>{r.wins}-{r.draws}-{r.losses}</td>
                                       <td>
