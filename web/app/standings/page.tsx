@@ -109,7 +109,8 @@ export default async function StandingsPage() {
                               {complete ? "✅" : ""} {playedMatches}/{expectedMatches} matches
                             </span>
                           </div>
-                          <table style={{ marginTop: 8 }}>
+                          <div className="table-scroll" style={{ marginTop: 8 }}>
+                          <table className="table-dense">
                             <thead>
                               <tr>
                                 <th></th>
@@ -191,6 +192,7 @@ export default async function StandingsPage() {
                               )}
                             </tbody>
                           </table>
+                          </div>
                           {div.shootouts.length > 0 && (
                             <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
                               <strong style={{ color: "#f1c40f" }}>⚔ Shootout{div.shootouts.length === 1 ? "" : "s"}:</strong>{" "}

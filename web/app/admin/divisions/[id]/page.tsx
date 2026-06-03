@@ -247,7 +247,8 @@ export default async function AdminDivisionDetail({
         {/* Standings */}
         <div className="card">
           <strong>Standings ({rows.length})</strong>
-          <table>
+          <div className="table-scroll">
+          <table className="table-dense">
             <thead>
               <tr>
                 <th></th>
@@ -287,6 +288,7 @@ export default async function AdminDivisionDetail({
               })}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* Members */}

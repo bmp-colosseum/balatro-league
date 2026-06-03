@@ -45,6 +45,17 @@ th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--bor
 th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
 tr:hover { background: var(--surface-2); }
 
+/* Dense table — for standings + division pages where 8+ columns share
+   limited horizontal room. Cuts padding so columns don't all squeeze
+   to ~50px wide. */
+.table-dense th, .table-dense td { padding: 6px 8px; font-size: 13px; }
+.table-dense th { font-size: 11px; }
+
+/* Horizontal scroll wrapper for wide tables. Wrap a <table> in
+   <div class="table-scroll">…</div> and it'll scroll horizontally
+   if it would otherwise overflow its container. */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
 
 .pill {
   display: inline-block;
@@ -57,11 +68,11 @@ tr:hover { background: var(--surface-2); }
 }
 
 .grid { display: grid; gap: 16px; }
-/* Cards in grid-2 hold standings tables — minmax(420px) is large enough
-   that the table content fits without overflow, and small enough that
-   we still get 2 columns on a typical 1100px main. Below ~840px main
-   width, gracefully stacks to a single column instead of clipping. */
-.grid-2 { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
+/* Cards in grid-2 hold standings tables. Standings has ~10 columns
+   now (incl. Overall, Match W%, W/D/L%, Game W%), so we bumped the
+   minimum so each card has room to render without squeezing every
+   column to ~50px. Below this width the grid stacks to one column. */
+.grid-2 { grid-template-columns: repeat(auto-fit, minmax(540px, 1fr)); }
 .grid-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 
 .stat { background: var(--surface-2); padding: 16px; border-radius: 8px; }

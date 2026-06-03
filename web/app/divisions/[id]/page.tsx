@@ -58,7 +58,8 @@ export default async function PublicDivisionPage({
 
         <div className="card">
           <strong>Standings</strong>
-          <table style={{ marginTop: 8 }}>
+          <div className="table-scroll" style={{ marginTop: 8 }}>
+          <table className="table-dense">
             <thead>
               <tr>
                 <th></th>
@@ -92,6 +93,7 @@ export default async function PublicDivisionPage({
               })}
             </tbody>
           </table>
+          </div>
         </div>
 
         {unplayed.length > 0 && (
