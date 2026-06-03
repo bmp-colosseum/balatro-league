@@ -14,7 +14,7 @@
 // from scrolling/zooming when admin drags on mobile.
 
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 export interface RatingRow {
   discordId: string;
@@ -139,9 +139,34 @@ export function DraggableRatingTable({
 
   const order = useMemo(() => JSON.stringify(rows.map((r) => r.discordId)), [rows]);
 
-  // Sort presets. Each one replaces the local order — the user's manual
-  // drag is discarded (drag state isn't persisted until Save, so there's
-  // nothing to warn about beyond "the visible order changes").
+  // Autosave: every time the row order changes (drag, sort, auto-fill
+  // refresh from props), fire saveRatings in the background so the
+  // displayed order is always the persisted order. No "Save" button —
+  // there's nothing to commit beyond what you see.
+  //
+  // Skip the very first render so we don't re-save the server's
+  // initial order back to itself on every mount.
+  const [isPending, startTransition] = useTransition();
+  const [savedHash, setSavedHash] = useState<string>(() => order);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  useEffect(() => {
+    if (order === savedHash) return;
+    setSaveError(null);
+    startTransition(async () => {
+      try {
+        const fd = new FormData();
+        fd.append("roundId", roundId);
+        fd.append("order", order);
+        await formAction(fd);
+        setSavedHash(order);
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : "save failed");
+      }
+    });
+  }, [order, savedHash, formAction, roundId]);
+
+  // Sort presets. Each one replaces the local order — autosave handles
+  // persistence; no separate confirmation needed.
   // Rating = rank (1 = best), so league rating sorts ASC. BMP MMR
   // still sorts DESC (higher MMR = stronger).
   const sortSmart = () => {
@@ -172,25 +197,30 @@ export function DraggableRatingTable({
   }
 
   return (
-    <form action={formAction}>
-      <input type="hidden" name="roundId" value={roundId} />
-      <input type="hidden" name="order" value={order} />
+    <div>
       <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>
-        Drag rows to reorder. Save locks in the rank — position #1 becomes rank 1 (best player),
-        position #N becomes rank N (weakest). Returners show their saved rank from end-of-last-season;
-        new players show BMP Ranked MMR. A ⚠ next to a rank means the player has both a rank and an MMR
-        — sometimes worth manually verifying before locking in.
+        Drag rows to reorder — position #1 is rank 1 (best player), #N is rank N (weakest).
+        Order is saved automatically as you drag; <strong>Build season</strong> below uses
+        whatever order you see here. Returners show their saved rank from end-of-last-season;
+        new players show BMP Ranked MMR. ⚠ next to a rank means the player has both a rank and
+        an MMR — worth a quick sanity check.
       </p>
-      <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
-        <span className="muted" style={{ fontSize: 11, alignSelf: "center" }}>Sort:</span>
+      <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <span className="muted" style={{ fontSize: 11 }}>Sort:</span>
         <button type="button" className="secondary" style={{ fontSize: 11, padding: "2px 8px" }} onClick={sortSmart}>
           Smart (returners by league rating, then BMP MMR)
         </button>
         <button type="button" className="secondary" style={{ fontSize: 11, padding: "2px 8px" }} onClick={sortByLeagueRating}>
           League rating only
         </button>
-        <span className="muted" style={{ fontSize: 11, alignSelf: "center" }}>
-          (sort overrides manual drag — Save preserves it)
+        <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
+          {saveError ? (
+            <span style={{ color: "#e74c3c" }}>⚠ save failed: {saveError}</span>
+          ) : isPending ? (
+            "Saving…"
+          ) : (
+            "✓ Saved"
+          )}
         </span>
       </div>
       <table
@@ -320,7 +350,6 @@ export function DraggableRatingTable({
           })}
         </tbody>
       </table>
-      <button type="submit" style={{ marginTop: 12 }}>Save &amp; lock order</button>
-    </form>
+    </div>
   );
 }
