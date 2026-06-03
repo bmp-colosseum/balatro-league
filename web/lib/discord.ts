@@ -394,6 +394,58 @@ export async function deleteChannel(channelId: string): Promise<boolean> {
   }
 }
 
+// List ALL channels (text, voice, category, etc.) in a guild. The
+// existing listGuildTextChannels filters to text-only; the destructive
+// wipe needs to also see categories so it can find + delete them.
+export async function listAllGuildChannels(guildId: string): Promise<Array<{
+  id: string;
+  name: string;
+  type: number;
+  parent_id: string | null;
+}>> {
+  try {
+    const all = (await rest().get(Routes.guildChannels(guildId))) as APIChannel[];
+    return all.map((c) => ({
+      id: c.id,
+      name: ("name" in c ? c.name : null) ?? "",
+      type: c.type as number,
+      parent_id: "parent_id" in c ? (c.parent_id ?? null) : null,
+    }));
+  } catch (err) {
+    console.warn(`Discord listAllGuildChannels failed:`, err);
+    return [];
+  }
+}
+
+export async function listGuildRoles(guildId: string): Promise<Array<{
+  id: string;
+  name: string;
+  managed: boolean;
+}>> {
+  try {
+    const roles = (await rest().get(Routes.guildRoles(guildId))) as Array<{
+      id: string;
+      name: string;
+      managed?: boolean;
+    }>;
+    return roles.map((r) => ({ id: r.id, name: r.name, managed: r.managed ?? false }));
+  } catch (err) {
+    console.warn(`Discord listGuildRoles failed:`, err);
+    return [];
+  }
+}
+
+export async function deleteGuildRole(guildId: string, roleId: string): Promise<boolean> {
+  try {
+    await rest().delete(Routes.guildRole(guildId, roleId));
+    return true;
+  } catch (err) {
+    if (isNotFound(err)) return true;
+    console.warn(`Discord deleteGuildRole(${roleId}) failed:`, err);
+    return false;
+  }
+}
+
 // True for the discord.js DiscordAPIError shape when Discord returns 404.
 function isNotFound(err: unknown): boolean {
   return (
