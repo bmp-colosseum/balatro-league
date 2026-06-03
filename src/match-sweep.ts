@@ -1,20 +1,22 @@
 // Periodic sweep for stale match sessions. Runs on bot boot (to catch
 // expirations that happened during a redeploy) and every minute thereafter.
 //
-// Four passes:
+// Five passes:
 //   1. WAITING_ACCEPT past expiresAt → cancel (5 min default expiry,
 //      handleAccept also checks but the sweep is the safety net when
 //      nobody clicks at all).
-//   2. Any non-terminal state with updatedAt > 24h ago → cancel as
-//      'abandoned'. Catches mid-game sessions where players ghosted —
-//      otherwise they'd sit in GAME_1_PLAYING or similar forever and
-//      keep their threads alive.
-//   3. COMPLETE/CANCELLED sessions where the inline thread delete never
+//   2. Any non-terminal state (excluding PAUSED) with updatedAt > 24h
+//      ago → cancel as 'abandoned'. Catches mid-game sessions where
+//      players ghosted. PAUSED gets its own longer grace via pass 3.
+//   3. PAUSED sessions with pausedAt > 7d ago → cancel. Players who
+//      pause are explicitly opting in to "we'll come back" — the long
+//      grace lets life happen without the idle sweep killing the match.
+//   4. COMPLETE/CANCELLED sessions where the inline thread delete never
 //      stamped threadArchivedAt (bot was offline at the moment, Discord
 //      5xx, perms briefly revoked). Tries the delete again. Marks
 //      threadArchivedAt regardless of outcome so we don't hammer a
 //      broken thread forever.
-//   4. Seasons with scheduledStartAt <= now() and not yet active →
+//   5. Seasons with scheduledStartAt <= now() and not yet active →
 //      auto-activate. Mirrors the web's performSeasonActivation flow:
 //      deactivate any prior active season, flip target to isActive,
 //      clear scheduledStartAt, post to announcements channel.
@@ -35,6 +37,7 @@ import { recordAudit, SYSTEM_ACTOR } from "./audit.js";
 
 const SWEEP_INTERVAL_MS = 60 * 1000;
 const IDLE_CANCEL_HOURS = 24;
+const PAUSED_CANCEL_DAYS = 7;
 
 let cachedRest: REST | null = null;
 function rest(): REST {
@@ -97,7 +100,9 @@ export async function sweepIdleSessions(): Promise<number> {
   const cutoff = new Date(Date.now() - IDLE_CANCEL_HOURS * 60 * 60 * 1000);
   const stale = await prisma.matchSession.findMany({
     where: {
-      state: { notIn: ["COMPLETE", "CANCELLED"] },
+      // PAUSED gets its own (longer) grace window in sweepPausedSessions —
+      // skip it here so a 24h pause doesn't get auto-cancelled.
+      state: { notIn: ["COMPLETE", "CANCELLED", "PAUSED"] },
       updatedAt: { lt: cutoff },
     },
     select: { id: true, threadId: true, state: true, updatedAt: true },
@@ -180,6 +185,50 @@ export async function sweepLeakedThreads(): Promise<number> {
     console.log(`[match-sweep leaked] processed ${leaked.length} thread(s), deleted ${deleted}`);
   }
   return leaked.length;
+}
+
+// Long-grace pass for PAUSED sessions: if nobody resumed within 7
+// days, cancel the match outright so abandoned pauses don't sit in the
+// DB indefinitely. Mirrors the thread-delete pattern from idle/expiry.
+export async function sweepPausedSessions(): Promise<number> {
+  const cutoff = new Date(Date.now() - PAUSED_CANCEL_DAYS * 24 * 60 * 60 * 1000);
+  const stale = await prisma.matchSession.findMany({
+    where: {
+      state: "PAUSED",
+      pausedAt: { lt: cutoff },
+    },
+    select: { id: true, threadId: true, pausedAt: true },
+    take: 50,
+  });
+  if (stale.length === 0) return 0;
+
+  for (const session of stale) {
+    await prisma.matchSession.update({
+      where: { id: session.id },
+      data: {
+        state: "CANCELLED",
+        version: { increment: 1 },
+      },
+    }).catch((err) => {
+      console.warn(`[match-sweep paused] cancel ${session.id} failed:`, err);
+    });
+    if (session.threadId) {
+      try {
+        await rest().delete(Routes.channel(session.threadId));
+        await prisma.matchSession.update({
+          where: { id: session.id },
+          data: { threadArchivedAt: new Date() },
+        }).catch(() => {});
+      } catch (err) {
+        logDiscordError("match-sweep.paused.deleteThread", err, {
+          threadId: session.threadId,
+          sessionId: session.id,
+        });
+      }
+    }
+  }
+  console.log(`[match-sweep paused] cancelled ${stale.length} paused session(s) (>${PAUSED_CANCEL_DAYS}d paused)`);
+  return stale.length;
 }
 
 // Auto-activate seasons whose scheduledStartAt has passed. Mirrors
@@ -304,11 +353,13 @@ export function startMatchSweep(): void {
   // Run all passes once immediately on boot.
   sweepExpiredInvites().catch((err) => console.warn("[match-sweep] boot expiry sweep failed:", err));
   sweepIdleSessions().catch((err) => console.warn("[match-sweep] boot idle sweep failed:", err));
+  sweepPausedSessions().catch((err) => console.warn("[match-sweep] boot paused sweep failed:", err));
   sweepLeakedThreads().catch((err) => console.warn("[match-sweep] boot leaked sweep failed:", err));
   sweepScheduledStarts().catch((err) => console.warn("[match-sweep] boot scheduled-start sweep failed:", err));
   setInterval(() => {
     sweepExpiredInvites().catch((err) => console.warn("[match-sweep] expiry tick failed:", err));
     sweepIdleSessions().catch((err) => console.warn("[match-sweep] idle tick failed:", err));
+    sweepPausedSessions().catch((err) => console.warn("[match-sweep] paused tick failed:", err));
     sweepLeakedThreads().catch((err) => console.warn("[match-sweep] leaked tick failed:", err));
     sweepScheduledStarts().catch((err) => console.warn("[match-sweep] scheduled-start tick failed:", err));
   }, SWEEP_INTERVAL_MS);

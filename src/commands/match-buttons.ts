@@ -189,6 +189,8 @@ export const matchButtons: ButtonHandler = {
     if (action === "winner") return handleWinner(interaction, session, parts[3]);
     if (action === "dc") return handleDc(interaction, session);
     if (action === "callhelper") return handleCallHelper(interaction, session);
+    if (action === "pause") return handlePauseVote(interaction, session);
+    if (action === "resume") return handleResumeVote(interaction, session);
     // Combo negotiation buttons. propose-start enters the proposal flow;
     // propose-submit/accept/counter/cancel manage state inside it.
     if (action === "proposestart") return handleProposeStart(interaction, session);
@@ -907,6 +909,106 @@ export const callHelperModal = {
 // the series continues normally (game 2 plays out after a game 1 DC).
 // Shootout: refuses to auto-forfeit and tells the clicker to use
 // /helper since the rules around shootout DCs need admin judgment.
+// Mutual-consent PAUSE: pauses the session until both players consent
+// to resume. Only valid AFTER game 1's winner has been recorded —
+// during game 1 the right path is mutual-cancel + restart later.
+// First click votes; opposite player's click flips state to PAUSED.
+// Re-clicking by the same player is a no-op (still ONE vote).
+async function handlePauseVote(interaction: ButtonInteraction, session: MatchSession) {
+  // Disallowed states: before game 1 winner is in (anything Game 1 or
+  // before — admin can just cancel), already PAUSED, or terminal.
+  const pausable =
+    session.state === "GAME_2_CHOOSE_FIRST" ||
+    session.state === "GAME_2_BAN" ||
+    session.state === "GAME_2_PICK" ||
+    session.state === "GAME_2_PLAYING" ||
+    session.state === "GAME_3_CHOOSE_FIRST" ||
+    session.state === "GAME_3_BAN" ||
+    session.state === "GAME_3_PICK" ||
+    session.state === "GAME_3_PLAYING";
+  if (!pausable) {
+    return reply(
+      interaction,
+      "Pause is available after game 1's winner is recorded. Before then, use the Cancel match button or admin cancel.",
+    );
+  }
+  const { playerA, playerB } = await loadPlayers(session);
+  if (interaction.user.id !== playerA.discordId && interaction.user.id !== playerB.discordId) {
+    return reply(interaction, "Only the two players in this match can vote to pause.");
+  }
+  const voterId = interaction.user.id === playerA.discordId ? session.playerAId : session.playerBId;
+
+  // Mutual-consent: opposite player's vote flips state.
+  if (session.pauseInitiatorPlayerId && session.pauseInitiatorPlayerId !== voterId) {
+    const updated = await updateSession(session, {
+      state: MatchSessionState.PAUSED,
+      pausedFromState: session.state,
+      pauseInitiatorPlayerId: null,
+      pausedAt: new Date(),
+    });
+    if (!updated) return raceLost(interaction);
+    await refreshMessage(interaction, updated);
+    return reply(
+      interaction,
+      "✅ Match paused. Either player can click Resume when ready — both have to confirm to resume. Auto-cancels in 7 days if nobody resumes.",
+    );
+  }
+  if (session.pauseInitiatorPlayerId === voterId) {
+    return reply(interaction, "You've already voted to pause. Waiting on your opponent.");
+  }
+  // First vote.
+  const updated = await updateSession(session, {
+    pauseInitiatorPlayerId: voterId,
+  });
+  if (!updated) return raceLost(interaction);
+  await refreshMessage(interaction, updated);
+  return reply(
+    interaction,
+    "🗳️ You voted to pause. Your opponent needs to confirm before the match pauses.",
+  );
+}
+
+// Mutual-consent RESUME — flips PAUSED back to whatever state we
+// paused from. Same vote pattern as pause.
+async function handleResumeVote(interaction: ButtonInteraction, session: MatchSession) {
+  if (session.state !== "PAUSED") {
+    return reply(interaction, "This match isn't paused.");
+  }
+  if (!session.pausedFromState) {
+    // Defensive — shouldn't happen since pause always writes the field.
+    return reply(interaction, "Paused state is missing the original phase. Ask an admin to cancel + restart.");
+  }
+  const { playerA, playerB } = await loadPlayers(session);
+  if (interaction.user.id !== playerA.discordId && interaction.user.id !== playerB.discordId) {
+    return reply(interaction, "Only the two players in this match can vote to resume.");
+  }
+  const voterId = interaction.user.id === playerA.discordId ? session.playerAId : session.playerBId;
+
+  if (session.resumeInitiatorPlayerId && session.resumeInitiatorPlayerId !== voterId) {
+    const updated = await updateSession(session, {
+      state: session.pausedFromState,
+      pausedFromState: null,
+      resumeInitiatorPlayerId: null,
+      pausedAt: null,
+    });
+    if (!updated) return raceLost(interaction);
+    await refreshMessage(interaction, updated);
+    return reply(interaction, "▶️ Match resumed. Both players are back — pick up where you left off.");
+  }
+  if (session.resumeInitiatorPlayerId === voterId) {
+    return reply(interaction, "You've already voted to resume. Waiting on your opponent.");
+  }
+  const updated = await updateSession(session, {
+    resumeInitiatorPlayerId: voterId,
+  });
+  if (!updated) return raceLost(interaction);
+  await refreshMessage(interaction, updated);
+  return reply(
+    interaction,
+    "🗳️ You voted to resume. Your opponent needs to confirm before the match resumes.",
+  );
+}
+
 // Only operable in a PLAYING phase — during BAN/PICK the right path
 // is /helper (no game has actually been played yet).
 async function handleDc(interaction: ButtonInteraction, session: MatchSession) {

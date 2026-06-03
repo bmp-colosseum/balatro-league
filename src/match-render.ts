@@ -58,6 +58,9 @@ export function renderMatch(
   if (session.state === "CANCELLED") {
     return renderCancelled(session, playerA, playerB);
   }
+  if (session.state === "PAUSED") {
+    return renderPaused(session, playerA, playerB);
+  }
 
   // Game 1 / 2 / 3 phases
   const gameNum: 1 | 2 | 3 = session.state.startsWith("GAME_1") ? 1
@@ -82,12 +85,34 @@ function withHelperRow(
   rendered: { embeds: EmbedBuilder[]; components: ComponentRow[] },
 ): { embeds: EmbedBuilder[]; components: ComponentRow[] } {
   if (rendered.components.length >= 5) return rendered;
-  const helperRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const extras: ButtonBuilder[] = [];
+  // Pause is offered any time after game 1's winner is recorded — i.e.
+  // game-2 / game-3 phases. Before that, players can cancel the match
+  // outright. After PAUSED, the resume button lives on the paused embed.
+  if (
+    session.state === "GAME_2_CHOOSE_FIRST" ||
+    session.state === "GAME_2_BAN" ||
+    session.state === "GAME_2_PICK" ||
+    session.state === "GAME_2_PLAYING" ||
+    session.state === "GAME_3_CHOOSE_FIRST" ||
+    session.state === "GAME_3_BAN" ||
+    session.state === "GAME_3_PICK" ||
+    session.state === "GAME_3_PLAYING"
+  ) {
+    extras.push(
+      new ButtonBuilder()
+        .setCustomId(`match:pause:${session.id}`)
+        .setLabel(session.pauseInitiatorPlayerId ? "⏸️ Confirm pause" : "⏸️ Pause")
+        .setStyle(ButtonStyle.Secondary),
+    );
+  }
+  extras.push(
     new ButtonBuilder()
       .setCustomId(`match:callhelper:${session.id}`)
       .setLabel("🆘 Call helper")
       .setStyle(ButtonStyle.Secondary),
   );
+  const helperRow = new ActionRowBuilder<ButtonBuilder>().addComponents(...extras);
   return { embeds: rendered.embeds, components: [...rendered.components, helperRow] };
 }
 
@@ -478,6 +503,33 @@ function renderCancelled(s: MatchSession, a: Player, b: Player) {
     .setColor(0xe74c3c)
     .setFooter({ text: `Match ${s.id}` });
   return { embeds: [embed], components: [] };
+}
+
+function renderPaused(s: MatchSession, a: Player, b: Player) {
+  const pausedAt = s.pausedAt ? `<t:${Math.floor(s.pausedAt.getTime() / 1000)}:R>` : "recently";
+  const phaseLabel = s.pausedFromState ?? "unknown";
+  const waitingOn =
+    s.resumeInitiatorPlayerId === a.id
+      ? `Waiting on ${mention(b)} to confirm.`
+      : s.resumeInitiatorPlayerId === b.id
+        ? `Waiting on ${mention(a)} to confirm.`
+        : "Either player can click Resume.";
+  const embed = new EmbedBuilder()
+    .setTitle("⏸️ Match paused")
+    .setDescription(
+      `${mention(a)} vs ${mention(b)} — paused ${pausedAt}.\n\n` +
+        `Both players need to confirm before the match resumes. ${waitingOn}\n\n` +
+        `_Will auto-cancel in 7 days if nobody resumes. Returning state: \`${phaseLabel}\`._`,
+    )
+    .setColor(0x95a5a6)
+    .setFooter({ text: `Match ${s.id}` });
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`match:resume:${s.id}`)
+      .setLabel(s.resumeInitiatorPlayerId ? "▶️ Confirm resume" : "▶️ Resume")
+      .setStyle(ButtonStyle.Success),
+  );
+  return { embeds: [embed], components: [row] };
 }
 
 function renderError(s: MatchSession, a: Player, b: Player, msg: string) {

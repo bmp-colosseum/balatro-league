@@ -255,6 +255,7 @@ enum MatchSessionState {
   GAME_3_BAN
   GAME_3_PICK
   GAME_3_PLAYING
+  PAUSED                // mutual-consent pause after game 1; pausedFromState remembers where to resume
   COMPLETE              // pairing written (or just done if casual)
   CANCELLED             // never accepted or admin-killed
 }
@@ -265,6 +266,16 @@ model MatchSession {
   playerAId     String            // initiator (ran /start-match OR /challenge)
   playerBId     String            // opponent
   state         MatchSessionState @default(WAITING_ACCEPT)
+  // Set when state=PAUSED — the previous state to resume back to once
+  // both players consent. Cleared on resume/cancel/complete.
+  pausedFromState MatchSessionState?
+  // Player IDs who voted for a pending pause / resume. First click sets
+  // it; opposite-player click flips state and clears it.
+  pauseInitiatorPlayerId  String?
+  resumeInitiatorPlayerId String?
+  // Set when the session enters PAUSED. match-sweep cancels paused
+  // sessions older than 7 days.
+  pausedAt                DateTime?
   // Bumped on every update; used for optimistic concurrency control so
   // racing button clicks can't double-write the state machine. Any update
   // is gated by `where: { id, version }` — a stale click hits 0 rows updated.
