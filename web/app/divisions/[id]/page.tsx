@@ -299,7 +299,7 @@ function AdminSection({
       <div className="card" style={{ borderColor: "#f1c40f" }}>
         <strong style={{ color: "#f1c40f" }}>🔧 Admin tools</strong>
         <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
-          Editing controls only visible to admins. Bulk import, drop/remove, override, shootouts, and crosstable progress.
+          Editing controls only visible to admins. Bulk import, drop/remove, override, shootouts, match progress.
         </p>
       </div>
 

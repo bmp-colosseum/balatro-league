@@ -321,7 +321,7 @@ export async function enqueueAnnounceResult(pairingId: string): Promise<void> {
   if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
   // Retry transient failures (network blips, Discord 5xx) twice with
   // backoff. After that the announce is dropped — admin can manually
-  // re-trigger via overrideResult or an editable-crosstable touch.
+  // re-trigger via overrideResult.
   await boss.send("notify.announce-result", { pairingId }, { retryLimit: 2, retryBackoff: true });
 }
 

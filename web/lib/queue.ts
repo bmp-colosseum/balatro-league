@@ -95,7 +95,7 @@ export async function enqueueReportPostPending(pairingId: string): Promise<void>
 // natural rate (1/sec polling, batchSize 1). Far better than calling
 // announceResult inline because:
 //   - Caller doesn't block on Discord round-trip
-//   - Bursts (e.g. crosstable rapid-fire edits) drain at a controlled
+//   - Bursts (e.g. rapid-fire admin edits) drain at a controlled
 //     pace instead of hitting rate limits
 //   - Failures retry automatically with backoff
 export async function enqueueAnnounceResult(pairingId: string): Promise<void> {
