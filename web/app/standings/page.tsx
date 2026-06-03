@@ -118,6 +118,7 @@ export default async function StandingsPage() {
                                 <th>Pts</th>
                                 <th>W-D-L</th>
                                 <th title="Match win rate: % of confirmed matches won 2-0. Excludes draws and losses from the numerator.">Match W%</th>
+                                <th title="Match outcomes as percentages: wins / draws / losses. Always sums to ~100%.">W/D/L%</th>
                                 <th>Games</th>
                                 <th title="Game win rate: gamesWon / (gamesWon + gamesLost). Finer than the match rate — a 2-0/0-2/1-1 player has match W% 33 but game W% 50.">Game W%</th>
                                 {showBmpMmr && (
@@ -128,7 +129,7 @@ export default async function StandingsPage() {
                             <tbody>
                               {rows.length === 0 ? (
                                 <tr>
-                                  <td colSpan={showBmpMmr ? 9 : 8} className="muted">No matches played yet.</td>
+                                  <td colSpan={showBmpMmr ? 10 : 9} className="muted">No matches played yet.</td>
                                 </tr>
                               ) : (
                                 rows.map((r, i) => {
@@ -168,6 +169,11 @@ export default async function StandingsPage() {
                                       <td>
                                         {r.played > 0
                                           ? `${Math.round((r.wins / r.played) * 100)}%`
+                                          : <span className="muted">—</span>}
+                                      </td>
+                                      <td>
+                                        {r.played > 0
+                                          ? `${Math.round((r.wins / r.played) * 100)}/${Math.round((r.draws / r.played) * 100)}/${Math.round((r.losses / r.played) * 100)}`
                                           : <span className="muted">—</span>}
                                       </td>
                                       <td title={gameRateTooltip(r)}>{r.gamesWon}-{r.gamesLost}</td>
