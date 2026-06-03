@@ -40,6 +40,7 @@ export default async function AdminSeasonsPage({
     presets,
     defaultPreset,
     roundsBySeason,
+    orphanRounds,
     channels,
     archivedCount,
   } = await loadAdminSeasonsIndex({
@@ -136,6 +137,57 @@ export default async function AdminSeasonsPage({
                 );
               })}
             </ol>
+          </div>
+        )}
+
+        {orphanRounds.length > 0 && (
+          <div className="card" style={{ borderColor: "#76c7ff" }}>
+            <strong style={{ color: "#76c7ff" }}>📋 Pending signup rounds ({orphanRounds.length})</strong>
+            <p className="muted" style={{ marginTop: 4, fontSize: 12 }}>
+              Signup rounds without a built season yet. From a seed script or
+              admin closed signups without clicking Build. Click through to
+              <code> /admin/signups/&lt;id&gt;/build</code> to assemble the season.
+            </p>
+            <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+              {orphanRounds.map((r) => (
+                <li
+                  key={r.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "4px 0",
+                    borderBottom: "1px solid var(--border, rgba(255,255,255,0.05))",
+                  }}
+                >
+                  <Link
+                    href={`/admin/signups/${r.id}/build`}
+                    style={{ textDecoration: "none", fontWeight: 600, flex: 1 }}
+                  >
+                    {r.name}
+                  </Link>
+                  <span
+                    className="pill"
+                    style={{
+                      background:
+                        r.status === "CLOSED"
+                          ? "rgba(241,196,15,0.2)"
+                          : "rgba(46,204,113,0.2)",
+                      color: r.status === "CLOSED" ? "#f1c40f" : "#2ecc71",
+                      fontSize: 11,
+                    }}
+                  >
+                    {r.status} · {r.signupCount} signed up
+                  </span>
+                  <Link
+                    href={`/admin/signups/${r.id}/build`}
+                    style={{ fontSize: 12 }}
+                  >
+                    Build →
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 

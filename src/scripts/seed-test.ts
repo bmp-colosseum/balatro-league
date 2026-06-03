@@ -8,11 +8,6 @@
 import { prisma } from "../db.js";
 import { formatSeasonLabel } from "../format-season.js";
 
-// Use a large negative-ish marker number to keep the test season out of
-// the way of real auto-numbered seasons. Fine to reuse across re-runs of
-// the seed because the script upserts by id.
-const TEST_SEASON_NUMBER = 9001;
-
 const [yourId, opponentId, yourName = "You", opponentName = "Opponent"] = process.argv.slice(2);
 
 if (!yourId || !opponentId) {
@@ -22,11 +17,18 @@ if (!yourId || !opponentId) {
   process.exit(1);
 }
 
+// Use the normal next-number sequence on first create so the test
+// season renders cleanly in admin. On re-runs the upsert hits the
+// existing row by id and skips the number entirely (update path
+// doesn't touch number).
+const existing = await prisma.season.findUnique({ where: { id: "test-season" } });
+const seasonNumber = existing?.number ?? ((await prisma.season.aggregate({ _max: { number: true } }))._max.number ?? 0) + 1;
+
 const season = await prisma.season.upsert({
   where: { id: "test-season" },
   create: {
     id: "test-season",
-    number: TEST_SEASON_NUMBER,
+    number: seasonNumber,
     subtitle: "Test",
     deadline: new Date("2026-06-13T18:00:00Z"),
     isActive: true,

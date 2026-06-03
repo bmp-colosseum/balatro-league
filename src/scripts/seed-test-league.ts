@@ -149,11 +149,12 @@ async function createPriorSeasonAndMembership(
   const seasonKey = `prior-S${10 - ps.seasonsAgo}`;
   let cached = priorSeasonsByName.get(seasonKey);
   if (!cached) {
-    // Pick a unique number outside the live-season range. Each run is
-    // run inside resetTestLeagueData so collisions are bounded; reserve
-    // 9000-series for the test-league prior seasons.
-    const baseNumber = 9000;
-    const number = baseNumber + (10 - ps.seasonsAgo);
+    // Use the normal next-season-number sequence so test seasons render
+    // as "Season 1", "Season 2" etc. instead of jumping to 9000-series.
+    // The subtitle is what marks them as test data for the reset
+    // sweep (see TEST_LEAGUE_SUBTITLE_PREFIX).
+    const agg = await prisma.season.aggregate({ _max: { number: true } });
+    const number = (agg._max.number ?? 0) + 1;
     const season = await prisma.season.create({
       data: {
         number,

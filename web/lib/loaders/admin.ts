@@ -1107,6 +1107,19 @@ export type AdminSeasonsRound = {
   _count: { signups: number };
 };
 
+// Signup rounds that exist without a linked Season yet — created via
+// seed scripts (seed-test-league, seed-returners-from), or manually
+// via earlier flows that didn't tie to a season. Surfaced on
+// /admin/seasons so admin can see + build them without having to
+// know the URL.
+export interface OrphanSignupRound {
+  id: string;
+  name: string;
+  status: "OPEN" | "CLOSED" | "BUILT";
+  signupCount: number;
+  closedAt: Date | null;
+}
+
 export interface AdminSeasonsPageData {
   // Kept as the existing Prisma shape — the page render was built against
   // it. The loader's job here is to encapsulate the FETCH (8 parallel
@@ -1123,6 +1136,9 @@ export interface AdminSeasonsPageData {
   presets: Array<{ id: string; name: string; decks: string[]; stakes: string[] }>;
   defaultPreset: { id: string; name: string; decks: string[]; stakes: string[] } | null;
   roundsBySeason: Map<string, AdminSeasonsRound>;
+  // Buildable rounds with no resultingSeasonId yet. Empty when none
+  // exist — page conditionally renders the section.
+  orphanRounds: OrphanSignupRound[];
   channels: Array<{ id: string; name: string }>;
   archivedCount: number;
 }
@@ -1158,7 +1174,7 @@ export async function loadAdminSeasonsIndex(opts: {
   listGuildTextChannels: (guildId: string) => Promise<Array<{ id: string; name: string }>>;
   guildId: string | undefined;
 }): Promise<AdminSeasonsPageData> {
-  const [seasons, templatesRaw, lastUsed, presets, defaultPreset, signupRounds, archivedCount] =
+  const [seasons, templatesRaw, lastUsed, presets, defaultPreset, signupRounds, archivedCount, orphanRoundsRaw] =
     await Promise.all([
       fetchAdminSeasons(opts.showArchived),
       prisma.tierTemplate.findMany({
@@ -1185,6 +1201,23 @@ export async function loadAdminSeasonsIndex(opts: {
         },
       }),
       prisma.season.count({ where: { archivedAt: { not: null } } }),
+      // Orphan rounds: no resultingSeasonId, NOT yet built. Includes
+      // OPEN (sitting in Discord with the button live) AND CLOSED
+      // (admin closed them but never clicked Build). Excludes BUILT
+      // because at that point a Season exists; the round is already
+      // tied. Seed scripts create CLOSED orphans for testing the
+      // build flow without a real signup channel.
+      prisma.signupRound.findMany({
+        where: { resultingSeasonId: null, status: { in: ["OPEN", "CLOSED"] } },
+        select: {
+          id: true,
+          name: true,
+          status: true,
+          closedAt: true,
+          _count: { select: { signups: { where: { withdrawn: false } } } },
+        },
+        orderBy: { openedAt: "desc" },
+      }),
     ]);
 
   const needsChannels = seasons.some(
@@ -1203,6 +1236,13 @@ export async function loadAdminSeasonsIndex(opts: {
   const roundsBySeason = new Map(
     signupRounds.map((r) => [r.resultingSeasonId!, r as AdminSeasonsRound]),
   );
+  const orphanRounds: OrphanSignupRound[] = orphanRoundsRaw.map((r) => ({
+    id: r.id,
+    name: r.name,
+    status: r.status,
+    signupCount: r._count.signups,
+    closedAt: r.closedAt,
+  }));
 
   return {
     seasons,
@@ -1211,6 +1251,7 @@ export async function loadAdminSeasonsIndex(opts: {
     presets,
     defaultPreset,
     roundsBySeason,
+    orphanRounds,
     channels,
     archivedCount,
   };
