@@ -97,8 +97,8 @@ export default async function ProfilePage({
                   <button type="submit">Report</button>
                 </form>
                 <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
-                  Reports go to <strong>#results</strong> with Confirm + Dispute buttons. If no one
-                  clicks within 2 minutes, the result auto-confirms.
+                  Web reports are recorded immediately. The result posts to <strong>#results</strong>;
+                  your opponent gets a DM with a dispute link if it's wrong.
                 </p>
               </>
             )}

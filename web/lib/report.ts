@@ -5,11 +5,35 @@
 
 import { prisma } from "@/lib/prisma";
 import {
+  enqueueAnnounceResult,
   enqueueDisputeSpawnThread,
-  enqueueReportAutoConfirm,
-  enqueueReportPostPending,
+  enqueueDm,
 } from "@/lib/queue";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
+
+// Compose the DM body sent to the opponent when a web-side report
+// confirms a match. Phrased from the opponent's POV so they don't have
+// to flip the score in their head — and includes a direct path to the
+// inline dispute UI on /report if the result is wrong.
+function buildOpponentReportDm(args: {
+  reporterDisplayName: string;
+  reporterGames: number;
+  opponentGames: number;
+  divisionName: string;
+  siteUrl: string;
+}): string {
+  const { reporterDisplayName, reporterGames, opponentGames, divisionName, siteUrl } = args;
+  const verdict =
+    reporterGames > opponentGames
+      ? `**${reporterDisplayName}** reported a **${reporterGames}-${opponentGames}** win over you in ${divisionName}.`
+      : reporterGames < opponentGames
+        ? `**${reporterDisplayName}** reported a **${reporterGames}-${opponentGames}** loss to you in ${divisionName}.`
+        : `**${reporterDisplayName}** reported a **1-1 draw** against you in ${divisionName}.`;
+  return (
+    `📝 ${verdict}\n\n` +
+    `It's already recorded in standings. **If that's wrong**, open ${siteUrl}/report, find this match in "Your recent matches", and click **Dispute** — a League Helper will sort it out.`
+  );
+}
 
 export type ReportResultStr = "2-0" | "1-1" | "0-2";
 
@@ -76,32 +100,77 @@ export async function reportSetFromWeb(
   if (existing && existing.status === "PENDING") {
     return {
       ok: false,
-      reason: "There's already a pending report for this match — opponent needs to confirm/dispute first (or wait for the 2-min auto-confirm).",
+      reason: "There's already a pending Discord report for this match — confirm or dispute it in #results (or wait for the 2-min auto-confirm).",
+    };
+  }
+  if (existing && existing.status === "DISPUTED") {
+    return {
+      ok: false,
+      reason: "This match is disputed — a League Helper needs to resolve it before a new result can be recorded.",
     };
   }
 
-  // PENDING by default — bot posts the public embed + opponent confirms
-  // or 2-min auto-confirm fires. No standings update yet.
+  // Web reports finalize immediately — the reporter is signed in and
+  // took a deliberate UI action, that's the commitment. Opponent gets
+  // a DM with a dispute link if the result is wrong; the inline
+  // dispute UI on /report routes through the helper-review flow.
+  // The Discord /report slash command still uses the PENDING + 2-min
+  // confirm window since that's natural in a channel context.
   const now = new Date();
   const pairing = existing
     ? await prisma.pairing.update({
         where: { id: existing.id },
-        data: { gamesWonA, gamesWonB, status: "PENDING", reporterId: reporter.id, reportedAt: now, confirmedAt: null },
+        data: {
+          gamesWonA,
+          gamesWonB,
+          status: "CONFIRMED",
+          reporterId: reporter.id,
+          reportedAt: now,
+          confirmedAt: now,
+        },
       })
     : await prisma.pairing.create({
         data: {
           divisionId: division.id,
-          playerAId, playerBId, gamesWonA, gamesWonB,
-          status: "PENDING",
+          playerAId,
+          playerBId,
+          gamesWonA,
+          gamesWonB,
+          status: "CONFIRMED",
           reporterId: reporter.id,
           reportedAt: now,
+          confirmedAt: now,
         },
       });
-  // Hand off the Discord-side work to the bot via pg-boss. Both jobs
-  // are idempotent on the worker side — auto-confirm no-ops if status
-  // already changed, post-pending no-ops if the message already exists.
-  enqueueReportPostPending(pairing.id).catch((err) => console.warn("[web report] post-pending enqueue:", err));
-  enqueueReportAutoConfirm(pairing.id).catch((err) => console.warn("[web report] auto-confirm enqueue:", err));
+  recomputeDivisionStandings(division.id).catch((err) =>
+    console.warn("[web report] standings recompute failed:", err),
+  );
+  enqueueAnnounceResult(pairing.id).catch((err) =>
+    console.warn("[web report] announce-result enqueue failed:", err),
+  );
+
+  // Opponent DM with dispute link. Best-effort — failures don't block
+  // the report itself. Opponent can still see and dispute the match
+  // on their /report page even if the DM never lands.
+  const opponent = await prisma.player.findUnique({
+    where: { id: opponentPlayerId },
+    select: { discordId: true },
+  });
+  if (opponent?.discordId) {
+    const reporterGames = reporterIsA ? gamesWonA : gamesWonB;
+    const opponentGames = reporterIsA ? gamesWonB : gamesWonA;
+    const siteUrl = (process.env.NEXTAUTH_URL ?? "").replace(/\/+$/, "") || "https://www.balatroleague.com";
+    enqueueDm({
+      discordId: opponent.discordId,
+      content: buildOpponentReportDm({
+        reporterDisplayName: reporter.displayName,
+        reporterGames,
+        opponentGames,
+        divisionName: division.name,
+        siteUrl,
+      }),
+    }).catch((err) => console.warn("[web report] opponent DM enqueue failed:", err));
+  }
 
   return { ok: true, pairingId: pairing.id, created: !existing };
 }

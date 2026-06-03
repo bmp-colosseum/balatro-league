@@ -35,7 +35,7 @@ export default async function ReportPage({
 
         {ok && (
           <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>
-            ✓ Reported. Your opponent has 2 minutes to confirm or dispute in #results, then it auto-confirms.
+            ✓ Reported. The result is recorded and your opponent has been DMed with a dispute link in case it's wrong.
           </div>
         )}
         {err && (
@@ -89,9 +89,9 @@ export default async function ReportPage({
             )}
 
             <p className="muted" style={{ fontSize: 11, marginTop: 12 }}>
-              Reports go to <strong>#results</strong> in Discord with Confirm + Dispute buttons. Your opponent
-              has 2 minutes — if no one clicks, it auto-confirms. Something wrong? Dispute it inline below
-              or ping a <strong>League Helper</strong> in Discord.
+              Web reports are recorded immediately and posted to <strong>#results</strong> in Discord. Your
+              opponent gets a DM with a dispute link in case the score is wrong — they can also dispute it
+              inline from their own /report page, or ping a <strong>League Helper</strong> in Discord.
             </p>
           </div>
         )}

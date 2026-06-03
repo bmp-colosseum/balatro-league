@@ -82,9 +82,14 @@ export default function HowToPlayPage() {
             </li>
           </ul>
           <p>
-            Either way, the bot posts an embed in <strong>#results</strong> pinging your opponent with
-            <strong> Confirm</strong> and <strong> Dispute</strong> buttons. If they don't react within{" "}
+            <strong>Discord <code>/report</code></strong> posts a Confirm + Dispute prompt to{" "}
+            <strong>#results</strong> tagging your opponent. If they don't react within{" "}
             <strong>2 minutes</strong>, the result auto-confirms — so don't sweat slow opponents.
+          </p>
+          <p>
+            <strong>Web /report</strong> records the result immediately and posts it to{" "}
+            <strong>#results</strong>; your opponent gets a Discord DM with a dispute link if the score
+            is wrong.
           </p>
           <p className="muted">
             Disputes spawn a public thread under <strong>#results</strong> where the staff helpers mediate.

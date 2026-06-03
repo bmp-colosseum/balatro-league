@@ -177,9 +177,10 @@ export default async function MePage({
                 </form>
               )}
               <p className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-                Reports go to <strong>#results</strong> with Confirm + Dispute buttons. Your opponent has{" "}
-                <strong>2 minutes</strong> — if no one clicks, it auto-confirms. Something wrong? Ping a
-                <strong> League Helper</strong> in Discord and they'll sort it out.
+                Web reports are recorded immediately. The result is posted to <strong>#results</strong> in
+                Discord and your opponent gets a DM with a dispute link. Something wrong? Use the inline
+                Dispute control on <Link href="/report">/report</Link> or ping a{" "}
+                <strong>League Helper</strong> in Discord.
               </p>
             </div>
           </div>
