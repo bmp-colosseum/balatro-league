@@ -206,33 +206,23 @@ export default async function SeasonDetailPage({
                 standings preview below. */}
             {!season.isActive && !season.endedAt && (
               <div className="card" style={{ background: justBuilt ? "rgba(46,204,113,0.10)" : "rgba(241,196,15,0.08)", borderColor: justBuilt ? "#2ecc71" : "#f1c40f", marginTop: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  <div style={{ flex: "1 1 280px" }}>
-                    <strong style={{ color: justBuilt ? "#2ecc71" : "#f1c40f" }}>
-                      {justBuilt ? "✓ Season built — review placements below" : "📝 Draft mode"}
-                    </strong>
-                    <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
-                      Each player has a "Move to…" dropdown — nudge people between divisions until
-                      you're happy with the shape. Changes save immediately. Click <strong>Lock in &amp; activate</strong>
-                      when ready to start the league.
-                    </p>
-                    <details style={{ marginTop: 6 }}>
-                      <summary style={{ cursor: "pointer", fontSize: 11, color: "#76c7ff" }}>What can I adjust here?</summary>
-                      <ul style={{ marginTop: 4, paddingLeft: 20, fontSize: 12, lineHeight: 1.6 }}>
-                        <li><strong>Move players</strong> between divisions with the "Move to…" dropdown on each row.</li>
-                        <li><strong>Add late signups</strong> via <Link href="/admin/players" style={{ color: "#76c7ff" }}>/admin/players</Link> — Add player + assign division.</li>
-                        <li><strong>Rename / delete</strong> the season from the bottom of this page if you need to restart.</li>
-                        <li>Once activated, players can run <code>/start-match</code> and standings start updating.</li>
-                      </ul>
-                    </details>
-                  </div>
-                  <form action={activateSeason}>
-                    <input type="hidden" name="id" value={season.id} />
-                    <button type="submit" style={{ background: "#2ecc71", color: "white", fontSize: 14, padding: "8px 16px", fontWeight: 600 }}>
-                      🔒 Lock in &amp; activate
-                    </button>
-                  </form>
-                </div>
+                <strong style={{ color: justBuilt ? "#2ecc71" : "#f1c40f" }}>
+                  {justBuilt ? "✓ Season built — review placements below" : "📝 Draft mode"}
+                </strong>
+                <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
+                  Drag players between divisions until you're happy with the shape. Changes save
+                  immediately. When ready, scroll to the bottom of this page and click{" "}
+                  <strong>Start season →</strong> to activate.
+                </p>
+                <details style={{ marginTop: 6 }}>
+                  <summary style={{ cursor: "pointer", fontSize: 11, color: "#76c7ff" }}>What can I adjust here?</summary>
+                  <ul style={{ marginTop: 4, paddingLeft: 20, fontSize: 12, lineHeight: 1.6 }}>
+                    <li><strong>Move players</strong> between divisions with drag-and-drop or the "Move to…" dropdown.</li>
+                    <li><strong>Add late signups</strong> via <Link href="/admin/players" style={{ color: "#76c7ff" }}>/admin/players</Link> — Add player + assign division.</li>
+                    <li><strong>Rename / delete</strong> the season from the bottom of this page if you need to restart.</li>
+                    <li>Once activated, players can run <code>/start-match</code> and standings start updating.</li>
+                  </ul>
+                </details>
               </div>
             )}
 

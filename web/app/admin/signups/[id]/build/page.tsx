@@ -68,7 +68,7 @@ export default async function BuildSeasonPage({
             <li><strong>Pick the tier shape</strong> (Legendary / Rare / Uncommon / Common…) — use ✨ Suggest from N signups to auto-compute, or load a saved template.</li>
             <li><strong>Click Build season</strong> — auto-seeds top-rated players into the top tier and fills each tier's divisions in rank order (Rare 1 gets the top Rare ranks, Rare 6 gets the bottom). Keeps entering rank close to ending rank so ranks don't shuffle wildly between seasons.</li>
             <li><strong>Review &amp; tweak placements</strong> on the season detail page that opens — use the per-player "Move to…" dropdowns to nudge anyone between divisions.</li>
-            <li><strong>Lock in &amp; activate</strong> — when you're happy, hit the big green button. The league is now live, players see standings, /start-match works.</li>
+            <li><strong>Start the season</strong> — when placements look right, click <strong>Start season →</strong> at the bottom of the season detail page. The league goes live, players see standings, /start-match works.</li>
           </ol>
           <p className="muted" style={{ fontSize: 12, marginTop: 8, marginBottom: 0 }}>
             Returning players' ratings come from end-of-last-season's recompute, so good finishers naturally
