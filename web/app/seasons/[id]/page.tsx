@@ -415,54 +415,62 @@ async function AdminSeasonPanel({
         </>
       )}
 
-      {season.endedAt && season.divisions.some((d) => d.discordChannelId) && (
-        <div className="card" style={{ marginTop: 16 }}>
-          <strong>📦 Archive Discord channels</strong>
-          <p className="muted" style={{ fontSize: 12 }}>
-            Season's ended — move every division channel into a <code>📦 {formatSeasonLabel(season)} Archive</code>
-            category and lock them (read-only). History stays, channels just stop cluttering
-            the active categories. Idempotent — safe to re-run if some channels failed last time.
-          </p>
-          <form action={archiveSeasonChannels}>
-            <input type="hidden" name="id" value={season.id} />
-            <button type="submit" className="secondary">Archive division channels →</button>
-          </form>
-        </div>
-      )}
-
+      {/* Post-season cleanup actions — collapsed by default since
+          they only apply to ended seasons and admin runs each at most
+          once per season. */}
       {season.endedAt && season.divisions.length > 0 && (
-        <div className="card" style={{ marginTop: 16, borderColor: "#f1c40f" }}>
-          <strong style={{ color: "#f1c40f" }}>🏆 Award champion roles</strong>
-          <p className="muted" style={{ fontSize: 12 }}>
-            For each division, give the rank-1 finisher a permanent
-            <code> 🏆 {formatSeasonLabel(season)} · &lt;Division&gt; Champion</code> role (gold, mentionable).
-            Persists forever as a bragging-rights badge. Idempotent: re-running
-            after a shootout resolves a previously-skipped tie at #1 will pick
-            up just that division. Divisions with unresolved ties at #1 are
-            skipped entirely until the shootout fixes the tie.
-          </p>
-          <form action={awardSeasonChampionRoles}>
-            <input type="hidden" name="id" value={season.id} />
-            <button type="submit" className="secondary">Award champion roles →</button>
-          </form>
-        </div>
-      )}
+        <details className="card" style={{ marginTop: 16 }}>
+          <summary style={{ cursor: "pointer" }}>
+            <strong>🧹 Post-season cleanup</strong>
+            <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
+              archive Discord channels, award champion roles, strip division roles
+            </span>
+          </summary>
+          <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
+            {season.divisions.some((d) => d.discordChannelId) && (
+              <div>
+                <strong>📦 Archive Discord channels</strong>
+                <p className="muted" style={{ fontSize: 12 }}>
+                  Move every division channel into a <code>📦 {formatSeasonLabel(season)} Archive</code>
+                  {" "}category and lock them (read-only). History stays, channels just stop cluttering
+                  the active categories. Idempotent.
+                </p>
+                <form action={archiveSeasonChannels}>
+                  <input type="hidden" name="id" value={season.id} />
+                  <button type="submit" className="secondary">Archive division channels →</button>
+                </form>
+              </div>
+            )}
 
-      {season.endedAt && season.divisions.some((d) => d.discordRoleId) && (
-        <div className="card" style={{ marginTop: 16 }}>
-          <strong>🧹 Strip division roles</strong>
-          <p className="muted" style={{ fontSize: 12 }}>
-            Remove the per-division Discord role from every player who was in this season.
-            Stops role accumulation across seasons. Fans out as one job per (player, role)
-            through the queue — gentle on Discord, takes a few minutes for a full season.
-            The roles themselves stay (so archived channels keep their permission anchor);
-            delete them manually in Discord settings if you want a totally clean role list.
-          </p>
-          <form action={stripSeasonDivisionRoles}>
-            <input type="hidden" name="id" value={season.id} />
-            <button type="submit" className="secondary">Strip roles from players →</button>
-          </form>
-        </div>
+            <div>
+              <strong style={{ color: "#f1c40f" }}>🏆 Award champion roles</strong>
+              <p className="muted" style={{ fontSize: 12 }}>
+                Rank-1 finisher in each division gets a permanent
+                <code> 🏆 {formatSeasonLabel(season)} · &lt;Division&gt; Champion</code> role. Idempotent;
+                tied divisions are skipped until the shootout resolves them.
+              </p>
+              <form action={awardSeasonChampionRoles}>
+                <input type="hidden" name="id" value={season.id} />
+                <button type="submit" className="secondary">Award champion roles →</button>
+              </form>
+            </div>
+
+            {season.divisions.some((d) => d.discordRoleId) && (
+              <div>
+                <strong>🧹 Strip division roles</strong>
+                <p className="muted" style={{ fontSize: 12 }}>
+                  Remove the per-division Discord role from every player. Stops role accumulation across
+                  seasons; the roles themselves stay for archived channel permissions. Fans out via queue,
+                  takes a few minutes for a full season.
+                </p>
+                <form action={stripSeasonDivisionRoles}>
+                  <input type="hidden" name="id" value={season.id} />
+                  <button type="submit" className="secondary">Strip roles from players →</button>
+                </form>
+              </div>
+            )}
+          </div>
+        </details>
       )}
 
       <div className="card">

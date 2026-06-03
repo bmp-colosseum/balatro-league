@@ -191,41 +191,6 @@ export default async function AdminSeasonsPage({
           </div>
         )}
 
-        <div className="card">
-          <strong>Create new season</strong>
-          <p className="muted">
-            Next up: <strong>Season {nextNumber}</strong>. Number is assigned
-            automatically — provide an optional subtitle and settings here. Tier
-            shape is configured later, after signups close, so you can split
-            divisions based on the actual player count. (You can still set it now
-            if you already know.)
-          </p>
-          <form action={createSeason}>
-            <label>Subtitle <input name="subtitle" placeholder="Optional subtitle (e.g. 'Launch')" /></label>
-            <label>Group size <input name="targetGroupSize" type="number" min={2} max={20} defaultValue={5} /></label>
-            <label>Min group <input name="minGroupSize" type="number" min={2} max={20} defaultValue={3} /></label>
-
-            <details style={{ flex: "1 1 100%", marginTop: 12 }}>
-              <summary style={{ cursor: "pointer" }}>
-                <strong>Optional: set tier shape now</strong>
-                <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
-                  (skip and configure after signups close)
-                </span>
-              </summary>
-              <div style={{ marginTop: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                  <Link href="/admin/seasons/templates" style={{ marginLeft: "auto" }}>
-                    <button type="button" className="secondary">Manage templates</button>
-                  </Link>
-                </div>
-                <TierEditor initial={initial} templates={templates} />
-              </div>
-            </details>
-
-            <button type="submit" style={{ marginTop: 12 }}>Create season</button>
-          </form>
-        </div>
-
         <div className="grid grid-2">
           {seasons.length === 0 ? (
             <div className="muted">No seasons yet.</div>
@@ -357,6 +322,45 @@ export default async function AdminSeasonsPage({
             );
           })}
         </div>
+
+        <details className="card" style={{ marginTop: 24 }}>
+          <summary style={{ cursor: "pointer" }}>
+            <strong>+ Create new season</strong>
+            <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
+              Next up: Season {nextNumber}
+            </span>
+          </summary>
+          <p className="muted" style={{ marginTop: 8 }}>
+            Number is assigned automatically — provide an optional subtitle and
+            settings here. Tier shape is configured later, after signups close,
+            so you can split divisions based on the actual player count. (You
+            can still set it now if you already know.)
+          </p>
+          <form action={createSeason}>
+            <label>Subtitle <input name="subtitle" placeholder="Optional subtitle (e.g. 'Launch')" /></label>
+            <label>Group size <input name="targetGroupSize" type="number" min={2} max={20} defaultValue={5} /></label>
+            <label>Min group <input name="minGroupSize" type="number" min={2} max={20} defaultValue={3} /></label>
+
+            <details style={{ flex: "1 1 100%", marginTop: 12 }}>
+              <summary style={{ cursor: "pointer" }}>
+                <strong>Optional: set tier shape now</strong>
+                <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
+                  (skip and configure after signups close)
+                </span>
+              </summary>
+              <div style={{ marginTop: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <Link href="/admin/seasons/templates" style={{ marginLeft: "auto" }}>
+                    <button type="button" className="secondary">Manage templates</button>
+                  </Link>
+                </div>
+                <TierEditor initial={initial} templates={templates} />
+              </div>
+            </details>
+
+            <button type="submit" style={{ marginTop: 12 }}>Create season</button>
+          </form>
+        </details>
       </main>
     </>
   );
