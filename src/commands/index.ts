@@ -6,6 +6,7 @@ import { helper } from "./helper.js";
 import { league } from "./league.js";
 import { callHelperModal, matchButtons, matchSelectMenus } from "./match-buttons.js";
 import { profile } from "./profile.js";
+import { randomDeck } from "./random-deck.js";
 import { disputeModal, disputeSelect, report, reportButtons } from "./report.js";
 import { reportShootout } from "./report-shootout.js";
 import { schedule } from "./schedule.js";
@@ -14,7 +15,7 @@ import { standings } from "./standings.js";
 import { startMatch } from "./start-match.js";
 import type { ButtonHandler, ModalHandler, SelectMenuHandler, SlashCommand } from "./types.js";
 
-export const slashCommands: SlashCommand[] = [help, helper, report, reportShootout, standings, schedule, profile, league, startMatch, challenge, admin];
+export const slashCommands: SlashCommand[] = [help, helper, report, reportShootout, standings, schedule, profile, league, startMatch, challenge, admin, randomDeck];
 
 export const buttonHandlers: ButtonHandler[] = [reportButtons, signupHandlers, matchButtons];
 

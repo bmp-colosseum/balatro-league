@@ -16,6 +16,7 @@ const PLAYER_COMMANDS = [
   { cmd: "/start-match @opponent", desc: "Guided best-of-2 match: bot picks the deck/stake via ban/pick" },
   { cmd: "/report @opponent result:2-0|1-1|0-2", desc: "Log a played match (auto-confirmed)" },
   { cmd: "/helper [reason]", desc: "Call a moderator into the current thread/channel" },
+  { cmd: "/random-deck", desc: "Roll a random deck + stake from the league's default pool" },
 ];
 
 const ADMIN_COMMANDS = [

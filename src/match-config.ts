@@ -61,7 +61,7 @@ export async function presetForCasualMatch() {
   return firstExistingPreset();
 }
 
-async function resolveDefaultSeasonPreset() {
+export async function resolveDefaultSeasonPreset() {
   const id = await getConfig(LeagueConfigKey.SeasonDefaultPresetId);
   if (id) {
     const preset = await prisma.matchConfigPreset.findUnique({ where: { id } });
