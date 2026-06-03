@@ -106,13 +106,6 @@ export default async function SeasonDetailPage({
           </div>
         )}
 
-        <LifecycleActions
-          season={season}
-          round={signupRound}
-          channels={channels}
-          playerCount={totalMembers}
-        />
-
         <div className="card">
           <strong>Settings</strong>
           <div style={{ marginTop: 8 }}>
@@ -460,6 +453,13 @@ export default async function SeasonDetailPage({
             </form>
           </div>
         )}
+
+        <LifecycleActions
+          season={season}
+          round={signupRound}
+          channels={channels}
+          playerCount={totalMembers}
+        />
 
         <details className="card" style={{ marginTop: 16 }}>
           <summary style={{ cursor: "pointer", color: "#e74c3c", fontSize: 12 }}>Danger zone</summary>
