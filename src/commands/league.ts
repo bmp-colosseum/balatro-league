@@ -5,6 +5,7 @@
 import {
   ChannelType,
   MessageFlags,
+  PermissionFlagsBits,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
   type TextChannel,
@@ -22,6 +23,12 @@ export const league: SlashCommand = {
   data: new SlashCommandBuilder()
     .setName("league")
     .setDescription("League server setup + permission management.")
+    // Hide from non-admin members in the slash-command picker.
+    // Bot still runs its own RoleBinding tier check per subcommand
+    // (OWNER for bootstrap/set-role, etc.). Server admins can grant
+    // access to specific roles via Server Settings → Integrations
+    // → bot if they want a broader audience.
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator.toString())
     .addSubcommand((sub) =>
       sub
         .setName("bootstrap-server")

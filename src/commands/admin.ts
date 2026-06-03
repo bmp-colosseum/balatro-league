@@ -38,6 +38,12 @@ export const admin: SlashCommand = {
   data: new SlashCommandBuilder()
     .setName("admin")
     .setDescription("Admin tools that make sense in Discord context (dispute resolution).")
+    // Hide from non-admin members in the slash-command picker. The
+    // bot still does its own RoleBinding tier check inside each
+    // subcommand, but this stops the command from cluttering every
+    // player's autocomplete. Server admins can override on a per-
+    // role basis via Server Settings → Integrations → bot.
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator.toString())
     .addSubcommand((sub) =>
       sub
         .setName("record-set")
