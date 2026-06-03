@@ -99,7 +99,7 @@ export const admin: SlashCommand = {
     .addSubcommand((sub) =>
       sub
         .setName("undo-report")
-        .setDescription("Remove a reported set so it's back to unplayed (for when something got reported wrong).")
+        .setDescription("Remove a reported match so it's back to unplayed (for when something got reported wrong).")
         .addUserOption((opt) => opt.setName("p1").setDescription("Either player in the match").setRequired(true))
         .addUserOption((opt) => opt.setName("p2").setDescription("The other player").setRequired(true)),
     )

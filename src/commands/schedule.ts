@@ -115,7 +115,7 @@ export const schedule: SlashCommand = {
       );
 
     if (theyReported.length === 0 && remaining.length === 0 && youReported.length === 0 && disputed.length === 0) {
-      embed.setDescription(`Season: **${formatSeasonLabel(activeSeason)}**\n\n🎉 You're done — all your sets are confirmed!`);
+      embed.setDescription(`Season: **${formatSeasonLabel(activeSeason)}**\n\n🎉 You're done — all your matches are recorded!`);
     }
 
     await interaction.editReply({ embeds: [embed] });

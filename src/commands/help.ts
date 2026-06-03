@@ -25,7 +25,7 @@ const PLAYER_COMMANDS = [
 ];
 
 const ADMIN_COMMANDS = [
-  { cmd: "/admin record-set @p1 @p2 result", desc: "Manually record a match (e.g. agreed in DMs but never reported)" },
+  { cmd: "/admin record-match @p1 @p2 result", desc: "Manually record a match (e.g. agreed in DMs but never reported)" },
   { cmd: "/admin override-result", desc: "Force-resolve a disputed match" },
   { cmd: "/admin cancel-match session reason", desc: "Force-cancel an in-flight match session" },
   { cmd: "/league bootstrap-server", desc: "One-time setup: creates category, channels, roles, results webhook" },

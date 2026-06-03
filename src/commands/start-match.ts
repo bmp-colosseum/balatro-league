@@ -31,7 +31,7 @@ export const startMatch: SlashCommand = {
     .addStringOption((opt) =>
       opt
         .setName("mode")
-        .setDescription("League set (BO2 default) or shootout tiebreaker (BO1)")
+        .setDescription("League match (BO2 default) or shootout tiebreaker (BO1)")
         .setRequired(false)
         .addChoices(...MODE_CHOICES),
     ),
