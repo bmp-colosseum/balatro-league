@@ -21,7 +21,7 @@ const PLAYER_COMMANDS = [
   { cmd: "/report-shootout @opponent winner:@p", desc: "Log a 1-game tiebreaker shootout" },
   { cmd: "/challenge @opponent", desc: "Casual match against anyone — not recorded to standings" },
   { cmd: "/helper [reason]", desc: "Call a moderator into the current thread/channel" },
-  { cmd: "/random-deck", desc: "Roll a random deck + stake from the league's default pool" },
+  { cmd: "/random", desc: "Roll a random deck + stake (also /random-deck, /random-stake)" },
 ];
 
 const ADMIN_COMMANDS = [

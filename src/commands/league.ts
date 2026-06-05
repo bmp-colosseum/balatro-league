@@ -197,7 +197,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     const signupChan = await ensureChannel("signups", "Signup embeds posted here by the web admin. Players click the button to register.");
     const resultsChan = await ensureChannel("results", "Auto-posted by the bot whenever a match is recorded.");
     const chatChan = await ensureChannel("league-chat", "General league chat. Match scheduling, banter, etc.");
-    const botCmdChan = await ensureChannel("bot-commands", "General bot commands: /random-deck, /profile, /standings, etc. Most replies are private (only you see them) so you can run commands from any channel.");
+    const botCmdChan = await ensureChannel("bot-commands", "General bot commands: /random, /profile, /standings, etc. Most replies are private (only you see them) so you can run commands from any channel.");
     const announcementsChan = await ensureChannel(
       "announcements",
       "League-wide announcements: season starts, recaps, league news. Bot-posted, read-only for members.",
