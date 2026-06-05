@@ -213,6 +213,7 @@ export const matchButtons: ButtonHandler = {
     if (action === "accept") return handleAccept(interaction, session);
     if (action === "decline") return handleDecline(interaction, session);
     if (action === "choosefirst") return handleChooseFirst(interaction, session, parts[3]);
+    if (action === "banrandom") return handleBanRandom(interaction, session);
     if (action === "banconfirm") return handleBanConfirm(interaction, session);
     if (action === "bancancel") return handleBanCancel(interaction, session);
     if (action === "reroll") return handleReroll(interaction, session);
@@ -415,6 +416,34 @@ async function handleBanSelect(interaction: StringSelectMenuInteraction, session
   await interaction.reply({ embeds, components, flags: MessageFlags.Ephemeral });
 }
 
+// 🎲 Random ban — roll the active banner's full allotment from what's
+// left and drop it into the same ephemeral confirm. Still a deliberate
+// confirm (you see what you rolled, and "Pick again" lets you re-roll by
+// clicking the button again), just no manual choosing.
+async function handleBanRandom(interaction: ButtonInteraction, session: MatchSession) {
+  const ctx = await loadBanContext(interaction, session);
+  if (!ctx) return;
+  const remaining = remainingCombos(ctx.game.pool, ctx.game.bans).map((r) => r.idx);
+  if (remaining.length < ctx.expected) {
+    return reply(interaction, "Not enough combos left to ban.");
+  }
+  // Draw `expected` distinct indices without replacement.
+  const pool = [...remaining];
+  const selected: number[] = [];
+  for (let i = 0; i < ctx.expected; i++) {
+    const j = Math.floor(Math.random() * pool.length);
+    const [picked] = pool.splice(j, 1);
+    if (picked !== undefined) selected.push(picked);
+  }
+  const { embeds, components } = renderBanConfirmPrompt({
+    sessionId: session.id,
+    gameNumber: ctx.gameNum,
+    pool: ctx.game.pool,
+    selected,
+  });
+  await interaction.reply({ embeds, components, flags: MessageFlags.Ephemeral });
+}
+
 // "Pick again" in the ephemeral confirm — just dismiss it. The banner
 // re-selects from the public dropdown, which spawns a fresh confirm.
 async function handleBanCancel(interaction: ButtonInteraction, session: MatchSession) {
@@ -422,7 +451,7 @@ async function handleBanCancel(interaction: ButtonInteraction, session: MatchSes
   const embed = new EmbedBuilder()
     .setTitle("Dismissed")
     .setColor(0x95a5a6)
-    .setDescription("No bans applied. Use the ban menu on the match to pick again.");
+    .setDescription("No bans applied — pick from the menu or roll 🎲 again on the match.");
   await interaction.update({ embeds: [embed], components: [] });
 }
 

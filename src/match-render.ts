@@ -416,9 +416,15 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
         }),
       );
     const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
-    // Reroll + Propose are shared-action buttons either player can
-    // click. Cancel/pause/helper live on the helper row.
+    // Random ban auto-rolls the active banner's picks into the same
+    // confirm prompt (still a deliberate confirm, just no manual
+    // choosing). Reroll + Propose are shared-action buttons either
+    // player can click. Cancel/pause/helper live on the helper row.
     const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`match:banrandom:${s.id}`)
+        .setLabel(`🎲 Random ban${expected > 1 ? "s" : ""}`)
+        .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId(`match:reroll:${s.id}`)
         .setLabel(rerollLabel)
