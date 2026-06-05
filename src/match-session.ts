@@ -30,10 +30,6 @@ export interface GameState {
   // game2 and game3 don't reuse game1's shuffle — bans reset to a new
   // random subset of the preset each round.
   pool: DeckEntry[];
-  // Bans the current ban-acting player has selected in the multi-select
-  // menu but not yet confirmed. Cleared when applied via the Confirm
-  // button (or when the player re-selects in the menu).
-  pendingBans?: number[];
   // Per-player winner votes. Both players vote independently; if they
   // agree the winner is recorded. If they disagree the match enters a
   // dispute state — admin uses /admin override-result to resolve.
@@ -45,7 +41,7 @@ export interface GameState {
   disputed?: boolean;
   // Reroll consent. Either player can request a pool reroll during the
   // ban phase; both must agree to apply. When both true, the pool is
-  // regenerated, bans/pendingBans are cleared, and the votes reset.
+  // regenerated, bans are cleared, and the votes reset.
   rerollVoteByA?: boolean;
   rerollVoteByB?: boolean;
   // (Mutual-consent cancel moved to MatchSession.cancelInitiatorPlayerId

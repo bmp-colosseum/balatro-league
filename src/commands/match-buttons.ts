@@ -9,8 +9,11 @@
 
 import {
   ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   ChannelType,
   EmbedBuilder,
+  StringSelectMenuBuilder,
   MessageFlags,
   ModalBuilder,
   PermissionFlagsBits,
@@ -34,7 +37,7 @@ import { env } from "../env.js";
 import { getLeagueSettings, getLeagueSettingsForSeason } from "../league-settings.js";
 import { logDiscordError } from "../log-discord-error.js";
 import { bootstrapPresetsAndPointers, generatePool, presetForCasualMatch, presetForDivision } from "../match-config.js";
-import { renderBanMenuEphemeral, renderMatch } from "../match-render.js";
+import { renderBanConfirmPrompt, renderMatch } from "../match-render.js";
 import { summonHelpers } from "./helper.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
 import {
@@ -149,11 +152,34 @@ async function refreshMessage(interaction: AnyInteraction, session: MatchSession
   // turn it is now — a new mention in an edit fires the same push
   // notification a new message would. Same content across no-op
   // refreshes doesn't notify anyone.
-  await interaction.update({ content, embeds, components });
+  await editOrUpdate(interaction, { content, embeds, components });
+}
+
+// Edit the source message, transparently handling whether the
+// interaction was already deferred/replied (handleAccept calls
+// deferUpdate up front to dodge the 3s ack window — after that you must
+// editReply, not update). Non-deferring handlers hit the update() path
+// unchanged.
+type ComponentRow = ActionRowBuilder<ButtonBuilder | StringSelectMenuBuilder>;
+async function editOrUpdate(
+  interaction: AnyInteraction,
+  payload: { content?: string; embeds: EmbedBuilder[]; components: ComponentRow[] },
+) {
+  if (interaction.deferred || interaction.replied) {
+    await interaction.editReply(payload);
+  } else {
+    await interaction.update(payload);
+  }
 }
 
 async function reply(interaction: AnyInteraction, content: string) {
-  await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+  // Post-defer, a fresh ack isn't allowed — followUp adds the ephemeral
+  // instead. Pre-defer (the common case) this is a plain reply.
+  if (interaction.deferred || interaction.replied) {
+    await interaction.followUp({ content, flags: MessageFlags.Ephemeral });
+  } else {
+    await interaction.reply({ content, flags: MessageFlags.Ephemeral });
+  }
 }
 
 async function raceLost(interaction: AnyInteraction) {
@@ -188,8 +214,8 @@ export const matchButtons: ButtonHandler = {
     if (action === "accept") return handleAccept(interaction, session);
     if (action === "decline") return handleDecline(interaction, session);
     if (action === "choosefirst") return handleChooseFirst(interaction, session, parts[3]);
-    if (action === "openban") return handleOpenBanMenu(interaction, session);
     if (action === "banconfirm") return handleBanConfirm(interaction, session);
+    if (action === "bancancel") return handleBanCancel(interaction, session);
     if (action === "reroll") return handleReroll(interaction, session);
     if (action === "pick") return handlePick(interaction, session, parts[3]);
     if (action === "winner") return handleWinner(interaction, session, parts[3]);
@@ -365,60 +391,49 @@ async function refreshPublicMatchMessage(interaction: AnyInteraction, session: M
   }
 }
 
-// Open the ephemeral ban menu — the active banner's private select +
-// confirm UI. Non-actors get an ephemeral "not your turn" reply.
-// The opponent sees only the public embed progress, never the
-// tentative selections.
-async function handleOpenBanMenu(interaction: ButtonInteraction, session: MatchSession) {
-  const ctx = await loadBanContext(interaction, session);
-  if (!ctx) return;
-  const { embeds, components } = renderBanMenuEphemeral({
-    sessionId: session.id,
-    gameNumber: ctx.gameNum,
-    pool: ctx.game.pool,
-    bans: ctx.game.bans,
-    pendingBans: ctx.game.pendingBans ?? [],
-    expected: ctx.expected,
-  });
-  await interaction.reply({ embeds, components, flags: MessageFlags.Ephemeral });
-}
-
-// Selection-only handler: runs inside the active banner's ephemeral.
-// Writes the chosen indices to game.pendingBans without actually
-// banning them. Player can re-select before clicking Confirm. We
-// update the EPHEMERAL — the public embed deliberately hides
-// pending state so the opponent can't peek.
+// Active banner selected from the PUBLIC ban dropdown. The selection
+// itself is client-local (the opponent never saw it), and we don't
+// apply it yet — instead we open an EPHEMERAL confirm visible only to
+// the banner so they can review before committing. The chosen indices
+// ride in the Confirm button's customId; nothing tentative is stored
+// server-side, so there's nothing for the opponent to peek at.
+// loadBanContext (public variant) guards the actor and refreshes the
+// public message in place if the phase is stale.
 async function handleBanSelect(interaction: StringSelectMenuInteraction, session: MatchSession) {
-  const ctx = await loadBanContextEphemeral(interaction, session);
+  const ctx = await loadBanContext(interaction, session);
   if (!ctx) return;
   const selected = interaction.values.map((v) => parseInt(v, 10)).filter((n) => !Number.isNaN(n));
   if (selected.length !== ctx.expected) {
     return reply(interaction, `Pick exactly ${ctx.expected} combo(s) to ban.`);
   }
   if (selected.some((idx) => ctx.game.bans.includes(idx))) {
-    return reply(interaction, "Some of those are already banned.");
+    return reply(interaction, "Some of those are already banned — pick again.");
   }
-  const newGame: GameState = { ...ctx.game, pendingBans: selected };
-  const updated = await updateSession(session, {
-    [ctx.gameField]: JSON.stringify(newGame),
-  } as Prisma.MatchSessionUpdateManyMutationInput);
-  if (!updated) return raceLost(interaction);
-  const refreshedGame = parseGame(updated[ctx.gameField]) ?? newGame;
-  const { embeds, components } = renderBanMenuEphemeral({
+  const { embeds, components } = renderBanConfirmPrompt({
     sessionId: session.id,
     gameNumber: ctx.gameNum,
     pool: ctx.game.pool,
-    bans: refreshedGame.bans,
-    pendingBans: refreshedGame.pendingBans ?? [],
-    expected: ctx.expected,
+    bans: ctx.game.bans,
+    selected,
   });
-  await interaction.update({ embeds, components });
+  await interaction.reply({ embeds, components, flags: MessageFlags.Ephemeral });
+}
+
+// "Pick again" in the ephemeral confirm — just dismiss it. The banner
+// re-selects from the public dropdown, which spawns a fresh confirm.
+async function handleBanCancel(interaction: ButtonInteraction, session: MatchSession) {
+  void session;
+  const embed = new EmbedBuilder()
+    .setTitle("Dismissed")
+    .setColor(0x95a5a6)
+    .setDescription("No bans applied. Use the ban menu on the match to pick again.");
+  await interaction.update({ embeds: [embed], components: [] });
 }
 
 // Both players consent → regenerate this game's pool. Excludes deck
 // NAMES seen in prior games for variety (same rule generatePool uses
-// at game start). Clears bans, pendingBans, and reroll votes so the
-// ban phase starts over with a fresh shuffle.
+// at game start). Clears bans and reroll votes so the ban phase
+// starts over with a fresh shuffle.
 async function handleReroll(interaction: ButtonInteraction, session: MatchSession) {
   const gameNum =
     session.state === "GAME_1_BAN" ? 1 :
@@ -481,25 +496,29 @@ async function handleReroll(interaction: ButtonInteraction, session: MatchSessio
   await refreshMessage(interaction, updated);
 }
 
-// Commit-the-pending-bans handler: runs inside the active banner's
-// ephemeral. Folds pendingBans into bans, advances phase if all
-// player rounds are done, closes the ephemeral with a success
-// message, then refreshes the PUBLIC match embed via REST so
-// everyone sees the new state.
+// Commit handler: runs from the active banner's ephemeral confirm. The
+// chosen indices arrive in the customId (match:banconfirm:<id>:<a.b.c>)
+// rather than from server state — selecting never wrote anything. Folds
+// them into bans, advances phase if all player rounds are done, closes
+// the ephemeral with a success message, then refreshes the PUBLIC match
+// embed via REST so everyone sees the new state. Re-validation here
+// covers the foot-gun where a banner opened two confirms and clicks a
+// stale one: loadBanContextEphemeral rejects if the phase advanced, and
+// the already-banned check rejects overlapping indices.
 async function handleBanConfirm(interaction: ButtonInteraction, session: MatchSession) {
   const ctx = await loadBanContextEphemeral(interaction, session);
   if (!ctx) return;
-  const pending = ctx.game.pendingBans ?? [];
+  const idxStr = interaction.customId.split(":")[3] ?? "";
+  const pending = idxStr.split(".").map((v) => parseInt(v, 10)).filter((n) => !Number.isNaN(n));
   if (pending.length !== ctx.expected) {
-    return reply(interaction, `Pick ${ctx.expected} combo(s) in the menu first.`);
+    return reply(interaction, `That selection expired — pick ${ctx.expected} again from the match menu.`);
   }
   if (pending.some((idx) => ctx.game.bans.includes(idx))) {
-    return reply(interaction, "Some of those bans were already applied — pick again.");
+    return reply(interaction, "Some of those bans were already applied — pick again from the match menu.");
   }
   const newGame: GameState = {
     ...ctx.game,
     bans: [...ctx.game.bans, ...pending],
-    pendingBans: undefined,
   };
   const newPhase = phaseFor(newGame, session.playerAId, session.playerBId, parsePolicy(session.policy));
   let newState: MatchSessionState = session.state;
@@ -601,13 +620,24 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
   if (session.state !== "WAITING_ACCEPT") {
     return reply(interaction, "This match is no longer waiting for acceptance.");
   }
+  // Accept is the heaviest handler — it creates a private thread and adds
+  // members (rate-limited REST) on top of several DB reads, which can blow
+  // Discord's 3-second ack window under load. deferUpdate acks immediately
+  // (buying 15 minutes) so the interaction can never expire mid-setup and
+  // strand the match with no visible UI. Every downstream reply/refresh is
+  // defer-aware (followUp / editReply) so this is the only change needed.
+  await interaction.deferUpdate();
+
   // Expiry check — survives bot restarts unlike the original setTimeout.
   if (session.expiresAt && session.expiresAt.getTime() < Date.now()) {
     const cancelled = await updateSession(session, { state: MatchSessionState.CANCELLED });
     if (cancelled) await refreshMessage(interaction, cancelled);
     return reply(interaction, "This match invite expired.");
   }
-  const { playerB } = await loadPlayers(session);
+  // Load both players ONCE up front and thread them through — this handler
+  // previously called loadPlayers three times (here, again below, and once
+  // more inside refreshMessage), i.e. 6 player queries for 2 players.
+  const { playerA, playerB } = await loadPlayers(session);
   if (!(await requireActor(interaction, playerB.discordId))) return;
 
   // Custom-combo path: skip the ban/pick flow entirely. game1 starts
@@ -648,7 +678,6 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
     poolSize: game1Pool.length,
   };
 
-  const { playerA } = await loadPlayers(session);
   const firstId = Math.random() < 0.5 ? playerA.id : playerB.id;
 
   // Create a Private Thread inside the channel where /start-match was
@@ -735,13 +764,26 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
     },
   });
 
-  await refreshMessage(interaction, updated);
+  // Render once from the already-loaded players + preset (no reload —
+  // refreshMessage would re-query both players and the preset). editReply
+  // edits the original invite message in place (we deferUpdate'd above).
+  const allowedStakes = customCombo ? [] : preset.stakes;
+  const started = renderMatch(updated, playerA, playerB, { allowedStakes });
+  // Best-effort: a failed invite edit (e.g. the message was deleted) must
+  // not abort the handler before the thread message — which is the
+  // canonical match UI — gets posted below. The match is already
+  // committed, so worst case is a stale invite, not a lost match.
+  await editOrUpdate(interaction, {
+    content: started.content,
+    embeds: started.embeds,
+    components: started.components,
+  }).catch((err) => console.warn(`[handleAccept] invite edit failed for ${updated.id}:`, err));
 
   if (matchChannelId && matchChannelId !== session.threadId) {
     try {
       const thread = await interaction.client.channels.fetch(matchChannelId);
       if (thread && thread.type === ChannelType.PrivateThread) {
-        const { embeds, components, content } = renderMatch(updated, playerA, playerB);
+        const { embeds, components, content } = renderMatch(updated, playerA, playerB, { allowedStakes });
         const sent = await thread.send({
           content: content || `<@${playerA.discordId}> <@${playerB.discordId}> — your match thread.`,
           embeds,

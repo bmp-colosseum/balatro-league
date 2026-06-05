@@ -340,12 +340,34 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
 
   if (phase.kind === "BAN") {
     const whose = phase.whoseBanId === a.id ? a : b;
-    // Minimal public render — the user explicitly doesn't want
-    // progress/pool/committed-bans visible to the off-turn player.
-    // Everything strategic (pool, committed bans, your tentative
-    // picks) lives in the ephemeral private ban menu instead.
-    // Reroll/cancel-vote nudges stay public since they require the
-    // OTHER player's click to apply.
+    const expected = phase.remainingForThem;
+    // The select menu lives directly on the PUBLIC message. Discord
+    // never syncs in-progress dropdown selections to other viewers, so
+    // the off-turn player sees the menu + placeholder but not what the
+    // active banner is choosing. Selecting opens an EPHEMERAL confirm
+    // (renderBanConfirmPrompt) visible only to the banner — that's the
+    // private review surface. The pool + committed bans ARE shared
+    // knowledge (both players draft against them), so they render here.
+    const sortedRemaining = [...remaining].sort((x, y) => {
+      const sd = canonicalStakeIndex(x.combo.stake) - canonicalStakeIndex(y.combo.stake);
+      if (sd !== 0) return sd;
+      return canonicalDeckIndex(x.combo.deck) - canonicalDeckIndex(y.combo.deck);
+    });
+    const bannedLabels = game.bans
+      .map((idx) => {
+        const c = pool[idx];
+        return c ? `${c.deck} / ${c.stake}` : null;
+      })
+      .filter((x): x is string => !!x);
+    const bannedLine = bannedLabels.length > 0
+      ? `\n🚫 **Banned so far:** ${bannedLabels.join(", ")}`
+      : "";
+    const poolLines = sortedRemaining.map(({ combo }, i) => {
+      const di = deckEmoji(combo.deck) ?? "";
+      const si = stakeEmoji(combo.stake) ?? "";
+      const icons = [di, si].filter(Boolean).join(" ");
+      return `${i + 1}. ${icons ? `${icons} ` : ""}${combo.deck} / ${combo.stake}`;
+    });
     const rerollLine =
       game.rerollVoteByA && !game.rerollVoteByB
         ? `\n\n🔄 **${a.displayName}** wants to reroll the pool. **${b.displayName}** click "Confirm reroll" to apply.`
@@ -353,24 +375,45 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
         ? `\n\n🔄 **${b.displayName}** wants to reroll the pool. **${a.displayName}** click "Confirm reroll" to apply.`
         : "";
     embed.setDescription(
-      `🎯 **${whose.displayName}** is banning.\n` +
-        `_You'll be pinged when it's your turn._` +
+      `🎯 **${whose.displayName}** is banning — pick **${expected}** below.\n` +
+        `_Your picks stay hidden from your opponent until you confirm._` +
+        bannedLine +
+        `\n\n**Pool (${sortedRemaining.length} left):**\n` +
+        poolLines.join("\n") +
         rerollLine,
     );
     const rerollLabel =
       game.rerollVoteByA || game.rerollVoteByB
         ? "Confirm reroll"
         : "Reroll pool";
-    // Public component row: an "Open ban menu" button for the active
-    // banner (validates actor in the handler; non-actors get an
-    // ephemeral "not your turn" reply). Reroll + Propose are
-    // shared-action buttons either player can click. Cancel lives on
-    // the helper row now (universal across phases).
+    // Public select menu (min=max=expected). The actor guard lives in
+    // the handler; non-actors who touch it get an ephemeral "not your
+    // turn" and the public message is left untouched.
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId(`match:banselect:${s.id}`)
+      .setPlaceholder(`${whose.displayName}: pick ${expected} to ban`)
+      .setMinValues(expected)
+      .setMaxValues(expected)
+      .addOptions(
+        sortedRemaining.map(({ idx, combo }) => {
+          const deckDesc = deckDescription(combo.deck);
+          const stakeDesc = stakeDescription(combo.stake);
+          let desc = deckDesc ?? "";
+          if (stakeDesc && desc.length + stakeDesc.length + 12 <= 100) {
+            desc = desc ? `${desc} · ${combo.stake}: ${stakeDesc}` : `${combo.stake}: ${stakeDesc}`;
+          }
+          return {
+            label: `${combo.deck} / ${combo.stake}`,
+            value: String(idx),
+            description: desc ? desc.slice(0, 100) : undefined,
+            emoji: deckEmojiPartial(combo.deck),
+          };
+        }),
+      );
+    const selectRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+    // Reroll + Propose are shared-action buttons either player can
+    // click. Cancel/pause/helper live on the helper row.
     const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`match:openban:${s.id}`)
-        .setLabel(`🎯 Open ban menu`)
-        .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
         .setCustomId(`match:reroll:${s.id}`)
         .setLabel(rerollLabel)
@@ -382,7 +425,7 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
     );
     return {
       embeds: [embed],
-      components: [actionRow],
+      components: [selectRow, actionRow],
     };
   }
 
@@ -510,115 +553,54 @@ function renderComplete(s: MatchSession, a: Player, b: Player, g1: GameState | n
   return { embeds: [embed], components: [] };
 }
 
-// Build the EPHEMERAL ban-menu view shown only to the active banner.
-// Public embed shows progress + committed bans only; the select menu
-// + Confirm button live here so the opponent never sees what's been
-// tentatively selected. Re-rendered on every select interaction so
-// the Confirm button label tracks the count.
-export function renderBanMenuEphemeral(args: {
+// Build the EPHEMERAL confirm prompt shown only to the active banner
+// after they select from the public ban dropdown. This is the private
+// review surface: the banner sees exactly what they're about to ban and
+// commits with one click; the opponent never sees any of it. The chosen
+// indices ride in the Confirm button's customId, so there's no tentative
+// server state to store or leak.
+export function renderBanConfirmPrompt(args: {
   sessionId: string;
   gameNumber: 1 | 2 | 3;
   pool: DeckEntry[];
   bans: number[];
-  pendingBans: number[];
-  expected: number;
+  selected: number[];
 }): { embeds: EmbedBuilder[]; components: ComponentRow[] } {
-  const { sessionId, gameNumber, pool, bans, pendingBans, expected } = args;
-  const remaining = remainingCombos(pool, bans);
-  const sortedRemaining = [...remaining].sort((x, y) => {
-    const s = canonicalStakeIndex(x.combo.stake) - canonicalStakeIndex(y.combo.stake);
-    if (s !== 0) return s;
-    return canonicalDeckIndex(x.combo.deck) - canonicalDeckIndex(y.combo.deck);
-  });
-  const pending = pendingBans.filter((idx) => remaining.some((r) => r.idx === idx));
-  const pendingLabels = pending
-    .map((idx) => {
-      const combo = pool[idx];
-      return combo ? `${combo.deck} / ${combo.stake}` : null;
-    })
-    .filter((s): s is string => !!s);
-
-  // Committed bans surface here too — strategically important to know
-  // what's already gone before you pick your own. Hidden from the
-  // public embed so the opponent can't peek.
-  const bannedLabels = bans
-    .map((idx) => {
-      const combo = pool[idx];
-      return combo ? `${combo.deck} / ${combo.stake}` : null;
-    })
-    .filter((s): s is string => !!s);
-  const bannedLine =
-    bannedLabels.length > 0
-      ? `\n\n🚫 **Already banned**: ${bannedLabels.join(", ")}`
-      : "";
-
-  // Full pool listing for context — same BMP-style numbered display
-  // the public embed used to carry. Remaining-only here so it lines
-  // up with the select menu options.
-  const poolLines = sortedRemaining.map(({ combo }, i) => {
-    const deckIcon = deckEmoji(combo.deck) ?? "";
-    const stakeIcon = stakeEmoji(combo.stake) ?? "";
-    const icons = [deckIcon, stakeIcon].filter(Boolean).join(" ");
-    return `${i + 1}. ${icons ? `${icons} ` : ""}${combo.deck} / ${combo.stake}`;
-  });
+  const { sessionId, gameNumber, pool, bans, selected } = args;
+  const label = (idx: number): string | null => {
+    const combo = pool[idx];
+    if (!combo) return null;
+    const di = deckEmoji(combo.deck) ?? "";
+    const si = stakeEmoji(combo.stake) ?? "";
+    const icons = [di, si].filter(Boolean).join(" ");
+    return `${icons ? `${icons} ` : ""}${combo.deck} / ${combo.stake}`;
+  };
+  const selLabels = selected.map(label).filter((x): x is string => !!x);
+  const bannedLabels = bans.map(label).filter((x): x is string => !!x);
 
   const embed = new EmbedBuilder()
-    .setTitle(`🎯 Your bans — Game ${gameNumber}`)
+    .setTitle(`🎯 Confirm your ban${selected.length > 1 ? "s" : ""} — Game ${gameNumber}`)
     .setColor(0xe74c3c)
     .setDescription(
-      `Pick **${expected}** combo(s) below, then click Confirm. ` +
-        `Your selections are private until you confirm.\n\n` +
-        `**Pool (${remaining.length} remaining):**\n` +
-        poolLines.join("\n") +
-        bannedLine +
-        (pendingLabels.length > 0
-          ? `\n\n**Currently picked**: ${pendingLabels.join(", ")}`
-          : "\n\n_Nothing picked yet._"),
+      `You're about to ban:\n${selLabels.map((l) => `• **${l}**`).join("\n")}\n\n` +
+        (bannedLabels.length > 0 ? `🚫 Already gone: ${bannedLabels.join(", ")}\n\n` : "") +
+        `Your opponent won't see this until you confirm.`,
     )
     .setFooter({ text: `Match ${sessionId}` });
 
-  const selectMenu = new StringSelectMenuBuilder()
-    .setCustomId(`match:banselect:${sessionId}`)
-    .setPlaceholder(`Pick ${expected} combo(s) to ban`)
-    .setMinValues(expected)
-    .setMaxValues(expected)
-    .addOptions(
-      sortedRemaining.map(({ idx, combo }) => {
-        const deckDesc = deckDescription(combo.deck);
-        const stakeDesc = stakeDescription(combo.stake);
-        let desc = deckDesc ?? "";
-        if (stakeDesc && desc.length + stakeDesc.length + 12 <= 100) {
-          desc = desc ? `${desc} · ${combo.stake}: ${stakeDesc}` : `${combo.stake}: ${stakeDesc}`;
-        }
-        return {
-          label: `${combo.deck} / ${combo.stake}`,
-          value: String(idx),
-          description: desc ? desc.slice(0, 100) : undefined,
-          default: pending.includes(idx),
-          emoji: deckEmojiPartial(combo.deck),
-        };
-      }),
-    );
-
-  const confirmRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  const idxStr = selected.join(".");
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setCustomId(`match:banconfirm:${sessionId}`)
-      .setLabel(
-        pending.length === expected
-          ? `Confirm ${expected} ban(s)`
-          : `Select ${expected - pending.length} more…`,
-      )
-      .setStyle(ButtonStyle.Danger)
-      .setDisabled(pending.length !== expected),
+      .setCustomId(`match:banconfirm:${sessionId}:${idxStr}`)
+      .setLabel(`Confirm ban${selected.length > 1 ? "s" : ""}`)
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId(`match:bancancel:${sessionId}`)
+      .setLabel("Pick again")
+      .setStyle(ButtonStyle.Secondary),
   );
 
-  return {
-    embeds: [embed],
-    components: [
-      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu),
-      confirmRow,
-    ],
-  };
+  return { embeds: [embed], components: [row] };
 }
 
 function renderCancelled(s: MatchSession, a: Player, b: Player) {
