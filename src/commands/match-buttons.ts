@@ -10,7 +10,6 @@
 import {
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle,
   ChannelType,
   EmbedBuilder,
   StringSelectMenuBuilder,
@@ -230,13 +229,11 @@ export const matchButtons: ButtonHandler = {
     if (action === "proposeaccept") return handleProposeAccept(interaction, session);
     if (action === "proposecounter") return handleProposeCounter(interaction, session);
     if (action === "proposecancel") return handleProposeCancel(interaction, session);
-    // Mutual-consent match cancel — entry point opens an ephemeral
-    // menu (avoids accidental drops); the three follow-on buttons
-    // (vote / withdraw / confirm) live inside that menu.
-    if (action === "cancelmatch") return handleOpenCancelMenu(interaction, session);
-    if (action === "cancelvote") return handleCancelVote(interaction, session);
-    if (action === "cancelwithdraw") return handleCancelWithdraw(interaction, session);
-    if (action === "cancelconfirm") return handleCancelConfirm(interaction, session);
+    // Mutual-consent match cancel — one button, no ephemeral menu.
+    // First click votes (and pings the opponent), clicking again
+    // withdraws, and the opponent's click drops the match. The two
+    // clicks ARE the confirmation, so there's no separate confirm step.
+    if (action === "cancelmatch") return handleCancelVote(interaction, session);
 
     await reply(interaction, "That button didn't match anything we recognize — refresh Discord and try again.");
   },
@@ -413,7 +410,6 @@ async function handleBanSelect(interaction: StringSelectMenuInteraction, session
     sessionId: session.id,
     gameNumber: ctx.gameNum,
     pool: ctx.game.pool,
-    bans: ctx.game.bans,
     selected,
   });
   await interaction.reply({ embeds, components, flags: MessageFlags.Ephemeral });
@@ -542,11 +538,9 @@ async function handleBanConfirm(interaction: ButtonInteraction, session: MatchSe
     })
     .filter((s): s is string => !!s);
   const successEmbed = new EmbedBuilder()
-    .setTitle("✅ Bans locked in")
+    .setTitle("✅ Banned")
     .setColor(0x2ecc71)
-    .setDescription(
-      `You banned: ${summary.join(", ")}\n\n_The match has moved on — check the main embed._`,
-    );
+    .setDescription(`You banned: ${summary.join(", ")}`);
   await interaction.update({ embeds: [successEmbed], components: [] });
   // Refresh the public match message so everyone sees the new state.
   await refreshPublicMatchMessage(interaction, updated);
@@ -1140,13 +1134,10 @@ async function handlePauseVote(interaction: ButtonInteraction, session: MatchSes
     });
     if (!updated) return raceLost(interaction);
     await refreshMessage(interaction, updated);
-    return reply(
-      interaction,
-      "✅ Match paused. Either player can click Resume when ready — both have to confirm to resume. Auto-cancels in 7 days if nobody resumes.",
-    );
+    return reply(interaction, "Match paused. Click Resume when you're both ready.");
   }
   if (session.pauseInitiatorPlayerId === voterId) {
-    return reply(interaction, "You've already voted to pause. Waiting on your opponent.");
+    return reply(interaction, "You already voted to pause — waiting on your opponent.");
   }
   // First vote.
   const updated = await updateSession(session, {
@@ -1154,10 +1145,7 @@ async function handlePauseVote(interaction: ButtonInteraction, session: MatchSes
   });
   if (!updated) return raceLost(interaction);
   await refreshMessage(interaction, updated);
-  return reply(
-    interaction,
-    "🗳️ You voted to pause. Your opponent needs to confirm before the match pauses.",
-  );
+  return reply(interaction, "You voted to pause — your opponent has to click Pause too.");
 }
 
 // Mutual-consent RESUME — flips PAUSED back to whatever state we
@@ -1185,20 +1173,17 @@ async function handleResumeVote(interaction: ButtonInteraction, session: MatchSe
     });
     if (!updated) return raceLost(interaction);
     await refreshMessage(interaction, updated);
-    return reply(interaction, "▶️ Match resumed. Both players are back — pick up where you left off.");
+    return reply(interaction, "Match resumed — pick up where you left off.");
   }
   if (session.resumeInitiatorPlayerId === voterId) {
-    return reply(interaction, "You've already voted to resume. Waiting on your opponent.");
+    return reply(interaction, "You already voted to resume — waiting on your opponent.");
   }
   const updated = await updateSession(session, {
     resumeInitiatorPlayerId: voterId,
   });
   if (!updated) return raceLost(interaction);
   await refreshMessage(interaction, updated);
-  return reply(
-    interaction,
-    "🗳️ You voted to resume. Your opponent needs to confirm before the match resumes.",
-  );
+  return reply(interaction, "You voted to resume — your opponent has to click Resume too.");
 }
 
 // Only operable in a PLAYING phase — during BAN/PICK the right path
@@ -1583,149 +1568,48 @@ async function handleProposeCancel(interaction: ButtonInteraction, session: Matc
   await refreshMessage(interaction, updated);
 }
 
-// Entry point for the mutual-consent cancel flow. Opens an ephemeral
-// menu so the actor sees the current vote state + a single, clearly-
-// labelled action button. Avoids accidental match-drops since the
-// click on the helper row only opens a confirmation UI, never drops
-// the match by itself.
-async function handleOpenCancelMenu(interaction: ButtonInteraction, session: MatchSession) {
-  const { playerA, playerB } = await loadPlayers(session);
-  if (interaction.user.id !== playerA.discordId && interaction.user.id !== playerB.discordId) {
-    return reply(interaction, "Only the two players in this match can vote to cancel.");
-  }
-  const actorPlayerId = interaction.user.id === playerA.discordId ? playerA.id : playerB.id;
-
-  const isInitiator = session.cancelInitiatorPlayerId === actorPlayerId;
-  const otherWantsCancel =
-    session.cancelInitiatorPlayerId !== null &&
-    session.cancelInitiatorPlayerId !== actorPlayerId;
-
-  let title: string;
-  let description: string;
-  let action: ButtonBuilder;
-  if (otherWantsCancel) {
-    title = "⛔ Confirm cancel match?";
-    description =
-      "Your opponent voted to cancel. Confirming drops this match — nothing gets recorded, " +
-      "the thread closes, and standings stay as they are.";
-    action = new ButtonBuilder()
-      .setCustomId(`match:cancelconfirm:${session.id}`)
-      .setLabel("Confirm cancel — drop the match")
-      .setStyle(ButtonStyle.Danger);
-  } else if (isInitiator) {
-    title = "⛔ Withdraw your cancel vote?";
-    description = "You already voted to cancel. Click below to take that back.";
-    action = new ButtonBuilder()
-      .setCustomId(`match:cancelwithdraw:${session.id}`)
-      .setLabel("Withdraw my vote")
-      .setStyle(ButtonStyle.Secondary);
-  } else {
-    title = "⛔ Vote to cancel match?";
-    description =
-      "Voting to cancel will drop this match if your opponent agrees. " +
-      "Your opponent gets pinged and either confirms to drop it, or ignores it. " +
-      "You can withdraw your vote any time before they confirm.";
-    action = new ButtonBuilder()
-      .setCustomId(`match:cancelvote:${session.id}`)
-      .setLabel("Vote to cancel")
-      .setStyle(ButtonStyle.Danger);
-  }
-
-  const embed = new EmbedBuilder()
-    .setTitle(title)
-    .setColor(0xe74c3c)
-    .setDescription(description)
-    .setFooter({ text: `Match ${session.id}` });
-  await interaction.reply({
-    embeds: [embed],
-    components: [new ActionRowBuilder<ButtonBuilder>().addComponents(action)],
-    flags: MessageFlags.Ephemeral,
-  });
-}
-
-// Records a first cancel vote — sets cancelInitiator + timestamp on
-// the session. Updates the ephemeral to confirm and refreshes the
-// public embed so the OTHER player sees the vote-pending indicator.
+// Mutual-consent cancel — one button on the helper row, no ephemeral
+// menu. The two clicks (yours + your opponent's) ARE the confirmation,
+// so there's no separate confirm step:
+//   - first click records your vote and pings the opponent
+//   - clicking again withdraws your vote
+//   - the opponent's click drops the match
 async function handleCancelVote(interaction: ButtonInteraction, session: MatchSession) {
+  if (session.state === "CANCELLED" || session.state === "COMPLETE" || session.state === "PAUSED") {
+    return reply(interaction, "This match isn't active.");
+  }
   const { playerA, playerB } = await loadPlayers(session);
   if (interaction.user.id !== playerA.discordId && interaction.user.id !== playerB.discordId) {
-    return reply(interaction, "Only the two players in this match can vote to cancel.");
+    return reply(interaction, "Only the two players in this match can cancel it.");
   }
-  const actorPlayerId = interaction.user.id === playerA.discordId ? playerA.id : playerB.id;
+  const voterId = interaction.user.id === playerA.discordId ? session.playerAId : session.playerBId;
 
-  // Edge case: opponent voted between menu-open and now. Treat this
-  // click as the second vote and finalize the cancel.
-  if (
-    session.cancelInitiatorPlayerId !== null &&
-    session.cancelInitiatorPlayerId !== actorPlayerId
-  ) {
+  // Opponent already voted → this click is the second vote → drop it.
+  if (session.cancelInitiatorPlayerId && session.cancelInitiatorPlayerId !== voterId) {
     return finalizeCancel(interaction, session);
   }
-  if (session.cancelInitiatorPlayerId === actorPlayerId) {
-    return reply(interaction, "You've already voted — close this menu.");
+  // You already voted → clicking again withdraws.
+  if (session.cancelInitiatorPlayerId === voterId) {
+    const updated = await updateSession(session, {
+      cancelInitiatorPlayerId: null,
+      cancelInitiatedAt: null,
+    });
+    if (!updated) return raceLost(interaction);
+    await refreshMessage(interaction, updated);
+    return reply(interaction, "Cancel vote withdrawn — match continues.");
   }
-
+  // First vote.
   const updated = await updateSession(session, {
-    cancelInitiatorPlayerId: actorPlayerId,
+    cancelInitiatorPlayerId: voterId,
     cancelInitiatedAt: new Date(),
   });
   if (!updated) return raceLost(interaction);
-
-  const embed = new EmbedBuilder()
-    .setTitle("✓ Vote recorded")
-    .setColor(0x2ecc71)
-    .setDescription(
-      "Your opponent has been pinged in the match. They can confirm to drop the match, " +
-        "or ignore the vote — you can withdraw any time before they confirm.",
-    );
-  await interaction.update({ embeds: [embed], components: [] });
-  await refreshPublicMatchMessage(interaction, updated);
+  await refreshMessage(interaction, updated);
+  return reply(interaction, "You voted to cancel — your opponent has to click Cancel match too.");
 }
 
-// Withdraws the actor's own vote — only valid if they're the initiator
-// and the other player hasn't confirmed yet.
-async function handleCancelWithdraw(interaction: ButtonInteraction, session: MatchSession) {
-  const { playerA, playerB } = await loadPlayers(session);
-  if (interaction.user.id !== playerA.discordId && interaction.user.id !== playerB.discordId) {
-    return reply(interaction, "Only the two players in this match can vote.");
-  }
-  const actorPlayerId = interaction.user.id === playerA.discordId ? playerA.id : playerB.id;
-  if (session.cancelInitiatorPlayerId !== actorPlayerId) {
-    return reply(interaction, "You haven't voted to cancel.");
-  }
-  const updated = await updateSession(session, {
-    cancelInitiatorPlayerId: null,
-    cancelInitiatedAt: null,
-  });
-  if (!updated) return raceLost(interaction);
-  const embed = new EmbedBuilder()
-    .setTitle("✓ Vote withdrawn")
-    .setColor(0x95a5a6)
-    .setDescription("Your cancel vote is gone. The match continues normally.");
-  await interaction.update({ embeds: [embed], components: [] });
-  await refreshPublicMatchMessage(interaction, updated);
-}
-
-// Second player confirms — flips state to CANCELLED, records audit,
-// updates the ephemeral, refreshes public, closes the thread.
-async function handleCancelConfirm(interaction: ButtonInteraction, session: MatchSession) {
-  const { playerA, playerB } = await loadPlayers(session);
-  if (interaction.user.id !== playerA.discordId && interaction.user.id !== playerB.discordId) {
-    return reply(interaction, "Only the two players in this match can vote.");
-  }
-  const actorPlayerId = interaction.user.id === playerA.discordId ? playerA.id : playerB.id;
-  if (!session.cancelInitiatorPlayerId) {
-    return reply(interaction, "Nobody has voted to cancel yet — vote first.");
-  }
-  if (session.cancelInitiatorPlayerId === actorPlayerId) {
-    return reply(interaction, "You voted — your opponent needs to confirm.");
-  }
-  await finalizeCancel(interaction, session);
-}
-
-// Shared finalization path — called from cancelconfirm and from
-// cancelvote when the actor is racing with the opponent's existing
-// vote (i.e. both voted essentially simultaneously).
+// Both players agreed → flip to CANCELLED, record audit, re-render, close
+// the thread. Called from the opponent's second cancel click.
 async function finalizeCancel(interaction: ButtonInteraction, session: MatchSession) {
   const updated = await updateSession(session, {
     state: MatchSessionState.CANCELLED,
@@ -1745,12 +1629,7 @@ async function finalizeCancel(interaction: ButtonInteraction, session: MatchSess
       playerBId: session.playerBId,
     },
   });
-  const embed = new EmbedBuilder()
-    .setTitle("✓ Match cancelled")
-    .setColor(0x95a5a6)
-    .setDescription("Both players agreed. Match dropped, nothing recorded.");
-  await interaction.update({ embeds: [embed], components: [] });
-  await refreshPublicMatchMessage(interaction, updated);
+  await refreshMessage(interaction, updated);
   closeMatchChannel(interaction, updated.id, updated.threadId).catch(() => {});
 }
 

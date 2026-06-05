@@ -102,7 +102,14 @@ function computeActiveContent(
   if (s.cancelInitiatorPlayerId && s.state !== "CANCELLED" && s.state !== "COMPLETE") {
     const initiator = s.cancelInitiatorPlayerId === a.id ? a : b;
     const opposingDc = s.cancelInitiatorPlayerId === a.id ? b.discordId : a.discordId;
-    return `<@${opposingDc}> ⛔ **${initiator.displayName}** voted to cancel — open the cancel menu in the helper row to confirm or keep playing.`;
+    return `<@${opposingDc}> ⛔ **${initiator.displayName}** wants to cancel — click **Cancel match** to agree, or just keep playing.`;
+  }
+  // Pause vote pending — ping the other player so it's not just a silent
+  // button swap. Same precedence idea as cancel.
+  if (s.pauseInitiatorPlayerId && s.state !== "PAUSED" && s.state !== "CANCELLED" && s.state !== "COMPLETE") {
+    const initiator = s.pauseInitiatorPlayerId === a.id ? a : b;
+    const opposingDc = s.pauseInitiatorPlayerId === a.id ? b.discordId : a.discordId;
+    return `<@${opposingDc}> ⏸️ **${initiator.displayName}** wants to pause — click **Pause** to agree, or keep playing.`;
   }
   switch (s.state) {
     case "WAITING_ACCEPT":
@@ -152,7 +159,15 @@ function computeActiveContent(
       // Mention once — Discord won't re-ping if the same content
       // shows up across no-op refreshes.
       return `<@${a.discordId}> <@${b.discordId}> 🎮 play the run, then vote for the winner.`;
-    case "PAUSED":
+    case "PAUSED": {
+      // Resume vote pending — ping the other player to agree.
+      if (s.resumeInitiatorPlayerId) {
+        const initiator = s.resumeInitiatorPlayerId === a.id ? a : b;
+        const opposingDc = s.resumeInitiatorPlayerId === a.id ? b.discordId : a.discordId;
+        return `<@${opposingDc}> ▶️ **${initiator.displayName}** wants to resume — click **Resume** to continue.`;
+      }
+      return "";
+    }
     case "COMPLETE":
     case "CANCELLED":
       return "";
@@ -185,7 +200,7 @@ function withHelperRow(
     extras.push(
       new ButtonBuilder()
         .setCustomId(`match:cancelmatch:${session.id}`)
-        .setLabel(session.cancelInitiatorPlayerId ? "⛔ Cancel vote pending" : "⛔ Cancel match")
+        .setLabel(session.cancelInitiatorPlayerId ? "⛔ Cancel match (1/2)" : "⛔ Cancel match")
         .setStyle(session.cancelInitiatorPlayerId ? ButtonStyle.Danger : ButtonStyle.Secondary),
     );
   }
@@ -205,7 +220,7 @@ function withHelperRow(
     extras.push(
       new ButtonBuilder()
         .setCustomId(`match:pause:${session.id}`)
-        .setLabel(session.pauseInitiatorPlayerId ? "⏸️ Confirm pause" : "⏸️ Pause")
+        .setLabel(session.pauseInitiatorPlayerId ? "⏸️ Pause (1/2)" : "⏸️ Pause")
         .setStyle(ButtonStyle.Secondary),
     );
   }
@@ -346,22 +361,14 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
     // the off-turn player sees the menu + placeholder but not what the
     // active banner is choosing. Selecting opens an EPHEMERAL confirm
     // (renderBanConfirmPrompt) visible only to the banner — that's the
-    // private review surface. The pool + committed bans ARE shared
-    // knowledge (both players draft against them), so they render here.
+    // private review surface. We show only what's LEFT in the pool — the
+    // dropdown options need it anyway, and there's no need to spell out
+    // what's already gone.
     const sortedRemaining = [...remaining].sort((x, y) => {
       const sd = canonicalStakeIndex(x.combo.stake) - canonicalStakeIndex(y.combo.stake);
       if (sd !== 0) return sd;
       return canonicalDeckIndex(x.combo.deck) - canonicalDeckIndex(y.combo.deck);
     });
-    const bannedLabels = game.bans
-      .map((idx) => {
-        const c = pool[idx];
-        return c ? `${c.deck} / ${c.stake}` : null;
-      })
-      .filter((x): x is string => !!x);
-    const bannedLine = bannedLabels.length > 0
-      ? `\n🚫 **Banned so far:** ${bannedLabels.join(", ")}`
-      : "";
     const poolLines = sortedRemaining.map(({ combo }, i) => {
       const di = deckEmoji(combo.deck) ?? "";
       const si = stakeEmoji(combo.stake) ?? "";
@@ -375,10 +382,8 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
         ? `\n\n🔄 **${b.displayName}** wants to reroll the pool. **${a.displayName}** click "Confirm reroll" to apply.`
         : "";
     embed.setDescription(
-      `🎯 **${whose.displayName}** is banning — pick **${expected}** below.\n` +
-        `_Your picks stay hidden from your opponent until you confirm._` +
-        bannedLine +
-        `\n\n**Pool (${sortedRemaining.length} left):**\n` +
+      `🎯 **${whose.displayName}** is banning — pick **${expected}**.\n\n` +
+        `**Pool (${sortedRemaining.length} left):**\n` +
         poolLines.join("\n") +
         rerollLine,
     );
@@ -563,10 +568,9 @@ export function renderBanConfirmPrompt(args: {
   sessionId: string;
   gameNumber: 1 | 2 | 3;
   pool: DeckEntry[];
-  bans: number[];
   selected: number[];
 }): { embeds: EmbedBuilder[]; components: ComponentRow[] } {
-  const { sessionId, gameNumber, pool, bans, selected } = args;
+  const { sessionId, gameNumber, pool, selected } = args;
   const label = (idx: number): string | null => {
     const combo = pool[idx];
     if (!combo) return null;
@@ -576,15 +580,12 @@ export function renderBanConfirmPrompt(args: {
     return `${icons ? `${icons} ` : ""}${combo.deck} / ${combo.stake}`;
   };
   const selLabels = selected.map(label).filter((x): x is string => !!x);
-  const bannedLabels = bans.map(label).filter((x): x is string => !!x);
 
   const embed = new EmbedBuilder()
     .setTitle(`🎯 Confirm your ban${selected.length > 1 ? "s" : ""} — Game ${gameNumber}`)
     .setColor(0xe74c3c)
     .setDescription(
-      `You're about to ban:\n${selLabels.map((l) => `• **${l}**`).join("\n")}\n\n` +
-        (bannedLabels.length > 0 ? `🚫 Already gone: ${bannedLabels.join(", ")}\n\n` : "") +
-        `Your opponent won't see this until you confirm.`,
+      `You're about to ban:\n${selLabels.map((l) => `• **${l}**`).join("\n")}`,
     )
     .setFooter({ text: `Match ${sessionId}` });
 
@@ -614,26 +615,25 @@ function renderCancelled(s: MatchSession, a: Player, b: Player) {
 
 function renderPaused(s: MatchSession, a: Player, b: Player) {
   const pausedAt = s.pausedAt ? `<t:${Math.floor(s.pausedAt.getTime() / 1000)}:R>` : "recently";
-  const phaseLabel = s.pausedFromState ?? "unknown";
   const waitingOn =
     s.resumeInitiatorPlayerId === a.id
-      ? `Waiting on ${mention(b)} to confirm.`
+      ? `Waiting on ${mention(b)} to click Resume.`
       : s.resumeInitiatorPlayerId === b.id
-        ? `Waiting on ${mention(a)} to confirm.`
-        : "Either player can click Resume.";
+        ? `Waiting on ${mention(a)} to click Resume.`
+        : "Both players click Resume to continue.";
   const embed = new EmbedBuilder()
     .setTitle("⏸️ Match paused")
     .setDescription(
       `${mention(a)} vs ${mention(b)} — paused ${pausedAt}.\n\n` +
-        `Both players need to confirm before the match resumes. ${waitingOn}\n\n` +
-        `_Will auto-cancel in 7 days if nobody resumes. Returning state: \`${phaseLabel}\`._`,
+        `${waitingOn}\n\n` +
+        `_Auto-cancels in 7 days if nobody resumes._`,
     )
     .setColor(0x95a5a6)
     .setFooter({ text: `Match ${s.id}` });
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`match:resume:${s.id}`)
-      .setLabel(s.resumeInitiatorPlayerId ? "▶️ Confirm resume" : "▶️ Resume")
+      .setLabel(s.resumeInitiatorPlayerId ? "▶️ Resume (1/2)" : "▶️ Resume")
       .setStyle(ButtonStyle.Success),
   );
   return { embeds: [embed], components: [row] };
