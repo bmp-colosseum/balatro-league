@@ -35,7 +35,7 @@ import { prisma } from "../db.js";
 import { env } from "../env.js";
 import { getLeagueSettings, getLeagueSettingsForSeason } from "../league-settings.js";
 import { logDiscordError } from "../log-discord-error.js";
-import { bootstrapPresetsAndPointers, generatePool, presetForCasualMatch, presetForDivision } from "../match-config.js";
+import { bootstrapPresetsAndPointers, generatePool, presetForCasualMatch, presetForDivision, type DeckEntry } from "../match-config.js";
 import { renderBanConfirmPrompt, renderMatch } from "../match-render.js";
 import { summonHelpers } from "./helper.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
@@ -417,9 +417,9 @@ async function handleBanSelect(interaction: StringSelectMenuInteraction, session
 }
 
 // 🎲 Random ban — roll the active banner's full allotment from what's
-// left and drop it into the same ephemeral confirm. Still a deliberate
-// confirm (you see what you rolled, and "Pick again" lets you re-roll by
-// clicking the button again), just no manual choosing.
+// left and apply it immediately. No confirm: random means random. Runs
+// from the public button, so we update the message in place and drop a
+// small ephemeral ack.
 async function handleBanRandom(interaction: ButtonInteraction, session: MatchSession) {
   const ctx = await loadBanContext(interaction, session);
   if (!ctx) return;
@@ -435,13 +435,10 @@ async function handleBanRandom(interaction: ButtonInteraction, session: MatchSes
     const [picked] = pool.splice(j, 1);
     if (picked !== undefined) selected.push(picked);
   }
-  const { embeds, components } = renderBanConfirmPrompt({
-    sessionId: session.id,
-    gameNumber: ctx.gameNum,
-    pool: ctx.game.pool,
-    selected,
-  });
-  await interaction.reply({ embeds, components, flags: MessageFlags.Ephemeral });
+  const updated = await applyBans(session, ctx, selected);
+  if (!updated) return raceLost(interaction);
+  await refreshMessage(interaction, updated);
+  return reply(interaction, `🎲 Randomly banned: ${banSummary(ctx.game.pool, selected)}`);
 }
 
 // "Pick again" in the ephemeral confirm — just dismiss it. The banner
@@ -521,6 +518,45 @@ async function handleReroll(interaction: ButtonInteraction, session: MatchSessio
   await refreshMessage(interaction, updated);
 }
 
+type BanContext = {
+  gameNum: 1 | 2 | 3;
+  gameField: "game1" | "game2" | "game3";
+  game: GameState;
+  expected: number;
+};
+
+// Fold the chosen indices into the game's bans and advance to PICK if
+// the ban phase is complete. Version-gated via updateSession — returns
+// the updated session, or null if a concurrent click won the race.
+async function applyBans(
+  session: MatchSession,
+  ctx: BanContext,
+  indices: number[],
+): Promise<MatchSession | null> {
+  const newGame: GameState = { ...ctx.game, bans: [...ctx.game.bans, ...indices] };
+  const newPhase = phaseFor(newGame, session.playerAId, session.playerBId, parsePolicy(session.policy));
+  let newState: MatchSessionState = session.state;
+  if (newPhase.kind === "PICK") {
+    newState = ctx.gameNum === 1 ? MatchSessionState.GAME_1_PICK
+      : ctx.gameNum === 2 ? MatchSessionState.GAME_2_PICK
+      : MatchSessionState.GAME_3_PICK;
+  }
+  return updateSession(session, {
+    [ctx.gameField]: JSON.stringify(newGame),
+    state: newState,
+  } as Prisma.MatchSessionUpdateManyMutationInput);
+}
+
+function banSummary(pool: DeckEntry[], indices: number[]): string {
+  return indices
+    .map((idx) => {
+      const combo = pool[idx];
+      return combo ? `${combo.deck} / ${combo.stake}` : null;
+    })
+    .filter((s): s is string => !!s)
+    .join(", ");
+}
+
 // Commit handler: runs from the active banner's ephemeral confirm. The
 // chosen indices arrive in the customId (match:banconfirm:<id>:<a.b.c>)
 // rather than from server state — selecting never wrote anything. Folds
@@ -541,35 +577,15 @@ async function handleBanConfirm(interaction: ButtonInteraction, session: MatchSe
   if (pending.some((idx) => ctx.game.bans.includes(idx))) {
     return reply(interaction, "Some of those bans were already applied — pick again from the match menu.");
   }
-  const newGame: GameState = {
-    ...ctx.game,
-    bans: [...ctx.game.bans, ...pending],
-  };
-  const newPhase = phaseFor(newGame, session.playerAId, session.playerBId, parsePolicy(session.policy));
-  let newState: MatchSessionState = session.state;
-  if (newPhase.kind === "PICK") {
-    newState = ctx.gameNum === 1 ? MatchSessionState.GAME_1_PICK
-      : ctx.gameNum === 2 ? MatchSessionState.GAME_2_PICK
-      : MatchSessionState.GAME_3_PICK;
-  }
-  const updated = await updateSession(session, {
-    [ctx.gameField]: JSON.stringify(newGame),
-    state: newState,
-  } as Prisma.MatchSessionUpdateManyMutationInput);
+  const updated = await applyBans(session, ctx, pending);
   if (!updated) return raceLost(interaction);
   // Close the ephemeral with a success state. We can't delete an
   // ephemeral message; clearing components + showing a confirmation
   // is the cleanest dismissal.
-  const summary = pending
-    .map((idx) => {
-      const combo = ctx.game.pool[idx];
-      return combo ? `${combo.deck} / ${combo.stake}` : null;
-    })
-    .filter((s): s is string => !!s);
   const successEmbed = new EmbedBuilder()
     .setTitle("✅ Banned")
     .setColor(0x2ecc71)
-    .setDescription(`You banned: ${summary.join(", ")}`);
+    .setDescription(`You banned: ${banSummary(ctx.game.pool, pending)}`);
   await interaction.update({ embeds: [successEmbed], components: [] });
   // Refresh the public match message so everyone sees the new state.
   await refreshPublicMatchMessage(interaction, updated);
