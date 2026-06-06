@@ -128,6 +128,26 @@ export const reportButtons: ButtonHandler = {
     // menus — only text inputs — and we want a clean dropdown for the
     // proposed result instead of typed-and-validated text.
     if (action === "dispute") {
+      // Only the two players in this match can dispute it — anyone else
+      // shouldn't even get the outcome-selection menu.
+      const subject = await prisma.pairing.findUnique({
+        where: { id: pairingId },
+        include: { playerA: { select: { discordId: true } }, playerB: { select: { discordId: true } } },
+      });
+      if (!subject) {
+        await interaction.reply({ content: "This match isn't on record anymore.", flags: MessageFlags.Ephemeral });
+        return;
+      }
+      if (
+        interaction.user.id !== subject.playerA.discordId &&
+        interaction.user.id !== subject.playerB.discordId
+      ) {
+        await interaction.reply({
+          content: "Only the two players in this match can dispute the result.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
       const select = new StringSelectMenuBuilder()
         .setCustomId(`dispute-select:${pairingId}`)
         .setPlaceholder("What SHOULD the result have been?")

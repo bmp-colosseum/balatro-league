@@ -161,14 +161,56 @@ export const startMatch: SlashCommand = {
       },
     });
 
-    const { embeds, components, content } = renderMatch(session, me, opp);
-    const message = await (interaction.channel as TextChannel).send({ content, embeds, components });
-    // Persist the message id so the ephemeral ban-menu flow can edit
-    // the public embed cross-interaction via REST.
-    await prisma.matchSession.update({
+    // Create a private thread under the division channel (like /challenge)
+    // and put the invite there, instead of posting it in the league channel.
+    // Persisting threadId up front means handleAccept reuses this thread
+    // (no relocation, no league-channel message at all).
+    let threadId: string | null = null;
+    try {
+      const parent = interaction.channel as TextChannel;
+      const suffix = session.id.slice(-6);
+      const thread = await parent.threads.create({
+        name: `Match · ${me.displayName} vs ${opp.displayName} · ${suffix}`,
+        type: ChannelType.PrivateThread,
+        autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
+        invitable: false,
+      });
+      await thread.members.add(me.discordId).catch(() => {});
+      await thread.members.add(opp.discordId).catch(() => {});
+      threadId = thread.id;
+    } catch (err) {
+      console.warn("[start-match] failed to create private thread:", err);
+      await interaction.editReply("Couldn't create the match thread — check the bot has Create Private Threads permission.");
+      return;
+    }
+
+    const updatedSession = await prisma.matchSession.update({
       where: { id: session.id },
-      data: { matchMessageId: message.id },
-    }).catch((err) => console.warn(`[start-match] persist messageId failed:`, err));
+      data: { threadId },
+    });
+
+    const { embeds, components, content } = renderMatch(updatedSession, me, opp);
+    let inviteUrl: string | null = null;
+    try {
+      const thread = await interaction.client.channels.fetch(threadId);
+      if (thread && thread.type === ChannelType.PrivateThread) {
+        const sent = await thread.send({
+          content:
+            content ||
+            `<@${opp.discordId}> — <@${me.discordId}> wants to play. Accept within ${settings.matchInviteExpiryMinutes} min.`,
+          embeds,
+          components,
+        });
+        await prisma.matchSession.update({
+          where: { id: session.id },
+          data: { matchMessageId: sent.id },
+        }).catch((err) => console.warn(`[start-match] persist messageId failed:`, err));
+        inviteUrl = sent.url;
+      }
+    } catch (err) {
+      console.warn("[start-match] failed to post invite into thread:", err);
+    }
+
     recordAudit({
       actor: actorFromInteractionUser(interaction.user),
       action: "match.create",
@@ -180,9 +222,13 @@ export const startMatch: SlashCommand = {
         divisionId: division.id,
         seasonId: season.id,
         opponentDiscordId: opponentUser.id,
+        threadId,
       },
     });
 
-    await interaction.editReply(`Match invite posted: ${message.url}`);
+    await interaction.editReply(
+      `Match invite sent — opened a private thread with ${opponentUser}. Check your sidebar; expires in ${settings.matchInviteExpiryMinutes} min if not accepted.` +
+        (inviteUrl ? `\n${inviteUrl}` : ""),
+    );
   },
 };
