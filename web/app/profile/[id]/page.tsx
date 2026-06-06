@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { hasTier } from "@/lib/admin";
 import { loadProfileExtras } from "@/lib/loaders/profile-extras";
+import { loadPlayerTraits } from "@/lib/loaders/player-traits";
+import { deckImage, stakeImage } from "@/lib/balatro-slugs";
 import { getShowBmpMmr } from "@/lib/preferences";
 import { loadPlayerHistory } from "@/lib/profile";
 import { tierColors } from "@/lib/tier-colors";
@@ -53,6 +55,7 @@ export default async function ProfilePage({
   });
   const isOwnProfile = viewer.isOwnProfile;
   const { isSanji, voterDiscordId, yesVotes, noVotes, myVote } = sanji;
+  const traits = await loadPlayerTraits(profile.player.id);
 
   return (
     <>
@@ -64,6 +67,34 @@ export default async function ProfilePage({
           <div className="stat"><div className="label">Seasons</div><div className="value">{t.seasons}</div></div>
           <div className="stat"><div className="label">Total points</div><div className="value">{t.points}</div></div>
         </div>
+
+        {/* Fun traits derived from ban/pick behaviour — flavour only. */}
+        {traits.length > 0 && (
+          <div className="card" style={{ marginTop: 12 }}>
+            <strong style={{ fontSize: 13 }}>🎭 Traits</strong>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+              {traits.map((tr) => (
+                <span
+                  key={tr.key}
+                  title={`${tr.description} (${tr.detail})`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "4px 10px",
+                    borderRadius: 999,
+                    background: "rgba(155,89,182,0.15)",
+                    border: "1px solid rgba(155,89,182,0.4)",
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  <span>{tr.emoji}</span> {tr.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Own profile + active division → report-a-match dropdown.
             Same UX as /me, just lives here so the player can stay on
@@ -342,7 +373,11 @@ export default async function ProfilePage({
                     .slice(0, 10)
                     .map((d) => (
                       <tr key={d.name}>
-                        <td>{d.name}</td>
+                        <td>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={deckImage(d.name)} alt="" width={20} height={20} style={{ verticalAlign: "middle", marginRight: 6, borderRadius: 3 }} />
+                          {d.name}
+                        </td>
                         <td style={{ textAlign: "right" }} className="muted">
                           {d.gamesWon}/{d.gamesTotal}
                         </td>
@@ -368,7 +403,11 @@ export default async function ProfilePage({
                       .filter((s) => s.gamesTotal >= 5)
                       .map((s) => (
                         <tr key={s.name}>
-                          <td>{s.name}</td>
+                          <td>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={stakeImage(s.name)} alt="" width={20} height={20} style={{ verticalAlign: "middle", marginRight: 6, borderRadius: 3 }} />
+                            {s.name}
+                          </td>
                           <td style={{ textAlign: "right" }} className="muted">
                             {s.gamesWon}/{s.gamesTotal}
                           </td>
