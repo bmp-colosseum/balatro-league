@@ -1544,8 +1544,13 @@ async function handleProposeStart(interaction: ButtonInteraction, session: Match
   }
   const ctx = await actorPlayer(interaction, session);
   if (!ctx) return;
-  if (session.customComboProposal) {
-    return reply(interaction, "There's already a proposal in flight — finish or cancel it first.");
+  const existing = parseProposal(session.customComboProposal);
+  // Only a SUBMITTED proposal blocks a new one (it's a real offer awaiting
+  // a response). A "building" proposal is private and uncommitted — it may
+  // be the clicker's own, or one someone opened and abandoned (which would
+  // otherwise wedge the button forever) — so just (re)start fresh.
+  if (existing && existing.status === "pending") {
+    return reply(interaction, "There's already a proposal awaiting a response — accept, counter, or cancel it first.");
   }
   const proposal: ComboProposal = { by: ctx.actor.id, status: "building" };
   const updated = await updateSession(session, { customComboProposal: JSON.stringify(proposal) });
