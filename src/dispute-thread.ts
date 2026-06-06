@@ -20,6 +20,7 @@ import {
 } from "discord.js";
 import { prisma } from "./db.js";
 import { tryGetDiscordClient } from "./discord.js";
+import { getConfig, LeagueConfigKey } from "./league-config.js";
 import { buildReportEmbed } from "./report-flow.js";
 
 export async function spawnDisputeThread(
@@ -82,6 +83,25 @@ export async function spawnDisputeThread(
       }
     } catch (err) {
       console.warn(`[dispute-thread] couldn't fetch channel ${pairing.reportChannelId}:`, err);
+    }
+  }
+
+  if (!threadParent) {
+    // No stored report message — e.g. a WEB report, which finalizes as
+    // CONFIRMED and never posts a #results embed. Fall back to the
+    // configured results channel and spawn a STANDALONE thread there, so
+    // the dispute actually gets a home + a helper ping (instead of the
+    // "Dispute filed" message promising a thread that never appears).
+    const resultsChannelId = await getConfig(LeagueConfigKey.ResultsChannelId);
+    if (resultsChannelId) {
+      try {
+        const channel = await client.channels.fetch(resultsChannelId);
+        if (channel && channel.type === ChannelType.GuildText) {
+          threadParent = channel as TextChannel;
+        }
+      } catch (err) {
+        console.warn(`[dispute-thread] couldn't fetch results channel ${resultsChannelId}:`, err);
+      }
     }
   }
 
