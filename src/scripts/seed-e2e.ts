@@ -28,7 +28,13 @@
 //   ADMIN_TOKEN=xxx npm run seed:e2e -- --seasons 100 --players 24 --divisions 4
 //   ADMIN_TOKEN=xxx WEB_URL=https://balatro-league-test... npm run seed:e2e -- --seasons 25
 //   ADMIN_TOKEN=xxx npm run seed:e2e -- --seasons 30 --activate-each  # each season goes live then ends
+//   ADMIN_TOKEN=xxx npm run seed:e2e -- --players 1000 --seasons 100  # big scale / perf run
+//   ADMIN_TOKEN=xxx npm run seed:e2e -- --players 1000 --division-size 6  # ~167 small divisions
 //   npm run seed:e2e -- --reset                                   # nuke prior e2e demos first
+//
+// Scale: divisions auto-derive from --division-size (default 6) so a large
+// --players count produces many SMALL divisions (tractable round-robins)
+// instead of a few enormous ones. --divisions still forces an exact count.
 
 import { prisma } from "../db.js";
 import { seedTestMatches } from "../seed-matches-core.js";
@@ -37,7 +43,8 @@ const DEMO_SUBTITLE = "E2E Demo";
 
 interface Args {
   players: number;
-  divisions: number;
+  divisions: number; // 0 = auto-derive from divisionSize
+  divisionSize: number;
   seasons: number;
   churn: number;
   reset: boolean;
@@ -63,7 +70,8 @@ function parseArgs(): Args {
   const playRaw = str("--play", null);
   return {
     players: Math.max(2, num("--players", 12)),
-    divisions: Math.max(1, num("--divisions", 2)),
+    divisions: num("--divisions", 0), // 0 → derive from --division-size
+    divisionSize: Math.max(2, num("--division-size", 6)),
     seasons: Math.max(1, num("--seasons", 1)),
     churn: Math.min(0.9, Math.max(0, flt("--churn", 0.1))),
     reset: argv.includes("--reset"),
@@ -223,10 +231,26 @@ async function main(): Promise<void> {
     roster.push({ discordId, displayName });
   }
 
+  // Division count: explicit --divisions wins, else derive from a target
+  // size so big leagues get many small divisions (a 1000-player league in 2
+  // divisions would be a 500-player round-robin — ~125k pairs each).
+  const divisions =
+    args.divisions > 0 ? args.divisions : Math.max(1, Math.round(args.players / args.divisionSize));
+  console.log(
+    `[plan] ${args.players} players · ${divisions} divisions (~${Math.round(args.players / divisions)}/div) · ` +
+      `${args.seasons} season(s)`,
+  );
+
+  const tStart = Date.now();
+  let totalMatches = 0;
+  let totalGames = 0;
+  let totalShootouts = 0;
+
   let prevSeasonId: string | null = null;
   let lastLabel = "";
 
   for (let s = 1; s <= args.seasons; s++) {
+    const seasonStart = Date.now();
     const isLast = s === args.seasons;
     if (prevSeasonId) {
       roster = await nextRoster(prevSeasonId, args.churn, rng, allocId);
@@ -264,8 +288,8 @@ async function main(): Promise<void> {
     const build = await postJson(`${args.webUrl}/api/admin/build-season`, token, {
       roundId: round.id,
       subtitle: `${DEMO_SUBTITLE} #${s}`,
-      config: [{ name: "Rare", divisionCount: args.divisions }],
-      targetGroupSize: Math.max(2, Math.ceil(roster.length / args.divisions)),
+      config: [{ name: "Rare", divisionCount: divisions }],
+      targetGroupSize: Math.max(2, Math.ceil(roster.length / divisions)),
       activate,
       skipDiscordSetup: activate && !isLast,
     });
@@ -289,17 +313,24 @@ async function main(): Promise<void> {
       }
     }
 
+    totalMatches += m.pairingsMade;
+    totalGames += m.gamesMade;
+    totalShootouts += m.shootoutsMade;
     console.log(
       `[season ${s}/${args.seasons}] ${m.seasonLabel} — ${roster.length} players, ` +
         `${b.divisionCount} divs, ${m.pairingsMade} matches, ${m.dcGames} DCs` +
-        (isLast ? " — ACTIVE (in progress)" : " — ended"),
+        (isLast ? " — ACTIVE" : " — ended") +
+        ` (${((Date.now() - seasonStart) / 1000).toFixed(1)}s)`,
     );
     prevSeasonId = b.seasonId;
   }
 
+  const elapsed = (Date.now() - tStart) / 1000;
   console.log(
-    `\n✅ Ran ${args.seasons} season(s). ${lastLabel} is ACTIVE; the prior ${args.seasons - 1} are completed history.`,
+    `\n✅ ${args.seasons} season(s) in ${elapsed.toFixed(1)}s (${(elapsed / args.seasons).toFixed(1)}s/season) — ` +
+      `${totalMatches} matches, ${totalGames} games, ${totalShootouts} shootouts written.`,
   );
+  console.log(`${lastLabel} is ACTIVE; the prior ${args.seasons - 1} are completed history.`);
   console.log("Explore: /standings · /stats · a player profile (career arc + per-season history + traits).");
   process.exit(0);
 }
