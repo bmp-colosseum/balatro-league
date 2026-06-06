@@ -511,9 +511,18 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
           };
         }),
       );
+    const pickRandomRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`match:pickrandom:${s.id}`)
+        .setLabel("🎲 Random pick")
+        .setStyle(ButtonStyle.Secondary),
+    );
     return {
       embeds: [embed],
-      components: [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(pickSelect)],
+      components: [
+        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(pickSelect),
+        pickRandomRow,
+      ],
     };
   }
 
@@ -693,7 +702,7 @@ export function renderComboBuilder(args: {
     .setColor(0x95a5a6)
     .setDescription(
       `Pick a deck + stake, then Submit — your opponent only sees it once you submit. ` +
-        `Accepting one skips ban/pick (every game uses the agreed deck/stake).\n\n` +
+        `Accepting skips ban/pick for **this game only** (the next game bans/picks as normal).\n\n` +
         `Deck: ${deck ? `${deckIcon} **${deck}**` : "_not picked_"}\n` +
         `Stake: ${stake ? `${stakeIcon} **${stake}**` : "_not picked_"}\n\n` +
         `Once you submit, **${responder.displayName}** can Accept, Counter, or Cancel.`,
@@ -775,7 +784,7 @@ function renderProposal(
     .setDescription(
       `**${proposer.displayName}** proposes:\n\n` +
         `${icons ? `${icons}  ` : ""}**${proposal.deck} / ${proposal.stake}**\n\n` +
-        `${responder.displayName}, accept to lock this combo in for all games of the match. ` +
+        `${responder.displayName}, accept to use this combo for **this game only**. ` +
         `Counter to take over the proposal yourself, or cancel to go back to ban/pick.`,
     );
   const actions = new ActionRowBuilder<ButtonBuilder>().addComponents(

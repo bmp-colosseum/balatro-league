@@ -217,6 +217,7 @@ export const matchButtons: ButtonHandler = {
     if (action === "banrandom") return handleBanRandom(interaction, session);
     if (action === "reroll") return handleReroll(interaction, session);
     if (action === "pick") return handlePick(interaction, session, parts[3]);
+    if (action === "pickrandom") return handlePickRandom(interaction, session);
     if (action === "winner") return handleWinner(interaction, session, parts[3]);
     if (action === "dc") return handleDc(interaction, session);
     if (action === "dcconfirm") return handleDcConfirm(interaction, session);
@@ -858,6 +859,23 @@ async function handleChooseFirst(interaction: ButtonInteraction, session: MatchS
   const updated = await updateSession(session, data);
   if (!updated) return raceLost(interaction);
   await refreshMessage(interaction, updated);
+}
+
+// 🎲 Random pick — choose one of the remaining combos at random and apply
+// it. handlePick re-validates the picker + state, so a non-picker clicking
+// this just gets rejected there.
+async function handlePickRandom(interaction: ButtonInteraction, session: MatchSession) {
+  const gameNum =
+    session.state === "GAME_1_PICK" ? 1 :
+    session.state === "GAME_2_PICK" ? 2 :
+    session.state === "GAME_3_PICK" ? 3 : 0;
+  if (gameNum === 0) return reply(interaction, "Not in a pick phase.");
+  const game = parseGame(session[`game${gameNum}` as const]);
+  if (!game) return reply(interaction, "Game state missing.");
+  const remaining = remainingCombos(game.pool, game.bans).map((r) => r.idx);
+  if (remaining.length === 0) return reply(interaction, "No combos left to pick.");
+  const choice = remaining[Math.floor(Math.random() * remaining.length)]!;
+  return handlePick(interaction, session, String(choice));
 }
 
 async function handlePick(interaction: AnyInteraction, session: MatchSession, idxRaw: string | undefined) {
