@@ -533,7 +533,15 @@ async function applyBans(
   ctx: BanContext,
   indices: number[],
 ): Promise<MatchSession | null> {
-  const newGame: GameState = { ...ctx.game, bans: [...ctx.game.bans, ...indices] };
+  // Banning IS "I'm fine with this pool", so clear any pending reroll
+  // vote. Otherwise a stale vote cast earlier could later combine with
+  // the opponent's confirm and wipe bans made in between.
+  const newGame: GameState = {
+    ...ctx.game,
+    bans: [...ctx.game.bans, ...indices],
+    rerollVoteByA: undefined,
+    rerollVoteByB: undefined,
+  };
   const newPhase = phaseFor(newGame, session.playerAId, session.playerBId, parsePolicy(session.policy));
   let newState: MatchSessionState = session.state;
   if (newPhase.kind === "PICK") {

@@ -137,6 +137,15 @@ function computeActiveContent(
         const targetDc = proposal.by === a.id ? b.discordId : a.discordId;
         return `<@${targetDc}> 🎯 custom combo proposed — accept, counter, or cancel.`;
       }
+      // Reroll vote pending (exactly one player voted) — ping the OTHER
+      // player to confirm or keep banning, instead of leaving it as a
+      // silent button-label change they might not notice.
+      if (Boolean(game.rerollVoteByA) !== Boolean(game.rerollVoteByB)) {
+        const voterIsA = Boolean(game.rerollVoteByA);
+        const voter = voterIsA ? a : b;
+        const opposingDc = voterIsA ? b.discordId : a.discordId;
+        return `<@${opposingDc}> 🔄 **${voter.displayName}** wants to reroll the pool — click **Confirm reroll** to agree, or keep banning.`;
+      }
       const phase = phaseFor(game, a.id, b.id, parsePolicy(s.policy));
       if (phase.kind !== "BAN") return "";
       const dc = phase.whoseBanId === a.id ? a.discordId : b.discordId;
@@ -375,17 +384,10 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
       const icons = [di, si].filter(Boolean).join(" ");
       return `${i + 1}. ${icons ? `${icons} ` : ""}${combo.deck} / ${combo.stake}`;
     });
-    const rerollLine =
-      game.rerollVoteByA && !game.rerollVoteByB
-        ? `\n\n🔄 **${a.displayName}** wants to reroll the pool. **${b.displayName}** click "Confirm reroll" to apply.`
-        : !game.rerollVoteByA && game.rerollVoteByB
-        ? `\n\n🔄 **${b.displayName}** wants to reroll the pool. **${a.displayName}** click "Confirm reroll" to apply.`
-        : "";
     embed.setDescription(
       `🎯 **${whose.displayName}** is banning — pick **${expected}**.\n\n` +
         `**Pool (${sortedRemaining.length} left):**\n` +
-        poolLines.join("\n") +
-        rerollLine,
+        poolLines.join("\n"),
     );
     const rerollLabel =
       game.rerollVoteByA || game.rerollVoteByB
