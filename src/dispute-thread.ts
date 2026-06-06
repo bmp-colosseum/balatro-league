@@ -22,6 +22,7 @@ import { prisma } from "./db.js";
 import { tryGetDiscordClient } from "./discord.js";
 import { getConfig, LeagueConfigKey } from "./league-config.js";
 import { buildReportEmbed } from "./report-flow.js";
+import { disputeThreadButtons } from "./commands/dispute-buttons.js";
 
 export async function spawnDisputeThread(
   pairingId: string,
@@ -145,6 +146,8 @@ export async function spawnDisputeThread(
       ? `<@${pairing.disputer.discordId}> disputed the result.`
       : `The result was disputed.`;
 
+    const hasProposal =
+      pairing.disputeProposedGamesWonA != null && pairing.disputeProposedGamesWonB != null;
     await thread.send({
       content:
         `${staffMentions ? staffMentions + "\n" : ""}` +
@@ -152,7 +155,9 @@ export async function spawnDisputeThread(
         disputerLine +
         proposalLine +
         reasonLine +
-        `\n\nDiscuss what happened here. A helper will jump in to fix the result or roll it back to unplayed.`,
+        `\n\nTalk it out below. Either player can **Close** to keep the reported result, ` +
+        `or a helper${hasProposal ? " can apply the proposed correction" : " can step in"}.`,
+      components: [disputeThreadButtons(pairing.id, hasProposal)],
     });
 
     await prisma.pairing.update({

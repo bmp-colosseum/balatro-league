@@ -1,6 +1,7 @@
 // Central registry: every slash command and interaction handler is wired here.
 import { admin } from "./admin.js";
 import { challenge } from "./challenge.js";
+import { disputeThreadButtonHandler } from "./dispute-buttons.js";
 import { adminHelp, help } from "./help.js";
 import { helper } from "./helper.js";
 import { league } from "./league.js";
@@ -17,7 +18,7 @@ import type { ButtonHandler, ModalHandler, SelectMenuHandler, SlashCommand } fro
 
 export const slashCommands: SlashCommand[] = [help, adminHelp, helper, report, reportShootout, standings, schedule, profile, league, startMatch, challenge, admin, random, randomDeck, randomStake];
 
-export const buttonHandlers: ButtonHandler[] = [reportButtons, signupHandlers, matchButtons];
+export const buttonHandlers: ButtonHandler[] = [reportButtons, signupHandlers, matchButtons, disputeThreadButtonHandler];
 
 export const selectMenuHandlers: SelectMenuHandler[] = [matchSelectMenus, disputeSelect];
 

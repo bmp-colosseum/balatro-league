@@ -5,8 +5,15 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import { enqueueAnnounceResult } from "@/lib/queue";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
+import { deleteChannel } from "@/lib/discord";
 import { prisma } from "@/lib/prisma";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
+
+// Close the Discord dispute thread once the dispute is resolved on the
+// web — keeps the two surfaces in sync (resolving here also tidies Discord).
+async function closeDisputeThread(disputeThreadId: string | null): Promise<void> {
+  if (disputeThreadId) await deleteChannel(disputeThreadId).catch(() => {});
+}
 
 // Accept the disputer's proposed correction wholesale. One-click path
 // when the helper agrees with what the disputer says it should have
@@ -40,8 +47,11 @@ export async function acceptDisputeProposal(formData: FormData) {
       adminOverrideReason: pairing.disputeReason
         ? `Accepted disputer's proposal: ${pairing.disputeReason}`
         : "Accepted disputer's proposal",
+      disputeProposedGamesWonA: null,
+      disputeProposedGamesWonB: null,
     },
   });
+  await closeDisputeThread(pairing.disputeThreadId);
   // Re-announce the corrected result so the channel sees the final
   // numbers — admin's accept-the-proposal flow effectively re-posts
   // the match with the new scores.
@@ -86,8 +96,11 @@ export async function rejectDispute(formData: FormData) {
       confirmedAt: pairing.confirmedAt ?? new Date(),
       adminOverrideBy: user.discordId,
       adminOverrideReason: "Dispute rejected, original result kept",
+      disputeProposedGamesWonA: null,
+      disputeProposedGamesWonB: null,
     },
   });
+  await closeDisputeThread(pairing.disputeThreadId);
   // Re-announce so the channel knows the dispute was rejected and
   // the original result stands.
   enqueueAnnounceResult(pairingId).catch((err) => console.warn("[dispute.reject] announceResult failed:", err));
