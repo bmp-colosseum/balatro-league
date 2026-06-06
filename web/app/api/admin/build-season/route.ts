@@ -31,6 +31,9 @@ interface RequestBody {
   minGroupSize?: unknown;
   matchConfigPresetId?: unknown;
   activate?: unknown;
+  // When activating, skip the Discord bootstrap/announce. For automation
+  // (seed/e2e) that flips many seasons live without churning channels.
+  skipDiscordSetup?: unknown;
 }
 
 export async function POST(req: NextRequest) {
@@ -93,7 +96,9 @@ export async function POST(req: NextRequest) {
 
     let activated = false;
     if (body.activate === true) {
-      await performSeasonActivation(result.seasonId, ctx.actor, "manual");
+      await performSeasonActivation(result.seasonId, ctx.actor, "manual", {
+        skipDiscord: body.skipDiscordSetup === true,
+      });
       activated = true;
     }
 

@@ -95,38 +95,142 @@ function makeRng(seedStr: string): () => number {
   };
 }
 
-function shuffle<T>(arr: T[], rng: () => number): T[] {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [a[i], a[j]] = [a[j]!, a[i]!];
-  }
-  return a;
+// --- Personas -------------------------------------------------------------
+// Uniform-random bans/picks produce NO detectable tendencies, so the profile
+// traits (which look for patterns) never fire on seeded data. Instead each
+// player gets a STABLE persona derived from their id — so the same player
+// keeps the same tendencies across every season and the signal accumulates.
+// The bans are emitted in real chronological/attribution order (NOT sorted):
+//   bans[0]       = first player's first ban
+//   bans[1,2,3]   = other (non-first) player's bans  (bans[1] = their first)
+//   bans[4,5,6]   = first player's remaining bans
+// …which is exactly what loadPlayerTraits attributes positionally and what
+// the live ban flow stores (match-buttons appends bans in turn order).
+
+const STAKE_RANK: Record<string, number> = { White: 0, Green: 1, Black: 2, Purple: 3, Gold: 4 };
+function stakeRank(s: string): number {
+  return STAKE_RANK[s] ?? 2;
 }
 
-// Build one game's GameState following the real ban policy. A DC game
-// still carries bans/pick (the ban phase happened, then someone dropped),
-// plus dcByPlayerId. ~20%/flag of games use a 🎲 random button so the
-// Rando Brando trait has signal.
+interface Persona {
+  pickStake: "high" | "low" | "any"; // Dr. Spectre / White Stake Warrior
+  banStake: "high" | "low" | "any";
+  favoriteDeck: string | null; // Deck Loyalist
+  wildcard: boolean; // Wildcard — picks all over the place
+  banishDeck: string | null; // {Deck} Banisher (first-ban)
+  banishStake: string | null; // {Stake} Banisher (first-ban)
+  ghostbuster: boolean; // bans Ghost on sight
+  randomLover: boolean; // Rando Brando — leans on the 🎲 buttons
+}
+
+const FAVE_DECKS = ["Plasma", "Erratic", "Nebula", "Zodiac", "Painted", "Anaglyph", "Magic", "Checkered"];
+const BANISH_DECKS = ["Erratic", "Plasma", "Abandoned", "Ghost", "Black", "Red"];
+const BANISH_STAKES = ["Gold", "Purple", "Black"];
+
+// Pure hash → stable persona for a given player id.
+function personaFor(playerId: string): Persona {
+  let h = 2166136261;
+  for (let i = 0; i < playerId.length; i++) {
+    h ^= playerId.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const u = h >>> 0;
+  const base: Persona = {
+    pickStake: "any",
+    banStake: "any",
+    favoriteDeck: null,
+    wildcard: false,
+    banishDeck: null,
+    banishStake: null,
+    ghostbuster: false,
+    randomLover: false,
+  };
+  switch (u % 8) {
+    case 0:
+      return { ...base, pickStake: "high", banStake: "low" }; // Dr. Spectre
+    case 1:
+      return { ...base, pickStake: "low", banStake: "high" }; // White Stake Warrior
+    case 2:
+      return { ...base, favoriteDeck: FAVE_DECKS[u % FAVE_DECKS.length]! }; // Deck Loyalist
+    case 3:
+      return { ...base, wildcard: true }; // Wildcard
+    case 4:
+      return { ...base, ghostbuster: true }; // Ghostbuster
+    case 5:
+      return { ...base, banishDeck: BANISH_DECKS[u % BANISH_DECKS.length]! }; // {Deck} Banisher
+    case 6:
+      return { ...base, banishStake: BANISH_STAKES[u % BANISH_STAKES.length]! }; // {Stake} Banisher
+    default:
+      return { ...base, randomLover: true }; // Rando Brando
+  }
+}
+
+function pickScore(p: Persona, c: DeckEntry, rng: () => number): number {
+  let s = rng() * 0.5;
+  if (p.wildcard) s += rng() * 50; // strong randomness → maximal deck diversity
+  if (p.favoriteDeck && c.deck === p.favoriteDeck) s += 100;
+  if (p.pickStake === "high") s += stakeRank(c.stake) * 8;
+  if (p.pickStake === "low") s += (4 - stakeRank(c.stake)) * 8;
+  return s;
+}
+function banScore(p: Persona, c: DeckEntry, rng: () => number): number {
+  let s = rng() * 0.5;
+  if (p.ghostbuster && c.deck === "Ghost") s += 100;
+  if (p.banishDeck && c.deck === p.banishDeck) s += 80;
+  if (p.banishStake && c.stake === p.banishStake) s += 80;
+  if (p.banStake === "low") s += (4 - stakeRank(c.stake)) * 8; // Spectre bans the gentle stakes
+  if (p.banStake === "high") s += stakeRank(c.stake) * 8; // White bans the brutal stakes
+  return s;
+}
+// Rank candidate indices by a scorer (descending). Each candidate is scored
+// exactly once, so RNG consumption stays deterministic.
+function rankByScore(cands: number[], scorer: (i: number) => number): number[] {
+  return cands
+    .map((i) => ({ i, s: scorer(i) }))
+    .sort((a, b) => b.s - a.s)
+    .map((x) => x.i);
+}
+
+// Build one game's GameState following the real ban policy, biased by each
+// player's persona. The OTHER (non-first) player makes the final pick.
 function generateGame(
   rng: () => number,
   pool: DeckEntry[],
   firstId: string,
+  otherId: string,
+  firstP: Persona,
+  otherP: Persona,
   winnerId: string,
   dcByPlayerId?: string,
 ): GameState {
-  const order = shuffle(
-    Array.from({ length: pool.length }, (_, i) => i),
-    rng,
-  );
-  const bans = order.slice(0, TOTAL_BANS).sort((x, y) => x - y);
-  const remaining = order.slice(TOTAL_BANS);
-  const pickedDeckIdx = remaining[Math.floor(rng() * remaining.length)]!;
-  const game: GameState = { firstId, bans, pickedDeckIdx, winnerId, pool };
+  void otherId;
+  const all = Array.from({ length: pool.length }, (_, i) => i);
+
+  // Other player's final pick — chosen first and excluded from the ban pool
+  // so it always survives (matches "ban down to the pick" in spirit).
+  const pickIdx = rankByScore(all, (i) => pickScore(otherP, pool[i]!, rng))[0]!;
+  let bannable = all.filter((i) => i !== pickIdx); // pool.length - 1
+
+  // First player's first ban → bans[0].
+  const b0 = rankByScore(bannable, (i) => banScore(firstP, pool[i]!, rng))[0]!;
+  bannable = bannable.filter((i) => i !== b0);
+
+  // Other player's 3 bans → bans[1,2,3] (bans[1] is their first ban).
+  const otherBans = rankByScore(bannable, (i) => banScore(otherP, pool[i]!, rng)).slice(0, 3);
+  bannable = bannable.filter((i) => !otherBans.includes(i));
+
+  // First player's remaining 3 bans → bans[4,5,6] (1 index left over = the
+  // second survivor, never banned).
+  const firstRest = rankByScore(bannable, (i) => banScore(firstP, pool[i]!, rng)).slice(0, 3);
+
+  const bans = [b0, ...otherBans, ...firstRest];
+  const game: GameState = { firstId, bans, pickedDeckIdx: pickIdx, winnerId, pool };
   if (dcByPlayerId) game.dcByPlayerId = dcByPlayerId;
-  if (rng() < 0.2) game.pickedRandomly = true;
-  if (rng() < 0.2) game.firstBannedRandomly = true;
-  if (rng() < 0.2) game.otherBannedRandomly = true;
+
+  // 🎲 random-button usage — heavy for randomLovers, a sprinkle otherwise.
+  if (rng() < (firstP.randomLover ? 0.7 : 0.06)) game.firstBannedRandomly = true;
+  if (rng() < (otherP.randomLover ? 0.7 : 0.06)) game.otherBannedRandomly = true;
+  if (rng() < (otherP.randomLover ? 0.6 : 0.06)) game.pickedRandomly = true;
   return game;
 }
 
@@ -187,15 +291,29 @@ export async function seedTestMatches(opts: SeedMatchesOptions): Promise<SeedMat
         const pB = memberIds[j]!;
         const [canonA, canonB] = pA < pB ? [pA, pB] : [pB, pA];
 
+        const personaA = personaFor(pA);
+        const personaB = personaFor(pB);
         const games: GameState[] = [];
         let winsA = 0;
         let winsB = 0;
         for (let g = 0; g < 2; g++) {
           const firstId = rng() < 0.5 ? pA : pB;
+          const otherId = firstId === pA ? pB : pA;
+          const firstP = firstId === pA ? personaA : personaB;
+          const otherP = otherId === pA ? personaA : personaB;
           const winnerId = rng() < 0.5 ? pA : pB;
           const isDc = rng() < 0.15;
           const dcByPlayerId = isDc ? (winnerId === pA ? pB : pA) : undefined;
-          const game = generateGame(rng, generatePool(decks, stakes, POOL_SIZE, rng), firstId, winnerId, dcByPlayerId);
+          const game = generateGame(
+            rng,
+            generatePool(decks, stakes, POOL_SIZE, rng),
+            firstId,
+            otherId,
+            firstP,
+            otherP,
+            winnerId,
+            dcByPlayerId,
+          );
           games.push(game);
           if (isDc) dcGames++;
           if (winnerId === canonA) winsA++;

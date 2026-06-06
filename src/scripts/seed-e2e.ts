@@ -27,6 +27,7 @@
 //   ADMIN_TOKEN=xxx npm run seed:e2e -- --seasons 50              # 50-season history
 //   ADMIN_TOKEN=xxx npm run seed:e2e -- --seasons 100 --players 24 --divisions 4
 //   ADMIN_TOKEN=xxx WEB_URL=https://balatro-league-test... npm run seed:e2e -- --seasons 25
+//   ADMIN_TOKEN=xxx npm run seed:e2e -- --seasons 30 --activate-each  # each season goes live then ends
 //   npm run seed:e2e -- --reset                                   # nuke prior e2e demos first
 
 import { prisma } from "../db.js";
@@ -40,6 +41,7 @@ interface Args {
   seasons: number;
   churn: number;
   reset: boolean;
+  activateEach: boolean;
   webUrl: string;
   playFraction: number | undefined;
 }
@@ -65,6 +67,7 @@ function parseArgs(): Args {
     seasons: Math.max(1, num("--seasons", 1)),
     churn: Math.min(0.9, Math.max(0, flt("--churn", 0.1))),
     reset: argv.includes("--reset"),
+    activateEach: argv.includes("--activate-each"),
     webUrl: (str("--url", null) ?? process.env.WEB_URL ?? "http://localhost:3000").replace(/\/$/, ""),
     playFraction: playRaw != null ? parseFloat(playRaw) : undefined,
   };
@@ -249,15 +252,22 @@ async function main(): Promise<void> {
       })),
     });
 
-    // Build via the REAL endpoint. Only the final season goes ACTIVE — the
-    // intermediate ones are built + ended (completed history), which avoids
-    // re-running Discord bootstrap/announce on every loop.
+    // Build via the REAL endpoint.
+    //   default:          only the final season goes ACTIVE; intermediate
+    //                     ones are built then ended (completed history).
+    //   --activate-each:  every season also passes through ACTIVE before
+    //                     being ended — the full real lifecycle. Intermediate
+    //                     activations skip the Discord bootstrap/announce
+    //                     (skipDiscordSetup) so we don't churn 100× channels;
+    //                     only the final live season sets Discord up for real.
+    const activate = isLast || args.activateEach;
     const build = await postJson(`${args.webUrl}/api/admin/build-season`, token, {
       roundId: round.id,
       subtitle: `${DEMO_SUBTITLE} #${s}`,
       config: [{ name: "Rare", divisionCount: args.divisions }],
       targetGroupSize: Math.max(2, Math.ceil(roster.length / args.divisions)),
-      activate: isLast,
+      activate,
+      skipDiscordSetup: activate && !isLast,
     });
     const b = build.json as BuildResponse;
     if (build.status !== 200 || !b.ok || !b.seasonId) {

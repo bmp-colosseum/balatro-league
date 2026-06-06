@@ -69,6 +69,7 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
   const bannedStakes: Counts = {};
   const pickedStakes: Counts = {};
   const pickedDecks: Counts = {};
+  const playedCombos: Counts = {}; // deck+stake the game was actually played on
   const firstBannedDecks: Counts = {};
   const firstBannedStakes: Counts = {};
   let totalBans = 0;
@@ -123,6 +124,12 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
           bump(pickedDecks, combo.deck);
           totalPicks++;
         }
+      }
+      // The combo the game was actually PLAYED on (regardless of who picked)
+      // — feeds the "signature combo" / most-played stat below.
+      if (g.pickedDeckIdx !== undefined) {
+        const combo = g.pool[g.pickedDeckIdx];
+        if (combo) bump(playedCombos, `${combo.deck} · ${combo.stake}`);
       }
       // Did this player use a 🎲 random button this game?
       const usedRandom = isFirst
@@ -220,6 +227,19 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
       emoji: "🎲",
       description: "Lets the dice decide — leans on the random pick/ban a lot.",
       detail: `random in ${Math.round((randomGames / games) * 100)}% of games`,
+    });
+  }
+  // 🎯 Signature Combo — the deck+stake this player has played on most.
+  // Informational (not a quirk), so it's always shown once there's enough
+  // history to make "most-played" meaningful.
+  const topCombo = topEntry(playedCombos);
+  if (games >= 6 && topCombo) {
+    traits.push({
+      key: "signature-combo",
+      label: `Signature: ${topCombo.name}`,
+      emoji: "🎯",
+      description: "The deck + stake they've played on most.",
+      detail: `played ${topCombo.count}× (${Math.round((topCombo.count / games) * 100)}% of games)`,
     });
   }
 

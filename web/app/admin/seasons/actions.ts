@@ -240,6 +240,7 @@ export async function performSeasonActivation(
   seasonId: string,
   actor: AuditActor,
   source: "manual" | "scheduled",
+  opts: { skipDiscord?: boolean } = {},
 ): Promise<void> {
   const target = await prisma.season.findUnique({ where: { id: seasonId } });
   if (!target) return;
@@ -265,6 +266,11 @@ export async function performSeasonActivation(
     summary: `Activated season "${formatSeasonLabel(target)}"${prior ? ` (deactivated "${formatSeasonLabel(prior)}")` : ""}${source === "scheduled" ? " — auto-triggered by scheduledStartAt" : ""}`,
     metadata: { previousActiveSeasonId: prior?.id ?? null, source },
   });
+  // skipDiscord is for automation (seed/e2e) that flips a long chain of
+  // seasons live without wanting to create+announce+tear-down Discord
+  // channels on every one. Real activations always run the bootstrap.
+  if (opts.skipDiscord) return;
+
   // Auto-bootstrap Discord (per-division roles + channels). Idempotent —
   // skips divisions that already have role + channel IDs. Best-effort:
   // if the guild config is missing or the enqueue fails, the activation
