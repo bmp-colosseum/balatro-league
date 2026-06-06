@@ -549,6 +549,12 @@ model Shootout {
   // OR "self-report" if a player used /report-shootout.
   recordedBy  String
   notes       String?
+  // The single tiebreaker game's ban/pick GameState as JSON — SAME column
+  // type + encoding as MatchSession.game1/2/3 (TEXT holding JSON.stringify),
+  // so a shootout carries the deck+stake it was played on and feeds the
+  // deck/stake stats + profile history just like a normal game. Null for
+  // shootouts recorded without game data.
+  game        String?
 
   @@unique([divisionId, playerAId, playerBId])
   @@index([divisionId])

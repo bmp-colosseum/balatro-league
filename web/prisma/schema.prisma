@@ -270,19 +270,22 @@ model MatchSession {
   // both players consent. Cleared on resume/cancel/complete.
   pausedFromState MatchSessionState?
   // Player IDs who voted for a pending pause / resume. First click sets
-  // it; opposite-player click flips state and clears it.
+  // it; opposite-player click flips state and clears it. Cleared on
+  // any non-pause/resume button click that mutates state.
   pauseInitiatorPlayerId  String?
   resumeInitiatorPlayerId String?
   // Set when the session enters PAUSED. match-sweep cancels paused
-  // sessions older than 7 days.
+  // sessions older than 7 days so abandoned pauses don't leak.
   pausedAt                DateTime?
   // Mutual-consent cancel — first click sets initiator, second click
   // from the other player flips state to CANCELLED. Lives at session
   // level (not per-game) so cancel works from any non-terminal phase.
   cancelInitiatorPlayerId String?
   cancelInitiatedAt       DateTime?
-  // Mutual-consent opponent-DC claim during a PLAYING phase (claimant
-  // player id). Opponent confirms (forfeits the game) or disputes.
+  // Mutual-consent opponent-DC claim during a PLAYING phase. The claimant
+  // (this player id) reports their opponent disconnected; the opponent
+  // confirms (forfeits the current game) or disputes. Null when no claim
+  // is pending. Cleared when the claim resolves.
   dcInitiatorPlayerId     String?
   // Bumped on every update; used for optimistic concurrency control so
   // racing button clicks can't double-write the state machine. Any update
@@ -360,6 +363,10 @@ model MatchSession {
   threadArchivedAt DateTime?
 
   @@index([state])
+  // match-sweep's idle-session pass scans `state NOT IN terminal AND
+  // updatedAt < cutoff`. Composite index keeps that fast as the table
+  // grows past a few thousand sessions.
+  @@index([state, updatedAt])
   @@index([threadId])
   @@index([state, expiresAt])
   // Cron predicate: sweep COMPLETE/CANCELLED sessions whose thread
@@ -432,8 +439,10 @@ model Tier {
   name      String     // Display name: "Legendary", "Champions", etc.
   // How many players promote up from THIS tier (top N) and relegate
   // down (bottom N) at end-of-season. Symmetric — one field for both
-  // directions. Drives ↑/↓ markers on /standings; end-season recompute
-  // doesn't care since next-season build seeds by global rank.
+  // directions. Defaults to 1 to match the original hardcoded
+  // behavior. Drives the ↑/↓ markers on /standings; end-season
+  // recompute doesn't care since next-season build seeds by global
+  // rank and handles the rebalance naturally.
   promoteRelegateCount Int @default(1)
 
   season    Season     @relation(fields: [seasonId], references: [id], onDelete: Cascade)
@@ -540,6 +549,12 @@ model Shootout {
   // OR "self-report" if a player used /report-shootout.
   recordedBy  String
   notes       String?
+  // The single tiebreaker game's ban/pick GameState as JSON — SAME column
+  // type + encoding as MatchSession.game1/2/3 (TEXT holding JSON.stringify),
+  // so a shootout carries the deck+stake it was played on and feeds the
+  // deck/stake stats + profile history just like a normal game. Null for
+  // shootouts recorded without game data.
+  game        String?
 
   @@unique([divisionId, playerAId, playerBId])
   @@index([divisionId])
@@ -652,7 +667,8 @@ model Pairing {
   hadDc                     Boolean       @default(false)
 
   // Optional deck/stake captured on a manual report (the combo that was
-  // played). Null when not provided / from the guided match flow.
+  // played). Null when not provided / when the result came from the guided
+  // match flow (that stores per-game detail in the MatchSession instead).
   reportedDeck              String?
   reportedStake             String?
 
@@ -664,6 +680,10 @@ model Pairing {
 
   @@unique([divisionId, playerAId, playerBId])
   @@index([divisionId, status])
+  // The unique constraint above covers playerAId lookups (leading column)
+  // but not playerBId. Profile-history loads do `OR: [{playerAId}, {playerBId}]`
+  // across many divisions; without this the playerBId arm full-scans.
+  @@index([playerBId])
 }
 
 // Named bundle of league rules: scoring + ban policy + timeouts.

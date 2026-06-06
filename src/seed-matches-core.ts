@@ -41,6 +41,7 @@ interface PreparedMatch {
   hadDc: boolean;
   playedAt: Date;
   shootoutWinnerId: string | null;
+  shootoutGame: GameState | null;
 }
 
 // Run `fn` over `items` with at most `limit` promises in flight. Workers
@@ -323,8 +324,22 @@ export async function seedTestMatches(opts: SeedMatchesOptions): Promise<SeedMat
         const playedAt = new Date(baseTime + Math.floor(rng() * 20) * 86400000);
 
         let shootoutWinnerId: string | null = null;
+        let shootoutGame: GameState | null = null;
         if (winsA === 1 && winsB === 1 && rng() < 0.5) {
           shootoutWinnerId = rng() < 0.5 ? canonA : canonB;
+          // A shootout is just one more game — same ban/pick setup, so give
+          // it a full GameState (it carries the deck+stake it was played on).
+          const sFirst = rng() < 0.5 ? canonA : canonB;
+          const sOther = sFirst === canonA ? canonB : canonA;
+          shootoutGame = generateGame(
+            rng,
+            generatePool(decks, stakes, POOL_SIZE, rng),
+            sFirst,
+            sOther,
+            personaFor(sFirst),
+            personaFor(sOther),
+            shootoutWinnerId,
+          );
         }
 
         prepared.push({
@@ -339,6 +354,7 @@ export async function seedTestMatches(opts: SeedMatchesOptions): Promise<SeedMat
           hadDc,
           playedAt,
           shootoutWinnerId,
+          shootoutGame,
         });
       }
     }
@@ -386,6 +402,7 @@ export async function seedTestMatches(opts: SeedMatchesOptions): Promise<SeedMat
           playerBId: p.canonB,
           winnerId: p.shootoutWinnerId,
           recordedBy: "seed-test-matches",
+          game: p.shootoutGame ? JSON.stringify(p.shootoutGame) : undefined,
         },
       });
     }

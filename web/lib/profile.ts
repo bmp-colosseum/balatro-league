@@ -392,6 +392,24 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
       const opponentId = s.playerAId === playerId ? s.playerBId : s.playerAId;
       const opponentName = playerNameById.get(opponentId) ?? "Unknown";
       const iWon = s.winnerId === playerId;
+      // A shootout is one more game: pull the deck+stake it was played on
+      // from its stored GameState (same JSON shape as a match game) so it
+      // renders the combo in history and counts toward the deck/stake tables.
+      const sGames: GamePlayed[] = [];
+      if (s.game) {
+        try {
+          const g = JSON.parse(s.game) as GameStateMin;
+          const idx = g.pickedDeckIdx;
+          if (idx !== undefined && g.pool && g.pool[idx]) {
+            const combo = g.pool[idx]!;
+            sGames.push({ num: 1, deck: combo.deck, stake: combo.stake, iWon });
+            bumpAgg(deckAgg, combo.deck, iWon);
+            bumpAgg(stakeAgg, combo.stake, iWon);
+          }
+        } catch {
+          // malformed shootout game JSON — just show it combo-less.
+        }
+      }
       return {
         pairingId: s.id,
         status: "CONFIRMED",
@@ -402,7 +420,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
         outcome: iWon ? "WIN" : "LOSS",
         confirmedAt: s.recordedAt,
         isShootout: true,
-        games: [], // shootouts don't have ban/pick combos stored — skip
+        games: sGames,
       };
     });
     // Combine + sort chronologically. Shootouts don't roll up into points

@@ -65,6 +65,15 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
     where: { pairingId: { in: pairings.map((p) => p.id) } },
     select: { game1: true, game2: true, game3: true },
   });
+  // Shootouts are real games too — fold their stored GameState in so they
+  // feed the same trait signals as match games.
+  const shootouts = await prisma.shootout.findMany({
+    where: { OR: [{ playerAId: playerId }, { playerBId: playerId }], game: { not: null } },
+    select: { game: true },
+  });
+  const gameJsons: (string | null)[] = [];
+  for (const s of sessions) gameJsons.push(s.game1, s.game2, s.game3);
+  for (const s of shootouts) gameJsons.push(s.game);
 
   const bannedStakes: Counts = {};
   const pickedStakes: Counts = {};
@@ -79,8 +88,8 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
   let ghostAvailable = 0; // games where the Ghost deck was in the pool
   let ghostBanned = 0; // …of those, how many this player banned it
 
-  for (const s of sessions) {
-    for (const json of [s.game1, s.game2, s.game3]) {
+  for (const json of gameJsons) {
+    {
       if (!json) continue;
       let g: GameStateMin;
       try {
