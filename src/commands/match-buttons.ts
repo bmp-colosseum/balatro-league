@@ -710,22 +710,22 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
     },
   });
 
-  // Render once from the already-loaded players + preset (no reload —
-  // refreshMessage would re-query both players and the preset). editReply
-  // edits the original invite message in place (we deferUpdate'd above).
   const allowedStakes = customCombo ? [] : preset.stakes;
-  const started = renderMatch(updated, playerA, playerB, { allowedStakes });
-  // Best-effort: a failed invite edit (e.g. the message was deleted) must
-  // not abort the handler before the thread message — which is the
-  // canonical match UI — gets posted below. The match is already
-  // committed, so worst case is a stale invite, not a lost match.
-  await editOrUpdate(interaction, {
-    content: started.content,
-    embeds: started.embeds,
-    components: started.components,
-  }).catch((err) => console.warn(`[handleAccept] invite edit failed for ${updated.id}:`, err));
-
+  // Did the match just relocate into a NEW private thread? (start-match
+  // posts the invite in the division channel, then makes a thread on
+  // accept. /challenge's invite is already in the thread, so no move.)
   if (matchChannelId && matchChannelId !== session.threadId) {
+    // Leave only a pointer on the original (public) invite — the full
+    // match controls belong in the private thread, not duplicated in the
+    // league channel. Best-effort: a failed edit must not abort before the
+    // thread message (the canonical UI) is posted below.
+    const pointer = new EmbedBuilder()
+      .setTitle("🎴 Match started")
+      .setColor(0x2ecc71)
+      .setDescription(`${playerA.displayName} vs ${playerB.displayName} — play it out in <#${matchChannelId}>.`)
+      .setFooter({ text: `Match ${updated.id}` });
+    await editOrUpdate(interaction, { content: "", embeds: [pointer], components: [] })
+      .catch((err) => console.warn(`[handleAccept] invite pointer edit failed for ${updated.id}:`, err));
     try {
       const thread = await interaction.client.channels.fetch(matchChannelId);
       if (thread && thread.type === ChannelType.PrivateThread) {
@@ -735,9 +735,7 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
           embeds,
           components,
         });
-        // Re-stamp matchMessageId — when the match relocates from
-        // the league channel into a private thread on accept, the
-        // canonical public message is now the in-thread send.
+        // The canonical match message is now the in-thread send.
         await prisma.matchSession.update({
           where: { id: updated.id },
           data: { matchMessageId: sent.id, threadId: matchChannelId },
@@ -746,6 +744,14 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
     } catch (err) {
       console.warn(`[match] failed to post into match thread ${matchChannelId}:`, err);
     }
+  } else {
+    // No relocation — the invite message IS the match message.
+    const started = renderMatch(updated, playerA, playerB, { allowedStakes });
+    await editOrUpdate(interaction, {
+      content: started.content,
+      embeds: started.embeds,
+      components: started.components,
+    }).catch((err) => console.warn(`[handleAccept] invite edit failed for ${updated.id}:`, err));
   }
   // Hush unused-env warning until something in here actually reads env.
   void env;

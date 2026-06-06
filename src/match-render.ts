@@ -540,6 +540,12 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
           .setCustomId(`match:dcdispute:${s.id}`)
           .setLabel("Dispute")
           .setStyle(ButtonStyle.Secondary),
+        // Lets the claimant take their own report back (the "Opponent
+        // DC'd" button is hidden while a claim is pending).
+        new ButtonBuilder()
+          .setCustomId(`match:dc:${s.id}`)
+          .setLabel("Withdraw report")
+          .setStyle(ButtonStyle.Secondary),
       );
       return { embeds: [embed], components: [dcActions] };
     }
