@@ -24,6 +24,7 @@ import { MatchSessionState } from "@prisma/client";
 import { prisma } from "../db.js";
 import { generatePool } from "../match-config.js";
 import { presetForSeason } from "../match-config.js";
+import { recomputeDivisionStandings } from "../standings-cache.js";
 import defaults from "../data/match-defaults.json" with { type: "json" };
 import type { GameState } from "../match-session.js";
 import type { DeckEntry } from "../match-config.js";
@@ -223,11 +224,18 @@ async function main(): Promise<void> {
     }
   }
 
+  // Recompute the standings CACHE for every division — the standings page
+  // reads the cache (it's only refreshed when a result is written), so
+  // without this the seeded matches wouldn't show up in standings.
+  for (const division of divisions) {
+    await recomputeDivisionStandings(division.id);
+  }
+
   console.log(
     `Seeded ${pairingsMade} matches (${gamesMade} games, ${dcGames} DC forfeits) + ${shootoutsMade} shootouts ` +
       `across ${divisions.length} divisions of ${season.subtitle ? `Season ${season.number} — ${season.subtitle}` : `Season ${season.number}`}.`,
   );
-  console.log("Recompute standings (or let the bot's cache refresh) and check /stats.");
+  console.log("Standings recomputed — check /standings and /stats.");
 }
 
 await main();
