@@ -75,6 +75,8 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
   let totalPicks = 0;
   let games = 0;
   let randomGames = 0;
+  let ghostAvailable = 0; // games where the Ghost deck was in the pool
+  let ghostBanned = 0; // …of those, how many this player banned it
 
   for (const s of sessions) {
     for (const json of [s.game1, s.game2, s.game3]) {
@@ -96,6 +98,13 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
         if (!combo) continue;
         bump(bannedStakes, combo.stake);
         totalBans++;
+      }
+      // Ghostbuster tracking — Ghost deck available vs. this player banning it.
+      if (g.pool.some((c) => c.deck === "Ghost")) {
+        ghostAvailable++;
+        if (myBanIdxs.some((idx) => idx !== undefined && g.pool![idx]?.deck === "Ghost")) {
+          ghostBanned++;
+        }
       }
       // The player's FIRST ban of the game (bans[0] if first, bans[1] if other).
       const myFirstBanIdx = isFirst ? bans[0] : bans[1];
@@ -159,6 +168,28 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
       emoji: "🃏",
       description: `Always reaching for the same deck.`,
       detail: `Favourite: ${topPick.name} (${Math.round((topPick.count / totalPicks) * 100)}% of picks)`,
+    });
+  }
+  // 🌈 Wildcard — deliberately picks all over the place (opposite of the
+  // Loyalist; distinct from Rando Brando, who lets the dice decide).
+  const distinctPicked = Object.keys(pickedDecks).length;
+  if (totalPicks >= 6 && distinctPicked / totalPicks >= 0.75) {
+    traits.push({
+      key: "wildcard",
+      label: "Wildcard",
+      emoji: "🌈",
+      description: "Never the same deck twice — picks all over the place.",
+      detail: `${distinctPicked} different decks across ${totalPicks} picks`,
+    });
+  }
+  // 👻 Ghostbuster — bans the Ghost deck whenever it shows up.
+  if (ghostAvailable >= 4 && ghostBanned / ghostAvailable >= 0.6) {
+    traits.push({
+      key: "ghostbuster",
+      label: "Ghostbuster",
+      emoji: "👻",
+      description: "Bans the Ghost deck on sight — who you gonna call?",
+      detail: `banned Ghost in ${Math.round((ghostBanned / ghostAvailable) * 100)}% of games it appeared`,
     });
   }
   // 🔨 {X} Hater — consistently FIRST-bans a particular deck or stake.
