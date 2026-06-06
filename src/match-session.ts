@@ -51,6 +51,11 @@ export interface GameState {
   // so phase resolution and standings work normally — the field is
   // additive metadata for the announce + history view.
   dcByPlayerId?: string;
+  // Cosmetic flags for the "Rando Brando" profile trait — set when a
+  // selection was made via the 🎲 random buttons rather than chosen.
+  pickedRandomly?: boolean;        // the final pick was random
+  firstBannedRandomly?: boolean;   // first player used random ban
+  otherBannedRandomly?: boolean;   // other (second) player used random ban
 }
 
 export function emptyGameState(firstId: string, pool: DeckEntry[]): GameState {

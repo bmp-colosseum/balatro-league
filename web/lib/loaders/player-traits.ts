@@ -1,10 +1,11 @@
 // Fun "player traits" derived from a player's ban/pick behaviour across
 // their confirmed matches. Purely cosmetic flavour — not used for anything
-// scoring-related.
+// scoring-related. Local Thunk would approve of the puns.
 //
 // Attribution: per game the FIRST player bans index [0] then [4,5,6], the
 // OTHER player bans [1,2,3] and makes the final PICK (pickedDeckIdx). So a
-// player's bans/picks depend on whether they were `firstId` that game.
+// player's bans/picks depend on whether they were `firstId` that game. The
+// player's FIRST ban is bans[0] (if first) or bans[1] (if other).
 
 import { prisma } from "@/lib/prisma";
 
@@ -14,6 +15,9 @@ interface GameStateMin {
   pickedDeckIdx?: number;
   dcByPlayerId?: string;
   bans?: number[];
+  pickedRandomly?: boolean;
+  firstBannedRandomly?: boolean;
+  otherBannedRandomly?: boolean;
 }
 
 export interface PlayerTrait {
@@ -25,8 +29,7 @@ export interface PlayerTrait {
 }
 
 // Relative difficulty rank among the pool's stakes (White easiest → Gold
-// hardest). Canonical order is White, Red, Green, Black, Blue, Purple,
-// Orange, Gold; the league pool uses 5 of them — rank them 0..4.
+// hardest); the league pool uses 5 of the 8 canonical stakes.
 const STAKE_RANK: Record<string, number> = { White: 0, Green: 1, Black: 2, Purple: 3, Gold: 4 };
 
 type Counts = Record<string, number>;
@@ -65,11 +68,13 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
 
   const bannedStakes: Counts = {};
   const pickedStakes: Counts = {};
-  const bannedDecks: Counts = {};
   const pickedDecks: Counts = {};
+  const firstBannedDecks: Counts = {};
+  const firstBannedStakes: Counts = {};
   let totalBans = 0;
   let totalPicks = 0;
   let games = 0;
+  let randomGames = 0;
 
   for (const s of sessions) {
     for (const json of [s.game1, s.game2, s.game3]) {
@@ -84,15 +89,22 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
       games++;
       const isFirst = g.firstId === playerId;
       const bans = g.bans ?? [];
-      // First player: [0] + [4..]; other player: [1..3].
       const myBanIdxs = isFirst ? [bans[0], ...bans.slice(4)] : bans.slice(1, 4);
       for (const idx of myBanIdxs) {
         if (idx === undefined) continue;
         const combo = g.pool[idx];
         if (!combo) continue;
         bump(bannedStakes, combo.stake);
-        bump(bannedDecks, combo.deck);
         totalBans++;
+      }
+      // The player's FIRST ban of the game (bans[0] if first, bans[1] if other).
+      const myFirstBanIdx = isFirst ? bans[0] : bans[1];
+      if (myFirstBanIdx !== undefined) {
+        const combo = g.pool[myFirstBanIdx];
+        if (combo) {
+          bump(firstBannedDecks, combo.deck);
+          bump(firstBannedStakes, combo.stake);
+        }
       }
       // Only the OTHER (non-first) player makes the final pick.
       if (!isFirst && g.pickedDeckIdx !== undefined) {
@@ -103,6 +115,11 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
           totalPicks++;
         }
       }
+      // Did this player use a 🎲 random button this game?
+      const usedRandom = isFirst
+        ? !!g.firstBannedRandomly
+        : !!g.otherBannedRandomly || !!g.pickedRandomly;
+      if (usedRandom) randomGames++;
     }
   }
 
@@ -112,57 +129,62 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
   const pickedAvg = avgRank(pickedStakes);
   const bannedAvg = avgRank(bannedStakes);
 
-  // Picks easy stakes + bans the brutal ones → plays it safe.
+  // 🤍 White Stake Warrior — picks the gentle stakes, bans the brutal ones.
   if (pickedAvg !== null && bannedAvg !== null && totalPicks >= 4 && pickedAvg <= 1.2 && bannedAvg >= 2.4) {
     traits.push({
       key: "white-warrior",
       label: "White Stake Warrior",
       emoji: "🤍",
       description: "Picks the gentle stakes and bans the brutal ones — plays it safe.",
-      detail: `avg picked stake ${pickedAvg.toFixed(1)}/4, banned ${bannedAvg.toFixed(1)}/4`,
-    });
-  }
-  // Picks the nastiest stakes on purpose.
-  if (pickedAvg !== null && totalPicks >= 4 && pickedAvg >= 2.8) {
-    traits.push({
-      key: "gold-gladiator",
-      label: "Gold Stake Gladiator",
-      emoji: "🥇",
-      description: "Picks the nastiest stakes on purpose. No fear.",
       detail: `avg picked stake ${pickedAvg.toFixed(1)}/4`,
     });
   }
-  // Keeps reaching for the same deck.
+  // 🎩 Dr. Spectre — the resident high-stakes menace.
+  if (pickedAvg !== null && totalPicks >= 4 && pickedAvg >= 2.8) {
+    traits.push({
+      key: "dr-spectre",
+      label: "Dr. Spectre",
+      emoji: "🎩",
+      description: "Picks the nastiest stakes on purpose. A true high-stakes player.",
+      detail: `avg picked stake ${pickedAvg.toFixed(1)}/4`,
+    });
+  }
+  // 🃏 Deck Loyalist — keeps reaching for the same deck. Shows the favourite.
   const topPick = topEntry(pickedDecks);
   if (topPick && totalPicks >= 5 && topPick.count / totalPicks >= 0.4) {
     traits.push({
       key: "deck-loyalist",
       label: "Deck Loyalist",
       emoji: "🃏",
-      description: "Keeps reaching for the same deck.",
-      detail: `${topPick.name} on ${Math.round((topPick.count / totalPicks) * 100)}% of picks`,
+      description: `Always reaching for the same deck.`,
+      detail: `Favourite: ${topPick.name} (${Math.round((topPick.count / totalPicks) * 100)}% of picks)`,
     });
   }
-  // Never picks the same thing twice.
-  const distinctPicked = Object.keys(pickedDecks).length;
-  if (totalPicks >= 6 && distinctPicked >= Math.min(6, totalPicks)) {
+  // 🔨 {X} Hater — consistently FIRST-bans a particular deck or stake.
+  const topFirstDeck = topEntry(firstBannedDecks);
+  const topFirstStake = topEntry(firstBannedStakes);
+  const deckHateRate = topFirstDeck ? topFirstDeck.count / games : 0;
+  const stakeHateRate = topFirstStake ? topFirstStake.count / games : 0;
+  if (games >= 5 && (deckHateRate >= 0.45 || stakeHateRate >= 0.45)) {
+    const useDeck = deckHateRate >= stakeHateRate;
+    const target = useDeck ? topFirstDeck! : topFirstStake!;
+    const rate = useDeck ? deckHateRate : stakeHateRate;
     traits.push({
-      key: "wildcard",
-      label: "Wildcard",
-      emoji: "🎲",
-      description: "Never picks the same thing twice.",
-      detail: `${distinctPicked} different decks picked`,
-    });
-  }
-  // Bans one deck on sight.
-  const topBan = topEntry(bannedDecks);
-  if (topBan && totalBans >= 6 && topBan.count / totalBans >= 0.25) {
-    traits.push({
-      key: "nemesis",
-      label: `${topBan.name} Hater`,
+      key: "hater",
+      label: `${target.name} Hater`,
       emoji: "🔨",
-      description: "Bans this deck on sight.",
-      detail: `banned ${topBan.name} ${topBan.count}×`,
+      description: `Bans ${target.name} first, on sight, almost every game.`,
+      detail: `first-banned ${target.name} in ${Math.round(rate * 100)}% of games`,
+    });
+  }
+  // 🎲 Rando Brando — loves the random buttons.
+  if (games >= 5 && randomGames / games >= 0.4) {
+    traits.push({
+      key: "rando-brando",
+      label: "Rando Brando",
+      emoji: "🎲",
+      description: "Lets the dice decide — leans on the random pick/ban a lot.",
+      detail: `random in ${Math.round((randomGames / games) * 100)}% of games`,
     });
   }
 

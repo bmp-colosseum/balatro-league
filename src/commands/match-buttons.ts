@@ -188,7 +188,7 @@ async function raceLost(interaction: AnyInteraction) {
 
 async function requireActor(interaction: AnyInteraction, expectedDiscordId: string): Promise<boolean> {
   if (interaction.user.id !== expectedDiscordId) {
-    await reply(interaction, "Only the turn player can use this button.");
+    await reply(interaction, "It's not your turn.");
     return false;
   }
   return true;
@@ -400,7 +400,11 @@ async function handleBanRandom(interaction: ButtonInteraction, session: MatchSes
     const [picked] = pool.splice(j, 1);
     if (picked !== undefined) selected.push(picked);
   }
-  const updated = await applyBans(session, ctx, selected);
+  // Flag which side used random (for the Rando Brando trait). The active
+  // banner is whoever phaseFor says — which equals the interaction user.
+  const phase = phaseFor(ctx.game, session.playerAId, session.playerBId, parsePolicy(session.policy));
+  const actorIsFirst = phase.kind === "BAN" && phase.whoseBanId === ctx.game.firstId;
+  const updated = await applyBans(session, ctx, selected, actorIsFirst ? { firstBannedRandomly: true } : { otherBannedRandomly: true });
   if (!updated) return raceLost(interaction);
   await refreshMessage(interaction, updated);
   return reply(interaction, `🎲 Randomly banned: ${banSummary(ctx.game.pool, selected)}`);
@@ -486,6 +490,7 @@ async function applyBans(
   session: MatchSession,
   ctx: BanContext,
   indices: number[],
+  extra?: Partial<GameState>,
 ): Promise<MatchSession | null> {
   // Banning IS "I'm fine with this pool", so clear any pending reroll
   // vote. Otherwise a stale vote cast earlier could later combine with
@@ -495,6 +500,7 @@ async function applyBans(
     bans: [...ctx.game.bans, ...indices],
     rerollVoteByA: undefined,
     rerollVoteByB: undefined,
+    ...extra,
   };
   const newPhase = phaseFor(newGame, session.playerAId, session.playerBId, parsePolicy(session.policy));
   let newState: MatchSessionState = session.state;
@@ -875,10 +881,10 @@ async function handlePickRandom(interaction: ButtonInteraction, session: MatchSe
   const remaining = remainingCombos(game.pool, game.bans).map((r) => r.idx);
   if (remaining.length === 0) return reply(interaction, "No combos left to pick.");
   const choice = remaining[Math.floor(Math.random() * remaining.length)]!;
-  return handlePick(interaction, session, String(choice));
+  return handlePick(interaction, session, String(choice), true);
 }
 
-async function handlePick(interaction: AnyInteraction, session: MatchSession, idxRaw: string | undefined) {
+async function handlePick(interaction: AnyInteraction, session: MatchSession, idxRaw: string | undefined, random = false) {
   if (!idxRaw) return reply(interaction, "This button looks broken — refresh Discord and try again.");
   const idx = parseInt(idxRaw, 10);
   if (Number.isNaN(idx)) return reply(interaction, "Invalid index.");
@@ -905,7 +911,7 @@ async function handlePick(interaction: AnyInteraction, session: MatchSession, id
   const picker = await prisma.player.findUniqueOrThrow({ where: { id: phase.pickerId } });
   if (!(await requireActor(interaction, picker.discordId))) return;
 
-  const newGame: GameState = { ...game, pickedDeckIdx: idx };
+  const newGame: GameState = { ...game, pickedDeckIdx: idx, pickedRandomly: random };
   const newState: MatchSessionState =
     gameNum === 1 ? MatchSessionState.GAME_1_PLAYING
     : gameNum === 2 ? MatchSessionState.GAME_2_PLAYING
