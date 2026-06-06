@@ -76,17 +76,37 @@ async function projectGame(
     },
   });
 
-  const banIdxs = g.bans ?? [];
-  for (let ordinal = 0; ordinal < banIdxs.length; ordinal++) {
-    const idx = banIdxs[ordinal];
-    if (idx === undefined) continue;
-    const combo = g.pool[idx];
+  // Map each banned pool slot → its turn order, so we can attribute who
+  // banned it (ordinal 0 / 4..6 = first player; 1..3 = the other).
+  const banOrdinalByPoolIdx = new Map<number, number>();
+  (g.bans ?? []).forEach((poolIdx, ordinal) => {
+    if (poolIdx !== undefined) banOrdinalByPoolIdx.set(poolIdx, ordinal);
+  });
+  // Write the FULL pool (picked + banned + survivors).
+  for (let poolIdx = 0; poolIdx < g.pool.length; poolIdx++) {
+    const combo = g.pool[poolIdx];
     if (!combo) continue;
-    const playerId = ordinal === 0 || ordinal >= 4 ? firstId : otherId;
-    await prisma.ban.upsert({
-      where: { gameId_ordinal: { gameId: game.id, ordinal } },
-      create: { gameId: game.id, ordinal, playerId, deck: combo.deck, stake: combo.stake },
-      update: { playerId, deck: combo.deck, stake: combo.stake },
+    const banOrdinal = banOrdinalByPoolIdx.get(poolIdx);
+    const bannedById =
+      banOrdinal === undefined ? null : banOrdinal === 0 || banOrdinal >= 4 ? firstId : otherId;
+    await prisma.gameDeck.upsert({
+      where: { gameId_poolIdx: { gameId: game.id, poolIdx } },
+      create: {
+        gameId: game.id,
+        poolIdx,
+        deck: combo.deck,
+        stake: combo.stake,
+        picked: poolIdx === g.pickedDeckIdx,
+        banOrdinal: banOrdinal ?? null,
+        bannedById,
+      },
+      update: {
+        deck: combo.deck,
+        stake: combo.stake,
+        picked: poolIdx === g.pickedDeckIdx,
+        banOrdinal: banOrdinal ?? null,
+        bannedById,
+      },
     });
   }
 }

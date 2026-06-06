@@ -50,14 +50,6 @@ export interface StatsPageData {
   longestActiveStreaks: StatsStreakRow[];
 }
 
-interface GameStateMin {
-  pool?: Array<{ deck: string; stake: string }>;
-  pickedDeckIdx?: number;
-  winnerId?: string;
-  dcByPlayerId?: string;
-  bans?: number[];
-}
-
 // Minimum games threshold for "best/worst" deck/stake lists so a 1-game
 // freak result doesn't dominate the leaderboard.
 const MIN_GAMES_FOR_RANKING = 20;
@@ -124,120 +116,57 @@ export async function loadStatsPageData(): Promise<StatsPageData> {
     .sort((a, b) => b.value - a.value)
     .slice(0, 5);
 
-  // ── Deck + stake aggregates ─────────────────────────────────────────
-  // Pull every MatchSession's game JSON across all confirmed pairings;
-  // walk each game with a pickedDeckIdx + winnerId; tally deck/stake
-  // game counts league-wide. Skip DC games.
-  const confirmedPairingIds = confirmedPairings.length === 0
-    ? []
-    : (await prisma.pairing.findMany({
-        where: { status: "CONFIRMED" },
-        select: { id: true },
-      })).map((p) => p.id);
-  const sessions = confirmedPairingIds.length === 0
-    ? []
-    : await prisma.matchSession.findMany({
-        where: { pairingId: { in: confirmedPairingIds } },
-        select: { game1: true, game2: true, game3: true },
-      });
-  const deckAgg = new Map<string, { won: number; total: number }>();
-  const stakeAgg = new Map<string, { won: number; total: number }>();
-  // Ban counters track two things per deck/stake: total bans and total
-  // pool appearances. Ban rate = bans / appearances tells you "when this
-  // shows up, how often does someone nuke it" — a stronger signal than
-  // raw counts because popular decks naturally appear in more pools.
-  const deckBans = new Map<string, { bans: number; appearances: number }>();
-  const stakeBans = new Map<string, { bans: number; appearances: number }>();
-  for (const s of sessions) {
-    for (const json of [s.game1, s.game2, s.game3]) {
-      if (!json) continue;
-      let game: GameStateMin | null = null;
-      try { game = JSON.parse(json) as GameStateMin; } catch { continue; }
-      if (!game) continue;
-      if (game.dcByPlayerId) continue;
-      // Appearance + ban tally over the full pool — independent of
-      // whether a deck was picked. Skip games without a real pool
-      // (custom-combo proposals + DC games have a length-1 placeholder
-      // pool which doesn't reflect ban behavior).
-      if (game.pool && game.pool.length > 1) {
-        const banSet = new Set(game.bans ?? []);
-        for (let i = 0; i < game.pool.length; i++) {
-          const combo = game.pool[i]!;
-          const dBan = deckBans.get(combo.deck) ?? { bans: 0, appearances: 0 };
-          dBan.appearances++;
-          if (banSet.has(i)) dBan.bans++;
-          deckBans.set(combo.deck, dBan);
-          const sBan = stakeBans.get(combo.stake) ?? { bans: 0, appearances: 0 };
-          sBan.appearances++;
-          if (banSet.has(i)) sBan.bans++;
-          stakeBans.set(combo.stake, sBan);
-        }
-      }
-      const idx = game.pickedDeckIdx;
-      if (idx === undefined || !game.pool || !game.pool[idx]) continue;
-      const combo = game.pool[idx];
-      const dRow = deckAgg.get(combo.deck) ?? { won: 0, total: 0 };
-      dRow.total++;
-      if (game.winnerId) dRow.won++; // any game that has a winner counts toward the deck/stake's "played" count
-      deckAgg.set(combo.deck, dRow);
-      const sRow = stakeAgg.get(combo.stake) ?? { won: 0, total: 0 };
-      sRow.total++;
-      if (game.winnerId) sRow.won++;
-      stakeAgg.set(combo.stake, sRow);
-    }
-  }
-  // For "win rate" leaderboards we need: of the games played on deck X,
-  // how often did SOMEBODY (anybody) win — which always = 100% if every
-  // game had a winnerId. That's not the metric we want. The right
-  // metric is per-player avg, which is already on the profile.
-  // For league-wide "deck performance" we go simpler: just count games
-  // played. Decks with more plays → more popular. For a "best win rate"
-  // type, fall back to expressing it as the average win rate of the
-  // higher-rated half of each game (= 50% deterministically). Skip
-  // best/worst league-wide; it doesn't have a useful interpretation
-  // without per-player context.
-  // Decision: keep only "most played" for league-wide deck/stake.
-  // (Best/worst kept in the type for forward-compat but empty for now.)
-  const sortedDecks: StatsDeckRow[] = [...deckAgg.entries()]
-    .map(([name, c]) => ({
-      name,
-      gamesTotal: c.total,
-      gamesWon: c.won,
-      winRatePct: c.total === 0 ? 0 : Math.round((c.won / c.total) * 100),
+  // ── Deck + stake aggregates (relational SQL — no JSON parsing) ──────
+  // Most-played = picked Game rows per deck/stake (non-DC, confirmed match).
+  // _count._all = games played; _count.winnerId = games with a recorded winner.
+  const gameWhere = { dcByPlayerId: null, match: { status: "CONFIRMED" as const } };
+  const [deckGameAgg, stakeGameAgg] = await Promise.all([
+    prisma.game.groupBy({ by: ["deck"], where: gameWhere, _count: { _all: true, winnerId: true } }),
+    prisma.game.groupBy({ by: ["stake"], where: gameWhere, _count: { _all: true, winnerId: true } }),
+  ]);
+  const sortedDecks: StatsDeckRow[] = deckGameAgg
+    .map((r) => ({
+      name: r.deck,
+      gamesTotal: r._count._all,
+      gamesWon: r._count.winnerId,
+      winRatePct: r._count._all === 0 ? 0 : Math.round((r._count.winnerId / r._count._all) * 100),
     }))
     .sort((a, b) => b.gamesTotal - a.gamesTotal);
-  const sortedStakes: StatsDeckRow[] = [...stakeAgg.entries()]
-    .map(([name, c]) => ({
-      name,
-      gamesTotal: c.total,
-      gamesWon: c.won,
-      winRatePct: c.total === 0 ? 0 : Math.round((c.won / c.total) * 100),
+  const sortedStakes: StatsDeckRow[] = stakeGameAgg
+    .map((r) => ({
+      name: r.stake,
+      gamesTotal: r._count._all,
+      gamesWon: r._count.winnerId,
+      winRatePct: r._count._all === 0 ? 0 : Math.round((r._count.winnerId / r._count._all) * 100),
     }))
     .sort((a, b) => b.gamesTotal - a.gamesTotal);
   const mostPlayedDecks = sortedDecks.slice(0, 10);
   const mostPlayedStakes = sortedStakes.slice(0, 10);
 
-  // Most-banned decks/stakes — sort by raw ban count so the leaderboard
-  // is comparable to "most played" (both popularity-weighted). banRatePct
-  // is also exposed so the UI can show "30% banned when present" for
-  // colour. Decks with fewer than 5 appearances are filtered to keep
-  // single-game flukes off the board.
-  const sortedBannedDecks: StatsBanRow[] = [...deckBans.entries()]
-    .filter(([, c]) => c.appearances >= 5)
-    .map(([name, c]) => ({
-      name,
-      bansTotal: c.bans,
-      appearancesTotal: c.appearances,
-      banRatePct: c.appearances === 0 ? 0 : Math.round((c.bans / c.appearances) * 100),
+  // Most-banned — over the FULL pool (GameDeck): _count._all = appearances,
+  // _count.banOrdinal = bans (rows with a ban turn). Exact ban-rate, no JSON.
+  // Sorted by raw ban count; filtered to ≥5 appearances to drop flukes.
+  const poolWhere = { game: { dcByPlayerId: null, match: { status: "CONFIRMED" as const } } };
+  const [deckBanAgg, stakeBanAgg] = await Promise.all([
+    prisma.gameDeck.groupBy({ by: ["deck"], where: poolWhere, _count: { _all: true, banOrdinal: true } }),
+    prisma.gameDeck.groupBy({ by: ["stake"], where: poolWhere, _count: { _all: true, banOrdinal: true } }),
+  ]);
+  const sortedBannedDecks: StatsBanRow[] = deckBanAgg
+    .filter((r) => r._count._all >= 5)
+    .map((r) => ({
+      name: r.deck,
+      bansTotal: r._count.banOrdinal,
+      appearancesTotal: r._count._all,
+      banRatePct: r._count._all === 0 ? 0 : Math.round((r._count.banOrdinal / r._count._all) * 100),
     }))
     .sort((a, b) => b.bansTotal - a.bansTotal);
-  const sortedBannedStakes: StatsBanRow[] = [...stakeBans.entries()]
-    .filter(([, c]) => c.appearances >= 5)
-    .map(([name, c]) => ({
-      name,
-      bansTotal: c.bans,
-      appearancesTotal: c.appearances,
-      banRatePct: c.appearances === 0 ? 0 : Math.round((c.bans / c.appearances) * 100),
+  const sortedBannedStakes: StatsBanRow[] = stakeBanAgg
+    .filter((r) => r._count._all >= 5)
+    .map((r) => ({
+      name: r.stake,
+      bansTotal: r._count.banOrdinal,
+      appearancesTotal: r._count._all,
+      banRatePct: r._count._all === 0 ? 0 : Math.round((r._count.banOrdinal / r._count._all) * 100),
     }))
     .sort((a, b) => b.bansTotal - a.bansTotal);
   const mostBannedDecks = sortedBannedDecks.slice(0, 10);
