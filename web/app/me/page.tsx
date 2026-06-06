@@ -1,19 +1,11 @@
 // Thin render of the /me page. All data comes from loadMePageData;
 // all mutations go through actions.ts. No direct Prisma here.
 
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, signOut } from "@/auth";
 import { loadMePageData } from "@/lib/loaders/me";
-import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
-import {
-  reportFromMePageAction,
-  resetToDiscordNameAction,
-  setCustomNameAction,
-  subscribeNextSeasonAction,
-  unsubscribeNextSeasonAction,
-} from "./actions";
+import { subscribeNextSeasonAction, unsubscribeNextSeasonAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +24,13 @@ export default async function MePage({
     avatar?: string | null;
   };
 
-  const { player, division, interest } = await loadMePageData(user.discordId, user.name);
+  const { player, interest } = await loadMePageData(user.discordId, user.name);
+
+  // /me and the profile page used to be confusingly separate. Now if you
+  // have a Player record, /me just sends you to your own profile (which
+  // carries the report form + personal settings + full history). Only the
+  // "not linked yet" state stays here.
+  if (player) redirect(`/profile/${player.id}`);
 
   const avatarUrl = user.avatar
     ? `https://cdn.discordapp.com/avatars/${user.discordId}/${user.avatar}.png?size=128`
@@ -44,7 +42,6 @@ export default async function MePage({
     await signOut({ redirectTo: "/standings" });
   }
 
-  const tc = division ? tierColors(division.tierPosition) : null;
 
   return (
     <>
@@ -110,94 +107,13 @@ export default async function MePage({
           )}
         </div>
 
-        {player && (
-          <div className="card">
-            <strong>Display name</strong>
-            <p className="muted" style={{ fontSize: 12 }}>
-              {player.hasCustomDisplayName
-                ? <>Currently using your custom name <strong>{player.displayName}</strong>. To switch back to your Discord username (auto-updates when you change it on Discord), reset below.</>
-                : <>Auto-synced from your Discord username (<strong>{player.displayName}</strong>). Set your own below if you want it shown differently in standings/profiles.</>}
-            </p>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <form action={setCustomNameAction} style={{ display: "flex", gap: 6, flex: "1 1 280px" }}>
-                <input
-                  type="text"
-                  name="displayName"
-                  defaultValue={player.displayName}
-                  required
-                  maxLength={64}
-                  style={{ flex: 1 }}
-                />
-                <button type="submit">Save custom name</button>
-              </form>
-              {player.hasCustomDisplayName && (
-                <form action={resetToDiscordNameAction}>
-                  <button type="submit" className="secondary">↻ Reset to Discord name</button>
-                </form>
-              )}
-            </div>
-          </div>
-        )}
-
-        {player && division && tc ? (
-          <div className="card">
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-              <strong>Your current division:</strong>
-              <span className="pill" style={{ background: tc.bg, color: tc.fg }}>{division.tierName}</span>
-              <Link href={`/seasons/${division.seasonId}`} style={{ textDecoration: "none" }}>{division.divisionName}</Link>
-              <span className="muted" style={{ marginLeft: "auto", fontSize: 12 }}>
-                {division.seasonName}
-                {division.myStandings && (
-                  <> · {division.myStandings.points} pts · {division.myStandings.wins}-{division.myStandings.draws}-{division.myStandings.losses}</>
-                )}
-              </span>
-            </div>
-
-            <div style={{ marginTop: 12 }}>
-              <strong>Report a match</strong>
-              {division.reportableOpponents.length === 0 ? (
-                <p className="muted" style={{ marginTop: 4 }}>
-                  No unplayed opponents — you've played everyone in your division.
-                </p>
-              ) : (
-                <form action={reportFromMePageAction} style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
-                  <span className="muted" style={{ fontSize: 12 }}>vs</span>
-                  <select name="opponentId" required style={{ flex: "1 1 200px" }}>
-                    <option value="">— pick an opponent —</option>
-                    {division.reportableOpponents.map((o) => (
-                      <option key={o.playerId} value={o.playerId}>{o.displayName}</option>
-                    ))}
-                  </select>
-                  <select name="result" required defaultValue="2-0">
-                    <option value="2-0">2-0 (I won both)</option>
-                    <option value="1-1">1-1 (draw)</option>
-                    <option value="0-2">0-2 (I lost both)</option>
-                  </select>
-                  <button type="submit">Report</button>
-                </form>
-              )}
-              <p className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-                Web reports are recorded immediately. The result is posted to <strong>#results</strong> in
-                Discord and your opponent gets a DM with a dispute link. Something wrong? Use the inline
-                Dispute control on <Link href="/report">/report</Link> or ping a{" "}
-                <strong>League Helper</strong> in Discord.
-              </p>
-            </div>
-          </div>
-        ) : player ? (
-          <div className="card muted">
-            You're not in an active public division right now — when you are, this is where you'll
-            report results from.
-          </div>
-        ) : (
-          <div className="card">
-            <strong>Not in the league yet</strong>
-            <p className="muted">
-              You're logged in but no Player record exists for your Discord ID. Find the Sign Up
-              button in your league's Discord channel, or ask an admin to add you.
-            </p>
-          </div>
-        )}
+        <div className="card">
+          <strong>Not in the league yet</strong>
+          <p className="muted">
+            You're logged in but no Player record exists for your Discord ID. Find the Sign Up
+            button in your league's Discord channel, or ask an admin to add you.
+          </p>
+        </div>
       </main>
     </>
   );

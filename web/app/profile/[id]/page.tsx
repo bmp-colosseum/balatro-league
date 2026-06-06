@@ -11,6 +11,13 @@ import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { recordSetForPlayer } from "@/app/admin/players/actions";
 import { castEasterEggVote, reportFromProfileAction, submitProfileDispute } from "./actions";
+import {
+  resetToDiscordNameAction,
+  setCustomNameAction,
+  subscribeNextSeasonAction,
+  unsubscribeNextSeasonAction,
+} from "@/app/me/actions";
+import { prisma } from "@/lib/prisma";
 import type { SeasonHistoryEntry } from "@/lib/profile";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +63,21 @@ export default async function ProfilePage({
   const isOwnProfile = viewer.isOwnProfile;
   const { isSanji, voterDiscordId, yesVotes, noVotes, myVote } = sanji;
   const traits = await loadPlayerTraits(profile.player.id);
+  // Own-profile-only personal settings (folded in from the old /me page).
+  const me = isOwnProfile
+    ? {
+        interest: await prisma.seasonInterest.findUnique({
+          where: { discordId: profile.player.discordId },
+          select: { subscribedAt: true },
+        }),
+        hasCustomDisplayName: (
+          await prisma.player.findUnique({
+            where: { id: profile.player.id },
+            select: { hasCustomDisplayName: true },
+          })
+        )?.hasCustomDisplayName ?? false,
+      }
+    : null;
 
   return (
     <>
@@ -134,6 +156,54 @@ export default async function ProfilePage({
               </>
             )}
           </div>
+        )}
+
+        {/* Personal settings — only on your own profile (folded in from /me). */}
+        {me && (
+          <>
+            <div className="card" style={{ marginTop: 16 }}>
+              <strong>Next-season notifications</strong>
+              {me.interest ? (
+                <>
+                  <p className="muted" style={{ fontSize: 12 }}>
+                    ✓ Subscribed (since {me.interest.subscribedAt.toISOString().slice(0, 10)}). The bot DMs you when the next season&apos;s signups open.
+                  </p>
+                  <form action={unsubscribeNextSeasonAction}>
+                    <button type="submit" className="secondary">Unsubscribe</button>
+                  </form>
+                </>
+              ) : (
+                <>
+                  <p className="muted" style={{ fontSize: 12 }}>
+                    Get a Discord DM the moment a new season&apos;s signups open.
+                  </p>
+                  <form action={subscribeNextSeasonAction}>
+                    <button type="submit">🔔 Notify me about the next season</button>
+                  </form>
+                </>
+              )}
+            </div>
+
+            <div className="card" style={{ marginTop: 16 }}>
+              <strong>Display name</strong>
+              <p className="muted" style={{ fontSize: 12 }}>
+                {me.hasCustomDisplayName
+                  ? <>Using your custom name <strong>{profile.player.displayName}</strong>. Reset to auto-sync from your Discord/server name.</>
+                  : <>Auto-synced from your server display name (<strong>{profile.player.displayName}</strong>). Set a custom one below to override.</>}
+              </p>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <form action={setCustomNameAction} style={{ display: "flex", gap: 6, flex: "1 1 280px" }}>
+                  <input type="text" name="displayName" defaultValue={profile.player.displayName} required maxLength={64} style={{ flex: 1 }} />
+                  <button type="submit">Save custom name</button>
+                </form>
+                {me.hasCustomDisplayName && (
+                  <form action={resetToDiscordNameAction}>
+                    <button type="submit" className="secondary">↻ Reset to auto</button>
+                  </form>
+                )}
+              </div>
+            </div>
+          </>
         )}
 
         {isSanji && (
