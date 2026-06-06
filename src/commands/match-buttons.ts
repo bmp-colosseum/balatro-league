@@ -597,8 +597,9 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
   // Expiry check — survives bot restarts unlike the original setTimeout.
   if (session.expiresAt && session.expiresAt.getTime() < Date.now()) {
     const cancelled = await updateSession(session, { state: MatchSessionState.CANCELLED });
-    if (cancelled) await refreshMessage(interaction, cancelled);
-    return reply(interaction, "This match invite expired.");
+    await reply(interaction, "This match invite expired.");
+    if (cancelled) closeMatchChannel(interaction, cancelled.id, cancelled.threadId).catch(() => {});
+    return;
   }
   // Load both players ONCE up front and thread them through — this handler
   // previously called loadPlayers three times (here, again below, and once
@@ -797,7 +798,10 @@ async function handleDecline(interaction: ButtonInteraction, session: MatchSessi
   }
   const updated = await updateSession(session, { state: MatchSessionState.CANCELLED });
   if (!updated) return raceLost(interaction);
-  await refreshMessage(interaction, updated);
+  // The invite was never accepted — delete its thread rather than leaving
+  // a "cancelled" embed sitting in an orphaned thread.
+  await reply(interaction, "Invite declined — closing the thread.");
+  closeMatchChannel(interaction, updated.id, updated.threadId).catch(() => {});
 }
 
 async function handleChooseFirst(interaction: ButtonInteraction, session: MatchSession, firstIdRaw: string | undefined) {
