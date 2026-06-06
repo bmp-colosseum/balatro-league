@@ -282,6 +282,11 @@ model MatchSession {
   // level (not per-game) so cancel works from any non-terminal phase.
   cancelInitiatorPlayerId String?
   cancelInitiatedAt       DateTime?
+  // Mutual-consent opponent-DC claim during a PLAYING phase. The claimant
+  // (this player id) reports their opponent disconnected; the opponent
+  // confirms (forfeits the current game) or disputes. Null when no claim
+  // is pending. Cleared when the claim resolves.
+  dcInitiatorPlayerId     String?
   // Bumped on every update; used for optimistic concurrency control so
   // racing button clicks can't double-write the state machine. Any update
   // is gated by `where: { id, version }` — a stale click hits 0 rows updated.

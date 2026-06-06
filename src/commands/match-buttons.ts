@@ -218,6 +218,8 @@ export const matchButtons: ButtonHandler = {
     if (action === "pick") return handlePick(interaction, session, parts[3]);
     if (action === "winner") return handleWinner(interaction, session, parts[3]);
     if (action === "dc") return handleDc(interaction, session);
+    if (action === "dcconfirm") return handleDcConfirm(interaction, session);
+    if (action === "dcdispute") return handleDcDispute(interaction, session);
     if (action === "callhelper") return handleCallHelper(interaction, session);
     if (action === "pause") return handlePauseVote(interaction, session);
     if (action === "resume") return handleResumeVote(interaction, session);
@@ -1176,8 +1178,11 @@ async function handleResumeVote(interaction: ButtonInteraction, session: MatchSe
   return reply(interaction, "You voted to resume — your opponent has to click Resume too.");
 }
 
-// Only operable in a PLAYING phase — during BAN/PICK the right path
-// is /helper (no game has actually been played yet).
+// Mutual-consent opponent-DC. The claimant clicks "Opponent DC'd" → it
+// records a claim and pings the opponent, who Confirms (forfeits this
+// game) or Disputes. Clicking again withdraws. Only operable in a PLAYING
+// phase — during BAN/PICK the right path is /helper. If the opponent is
+// truly gone and can't confirm, the claimant uses /helper.
 async function handleDc(interaction: ButtonInteraction, session: MatchSession) {
   const isGame1 = session.state === "GAME_1_PLAYING";
   const isGame2 = session.state === "GAME_2_PLAYING";
@@ -1204,36 +1209,100 @@ async function handleDc(interaction: ButtonInteraction, session: MatchSession) {
   const game = parseGame(gameJson);
   if (!game) return reply(interaction, "Game state missing.");
 
-  const reporterIsA = interaction.user.id === playerA.discordId;
-  const reporterId = reporterIsA ? session.playerAId : session.playerBId;
-  const dcerId = reporterIsA ? session.playerBId : session.playerAId;
-  // Auto-fill BOTH votes to the reporter so the rest of the flow
-  // (advance to next game / finalize) treats it like a confirmed
-  // result. The DC'er can dispute via the existing /report dispute
-  // path on the Pairing once it's written.
+  const reporterId = interaction.user.id === playerA.discordId ? session.playerAId : session.playerBId;
+
+  // Already a claim in flight?
+  if (session.dcInitiatorPlayerId) {
+    if (session.dcInitiatorPlayerId === reporterId) {
+      // Same player clicks again → withdraw their claim.
+      const updated = await updateSession(session, { dcInitiatorPlayerId: null });
+      if (!updated) return raceLost(interaction);
+      await refreshMessage(interaction, updated);
+      return reply(interaction, "Withdrew your DC report — game continues.");
+    }
+    // The OTHER player already claimed (they say YOU disconnected). Treat
+    // this click as a competing claim — clearer to just point them at the
+    // Confirm/Dispute buttons that are already showing.
+    return reply(interaction, "Your opponent already reported a DC. Use Confirm or Dispute on the match.");
+  }
+
+  // First claim: record it and ping the opponent to confirm or dispute.
+  const updated = await updateSession(session, { dcInitiatorPlayerId: reporterId });
+  if (!updated) return raceLost(interaction);
+  await refreshMessage(interaction, updated);
+  return reply(
+    interaction,
+    "Reported that your opponent disconnected. They need to **Confirm** (you take this game) or **Dispute** it. If they're gone for good, use `/helper`.",
+  );
+}
+
+// Opponent confirms the DC claim → claimant wins the current game, the
+// confirmer is recorded as the disconnect. Only the player the claim is
+// AGAINST (the opponent of the claimant) can confirm.
+async function handleDcConfirm(interaction: ButtonInteraction, session: MatchSession) {
+  const isGame1 = session.state === "GAME_1_PLAYING";
+  const isGame2 = session.state === "GAME_2_PLAYING";
+  const isGame3 = session.state === "GAME_3_PLAYING";
+  if (!isGame1 && !isGame2 && !isGame3) return reply(interaction, "No game is being played.");
+  if (!session.dcInitiatorPlayerId) return reply(interaction, "There's no DC report to confirm.");
+  const { playerA, playerB } = await loadPlayers(session);
+  if (interaction.user.id !== playerA.discordId && interaction.user.id !== playerB.discordId) {
+    return reply(interaction, "Only the two players in this match can confirm a DC.");
+  }
+  const actorId = interaction.user.id === playerA.discordId ? session.playerAId : session.playerBId;
+  const claimantId = session.dcInitiatorPlayerId;
+  if (actorId === claimantId) {
+    return reply(interaction, "You reported the DC — your opponent has to confirm it.");
+  }
+  // actor is the opponent of the claimant = the one who supposedly DC'd.
+  return applyDcForfeit(interaction, session, claimantId, actorId);
+}
+
+// Either player disputes the claim → clear it, game continues.
+async function handleDcDispute(interaction: ButtonInteraction, session: MatchSession) {
+  if (!session.dcInitiatorPlayerId) return reply(interaction, "There's no DC report to dispute.");
+  const { playerA, playerB } = await loadPlayers(session);
+  if (interaction.user.id !== playerA.discordId && interaction.user.id !== playerB.discordId) {
+    return reply(interaction, "Only the two players in this match can dispute a DC.");
+  }
+  const updated = await updateSession(session, { dcInitiatorPlayerId: null });
+  if (!updated) return raceLost(interaction);
+  await refreshMessage(interaction, updated);
+  return reply(interaction, "Disputed the DC report — game continues. If you can't agree, use `/helper`.");
+}
+
+// Shared forfeit application: claimant wins the current game, dcer is
+// recorded as the disconnect, and we advance (same wiring as handleWinner,
+// narrower — no custom-combo skip). Clears the DC claim in the same write.
+async function applyDcForfeit(
+  interaction: ButtonInteraction,
+  session: MatchSession,
+  claimantId: string,
+  dcerId: string,
+) {
+  const isGame1 = session.state === "GAME_1_PLAYING";
+  const isGame2 = session.state === "GAME_2_PLAYING";
+  const gameField: "game1" | "game2" | "game3" = isGame1 ? "game1" : isGame2 ? "game2" : "game3";
+  const game = parseGame(session[gameField]);
+  if (!game) return reply(interaction, "Game state missing.");
   const newGame: GameState = {
     ...game,
-    voteByA: reporterId,
-    voteByB: reporterId,
-    winnerId: reporterId,
+    voteByA: claimantId,
+    voteByB: claimantId,
+    winnerId: claimantId,
     dcByPlayerId: dcerId,
     disputed: false,
   };
 
-  // Same advance logic as handleWinner — we duplicate the next-game
-  // wiring rather than refactoring into a shared helper since the DC
-  // path is narrower (no custom-combo skip, BO2-only).
   if (isGame1) {
     const updated = await updateSession(session, {
       game1: JSON.stringify(newGame),
       state: MatchSessionState.GAME_2_CHOOSE_FIRST,
+      dcInitiatorPlayerId: null,
     });
     if (!updated) return raceLost(interaction);
     await refreshMessage(interaction, updated);
-    return reply(
-      interaction,
-      "Recorded as a DC win for you in game 1. Game 2 still plays normally — the opponent can dispute the result if they come back online.",
-    );
+    return reply(interaction, "Confirmed — DC win recorded for game 1. Game 2 plays normally.");
   }
 
   if (isGame2) {
@@ -1251,10 +1320,11 @@ async function handleDc(interaction: ButtonInteraction, session: MatchSession) {
         const updated = await updateSession(session, {
           game2: JSON.stringify(newGame),
           state: MatchSessionState.GAME_3_CHOOSE_FIRST,
+          dcInitiatorPlayerId: null,
         });
         if (!updated) return raceLost(interaction);
         await refreshMessage(interaction, updated);
-        return reply(interaction, "Recorded as a DC win for you in game 2. Series goes to game 3.");
+        return reply(interaction, "Confirmed — DC win recorded for game 2. Series goes to game 3.");
       }
     }
     return finalizeMatch(interaction, session, newGame, "game2");
@@ -1292,6 +1362,7 @@ async function finalizeMatch(
     [finalGameField]: JSON.stringify(finalGame),
     state: MatchSessionState.COMPLETE,
     completedAt: new Date(),
+    dcInitiatorPlayerId: null,
   } as Prisma.MatchSessionUpdateManyMutationInput);
   if (!updated) return raceLost(interaction);
   // Record completion in the audit log so we have an event per match —

@@ -111,6 +111,12 @@ function computeActiveContent(
     const opposingDc = s.pauseInitiatorPlayerId === a.id ? b.discordId : a.discordId;
     return `<@${opposingDc}> ⏸️ **${initiator.displayName}** wants to pause — click **Pause** to agree, or keep playing.`;
   }
+  // DC claim pending — ping the player it's against to confirm or dispute.
+  if (s.dcInitiatorPlayerId && s.state !== "CANCELLED" && s.state !== "COMPLETE") {
+    const claimant = s.dcInitiatorPlayerId === a.id ? a : b;
+    const opposingDc = s.dcInitiatorPlayerId === a.id ? b.discordId : a.discordId;
+    return `<@${opposingDc}> 🔌 **${claimant.displayName}** says you disconnected — **Confirm** to forfeit this game, or **Dispute** to keep playing.`;
+  }
   switch (s.state) {
     case "WAITING_ACCEPT":
       return `<@${b.discordId}> 🎴 match invite from <@${a.discordId}> — accept or decline.`;
@@ -513,6 +519,30 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
 
   if (phase.kind === "PLAYING") {
     const picked = game.pickedDeckIdx !== undefined ? pool[game.pickedDeckIdx] : null;
+    // DC claim pending — resolve it before normal winner voting. The
+    // claimant reported their opponent disconnected; the opponent confirms
+    // (forfeits this game) or disputes (keep playing).
+    if (s.dcInitiatorPlayerId) {
+      const claimant = s.dcInitiatorPlayerId === a.id ? a : b;
+      const dcer = s.dcInitiatorPlayerId === a.id ? b : a;
+      embed.setDescription(
+        `🎲 Playing: **${picked?.deck ?? "?"} / ${picked?.stake ?? "?"} stake**\n\n` +
+          `🔌 **${claimant.displayName}** reports that **${dcer.displayName}** disconnected.\n\n` +
+          `**${dcer.displayName}** — **Confirm** to give ${claimant.displayName} this game, or **Dispute** to keep playing.\n` +
+          `_If ${dcer.displayName} is gone for good, use \`/helper\` to get a mod._`,
+      );
+      const dcActions = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`match:dcconfirm:${s.id}`)
+          .setLabel("✅ Confirm DC")
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId(`match:dcdispute:${s.id}`)
+          .setLabel("Dispute")
+          .setStyle(ButtonStyle.Secondary),
+      );
+      return { embeds: [embed], components: [dcActions] };
+    }
     // Per-player vote status line: who voted what. When both votes agree
     // the match auto-advances (this render only fires while voting is
     // incomplete or disputed).
