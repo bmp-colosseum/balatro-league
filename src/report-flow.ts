@@ -55,8 +55,10 @@ export function buildReportEmbed(args: {
   result: { gamesWonA: number; gamesWonB: number };
   reporterIsA: boolean;
   pairingId: string;
+  // Optional combo captured on the report — shown as a field when present.
+  combo?: { deck?: string | null; stake?: string | null };
 }): EmbedBuilder {
-  const { status, reporter, opponent, divisionName, result, reporterIsA, pairingId } = args;
+  const { status, reporter, opponent, divisionName, result, reporterIsA, pairingId, combo } = args;
   const repGames = reporterIsA ? result.gamesWonA : result.gamesWonB;
   const oppGames = reporterIsA ? result.gamesWonB : result.gamesWonA;
   const scoreline = `${reporter.displayName} **${repGames}-${oppGames}** ${opponent.displayName}`;
@@ -96,11 +98,19 @@ export function buildReportEmbed(args: {
         `<@${opponent.discordId}> disputed the result. A helper has been pinged in the thread below.`;
       break;
   }
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setTitle(title)
     .setDescription(description)
     .setColor(color)
     .setFooter({ text: `Match ${pairingId}` });
+  if (combo && (combo.deck || combo.stake)) {
+    embed.addFields({
+      name: "🎴 Played",
+      value: [combo.deck, combo.stake].filter(Boolean).join(" / "),
+      inline: false,
+    });
+  }
+  return embed;
 }
 
 export function pendingButtons(pairingId: string): ActionRowBuilder<ButtonBuilder> {
@@ -156,6 +166,7 @@ export async function postPendingReport(pairingId: string): Promise<void> {
       result: { gamesWonA: pairing.gamesWonA, gamesWonB: pairing.gamesWonB },
       reporterIsA,
       pairingId: pairing.id,
+      combo: { deck: pairing.reportedDeck, stake: pairing.reportedStake },
     });
     const message = await (channel as TextChannel).send({
       content: `<@${opponent.discordId}> match reported against you`,

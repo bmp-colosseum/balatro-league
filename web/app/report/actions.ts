@@ -26,7 +26,9 @@ export async function submitReportFromReportPage(formData: FormData) {
   if (!opponentId || !["2-0", "1-1", "0-2"].includes(result)) {
     redirect("/report?err=missing-fields");
   }
-  const r = await reportSetFromWeb(discordId!, opponentId, result);
+  const deck = String(formData.get("deck") ?? "").trim() || null;
+  const stake = String(formData.get("stake") ?? "").trim() || null;
+  const r = await reportSetFromWeb(discordId!, opponentId, result, { deck, stake });
   if (!r.ok) redirect(`/report?err=${encodeURIComponent(r.reason)}`);
   revalidatePath("/report");
   revalidatePath("/me");

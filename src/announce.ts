@@ -71,6 +71,13 @@ export async function announceResult(pairingId: string): Promise<void> {
     .setColor(color)
     .setFooter({ text: `Match ${pairing.id}` })
     .setTimestamp(new Date());
+  if (pairing.reportedDeck || pairing.reportedStake) {
+    embed.addFields({
+      name: "🎴 Played",
+      value: [pairing.reportedDeck, pairing.reportedStake].filter(Boolean).join(" / "),
+      inline: false,
+    });
+  }
 
   // Dispute button — visible inline so a player who sees their result
   // and disagrees can flag it without leaving the channel. Routes to

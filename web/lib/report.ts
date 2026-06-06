@@ -51,6 +51,7 @@ export async function reportSetFromWeb(
   reporterDiscordId: string,
   opponentPlayerId: string,
   result: ReportResultStr,
+  combo?: { deck?: string | null; stake?: string | null },
 ): Promise<ReportOutcome> {
   const reporter = await prisma.player.findUnique({ where: { discordId: reporterDiscordId } });
   if (!reporter) return { ok: false, reason: "You don't have a Player record — ask an admin to add you." };
@@ -117,6 +118,8 @@ export async function reportSetFromWeb(
   // The Discord /report slash command still uses the PENDING + 2-min
   // confirm window since that's natural in a channel context.
   const now = new Date();
+  const reportedDeck = combo?.deck?.trim() || null;
+  const reportedStake = combo?.stake?.trim() || null;
   const pairing = existing
     ? await prisma.pairing.update({
         where: { id: existing.id },
@@ -127,6 +130,8 @@ export async function reportSetFromWeb(
           reporterId: reporter.id,
           reportedAt: now,
           confirmedAt: now,
+          reportedDeck,
+          reportedStake,
         },
       })
     : await prisma.pairing.create({
@@ -140,6 +145,8 @@ export async function reportSetFromWeb(
           reporterId: reporter.id,
           reportedAt: now,
           confirmedAt: now,
+          reportedDeck,
+          reportedStake,
         },
       });
   recomputeDivisionStandings(division.id).catch((err) =>

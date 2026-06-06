@@ -11,6 +11,9 @@ export interface ReportInput {
   reporterPlayerId: string;
   opponentPlayerId: string;
   result: PairingResult;
+  // Optional combo that was played — captured for the record / history.
+  deck?: string | null;
+  stake?: string | null;
 }
 
 export type ReportResult =
@@ -73,6 +76,8 @@ export async function reportSet(input: ReportInput): Promise<ReportResult> {
   // promotes it to CONFIRMED. No standings recompute or announce
   // happens until status flips to CONFIRMED.
   const now = new Date();
+  const reportedDeck = input.deck?.trim() || null;
+  const reportedStake = input.stake?.trim() || null;
   const pairing = existing
     ? await prisma.pairing.update({
         where: { id: existing.id },
@@ -83,6 +88,8 @@ export async function reportSet(input: ReportInput): Promise<ReportResult> {
           reporterId: input.reporterPlayerId,
           reportedAt: now,
           confirmedAt: null,
+          reportedDeck,
+          reportedStake,
         },
       })
     : await prisma.pairing.create({
@@ -95,6 +102,8 @@ export async function reportSet(input: ReportInput): Promise<ReportResult> {
           status: "PENDING",
           reporterId: input.reporterPlayerId,
           reportedAt: now,
+          reportedDeck,
+          reportedStake,
         },
       });
 

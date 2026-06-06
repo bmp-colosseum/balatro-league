@@ -12,6 +12,7 @@ import {
   type StringSelectMenuInteraction,
 } from "discord.js";
 import { enqueueAnnounceResult } from "../queue.js";
+import { CANONICAL_DECKS, CANONICAL_STAKES } from "../balatro-info.js";
 import { prisma } from "../db.js";
 import { spawnDisputeThread } from "../dispute-thread.js";
 import { getOrCreatePlayer } from "../players.js";
@@ -43,11 +44,27 @@ export const report: SlashCommand = {
         .setDescription("Result from YOUR point of view")
         .setRequired(true)
         .addChoices(...RESULT_CHOICES),
+    )
+    .addStringOption((opt) =>
+      opt
+        .setName("deck")
+        .setDescription("Optional: the deck that was played")
+        .setRequired(false)
+        .addChoices(...CANONICAL_DECKS.slice(0, 25).map((d) => ({ name: d.name, value: d.name }))),
+    )
+    .addStringOption((opt) =>
+      opt
+        .setName("stake")
+        .setDescription("Optional: the stake that was played")
+        .setRequired(false)
+        .addChoices(...CANONICAL_STAKES.slice(0, 25).map((s) => ({ name: s.name, value: s.name }))),
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
     const opponentUser = interaction.options.getUser("opponent", true);
     const resultStr = interaction.options.getString("result", true);
+    const deck = interaction.options.getString("deck");
+    const stake = interaction.options.getString("stake");
     if (!["2-0", "1-1", "0-2"].includes(resultStr)) {
       await interaction.reply({
         content: `Invalid result \`${resultStr}\`. Use 2-0, 1-1, or 0-2.`,
@@ -72,6 +89,8 @@ export const report: SlashCommand = {
       reporterPlayerId: reporter.id,
       opponentPlayerId: opponent.id,
       result: resultStr as "2-0" | "1-1" | "0-2",
+      deck,
+      stake,
     });
     if (!r.ok) {
       await interaction.editReply(r.reason);

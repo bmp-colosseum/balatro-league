@@ -7,6 +7,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { loadReportPageData } from "@/lib/loaders/report";
+import { CANONICAL_DECKS, CANONICAL_STAKES } from "@/lib/balatro-info";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { submitReportFromReportPage, submitReportPageDispute } from "./actions";
@@ -83,6 +84,18 @@ export default async function ReportPage({
                   <option value="2-0">2-0 (I won both)</option>
                   <option value="1-1">1-1 (draw)</option>
                   <option value="0-2">0-2 (I lost both)</option>
+                </select>
+                <select name="deck" defaultValue="" title="Optional: deck played">
+                  <option value="">deck (optional)</option>
+                  {CANONICAL_DECKS.map((d) => (
+                    <option key={d.name} value={d.name}>{d.name}</option>
+                  ))}
+                </select>
+                <select name="stake" defaultValue="" title="Optional: stake played">
+                  <option value="">stake (optional)</option>
+                  {CANONICAL_STAKES.map((s) => (
+                    <option key={s.name} value={s.name}>{s.name}</option>
+                  ))}
                 </select>
                 <button type="submit">Report</button>
               </form>

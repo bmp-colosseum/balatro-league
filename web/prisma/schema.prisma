@@ -651,6 +651,11 @@ model Pairing {
   // Per-game DC attribution lives in the MatchSession GameState JSON.
   hadDc                     Boolean       @default(false)
 
+  // Optional deck/stake captured on a manual report (the combo that was
+  // played). Null when not provided / from the guided match flow.
+  reportedDeck              String?
+  reportedStake             String?
+
   division     Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
   playerA      Player   @relation("PairingPlayerA", fields: [playerAId], references: [id])
   playerB      Player   @relation("PairingPlayerB", fields: [playerBId], references: [id])
