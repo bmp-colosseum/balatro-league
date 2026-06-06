@@ -50,33 +50,25 @@ export async function createSeason(formData: FormData) {
   const subtitleRaw = String(formData.get("subtitle") ?? "").trim();
   const subtitle = subtitleRaw.length > 0 ? subtitleRaw : null;
 
-  // Tier config is now OPTIONAL — admin can skip setup and configure tiers
-  // later once they see how many players signed up.
-  const configs = parseConfig(String(formData.get("config") ?? ""));
-
   const targetGroupSize = Math.max(2, parseInt(String(formData.get("targetGroupSize")), 10) || 5);
   const minGroupSize = Math.max(2, parseInt(String(formData.get("minGroupSize")), 10) || 3);
 
+  // A season is created EMPTY — no tiers, no divisions. Tiers/divisions are
+  // only built later, from the actual signups, after signups close. Keeping
+  // tier setup out of creation avoids accidentally creating divisions
+  // before anyone's signed up.
   const number = await nextSeasonNumber(prisma);
   const season = await prisma.season.create({
     data: { number, subtitle, isActive: false, targetGroupSize, minGroupSize },
   });
 
-  if (configs.length > 0) {
-    await createTiersAndDivisionsFor(season.id, configs);
-    await prisma.tierTemplate.upsert({
-      where: { name: LAST_USED_NAME },
-      create: { name: LAST_USED_NAME, config: JSON.stringify(configs), isLastUsed: true },
-      update: { config: JSON.stringify(configs), isLastUsed: true },
-    });
-  }
   recordAudit({
     actor: actorFromAdminUser(user),
     action: "season.create",
     targetType: "Season",
     targetId: season.id,
     summary: `Created season "${formatSeasonLabel(season)}"`,
-    metadata: { targetGroupSize, minGroupSize, tierCount: configs.length },
+    metadata: { targetGroupSize, minGroupSize },
   });
 
   revalidatePath("/admin/seasons");

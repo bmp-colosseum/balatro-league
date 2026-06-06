@@ -3,11 +3,9 @@ import { requireAdmin } from "@/lib/admin";
 import { loadAdminSeasonsIndex } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
-import { TierEditor } from "@/components/TierEditor";
 import {
   activateSeason,
   archiveSeason,
-  configureTiers,
   createSeason,
   deleteSeason,
   finalizeSignupsForSeason,
@@ -35,8 +33,6 @@ export default async function AdminSeasonsPage({
 
   const {
     seasons,
-    templates,
-    initialTierConfig: initial,
     presets,
     defaultPreset,
     roundsBySeason,
@@ -246,21 +242,11 @@ export default async function AdminSeasonsPage({
                     </div>
                   </div>
                 ) : (
-                  <details style={{ marginTop: 8 }}>
-                    <summary style={{ cursor: "pointer" }}>
-                      <strong>⚙ Configure tiers</strong>
-                      <span className="muted" style={{ marginLeft: 8, fontSize: 11 }}>
-                        — no divisions yet. {roundsBySeason.get(s.id)?._count.signups != null
-                          ? `${roundsBySeason.get(s.id)?._count.signups} signed up so far.`
-                          : "Set this up before opening signups, or after closing."}
-                      </span>
-                    </summary>
-                    <form action={configureTiers} style={{ marginTop: 8 }}>
-                      <input type="hidden" name="seasonId" value={s.id} />
-                      <TierEditor initial={initial} templates={templates} />
-                      <button type="submit" style={{ marginTop: 8 }}>Create tiers + divisions</button>
-                    </form>
-                  </details>
+                  <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+                    No divisions yet — they get built from the signups once you
+                    finalize sign-ups (below). You set the tier shape at that
+                    build step.
+                  </p>
                 )}
 
                 <DiscordBootstrap season={s} />
@@ -331,32 +317,14 @@ export default async function AdminSeasonsPage({
             </span>
           </summary>
           <p className="muted" style={{ marginTop: 8 }}>
-            Number is assigned automatically — provide an optional subtitle and
-            settings here. Tier shape is configured later, after signups close,
-            so you can split divisions based on the actual player count. (You
-            can still set it now if you already know.)
+            Number is assigned automatically — just an optional subtitle and
+            group sizes here. Tiers and divisions are built later, from the
+            actual signups, after signups close.
           </p>
           <form action={createSeason}>
             <label>Subtitle <input name="subtitle" placeholder="Optional subtitle (e.g. 'Launch')" /></label>
             <label>Group size <input name="targetGroupSize" type="number" min={2} max={20} defaultValue={5} /></label>
             <label>Min group <input name="minGroupSize" type="number" min={2} max={20} defaultValue={3} /></label>
-
-            <details style={{ flex: "1 1 100%", marginTop: 12 }}>
-              <summary style={{ cursor: "pointer" }}>
-                <strong>Optional: set tier shape now</strong>
-                <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
-                  (skip and configure after signups close)
-                </span>
-              </summary>
-              <div style={{ marginTop: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                  <Link href="/admin/seasons/templates" style={{ marginLeft: "auto" }}>
-                    <button type="button" className="secondary">Manage templates</button>
-                  </Link>
-                </div>
-                <TierEditor initial={initial} templates={templates} />
-              </div>
-            </details>
 
             <button type="submit" style={{ marginTop: 12 }}>Create season</button>
           </form>
