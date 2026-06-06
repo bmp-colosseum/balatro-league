@@ -36,7 +36,7 @@ import { env } from "../env.js";
 import { getLeagueSettings, getLeagueSettingsForSeason } from "../league-settings.js";
 import { logDiscordError } from "../log-discord-error.js";
 import { bootstrapPresetsAndPointers, generatePool, presetForCasualMatch, presetForDivision, type DeckEntry } from "../match-config.js";
-import { renderBanConfirmPrompt, renderMatch } from "../match-render.js";
+import { renderBanConfirmPrompt, renderComboBuilder, renderMatch } from "../match-render.js";
 import { summonHelpers } from "./helper.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
 import {
@@ -142,11 +142,7 @@ async function loadAllowedStakes(session: MatchSession): Promise<string[]> {
 
 async function refreshMessage(interaction: AnyInteraction, session: MatchSession) {
   const { playerA, playerB } = await loadPlayers(session);
-  // Allowed stakes feed the combo-proposal UI in ANY BAN phase (proposals
-  // can happen per-game now). Cheap to always fetch.
-  const isBanPhase = session.state === "GAME_1_BAN" || session.state === "GAME_2_BAN" || session.state === "GAME_3_BAN";
-  const allowedStakes = isBanPhase ? await loadAllowedStakes(session) : [];
-  const { embeds, components, content } = renderMatch(session, playerA, playerB, { allowedStakes });
+  const { embeds, components, content } = renderMatch(session, playerA, playerB);
   // Including content on every update lets Discord re-ping whoever's
   // turn it is now — a new mention in an edit fires the same push
   // notification a new message would. Same content across no-op
@@ -377,12 +373,7 @@ async function refreshPublicMatchMessage(interaction: AnyInteraction, session: M
     if (!channel || !("messages" in channel)) return;
     const message = await channel.messages.fetch(session.matchMessageId);
     const { playerA, playerB } = await loadPlayers(session);
-    const isBanPhase =
-      session.state === "GAME_1_BAN" ||
-      session.state === "GAME_2_BAN" ||
-      session.state === "GAME_3_BAN";
-    const allowedStakes = isBanPhase ? await loadAllowedStakes(session) : [];
-    const { embeds, components, content } = renderMatch(session, playerA, playerB, { allowedStakes });
+    const { embeds, components, content } = renderMatch(session, playerA, playerB);
     await message.edit({ content, embeds, components });
   } catch (err) {
     console.warn(`[refreshPublicMatchMessage] failed for ${session.id}:`, err);
@@ -1550,6 +1541,26 @@ async function actorPlayer(interaction: AnyInteraction, session: MatchSession) {
   return null;
 }
 
+// Render the proposer's private builder for an ephemeral reply/update.
+async function buildComboBuilder(session: MatchSession, proposal: ComboProposal) {
+  const { playerA, playerB } = await loadPlayers(session);
+  const proposer = proposal.by === playerA.id ? playerA : playerB;
+  const responder = proposal.by === playerA.id ? playerB : playerA;
+  const allowedStakes = await loadAllowedStakes(session);
+  return renderComboBuilder({
+    sessionId: session.id,
+    proposer,
+    responder,
+    deck: proposal.deck,
+    stake: proposal.stake,
+    allowedStakes,
+  });
+}
+
+// "Propose custom combo" → opens the builder as an EPHEMERAL, private to
+// the proposer. The public ban message is left untouched (the builder no
+// longer takes over the shared message), so the ban phase isn't
+// interrupted while they draft. Only Submit surfaces it publicly.
 async function handleProposeStart(interaction: ButtonInteraction, session: MatchSession) {
   if (banPhaseGameNum(session.state) === 0) {
     return reply(interaction, "You can only propose a custom combo during a ban phase.");
@@ -1562,7 +1573,8 @@ async function handleProposeStart(interaction: ButtonInteraction, session: Match
   const proposal: ComboProposal = { by: ctx.actor.id, status: "building" };
   const updated = await updateSession(session, { customComboProposal: JSON.stringify(proposal) });
   if (!updated) return raceLost(interaction);
-  await refreshMessage(interaction, updated);
+  const built = await buildComboBuilder(updated, proposal);
+  await interaction.reply({ ...built, flags: MessageFlags.Ephemeral });
 }
 
 async function handleProposeDeck(interaction: StringSelectMenuInteraction, session: MatchSession) {
@@ -1580,11 +1592,11 @@ async function handleProposeDeck(interaction: StringSelectMenuInteraction, sessi
   if (!deck || !isCanonicalDeck(deck)) {
     return reply(interaction, "That deck isn't in our registry — pick a known deck.");
   }
-  const updated = await updateSession(session, {
-    customComboProposal: JSON.stringify({ ...proposal, deck }),
-  });
+  const next: ComboProposal = { ...proposal, deck };
+  const updated = await updateSession(session, { customComboProposal: JSON.stringify(next) });
   if (!updated) return raceLost(interaction);
-  await refreshMessage(interaction, updated);
+  const built = await buildComboBuilder(updated, next);
+  await interaction.update(built);
 }
 
 async function handleProposeStake(interaction: StringSelectMenuInteraction, session: MatchSession) {
@@ -1603,13 +1615,15 @@ async function handleProposeStake(interaction: StringSelectMenuInteraction, sess
   if (!stake || !allowedStakes.includes(stake)) {
     return reply(interaction, "That stake isn't in this season's preset — pick one from the menu.");
   }
-  const updated = await updateSession(session, {
-    customComboProposal: JSON.stringify({ ...proposal, stake }),
-  });
+  const next: ComboProposal = { ...proposal, stake };
+  const updated = await updateSession(session, { customComboProposal: JSON.stringify(next) });
   if (!updated) return raceLost(interaction);
-  await refreshMessage(interaction, updated);
+  const built = await buildComboBuilder(updated, next);
+  await interaction.update(built);
 }
 
+// Submit → flip to "pending". Closes the proposer's ephemeral builder and
+// surfaces the proposal on the PUBLIC message for the opponent.
 async function handleProposeSubmit(interaction: ButtonInteraction, session: MatchSession) {
   if (banPhaseGameNum(session.state) === 0) return reply(interaction, "Not in a ban phase.");
   const proposal = parseProposal(session.customComboProposal);
@@ -1628,9 +1642,17 @@ async function handleProposeSubmit(interaction: ButtonInteraction, session: Matc
     customComboProposal: JSON.stringify({ ...proposal, status: "pending" }),
   });
   if (!updated) return raceLost(interaction);
-  await refreshMessage(interaction, updated);
+  const sentEmbed = new EmbedBuilder()
+    .setTitle("✅ Proposal sent")
+    .setColor(0x2ecc71)
+    .setDescription(`Proposed **${proposal.deck} / ${proposal.stake}** — waiting on ${ctx.other.displayName} to respond.`);
+  await interaction.update({ embeds: [sentEmbed], components: [] });
+  await refreshPublicMatchMessage(interaction, updated);
 }
 
+// Counter → the responder takes over the proposal. Re-opens the builder
+// as THEIR private ephemeral and clears the public pending proposal (back
+// to the ban UI) so it isn't sitting there mid-counter.
 async function handleProposeCounter(interaction: ButtonInteraction, session: MatchSession) {
   if (banPhaseGameNum(session.state) === 0) return reply(interaction, "Not in a ban phase.");
   const proposal = parseProposal(session.customComboProposal);
@@ -1642,23 +1664,37 @@ async function handleProposeCounter(interaction: ButtonInteraction, session: Mat
   if (proposal.by === ctx.actor.id) {
     return reply(interaction, "You're the proposer — wait for your opponent's response.");
   }
-  // Flip ownership to the actor, drop their picks, drop back to building.
+  // Flip ownership to the actor, drop the picks, back to building.
   const next: ComboProposal = { by: ctx.actor.id, status: "building" };
   const updated = await updateSession(session, { customComboProposal: JSON.stringify(next) });
   if (!updated) return raceLost(interaction);
-  await refreshMessage(interaction, updated);
+  const built = await buildComboBuilder(updated, next);
+  await interaction.reply({ ...built, flags: MessageFlags.Ephemeral });
+  await refreshPublicMatchMessage(interaction, updated);
 }
 
 async function handleProposeCancel(interaction: ButtonInteraction, session: MatchSession) {
   if (banPhaseGameNum(session.state) === 0) return reply(interaction, "Not in a ban phase.");
-  if (!session.customComboProposal) {
+  const proposal = parseProposal(session.customComboProposal);
+  if (!proposal) {
     return reply(interaction, "No proposal to cancel.");
   }
   const ctx = await actorPlayer(interaction, session);
   if (!ctx) return;
   const updated = await updateSession(session, { customComboProposal: null });
   if (!updated) return raceLost(interaction);
-  await refreshMessage(interaction, updated);
+  // Building cancel comes from the proposer's ephemeral builder — dismiss
+  // it (the public message was never changed). Pending cancel comes from
+  // the public proposal — re-render the public message back to the ban UI.
+  if (proposal.status === "building") {
+    const embed = new EmbedBuilder()
+      .setTitle("Proposal cancelled")
+      .setColor(0x95a5a6)
+      .setDescription("No combo proposed — back to the ban phase.");
+    await interaction.update({ embeds: [embed], components: [] });
+  } else {
+    await refreshMessage(interaction, updated);
+  }
 }
 
 // Mutual-consent cancel — one button on the helper row, no ephemeral
