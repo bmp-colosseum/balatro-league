@@ -873,6 +873,38 @@ export async function addLatePlayerToDivision(formData: FormData) {
   revalidatePath(`/seasons/${division!.seasonId}`);
 }
 
+// Add an EXISTING player (picked from the player list via search) to a
+// division — no Discord-ID resolution, just place them by player id.
+export async function addExistingPlayerToDivision(formData: FormData) {
+  const { user } = await requireAdmin();
+  const divisionId = String(formData.get("divisionId") ?? "").trim();
+  const playerId = String(formData.get("playerId") ?? "").trim();
+  if (!divisionId || !playerId) return;
+
+  const division = await prisma.division.findUnique({
+    where: { id: divisionId },
+    select: { id: true, name: true, seasonId: true },
+  });
+  if (!division) redirect(`/admin/seasons?err=${encodeURIComponent("Division not found")}`);
+  const player = await prisma.player.findUnique({
+    where: { id: playerId },
+    select: { id: true, displayName: true },
+  });
+  if (!player) redirect(`/seasons/${division!.seasonId}?err=${encodeURIComponent("Player not found")}`);
+
+  const { placePlayerInDivision } = await import("@/lib/division-membership");
+  await placePlayerInDivision(division!.id, player!.id);
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "division.add-existing-player",
+    targetType: "DivisionMember",
+    targetId: player!.id,
+    summary: `Added existing player ${player!.displayName} to ${division!.name}`,
+    metadata: { seasonId: division!.seasonId, divisionId: division!.id, playerId: player!.id },
+  });
+  revalidatePath(`/seasons/${division!.seasonId}`);
+}
+
 // Drop-anywhere positional move: dragged a player to a specific row
 // index in a target division (cross-division OR within-division
 // reorder). The simpler moveDivisionMember just appends to the end —

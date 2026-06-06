@@ -269,6 +269,11 @@ async function AdminSeasonPanel({
     orderBy: [{ isDefault: "desc" }, { name: "asc" }],
     select: { id: true, name: true, isDefault: true },
   });
+  // Existing players for the draft editor's "add existing player" search.
+  const allPlayers = await prisma.player.findMany({
+    select: { id: true, displayName: true },
+    orderBy: { displayName: "asc" },
+  });
 
   return (
     <>
@@ -419,6 +424,7 @@ async function AdminSeasonPanel({
                 tiers={editorTiers}
                 divisions={editorDivisions}
                 initialMembers={editorMembers}
+                allPlayers={allPlayers}
               />
             );
           })()}

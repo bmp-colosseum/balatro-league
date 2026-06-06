@@ -21,7 +21,8 @@
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { moveDivisionMember, moveDivisionMemberToPosition } from "@/app/admin/seasons/actions";
-import { addLatePlayerToDivision, deleteDivision } from "@/app/admin/seasons/actions";
+import { addExistingPlayerToDivision, addLatePlayerToDivision, deleteDivision } from "@/app/admin/seasons/actions";
+import { PlayerSearch, type PlayerOption } from "@/components/PlayerSearch";
 import { addDivisionToTier } from "@/app/admin/seasons/actions";
 
 export interface EditorMember {
@@ -81,11 +82,13 @@ export function DraggableDivisionsEditor({
   tiers,
   divisions,
   initialMembers,
+  allPlayers = [],
 }: {
   seasonId: string;
   tiers: EditorTier[];
   divisions: EditorDivision[];
   initialMembers: EditorMember[];
+  allPlayers?: PlayerOption[];
 }) {
   const [members, setMembers] = useState<EditorMember[]>(initialMembers);
   const [dragPlayerId, setDragPlayerId] = useState<string | null>(null);
@@ -446,6 +449,18 @@ export function DraggableDivisionsEditor({
                       />
                       <button type="submit" className="secondary" style={{ fontSize: 11, padding: "1px 6px" }}>Add</button>
                     </form>
+                    {/* Or pick an existing player by name (search). */}
+                    {allPlayers.length > 0 && (
+                      <form
+                        action={addExistingPlayerToDivision}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        style={{ display: "flex", gap: 4, marginTop: 4, fontSize: 11 }}
+                      >
+                        <input type="hidden" name="divisionId" value={d.id} />
+                        <PlayerSearch players={allPlayers} name="playerId" placeholder="+ search existing player…" />
+                        <button type="submit" className="secondary" style={{ fontSize: 11, padding: "1px 6px" }}>Add</button>
+                      </form>
+                    )}
                   </div>
                 );
               })}
