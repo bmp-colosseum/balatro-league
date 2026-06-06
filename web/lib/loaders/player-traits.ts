@@ -201,12 +201,15 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
     const useDeck = deckHateRate >= stakeHateRate;
     const target = useDeck ? topFirstDeck! : topFirstStake!;
     const rate = useDeck ? deckHateRate : stakeHateRate;
+    // Always qualify with "Deck"/"Stake" so a color-named one (Black, Gold,
+    // White, …) reads unmistakably as a Balatro thing, never a slur.
+    const label = useDeck ? `${target.name} Deck Banisher` : `${target.name} Stake Banisher`;
     traits.push({
-      key: "hater",
-      label: `${target.name} Hater`,
+      key: "banisher",
+      label,
       emoji: "🔨",
-      description: `Bans ${target.name} first, on sight, almost every game.`,
-      detail: `first-banned ${target.name} in ${Math.round(rate * 100)}% of games`,
+      description: `First-bans the ${target.name} ${useDeck ? "deck" : "stake"} almost every game — banishes it on sight.`,
+      detail: `first-banned in ${Math.round(rate * 100)}% of games`,
     });
   }
   // 🎲 Rando Brando — loves the random buttons.

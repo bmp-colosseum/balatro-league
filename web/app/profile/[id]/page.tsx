@@ -602,6 +602,9 @@ export default async function ProfilePage({
                                       <span
                                         title={`${g.deck} / ${g.stake}${g.iWon === null ? "" : g.iWon ? " · won" : " · lost"}`}
                                         style={{
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: 2,
                                           color:
                                             g.iWon === true
                                               ? "#2ecc71"
@@ -610,6 +613,10 @@ export default async function ProfilePage({
                                               : undefined,
                                         }}
                                       >
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={deckImage(g.deck)} alt="" width={14} height={14} style={{ borderRadius: 2 }} />
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img src={stakeImage(g.stake)} alt="" width={14} height={14} style={{ borderRadius: 2 }} />
                                         {g.deck}/{g.stake}
                                       </span>
                                     </span>
