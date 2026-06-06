@@ -286,6 +286,30 @@ export async function addSignupByDiscordId(formData: FormData) {
   revalidatePath(`/admin/signups/${roundId}/build`);
 }
 
+// Add an EXISTING player to the signup round by player id (from the search
+// picker) — looks up their Discord id + name, no manual ID typing.
+export async function addSignupByPlayerId(formData: FormData) {
+  await requireAdmin();
+  const roundId = String(formData.get("roundId") ?? "");
+  const playerId = String(formData.get("playerId") ?? "");
+  if (!roundId || !playerId) {
+    redirect(`/admin/signups/${roundId}/build?err=missing-fields`);
+  }
+  const player = await prisma.player.findUnique({
+    where: { id: playerId },
+    select: { discordId: true, displayName: true },
+  });
+  if (!player) {
+    redirect(`/admin/signups/${roundId}/build?err=${encodeURIComponent("Player not found")}`);
+  }
+  await prisma.signup.upsert({
+    where: { roundId_discordId: { roundId, discordId: player!.discordId } },
+    create: { roundId, discordId: player!.discordId, displayName: player!.displayName, withdrawn: false },
+    update: { displayName: player!.displayName, withdrawn: false },
+  });
+  revalidatePath(`/admin/signups/${roundId}/build`);
+}
+
 // Commit: place players into divisions and mark round BUILT.
 //
 // Two modes (auto-detected):

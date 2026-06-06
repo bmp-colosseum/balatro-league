@@ -6,7 +6,8 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
 import { DraggableRatingTable, type RatingRow } from "@/components/DraggableRatingTable";
-import { addSignupByDiscordId, autoFillRatingsFromMmr, buildSeason, refreshSignupMmrSnapshots, saveRatings } from "./actions";
+import { addSignupByDiscordId, addSignupByPlayerId, autoFillRatingsFromMmr, buildSeason, refreshSignupMmrSnapshots, saveRatings } from "./actions";
+import { PlayerSearch } from "@/components/PlayerSearch";
 import { nextSeasonNumber } from "@/lib/format-season";
 import { prisma } from "@/lib/prisma";
 
@@ -40,6 +41,11 @@ export default async function BuildSeasonPage({
     playerCount,
   } = result;
   const nextNumber = await nextSeasonNumber(prisma);
+  // Existing players for the "add by name" search picker.
+  const allPlayers = await prisma.player.findMany({
+    select: { id: true, displayName: true },
+    orderBy: { displayName: "asc" },
+  });
 
   return (
     <>
@@ -107,6 +113,13 @@ export default async function BuildSeasonPage({
             />
             <button type="submit">Look up & add</button>
           </form>
+          {allPlayers.length > 0 && (
+            <form action={addSignupByPlayerId} style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+              <input type="hidden" name="roundId" value={round.id} />
+              <PlayerSearch players={allPlayers} name="playerId" placeholder="…or add an existing player by name" />
+              <button type="submit" className="secondary">Add</button>
+            </form>
+          )}
         </div>
 
         <div className="card">
