@@ -110,36 +110,30 @@ function shuffle<T>(arr: T[], rand: () => number): T[] {
   return a;
 }
 
-// One-shot bootstrap. If NO presets exist at all, create a single
-// 'Stock' preset with the stock Balatro decks/stakes and point BOTH
-// config keys at it so /start-match and /challenge can resolve a
-// preset on day one. Admin can rename, edit, add more presets, or
-// move the pointers afterwards — none of that depends on the name.
-//
-// If presets already exist but the config keys aren't set yet (e.g.
-// fresh deploy on top of a prior schema), point the keys at whichever
-// preset exists so the resolvers don't hit null.
+// Bootstrap + keep the canonical pool in sync. The "Stock" preset is the
+// managed default — it's force-synced to match-defaults.json on every
+// boot, so editing that file and redeploying actually updates the live
+// pool. (The old behavior only seeded once, so a stale pool stuck forever
+// even across test-env wipes, which preserve presets.) Admins who want a
+// different pool make a SEPARATE named preset and point a role at it;
+// Stock stays canonical.
 export async function bootstrapPresetsAndPointers(): Promise<void> {
-  const presetCount = await prisma.matchConfigPreset.count();
-  let anchor = await firstExistingPreset();
+  let anchor = await prisma.matchConfigPreset.findUnique({ where: { name: STOCK_SEED_NAME } });
 
-  if (presetCount === 0) {
+  if (!anchor) {
+    // Missing (fresh DB, or some other preset exists but Stock was never
+    // created) — create it from the canonical defaults.
     anchor = await prisma.matchConfigPreset.create({
       data: { name: STOCK_SEED_NAME, decks: defaults.decks, stakes: defaults.stakes },
     });
-  } else if (anchor && (anchor.decks.length === 0 || anchor.stakes.length === 0)) {
-    // Existing-but-empty preset — backfill so the resolver doesn't
-    // return a useless row.
-    await prisma.matchConfigPreset.update({
+  } else {
+    // Force-sync to the canonical pool so the defaults file is the single
+    // source of truth.
+    anchor = await prisma.matchConfigPreset.update({
       where: { id: anchor.id },
-      data: {
-        ...(anchor.decks.length === 0 ? { decks: defaults.decks } : {}),
-        ...(anchor.stakes.length === 0 ? { stakes: defaults.stakes } : {}),
-      },
+      data: { decks: defaults.decks, stakes: defaults.stakes },
     });
   }
-
-  if (!anchor) return;
 
   // Point the LeagueConfig keys at the anchor preset, but ONLY if
   // they're currently unset — admin's existing choices win.
