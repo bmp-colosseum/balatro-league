@@ -13,53 +13,15 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { prisma } from "../db.js";
-
-// Every Prisma model, camelCased as on the client. Order here is just the
-// dump order; import-full.ts handles FK-safe insert order.
-const MODELS = [
-  "player",
-  "playerMmrSnapshot",
-  "easterEggVote",
-  "season",
-  "signupRound",
-  "signup",
-  "matchConfigPreset",
-  "matchSession",
-  "leagueConfig",
-  "seasonInterest",
-  "roleBinding",
-  "tierTemplate",
-  "tier",
-  "division",
-  "divisionStandings",
-  "shootout",
-  "divisionMember",
-  "pairing",
-  "leagueRulesTemplate",
-  "adminAuditEvent",
-] as const;
-
-type AnyDelegate = { findMany: () => Promise<unknown[]> };
-const client = prisma as unknown as Record<string, AnyDelegate>;
+import { buildFullExport } from "../league-export.js";
 
 async function main(): Promise<void> {
-  const out: Record<string, unknown> = {
-    exportedAt: new Date().toISOString(),
-    schemaVersion: 1,
-  };
-  let total = 0;
-  for (const model of MODELS) {
-    const rows = await client[model]!.findMany();
-    out[model] = rows;
-    total += rows.length;
-  }
-
+  const { data, rowCount } = await buildFullExport();
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
   const path = process.argv[2] ?? `backups/full-export-${ts}.json`;
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(out, null, 2), "utf-8");
-  console.log(`Exported ${total} rows across ${MODELS.length} models → ${path}`);
+  writeFileSync(path, JSON.stringify(data, null, 2), "utf-8");
+  console.log(`Exported ${rowCount} rows → ${path}`);
 }
 
 await main();

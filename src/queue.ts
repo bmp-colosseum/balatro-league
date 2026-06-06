@@ -36,7 +36,7 @@ import {
   removeGuildMemberRole as removeGuildMemberRoleViaBot,
 } from "./discord-helpers.js";
 import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
-import { buildLeagueExport, exportFilename, serializeExport } from "./league-export.js";
+import { buildFullExport, buildLeagueExport, exportFilename, fullExportFilename, serializeExport } from "./league-export.js";
 import { formatSeasonLabel } from "./format-season.js";
 import { postPendingReport } from "./report-flow.js";
 import { autoConfirmReport } from "./report-auto-confirm.js";
@@ -79,6 +79,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("dispute.spawn-thread");
   await boss.createQueue("notify.announce-result");
   await boss.createQueue("league-info.refresh");
+  await boss.createQueue("refresh.display-names");
 
   // One-shot cleanup for retired queues. archive.stale-threads was the
   // pre-5c2bc7c hourly cron that got merged into match-sweep's 60s
@@ -228,6 +229,16 @@ export async function initQueue(): Promise<void> {
   // non-issue for Discord storage.
   await boss.schedule("backup.league", "0 6 * * *");
   console.log("[pg-boss] scheduled backup.league @ 06:00 UTC daily");
+
+  // Worker: refresh every player's display name from their CURRENT server
+  // (guild) display name — so the league shows their nickname, and tracks
+  // changes. Daily is plenty (no live nickname hook). Players who set a
+  // custom name (hasCustomDisplayName) are left alone.
+  await boss.work("refresh.display-names", { batchSize: 1 }, async () => {
+    await runDisplayNameRefresh();
+  });
+  await boss.schedule("refresh.display-names", "0 7 * * *");
+  console.log("[pg-boss] scheduled refresh.display-names @ 07:00 UTC daily");
 
   // Worker: post the public PENDING report embed to #results. Used by
   // the web-side /me report flow which can't post directly. Discord
@@ -380,6 +391,45 @@ export async function enqueueReportAutoConfirm(pairingId: string): Promise<void>
 
 // Build snapshot, post to the bot-commands channel as a file. Shared
 // between the weekly cron and the /admin export-results command.
+// Pull each player's current SERVER (guild) display name and store it as
+// their league display name, so the league reflects nicknames and tracks
+// changes. Individual member fetches (no privileged GuildMembers intent
+// needed). Skips players who set a custom name, and silently skips anyone
+// who left the guild / can't be fetched.
+export async function runDisplayNameRefresh(): Promise<{ updated: number; checked: number }> {
+  const guildId = env.DISCORD_GUILD_ID;
+  if (!guildId) {
+    console.warn("[refresh.display-names] no DISCORD_GUILD_ID — skipping");
+    return { updated: 0, checked: 0 };
+  }
+  const client = tryGetDiscordClient();
+  if (!client) {
+    console.warn("[refresh.display-names] Discord client not ready — skipping");
+    return { updated: 0, checked: 0 };
+  }
+  const guild = await client.guilds.fetch(guildId).catch(() => null);
+  if (!guild) {
+    console.warn(`[refresh.display-names] couldn't fetch guild ${guildId}`);
+    return { updated: 0, checked: 0 };
+  }
+  const players = await prisma.player.findMany({
+    where: { hasCustomDisplayName: false },
+    select: { id: true, discordId: true, displayName: true },
+  });
+  let updated = 0;
+  for (const p of players) {
+    const member = await guild.members.fetch(p.discordId).catch(() => null);
+    if (!member) continue; // left the guild, or a non-snowflake (mock) id
+    const name = member.displayName; // nickname ?? global name ?? username
+    if (name && name !== p.displayName) {
+      await prisma.player.update({ where: { id: p.id }, data: { displayName: name } });
+      updated++;
+    }
+  }
+  console.log(`[refresh.display-names] updated ${updated}/${players.length}`);
+  return { updated, checked: players.length };
+}
+
 export async function runLeagueBackup(): Promise<{
   postedTo: string | null;
   fileSize: number;
@@ -413,10 +463,28 @@ export async function runLeagueBackup(): Promise<{
       console.warn(`[backup.league] channel ${channelId} not a text channel`);
       return { postedTo: null, fileSize: buf.length, filename };
     }
-    const attachment = new AttachmentBuilder(buf, { name: filename });
+    const files = [new AttachmentBuilder(buf, { name: filename })];
+    // Also attach the FULL dump (every model) for an exact rebuild — as
+    // long as it fits under Discord's bot upload limit (~8MB). Beyond that
+    // we skip it and rely on `npm run export:full` / pg_dump off-platform.
+    let fullNote = "";
+    try {
+      const { data: fullData, rowCount } = await buildFullExport();
+      const fullBuf = Buffer.from(JSON.stringify(fullData), "utf-8");
+      if (fullBuf.length <= 7_500_000) {
+        files.push(new AttachmentBuilder(fullBuf, { name: fullExportFilename() }));
+        fullNote = ` + full dump (${rowCount} rows, ${Math.round(fullBuf.length / 1024)}KB)`;
+      } else {
+        fullNote = ` — full dump skipped (${Math.round(fullBuf.length / 1024)}KB > Discord limit; use export:full)`;
+      }
+    } catch (err) {
+      console.warn("[backup.league] full export failed:", err);
+    }
     await channel.send({
-      content: `📦 Weekly league backup — ${data.seasons.length} seasons, ${data.players.length} players. Source of truth if Railway eats itself.`,
-      files: [attachment],
+      content:
+        `📦 Daily league backup — ${data.seasons.length} seasons, ${data.players.length} players${fullNote}. ` +
+        `Source of truth if Railway eats itself.`,
+      files,
     });
     return { postedTo: channelId, fileSize: buf.length, filename };
   } catch (err) {

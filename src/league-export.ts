@@ -179,3 +179,29 @@ export function exportFilename(): string {
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
   return `balatro-league-backup-${ts}.json`;
 }
+
+// FULL dump — every row of every model, for an exact rebuild after a schema
+// change. Shared by the export:full script and the daily Discord backup.
+const FULL_MODELS = [
+  "player", "playerMmrSnapshot", "easterEggVote", "season", "signupRound", "signup",
+  "matchConfigPreset", "matchSession", "leagueConfig", "seasonInterest", "roleBinding",
+  "tierTemplate", "tier", "division", "divisionStandings", "shootout", "divisionMember",
+  "pairing", "leagueRulesTemplate", "adminAuditEvent",
+] as const;
+
+export async function buildFullExport(): Promise<{ data: Record<string, unknown>; rowCount: number }> {
+  const out: Record<string, unknown> = { exportedAt: new Date().toISOString(), schemaVersion: 1 };
+  const client = prisma as unknown as Record<string, { findMany: () => Promise<unknown[]> }>;
+  let rowCount = 0;
+  for (const model of FULL_MODELS) {
+    const rows = await client[model]!.findMany();
+    out[model] = rows;
+    rowCount += rows.length;
+  }
+  return { data: out, rowCount };
+}
+
+export function fullExportFilename(): string {
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  return `balatro-league-full-${ts}.json`;
+}
