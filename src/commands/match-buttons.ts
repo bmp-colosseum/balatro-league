@@ -20,6 +20,7 @@ import {
   TextInputStyle,
   ThreadAutoArchiveDuration,
   type ButtonInteraction,
+  type Client,
   type GuildTextBasedChannel,
   type ModalSubmitInteraction,
   type StringSelectMenuInteraction,
@@ -309,6 +310,33 @@ async function loadBanContext(
   const actor = await prisma.player.findUniqueOrThrow({ where: { id: phase.whoseBanId } });
   if (!(await requireActor(interaction, actor.discordId))) return null;
   return { gameNum: gameNum as 1 | 2 | 3, gameField, game, expected: phase.remainingForThem };
+}
+
+// Re-post the match controls at the BOTTOM of the thread. Called after the
+// bot itself posts another message (e.g. a helper summon) that would bury
+// the controls and force players to scroll up. Posts fresh controls,
+// repoints matchMessageId, then deletes the old message. No-op on terminal
+// states or when there's no channel.
+async function bumpMatchControls(client: Client, session: MatchSession): Promise<void> {
+  if (session.state === "COMPLETE" || session.state === "CANCELLED") return;
+  const channelId = session.threadId ?? session.channelId;
+  if (!channelId) return;
+  try {
+    const channel = await client.channels.fetch(channelId);
+    if (!channel || !("send" in channel) || !("messages" in channel)) return;
+    const { playerA, playerB } = await loadPlayers(session);
+    const { embeds, components, content } = renderMatch(session, playerA, playerB);
+    const sent = await channel.send({ content: content || undefined, embeds, components });
+    const oldId = session.matchMessageId;
+    await prisma.matchSession
+      .update({ where: { id: session.id }, data: { matchMessageId: sent.id } })
+      .catch(() => {});
+    if (oldId) {
+      await channel.messages.fetch(oldId).then((m) => m.delete()).catch(() => {});
+    }
+  } catch (err) {
+    console.warn(`[bumpMatchControls] failed for ${session.id}:`, err);
+  }
 }
 
 // Cross-interaction edit of the canonical public match message. Used
@@ -1086,6 +1114,12 @@ export const callHelperModal = {
       return;
     }
     await interaction.reply({ content: result.content });
+    // The helper ping just posted below the controls — bump them back to
+    // the bottom so players don't have to scroll up to keep playing.
+    if (sessionId) {
+      const s = await loadSession(sessionId);
+      if (s) await bumpMatchControls(interaction.client, s);
+    }
   },
 } as const;
 
