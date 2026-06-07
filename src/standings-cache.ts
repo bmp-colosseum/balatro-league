@@ -28,25 +28,40 @@ interface CachedRow {
 }
 
 export async function recomputeDivisionStandings(divisionId: string): Promise<void> {
+  // Transitional projection: keep the unified Match model current FIRST (it's
+  // still derived from Pairing/Shootout until the writers cut over), THEN
+  // compute standings from it. Best-effort — a projection failure must never
+  // break the standings cache. Removed once writers populate Match directly.
+  await projectDivisionMatches(divisionId).catch((err) =>
+    console.warn(`[match-projection] division ${divisionId} failed:`, err),
+  );
   const div = await prisma.division.findUnique({
     where: { id: divisionId },
     include: {
       members: { where: { status: "ACTIVE" }, include: { player: true } },
-      pairings: {
+      matches: {
         where: { status: "CONFIRMED" },
         select: {
+          format: true,
           playerAId: true,
           playerBId: true,
           gamesWonA: true,
           gamesWonB: true,
+          winnerId: true,
         },
       },
-      shootouts: { select: { playerAId: true, playerBId: true, winnerId: true } },
     },
   });
   if (!div) return;
   const { scoring } = await getLeagueSettingsForSeason(div.seasonId);
-  const rows = computeStandings(div.members.map((m) => m.player), div.pairings, div.shootouts, scoring);
+  const rows = computeStandings(
+    div.members.map((m) => m.player),
+    div.matches.filter((m) => m.format === "LEAGUE_BO2"),
+    div.matches
+      .filter((m) => m.format === "SHOOTOUT_BO1" && m.winnerId !== null)
+      .map((m) => ({ playerAId: m.playerAId, playerBId: m.playerBId, winnerId: m.winnerId! })),
+    scoring,
+  );
   const payload: CachedRow[] = rows.map((r) => ({
     playerId: r.player.id,
     points: r.points,
@@ -62,34 +77,42 @@ export async function recomputeDivisionStandings(divisionId: string): Promise<vo
     create: { divisionId, rowsJson: JSON.stringify(payload) },
     update: { rowsJson: JSON.stringify(payload), computedAt: new Date() },
   });
-
-  // Transitional dual-write: keep the unified Match/Game/Ban model in sync
-  // with this division's results. Best-effort — a projection failure must
-  // never break the standings cache. Removed at the contract stage.
-  await projectDivisionMatches(divisionId).catch((err) =>
-    console.warn(`[match-projection] division ${divisionId} failed:`, err),
-  );
 }
 
 export async function loadDivisionStandings(divisionId: string): Promise<StandingRow[]> {
   const cached = await prisma.divisionStandings.findUnique({ where: { divisionId } });
   if (!cached) {
     // Cold cache: compute + populate, return the freshly computed rows.
-    // Skips the inevitable double-read by computing locally first.
+    // Skips the inevitable double-read by computing locally first. Project
+    // first so Match is current (transitional — see recompute).
+    await projectDivisionMatches(divisionId).catch(() => {});
     const div = await prisma.division.findUnique({
       where: { id: divisionId },
       include: {
         members: { where: { status: "ACTIVE" }, include: { player: true } },
-        pairings: {
+        matches: {
           where: { status: "CONFIRMED" },
-          select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
+          select: {
+            format: true,
+            playerAId: true,
+            playerBId: true,
+            gamesWonA: true,
+            gamesWonB: true,
+            winnerId: true,
+          },
         },
-        shootouts: { select: { playerAId: true, playerBId: true, winnerId: true } },
       },
     });
     if (!div) return [];
     const { scoring } = await getLeagueSettingsForSeason(div.seasonId);
-    const rows = computeStandings(div.members.map((m) => m.player), div.pairings, div.shootouts, scoring);
+    const rows = computeStandings(
+      div.members.map((m) => m.player),
+      div.matches.filter((m) => m.format === "LEAGUE_BO2"),
+      div.matches
+        .filter((m) => m.format === "SHOOTOUT_BO1" && m.winnerId !== null)
+        .map((m) => ({ playerAId: m.playerAId, playerBId: m.playerBId, winnerId: m.winnerId! })),
+      scoring,
+    );
     const payload: CachedRow[] = rows.map((r) => ({
       playerId: r.player.id,
       points: r.points,
