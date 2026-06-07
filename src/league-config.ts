@@ -44,6 +44,19 @@ export const LeagueConfigKey = {
   // log-only). Bootstrap auto-creates if neither is set.
   DevopsChannelId: "devops_channel_id",
 
+  // ── Community channels (portability) ─────────────────────────────────
+  // Optional channel ids set per-server on /admin/config so the bot can run
+  // in any server without auto-creating channels. Right-click a channel →
+  // Copy Channel ID. Unset = the related feature is simply unavailable.
+  //   SupportChannelId  — /support opens private ticket threads here.
+  //   AdminChannelId    — league admin/staff chat (reference/links).
+  //   FeedbackChannelId — feedback / forum channel (reference/links).
+  //   GeneralChannelId  — league general chat (reference/links).
+  SupportChannelId: "support_channel_id",
+  AdminChannelId: "admin_channel_id",
+  FeedbackChannelId: "feedback_channel_id",
+  GeneralChannelId: "general_channel_id",
+
   // ── Tunable league rules (all integers, stored as strings) ───────────
   // Scoring: points awarded per match outcome. Defaults 3/1/0 mirror the
   // current Dunk-original rules. Admin can change mid-season if needed —

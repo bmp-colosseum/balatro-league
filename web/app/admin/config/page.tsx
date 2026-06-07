@@ -30,6 +30,13 @@ const CHANNEL_KEYS = [
   { key: "devops_channel_id", label: "DevOps channel ID", help: "Queue-stall + rate-limit alerts. Tech-only." },
 ];
 
+const COMMUNITY_KEYS = [
+  { key: "support_channel_id", label: "Support channel ID", help: "Where /support opens private ticket threads (pings helpers). Unset = /support is disabled." },
+  { key: "admin_channel_id", label: "Admin channel ID", help: "League admin/staff chat. Stored so the bot/site can reference it. Optional." },
+  { key: "feedback_channel_id", label: "Feedback channel ID", help: "Feedback / forum channel where players post. Optional." },
+  { key: "general_channel_id", label: "General channel ID", help: "League general chat. Optional." },
+];
+
 const BMP_KEYS = [
   { key: "bmp_current_season", label: "Current BMP season", help: "e.g. 'season6'. Auto-detected from balatromp.com daily — override here if needed." },
   { key: "bmp_capture_previous_season", label: "Capture previous BMP season on refresh", help: "Set to 'true' to backfill the previous BMP season for everyone. Default: unset (only current is captured)." },
@@ -65,6 +72,7 @@ export default async function AdminConfigPage() {
         </p>
 
         <ConfigSection title="Channels & external" keys={CHANNEL_KEYS} valueByKey={valueByKey} />
+        <ConfigSection title="Community channels" keys={COMMUNITY_KEYS} valueByKey={valueByKey} />
         <ConfigSection title="Public / join page" keys={SITE_KEYS} valueByKey={valueByKey} />
         <ConfigSection title="BMP / balatromp.com" keys={BMP_KEYS} valueByKey={valueByKey} />
         <p className="muted" style={{ fontSize: 12, marginTop: 16 }}>
