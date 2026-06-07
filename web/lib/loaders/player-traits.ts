@@ -21,6 +21,10 @@ export interface PlayerTrait {
   emoji: string;
   description: string;
   detail: string;
+  // Plain-language description of how the trait is earned (the gating rule).
+  // Not admin-editable — it documents the code logic. Shown on the profile
+  // tooltip + the /admin/traits catalog.
+  criteria: string;
   // When set, a small (~48px) data: URL the profile renders in place of the
   // emoji. Comes from an admin override; null/undefined = show the emoji.
   iconDataUrl?: string | null;
@@ -33,6 +37,7 @@ export interface TraitDef {
   label: string;
   emoji: string;
   description: string;
+  criteria: string;
 }
 
 // The trait catalog. Defaults only — per-trait admin edits live in
@@ -44,24 +49,28 @@ export const TRAIT_REGISTRY: TraitDef[] = [
     label: "White Stake Warrior",
     emoji: "🤍",
     description: "Will beat you… as long as it's on White stake.",
+    criteria: "White is both your most-played and most-won stake (2+ wins on White), across 10+ games.",
   },
   {
     key: "dr-spectred",
     label: "Dr. Spectred",
     emoji: "🎓",
     description: "PhD in Gold Stake from Balatro University.",
+    criteria: "Gold is both your most-played and most-won stake (2+ wins on Gold), across 10+ games.",
   },
   {
     key: "ghostbuster",
     label: "Ghostbuster",
     emoji: "👻",
-    description: "Bans the Ghost deck on sight — who you gonna call?",
+    description: "Who you gonna call?",
+    criteria: "Banned the Ghost deck in 60%+ of games it appeared (4+ such games), across 10+ games.",
   },
   {
     key: "super-balatro-genius",
     label: "Super Balatro Genius",
     emoji: "🎲",
     description: "Doesn't care what the deck or stake is, they will beat you.",
+    criteria: "Random-picked the majority of your picks and won most of them, across 10+ games.",
   },
 ];
 const REGISTRY_BY_KEY = new Map(TRAIT_REGISTRY.map((t) => [t.key, t]));
@@ -102,6 +111,7 @@ function makeTrait(key: string, detail: string, overrides: Map<string, TraitOver
     label: ov?.label ?? base?.label ?? key,
     emoji: ov?.emoji ?? base?.emoji ?? "🎭",
     description: ov?.description ?? base?.description ?? "",
+    criteria: base?.criteria ?? "",
     detail,
     iconDataUrl: ov?.iconDataUrl ?? null,
   };
@@ -178,7 +188,7 @@ export async function loadPlayerTraits(
     }
   }
 
-  if (games < 4) return []; // not enough signal yet
+  if (games < 10) return []; // 10-game floor — earned over a few seasons, not in one
 
   const traits: PlayerTrait[] = [];
   const topPlayedStake = topEntry(playedStakes);

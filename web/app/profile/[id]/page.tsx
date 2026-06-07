@@ -129,7 +129,7 @@ export default async function ProfilePage({
               {traits.map((tr) => (
                 <span
                   key={tr.key}
-                  title={`${tr.description} (${tr.detail})`}
+                  title={`${tr.description} (${tr.detail})\n\nHow it's earned: ${tr.criteria}`}
                   style={{
                     display: "inline-flex",
                     alignItems: "center",

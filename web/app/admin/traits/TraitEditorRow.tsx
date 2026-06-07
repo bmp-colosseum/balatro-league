@@ -72,6 +72,9 @@ export function TraitEditorRow({
 
   return (
     <div className="card" style={{ display: "grid", gap: 10 }}>
+      <div className="muted" style={{ fontSize: 11, fontStyle: "italic" }}>
+        🏅 Earned when: {row.criteria}
+      </div>
       <form action={saveAction} style={{ display: "grid", gap: 10 }}>
         <input type="hidden" name="key" value={row.key} />
         <input type="hidden" name="iconDataUrl" value={iconField} />

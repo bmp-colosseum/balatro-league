@@ -17,6 +17,8 @@ export interface TraitAdminRow {
   emoji: string;
   description: string;
   iconDataUrl: string | null;
+  // Plain-language gating rule (how the trait is earned). Read-only.
+  criteria: string;
   // The code defaults, so the editor can show "default: …" hints.
   defaultLabel: string;
   defaultEmoji: string;
@@ -66,6 +68,7 @@ export async function loadTraitsAdmin(): Promise<TraitAdminRow[]> {
       emoji: ov?.emoji ?? def.emoji,
       description: ov?.description ?? def.description,
       iconDataUrl: ov?.iconDataUrl ?? null,
+      criteria: def.criteria,
       defaultLabel: def.label,
       defaultEmoji: def.emoji,
       defaultDescription: def.description,
