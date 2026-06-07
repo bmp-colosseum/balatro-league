@@ -96,6 +96,19 @@ export interface PerComboPerformance {
   winRatePct: number;
 }
 
+// "Favourites" — top-5 cuts by raw count (not win rate). Most-played = how
+// often the player was on it; most-won = how many they won on it. Computed
+// for decks, stakes, and the deck+stake combo.
+export interface FavoriteEntry {
+  name: string;
+  gamesPlayed: number;
+  gamesWon: number;
+}
+export interface Favorites {
+  mostPlayed: { decks: FavoriteEntry[]; stakes: FavoriteEntry[]; combos: FavoriteEntry[] };
+  mostWon: { decks: FavoriteEntry[]; stakes: FavoriteEntry[]; combos: FavoriteEntry[] };
+}
+
 // Aggregate record against one specific opponent across all confirmed
 // matches in any season. Match-level (W/D/L) and game-level
 // (gamesWon/gamesLost) both surfaced.
@@ -139,6 +152,7 @@ export interface PlayerHistory {
   // Empty arrays when the player has zero recorded games.
   deckPerformance: PerComboPerformance[];
   stakePerformance: PerComboPerformance[];
+  favorites: Favorites;
   // Head-to-head records against every player this person has played.
   // Sorted by totalMatches desc. UI typically shows just the top N or
   // filters to the viewer-vs-profile-owner row.
@@ -199,6 +213,10 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
       totals: emptyTotals(),
       deckPerformance: [],
       stakePerformance: [],
+      favorites: {
+        mostPlayed: { decks: [], stakes: [], combos: [] },
+        mostWon: { decks: [], stakes: [], combos: [] },
+      },
       headToHeads: [],
     };
   }
@@ -261,6 +279,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
   // career. iterated inline below as we walk the matches.
   const deckAgg = new Map<string, { won: number; total: number }>();
   const stakeAgg = new Map<string, { won: number; total: number }>();
+  const comboAgg = new Map<string, { won: number; total: number }>();
   const bumpAgg = (
     map: Map<string, { won: number; total: number }>,
     key: string,
@@ -285,6 +304,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
       if (g.dcByPlayerId) continue;
       bumpAgg(deckAgg, g.deck, iWon);
       bumpAgg(stakeAgg, g.stake, iWon);
+      bumpAgg(comboAgg, `${g.deck} · ${g.stake}`, iWon);
     }
     return result;
   }
@@ -414,6 +434,27 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
   const deckPerformance = buildPerf(deckAgg);
   const stakePerformance = buildPerf(stakeAgg);
 
+  // Favourites: top-5 by raw count. "played" sorts by total games on it;
+  // "won" sorts by games won (ties broken by the other).
+  const topBy = (
+    agg: Map<string, { won: number; total: number }>,
+    by: "played" | "won",
+    n = 5,
+  ): FavoriteEntry[] =>
+    [...agg.entries()]
+      .map(([name, c]) => ({ name, gamesPlayed: c.total, gamesWon: c.won }))
+      .filter((e) => (by === "won" ? e.gamesWon > 0 : e.gamesPlayed > 0))
+      .sort((a, b) =>
+        by === "won"
+          ? b.gamesWon - a.gamesWon || b.gamesPlayed - a.gamesPlayed
+          : b.gamesPlayed - a.gamesPlayed || b.gamesWon - a.gamesWon,
+      )
+      .slice(0, n);
+  const favorites: Favorites = {
+    mostPlayed: { decks: topBy(deckAgg, "played"), stakes: topBy(stakeAgg, "played"), combos: topBy(comboAgg, "played") },
+    mostWon: { decks: topBy(deckAgg, "won"), stakes: topBy(stakeAgg, "won"), combos: topBy(comboAgg, "won") },
+  };
+
   // Head-to-head: group pairings by opponent, sum match outcomes +
   // game totals. Shootouts excluded — they're tiebreakers, not
   // recorded as career H2H wins. Disputed pairings included but use
@@ -458,7 +499,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
     }))
     .sort((a, b) => b.totalMatches - a.totalMatches);
 
-  return { player, history, totals, deckPerformance, stakePerformance, headToHeads };
+  return { player, history, totals, deckPerformance, stakePerformance, favorites, headToHeads };
 }
 
 function emptyTotals(): PlayerHistory["totals"] {

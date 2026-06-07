@@ -18,7 +18,7 @@ import {
   unsubscribeNextSeasonAction,
 } from "@/app/me/actions";
 import { prisma } from "@/lib/prisma";
-import type { SeasonHistoryEntry } from "@/lib/profile";
+import type { SeasonHistoryEntry, FavoriteEntry } from "@/lib/profile";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +31,37 @@ function seasonRateTooltip(h: SeasonHistoryEntry): string {
   const draw = Math.round((h.draws / h.played) * 100);
   const loss = Math.round((h.losses / h.played) * 100);
   return `Win ${win}% · Draw ${draw}% · Loss ${loss}% (${h.played} matches)`;
+}
+
+// One "favourite" row — deck and/or stake thumbnail + name + a count
+// (× plays, or W for wins). Combos carry "Deck · Stake" so we split + show both.
+function favRow(r: FavoriteEntry, kind: "deck" | "stake" | "combo", metric: "played" | "won") {
+  const [deckName, stakeName] = kind === "combo" ? r.name.split(" · ") : [r.name, r.name];
+  return (
+    <li key={r.name} style={{ display: "flex", alignItems: "center", gap: 5, padding: "1px 0" }}>
+      {(kind === "deck" || kind === "combo") && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={deckImage(deckName!)} alt="" width={15} height={15} style={{ borderRadius: 2 }} />
+      )}
+      {(kind === "stake" || kind === "combo") && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={stakeImage(kind === "combo" ? stakeName! : r.name)} alt="" width={15} height={15} style={{ borderRadius: 2 }} />
+      )}
+      <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</span>
+      <span className="muted">{metric === "won" ? `${r.gamesWon}W` : `${r.gamesPlayed}×`}</span>
+    </li>
+  );
+}
+function favBlock(title: string, rows: FavoriteEntry[], kind: "deck" | "stake" | "combo", metric: "played" | "won") {
+  if (rows.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div className="muted" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</div>
+      <ul style={{ listStyle: "none", padding: 0, margin: "2px 0 0", fontSize: 12 }}>
+        {rows.map((r) => favRow(r, kind, metric))}
+      </ul>
+    </div>
+  );
 }
 
 export default async function ProfilePage({
@@ -129,7 +160,7 @@ export default async function ProfilePage({
             </div>
             {ownActiveDivision.reportableOpponents.length === 0 ? (
               <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
-                No unplayed opponents — you've played everyone in your division.
+                No unplayed opponents — you&apos;ve played everyone in your division.
               </p>
             ) : (
               <>
@@ -151,7 +182,7 @@ export default async function ProfilePage({
                 </form>
                 <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
                   Web reports are recorded immediately. The result posts to <strong>#results</strong>;
-                  your opponent gets a DM with a dispute link if it's wrong.
+                  your opponent gets a DM with a dispute link if it&apos;s wrong.
                 </p>
               </>
             )}
@@ -492,6 +523,31 @@ export default async function ProfilePage({
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Favourites — top-5 by raw count (decks / stakes / combos), most-
+            played and (separately) most-won. */}
+        {profile.favorites.mostPlayed.decks.length > 0 && (
+          <div className="grid grid-2" style={{ marginTop: 16 }}>
+            <div className="card">
+              <strong>⭐ Most played</strong>
+              <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
+                Top decks, stakes &amp; combos by games played.
+              </p>
+              {favBlock("Decks", profile.favorites.mostPlayed.decks, "deck", "played")}
+              {favBlock("Stakes", profile.favorites.mostPlayed.stakes, "stake", "played")}
+              {favBlock("Combos", profile.favorites.mostPlayed.combos, "combo", "played")}
+            </div>
+            <div className="card">
+              <strong>🏆 Most won</strong>
+              <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
+                Top decks, stakes &amp; combos by games won.
+              </p>
+              {favBlock("Decks", profile.favorites.mostWon.decks, "deck", "won")}
+              {favBlock("Stakes", profile.favorites.mostWon.stakes, "stake", "won")}
+              {favBlock("Combos", profile.favorites.mostWon.combos, "combo", "won")}
+            </div>
           </div>
         )}
 
