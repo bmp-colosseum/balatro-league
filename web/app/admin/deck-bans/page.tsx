@@ -49,13 +49,13 @@ export default async function DeckSelectionPage({
         </p>
         <ul className="muted" style={{ marginTop: -4, fontSize: 13 }}>
           <li>
-            <strong>Season default</strong>{" "}
+            <strong>Standard</strong>{" "}
             {seasonDefaultName ? (
               <>→ <code>{seasonDefaultName}</code></>
             ) : (
               <em>(unset — falls back to whichever preset exists)</em>
             )}{" "}
-            — used by <code>/start-match</code> for any season that hasn&apos;t picked its own preset.
+            — the bans/picks pool for league matches (<code>/start-match</code>), unless a season picks its own.
           </li>
           <li>
             <strong>Challenge</strong>{" "}
@@ -67,11 +67,11 @@ export default async function DeckSelectionPage({
             — used by <code>/challenge</code>. Edit independently of the season default.
           </li>
           <li>
-            <strong>Custom-combo</strong>{" "}
+            <strong>Custom</strong>{" "}
             {customComboName ? (
               <>→ <code>{customComboName}</code></>
             ) : (
-              <em>(unset — falls back to the Casual preset)</em>
+              <em>(unset — falls back to the Challenge preset)</em>
             )}{" "}
             — allowed stakes for the in-match &ldquo;agree on a specific deck/stake&rdquo; picker.
             Point it at a preset that includes Planet/Spectral/Spectral+ to offer them there without
@@ -153,9 +153,9 @@ function PresetSidebar({
         {presets.map((p) => {
           const isActive = p.id === selectedId;
           const tags: string[] = [];
-          if (p.id === seasonDefaultPresetId) tags.push("season default");
+          if (p.id === seasonDefaultPresetId) tags.push("standard");
           if (p.id === casualPresetId) tags.push("challenge");
-          if (p.id === customComboPresetId) tags.push("custom-combo");
+          if (p.id === customComboPresetId) tags.push("custom");
           return (
             <li key={p.id} style={{ marginBottom: 4 }}>
               <Link
@@ -247,7 +247,7 @@ function PresetEditor({
             <input type="hidden" name="id" value={preset.id} />
             <input type="hidden" name="role" value={SEASON_DEFAULT_PRESET_ID_KEY} />
             <button type="submit" disabled={isSeasonDefault}>
-              {isSeasonDefault ? "✓ Used as season default" : "Use as season default"}
+              {isSeasonDefault ? "✓ Used as Standard (league bans/picks)" : "Use as Standard (league bans/picks)"}
             </button>
           </form>
           <form action={setPresetRole}>
@@ -261,7 +261,7 @@ function PresetEditor({
             <input type="hidden" name="id" value={preset.id} />
             <input type="hidden" name="role" value={CUSTOM_COMBO_PRESET_ID_KEY} />
             <button type="submit" disabled={isCustomCombo}>
-              {isCustomCombo ? "✓ Used for custom-combo picker" : "Use for custom-combo picker"}
+              {isCustomCombo ? "✓ Used as Custom (custom-combo picker)" : "Use as Custom (custom-combo picker)"}
             </button>
           </form>
         </div>
