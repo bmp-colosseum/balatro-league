@@ -38,6 +38,51 @@ function renderMmrCell(entry: StandingsMmrEntry | undefined, currentBmpSeason: s
   );
 }
 
+// Clinch predictor: who is mathematically guaranteed to promote ("up") /
+// relegate ("down") regardless of how the remaining matches play out.
+// Conservative — flags a player only when it holds even in their WORST
+// remaining case while every rival wins out. (That ignores rivals also playing
+// each other, which can only help the flagged player, so it never
+// false-positives; it just won't flag a borderline case early.) Assumes the
+// standard 3/1/0 scoring. Absent from the map = not yet decided.
+function computeClinch(
+  rows: Array<StandingRow & { dropped?: boolean }>,
+  activeCount: number,
+  promoteN: number,
+  relegateN: number,
+): Map<string, "up" | "down"> {
+  const MAX_PER_MATCH = 3;
+  const result = new Map<string, "up" | "down">();
+  const active = rows.filter((r) => !r.dropped);
+  const n = active.length;
+  if (n === 0) return result;
+  const totalGames = Math.max(0, activeCount - 1);
+  const info = active.map((r) => {
+    const remaining = Math.max(0, totalGames - r.played);
+    return { id: r.player.id, floor: r.points, ceil: r.points + MAX_PER_MATCH * remaining };
+  });
+  for (const me of info) {
+    if (promoteN > 0) {
+      // Guaranteed top-promoteN if fewer than promoteN rivals can even reach
+      // this player's floor.
+      const canCatch = info.filter((o) => o.id !== me.id && o.ceil >= me.floor).length;
+      if (canCatch < promoteN) {
+        result.set(me.id, "up");
+        continue;
+      }
+    }
+    if (relegateN > 0) {
+      // Locked into the bottom relegateN if enough rivals are guaranteed
+      // strictly above even when this player wins out.
+      const guaranteedAbove = info.filter((o) => o.id !== me.id && o.floor > me.ceil).length;
+      if (guaranteedAbove >= n - relegateN) {
+        result.set(me.id, "down");
+      }
+    }
+  }
+  return result;
+}
+
 export const dynamic = "force-dynamic"; // Always fresh — DB writes happen out-of-band via the bot
 
 // Tooltips so the raw W-D-L / Games cells double as rate views on hover
@@ -140,6 +185,16 @@ export default async function StandingsPage() {
                       const _maxMovers = Math.max(0, Math.floor((rows.length - 1) / 2));
                       const effective = Math.min(_prc, _maxMovers);
 
+                      // Clinch predictor — who's already locked up/down even
+                      // before the round-robin finishes. Top tier never
+                      // promotes; bottom tier never relegates.
+                      const clinch = computeClinch(
+                        rows,
+                        activeCount,
+                        isTopTier ? 0 : effective,
+                        isBottomTier ? 0 : effective,
+                      );
+
                       // Shootout marker is TIER-INDEPENDENT — chains crossing
                       // either boundary (promo or relegation) need resolving.
                       // For N=1 this collapses to the old "ties at rank 1" /
@@ -223,6 +278,15 @@ export default async function StandingsPage() {
                                   ) : isRelegating ? (
                                     <span title="Relegation position" style={{ color: "#e74c3c" }}>↓</span>
                                   ) : null;
+                                  // Clinch badge — only while the round-robin is
+                                  // still in progress (once complete the ↑/↓ tells
+                                  // the final story).
+                                  const clinchStatus = complete ? undefined : clinch.get(r.player.id);
+                                  const clinchMarker = clinchStatus === "up" ? (
+                                    <span title="Clinched promotion — guaranteed to move up regardless of remaining matches" style={{ color: "#2ecc71" }}>🔒↑</span>
+                                  ) : clinchStatus === "down" ? (
+                                    <span title="Relegation locked — guaranteed to move down regardless of remaining matches" style={{ color: "#e74c3c" }}>🔒↓</span>
+                                  ) : null;
                                   const shootoutNeeded =
                                     complete && (promoTieRowSet.has(i) || relegationTieRowSet.has(i));
                                   const shootoutMarker = shootoutNeeded ? (
@@ -235,7 +299,7 @@ export default async function StandingsPage() {
                                   ) : null;
                                   return (
                                     <tr key={r.player.id}>
-                                      <td>{medal}{movementMarker && <> {movementMarker}</>}{shootoutMarker}</td>
+                                      <td>{medal}{movementMarker && <> {movementMarker}</>}{clinchMarker && <> {clinchMarker}</>}{shootoutMarker}</td>
                                       <td>{r.dropped ? <s>{link}</s> : link}</td>
                                       <td><strong>{r.points}</strong></td>
                                       <td title={standingRateTooltip(r)}>{r.wins}-{r.draws}-{r.losses}</td>
