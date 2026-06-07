@@ -36,7 +36,7 @@ import { prisma } from "../db.js";
 import { env } from "../env.js";
 import { getLeagueSettings, getLeagueSettingsForSeason } from "../league-settings.js";
 import { logDiscordError } from "../log-discord-error.js";
-import { bootstrapPresetsAndPointers, generatePool, presetForCasualMatch, presetForDivision, type DeckEntry } from "../match-config.js";
+import { bootstrapPresetsAndPointers, generatePool, presetForCasualMatch, presetForCustomCombo, presetForDivision, type DeckEntry } from "../match-config.js";
 import { renderComboBuilder, renderMatch } from "../match-render.js";
 import { summonHelpers } from "./helper.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
@@ -136,13 +136,15 @@ async function updateSession(
 type AnyInteraction = ButtonInteraction | StringSelectMenuInteraction;
 
 // Resolve the stake list this match can use for a custom-combo proposal.
-// The preset for the season (league) or the configured casual preset
-// (challenge) defines the allowed stakes — proposer can only pick from
-// those, even though decks are open to the full canonical library.
+// League matches stay locked to the season's competitive preset; casual
+// matches use the dedicated custom-combo preset (its own role, so admins can
+// offer exotic stakes here without touching the /challenge ban-pick pool —
+// falls back to the casual preset until one is configured). Decks are open to
+// the full canonical library either way.
 async function loadAllowedStakes(session: MatchSession): Promise<string[]> {
   const preset = session.divisionId
     ? await presetForDivision(session.divisionId)
-    : await presetForCasualMatch();
+    : await presetForCustomCombo();
   return preset?.stakes ?? [];
 }
 

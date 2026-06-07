@@ -21,6 +21,7 @@ export const dynamic = "force-dynamic";
 
 const SEASON_DEFAULT_PRESET_ID_KEY = "season_default_preset_id";
 const CASUAL_PRESET_ID_KEY = "casual_preset_id";
+const CUSTOM_COMBO_PRESET_ID_KEY = "custom_combo_preset_id";
 
 export default async function DeckSelectionPage({
   searchParams,
@@ -29,10 +30,12 @@ export default async function DeckSelectionPage({
 }) {
   await requireAdmin();
   const { preset: presetIdParam } = await searchParams;
-  const { presets, selected, seasonDefaultPresetId, casualPresetId } = await loadDeckBansPage(presetIdParam);
+  const { presets, selected, seasonDefaultPresetId, casualPresetId, customComboPresetId } =
+    await loadDeckBansPage(presetIdParam);
 
   const seasonDefaultName = presets.find((p) => p.id === seasonDefaultPresetId)?.name ?? null;
   const casualName = presets.find((p) => p.id === casualPresetId)?.name ?? null;
+  const customComboName = presets.find((p) => p.id === customComboPresetId)?.name ?? null;
 
   return (
     <>
@@ -62,6 +65,17 @@ export default async function DeckSelectionPage({
               <em>(unset — falls back to whichever preset exists)</em>
             )}{" "}
             — used by <code>/challenge</code>. Edit independently of the season default.
+          </li>
+          <li>
+            <strong>Custom-combo</strong>{" "}
+            {customComboName ? (
+              <>→ <code>{customComboName}</code></>
+            ) : (
+              <em>(unset — falls back to the Casual preset)</em>
+            )}{" "}
+            — allowed stakes for the in-match &ldquo;agree on a specific deck/stake&rdquo; picker.
+            Point it at a preset that includes Planet/Spectral/Spectral+ to offer them there without
+            touching the <code>/challenge</code> pool.
           </li>
         </ul>
         <p className="muted" style={{ fontSize: 13 }}>
@@ -100,12 +114,14 @@ export default async function DeckSelectionPage({
               selectedId={selected?.id ?? null}
               seasonDefaultPresetId={seasonDefaultPresetId}
               casualPresetId={casualPresetId}
+              customComboPresetId={customComboPresetId}
             />
             {selected ? (
               <PresetEditor
                 preset={selected}
                 isSeasonDefault={selected.id === seasonDefaultPresetId}
                 isCasual={selected.id === casualPresetId}
+                isCustomCombo={selected.id === customComboPresetId}
               />
             ) : (
               <div className="card muted">Pick a preset from the left, or create a new one.</div>
@@ -122,11 +138,13 @@ function PresetSidebar({
   selectedId,
   seasonDefaultPresetId,
   casualPresetId,
+  customComboPresetId,
 }: {
   presets: Array<{ id: string; name: string; seasonCount: number }>;
   selectedId: string | null;
   seasonDefaultPresetId: string | null;
   casualPresetId: string | null;
+  customComboPresetId: string | null;
 }) {
   return (
     <div className="card" style={{ alignSelf: "start" }}>
@@ -137,6 +155,7 @@ function PresetSidebar({
           const tags: string[] = [];
           if (p.id === seasonDefaultPresetId) tags.push("season default");
           if (p.id === casualPresetId) tags.push("casual");
+          if (p.id === customComboPresetId) tags.push("custom-combo");
           return (
             <li key={p.id} style={{ marginBottom: 4 }}>
               <Link
@@ -191,10 +210,12 @@ function PresetEditor({
   preset,
   isSeasonDefault,
   isCasual,
+  isCustomCombo,
 }: {
   preset: { id: string; name: string; decks: string[]; stakes: string[] };
   isSeasonDefault: boolean;
   isCasual: boolean;
+  isCustomCombo: boolean;
 }) {
   const totalCombos = preset.decks.length * preset.stakes.length;
   return (
@@ -234,6 +255,13 @@ function PresetEditor({
             <input type="hidden" name="role" value={CASUAL_PRESET_ID_KEY} />
             <button type="submit" disabled={isCasual}>
               {isCasual ? "✓ Used for casual /challenge" : "Use for casual /challenge"}
+            </button>
+          </form>
+          <form action={setPresetRole}>
+            <input type="hidden" name="id" value={preset.id} />
+            <input type="hidden" name="role" value={CUSTOM_COMBO_PRESET_ID_KEY} />
+            <button type="submit" disabled={isCustomCombo}>
+              {isCustomCombo ? "✓ Used for custom-combo picker" : "Use for custom-combo picker"}
             </button>
           </form>
         </div>

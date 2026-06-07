@@ -64,6 +64,21 @@ export async function presetForCasualMatch() {
   return firstExistingPreset();
 }
 
+// Custom-combo "agree on a specific deck/stake" picker resolution. Its own
+// role so admins can offer exotic stakes there without touching /challenge:
+//   1. LeagueConfig.CustomComboPresetId — admin's chosen custom-combo preset
+//   2. The casual preset (back-compat: behaves as before until a custom one
+//      is set)
+//   3. Any single existing preset
+export async function presetForCustomCombo() {
+  const id = await getConfig(LeagueConfigKey.CustomComboPresetId);
+  if (id) {
+    const preset = await prisma.matchConfigPreset.findUnique({ where: { id } });
+    if (preset) return preset;
+  }
+  return presetForCasualMatch();
+}
+
 export async function resolveDefaultSeasonPreset() {
   const id = await getConfig(LeagueConfigKey.SeasonDefaultPresetId);
   if (id) {

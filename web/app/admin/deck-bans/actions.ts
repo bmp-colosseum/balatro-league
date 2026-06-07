@@ -13,6 +13,7 @@ import defaults from "@/lib/match-defaults.json";
 // the bot reads.
 const SEASON_DEFAULT_PRESET_ID_KEY = "season_default_preset_id";
 const CASUAL_PRESET_ID_KEY = "casual_preset_id";
+const CUSTOM_COMBO_PRESET_ID_KEY = "custom_combo_preset_id";
 
 // Any change to MatchConfigPreset (create, rename, delete, edit
 // decks/stakes) needs to bust the cached preset list on every
@@ -64,7 +65,10 @@ export async function deletePreset(formData: FormData) {
   // /admin/deck-bans afterwards.
   await prisma.matchConfigPreset.delete({ where: { id } });
   await prisma.leagueConfig.deleteMany({
-    where: { key: { in: [SEASON_DEFAULT_PRESET_ID_KEY, CASUAL_PRESET_ID_KEY] }, value: id },
+    where: {
+      key: { in: [SEASON_DEFAULT_PRESET_ID_KEY, CASUAL_PRESET_ID_KEY, CUSTOM_COMBO_PRESET_ID_KEY] },
+      value: id,
+    },
   });
   revalidatePresetSurfaces();
   redirect("/admin/deck-bans");
@@ -167,7 +171,12 @@ export async function setPresetRole(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const role = String(formData.get("role") ?? "");
   if (!id) return;
-  if (role !== SEASON_DEFAULT_PRESET_ID_KEY && role !== CASUAL_PRESET_ID_KEY) return;
+  if (
+    role !== SEASON_DEFAULT_PRESET_ID_KEY &&
+    role !== CASUAL_PRESET_ID_KEY &&
+    role !== CUSTOM_COMBO_PRESET_ID_KEY
+  )
+    return;
   // Verify the preset still exists — guards against a race where the
   // admin clicked Delete in another tab.
   const preset = await prisma.matchConfigPreset.findUnique({ where: { id } });

@@ -293,6 +293,7 @@ export interface DeckBansPageData {
   // Either may be null on a fresh install before bootstrap has run.
   seasonDefaultPresetId: string | null;
   casualPresetId: string | null;
+  customComboPresetId: string | null;
 }
 
 export async function loadDeckBansPage(selectedIdParam: string | undefined): Promise<DeckBansPageData> {
@@ -308,7 +309,7 @@ export async function loadDeckBansPage(selectedIdParam: string | undefined): Pro
       },
     }),
     prisma.leagueConfig.findMany({
-      where: { key: { in: ["season_default_preset_id", "casual_preset_id"] } },
+      where: { key: { in: ["season_default_preset_id", "casual_preset_id", "custom_combo_preset_id"] } },
       select: { key: true, value: true },
     }),
   ]);
@@ -328,6 +329,7 @@ export async function loadDeckBansPage(selectedIdParam: string | undefined): Pro
     selected,
     seasonDefaultPresetId: configByKey.get("season_default_preset_id") ?? null,
     casualPresetId: configByKey.get("casual_preset_id") ?? null,
+    customComboPresetId: configByKey.get("custom_combo_preset_id") ?? null,
   };
 }
 

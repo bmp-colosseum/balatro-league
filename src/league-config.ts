@@ -77,10 +77,16 @@ export const LeagueConfigKey = {
   //   SeasonDefaultPresetId — fallback for /start-match when a season
   //                           hasn't picked a per-season preset.
   //   CasualPresetId        — used by /challenge.
+  //   CustomComboPresetId   — allowed stakes for the in-match custom-combo
+  //                           "agree on a specific deck/stake" picker, so
+  //                           admins can offer exotic stakes (Planet/Spectral
+  //                           /…) there without changing the /challenge pool.
+  //                           Falls back to the casual preset when unset.
   // Bootstrap creates a single 'Stock' preset and points both keys at
   // it on first run. Admin can repoint either one on /admin/deck-bans.
   SeasonDefaultPresetId: "season_default_preset_id",
   CasualPresetId: "casual_preset_id",
+  CustomComboPresetId: "custom_combo_preset_id",
 
   // Public-facing Discord server invite URL (e.g. https://discord.gg/abc).
   // Shown on the website's /join page so prospective players can find
