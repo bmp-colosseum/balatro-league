@@ -449,6 +449,10 @@ function LifecycleActions({
             <option key={c.id} value={c.id}>#{c.name}</option>
           ))}
         </select>
+        <label style={{ fontSize: 11, display: "flex", flexDirection: "column", gap: 2 }}>
+          <span className="muted">Signups close (UTC, optional)</span>
+          <input type="datetime-local" name="closesAt" />
+        </label>
         <button type="submit" disabled={channels.length === 0}>Open signups</button>
       </form>
       <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>

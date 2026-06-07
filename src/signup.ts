@@ -4,6 +4,12 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
 import type { Signup, SignupRound } from "@prisma/client";
 
+// Discord renders <t:unix:STYLE> in each viewer's own timezone. F = full
+// date/time, R = relative ("in 3 days").
+function discordTs(d: Date, style: "F" | "R"): string {
+  return `<t:${Math.floor(d.getTime() / 1000)}:${style}>`;
+}
+
 export function signupEmbed(round: SignupRound, signups: Signup[]): EmbedBuilder {
   const active = signups.filter((s) => !s.withdrawn);
 
@@ -18,16 +24,33 @@ export function signupEmbed(round: SignupRound, signups: Signup[]): EmbedBuilder
         ? `**${active.length} signed up — sign-ups closed**`
         : `**${active.length} signed up — season started**`;
 
+  // Description tracks the round's lifecycle. While OPEN we show the close
+  // time (the withdraw deadline) as a Discord timestamp. Once the season has
+  // started, self-serve withdrawal is gone — point them at a helper.
+  let description: string;
+  if (round.status === "OPEN") {
+    const closeLine = round.closesAt
+      ? `Sign-ups close ${discordTs(round.closesAt, "F")} (${discordTs(round.closesAt, "R")}). Withdraw any time before then.`
+      : "Withdraw any time before sign-ups close.";
+    description = `Click below to register. ${closeLine}`;
+  } else if (round.status === "CLOSED") {
+    description = "Sign-ups are closed.";
+  } else {
+    description = "Season started — to withdraw or make a change, ask a league helper.";
+  }
+
   return new EmbedBuilder()
     .setTitle(`🃏  ${round.name}`)
-    .setDescription("Click below to register. Withdraw anytime before sign-ups close.")
+    .setDescription(description)
     .addFields({ name: "Status", value: status, inline: false })
     .setColor(round.status === "OPEN" ? 0x5865f2 : 0x99aab5)
     .setFooter({ text: `Round ${round.id}` });
 }
 
 export function signupButtons(round: SignupRound): ActionRowBuilder<ButtonBuilder> {
-  const open = round.status === "OPEN";
+  // Disabled once the round isn't OPEN, or once the announced close time has
+  // passed (takes effect on the next re-render).
+  const open = round.status === "OPEN" && !(round.closesAt && Date.now() > round.closesAt.getTime());
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`signup:join:${round.id}`)

@@ -449,16 +449,19 @@ export async function unendSeason(formData: FormData) {
   revalidatePath("/admin/seasons");
 }
 
-function buildSignupPayload(round: { id: string; name: string }): {
+function buildSignupPayload(round: { id: string; name: string; closesAt: Date | null }): {
   embeds: MessageEmbed[];
   components: ComponentActionRow[];
 } {
   // Public embed surfaces COUNT only — roster lives behind admin auth
   // on /admin/signups/[id]/build. See signupEmbed() on the bot side
   // for the matching live-update format.
+  const closeLine = round.closesAt
+    ? `Sign-ups close <t:${Math.floor(round.closesAt.getTime() / 1000)}:F> (<t:${Math.floor(round.closesAt.getTime() / 1000)}:R>). Withdraw any time before then.`
+    : "Withdraw any time before sign-ups close.";
   const embed: MessageEmbed = {
     title: `🃏  ${round.name}`,
-    description: "Click below to register. Withdraw anytime before sign-ups close.",
+    description: `Click below to register. ${closeLine}`,
     fields: [{ name: "Status", value: "**0 signed up**", inline: false }],
     color: 0x5865f2,
     footer: { text: `Round ${round.id}` },
@@ -513,6 +516,12 @@ export async function openSignupsForSeason(formData: FormData) {
   const season = await prisma.season.findUnique({ where: { id: seasonId } });
   if (!season) redirect("/admin/seasons?err=season-not-found");
 
+  // Optional scheduled close time (datetime-local, interpreted as UTC on the
+  // server). Stored + shown as a Discord timestamp; it's the withdraw deadline.
+  const closesAtStr = String(formData.get("closesAt") ?? "").trim();
+  const closesAtDate = closesAtStr ? new Date(closesAtStr) : null;
+  const closesAt = closesAtDate && !Number.isNaN(closesAtDate.getTime()) ? closesAtDate : null;
+
   const seasonLabel = formatSeasonLabel(season!);
   const round = await prisma.signupRound.create({
     data: {
@@ -522,6 +531,7 @@ export async function openSignupsForSeason(formData: FormData) {
       messageId: "pending",
       resultingSeasonId: season!.id,
       status: "OPEN",
+      closesAt,
     },
   });
 

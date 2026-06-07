@@ -41,6 +41,15 @@ export const signupHandlers: ButtonHandler = {
       });
       return;
     }
+    // Past the announced close time → the withdraw/sign-up window is over even
+    // if the round hasn't been finalized yet. Point them at a helper.
+    if (round.closesAt && Date.now() > round.closesAt.getTime()) {
+      await interaction.reply({
+        content: `Sign-ups for **${round.name}** have closed. If you need to change anything, ask a league helper.`,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
 
     if (action === "join") {
       const existing = await prisma.signup.findUnique({

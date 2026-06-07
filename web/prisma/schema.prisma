@@ -208,6 +208,9 @@ model SignupRound {
   messageId         String       // the signup message we re-edit as people sign up
   status            SignupStatus @default(OPEN)
   openedAt          DateTime     @default(now())
+  // Scheduled close time chosen at open — shown as a Discord timestamp in the
+  // signup post and used as the withdraw deadline. Null = no announced deadline.
+  closesAt          DateTime?
   closedAt          DateTime?
   resultingSeasonId String?      // set when build-season turns this into a Season
 
