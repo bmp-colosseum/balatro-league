@@ -80,7 +80,7 @@ export const TRAIT_REGISTRY: TraitDef[] = [
     key: "super-balatro-genius",
     label: "Super Balatro Genius",
     emoji: "🎲",
-    description: "Lets the dice decide — leans on the random pick/ban a lot.",
+    description: "Doesn't care what the deck or stake is.",
   },
 ];
 const REGISTRY_BY_KEY = new Map(TRAIT_REGISTRY.map((t) => [t.key, t]));
