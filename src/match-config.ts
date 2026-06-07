@@ -15,13 +15,15 @@ import { getConfig, LeagueConfigKey } from "./league-config.js";
 
 export const DEFAULT_POOL_SIZE = 9;
 
-// Name used by the one-shot auto-seed when NO presets exist at all.
-// Name of the managed canonical preset. The bootstrap force-syncs the
-// preset WITH THIS NAME to match-defaults.json on every boot, so the name
-// is load-bearing — don't rename the live preset in the UI (it'd get
-// re-created). LEGACY_SEED_NAME is the old name we auto-rename on boot.
-const STOCK_SEED_NAME = "League decks";
-const LEGACY_SEED_NAME = "Stock";
+// The three starter presets, one per role. "Standard" is the MANAGED canonical
+// pool — force-synced to match-defaults.json on every boot, so its name is
+// load-bearing (don't rename it in the UI; it'd get re-created). "Challenge"
+// and "Custom" are seeded from the defaults once, then freely editable.
+const STANDARD_NAME = "Standard";
+const CHALLENGE_NAME = "Challenge";
+const CUSTOM_NAME = "Custom";
+// Older names the managed pool used — auto-renamed to "Standard" on boot.
+const LEGACY_STANDARD_NAMES = ["League decks", "Stock"];
 
 export interface DeckEntry {
   deck: string;
@@ -136,46 +138,66 @@ function shuffle<T>(arr: T[], rand: () => number): T[] {
 // different pool make a SEPARATE named preset and point a role at it; the
 // managed one stays canonical.
 export async function bootstrapPresetsAndPointers(): Promise<void> {
-  // One-time migration: rename a legacy "Stock" preset to the new name so
-  // we keep managing the same row instead of creating a duplicate.
-  const legacy = await prisma.matchConfigPreset.findUnique({ where: { name: LEGACY_SEED_NAME } });
-  if (legacy && !(await prisma.matchConfigPreset.findUnique({ where: { name: STOCK_SEED_NAME } }))) {
-    await prisma.matchConfigPreset.update({ where: { id: legacy.id }, data: { name: STOCK_SEED_NAME } });
+  // One-time migration: rename a legacy managed preset ("Stock" / "League
+  // decks") to "Standard" so we keep managing the same row, not a duplicate.
+  if (!(await prisma.matchConfigPreset.findUnique({ where: { name: STANDARD_NAME } }))) {
+    for (const legacyName of LEGACY_STANDARD_NAMES) {
+      const legacy = await prisma.matchConfigPreset.findUnique({ where: { name: legacyName } });
+      if (legacy) {
+        await prisma.matchConfigPreset.update({ where: { id: legacy.id }, data: { name: STANDARD_NAME } });
+        break;
+      }
+    }
   }
 
-  let anchor = await prisma.matchConfigPreset.findUnique({ where: { name: STOCK_SEED_NAME } });
+  // Standard = the MANAGED canonical pool, force-synced to defaults each boot.
+  let standard = await prisma.matchConfigPreset.findUnique({ where: { name: STANDARD_NAME } });
+  standard = standard
+    ? await prisma.matchConfigPreset.update({
+        where: { id: standard.id },
+        data: { decks: defaults.decks, stakes: defaults.stakes },
+      })
+    : await prisma.matchConfigPreset.create({
+        data: { name: STANDARD_NAME, decks: defaults.decks, stakes: defaults.stakes },
+      });
 
-  if (!anchor) {
-    // Missing (fresh DB, or some other preset exists but Stock was never
-    // created) — create it from the canonical defaults.
-    anchor = await prisma.matchConfigPreset.create({
-      data: { name: STOCK_SEED_NAME, decks: defaults.decks, stakes: defaults.stakes },
-    });
-  } else {
-    // Force-sync to the canonical pool so the defaults file is the single
-    // source of truth.
-    anchor = await prisma.matchConfigPreset.update({
-      where: { id: anchor.id },
-      data: { decks: defaults.decks, stakes: defaults.stakes },
-    });
-  }
+  // Challenge + Custom = seeded from the defaults ONCE, then freely editable
+  // (not force-synced, so admin edits stick).
+  const challenge = await ensureSeededPreset(CHALLENGE_NAME);
+  const custom = await ensureSeededPreset(CUSTOM_NAME);
 
-  // Point the LeagueConfig keys at the anchor preset, but ONLY if
-  // they're currently unset — admin's existing choices win.
-  const existingSeasonId = await getConfig(LeagueConfigKey.SeasonDefaultPresetId);
-  const existingCasualId = await getConfig(LeagueConfigKey.CasualPresetId);
-  if (!existingSeasonId) {
-    await prisma.leagueConfig.upsert({
-      where: { key: LeagueConfigKey.SeasonDefaultPresetId },
-      create: { key: LeagueConfigKey.SeasonDefaultPresetId, value: anchor.id, updatedBy: "bootstrap" },
-      update: { value: anchor.id },
-    });
-  }
-  if (!existingCasualId) {
-    await prisma.leagueConfig.upsert({
-      where: { key: LeagueConfigKey.CasualPresetId },
-      create: { key: LeagueConfigKey.CasualPresetId, value: anchor.id, updatedBy: "bootstrap" },
-      update: { value: anchor.id },
-    });
-  }
+  // Point each role at its own preset. Repoint when the role is unset OR still
+  // sharing one of the seeded defaults — so existing installs split apart
+  // automatically — but leave a deliberate admin assignment alone.
+  await pointRole(LeagueConfigKey.SeasonDefaultPresetId, standard.id, [null]);
+  await pointRole(LeagueConfigKey.CasualPresetId, challenge.id, [null, standard.id]);
+  await pointRole(LeagueConfigKey.CustomComboPresetId, custom.id, [null, standard.id, challenge.id]);
+}
+
+// Create a preset seeded from the canonical defaults if one with this name
+// doesn't exist yet; otherwise leave it untouched (admin edits persist).
+async function ensureSeededPreset(name: string) {
+  const existing = await prisma.matchConfigPreset.findUnique({ where: { name } });
+  if (existing) return existing;
+  return prisma.matchConfigPreset.create({
+    data: { name, decks: defaults.decks, stakes: defaults.stakes },
+  });
+}
+
+// Set a role pointer to presetId when it's unset or currently points at one of
+// `repointFrom` (the shared seeds). A deliberate assignment to any other preset
+// is left alone.
+async function pointRole(
+  key: LeagueConfigKey,
+  presetId: string,
+  repointFrom: (string | null)[],
+): Promise<void> {
+  const current = (await getConfig(key)) ?? null;
+  if (current !== null && !repointFrom.includes(current)) return;
+  if (current === presetId) return;
+  await prisma.leagueConfig.upsert({
+    where: { key },
+    create: { key, value: presetId, updatedBy: "bootstrap" },
+    update: { value: presetId },
+  });
 }

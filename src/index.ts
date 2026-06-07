@@ -153,9 +153,10 @@ await client.login(env.DISCORD_TOKEN);
 // Start the pg-boss worker AFTER the Discord client is logged in — DM
 // jobs need the client to send. Errors here don't abort the bot.
 initQueue().catch((err) => console.warn("[pg-boss] init failed:", err));
-// Ensure the canonical "Stock" preset matches match-defaults.json and the
-// preset pointers are set. Runs on every boot so editing the defaults +
-// redeploying updates the live pool immediately (not just on next match).
+// Ensure the Standard / Challenge / Custom starter presets exist and each
+// role points at its own. Standard is force-synced to match-defaults.json
+// every boot (editing defaults + redeploying updates the live pool); the
+// others are seeded once, then admin-editable.
 bootstrapPresetsAndPointers().catch((err) => console.warn("[presets] bootstrap failed:", err));
 // Auto-create the bot-commands channel if neither env var nor LeagueConfig
 // has one already. Best-effort — admin can always pin manually later.
