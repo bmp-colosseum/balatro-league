@@ -142,7 +142,19 @@ export default async function ProfilePage({
                     fontWeight: 600,
                   }}
                 >
-                  <span>{tr.emoji}</span> {tr.label}
+                  {tr.iconDataUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={tr.iconDataUrl}
+                      alt=""
+                      width={16}
+                      height={16}
+                      style={{ borderRadius: 3, objectFit: "contain" }}
+                    />
+                  ) : (
+                    <span>{tr.emoji}</span>
+                  )}{" "}
+                  {tr.label}
                 </span>
               ))}
             </div>

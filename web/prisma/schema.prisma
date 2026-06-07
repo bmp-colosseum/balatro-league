@@ -873,3 +873,20 @@ model AdminAuditEvent {
   @@index([action, createdAt])
   @@index([targetType, targetId])
 }
+
+// Admin-editable presentation overrides for the cosmetic player traits
+// (web/lib/loaders/player-traits.ts). The trait CATALOG (which traits exist
+// and their default label/emoji/description) lives in code as TRAIT_REGISTRY;
+// this table only layers per-trait overrides on top, keyed by the trait's
+// registry key. A null column means "use the code default". iconDataUrl holds
+// a small (~48px) client-resized data: URL that, when present, renders in
+// place of the emoji on the profile trait pill. Editable from /admin/traits.
+model TraitOverride {
+  key         String   @id // matches a TRAIT_REGISTRY key, e.g. "dr-spectred"
+  label       String?
+  emoji       String?
+  description String?
+  iconDataUrl String?  @db.Text // resized data: URL (~48px), null = show emoji
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?
+}

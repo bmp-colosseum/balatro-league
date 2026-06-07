@@ -7,6 +7,12 @@
 // reconstruct it positionally. The OTHER (non-first) player makes the pick
 // (the GameDeck row flagged `picked`). Shootouts are matches now, so they
 // fold in automatically.
+//
+// Presentation (label / emoji / description / custom icon) layers on top of
+// the TRAIT_REGISTRY catalog below: the code decides WHICH traits a player
+// earns and the per-player `detail` stat line, while an admin can override
+// any trait's label/emoji/description or upload a custom icon from
+// /admin/traits (stored in TraitOverride, keyed by the trait's registry key).
 
 import { prisma } from "@/lib/prisma";
 
@@ -16,6 +22,115 @@ export interface PlayerTrait {
   emoji: string;
   description: string;
   detail: string;
+  // When set, a small (~48px) data: URL the profile renders in place of the
+  // emoji. Comes from an admin override; null/undefined = show the emoji.
+  iconDataUrl?: string | null;
+}
+
+// One catalog entry — the default presentation for a trait. The set of keys
+// here IS the full universe of traits; /admin/traits lists exactly these.
+export interface TraitDef {
+  key: string;
+  label: string;
+  emoji: string;
+  description: string;
+}
+
+// The trait catalog. Defaults only — per-trait admin edits live in
+// TraitOverride and win over these at render time. `detail` is never stored
+// here; it's the per-player stat line computed in loadPlayerTraits.
+export const TRAIT_REGISTRY: TraitDef[] = [
+  {
+    key: "white-warrior",
+    label: "White Stake Warrior",
+    emoji: "🤍",
+    description: "Picks the gentle stakes and bans the brutal ones — plays it safe.",
+  },
+  {
+    key: "dr-spectred",
+    label: "Dr. Spectred",
+    emoji: "🎓",
+    description: "PhD in Gold Stake from Balatro University.",
+  },
+  {
+    key: "deck-loyalist",
+    label: "Deck Loyalist",
+    emoji: "🃏",
+    description: "Always reaching for the same deck.",
+  },
+  {
+    key: "wildcard",
+    label: "Wildcard",
+    emoji: "🌈",
+    description: "Never the same deck twice — picks all over the place.",
+  },
+  {
+    key: "ghostbuster",
+    label: "Ghostbuster",
+    emoji: "👻",
+    description: "Bans the Ghost deck on sight — who you gonna call?",
+  },
+  {
+    key: "banisher",
+    label: "Banisher",
+    emoji: "🔨",
+    description: "First-bans a particular deck or stake almost every game — banishes it on sight.",
+  },
+  {
+    key: "super-balatro-genius",
+    label: "Super Balatro Genius",
+    emoji: "🎲",
+    description: "Lets the dice decide — leans on the random pick/ban a lot.",
+  },
+];
+const REGISTRY_BY_KEY = new Map(TRAIT_REGISTRY.map((t) => [t.key, t]));
+
+export interface TraitOverrideRow {
+  key: string;
+  label: string | null;
+  emoji: string | null;
+  description: string | null;
+  iconDataUrl: string | null;
+}
+
+// Load every admin override once, keyed by trait key. Callers that compute
+// traits for many players (the /admin/traits "who has what" view) should load
+// this once and pass it into loadPlayerTraits to avoid N queries.
+export async function loadTraitOverrides(): Promise<Map<string, TraitOverrideRow>> {
+  // Degrade gracefully if the TraitOverride table isn't there yet (the brief
+  // window where the web service has deployed the new code but the bot hasn't
+  // run the migration). Traits are cosmetic, so falling back to code defaults
+  // is far better than throwing on every profile render.
+  try {
+    const rows = await prisma.traitOverride.findMany({
+      select: { key: true, label: true, emoji: true, description: true, iconDataUrl: true },
+    });
+    return new Map(rows.map((r) => [r.key, r]));
+  } catch {
+    return new Map();
+  }
+}
+
+// Finish a trait by layering, in order of precedence: admin override → the
+// per-player dynamic bits (only the Banisher has a dynamic label/description,
+// for its specific target) → the registry default. `detail` is always the
+// per-player stat line.
+function makeTrait(
+  key: string,
+  detail: string,
+  overrides: Map<string, TraitOverrideRow>,
+  dynamic?: { label?: string; description?: string },
+): PlayerTrait {
+  const base = REGISTRY_BY_KEY.get(key);
+  const ov = overrides.get(key);
+  return {
+    key,
+    label: ov?.label ?? dynamic?.label ?? base?.label ?? key,
+    emoji: ov?.emoji ?? base?.emoji ?? "🎭",
+    description: ov?.description ?? dynamic?.description ?? base?.description ?? "",
+    detail,
+    iconDataUrl: ov?.iconDataUrl ?? null,
+  };
 }
 
 // Relative difficulty rank among the pool's stakes (White easiest → Gold
@@ -45,7 +160,12 @@ function avgRank(c: Counts): number | null {
   return n > 0 ? sum / n : null;
 }
 
-export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]> {
+export async function loadPlayerTraits(
+  playerId: string,
+  overridesInput?: Map<string, TraitOverrideRow>,
+): Promise<PlayerTrait[]> {
+  const overrides = overridesInput ?? (await loadTraitOverrides());
+
   // Read the player's games relationally (Game + its full GameDeck pool) —
   // no JSON parsing. Shootouts fold in automatically (they're matches now).
   // Only confirmed, non-DC games count. Ban attribution lives on each
@@ -57,6 +177,7 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
     },
     select: {
       firstPlayerId: true,
+      winnerId: true,
       pickedRandomly: true,
       firstBannedRandomly: true,
       otherBannedRandomly: true,
@@ -69,6 +190,8 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
   const pickedDecks: Counts = {};
   const firstBannedDecks: Counts = {};
   const firstBannedStakes: Counts = {};
+  const playedStakes: Counts = {}; // stake every game was played on (the picked combo)
+  const wonStakes: Counts = {}; // …of those, the ones this player won
   let totalPicks = 0;
   let games = 0;
   let randomGames = 0;
@@ -109,6 +232,10 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
     // The picked combo (what the game was played on).
     const picked = g.pool.find((d) => d.picked);
     if (picked) {
+      // Every game the player was in counts toward "stakes they played on",
+      // and a win on that stake toward "stakes they win on" (Dr. Spectred).
+      bump(playedStakes, picked.stake);
+      if (g.winnerId === playerId) bump(wonStakes, picked.stake);
       // Only the OTHER (non-first) player makes the final pick.
       if (!isFirst) {
         bump(pickedStakes, picked.stake);
@@ -130,60 +257,53 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
 
   // 🤍 White Stake Warrior — picks the gentle stakes, bans the brutal ones.
   if (pickedAvg !== null && bannedAvg !== null && totalPicks >= 4 && pickedAvg <= 1.2 && bannedAvg >= 2.4) {
-    traits.push({
-      key: "white-warrior",
-      label: "White Stake Warrior",
-      emoji: "🤍",
-      description: "Picks the gentle stakes and bans the brutal ones — plays it safe.",
-      detail: `avg picked stake ${pickedAvg.toFixed(1)}/4`,
-    });
+    traits.push(makeTrait("white-warrior", `avg picked stake ${pickedAvg.toFixed(1)}/4`, overrides));
   }
-  // 🎩 Dr. Spectre — the mirror of the White Stake Warrior: picks the
-  // brutal stakes and bans the gentle ones. Lives for the high stakes.
-  if (pickedAvg !== null && bannedAvg !== null && totalPicks >= 4 && pickedAvg >= 2.8 && bannedAvg <= 1.6) {
-    const topStake = topEntry(pickedStakes);
-    traits.push({
-      key: "dr-spectre",
-      label: "Dr. Spectre",
-      emoji: "🎩",
-      description: "Lives for the high stakes.",
-      detail: topStake ? `Most-picked stake: ${topStake.name}` : `avg picked stake ${pickedAvg.toFixed(1)}/4`,
-    });
+  // 🎓 Dr. Spectred — PhD in Gold Stake from Balatro University. Awarded only
+  // when Gold is BOTH this player's most-played stake AND their most-won
+  // stake (with at least a couple of real Gold wins, not a one-off). Gold is
+  // the hardest stake, so this is rare by design — exactly the point.
+  const topPlayedStake = topEntry(playedStakes);
+  const topWonStake = topEntry(wonStakes);
+  if (topPlayedStake?.name === "Gold" && topWonStake?.name === "Gold" && topWonStake.count >= 2) {
+    traits.push(
+      makeTrait(
+        "dr-spectred",
+        `${topPlayedStake.count} games on Gold · ${topWonStake.count} wins on it`,
+        overrides,
+      ),
+    );
   }
   // 🃏 Deck Loyalist — keeps reaching for the same deck. Shows the favourite.
   const topPick = topEntry(pickedDecks);
   if (topPick && totalPicks >= 5 && topPick.count / totalPicks >= 0.4) {
-    traits.push({
-      key: "deck-loyalist",
-      label: "Deck Loyalist",
-      emoji: "🃏",
-      description: `Always reaching for the same deck.`,
-      detail: `Favourite: ${topPick.name} (${Math.round((topPick.count / totalPicks) * 100)}% of picks)`,
-    });
+    traits.push(
+      makeTrait(
+        "deck-loyalist",
+        `Favourite: ${topPick.name} (${Math.round((topPick.count / totalPicks) * 100)}% of picks)`,
+        overrides,
+      ),
+    );
   }
   // 🌈 Wildcard — deliberately picks all over the place (opposite of the
-  // Loyalist; distinct from Rando Brando, who lets the dice decide).
+  // Loyalist; distinct from Super Balatro Genius, who lets the dice decide).
   const distinctPicked = Object.keys(pickedDecks).length;
   if (totalPicks >= 6 && distinctPicked / totalPicks >= 0.75) {
-    traits.push({
-      key: "wildcard",
-      label: "Wildcard",
-      emoji: "🌈",
-      description: "Never the same deck twice — picks all over the place.",
-      detail: `${distinctPicked} different decks across ${totalPicks} picks`,
-    });
+    traits.push(
+      makeTrait("wildcard", `${distinctPicked} different decks across ${totalPicks} picks`, overrides),
+    );
   }
   // 👻 Ghostbuster — bans the Ghost deck whenever it shows up.
   if (ghostAvailable >= 4 && ghostBanned / ghostAvailable >= 0.6) {
-    traits.push({
-      key: "ghostbuster",
-      label: "Ghostbuster",
-      emoji: "👻",
-      description: "Bans the Ghost deck on sight — who you gonna call?",
-      detail: `banned Ghost in ${Math.round((ghostBanned / ghostAvailable) * 100)}% of games it appeared`,
-    });
+    traits.push(
+      makeTrait(
+        "ghostbuster",
+        `banned Ghost in ${Math.round((ghostBanned / ghostAvailable) * 100)}% of games it appeared`,
+        overrides,
+      ),
+    );
   }
-  // 🔨 {X} Hater — consistently FIRST-bans a particular deck or stake.
+  // 🔨 {X} Banisher — consistently FIRST-bans a particular deck or stake.
   const topFirstDeck = topEntry(firstBannedDecks);
   const topFirstStake = topEntry(firstBannedStakes);
   const deckHateRate = topFirstDeck ? topFirstDeck.count / games : 0;
@@ -195,23 +315,23 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
     // Always qualify with "Deck"/"Stake" so a color-named one (Black, Gold,
     // White, …) reads unmistakably as a Balatro thing, never a slur.
     const label = useDeck ? `${target.name} Deck Banisher` : `${target.name} Stake Banisher`;
-    traits.push({
-      key: "banisher",
-      label,
-      emoji: "🔨",
-      description: `First-bans the ${target.name} ${useDeck ? "deck" : "stake"} almost every game — banishes it on sight.`,
-      detail: `first-banned in ${Math.round(rate * 100)}% of games`,
-    });
+    const description = `First-bans the ${target.name} ${useDeck ? "deck" : "stake"} almost every game — banishes it on sight.`;
+    traits.push(
+      makeTrait("banisher", `first-banned in ${Math.round(rate * 100)}% of games`, overrides, {
+        label,
+        description,
+      }),
+    );
   }
-  // 🎲 Rando Brando — loves the random buttons.
+  // 🎲 Super Balatro Genius — loves the random buttons (lets the dice decide).
   if (games >= 5 && randomGames / games >= 0.4) {
-    traits.push({
-      key: "rando-brando",
-      label: "Rando Brando",
-      emoji: "🎲",
-      description: "Lets the dice decide — leans on the random pick/ban a lot.",
-      detail: `random in ${Math.round((randomGames / games) * 100)}% of games`,
-    });
+    traits.push(
+      makeTrait(
+        "super-balatro-genius",
+        `random in ${Math.round((randomGames / games) * 100)}% of games`,
+        overrides,
+      ),
+    );
   }
   return traits;
 }
