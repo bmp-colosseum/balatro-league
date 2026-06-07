@@ -111,10 +111,11 @@ async function loadActiveDivisionContext(
 
   // Only the player's OWN CONFIRMED pairings (to know who they've
   // already played) — not the whole division's pairing table.
-  const myPairings = await prisma.pairing.findMany({
+  const myPairings = await prisma.match.findMany({
     where: {
       divisionId: div.id,
       status: "CONFIRMED",
+      format: "LEAGUE_BO2",
       OR: [{ playerAId: playerId }, { playerBId: playerId }],
     },
     select: { playerAId: true, playerBId: true },
@@ -177,10 +178,11 @@ async function deriveStandingsFromPairings(
   playerId: string,
   divisionId: string,
 ): Promise<MeStandingsRow | null> {
-  const allMine = await prisma.pairing.findMany({
+  const allMine = await prisma.match.findMany({
     where: {
       divisionId,
       status: "CONFIRMED",
+      format: "LEAGUE_BO2",
       OR: [{ playerAId: playerId }, { playerBId: playerId }],
     },
     select: { playerAId: true, gamesWonA: true, gamesWonB: true },

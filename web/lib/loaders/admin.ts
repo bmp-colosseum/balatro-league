@@ -40,8 +40,8 @@ export interface AdminDisputeRow {
 }
 
 export async function loadAdminDisputes(): Promise<AdminDisputeRow[]> {
-  const rows = await prisma.pairing.findMany({
-    where: { status: "DISPUTED", division: { season: { isActive: true } } },
+  const rows = await prisma.match.findMany({
+    where: { status: "DISPUTED", format: "LEAGUE_BO2", division: { season: { isActive: true } } },
     select: {
       id: true,
       divisionId: true,
@@ -127,8 +127,8 @@ export async function loadAdminHomeStats(): Promise<AdminHomeStats> {
     }),
     prisma.player.count(),
     prisma.player.findMany({ select: { discordId: true } }),
-    prisma.pairing.count({ where: { status: "CONFIRMED" } }),
-    prisma.pairing.count({ where: { status: "DISPUTED" } }),
+    prisma.match.count({ where: { status: "CONFIRMED", format: "LEAGUE_BO2" } }),
+    prisma.match.count({ where: { status: "DISPUTED", format: "LEAGUE_BO2" } }),
   ]);
   return {
     activeSeason: activeSeason
@@ -550,8 +550,8 @@ export async function loadAdminPlayersListView(opts: {
       bucket.push({ playerId: m.playerId, displayName: m.player.displayName });
       membersByDivision.set(m.divisionId, bucket);
     }
-    const pairings = await prisma.pairing.findMany({
-      where: { status: "CONFIRMED", division: { seasonId: selectedSeason.id } },
+    const pairings = await prisma.match.findMany({
+      where: { status: "CONFIRMED", format: "LEAGUE_BO2", division: { seasonId: selectedSeason.id } },
       select: { divisionId: true, playerAId: true, playerBId: true },
     });
     const playedKey = (divisionId: string, a: string, b: string) =>
@@ -1161,7 +1161,7 @@ async function fetchAdminSeasons(showArchived: boolean) {
         orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
         include: {
           tier: true,
-          _count: { select: { members: true, pairings: true } },
+          _count: { select: { members: true, matches: { where: { format: "LEAGUE_BO2" } } } },
         },
       },
       matchConfigPreset: true,
@@ -1321,21 +1321,33 @@ export async function loadAdminDivisionDetail(
       season: { select: { id: true, number: true, subtitle: true, targetGroupSize: true } },
       tier: { select: { name: true, position: true } },
       members: { include: { player: true }, orderBy: { joinedAt: "asc" } },
-      pairings: {
+      matches: {
         include: { playerA: true, playerB: true },
         orderBy: [{ status: "asc" }, { reportedAt: "desc" }],
-      },
-      shootouts: {
-        select: { playerAId: true, playerBId: true, winnerId: true, recordedBy: true, recordedAt: true, notes: true },
       },
     },
   });
   if (!division) return null;
 
+  // Split the unified matches back into BO2 "pairings" and shootouts for
+  // the existing view shape.
+  const pairings = division.matches.filter((m) => m.format === "LEAGUE_BO2");
+  const shootoutMatches = division.matches.filter((m) => m.format === "SHOOTOUT_BO1");
+  const shootouts = shootoutMatches
+    .filter((s) => s.winnerId !== null)
+    .map((s) => ({
+      playerAId: s.playerAId,
+      playerBId: s.playerBId,
+      winnerId: s.winnerId!,
+      recordedBy: s.recordedBy ?? "unknown",
+      recordedAt: s.confirmedAt ?? s.createdAt,
+      notes: s.notes,
+    }));
+
   const droppedIds = new Set(
     division.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId),
   );
-  const confirmedPairings = division.pairings.filter((p) => p.status === "CONFIRMED");
+  const confirmedPairings = pairings.filter((p) => p.status === "CONFIRMED");
   const standings = computeStandings(
     division.members.map((m) => m.player),
     confirmedPairings.map((p) => ({
@@ -1344,7 +1356,9 @@ export async function loadAdminDivisionDetail(
       gamesWonA: p.gamesWonA,
       gamesWonB: p.gamesWonB,
     })),
-    division.shootouts,
+    shootoutMatches
+      .filter((s) => s.winnerId !== null)
+      .map((s) => ({ playerAId: s.playerAId, playerBId: s.playerBId, winnerId: s.winnerId! })),
   ).map((r) => ({ ...r, dropped: droppedIds.has(r.player.id) }));
 
   const playerById = new Map(
@@ -1356,7 +1370,7 @@ export async function loadAdminDivisionDetail(
     const [x, y] = a < b ? [a, b] : [b, a];
     return `${x}-${y}`;
   };
-  const playedSet = new Set(division.pairings.map((p) => playedKey(p.playerAId, p.playerBId)));
+  const playedSet = new Set(pairings.map((p) => playedKey(p.playerAId, p.playerBId)));
   const unplayed: AdminDivisionDetailData["unplayed"] = [];
   for (let i = 0; i < activeMembers.length; i++) {
     for (let j = i + 1; j < activeMembers.length; j++) {
@@ -1391,7 +1405,7 @@ export async function loadAdminDivisionDetail(
         rating: m.player.rating,
       },
     })),
-    pairings: division.pairings.map((p): AdminDivisionDetailPairing => ({
+    pairings: pairings.map((p): AdminDivisionDetailPairing => ({
       id: p.id,
       status: p.status,
       playerAId: p.playerAId,
@@ -1403,7 +1417,7 @@ export async function loadAdminDivisionDetail(
       playerA: { id: p.playerA.id, displayName: p.playerA.displayName },
       playerB: { id: p.playerB.id, displayName: p.playerB.displayName },
     })),
-    shootouts: division.shootouts,
+    shootouts,
     standings,
     unplayed,
     playerById,
@@ -1431,7 +1445,7 @@ export async function loadAdminDivisionsIndex(): Promise<AdminDivisionsPageData>
               name: true,
               targetSize: true,
               _count: { select: { members: true } },
-              pairings: { where: { status: "CONFIRMED" }, select: { id: true } },
+              matches: { where: { status: "CONFIRMED", format: "LEAGUE_BO2" }, select: { id: true } },
             },
           },
         },
@@ -1448,7 +1462,7 @@ export async function loadAdminDivisionsIndex(): Promise<AdminDivisionsPageData>
       name: d.name,
       memberCount: d._count.members,
       targetSize: d.targetSize ?? season.targetGroupSize,
-      confirmedPairingCount: d.pairings.length,
+      confirmedPairingCount: d.matches.length,
       expectedPairingCount: expectedPairings(d._count.members),
     })),
   }));

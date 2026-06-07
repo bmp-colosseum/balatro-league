@@ -192,7 +192,7 @@ export default async function AdminSeasonsPage({
             <div className="muted">No seasons yet.</div>
           ) : seasons.map((s) => {
             const players = s.divisions.reduce((sum, d) => sum + d._count.members, 0);
-            const sets = s.divisions.reduce((sum, d) => sum + d._count.pairings, 0);
+            const sets = s.divisions.reduce((sum, d) => sum + d._count.matches, 0);
             const tierLine = s.tiers
               .map((t) => `${t.name}: ${t._count.divisions}`)
               .join(" · ");

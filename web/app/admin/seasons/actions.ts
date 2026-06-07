@@ -154,7 +154,7 @@ export async function deleteDivision(formData: FormData) {
     include: {
       season: { select: { id: true, isActive: true, endedAt: true } },
       tier: { select: { name: true } },
-      _count: { select: { members: true, pairings: true } },
+      _count: { select: { members: true, matches: true } },
     },
   });
   if (!division) {
@@ -177,7 +177,7 @@ export async function deleteDivision(formData: FormData) {
   // _count.pairings should be 0 in draft mode (no matches played yet),
   // but guard anyway — if somehow a pairing exists for this division
   // we refuse rather than orphan match history.
-  if (division!._count.pairings > 0) {
+  if (division!._count.matches > 0) {
     redirect(
       `/seasons/${division!.season.id}?err=${encodeURIComponent(
         `"${division!.name}" has match history attached. Refusing to delete.`,

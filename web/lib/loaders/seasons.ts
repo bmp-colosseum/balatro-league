@@ -37,7 +37,7 @@ export async function loadSeasonsIndex(): Promise<SeasonIndexEntry[]> {
       startedAt: true,
       endedAt: true,
       _count: { select: { divisions: true } },
-      divisions: { select: { _count: { select: { members: true, pairings: true } } } },
+      divisions: { select: { _count: { select: { members: true, matches: { where: { format: "LEAGUE_BO2" } } } } } },
     },
     orderBy: [{ isActive: "desc" }, { startedAt: "desc" }],
   });
@@ -49,7 +49,7 @@ export async function loadSeasonsIndex(): Promise<SeasonIndexEntry[]> {
     endedAt: s.endedAt,
     divisionCount: s._count.divisions,
     playerCount: s.divisions.reduce((sum, d) => sum + d._count.members, 0),
-    pairingCount: s.divisions.reduce((sum, d) => sum + d._count.pairings, 0),
+    pairingCount: s.divisions.reduce((sum, d) => sum + d._count.matches, 0),
   }));
 }
 

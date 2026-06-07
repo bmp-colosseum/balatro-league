@@ -94,7 +94,7 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
               groupNumber: true,
               members: { select: { playerId: true, status: true } },
               // _count is a single SQL count(), cheap.
-              _count: { select: { pairings: { where: { status: "CONFIRMED" } } } },
+              _count: { select: { matches: { where: { status: "CONFIRMED", format: "LEAGUE_BO2" } } } },
             },
           },
         },
@@ -128,9 +128,9 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
   // All shootouts across this season's divisions in one round-trip.
   // Shootout has no Player relation in the schema, so we batch the
   // player-name lookup separately and stitch them together below.
-  const allShootouts = allDivIds.length === 0 ? [] : await prisma.shootout.findMany({
-    where: { divisionId: { in: allDivIds } },
-    orderBy: { recordedAt: "desc" },
+  const allShootouts = allDivIds.length === 0 ? [] : await prisma.match.findMany({
+    where: { divisionId: { in: allDivIds }, format: "SHOOTOUT_BO1" },
+    orderBy: { confirmedAt: "desc" },
   });
   const shootoutPlayerIds = new Set<string>();
   for (const s of allShootouts) {
@@ -144,12 +144,13 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
   const playerNameById = new Map(shootoutPlayers.map((p) => [p.id, p.displayName]));
   const shootoutsByDivisionId = new Map<string, StandingsShootout[]>();
   for (const s of allShootouts) {
+    if (!s.winnerId) continue; // shootout with no recorded winner — skip
     const winnerName = playerNameById.get(s.winnerId);
     const loserId = s.winnerId === s.playerAId ? s.playerBId : s.playerAId;
     const loserName = playerNameById.get(loserId);
     if (!winnerName || !loserName) continue; // orphan — hide rather than crash
     const arr = shootoutsByDivisionId.get(s.divisionId) ?? [];
-    arr.push({ id: s.id, winnerName, loserName, recordedAt: s.recordedAt });
+    arr.push({ id: s.id, winnerName, loserName, recordedAt: s.confirmedAt ?? s.createdAt });
     shootoutsByDivisionId.set(s.divisionId, arr);
   }
 
@@ -174,7 +175,7 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
   });
   const bmpCurrentSeason = bmpCurrentSeasonRow?.value ?? null;
 
-  let mmrByPlayerId = new Map<string, StandingsMmrEntry>();
+  const mmrByPlayerId = new Map<string, StandingsMmrEntry>();
   if (opts.showBmpMmr) {
     const allPlayerIds = season.tiers.flatMap((t) =>
       t.divisions.flatMap((d) => d.members.map((m) => m.playerId)),
@@ -227,7 +228,7 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
       groupNumber: d.groupNumber,
       activeMemberIds: d.members.filter((m) => m.status === "ACTIVE").map((m) => m.playerId),
       droppedMemberIds: d.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId),
-      playedMatches: d._count.pairings,
+      playedMatches: d._count.matches,
       rows: standingsByDivisionId.get(d.id) ?? [],
       shootouts: shootoutsByDivisionId.get(d.id) ?? [],
     })),

@@ -230,10 +230,11 @@ async function loadOwnActiveDivision(playerId: string): Promise<OwnActiveDivisio
   });
   if (!membership) return null;
   const div = membership.division;
-  const myPairings = await prisma.pairing.findMany({
+  const myPairings = await prisma.match.findMany({
     where: {
       divisionId: div.id,
       status: "CONFIRMED",
+      format: "LEAGUE_BO2",
       OR: [{ playerAId: playerId }, { playerBId: playerId }],
     },
     select: { playerAId: true, playerBId: true },

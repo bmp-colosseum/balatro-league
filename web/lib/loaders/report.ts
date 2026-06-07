@@ -87,9 +87,10 @@ export async function loadReportPageData(discordId: string): Promise<ReportPageD
   //   - to compute confirmedOpponentIds / pendingOpponentIds (any status)
   //   - to render the recent-matches list (CONFIRMED + DISPUTED only,
   //     newest first, top 10)
-  const myPairings = await prisma.pairing.findMany({
+  const myPairings = await prisma.match.findMany({
     where: {
       divisionId: div.id,
+      format: "LEAGUE_BO2",
       OR: [{ playerAId: player.id }, { playerBId: player.id }],
     },
     select: {
