@@ -331,8 +331,8 @@ function renderChooseFirst(s: MatchSession, a: Player, b: Player, prevGame: Game
     .setColor(0xf1c40f)
     .setDescription(
       `${mention(loser)} lost game ${nextGameNum - 1} — you pick who bans first.\n\n` +
-        `⚠️ **This also decides who picks the deck.** Whoever bans first shapes the pool, ` +
-        `but the **other** player makes the final pick:\n` +
+        `⚠️ **This also decides who picks the deck — whoever bans first does NOT pick it.** ` +
+        `The **other** player makes the final pick:\n` +
         `_first bans 1 → other bans 3 → first bans 3 → **other picks 1 of the last 2**._`,
     );
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
