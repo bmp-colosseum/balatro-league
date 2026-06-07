@@ -24,6 +24,9 @@ export interface WipeResult {
 // need a topological order — PG will follow FK cascades regardless.
 // Explicit list also documents what's wiped vs preserved.
 const WIPED_TABLES = [
+  "Match",
+  "Game",
+  "GameDeck",
   "Pairing",
   "Shootout",
   "MatchSession",
