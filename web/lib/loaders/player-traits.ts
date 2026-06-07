@@ -67,7 +67,6 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
   const bannedStakes: Counts = {};
   const pickedStakes: Counts = {};
   const pickedDecks: Counts = {};
-  const playedCombos: Counts = {}; // deck+stake the game was actually played on
   const firstBannedDecks: Counts = {};
   const firstBannedStakes: Counts = {};
   let totalPicks = 0;
@@ -110,7 +109,6 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
     // The picked combo (what the game was played on).
     const picked = g.pool.find((d) => d.picked);
     if (picked) {
-      bump(playedCombos, `${picked.deck} · ${picked.stake}`);
       // Only the OTHER (non-first) player makes the final pick.
       if (!isFirst) {
         bump(pickedStakes, picked.stake);
@@ -143,12 +141,13 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
   // 🎩 Dr. Spectre — the mirror of the White Stake Warrior: picks the
   // brutal stakes and bans the gentle ones. Lives for the high stakes.
   if (pickedAvg !== null && bannedAvg !== null && totalPicks >= 4 && pickedAvg >= 2.8 && bannedAvg <= 1.6) {
+    const topStake = topEntry(pickedStakes);
     traits.push({
       key: "dr-spectre",
       label: "Dr. Spectre",
       emoji: "🎩",
-      description: "Picks the brutal stakes and bans the gentle ones — lives for the high stakes.",
-      detail: `avg picked stake ${pickedAvg.toFixed(1)}/4, banned ${bannedAvg.toFixed(1)}/4`,
+      description: "Lives for the high stakes.",
+      detail: topStake ? `Most-picked stake: ${topStake.name}` : `avg picked stake ${pickedAvg.toFixed(1)}/4`,
     });
   }
   // 🃏 Deck Loyalist — keeps reaching for the same deck. Shows the favourite.
@@ -214,19 +213,5 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
       detail: `random in ${Math.round((randomGames / games) * 100)}% of games`,
     });
   }
-  // 🎯 Signature Combo — the deck+stake this player has played on most.
-  // Informational (not a quirk), so it's always shown once there's enough
-  // history to make "most-played" meaningful.
-  const topCombo = topEntry(playedCombos);
-  if (games >= 6 && topCombo) {
-    traits.push({
-      key: "signature-combo",
-      label: `Signature: ${topCombo.name}`,
-      emoji: "🎯",
-      description: "The deck + stake they've played on most.",
-      detail: `played ${topCombo.count}× (${Math.round((topCombo.count / games) * 100)}% of games)`,
-    });
-  }
-
   return traits;
 }
