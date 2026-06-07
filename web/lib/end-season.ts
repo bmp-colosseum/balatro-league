@@ -227,7 +227,7 @@ export async function endSeasonCore(seasonId: string, actor: AuditActor): Promis
         include: {
           tier: true,
           members: { include: { player: true } },
-          pairings: { where: { status: "CONFIRMED" } },
+          matches: { where: { status: "CONFIRMED", format: "LEAGUE_BO2" } },
         },
       },
     },
@@ -253,7 +253,7 @@ export async function endSeasonCore(seasonId: string, actor: AuditActor): Promis
         status: m.status,
         currentRating: m.player.rating,
       })),
-      standings: computeStandings(players, d.pairings),
+      standings: computeStandings(players, d.matches),
     };
   });
 

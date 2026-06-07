@@ -63,8 +63,8 @@ export async function planSeason(roundId: string, opts: PlanOpts = {}): Promise<
         include: {
           tier: true,
           members: { include: { player: true } },
-          pairings: {
-            where: { status: "CONFIRMED" },
+          matches: {
+            where: { status: "CONFIRMED", format: "LEAGUE_BO2" },
             select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
           },
         },
@@ -81,7 +81,7 @@ export async function planSeason(roundId: string, opts: PlanOpts = {}): Promise<
     for (const division of previousSeason.divisions) {
       const players: Player[] = division.members.map((m) => m.player);
       if (players.length === 0) continue;
-      const rows = computeStandings(players, division.pairings);
+      const rows = computeStandings(players, division.matches);
       rows.forEach((row, idx) => {
         let placement: "TOP" | "MIDDLE" | "BOTTOM";
         if (idx === 0) placement = "TOP";

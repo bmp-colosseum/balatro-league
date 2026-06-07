@@ -72,8 +72,8 @@ export async function loadStatsPageData(): Promise<StatsPageData> {
   // Top by career match wins (2-0 results across all CONFIRMED pairings).
   // Pairing rows + group-by-player. Two passes since each Pairing has
   // playerA + playerB and we want wins per side.
-  const confirmedPairings = await prisma.pairing.findMany({
-    where: { status: "CONFIRMED" },
+  const confirmedPairings = await prisma.match.findMany({
+    where: { status: "CONFIRMED", format: "LEAGUE_BO2" },
     select: {
       playerAId: true,
       playerBId: true,
@@ -202,9 +202,10 @@ export async function loadStatsPageData(): Promise<StatsPageData> {
     });
     const activePlayerIds = [...new Set(activeMembers.map((m) => m.playerId))];
     if (activePlayerIds.length > 0) {
-      const allPairings = await prisma.pairing.findMany({
+      const allPairings = await prisma.match.findMany({
         where: {
           status: "CONFIRMED",
+          format: "LEAGUE_BO2",
           OR: [{ playerAId: { in: activePlayerIds } }, { playerBId: { in: activePlayerIds } }],
         },
         select: {

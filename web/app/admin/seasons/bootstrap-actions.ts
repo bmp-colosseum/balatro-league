@@ -298,8 +298,8 @@ export async function awardSeasonChampionRoles(formData: FormData) {
       divisions: {
         include: {
           members: { where: { status: "ACTIVE" }, include: { player: true } },
-          pairings: {
-            where: { status: "CONFIRMED" },
+          matches: {
+            where: { status: "CONFIRMED", format: "LEAGUE_BO2" },
             select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
           },
         },
@@ -312,7 +312,7 @@ export async function awardSeasonChampionRoles(formData: FormData) {
   let skipped = 0;
   for (const div of season.divisions) {
     if (div.members.length === 0) continue;
-    const standings = computeStandings(div.members.map((m) => m.player), div.pairings);
+    const standings = computeStandings(div.members.map((m) => m.player), div.matches);
     if (standings.length === 0) continue;
     // Unresolved tie at #1 → skip. row[1].tiedWithPrev means rows 0+1
     // are tied on points/h2h/wins/draws, so no clear champion yet.
