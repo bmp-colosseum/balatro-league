@@ -49,28 +49,28 @@ export const TRAIT_REGISTRY: TraitDef[] = [
     label: "White Stake Warrior",
     emoji: "🤍",
     description: "Will beat you… as long as it's on White stake.",
-    criteria: "White is both your most-played and most-won stake (2+ wins on White), across 10+ games.",
+    criteria: "After 10+ games, White is both your most-played and most-won stake.",
   },
   {
     key: "dr-spectred",
     label: "Dr. Spectred",
     emoji: "🎓",
     description: "PhD in Gold Stake from Balatro University.",
-    criteria: "Gold is both your most-played and most-won stake (2+ wins on Gold), across 10+ games.",
+    criteria: "After 10+ games, Gold is both your most-played and most-won stake.",
   },
   {
     key: "ghostbuster",
     label: "Ghostbuster",
     emoji: "👻",
     description: "Who you gonna call?",
-    criteria: "Banned the Ghost deck in 60%+ of games it appeared (4+ such games), across 10+ games.",
+    criteria: "After 10+ games, you've banned the Ghost deck in most games it appeared.",
   },
   {
     key: "super-balatro-genius",
     label: "Super Balatro Genius",
     emoji: "🎲",
     description: "Doesn't care what the deck or stake is, they will beat you.",
-    criteria: "Random-picked the majority of your picks and won most of them, across 10+ games.",
+    criteria: "After 10+ games, you random-pick most of your picks and win most of them.",
   },
 ];
 const REGISTRY_BY_KEY = new Map(TRAIT_REGISTRY.map((t) => [t.key, t]));
@@ -197,7 +197,7 @@ export async function loadPlayerTraits(
   // 🤍 White Stake Warrior — White is BOTH their most-played and most-won
   // stake. Will beat you… as long as it's on White (the gentle stake). The
   // self-deprecating mirror of Dr. Spectred, who does it on Gold.
-  if (topPlayedStake?.name === "White" && topWonStake?.name === "White" && topWonStake.count >= 2) {
+  if (topPlayedStake?.name === "White" && topWonStake?.name === "White") {
     traits.push(
       makeTrait(
         "white-warrior",
@@ -206,9 +206,9 @@ export async function loadPlayerTraits(
       ),
     );
   }
-  // 🎓 Dr. Spectred — PhD in Gold Stake. Gold is BOTH most-played and most-won
-  // (with a couple of real Gold wins). Gold is the hardest stake → rare.
-  if (topPlayedStake?.name === "Gold" && topWonStake?.name === "Gold" && topWonStake.count >= 2) {
+  // 🎓 Dr. Spectred — PhD in Gold Stake. Gold is BOTH most-played and most-won.
+  // Gold is the hardest stake → rare in practice.
+  if (topPlayedStake?.name === "Gold" && topWonStake?.name === "Gold") {
     traits.push(
       makeTrait(
         "dr-spectred",
@@ -217,8 +217,8 @@ export async function loadPlayerTraits(
       ),
     );
   }
-  // 👻 Ghostbuster — bans the Ghost deck whenever it shows up.
-  if (ghostAvailable >= 4 && ghostBanned / ghostAvailable >= 0.6) {
+  // 👻 Ghostbuster — bans the Ghost deck most of the time it shows up.
+  if (ghostAvailable > 0 && ghostBanned / ghostAvailable >= 0.6) {
     traits.push(
       makeTrait(
         "ghostbuster",
@@ -229,13 +229,7 @@ export async function loadPlayerTraits(
   }
   // 🎲 Super Balatro Genius — random-picks more often than not AND wins the
   // majority of those games. Doesn't care what the deck or stake is.
-  if (
-    totalPicks >= 5 &&
-    randomPicks >= 3 &&
-    randomPicks / totalPicks >= 0.5 &&
-    randomPickWins >= 2 &&
-    randomPickWins / randomPicks >= 0.5
-  ) {
+  if (randomPicks > 0 && randomPicks / totalPicks >= 0.5 && randomPickWins / randomPicks >= 0.5) {
     traits.push(
       makeTrait("super-balatro-genius", `won ${randomPickWins} of ${randomPicks} random picks`, overrides),
     );
