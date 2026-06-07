@@ -31,7 +31,7 @@ export async function spawnDisputeThread(
   // false so the embed gets edited inside this function.
   opts: { skipEmbedEdit?: boolean } = {},
 ): Promise<void> {
-  const pairing = await prisma.pairing.findUnique({
+  const pairing = await prisma.match.findUnique({
     where: { id: pairingId },
     include: { playerA: true, playerB: true, division: true, disputer: true },
   });
@@ -160,7 +160,7 @@ export async function spawnDisputeThread(
       components: [disputeThreadButtons(pairing.id, hasProposal)],
     });
 
-    await prisma.pairing.update({
+    await prisma.match.update({
       where: { id: pairing.id },
       data: { disputeThreadId: thread.id },
     });

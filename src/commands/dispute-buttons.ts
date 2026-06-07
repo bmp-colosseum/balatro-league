@@ -73,16 +73,18 @@ async function applyResolution(
   actionTag: string,
   reason: string,
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const pairing = await prisma.pairing.findUnique({ where: { id: pairingId } });
+  const pairing = await prisma.match.findUnique({ where: { id: pairingId } });
   if (!pairing) return { ok: false, reason: "This match isn't on record anymore." };
   if (pairing.status !== "DISPUTED") return { ok: false, reason: "This match isn't disputed anymore." };
 
-  await prisma.pairing.update({
+  const winnerId = gamesWonA > gamesWonB ? pairing.playerAId : gamesWonB > gamesWonA ? pairing.playerBId : null;
+  await prisma.match.update({
     where: { id: pairingId },
     data: {
       status: "CONFIRMED",
       gamesWonA,
       gamesWonB,
+      winnerId,
       confirmedAt: new Date(),
       adminOverrideBy: interaction.user.id,
       adminOverrideReason: reason,
@@ -122,7 +124,7 @@ export const disputeThreadButtonHandler: ButtonHandler = {
       return;
     }
 
-    const pairing = await prisma.pairing.findUnique({
+    const pairing = await prisma.match.findUnique({
       where: { id: pairingId },
       include: {
         playerA: { select: { discordId: true, displayName: true } },

@@ -131,7 +131,7 @@ export function pendingButtons(pairingId: string): ActionRowBuilder<ButtonBuilde
 // job can edit in place. Best-effort: a failed post still leaves the
 // Pairing in PENDING, and auto-confirm will fire from the queue.
 export async function postPendingReport(pairingId: string): Promise<void> {
-  const pairing = await prisma.pairing.findUnique({
+  const pairing = await prisma.match.findUnique({
     where: { id: pairingId },
     include: {
       playerA: true,
@@ -173,7 +173,7 @@ export async function postPendingReport(pairingId: string): Promise<void> {
       embeds: [embed],
       components: [pendingButtons(pairingId)],
     });
-    await prisma.pairing.update({
+    await prisma.match.update({
       where: { id: pairingId },
       data: { reportChannelId: channelId, reportMessageId: message.id },
     });

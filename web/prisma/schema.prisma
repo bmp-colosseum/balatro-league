@@ -742,6 +742,11 @@ model Match {
   // guided flow ran, per-game decks/stakes live on Game rows instead.
   reportedDeck              String?
   reportedStake             String?
+  // Shootout provenance (absorbed from the old Shootout model). recordedBy
+  // is a Discord id or "self-report"; notes is free text. Null for normal
+  // BO2 matches.
+  recordedBy                String?
+  notes                     String?
   createdAt    DateTime      @default(now())
 
   division     Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)

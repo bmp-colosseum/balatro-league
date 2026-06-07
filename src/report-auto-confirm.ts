@@ -11,7 +11,7 @@ import { buildReportEmbed } from "./report-flow.js";
 import { recomputeDivisionStandings } from "./standings-cache.js";
 
 export async function autoConfirmReport(pairingId: string): Promise<void> {
-  const pairing = await prisma.pairing.findUnique({
+  const pairing = await prisma.match.findUnique({
     where: { id: pairingId },
     include: {
       playerA: true,
@@ -22,7 +22,7 @@ export async function autoConfirmReport(pairingId: string): Promise<void> {
   if (!pairing) return;
   if (pairing.status !== "PENDING") return;
 
-  await prisma.pairing.update({
+  await prisma.match.update({
     where: { id: pairingId },
     data: { status: "CONFIRMED", confirmedAt: new Date() },
   });

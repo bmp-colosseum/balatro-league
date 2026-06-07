@@ -40,6 +40,7 @@ import { bootstrapPresetsAndPointers, generatePool, presetForCasualMatch, preset
 import { renderComboBuilder, renderMatch } from "../match-render.js";
 import { summonHelpers } from "./helper.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
+import { writeMatchGames } from "../match-write.js";
 import {
   emptyGameState,
   parsePolicy,
@@ -1469,19 +1470,37 @@ async function finalizeMatch(
     const [canonA, canonB] = session.playerAId < session.playerBId
       ? [session.playerAId, session.playerBId]
       : [session.playerBId, session.playerAId];
-    await prisma.shootout.upsert({
+    const winA = winnerId === canonA ? 1 : 0;
+    const winB = winnerId === canonB ? 1 : 0;
+    const now = new Date();
+    const shootout = await prisma.match.upsert({
       where: {
-        divisionId_playerAId_playerBId: { divisionId: session.divisionId, playerAId: canonA, playerBId: canonB },
+        divisionId_playerAId_playerBId_format: {
+          divisionId: session.divisionId,
+          playerAId: canonA,
+          playerBId: canonB,
+          format: "SHOOTOUT_BO1",
+        },
       },
       create: {
         divisionId: session.divisionId,
         playerAId: canonA,
         playerBId: canonB,
+        format: "SHOOTOUT_BO1",
+        gamesWonA: winA,
+        gamesWonB: winB,
         winnerId,
+        status: "CONFIRMED",
+        reportedAt: now,
+        confirmedAt: now,
         recordedBy: interaction.user.id,
       },
-      update: { winnerId, recordedBy: interaction.user.id },
+      update: { gamesWonA: winA, gamesWonB: winB, winnerId, status: "CONFIRMED", confirmedAt: now, recordedBy: interaction.user.id },
     });
+    // The shootout's single game went through ban/pick — persist it.
+    const g1state = finalGameField === "game1" ? finalGame : g1;
+    await writeMatchGames(shootout.id, canonA, canonB, [g1state]);
+    await prisma.matchSession.update({ where: { id: updated.id }, data: { pairingId: shootout.id } });
     await refreshMessage(interaction, updated);
     closeMatchChannel(interaction, updated.id, updated.threadId).catch(() => {});
     recomputeDivisionStandings(session.divisionId).catch(() => {});
@@ -1515,20 +1534,24 @@ async function finalizeMatch(
     !!parseGame(session.game2)?.dcByPlayerId ||
     !!parseGame(session.game3)?.dcByPlayerId ||
     !!finalGame.dcByPlayerId;
-  const pairing = await prisma.pairing.upsert({
+  const winnerId = gamesWonA > gamesWonB ? canonA : gamesWonB > gamesWonA ? canonB : null;
+  const pairing = await prisma.match.upsert({
     where: {
-      divisionId_playerAId_playerBId: {
+      divisionId_playerAId_playerBId_format: {
         divisionId: session.divisionId!,
         playerAId: canonA,
         playerBId: canonB,
+        format: "LEAGUE_BO2",
       },
     },
     create: {
       divisionId: session.divisionId!,
       playerAId: canonA,
       playerBId: canonB,
+      format: "LEAGUE_BO2",
       gamesWonA,
       gamesWonB,
+      winnerId,
       status: "CONFIRMED",
       reporterId: reporter.id,
       reportedAt: new Date(),
@@ -1538,6 +1561,7 @@ async function finalizeMatch(
     update: {
       gamesWonA,
       gamesWonB,
+      winnerId,
       status: "CONFIRMED",
       reporterId: reporter.id,
       reportedAt: new Date(),
@@ -1545,6 +1569,13 @@ async function finalizeMatch(
       confirmedAt: new Date(),
     },
   });
+
+  // Persist per-game Game/GameDeck rows from the guided flow's GameStates
+  // (the final field uses finalGame; others from the stored session).
+  const game1State = finalGameField === "game1" ? finalGame : g1;
+  const game2State = finalGameField === "game2" ? finalGame : g2;
+  const game3State = finalGameField === "game3" ? finalGame : g3;
+  await writeMatchGames(pairing.id, canonA, canonB, [game1State, game2State, game3State]);
 
   await prisma.matchSession.update({
     where: { id: updated.id },

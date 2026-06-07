@@ -286,10 +286,11 @@ async function undoReport(interaction: ChatInputCommandInteraction) {
   // Find the pairing across the active season's divisions (either player
   // could be in any division of this season; the unique constraint is
   // (divisionId, playerAId, playerBId) so we find by canonical pair).
-  const pairing = await prisma.pairing.findFirst({
+  const pairing = await prisma.match.findFirst({
     where: {
       playerAId: canonA,
       playerBId: canonB,
+      format: "LEAGUE_BO2",
       division: { seasonId: activeSeason.id },
     },
     include: { division: { select: { id: true, name: true } } },
@@ -300,7 +301,7 @@ async function undoReport(interaction: ChatInputCommandInteraction) {
     );
     return;
   }
-  await prisma.pairing.delete({ where: { id: pairing.id } });
+  await prisma.match.delete({ where: { id: pairing.id } });
   // Standings cache no longer reflects this pairing — recompute the
   // affected division. Fire-and-forget so the user doesn't wait on it.
   recomputeDivisionStandings(pairing.division.id).catch(() => {});
@@ -365,17 +366,41 @@ async function persistShootout(args: {
   }
 
   const [canonA, canonB] = p1.id < p2.id ? [p1.id, p2.id] : [p2.id, p1.id];
-  await prisma.shootout.upsert({
-    where: { divisionId_playerAId_playerBId: { divisionId: member.divisionId, playerAId: canonA, playerBId: canonB } },
+  const winA = winner.id === canonA ? 1 : 0;
+  const winB = winner.id === canonB ? 1 : 0;
+  const now = new Date();
+  await prisma.match.upsert({
+    where: {
+      divisionId_playerAId_playerBId_format: {
+        divisionId: member.divisionId,
+        playerAId: canonA,
+        playerBId: canonB,
+        format: "SHOOTOUT_BO1",
+      },
+    },
     create: {
       divisionId: member.divisionId,
       playerAId: canonA,
       playerBId: canonB,
+      format: "SHOOTOUT_BO1",
+      gamesWonA: winA,
+      gamesWonB: winB,
       winnerId: winner.id,
+      status: "CONFIRMED",
+      reportedAt: now,
+      confirmedAt: now,
       recordedBy: args.recordedBy,
       notes: args.notes ?? null,
     },
-    update: { winnerId: winner.id, recordedBy: args.recordedBy, notes: args.notes ?? null },
+    update: {
+      gamesWonA: winA,
+      gamesWonB: winB,
+      winnerId: winner.id,
+      status: "CONFIRMED",
+      confirmedAt: now,
+      recordedBy: args.recordedBy,
+      notes: args.notes ?? null,
+    },
   });
   recomputeDivisionStandings(member.divisionId).catch(() => {});
   return { ok: true, divisionName: member.division.name, winnerName: winner.displayName };
@@ -569,14 +594,24 @@ async function recordPairing(interaction: ChatInputCommandInteraction) {
   const gamesWonA = p1IsA ? games.a : games.b;
   const gamesWonB = p1IsA ? games.b : games.a;
 
-  const upserted = await prisma.pairing.upsert({
-    where: { divisionId_playerAId_playerBId: { divisionId: division.id, playerAId, playerBId } },
+  const winnerId = gamesWonA > gamesWonB ? playerAId : gamesWonB > gamesWonA ? playerBId : null;
+  const upserted = await prisma.match.upsert({
+    where: {
+      divisionId_playerAId_playerBId_format: {
+        divisionId: division.id,
+        playerAId,
+        playerBId,
+        format: "LEAGUE_BO2",
+      },
+    },
     create: {
       divisionId: division.id,
       playerAId,
       playerBId,
+      format: "LEAGUE_BO2",
       gamesWonA,
       gamesWonB,
+      winnerId,
       status: "CONFIRMED",
       reporterId: null,
       reportedAt: new Date(),
@@ -587,6 +622,7 @@ async function recordPairing(interaction: ChatInputCommandInteraction) {
     update: {
       gamesWonA,
       gamesWonB,
+      winnerId,
       status: "CONFIRMED",
       confirmedAt: new Date(),
       adminOverrideBy: interaction.user.id,
@@ -666,7 +702,7 @@ async function forceResult(interaction: ChatInputCommandInteraction) {
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const pairing = await prisma.pairing.findUnique({
+  const pairing = await prisma.match.findUnique({
     where: { id: pairingId },
     include: { playerA: true, playerB: true, division: true },
   });
@@ -676,11 +712,13 @@ async function forceResult(interaction: ChatInputCommandInteraction) {
   }
 
   const games = gamesFromResult(result);
-  await prisma.pairing.update({
+  const winnerId = games.a > games.b ? pairing.playerAId : games.b > games.a ? pairing.playerBId : null;
+  await prisma.match.update({
     where: { id: pairingId },
     data: {
       gamesWonA: games.a,
       gamesWonB: games.b,
+      winnerId,
       status: "CONFIRMED",
       confirmedAt: new Date(),
       adminOverrideBy: interaction.user.id,
