@@ -441,6 +441,10 @@ export async function overridePairing(formData: FormData) {
       confirmedAt: new Date(),
       adminOverrideBy: "web-dashboard",
       adminOverrideReason: "override via web dashboard",
+      // Overriding to a played result clears any forfeit/DQ flag so it no
+      // longer renders "by DQ" (use Delete to undo a DQ entirely).
+      forfeit: false,
+      forfeitReason: null,
     },
   });
   enqueueAnnounceResult(updated.id).catch((err) => console.warn("announceResult failed:", err));
