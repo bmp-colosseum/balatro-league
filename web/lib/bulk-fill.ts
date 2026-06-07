@@ -88,19 +88,29 @@ export async function bulkFillSeason(opts: BulkFillOptions): Promise<BulkFillRes
       for (let j = i + 1; j < playerIds.length; j++) {
         const aId = playerIds[i]!;
         const bId = playerIds[j]!;
-        const existing = await prisma.pairing.findUnique({
-          where: { divisionId_playerAId_playerBId: { divisionId: div.id, playerAId: aId, playerBId: bId } },
+        const existing = await prisma.match.findUnique({
+          where: {
+            divisionId_playerAId_playerBId_format: {
+              divisionId: div.id,
+              playerAId: aId,
+              playerBId: bId,
+              format: "LEAGUE_BO2",
+            },
+          },
         });
         const result = randomResult(rand);
         const { a: gA, b: gB } = gamesFromResult(result);
+        const winnerId = gA > gB ? aId : gB > gA ? bId : null;
         if (!existing) {
-          const row = await prisma.pairing.create({
+          const row = await prisma.match.create({
             data: {
               divisionId: div.id,
               playerAId: aId,
               playerBId: bId,
+              format: "LEAGUE_BO2",
               gamesWonA: gA,
               gamesWonB: gB,
+              winnerId,
               status: "CONFIRMED",
               reportedAt: new Date(),
               confirmedAt: new Date(),
@@ -114,9 +124,10 @@ export async function bulkFillSeason(opts: BulkFillOptions): Promise<BulkFillRes
         } else if (existing.status !== "CONFIRMED") {
           // UncheckedUpdateInput lets us set the raw disputedById FK to
           // null without going through the relation API. Same effect.
-          const data: Prisma.PairingUncheckedUpdateInput = {
+          const data: Prisma.MatchUncheckedUpdateInput = {
             gamesWonA: gA,
             gamesWonB: gB,
+            winnerId,
             status: "CONFIRMED",
             reportedAt: existing.reportedAt ?? new Date(),
             confirmedAt: new Date(),
@@ -126,7 +137,7 @@ export async function bulkFillSeason(opts: BulkFillOptions): Promise<BulkFillRes
             disputeReason: null,
             disputedAt: null,
           };
-          await prisma.pairing.update({ where: { id: existing.id }, data });
+          await prisma.match.update({ where: { id: existing.id }, data });
           confirmedFromPending++;
           if (announce) {
             await enqueueAnnounceResult(existing.id).catch(() => {});

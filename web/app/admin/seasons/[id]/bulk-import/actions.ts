@@ -194,14 +194,24 @@ export async function bulkImportSeason(formData: FormData) {
       // the Discord channel with dozens of posts. If you need to
       // re-announce after import, do it via /admin record-set or
       // /admin override-result per row.
-      await prisma.pairing.upsert({
-        where: { divisionId_playerAId_playerBId: { divisionId: div.id, playerAId: canonA, playerBId: canonB } },
+      const winnerId = gamesWonA > gamesWonB ? canonA : gamesWonB > gamesWonA ? canonB : null;
+      await prisma.match.upsert({
+        where: {
+          divisionId_playerAId_playerBId_format: {
+            divisionId: div.id,
+            playerAId: canonA,
+            playerBId: canonB,
+            format: "LEAGUE_BO2",
+          },
+        },
         create: {
           divisionId: div.id,
           playerAId: canonA,
           playerBId: canonB,
+          format: "LEAGUE_BO2",
           gamesWonA,
           gamesWonB,
+          winnerId,
           status: "CONFIRMED",
           reportedAt: new Date(),
           confirmedAt: new Date(),
@@ -209,6 +219,7 @@ export async function bulkImportSeason(formData: FormData) {
         update: {
           gamesWonA,
           gamesWonB,
+          winnerId,
           status: "CONFIRMED",
           confirmedAt: new Date(),
         },

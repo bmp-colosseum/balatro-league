@@ -59,14 +59,24 @@ export async function recordSetForPlayer(formData: FormData) {
   const gamesWonA = playerIsA ? games.a : games.b;
   const gamesWonB = playerIsA ? games.b : games.a;
 
-  const recorded = await prisma.pairing.upsert({
-    where: { divisionId_playerAId_playerBId: { divisionId, playerAId: canonA, playerBId: canonB } },
+  const winnerId = gamesWonA > gamesWonB ? canonA : gamesWonB > gamesWonA ? canonB : null;
+  const recorded = await prisma.match.upsert({
+    where: {
+      divisionId_playerAId_playerBId_format: {
+        divisionId,
+        playerAId: canonA,
+        playerBId: canonB,
+        format: "LEAGUE_BO2",
+      },
+    },
     create: {
       divisionId,
       playerAId: canonA,
       playerBId: canonB,
+      format: "LEAGUE_BO2",
       gamesWonA,
       gamesWonB,
+      winnerId,
       status: "CONFIRMED",
       reportedAt: new Date(),
       confirmedAt: new Date(),
@@ -76,6 +86,7 @@ export async function recordSetForPlayer(formData: FormData) {
     update: {
       gamesWonA,
       gamesWonB,
+      winnerId,
       status: "CONFIRMED",
       confirmedAt: new Date(),
       adminOverrideBy: "admin-players-page",
@@ -157,7 +168,7 @@ export async function dropPlayer(formData: FormData) {
   });
 
   // Void unplayed pairings
-  await prisma.pairing.deleteMany({
+  await prisma.match.deleteMany({
     where: {
       divisionId: membership.divisionId,
       status: "PENDING",
@@ -192,12 +203,12 @@ export async function deletePlayer(formData: FormData) {
   if (!playerId) return;
   // Collect affected divisions before the delete so we can recompute
   // each one's standings after the player's pairings vanish.
-  const affected = await prisma.pairing.findMany({
+  const affected = await prisma.match.findMany({
     where: { OR: [{ playerAId: playerId }, { playerBId: playerId }] },
     select: { divisionId: true },
     distinct: ["divisionId"],
   });
-  await prisma.pairing.deleteMany({
+  await prisma.match.deleteMany({
     where: { OR: [{ playerAId: playerId }, { playerBId: playerId }] },
   });
   await prisma.player.delete({ where: { id: playerId } });

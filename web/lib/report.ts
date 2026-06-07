@@ -89,8 +89,15 @@ export async function reportSetFromWeb(
   const gamesWonA = reporterIsA ? games.a : games.b;
   const gamesWonB = reporterIsA ? games.b : games.a;
 
-  const existing = await prisma.pairing.findUnique({
-    where: { divisionId_playerAId_playerBId: { divisionId: division.id, playerAId, playerBId } },
+  const existing = await prisma.match.findUnique({
+    where: {
+      divisionId_playerAId_playerBId_format: {
+        divisionId: division.id,
+        playerAId,
+        playerBId,
+        format: "LEAGUE_BO2",
+      },
+    },
   });
   if (existing && existing.status === "CONFIRMED") {
     return {
@@ -120,12 +127,14 @@ export async function reportSetFromWeb(
   const now = new Date();
   const reportedDeck = combo?.deck?.trim() || null;
   const reportedStake = combo?.stake?.trim() || null;
+  const winnerId = gamesWonA > gamesWonB ? playerAId : gamesWonB > gamesWonA ? playerBId : null;
   const pairing = existing
-    ? await prisma.pairing.update({
+    ? await prisma.match.update({
         where: { id: existing.id },
         data: {
           gamesWonA,
           gamesWonB,
+          winnerId,
           status: "CONFIRMED",
           reporterId: reporter.id,
           reportedAt: now,
@@ -134,13 +143,15 @@ export async function reportSetFromWeb(
           reportedStake,
         },
       })
-    : await prisma.pairing.create({
+    : await prisma.match.create({
         data: {
           divisionId: division.id,
           playerAId,
           playerBId,
+          format: "LEAGUE_BO2",
           gamesWonA,
           gamesWonB,
+          winnerId,
           status: "CONFIRMED",
           reporterId: reporter.id,
           reportedAt: now,
@@ -202,7 +213,7 @@ export async function disputeMatchFromWeb(
   const player = await prisma.player.findUnique({ where: { discordId: disputerDiscordId } });
   if (!player) return { ok: false, reason: "You don't have a Player record." };
 
-  const pairing = await prisma.pairing.findUnique({
+  const pairing = await prisma.match.findUnique({
     where: { id: pairingId },
     include: { division: { include: { season: true } } },
   });
@@ -233,7 +244,7 @@ export async function disputeMatchFromWeb(
   }
   const cleanReason = reason?.trim().slice(0, 500) || null;
 
-  await prisma.pairing.update({
+  await prisma.match.update({
     where: { id: pairingId },
     data: {
       status: "DISPUTED",

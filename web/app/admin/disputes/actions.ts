@@ -24,7 +24,7 @@ export async function acceptDisputeProposal(formData: FormData) {
   const pairingId = String(formData.get("pairingId") ?? "").trim();
   if (!pairingId) redirect("/admin/disputes?err=missing-id");
 
-  const pairing = await prisma.pairing.findUnique({ where: { id: pairingId } });
+  const pairing = await prisma.match.findUnique({ where: { id: pairingId } });
   if (!pairing) redirect("/admin/disputes?err=not-found");
   if (pairing.status !== "DISPUTED") {
     redirect(`/admin/disputes?err=${encodeURIComponent("Match isn't disputed")}`);
@@ -36,7 +36,7 @@ export async function acceptDisputeProposal(formData: FormData) {
     redirect(`/admin/disputes?err=${encodeURIComponent("No proposed result to accept — use Custom Edit instead")}`);
   }
 
-  await prisma.pairing.update({
+  await prisma.match.update({
     where: { id: pairingId },
     data: {
       gamesWonA: pairing.disputeProposedGamesWonA,
@@ -83,13 +83,13 @@ export async function rejectDispute(formData: FormData) {
   const pairingId = String(formData.get("pairingId") ?? "").trim();
   if (!pairingId) redirect("/admin/disputes?err=missing-id");
 
-  const pairing = await prisma.pairing.findUnique({ where: { id: pairingId } });
+  const pairing = await prisma.match.findUnique({ where: { id: pairingId } });
   if (!pairing) redirect("/admin/disputes?err=not-found");
   if (pairing.status !== "DISPUTED") {
     redirect(`/admin/disputes?err=${encodeURIComponent("Match isn't disputed")}`);
   }
 
-  await prisma.pairing.update({
+  await prisma.match.update({
     where: { id: pairingId },
     data: {
       status: "CONFIRMED",
@@ -133,13 +133,13 @@ export async function setDisputeResult(formData: FormData) {
   const games = map[resultStr];
   if (!games) redirect(`/admin/disputes?err=${encodeURIComponent("Pick a result")}`);
 
-  const pairing = await prisma.pairing.findUnique({ where: { id: pairingId } });
+  const pairing = await prisma.match.findUnique({ where: { id: pairingId } });
   if (!pairing) redirect("/admin/disputes?err=not-found");
   if (pairing.status !== "DISPUTED") {
     redirect(`/admin/disputes?err=${encodeURIComponent("Match isn't disputed")}`);
   }
 
-  await prisma.pairing.update({
+  await prisma.match.update({
     where: { id: pairingId },
     data: {
       status: "CONFIRMED",

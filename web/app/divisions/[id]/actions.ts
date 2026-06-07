@@ -57,14 +57,17 @@ export async function recordFromDivisionAction(formData: FormData) {
   const gamesWonA = aIsCanon ? games.a : games.b;
   const gamesWonB = aIsCanon ? games.b : games.a;
 
-  const recorded = await prisma.pairing.upsert({
-    where: { divisionId_playerAId_playerBId: { divisionId, playerAId: canonA, playerBId: canonB } },
+  const winnerId = gamesWonA > gamesWonB ? canonA : gamesWonB > gamesWonA ? canonB : null;
+  const recorded = await prisma.match.upsert({
+    where: { divisionId_playerAId_playerBId_format: { divisionId, playerAId: canonA, playerBId: canonB, format: "LEAGUE_BO2" } },
     create: {
       divisionId,
       playerAId: canonA,
       playerBId: canonB,
+      format: "LEAGUE_BO2",
       gamesWonA,
       gamesWonB,
+      winnerId,
       status: "CONFIRMED",
       reportedAt: new Date(),
       confirmedAt: new Date(),
@@ -74,6 +77,7 @@ export async function recordFromDivisionAction(formData: FormData) {
     update: {
       gamesWonA,
       gamesWonB,
+      winnerId,
       status: "CONFIRMED",
       confirmedAt: new Date(),
       adminOverrideBy: viewerUser.discordId,
@@ -171,7 +175,7 @@ export async function dropDivisionMember(formData: FormData) {
     data: { status: "DROPPED", droppedAt: new Date() },
   });
   // Void unplayed pairings only
-  await prisma.pairing.deleteMany({
+  await prisma.match.deleteMany({
     where: {
       divisionId,
       status: "PENDING",
@@ -207,7 +211,7 @@ export async function removeDivisionMember(formData: FormData) {
   const playerId = String(formData.get("playerId") ?? "");
   if (!divisionId || !playerId) return;
 
-  await prisma.pairing.deleteMany({
+  await prisma.match.deleteMany({
     where: {
       divisionId,
       OR: [{ playerAId: playerId }, { playerBId: playerId }],
@@ -328,14 +332,17 @@ export async function bulkRecordPairings(formData: FormData) {
     const gamesWonA = aIsCanonA ? games.a : games.b;
     const gamesWonB = aIsCanonA ? games.b : games.a;
 
-    await prisma.pairing.upsert({
-      where: { divisionId_playerAId_playerBId: { divisionId, playerAId: canonA, playerBId: canonB } },
+    const winnerId = gamesWonA > gamesWonB ? canonA : gamesWonB > gamesWonA ? canonB : null;
+    await prisma.match.upsert({
+      where: { divisionId_playerAId_playerBId_format: { divisionId, playerAId: canonA, playerBId: canonB, format: "LEAGUE_BO2" } },
       create: {
         divisionId,
         playerAId: canonA,
         playerBId: canonB,
+        format: "LEAGUE_BO2",
         gamesWonA,
         gamesWonB,
+        winnerId,
         status: "CONFIRMED",
         reportedAt: new Date(),
         confirmedAt: new Date(),
@@ -343,6 +350,7 @@ export async function bulkRecordPairings(formData: FormData) {
       update: {
         gamesWonA,
         gamesWonB,
+        winnerId,
         status: "CONFIRMED",
         confirmedAt: new Date(),
       },
@@ -385,14 +393,17 @@ export async function recordSet(formData: FormData) {
   const gamesWonA = meIsA ? games.a : games.b;
   const gamesWonB = meIsA ? games.b : games.a;
 
-  const recorded = await prisma.pairing.upsert({
-    where: { divisionId_playerAId_playerBId: { divisionId, playerAId: canonA, playerBId: canonB } },
+  const winnerId = gamesWonA > gamesWonB ? canonA : gamesWonB > gamesWonA ? canonB : null;
+  const recorded = await prisma.match.upsert({
+    where: { divisionId_playerAId_playerBId_format: { divisionId, playerAId: canonA, playerBId: canonB, format: "LEAGUE_BO2" } },
     create: {
       divisionId,
       playerAId: canonA,
       playerBId: canonB,
+      format: "LEAGUE_BO2",
       gamesWonA,
       gamesWonB,
+      winnerId,
       status: "CONFIRMED",
       reportedAt: new Date(),
       confirmedAt: new Date(),
@@ -402,6 +413,7 @@ export async function recordSet(formData: FormData) {
     update: {
       gamesWonA,
       gamesWonB,
+      winnerId,
       status: "CONFIRMED",
       confirmedAt: new Date(),
       adminOverrideBy: "web-dashboard",
@@ -420,7 +432,7 @@ export async function overridePairing(formData: FormData) {
   const result = String(formData.get("result") ?? "") as Result;
   if (!pairingId || !["2-0", "1-1", "0-2"].includes(result)) return;
   const games = gamesFromResult(result);
-  const updated = await prisma.pairing.update({
+  const updated = await prisma.match.update({
     where: { id: pairingId },
     data: {
       gamesWonA: games.a,
@@ -450,12 +462,27 @@ export async function recordShootout(formData: FormData) {
   if (p1Id === p2Id) return;
   if (winnerId !== p1Id && winnerId !== p2Id) return;
   const [canonA, canonB] = p1Id < p2Id ? [p1Id, p2Id] : [p2Id, p1Id];
-  await prisma.shootout.upsert({
+  const winA = winnerId === canonA ? 1 : 0;
+  const winB = winnerId === canonB ? 1 : 0;
+  const now = new Date();
+  await prisma.match.upsert({
     where: {
-      divisionId_playerAId_playerBId: { divisionId, playerAId: canonA, playerBId: canonB },
+      divisionId_playerAId_playerBId_format: { divisionId, playerAId: canonA, playerBId: canonB, format: "SHOOTOUT_BO1" },
     },
-    create: { divisionId, playerAId: canonA, playerBId: canonB, winnerId, recordedBy: "web-dashboard" },
-    update: { winnerId, recordedBy: "web-dashboard" },
+    create: {
+      divisionId,
+      playerAId: canonA,
+      playerBId: canonB,
+      format: "SHOOTOUT_BO1",
+      gamesWonA: winA,
+      gamesWonB: winB,
+      winnerId,
+      status: "CONFIRMED",
+      reportedAt: now,
+      confirmedAt: now,
+      recordedBy: "web-dashboard",
+    },
+    update: { gamesWonA: winA, gamesWonB: winB, winnerId, status: "CONFIRMED", confirmedAt: now, recordedBy: "web-dashboard" },
   });
   recomputeDivisionStandings(divisionId).catch(() => {});
   revalidatePath(`/divisions/${divisionId}`);
@@ -470,8 +497,8 @@ export async function deleteShootout(formData: FormData) {
   const p2Id = String(formData.get("p2") ?? "");
   if (!divisionId || !p1Id || !p2Id) return;
   const [canonA, canonB] = p1Id < p2Id ? [p1Id, p2Id] : [p2Id, p1Id];
-  await prisma.shootout.deleteMany({
-    where: { divisionId, playerAId: canonA, playerBId: canonB },
+  await prisma.match.deleteMany({
+    where: { divisionId, playerAId: canonA, playerBId: canonB, format: "SHOOTOUT_BO1" },
   });
   recomputeDivisionStandings(divisionId).catch(() => {});
   revalidatePath(`/divisions/${divisionId}`);
@@ -481,9 +508,9 @@ export async function deletePairing(formData: FormData) {
   await requireAdmin();
   const pairingId = String(formData.get("pairingId") ?? "");
   if (!pairingId) return;
-  const p = await prisma.pairing.findUnique({ where: { id: pairingId } });
+  const p = await prisma.match.findUnique({ where: { id: pairingId } });
   if (!p) return;
-  await prisma.pairing.delete({ where: { id: pairingId } });
+  await prisma.match.delete({ where: { id: pairingId } });
   recomputeDivisionStandings(p.divisionId).catch(() => {});
   revalidatePath(`/divisions/${p.divisionId}`);
 }
