@@ -22,6 +22,7 @@ import {
   CANONICAL_DECKS,
   CANONICAL_STAKES,
   deckSlug,
+  stakeEmojiChar,
   stakeSlug,
 } from "./balatro-info.js";
 import { env } from "./env.js";
@@ -63,7 +64,9 @@ export function deckEmoji(deckName: string): string | null {
 
 export function stakeEmoji(stakeName: string): string | null {
   const e = emojiByName.get(stakeEmojiName(stakeName));
-  return e ? formatEmoji(e) : null;
+  if (e) return formatEmoji(e);
+  // No uploaded chip emoji — fall back to the unicode emoji for custom stakes.
+  return stakeEmojiChar(stakeName) ?? null;
 }
 
 // For StringSelectMenu options — Discord wants `{id, name, animated}`.
@@ -72,9 +75,13 @@ export function deckEmojiPartial(deckName: string): { id: string; name: string; 
   return e ? { id: e.id, name: e.name, animated: e.animated } : undefined;
 }
 
-export function stakeEmojiPartial(stakeName: string): { id: string; name: string; animated?: boolean } | undefined {
+export function stakeEmojiPartial(stakeName: string): { id?: string; name: string; animated?: boolean } | undefined {
   const e = emojiByName.get(stakeEmojiName(stakeName));
-  return e ? { id: e.id, name: e.name, animated: e.animated } : undefined;
+  if (e) return { id: e.id, name: e.name, animated: e.animated };
+  // Unicode fallback for custom stakes — Discord select menus accept a bare
+  // unicode emoji as { name } with no id.
+  const char = stakeEmojiChar(stakeName);
+  return char ? { name: char } : undefined;
 }
 
 // One-shot: list app emojis, upload any missing PNGs, populate the cache.

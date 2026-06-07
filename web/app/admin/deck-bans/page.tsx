@@ -52,7 +52,7 @@ export default async function DeckSelectionPage({
             ) : (
               <em>(unset — falls back to whichever preset exists)</em>
             )}{" "}
-            — used by <code>/start-match</code> for any season that hasn't picked its own preset.
+            — used by <code>/start-match</code> for any season that hasn&apos;t picked its own preset.
           </li>
           <li>
             <strong>Casual</strong>{" "}
@@ -65,7 +65,7 @@ export default async function DeckSelectionPage({
           </li>
         </ul>
         <p className="muted" style={{ fontSize: 13 }}>
-          A stock 'Stock' preset is auto-seeded on first use and both pointers are set to it. Repoint either pointer below by editing a preset.
+          A stock &apos;Stock&apos; preset is auto-seeded on first use and both pointers are set to it. Repoint either pointer below by editing a preset.
         </p>
         <div className="card" style={{ fontSize: 12 }}>
           <strong>Stock seed</strong>
@@ -76,18 +76,18 @@ export default async function DeckSelectionPage({
             <strong>Stakes ({defaults.stakes.length}):</strong> {defaults.stakes.join(", ")}
           </p>
           <p className="muted">
-            {defaults.decks.length * defaults.stakes.length} combos available to the bot's 9-pick sampler.
+            {defaults.decks.length * defaults.stakes.length} combos available to the bot&apos;s 9-pick sampler.
           </p>
         </div>
 
         {presets.length === 0 ? (
           <div className="card">
             <strong>No presets yet</strong>
-            <p className="muted">Create one with Balatro's stock decks/stakes, or start from scratch.</p>
+            <p className="muted">Create one with Balatro&apos;s stock decks/stakes, or start from scratch.</p>
             <div style={{ display: "flex", gap: 8 }}>
               <form action={seedStockPreset}>
                 <button type="submit">
-                  Seed a 'Stock' preset ({defaults.decks.length} decks, {defaults.stakes.length} stakes)
+                  Seed a &apos;Stock&apos; preset ({defaults.decks.length} decks, {defaults.stakes.length} stakes)
                 </button>
               </form>
               <CreatePresetForm seedAvailable={false} />
@@ -291,7 +291,7 @@ function ListEditor({
   // inline sizes so the list stays scannable. Both PNGs are served as
   // static assets from web/public/balatro/ (synced from the bot's
   // src/assets/balatro/ at install time).
-  const slug = (n: string) => n.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  const slug = (n: string) => n.toLowerCase().replace(/\+/g, "_plus").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
   const imgSize = kind === "decks" ? { w: 28, h: 38 } : { w: 24, h: 24 };
   const imgFor = (name: string) => `/balatro/${kind}/${slug(name)}.png`;
   return (

@@ -12,6 +12,9 @@ import info from "./data/balatro-info.json" with { type: "json" };
 export interface BalatroItem {
   name: string;
   description: string;
+  // Optional unicode-emoji fallback for items with no PNG art (e.g. the
+  // custom multiplayer-mod stakes before their chip emoji is uploaded).
+  emoji?: string;
 }
 
 export const CANONICAL_DECKS: readonly BalatroItem[] = info.decks;
@@ -35,6 +38,12 @@ export function stakeDescription(name: string): string | undefined {
   return stakeByName.get(name.toLowerCase())?.description;
 }
 
+// Unicode-emoji fallback for a stake (only set for custom stakes without PNG
+// art). Used when no uploaded Discord emoji exists yet.
+export function stakeEmojiChar(name: string): string | undefined {
+  return stakeByName.get(name.toLowerCase())?.emoji;
+}
+
 export function canonicalDeckIndex(name: string): number {
   return deckPos.get(name.toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
 }
@@ -54,9 +63,9 @@ export function isCanonicalStake(name: string): boolean {
 // Lowercase, alphanumeric+underscore slug used for asset filenames and
 // Discord application emoji names. "Red Deck" → "red", "Magic" → "magic".
 export function deckSlug(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  return name.toLowerCase().replace(/\+/g, "_plus").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 }
 
 export function stakeSlug(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  return name.toLowerCase().replace(/\+/g, "_plus").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 }

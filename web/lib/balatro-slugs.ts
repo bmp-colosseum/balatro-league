@@ -3,7 +3,7 @@
 // the bot's src/balatro-info.ts so the web can render the same art.
 
 function slug(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+  return name.toLowerCase().replace(/\+/g, "_plus").replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 }
 
 export function deckImage(name: string): string {

@@ -8,6 +8,7 @@ import info from "./balatro-info.json" with { type: "json" };
 export interface BalatroItem {
   name: string;
   description: string;
+  emoji?: string;
 }
 
 export const CANONICAL_DECKS: readonly BalatroItem[] = info.decks;
@@ -15,6 +16,11 @@ export const CANONICAL_STAKES: readonly BalatroItem[] = info.stakes;
 
 const deckByName = new Map(CANONICAL_DECKS.map((d) => [d.name.toLowerCase(), d]));
 const stakeByName = new Map(CANONICAL_STAKES.map((s) => [s.name.toLowerCase(), s]));
+
+// Unicode-emoji fallback for a stake without PNG art (custom mod stakes).
+export function stakeEmojiChar(name: string): string | undefined {
+  return stakeByName.get(name.toLowerCase())?.emoji;
+}
 
 export function deckDescription(name: string): string | undefined {
   return deckByName.get(name.toLowerCase())?.description;
