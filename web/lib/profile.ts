@@ -160,16 +160,6 @@ interface CachedRow {
   played: number;
 }
 
-// Subset of the bot-side GameState we need on the web for deck/stake
-// extraction. Kept minimal so a schema drift on the bot side doesn't
-// quietly break the loader — extra fields are ignored.
-interface GameStateMin {
-  pool?: Array<{ deck: string; stake: string }>;
-  pickedDeckIdx?: number;
-  winnerId?: string;
-  dcByPlayerId?: string;
-}
-
 export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory | null> {
   const player = await prisma.player.findUnique({
     where: { id: playerId },
@@ -229,10 +219,12 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
     }
   }
 
-  // 3) The viewing player's OWN pairings across all those divisions in
-  // one round trip. CONFIRMED + DISPUTED — DISPUTED rows render with a
-  // badge and a "Update dispute" button.
-  const myPairings = await prisma.pairing.findMany({
+  // 3) The viewing player's OWN matches across all those divisions in one
+  // round trip — the unified Match model, so BO2 series AND shootouts come
+  // back together (format distinguishes them), each with its per-game rows
+  // (deck/stake/winner). No JSON, no separate shootout/session queries.
+  // CONFIRMED + DISPUTED; DISPUTED renders a badge + "Update dispute" button.
+  const myMatches = await prisma.match.findMany({
     where: {
       divisionId: { in: divisionIds },
       status: { in: ["CONFIRMED", "DISPUTED"] },
@@ -240,43 +232,29 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
     },
     select: {
       id: true,
+      format: true,
       status: true,
       divisionId: true,
       playerAId: true,
       playerBId: true,
       gamesWonA: true,
       gamesWonB: true,
+      winnerId: true,
       confirmedAt: true,
       playerA: { select: { id: true, displayName: true } },
       playerB: { select: { id: true, displayName: true } },
+      games: {
+        select: { num: true, deck: true, stake: true, winnerId: true, dcByPlayerId: true },
+        orderBy: { num: "asc" },
+      },
     },
     orderBy: { confirmedAt: "asc" },
   });
-  const pairingsByDivision = new Map<string, typeof myPairings>();
-  for (const p of myPairings) {
-    const bucket = pairingsByDivision.get(p.divisionId);
-    if (bucket) bucket.push(p);
-    else pairingsByDivision.set(p.divisionId, [p]);
-  }
-
-  // For per-match deck/stake breakdown + per-deck/stake aggregates,
-  // join the MatchSession rows that resulted in these pairings. A
-  // pairing may have no session (admin record-set, /report-only) —
-  // those just won't contribute deck data.
-  const sessions = myPairings.length === 0 ? [] : await prisma.matchSession.findMany({
-    where: { pairingId: { in: myPairings.map((p) => p.id) } },
-    select: {
-      pairingId: true,
-      playerAId: true,
-      playerBId: true,
-      game1: true,
-      game2: true,
-      game3: true,
-    },
-  });
-  const sessionsByPairingId = new Map<string, typeof sessions[number]>();
-  for (const s of sessions) {
-    if (s.pairingId) sessionsByPairingId.set(s.pairingId, s);
+  const matchesByDivision = new Map<string, typeof myMatches>();
+  for (const mm of myMatches) {
+    const bucket = matchesByDivision.get(mm.divisionId);
+    if (bucket) bucket.push(mm);
+    else matchesByDivision.set(mm.divisionId, [mm]);
   }
 
   // Aggregate per-deck + per-stake game counts across this player's
@@ -294,66 +272,21 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
     map.set(key, cur);
   };
 
-  // Extract this player's games from a session — returns the per-game
-  // breakdown to attach to the MatchEntry AND folds the aggregates.
-  // dcByPlayerId games are excluded from per-deck/stake stats since
-  // they weren't actually played (forfeit by disconnect).
-  function gamesFromSession(
-    session: typeof sessions[number],
-  ): GamePlayed[] {
+  // Per-game breakdown for a match (Game rows) → GamePlayed[] for the UI,
+  // folding the per-deck/stake aggregates. DC games are excluded from the
+  // aggregates (forfeit, not really played) but still shown in history.
+  function gamesFromMatch(match: (typeof myMatches)[number]): GamePlayed[] {
     const result: GamePlayed[] = [];
-    const meIsA = session.playerAId === playerId;
-    const meId = meIsA ? session.playerAId : session.playerBId;
-    for (const [num, json] of [
-      [1, session.game1] as const,
-      [2, session.game2] as const,
-      [3, session.game3] as const,
-    ]) {
-      if (!json) continue;
-      let game: GameStateMin | null = null;
-      try { game = JSON.parse(json) as GameStateMin; } catch { continue; }
-      if (!game) continue;
-      const idx = game.pickedDeckIdx;
-      if (idx === undefined || !game.pool || !game.pool[idx]) continue;
-      const combo = game.pool[idx];
-      const winnerId = game.winnerId ?? null;
-      const iWon = winnerId == null ? null : winnerId === meId;
-      result.push({ num: num as 1 | 2 | 3, deck: combo.deck, stake: combo.stake, iWon });
-      // Skip aggregates if winner indeterminate OR forfeit (DC).
+    for (const g of match.games) {
+      const iWon = g.winnerId == null ? null : g.winnerId === playerId;
+      const num = (g.num === 3 ? 3 : g.num === 2 ? 2 : 1) as 1 | 2 | 3;
+      result.push({ num, deck: g.deck, stake: g.stake, iWon });
       if (iWon === null) continue;
-      if (game.dcByPlayerId) continue;
-      bumpAgg(deckAgg, combo.deck, iWon);
-      bumpAgg(stakeAgg, combo.stake, iWon);
+      if (g.dcByPlayerId) continue;
+      bumpAgg(deckAgg, g.deck, iWon);
+      bumpAgg(stakeAgg, g.stake, iWon);
     }
     return result;
-  }
-
-  // Shootouts the player participated in across all those divisions.
-  // Shootout has no Player relation in the schema (kept simple — ids
-  // only), so we batch-fetch the opponent display names in one
-  // round-trip after this query.
-  const myShootouts = await prisma.shootout.findMany({
-    where: {
-      divisionId: { in: divisionIds },
-      OR: [{ playerAId: playerId }, { playerBId: playerId }],
-    },
-  });
-  const opponentIds = new Set<string>();
-  for (const s of myShootouts) {
-    opponentIds.add(s.playerAId === playerId ? s.playerBId : s.playerAId);
-  }
-  const opponentRows = opponentIds.size
-    ? await prisma.player.findMany({
-        where: { id: { in: [...opponentIds] } },
-        select: { id: true, displayName: true },
-      })
-    : [];
-  const playerNameById = new Map(opponentRows.map((p) => [p.id, p.displayName]));
-  const shootoutsByDivision = new Map<string, typeof myShootouts>();
-  for (const s of myShootouts) {
-    const bucket = shootoutsByDivision.get(s.divisionId);
-    if (bucket) bucket.push(s);
-    else shootoutsByDivision.set(s.divisionId, [s]);
   }
 
   const history: SeasonHistoryEntry[] = [];
@@ -364,72 +297,36 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
       ? cached.findIndex((r) => r.playerId === playerId) + 1
       : 0;
 
-    const pairingMatches: MatchEntry[] = (pairingsByDivision.get(m.divisionId) ?? []).map((p): MatchEntry => {
-      const meIsA = p.playerAId === playerId;
-      const opponent = meIsA ? p.playerB : p.playerA;
-      const myGames = meIsA ? p.gamesWonA : p.gamesWonB;
-      const oppGames = meIsA ? p.gamesWonB : p.gamesWonA;
-      const outcome: MatchEntry["outcome"] =
-        myGames > oppGames ? "WIN" : myGames < oppGames ? "LOSS" : "DRAW";
-      const session = sessionsByPairingId.get(p.id);
-      const games = session ? gamesFromSession(session) : [];
+    // Both formats come from the unified Match query. A shootout (1-game) has
+    // gamesWonA/B of 1/0 and no draw; a BO2 derives WIN/DRAW/LOSS from the
+    // game tally. Already ordered by confirmedAt from the query.
+    const matches: MatchEntry[] = (matchesByDivision.get(m.divisionId) ?? []).map((mm): MatchEntry => {
+      const meIsA = mm.playerAId === playerId;
+      const opponent = meIsA ? mm.playerB : mm.playerA;
+      const myGames = meIsA ? mm.gamesWonA : mm.gamesWonB;
+      const oppGames = meIsA ? mm.gamesWonB : mm.gamesWonA;
+      const isShootout = mm.format === "SHOOTOUT_BO1";
+      const outcome: MatchEntry["outcome"] = isShootout
+        ? mm.winnerId === playerId
+          ? "WIN"
+          : "LOSS"
+        : myGames > oppGames
+          ? "WIN"
+          : myGames < oppGames
+            ? "LOSS"
+            : "DRAW";
       return {
-        pairingId: p.id,
-        status: p.status === "DISPUTED" ? "DISPUTED" : "CONFIRMED",
+        pairingId: mm.id,
+        status: mm.status === "DISPUTED" ? "DISPUTED" : "CONFIRMED",
         opponentPlayerId: opponent.id,
         opponentDisplayName: opponent.displayName,
         myGames,
         opponentGames: oppGames,
         outcome,
-        confirmedAt: p.confirmedAt,
-        games,
+        confirmedAt: mm.confirmedAt,
+        isShootout,
+        games: gamesFromMatch(mm),
       };
-    });
-    // Shootouts as MatchEntry rows. 1-game format → myGames/opponentGames
-    // are 0 or 1. Draw isn't possible for a shootout. UI distinguishes via
-    // isShootout flag.
-    const shootoutMatches: MatchEntry[] = (shootoutsByDivision.get(m.divisionId) ?? []).map((s): MatchEntry => {
-      const opponentId = s.playerAId === playerId ? s.playerBId : s.playerAId;
-      const opponentName = playerNameById.get(opponentId) ?? "Unknown";
-      const iWon = s.winnerId === playerId;
-      // A shootout is one more game: pull the deck+stake it was played on
-      // from its stored GameState (same JSON shape as a match game) so it
-      // renders the combo in history and counts toward the deck/stake tables.
-      const sGames: GamePlayed[] = [];
-      if (s.game) {
-        try {
-          const g = JSON.parse(s.game) as GameStateMin;
-          const idx = g.pickedDeckIdx;
-          if (idx !== undefined && g.pool && g.pool[idx]) {
-            const combo = g.pool[idx]!;
-            sGames.push({ num: 1, deck: combo.deck, stake: combo.stake, iWon });
-            bumpAgg(deckAgg, combo.deck, iWon);
-            bumpAgg(stakeAgg, combo.stake, iWon);
-          }
-        } catch {
-          // malformed shootout game JSON — just show it combo-less.
-        }
-      }
-      return {
-        pairingId: s.id,
-        status: "CONFIRMED",
-        opponentPlayerId: opponentId,
-        opponentDisplayName: opponentName,
-        myGames: iWon ? 1 : 0,
-        opponentGames: iWon ? 0 : 1,
-        outcome: iWon ? "WIN" : "LOSS",
-        confirmedAt: s.recordedAt,
-        isShootout: true,
-        games: sGames,
-      };
-    });
-    // Combine + sort chronologically. Shootouts don't roll up into points
-    // (the cached row's wins/draws/losses/games don't reflect them — they're
-    // a tiebreaker only), so we DON'T add them to derived stats below.
-    const matches: MatchEntry[] = [...pairingMatches, ...shootoutMatches].sort((a, b) => {
-      const aT = a.confirmedAt?.getTime() ?? 0;
-      const bT = b.confirmedAt?.getTime() ?? 0;
-      return aT - bT;
     });
 
     // Stats: prefer the cached row when present (authoritative — same
@@ -526,12 +423,13 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
     string,
     { displayName: string; wins: number; draws: number; losses: number; gamesWon: number; gamesLost: number }
   >();
-  for (const p of myPairings) {
-    if (p.status !== "CONFIRMED") continue;
-    const meIsA = p.playerAId === playerId;
-    const opp = meIsA ? p.playerB : p.playerA;
-    const myG = meIsA ? p.gamesWonA : p.gamesWonB;
-    const oppG = meIsA ? p.gamesWonB : p.gamesWonA;
+  for (const mm of myMatches) {
+    if (mm.status !== "CONFIRMED") continue;
+    if (mm.format === "SHOOTOUT_BO1") continue; // tiebreakers aren't career H2H
+    const meIsA = mm.playerAId === playerId;
+    const opp = meIsA ? mm.playerB : mm.playerA;
+    const myG = meIsA ? mm.gamesWonA : mm.gamesWonB;
+    const oppG = meIsA ? mm.gamesWonB : mm.gamesWonA;
     const cur = h2hByOpp.get(opp.id) ?? {
       displayName: opp.displayName,
       wins: 0,

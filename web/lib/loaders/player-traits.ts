@@ -2,10 +2,11 @@
 // their confirmed matches. Purely cosmetic flavour — not used for anything
 // scoring-related. Local Thunk would approve of the puns.
 //
-// Attribution: per game the FIRST player bans index [0] then [4,5,6], the
-// OTHER player bans [1,2,3] and makes the final PICK (pickedDeckIdx). So a
-// player's bans/picks depend on whether they were `firstId` that game. The
-// player's FIRST ban is bans[0] (if first) or bans[1] (if other).
+// Reads the relational model (Game + its GameDeck pool) — no JSON. Ban
+// attribution is stored per pool row (bannedById / banOrdinal), so we never
+// reconstruct it positionally. The OTHER (non-first) player makes the pick
+// (the GameDeck row flagged `picked`). Shootouts are matches now, so they
+// fold in automatically.
 
 import { prisma } from "@/lib/prisma";
 
