@@ -80,7 +80,7 @@ export const TRAIT_REGISTRY: TraitDef[] = [
     key: "super-balatro-genius",
     label: "Super Balatro Genius",
     emoji: "🎲",
-    description: "Doesn't care what the deck or stake is.",
+    description: "Doesn't care what the deck or stake is, they will beat you.",
   },
 ];
 const REGISTRY_BY_KEY = new Map(TRAIT_REGISTRY.map((t) => [t.key, t]));
@@ -179,8 +179,6 @@ export async function loadPlayerTraits(
       firstPlayerId: true,
       winnerId: true,
       pickedRandomly: true,
-      firstBannedRandomly: true,
-      otherBannedRandomly: true,
       pool: { select: { deck: true, stake: true, picked: true, banOrdinal: true, bannedById: true } },
     },
   });
@@ -194,7 +192,8 @@ export async function loadPlayerTraits(
   const wonStakes: Counts = {}; // …of those, the ones this player won
   let totalPicks = 0;
   let games = 0;
-  let randomGames = 0;
+  let randomPicks = 0; // games this player picked via the random button
+  let randomPickWins = 0; // …of those, how many they won
   let ghostAvailable = 0; // games where the Ghost deck was in the pool
   let ghostBanned = 0; // …of those, how many this player banned it
 
@@ -241,12 +240,13 @@ export async function loadPlayerTraits(
         bump(pickedStakes, picked.stake);
         bump(pickedDecks, picked.deck);
         totalPicks++;
+        // 🎲 random-pick usage + wins (the picker is the non-first player).
+        if (g.pickedRandomly) {
+          randomPicks++;
+          if (g.winnerId === playerId) randomPickWins++;
+        }
       }
     }
-
-    // 🎲 random-button usage this game.
-    const usedRandom = isFirst ? !!g.firstBannedRandomly : !!g.otherBannedRandomly || !!g.pickedRandomly;
-    if (usedRandom) randomGames++;
   }
 
   if (games < 4) return []; // not enough signal yet
@@ -323,14 +323,18 @@ export async function loadPlayerTraits(
       }),
     );
   }
-  // 🎲 Super Balatro Genius — loves the random buttons (lets the dice decide).
-  if (games >= 5 && randomGames / games >= 0.4) {
+  // 🎲 Super Balatro Genius — random-picks more often than not AND wins the
+  // majority of those games. Doesn't care what the deck or stake is — the
+  // mirror of a careful picker, winning anyway by leaving it to chance.
+  if (
+    totalPicks >= 5 &&
+    randomPicks >= 3 &&
+    randomPicks / totalPicks >= 0.5 &&
+    randomPickWins >= 2 &&
+    randomPickWins / randomPicks >= 0.5
+  ) {
     traits.push(
-      makeTrait(
-        "super-balatro-genius",
-        `random in ${Math.round((randomGames / games) * 100)}% of games`,
-        overrides,
-      ),
+      makeTrait("super-balatro-genius", `won ${randomPickWins} of ${randomPicks} random picks`, overrides),
     );
   }
   return traits;
