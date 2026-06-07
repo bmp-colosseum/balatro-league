@@ -518,3 +518,71 @@ export async function deletePairing(formData: FormData) {
   recomputeDivisionStandings(p.divisionId).catch(() => {});
   revalidatePath(`/divisions/${p.divisionId}`);
 }
+
+// Record (or FIX) a forfeit / DQ between two members of this division. Upserts
+// the LEAGUE_BO2 match to 2-0 for the winner with the forfeit flag — so it both
+// records a brand-new DQ AND overwrites a wrong existing one in place (no need
+// to delete first). Works whether the pair has played or not. The reason is
+// admin-only (forfeitReason + audit), never shown publicly.
+export async function recordForfeitInDivision(formData: FormData) {
+  const { user } = await requireAdmin();
+  const divisionId = String(formData.get("divisionId") ?? "");
+  const winnerId = String(formData.get("winnerId") ?? "");
+  const loserId = String(formData.get("loserId") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!divisionId || !winnerId || !loserId || winnerId === loserId || !reason) return;
+
+  const [canonA, canonB] = winnerId < loserId ? [winnerId, loserId] : [loserId, winnerId];
+  const winnerIsA = winnerId === canonA;
+  const gamesWonA = winnerIsA ? 2 : 0;
+  const gamesWonB = winnerIsA ? 0 : 2;
+
+  const recorded = await prisma.match.upsert({
+    where: {
+      divisionId_playerAId_playerBId_format: {
+        divisionId,
+        playerAId: canonA,
+        playerBId: canonB,
+        format: "LEAGUE_BO2",
+      },
+    },
+    create: {
+      divisionId,
+      playerAId: canonA,
+      playerBId: canonB,
+      format: "LEAGUE_BO2",
+      gamesWonA,
+      gamesWonB,
+      winnerId,
+      status: "CONFIRMED",
+      reportedAt: new Date(),
+      confirmedAt: new Date(),
+      adminOverrideBy: "web-dashboard",
+      adminOverrideReason: "forfeit / DQ",
+      forfeit: true,
+      forfeitReason: reason,
+    },
+    update: {
+      gamesWonA,
+      gamesWonB,
+      winnerId,
+      status: "CONFIRMED",
+      confirmedAt: new Date(),
+      adminOverrideBy: "web-dashboard",
+      adminOverrideReason: "forfeit / DQ",
+      forfeit: true,
+      forfeitReason: reason,
+    },
+  });
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "match.forfeit",
+    targetType: "Match",
+    targetId: recorded.id,
+    summary: `Forfeit win (2-0 by DQ), winner ${winnerId}`,
+    metadata: { winnerId, loserId, reason, divisionId },
+  });
+  enqueueAnnounceResult(recorded.id).catch(() => {});
+  recomputeDivisionStandings(divisionId).catch(() => {});
+  revalidatePath(`/divisions/${divisionId}`);
+}

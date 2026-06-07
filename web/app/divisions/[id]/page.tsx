@@ -20,6 +20,7 @@ import {
   dropDivisionMember,
   overridePairing,
   reactivateDivisionMember,
+  recordForfeitInDivision,
   recordFromDivisionAction,
   recordSet,
   recordShootout,
@@ -272,7 +273,7 @@ function MatchesSections({
         <strong>Your unplayed ({myUnplayed.length})</strong>
         {myUnplayed.length === 0 ? (
           <p className="muted" style={{ marginTop: 6 }}>
-            You've played everyone in your division.
+            You&apos;ve played everyone in your division.
           </p>
         ) : (
           <UnplayedList
@@ -298,7 +299,7 @@ function MatchesSections({
           <summary style={{ cursor: "pointer" }}>
             <strong>Remaining ({otherUnplayed.length})</strong>
             <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
-              other players' upcoming
+              other players&apos; upcoming
             </span>
           </summary>
           <UnplayedList
@@ -518,7 +519,7 @@ function AdminSection({
         <summary style={{ cursor: "pointer" }}><strong>Bulk record played pairings</strong></summary>
         <p className="muted" style={{ marginTop: 8 }}>
           One line per played set: <code>discordA discordB RESULT</code> where RESULT is{" "}
-          <code>2-0</code>, <code>1-1</code>, or <code>0-2</code> (A's perspective).
+          <code>2-0</code>, <code>1-1</code>, or <code>0-2</code> (A&apos;s perspective).
           Both players must already be members of this division.
         </p>
         <form action={bulkRecordPairings}>
@@ -537,7 +538,7 @@ function AdminSection({
       <div className="card">
         <strong>Add player by Discord ID</strong>
         <p className="muted">
-          Mid-season add — looks up the member's guild display name; you can override.
+          Mid-season add — looks up the member&apos;s guild display name; you can override.
           If this division has a Discord role set up, the new player will also be
           granted the role (and channel access).
         </p>
@@ -671,6 +672,41 @@ function AdminSection({
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Record / fix a forfeit (DQ). Works on any pair, played or not — it
+          overwrites an existing result in place, so a wrong DQ is fixed by
+          just re-submitting with the right winner (no delete-first dance). */}
+      <div className="card">
+        <strong>⚖ Record / fix a forfeit (DQ)</strong>
+        <p className="muted" style={{ fontSize: 12, margin: "4px 0 8px" }}>
+          Awards a 2-0 win by DQ (no-show, drop-out, rule break). Works even if the pair already
+          played — it overwrites that result, so to fix a wrong DQ just pick the right winner and
+          submit again. Reason is <strong>admin-only</strong> (players only see &ldquo;by DQ&rdquo;).
+        </p>
+        <form action={recordForfeitInDivision} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+          <input type="hidden" name="divisionId" value={divisionId} />
+          <label style={{ fontSize: 12 }}>
+            Winner{" "}
+            <select name="winnerId" required defaultValue="">
+              <option value="" disabled>— winner —</option>
+              {members.filter((m) => m.status === "ACTIVE").map((m) => (
+                <option key={m.playerId} value={m.playerId}>{m.player.displayName}</option>
+              ))}
+            </select>
+          </label>
+          <label style={{ fontSize: 12 }}>
+            DQ&apos;d{" "}
+            <select name="loserId" required defaultValue="">
+              <option value="" disabled>— loser —</option>
+              {members.filter((m) => m.status === "ACTIVE").map((m) => (
+                <option key={m.playerId} value={m.playerId}>{m.player.displayName}</option>
+              ))}
+            </select>
+          </label>
+          <input type="text" name="reason" required placeholder="Reason (admin-only)" style={{ flex: "1 1 200px" }} />
+          <button type="submit">Record DQ</button>
+        </form>
       </div>
 
       {/* Shootouts admin controls */}
