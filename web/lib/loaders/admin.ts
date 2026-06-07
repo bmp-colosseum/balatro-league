@@ -538,7 +538,7 @@ export async function loadAdminPlayersListView(opts: {
   // For the inline "Record set vs ..." form per row, pre-compute the
   // unplayed opponents for each (player, division) in one batch — avoids
   // a per-row roundtrip.
-  let unplayedByKey = new Map<string, Array<{ playerId: string; displayName: string }>>();
+  const unplayedByKey = new Map<string, Array<{ playerId: string; displayName: string }>>();
   if (selectedSeason) {
     const members = await prisma.divisionMember.findMany({
       where: { seasonId: selectedSeason.id, status: "ACTIVE" },
