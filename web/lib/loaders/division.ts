@@ -111,8 +111,8 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
     dropped: droppedIds.has(r.player.id),
   }));
 
-  const pairings = await prisma.pairing.findMany({
-    where: { divisionId, status: "CONFIRMED" },
+  const pairings = await prisma.match.findMany({
+    where: { divisionId, status: "CONFIRMED", format: "LEAGUE_BO2" },
     select: {
       id: true,
       confirmedAt: true,
@@ -154,9 +154,9 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
   // through the active-member list (which is already loaded) so we
   // avoid an extra round trip per shootout.
   const memberById = new Map(division.members.map((m) => [m.playerId, m.player]));
-  const rawShootouts = await prisma.shootout.findMany({
-    where: { divisionId },
-    orderBy: { recordedAt: "desc" },
+  const rawShootouts = await prisma.match.findMany({
+    where: { divisionId, format: "SHOOTOUT_BO1" },
+    orderBy: { confirmedAt: "desc" },
   });
   const shootouts: DivisionShootout[] = rawShootouts.flatMap((s) => {
     const a = memberById.get(s.playerAId);
@@ -166,7 +166,7 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
     const loser = s.winnerId === a.id ? b : a;
     return [{
       id: s.id,
-      recordedAt: s.recordedAt,
+      recordedAt: s.confirmedAt ?? s.createdAt,
       winner,
       loser,
       notes: s.notes ?? null,
