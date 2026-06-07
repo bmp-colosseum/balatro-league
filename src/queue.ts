@@ -27,7 +27,26 @@ import { prisma } from "./db.js";
 import { composeLeagueInfoContent } from "./league-info-content.js";
 import { env } from "./env.js";
 import { checkQueueStalls } from "./devops-alarm.js";
+import { postDevopsAlert } from "./devops-alert.js";
 import { tryGetDiscordClient } from "./discord.js";
+
+// Preflight for the announce worker: is a results destination configured at
+// all (global webhook/channel via env or LeagueConfig)? Per-season overrides
+// are a refinement on top; this catches the common "nobody set up #results"
+// case so we alert ops instead of firing a flood of doomed requests.
+async function announceDestinationConfigured(): Promise<boolean> {
+  if ((env.RESULTS_WEBHOOK_URL ?? "").trim() || (env.RESULTS_CHANNEL_ID ?? "").trim()) return true;
+  const rows = await prisma.leagueConfig.findMany({
+    where: { key: { in: ["results_webhook_url", "results_channel_id"] } },
+    select: { value: true },
+  });
+  return rows.some((r) => (r.value ?? "").trim().length > 0);
+}
+
+// Throttle the "results not configured" devops alert so a backlog doesn't
+// spam the channel every poll.
+let lastAnnounceConfigAlert = 0;
+const ANNOUNCE_CONFIG_ALERT_COOLDOWN_MS = 10 * 60 * 1000;
 import {
   addGuildMemberRole,
   createGuildRole,
@@ -142,6 +161,31 @@ export async function initQueue(): Promise<void> {
     "notify.announce-result",
     { batchSize: 50, pollingIntervalSeconds: 1 },
     async (jobs: Job<AnnounceResultJob>[]) => {
+      // PREFLIGHT: if there's no results destination configured, DON'T drop
+      // the announces (or fire a flood of 404s — invalid-request ban risk).
+      // Alert devops (throttled) and re-queue each job with a delay so they
+      // post once ops fixes the config. Completing the batch here (no throw)
+      // means the originals ack cleanly — no duplicates.
+      if (!(await announceDestinationConfigured())) {
+        const now = Date.now();
+        if (now - lastAnnounceConfigAlert > ANNOUNCE_CONFIG_ALERT_COOLDOWN_MS) {
+          lastAnnounceConfigAlert = now;
+          await postDevopsAlert(
+            `⚠️ **Result announces have no destination configured** (no results webhook/channel). ` +
+              `Holding announces — they'll post once a results channel or webhook is set. ` +
+              `Set \`results_channel_id\`/\`results_webhook_url\` (LeagueConfig) or the env vars.`,
+            true,
+          ).catch(() => {});
+        }
+        await Promise.all(
+          jobs.map((job) =>
+            boss!
+              .send("notify.announce-result", job.data, { startAfter: 300, retryLimit: 100, retryBackoff: true })
+              .catch(() => {}),
+          ),
+        );
+        return;
+      }
       await Promise.all(
         jobs.map((job) =>
           announceResult(job.data.pairingId).catch((err) =>
