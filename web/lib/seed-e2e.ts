@@ -15,6 +15,7 @@ import { endSeasonCore } from "@/lib/end-season";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
 import { writeMatchGames, type GameStateLike } from "@/lib/match-write";
 import { performSeasonActivation } from "@/app/admin/seasons/actions";
+import { enqueueAnnounceResult } from "@/lib/queue";
 import defaults from "@/lib/match-defaults.json";
 
 const DEMO_SUBTITLE = "E2E Demo";
@@ -33,6 +34,13 @@ export interface SeedE2EOptions {
   seasons?: number;
   churn?: number;
   activateEach?: boolean;
+  // Each season activates with REAL Discord (bootstrap channels/roles) and
+  // tears them down on end — the full create→teardown cycle, every season.
+  // Heavy Discord churn (drained by the bot worker, rate-limited).
+  realDiscordEach?: boolean;
+  // Fire a result-announce job per match (floods the announce queue; the
+  // bot drains at ~1/sec — this is where you SEE the Discord bottleneck).
+  announce?: boolean;
   playFraction?: number;
   reset?: boolean;
 }
@@ -206,6 +214,7 @@ interface PreparedMatch {
 async function seedMatchesForSeason(
   seasonId: string,
   playFraction: number,
+  announce: boolean,
 ): Promise<{ matches: number; games: number; shootouts: number }> {
   const season = await prisma.season.findUnique({ where: { id: seasonId } });
   if (!season) return { matches: 0, games: 0, shootouts: 0 };
@@ -286,6 +295,7 @@ async function seedMatchesForSeason(
       },
     });
     await writeMatchGames(match.id, p.canonA, p.canonB, p.games);
+    if (announce) await enqueueAnnounceResult(match.id).catch(() => {});
     if (p.shootoutWinnerId) {
       const sWinA = p.shootoutWinnerId === p.canonA ? 1 : 0;
       const sWinB = p.shootoutWinnerId === p.canonB ? 1 : 0;
@@ -433,12 +443,15 @@ export async function runSeedE2E(opts: SeedE2EOptions, actor: AuditActor): Promi
     lastSeasonId = built.seasonId;
     lastSeasonLabel = `Season ${built.seasonNumber} — ${DEMO_SUBTITLE} #${s}`;
 
-    const activate = isLast || !!opts.activateEach;
+    const activate = isLast || !!opts.activateEach || !!opts.realDiscordEach;
     if (activate) {
-      await performSeasonActivation(built.seasonId, actor, "manual", { skipDiscord: !isLast });
+      // realDiscordEach → real bootstrap every season; otherwise only the
+      // final season touches Discord (intermediates skip it).
+      const skipDiscord = opts.realDiscordEach ? false : !isLast;
+      await performSeasonActivation(built.seasonId, actor, "manual", { skipDiscord });
     }
 
-    const m = await seedMatchesForSeason(built.seasonId, playFraction);
+    const m = await seedMatchesForSeason(built.seasonId, playFraction, !!opts.announce);
     totalMatches += m.matches;
     totalGames += m.games;
     totalShootouts += m.shootouts;

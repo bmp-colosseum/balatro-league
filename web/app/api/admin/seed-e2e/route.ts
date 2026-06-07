@@ -49,6 +49,8 @@ export async function POST(req: NextRequest) {
     churn: num(body.churn),
     playFraction: num(body.playFraction),
     activateEach: body.activateEach === true,
+    realDiscordEach: body.realDiscordEach === true,
+    announce: body.announce === true,
     reset: body.reset === true,
   };
 
