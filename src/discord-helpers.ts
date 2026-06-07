@@ -68,11 +68,21 @@ export async function createGuildRole(
   }
 }
 
+// A real Discord user id is a numeric snowflake (17-20 digits). Seeded/test
+// players use non-numeric ids (e.g. "e2e-75"); calling Discord with those
+// throws 50035 "not snowflake" and racks up invalid requests (ban risk), so
+// we short-circuit before ever hitting the API.
+const SNOWFLAKE_RE = /^\d{17,20}$/;
+export function isDiscordSnowflake(id: string): boolean {
+  return SNOWFLAKE_RE.test(id);
+}
+
 export async function addGuildMemberRole(
   guildId: string,
   userId: string,
   roleId: string,
 ): Promise<boolean> {
+  if (!isDiscordSnowflake(userId)) return false; // not a real Discord user (e.g. seeded player)
   try {
     const guild = await getGuild(guildId);
     const member = await guild.members.fetch(userId);
@@ -92,6 +102,7 @@ export async function removeGuildMemberRole(
   userId: string,
   roleId: string,
 ): Promise<boolean> {
+  if (!isDiscordSnowflake(userId)) return true; // not a real Discord user — nothing to remove
   try {
     const guild = await getGuild(guildId);
     const member = await guild.members.fetch(userId).catch(() => null);

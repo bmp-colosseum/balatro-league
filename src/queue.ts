@@ -49,6 +49,7 @@ let lastAnnounceConfigAlert = 0;
 const ANNOUNCE_CONFIG_ALERT_COOLDOWN_MS = 10 * 60 * 1000;
 import {
   addGuildMemberRole,
+  isDiscordSnowflake,
   createGuildRole,
   createGuildTextChannel,
   postChannelMessage,
@@ -464,8 +465,9 @@ export async function runDisplayNameRefresh(): Promise<{ updated: number; checke
   });
   let updated = 0;
   for (const p of players) {
+    if (!isDiscordSnowflake(p.discordId)) continue; // seeded/mock id — skip the API call
     const member = await guild.members.fetch(p.discordId).catch(() => null);
-    if (!member) continue; // left the guild, or a non-snowflake (mock) id
+    if (!member) continue; // left the guild
     const name = member.displayName; // nickname ?? global name ?? username
     if (name && name !== p.displayName) {
       await prisma.player.update({ where: { id: p.id }, data: { displayName: name } });
