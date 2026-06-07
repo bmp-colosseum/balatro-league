@@ -54,6 +54,18 @@ export async function POST(req: NextRequest) {
     reset: body.reset === true,
   };
 
+  // Background mode: kick the seed off without awaiting and return now. For
+  // long runs (many seasons, realDiscordEach waits on the bot per season) the
+  // request would otherwise stay open for tens of minutes. The work continues
+  // in the web process; watch the bot/web logs for progress. Best-effort — no
+  // durability, so a redeploy mid-run stops it (fine for a test env).
+  if (body.background === true) {
+    void runSeedE2E(opts, ctx.actor).catch((err) =>
+      console.error("[seed-e2e:background] failed:", err),
+    );
+    return NextResponse.json({ ok: true, started: true, background: true, opts });
+  }
+
   try {
     const result = await runSeedE2E(opts, ctx.actor);
     return NextResponse.json({ ok: true, ...result });

@@ -380,6 +380,23 @@ async function nextRoster(prevSeasonId: string, churn: number, rng: () => number
   return [...kept.map((p) => ({ discordId: p.discordId, displayName: p.displayName })), ...newcomers];
 }
 
+// Wait until the bot has finished bootstrapping a season's Discord channels
+// (every member-bearing division has a discordChannelId). Used by
+// realDiscordEach so we don't tear a season down before its async bootstrap
+// finished (which would orphan channels). Best-effort: returns on timeout so
+// a stuck bootstrap doesn't hang the whole seed.
+async function waitForSeasonBootstrap(seasonId: string, timeoutMs = 4 * 60 * 1000): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const divs = await prisma.division.findMany({
+      where: { seasonId, members: { some: { status: "ACTIVE" } } },
+      select: { discordChannelId: true },
+    });
+    if (divs.length > 0 && divs.every((d) => d.discordChannelId)) return;
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+}
+
 export async function runSeedE2E(opts: SeedE2EOptions, actor: AuditActor): Promise<SeedE2EResult> {
   const players = Math.max(2, opts.players ?? 12);
   const divisionSize = Math.max(2, opts.divisionSize ?? 6);
@@ -449,6 +466,12 @@ export async function runSeedE2E(opts: SeedE2EOptions, actor: AuditActor): Promi
       // final season touches Discord (intermediates skip it).
       const skipDiscord = opts.realDiscordEach ? false : !isLast;
       await performSeasonActivation(built.seasonId, actor, "manual", { skipDiscord });
+      // Wait for the bot to finish creating this season's channels before we
+      // move on (and later tear them down) — otherwise teardown races the
+      // async bootstrap and orphans channels. Only when a guild is configured.
+      if (opts.realDiscordEach && process.env.DISCORD_GUILD_ID) {
+        await waitForSeasonBootstrap(built.seasonId);
+      }
     }
 
     const m = await seedMatchesForSeason(built.seasonId, playFraction, !!opts.announce);
