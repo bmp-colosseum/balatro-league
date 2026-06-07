@@ -4,6 +4,7 @@ import { ensureBalatroEmojis } from "./balatro-emojis.js";
 import { ensureCommandsRegistered } from "./commands/register.js";
 import { ensureBotCommandsChannel } from "./bot-commands-channel.js";
 import { ensureChallengesChannel } from "./challenges-channel.js";
+import { ensureSupportChannel } from "./support-channel.js";
 import { ensureDevopsChannel } from "./devops-channel.js";
 import { checkChannelScope } from "./command-channels.js";
 import { buttonHandlers, modalHandlers, selectMenuHandlers, slashCommands } from "./commands/index.js";
@@ -176,6 +177,9 @@ ensureCommandsRegistered().catch((err) =>
 // Casual-challenges parent channel — invisible/empty for players,
 // only used as the parent for ephemeral /challenge private threads.
 ensureChallengesChannel().catch((err) => console.warn("[challenges-channel] init failed:", err));
+// Support channel — auto-create a public #support on first boot if unset, so
+// /support works out of the box. Admin can repoint it on /admin/config.
+ensureSupportChannel().catch((err) => console.warn("[support-channel] init failed:", err));
 // DevOps alert channel — infra-only, distinct from league admin. Used
 // by the queue-stall alarm; null is fine (alerts log to console).
 ensureDevopsChannel().catch((err) => console.warn("[devops-channel] init failed:", err));
