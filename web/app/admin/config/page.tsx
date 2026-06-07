@@ -35,6 +35,10 @@ const BMP_KEYS = [
   { key: "bmp_capture_previous_season", label: "Capture previous BMP season on refresh", help: "Set to 'true' to backfill the previous BMP season for everyone. Default: unset (only current is captured)." },
 ];
 
+const SITE_KEYS = [
+  { key: "discord_server_invite_url", label: "Discord server invite URL", help: "Public invite link shown as the 'Step 1 — Join the Discord server' card on the /join landing page. Use a non-expiring invite (https://discord.gg/…). Leave unset to hide the Step 1 card entirely." },
+];
+
 // Scoring + match policy + timeouts already have a dedicated UI at
 // /admin/settings (via getLeagueSettings() with typed defaults). This
 // page is for the channels/webhooks/BMP/role-binding stuff that was
@@ -61,6 +65,7 @@ export default async function AdminConfigPage() {
         </p>
 
         <ConfigSection title="Channels & external" keys={CHANNEL_KEYS} valueByKey={valueByKey} />
+        <ConfigSection title="Public / join page" keys={SITE_KEYS} valueByKey={valueByKey} />
         <ConfigSection title="BMP / balatromp.com" keys={BMP_KEYS} valueByKey={valueByKey} />
         <p className="muted" style={{ fontSize: 12, marginTop: 16 }}>
           Looking for scoring / match policy / timeouts? Those live on{" "}
