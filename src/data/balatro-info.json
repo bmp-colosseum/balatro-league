@@ -32,8 +32,8 @@
     { "name": "Purple", "description": "Required score scales even faster each Ante" },
     { "name": "Orange", "description": "30% chance for Perishable Jokers (debuffed after 5 rounds)" },
     { "name": "Gold", "description": "30% chance for Rental Jokers (costs $3 per round)" },
-    { "name": "Planet", "description": "Black Stake effects + Perishable Jokers in shop (debuffed after 5 rounds); score scales faster each Ante", "emoji": "🪐" },
-    { "name": "Spectral", "description": "Planet Stake effects + Rental Jokers in shop; score scales faster each Ante", "emoji": "👻" },
-    { "name": "Spectral+", "description": "Spectral Stake effects; score scales even faster each Ante", "emoji": "✨" }
+    { "name": "Planet", "description": "Black Stake effects + Perishable Jokers in shop (debuffed after 5 rounds); score scales faster each Ante" },
+    { "name": "Spectral", "description": "Planet Stake effects + Rental Jokers in shop; score scales faster each Ante" },
+    { "name": "Spectral+", "description": "Spectral Stake effects; score scales even faster each Ante" }
   ]
 }
