@@ -130,20 +130,25 @@ export async function initQueue(): Promise<void> {
     },
   );
 
-  // Worker: announce one pairing result to the configured Discord
-  // channel/webhook. Serial (batchSize 1) and slow polling so a burst
-  // (e.g. finish:season --announce on 250 pairings) drips out at the
-  // worker's natural pace instead of hammering Discord. announceResult
-  // already handles its own webhook->REST fallback and is safe to call
-  // from this context. Retried twice on failure (transient network /
-  // 5xx from Discord), then dropped.
+  // Worker: announce pairing results to the configured Discord
+  // channel/webhook. We DON'T self-throttle anymore — pull a big batch and
+  // fire them concurrently, letting discord.js's REST client be the rate
+  // limiter (it tracks per-route + global buckets and auto-backs-off on
+  // 429s). The real ceiling is Discord's per-channel limit (~1/sec sustained
+  // to one channel; higher via webhook or across channels), so a same-channel
+  // burst still drains at Discord's pace — but we no longer cap it below that.
+  // Per-job catch so one bad announce doesn't fail/retry the whole batch.
   await boss.work<AnnounceResultJob>(
     "notify.announce-result",
-    { batchSize: 1, pollingIntervalSeconds: 1 },
+    { batchSize: 50, pollingIntervalSeconds: 1 },
     async (jobs: Job<AnnounceResultJob>[]) => {
-      for (const job of jobs) {
-        await announceResult(job.data.pairingId);
-      }
+      await Promise.all(
+        jobs.map((job) =>
+          announceResult(job.data.pairingId).catch((err) =>
+            console.warn(`[announce] ${job.data.pairingId} failed:`, err),
+          ),
+        ),
+      );
     },
   );
 
