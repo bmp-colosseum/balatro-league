@@ -20,7 +20,7 @@ const LEAGUE_CONFIG_KEY_RESULTS_WEBHOOK = "results_webhook_url";
 const LEAGUE_CONFIG_KEY_RESULTS_CHANNEL = "results_channel_id";
 
 export async function announceResult(pairingId: string): Promise<void> {
-  const pairing = await prisma.pairing.findUnique({
+  const pairing = await prisma.match.findUnique({
     where: { id: pairingId },
     include: { playerA: true, playerB: true, division: { include: { season: true } } },
   });

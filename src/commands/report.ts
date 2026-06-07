@@ -130,7 +130,7 @@ export const reportButtons: ButtonHandler = {
     if (action === "dispute") {
       // Only the two players in this match can dispute it — anyone else
       // shouldn't even get the outcome-selection menu.
-      const subject = await prisma.pairing.findUnique({
+      const subject = await prisma.match.findUnique({
         where: { id: pairingId },
         include: { playerA: { select: { discordId: true } }, playerB: { select: { discordId: true } } },
       });
@@ -172,7 +172,7 @@ export const reportButtons: ButtonHandler = {
       return;
     }
 
-    const pairing = await prisma.pairing.findUnique({
+    const pairing = await prisma.match.findUnique({
       where: { id: pairingId },
       include: { playerA: true, playerB: true, division: true },
     });
@@ -268,7 +268,7 @@ export const disputeModal: ModalHandler = {
         await interaction.reply({ content: "Invalid proposal.", flags: MessageFlags.Ephemeral });
         return;
       }
-      const p = await prisma.pairing.findUnique({ where: { id: pairingId } });
+      const p = await prisma.match.findUnique({ where: { id: pairingId } });
       if (!p) {
         await interaction.reply({ content: "Match not found.", flags: MessageFlags.Ephemeral });
         return;
@@ -299,7 +299,7 @@ export const disputeModal: ModalHandler = {
     } else {
       await interaction.reply({ content: confirmation, flags: MessageFlags.Ephemeral });
     }
-    const pairing = await prisma.pairing.findUnique({
+    const pairing = await prisma.match.findUnique({
       where: { id: pairingId },
       include: { playerA: true, playerB: true, division: true },
     });

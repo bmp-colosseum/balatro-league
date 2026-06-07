@@ -32,7 +32,7 @@ function rest(): REST {
 }
 
 export async function announceResult(pairingId: string): Promise<void> {
-  const pairing = await prisma.pairing.findUnique({
+  const pairing = await prisma.match.findUnique({
     where: { id: pairingId },
     include: { playerA: true, playerB: true, division: { include: { season: true } } },
   });

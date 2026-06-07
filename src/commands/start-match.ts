@@ -87,8 +87,15 @@ export const startMatch: SlashCommand = {
     // triggered the need for a shootout in the first place) — so we
     // allow the shootout flow to proceed even with an existing Pairing.
     const [playerAId, playerBId] = me.id < opp.id ? [me.id, opp.id] : [opp.id, me.id];
-    const existing = await prisma.pairing.findUnique({
-      where: { divisionId_playerAId_playerBId: { divisionId: division.id, playerAId, playerBId } },
+    const existing = await prisma.match.findUnique({
+      where: {
+        divisionId_playerAId_playerBId_format: {
+          divisionId: division.id,
+          playerAId,
+          playerBId,
+          format: "LEAGUE_BO2",
+        },
+      },
     });
     if (!isShootout && existing && existing.status === "CONFIRMED") {
       await interaction.editReply(
@@ -100,8 +107,15 @@ export const startMatch: SlashCommand = {
     // Shootout mode also wants to avoid a duplicate Shootout row — bail
     // if one already exists.
     if (isShootout) {
-      const existingShootout = await prisma.shootout.findUnique({
-        where: { divisionId_playerAId_playerBId: { divisionId: division.id, playerAId, playerBId } },
+      const existingShootout = await prisma.match.findUnique({
+        where: {
+          divisionId_playerAId_playerBId_format: {
+            divisionId: division.id,
+            playerAId,
+            playerBId,
+            format: "SHOOTOUT_BO1",
+          },
+        },
       });
       if (existingShootout) {
         await interaction.editReply(
