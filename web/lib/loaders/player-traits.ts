@@ -9,17 +9,6 @@
 
 import { prisma } from "@/lib/prisma";
 
-interface GameStateMin {
-  firstId?: string;
-  pool?: Array<{ deck: string; stake: string }>;
-  pickedDeckIdx?: number;
-  dcByPlayerId?: string;
-  bans?: number[];
-  pickedRandomly?: boolean;
-  firstBannedRandomly?: boolean;
-  otherBannedRandomly?: boolean;
-}
-
 export interface PlayerTrait {
   key: string;
   label: string;
@@ -56,24 +45,23 @@ function avgRank(c: Counts): number | null {
 }
 
 export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]> {
-  const pairings = await prisma.pairing.findMany({
-    where: { status: "CONFIRMED", OR: [{ playerAId: playerId }, { playerBId: playerId }] },
-    select: { id: true },
+  // Read the player's games relationally (Game + its full GameDeck pool) —
+  // no JSON parsing. Shootouts fold in automatically (they're matches now).
+  // Only confirmed, non-DC games count. Ban attribution lives on each
+  // GameDeck row (bannedById / banOrdinal), so we never reconstruct it.
+  const playerGames = await prisma.game.findMany({
+    where: {
+      dcByPlayerId: null,
+      match: { status: "CONFIRMED", OR: [{ playerAId: playerId }, { playerBId: playerId }] },
+    },
+    select: {
+      firstPlayerId: true,
+      pickedRandomly: true,
+      firstBannedRandomly: true,
+      otherBannedRandomly: true,
+      pool: { select: { deck: true, stake: true, picked: true, banOrdinal: true, bannedById: true } },
+    },
   });
-  if (pairings.length === 0) return [];
-  const sessions = await prisma.matchSession.findMany({
-    where: { pairingId: { in: pairings.map((p) => p.id) } },
-    select: { game1: true, game2: true, game3: true },
-  });
-  // Shootouts are real games too — fold their stored GameState in so they
-  // feed the same trait signals as match games.
-  const shootouts = await prisma.shootout.findMany({
-    where: { OR: [{ playerAId: playerId }, { playerBId: playerId }], game: { not: null } },
-    select: { game: true },
-  });
-  const gameJsons: (string | null)[] = [];
-  for (const s of sessions) gameJsons.push(s.game1, s.game2, s.game3);
-  for (const s of shootouts) gameJsons.push(s.game);
 
   const bannedStakes: Counts = {};
   const pickedStakes: Counts = {};
@@ -81,71 +69,58 @@ export async function loadPlayerTraits(playerId: string): Promise<PlayerTrait[]>
   const playedCombos: Counts = {}; // deck+stake the game was actually played on
   const firstBannedDecks: Counts = {};
   const firstBannedStakes: Counts = {};
-  let totalBans = 0;
   let totalPicks = 0;
   let games = 0;
   let randomGames = 0;
   let ghostAvailable = 0; // games where the Ghost deck was in the pool
   let ghostBanned = 0; // …of those, how many this player banned it
 
-  for (const json of gameJsons) {
-    {
-      if (!json) continue;
-      let g: GameStateMin;
-      try {
-        g = JSON.parse(json) as GameStateMin;
-      } catch {
-        continue;
+  for (const g of playerGames) {
+    if (g.pool.length === 0) continue;
+    games++;
+    const isFirst = g.firstPlayerId === playerId;
+
+    // This player's bans — attribution is stored on each GameDeck row.
+    const myBans = g.pool.filter((d) => d.bannedById === playerId);
+    for (const d of myBans) bump(bannedStakes, d.stake);
+
+    // Their FIRST ban = the one with the smallest ban turn order.
+    let firstBan: (typeof myBans)[number] | null = null;
+    let firstBanOrd = Infinity;
+    for (const d of myBans) {
+      if (d.banOrdinal == null) continue;
+      if (d.banOrdinal < firstBanOrd) {
+        firstBanOrd = d.banOrdinal;
+        firstBan = d;
       }
-      if (!g.pool || g.pool.length === 0 || g.dcByPlayerId || !g.firstId) continue;
-      games++;
-      const isFirst = g.firstId === playerId;
-      const bans = g.bans ?? [];
-      const myBanIdxs = isFirst ? [bans[0], ...bans.slice(4)] : bans.slice(1, 4);
-      for (const idx of myBanIdxs) {
-        if (idx === undefined) continue;
-        const combo = g.pool[idx];
-        if (!combo) continue;
-        bump(bannedStakes, combo.stake);
-        totalBans++;
-      }
-      // Ghostbuster tracking — Ghost deck available vs. this player banning it.
-      if (g.pool.some((c) => c.deck === "Ghost")) {
-        ghostAvailable++;
-        if (myBanIdxs.some((idx) => idx !== undefined && g.pool![idx]?.deck === "Ghost")) {
-          ghostBanned++;
-        }
-      }
-      // The player's FIRST ban of the game (bans[0] if first, bans[1] if other).
-      const myFirstBanIdx = isFirst ? bans[0] : bans[1];
-      if (myFirstBanIdx !== undefined) {
-        const combo = g.pool[myFirstBanIdx];
-        if (combo) {
-          bump(firstBannedDecks, combo.deck);
-          bump(firstBannedStakes, combo.stake);
-        }
-      }
-      // Only the OTHER (non-first) player makes the final pick.
-      if (!isFirst && g.pickedDeckIdx !== undefined) {
-        const combo = g.pool[g.pickedDeckIdx];
-        if (combo) {
-          bump(pickedStakes, combo.stake);
-          bump(pickedDecks, combo.deck);
-          totalPicks++;
-        }
-      }
-      // The combo the game was actually PLAYED on (regardless of who picked)
-      // — feeds the "signature combo" / most-played stat below.
-      if (g.pickedDeckIdx !== undefined) {
-        const combo = g.pool[g.pickedDeckIdx];
-        if (combo) bump(playedCombos, `${combo.deck} · ${combo.stake}`);
-      }
-      // Did this player use a 🎲 random button this game?
-      const usedRandom = isFirst
-        ? !!g.firstBannedRandomly
-        : !!g.otherBannedRandomly || !!g.pickedRandomly;
-      if (usedRandom) randomGames++;
     }
+    if (firstBan) {
+      bump(firstBannedDecks, firstBan.deck);
+      bump(firstBannedStakes, firstBan.stake);
+    }
+
+    // Ghostbuster — Ghost available in the pool vs. this player banning it.
+    const ghostRow = g.pool.find((d) => d.deck === "Ghost");
+    if (ghostRow) {
+      ghostAvailable++;
+      if (ghostRow.bannedById === playerId) ghostBanned++;
+    }
+
+    // The picked combo (what the game was played on).
+    const picked = g.pool.find((d) => d.picked);
+    if (picked) {
+      bump(playedCombos, `${picked.deck} · ${picked.stake}`);
+      // Only the OTHER (non-first) player makes the final pick.
+      if (!isFirst) {
+        bump(pickedStakes, picked.stake);
+        bump(pickedDecks, picked.deck);
+        totalPicks++;
+      }
+    }
+
+    // 🎲 random-button usage this game.
+    const usedRandom = isFirst ? !!g.firstBannedRandomly : !!g.otherBannedRandomly || !!g.pickedRandomly;
+    if (usedRandom) randomGames++;
   }
 
   if (games < 4) return []; // not enough signal yet
