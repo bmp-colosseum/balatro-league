@@ -46,22 +46,43 @@ export async function composeLeagueInfoContent(): Promise<string> {
 }
 
 async function composeDynamicBlock(): Promise<string> {
-  // Priority order — whichever state is most relevant right now wins
-  // the top of the dynamic block:
-  //   1. An OPEN signup round → "signups open"
-  //   2. An active season → "Season N is live"
-  //   3. Most-recently-ended season → "Season N ended"
-  //   4. Nothing → "no active season right now"
-  const openRound = await prisma.signupRound.findFirst({
-    where: { status: "OPEN" },
-    orderBy: { openedAt: "desc" },
-    select: {
-      name: true,
-      channelId: true,
-      resultingSeasonId: true,
-      signups: { where: { withdrawn: false }, select: { id: true } },
-    },
-  });
+  // The active season and an open signup round can BOTH be true (signups for
+  // next season open while the current one is still being played) — so we
+  // build each block independently and show both. Order: live season first,
+  // then "signups open for next". Falls through to ended/none when neither.
+  const [openRound, activeSeason] = await Promise.all([
+    prisma.signupRound.findFirst({
+      where: { status: "OPEN" },
+      orderBy: { openedAt: "desc" },
+      select: {
+        name: true,
+        channelId: true,
+        resultingSeasonId: true,
+        signups: { where: { withdrawn: false }, select: { id: true } },
+      },
+    }),
+    prisma.season.findFirst({
+      where: { isActive: true },
+      select: { id: true, number: true, subtitle: true, startedAt: true },
+    }),
+  ]);
+
+  const blocks: string[] = [];
+
+  if (activeSeason) {
+    const label = formatSeasonLabel(activeSeason);
+    const since = activeSeason.startedAt.toISOString().slice(0, 10);
+    blocks.push(
+      [
+        "─────────────────────",
+        `## 🏆 ${label} is live!`,
+        `Active since ${since}.`,
+        `**Standings:** <${webUrl("standings")}>`,
+        "Use `/start-match @opponent` in your division channel to play.",
+      ].join("\n"),
+    );
+  }
+
   if (openRound) {
     let seasonLabel = openRound.name;
     if (openRound.resultingSeasonId) {
@@ -71,31 +92,19 @@ async function composeDynamicBlock(): Promise<string> {
       });
       if (s) seasonLabel = formatSeasonLabel(s);
     }
-    return [
-      "─────────────────────",
-      `## 📝 Signups open: ${seasonLabel}`,
-      `Click the **Sign Up** button in <#${openRound.channelId}> to register.`,
-      `**${openRound.signups.length} signed up so far.**`,
-      "",
-      `_Or sign up from <${webUrl("join")}>._`,
-    ].join("\n");
+    blocks.push(
+      [
+        "─────────────────────",
+        `## 📝 Signups open: ${seasonLabel}`,
+        `Click the **Sign Up** button in <#${openRound.channelId}> to register.`,
+        `**${openRound.signups.length} signed up so far.**`,
+        "",
+        `_Or sign up from <${webUrl("join")}>._`,
+      ].join("\n"),
+    );
   }
 
-  const activeSeason = await prisma.season.findFirst({
-    where: { isActive: true },
-    select: { id: true, number: true, subtitle: true, startedAt: true },
-  });
-  if (activeSeason) {
-    const label = formatSeasonLabel(activeSeason);
-    const since = activeSeason.startedAt.toISOString().slice(0, 10);
-    return [
-      "─────────────────────",
-      `## 🏆 ${label} is live!`,
-      `Active since ${since}.`,
-      `**Standings:** <${webUrl("standings")}>`,
-      "Use `/start-match @opponent` in your division channel to play.",
-    ].join("\n");
-  }
+  if (blocks.length > 0) return blocks.join("\n\n");
 
   // Pick the most-recently-ended season for "last season was…" context.
   const recentEnded = await prisma.season.findFirst({
