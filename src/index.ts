@@ -64,6 +64,20 @@ client.once(Events.ClientReady, async (c) => {
 
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
+    // Guild lock: this instance only operates in its configured DISCORD_GUILD_ID.
+    // If the bot gets added to another server, politely refuse rather than act
+    // on the wrong place — a safety net for running/moving across servers.
+    if (env.DISCORD_GUILD_ID && interaction.guildId && interaction.guildId !== env.DISCORD_GUILD_ID) {
+      if (interaction.isAutocomplete()) {
+        await interaction.respond([]);
+      } else if (interaction.isRepliable()) {
+        await interaction.reply({
+          content: "This bot is configured for a different server and doesn't operate here.",
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      return;
+    }
     if (interaction.isChatInputCommand()) {
       const command = slashCommands.find((c) => c.data.name === interaction.commandName);
       if (!command) {

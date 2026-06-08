@@ -23,7 +23,8 @@ export const dynamic = "force-dynamic";
 // it's the display order on the page. Sections are sub-headed below.
 const CHANNEL_KEYS = [
   { key: "results_webhook_url", label: "Results webhook URL", help: "Posts match results here via webhook. First priority. Falls back to env RESULTS_WEBHOOK_URL." },
-  { key: "results_channel_id", label: "Results channel ID", help: "Posts match results here via the bot (used when no webhook is set). Right-click channel → Copy Channel ID. Falls back to env RESULTS_CHANNEL_ID." },
+  { key: "results_channel_id", label: "Results channel — bot", help: "Where the BOT auto-posts match results (e.g. #league-results-bot). Used when no webhook is set. Right-click channel → Copy Channel ID. Falls back to env RESULTS_CHANNEL_ID." },
+  { key: "results_human_channel_id", label: "Results channel — humans", help: "Human-facing results channel (e.g. #league-results) for people to post in manually if the bot's auto-post ever has an issue. The bot doesn't post here." },
   { key: "bot_commands_channel_id", label: "Bot-commands channel ID", help: "Where /challenge/etc. work outside of division channels. Auto-created on bot startup if unset." },
   { key: "backup_channel_id", label: "Backup channel ID", help: "Daily league backup attachments land here. Should be staff-only." },
   { key: "challenges_channel_id", label: "Challenges channel ID", help: "Parent channel for /challenge match threads. Optional." },

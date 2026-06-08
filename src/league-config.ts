@@ -56,6 +56,10 @@ export const LeagueConfigKey = {
   AdminChannelId: "admin_channel_id",
   FeedbackChannelId: "feedback_channel_id",
   GeneralChannelId: "general_channel_id",
+  // Human-facing results channel (manual backup). The BOT posts to
+  // ResultsChannelId (#league-results-bot); this one is for people to post in
+  // if the bot's auto-post ever has an issue.
+  ResultsHumanChannelId: "results_human_channel_id",
 
   // ── Tunable league rules (all integers, stored as strings) ───────────
   // Scoring: points awarded per match outcome. Defaults 3/1/0 mirror the
