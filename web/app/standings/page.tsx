@@ -112,6 +112,19 @@ export default async function StandingsPage() {
     }),
   ]);
 
+  // Season-wide match progress (sum of every division's round-robin).
+  let totalPlayed = 0;
+  let totalExpected = 0;
+  for (const t of data.tiers) {
+    for (const d of t.divisions) {
+      const ac = d.activeMemberIds.length;
+      totalExpected += ac < 2 ? 0 : (ac * (ac - 1)) / 2;
+      totalPlayed += d.playedMatches;
+    }
+  }
+  const totalRemaining = Math.max(0, totalExpected - totalPlayed);
+  const pctPlayed = totalExpected > 0 ? Math.round((totalPlayed / totalExpected) * 100) : 0;
+
   return (
     <>
       <SiteNav activePath="/standings" />
@@ -142,6 +155,17 @@ export default async function StandingsPage() {
         ) : (
           <>
             <h2>{data.season.name} — Standings</h2>
+            <div
+              className="card"
+              style={{ marginBottom: 16, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "baseline" }}
+            >
+              <span style={{ fontSize: 15 }}>
+                <strong>{totalPlayed}</strong> <span className="muted">/ {totalExpected}</span> matches played
+              </span>
+              <span className="muted">·</span>
+              <span><strong>{totalRemaining}</strong> remaining</span>
+              <span className="muted" style={{ marginLeft: "auto" }}>{pctPlayed}% complete</span>
+            </div>
             {data.tiers.filter((t) => t.divisions.length > 0).map((tier) => {
               const isTopTier = tier.position === data.minTierPosition;
               const isBottomTier = tier.position === data.maxTierPosition;
