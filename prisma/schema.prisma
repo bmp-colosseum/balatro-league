@@ -55,8 +55,28 @@ model Player {
   reportedMatches Match[]   @relation("MatchReporter")
   disputedMatches Match[]   @relation("MatchDisputer")
   mmrSnapshots    PlayerMmrSnapshot[]
+  strikes         Strike[]
+  // Opt-in: auto-enroll this player into the next signup round when it opens.
+  // Default off — players choose this on /me. They can still withdraw after.
+  autoSignup      Boolean   @default(false)
 
   @@index([rating])
+}
+
+// Admin-logged strike against a player (repeat offenders: no-shows, DQs, rule
+// breaks, …). Free-text reason so admins decide policy outside the bot based on
+// the count. Append-only history; admins can delete a mistaken one.
+model Strike {
+  id           String   @id @default(cuid())
+  playerId     String
+  reason       String
+  issuedById   String   // Discord id of the admin who logged it
+  issuedByName String
+  createdAt    DateTime @default(now())
+
+  player       Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId])
 }
 
 // Scraped point-in-time MMR snapshot from balatromp.com. We capture one

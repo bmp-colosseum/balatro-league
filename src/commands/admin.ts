@@ -148,6 +148,21 @@ export const admin: SlashCommand = {
         .addStringOption((opt) =>
           opt.setName("reason").setDescription("Why — recorded for audit").setRequired(true),
         ),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("strike")
+        .setDescription("Log a strike against a player (repeat offenders: no-show, DQ, rule break).")
+        .addUserOption((opt) => opt.setName("player").setDescription("Player to strike").setRequired(true))
+        .addStringOption((opt) =>
+          opt.setName("reason").setDescription("Why (free text — recorded for the strike history)").setRequired(true),
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("strikes")
+        .setDescription("List a player's strikes + count.")
+        .addUserOption((opt) => opt.setName("player").setDescription("Player to look up").setRequired(true)),
     ),
 
   // Only record-shootout has autocompleted options (p1 / p2). Other
@@ -180,6 +195,8 @@ export const admin: SlashCommand = {
     if (!(await requireAdmin(interaction))) return;
     if (sub === "override-result") return forceResult(interaction);
     if (sub === "forfeit") return recordForfeit(interaction);
+    if (sub === "strike") return recordStrike(interaction);
+    if (sub === "strikes") return listStrikes(interaction);
     if (sub === "export-results") return exportResults(interaction);
     if (sub === "reload-emojis") return reloadEmojis(interaction);
     if (sub === "cancel-match") return cancelMatch(interaction);
@@ -796,6 +813,58 @@ async function recordForfeit(interaction: ChatInputCommandInteraction) {
   await interaction.editReply(
     `✅ Recorded **${winner.displayName}** def. **${loser.displayName}** — **2-0 by DQ** in **${division.name}**.\n` +
       `Reason (admin-only): _${reason}_`,
+  );
+}
+
+// Log a strike against a player. Free-text reason; admins act on the count.
+async function recordStrike(interaction: ChatInputCommandInteraction) {
+  const user = interaction.options.getUser("player", true);
+  const reason = interaction.options.getString("reason", true).trim();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const player = await getOrCreatePlayer(user);
+  await prisma.strike.create({
+    data: {
+      playerId: player.id,
+      reason,
+      issuedById: interaction.user.id,
+      issuedByName: interaction.user.username,
+    },
+  });
+  const count = await prisma.strike.count({ where: { playerId: player.id } });
+  recordAudit({
+    actor: actorFromInteractionUser(interaction.user),
+    action: "strike.add",
+    targetType: "Player",
+    targetId: player.id,
+    summary: `Strike #${count} on ${player.displayName}: ${reason}`,
+    metadata: { reason, count },
+  });
+  await interaction.editReply(`⚠️ Logged strike **#${count}** for **${player.displayName}** — _${reason}_`);
+}
+
+// List a player's strikes, newest first, with the running count.
+async function listStrikes(interaction: ChatInputCommandInteraction) {
+  const user = interaction.options.getUser("player", true);
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const player = await prisma.player.findUnique({ where: { discordId: user.id } });
+  if (!player) {
+    await interaction.editReply(`${user.username} isn't in the league yet — no strikes.`);
+    return;
+  }
+  const strikes = await prisma.strike.findMany({
+    where: { playerId: player.id },
+    orderBy: { createdAt: "desc" },
+  });
+  if (strikes.length === 0) {
+    await interaction.editReply(`✅ **${player.displayName}** has no strikes.`);
+    return;
+  }
+  const lines = strikes.map(
+    (s, i) =>
+      `**${strikes.length - i}.** <t:${Math.floor(s.createdAt.getTime() / 1000)}:d> — ${s.reason} _(by ${s.issuedByName})_`,
+  );
+  await interaction.editReply(
+    `⚠️ **${player.displayName}** — **${strikes.length}** strike${strikes.length === 1 ? "" : "s"}:\n${lines.join("\n")}`,
   );
 }
 
