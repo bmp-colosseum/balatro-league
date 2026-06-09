@@ -182,15 +182,37 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
      // to decide whether to seed it with onboarding messages (we don't want
      // to spam an existing channel admin has already curated).
     const justCreated = new Set<string>();
-    async function ensureChannel(name: string, topic: string) {
+    async function ensureChannel(
+      name: string,
+      topic: string,
+      type: ChannelType.GuildText | ChannelType.GuildAnnouncement = ChannelType.GuildText,
+    ) {
       const existing = guild.channels.cache.find(
-        (c) => c.type === ChannelType.GuildText && c.name === name && c.parentId === categoryId,
+        (c) =>
+          (c.type === ChannelType.GuildText || c.type === ChannelType.GuildAnnouncement) &&
+          c.name === name &&
+          c.parentId === categoryId,
       );
-      if (existing && existing.type === ChannelType.GuildText) {
-        reused.push(`#${name}`);
+      if (
+        existing &&
+        (existing.type === ChannelType.GuildText || existing.type === ChannelType.GuildAnnouncement)
+      ) {
+        // Convert in place if it's the wrong type (e.g. #announcements was made
+        // as a plain text channel before this fix).
+        if (existing.type !== type) {
+          await existing.edit({ type }).then(
+            () =>
+              created.push(
+                `#${name} (converted to ${type === ChannelType.GuildAnnouncement ? "announcement" : "text"} channel)`,
+              ),
+            () => reused.push(`#${name} (couldn't convert type — convert it manually in channel settings)`),
+          );
+        } else {
+          reused.push(`#${name}`);
+        }
         return existing;
       }
-      const ch = await guild.channels.create({ name, type: ChannelType.GuildText, parent: categoryId, topic });
+      const ch = await guild.channels.create({ name, type, parent: categoryId, topic });
       created.push(`#${name}`);
       justCreated.add(ch.id);
       return ch;
@@ -203,6 +225,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     const announcementsChan = await ensureChannel(
       "announcements",
       "League-wide announcements: season starts, recaps, league news. Bot-posted, read-only for members.",
+      ChannelType.GuildAnnouncement,
     );
 
     // Persist channel ids in LeagueConfig so the bot's per-channel
