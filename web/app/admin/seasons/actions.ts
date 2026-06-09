@@ -271,13 +271,26 @@ export async function performSeasonActivation(
   // channels on every one. Real activations always run the bootstrap.
   if (opts.skipDiscord) return;
 
-  // Auto-bootstrap Discord (per-division roles + channels). Idempotent —
-  // skips divisions that already have role + channel IDs. Best-effort:
-  // if the guild config is missing or the enqueue fails, the activation
-  // still succeeds and admin can re-run via the season detail page.
-  await runSeasonDiscordBootstrap(seasonId).catch((err) =>
-    console.warn("[season.activate] Discord bootstrap enqueue failed:", err),
-  );
+  // Division channels can be turned off for a lightweight league: no
+  // per-division channels/roles, matches happen in #bot-commands, results
+  // announce to the central results channel, standings live on the web. When
+  // the flag is set we skip ONLY the channel/role bootstrap — the season-start
+  // announcement + #league-info refresh below still run. Admin can still create
+  // channels later via the season page's "Set up Discord channels & roles".
+  const divChannelsDisabled =
+    (await prisma.leagueConfig.findUnique({
+      where: { key: "division_channels_disabled" },
+      select: { value: true },
+    }))?.value === "true";
+  if (!divChannelsDisabled) {
+    // Auto-bootstrap Discord (per-division roles + channels). Idempotent —
+    // skips divisions that already have role + channel IDs. Best-effort:
+    // if the guild config is missing or the enqueue fails, the activation
+    // still succeeds and admin can re-run via the season detail page.
+    await runSeasonDiscordBootstrap(seasonId).catch((err) =>
+      console.warn("[season.activate] Discord bootstrap enqueue failed:", err),
+    );
+  }
 
   // Best-effort announcement. Fire even when no channel is configured —
   // the call short-circuits cleanly without failing activation.

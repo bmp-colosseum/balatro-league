@@ -67,6 +67,13 @@ export const LeagueConfigKey = {
   // season actually starts; flip back to "false" (or clear it) on launch.
   SignupsOnlyMode: "signups_only_mode",
 
+  // Lightweight league: set to "true" to NOT auto-create per-division Discord
+  // channels/roles when a season activates. Matches happen in #bot-commands,
+  // results announce to the central results channel, standings live on the web.
+  // Admin can still create channels later from the season page. Season-start
+  // announcements + #league-info still post.
+  DivisionChannelsDisabled: "division_channels_disabled",
+
   // ── Tunable league rules (all integers, stored as strings) ───────────
   // Scoring: points awarded per match outcome. Defaults 3/1/0 mirror the
   // current Dunk-original rules. Admin can change mid-season if needed —

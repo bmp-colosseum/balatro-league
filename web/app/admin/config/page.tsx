@@ -33,6 +33,7 @@ const CHANNEL_KEYS = [
 
 const MODE_KEYS = [
   { key: "signups_only_mode", label: "Sign-ups-only mode", help: "Set to 'true' to disable every command except /help while keeping the sign-up flow live. Use for a soft launch in a new server; set to 'false' (or clear) when the season starts." },
+  { key: "division_channels_disabled", label: "Disable division channels", help: "Set to 'true' for a lightweight league: activating a season won't auto-create per-division channels/roles. Matches run in #bot-commands, results post to the Results channel, standings are on the web. You can still create channels later from the season page." },
 ];
 
 const COMMUNITY_KEYS = [
