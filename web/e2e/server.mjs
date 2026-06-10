@@ -42,6 +42,7 @@ const env = {
   DISCORD_CLIENT_ID: "0",
   DISCORD_CLIENT_SECRET: "0",
   LEAGUE_OWNER_DISCORD_ID: "e2e-owner",
+  ADMIN_TOKEN: "e2e-admin-token-0123456789", // for seed endpoints used by create-league E2E
 };
 
 console.log("[e2e] starting next dev…");
