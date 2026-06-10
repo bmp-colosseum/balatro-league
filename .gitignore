@@ -20,3 +20,6 @@ scripts/out/
 
 # Local DB backups / exports (npm run backup:db / export:full)
 backups/
+
+# vitest integration: embedded postgres connection url
+.vitest-pg-url

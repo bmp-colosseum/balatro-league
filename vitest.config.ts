@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig, configDefaults } from "vitest/config";
 
 export default defineConfig({
   test: {
@@ -8,5 +8,7 @@ export default defineConfig({
     // Prisma instantiates but never connects (the logic under test is pure).
     setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/*.test.ts"],
+    // Integration tests (real Postgres) run via vitest.integration.config.ts.
+    exclude: [...configDefaults.exclude, "**/*.integration.test.ts"],
   },
 });
