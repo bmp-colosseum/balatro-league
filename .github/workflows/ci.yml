@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  bot:
+    name: bot — typecheck + tests
+    runs-on: ubuntu-latest
+    env:
+      # Only these three are required by env.ts (the rest are optional / defaulted).
+      # The integration suite overrides DATABASE_URL with its embedded Postgres.
+      DISCORD_TOKEN: ci-dummy-token
+      DISCORD_CLIENT_ID: "0"
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      # embedded-postgres downloads a real Postgres binary and runs it locally —
+      # no Docker service needed on the runner.
+      - run: npm run test:integration
+
+  # NOTE: a web job (cd web && tsc --noEmit / next build) is a worthwhile
+  # follow-up, but needs next-env.d.ts generated first (a fresh checkout has
+  # none), so it's intentionally omitted here rather than shipped red.
