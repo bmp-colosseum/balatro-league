@@ -210,8 +210,10 @@ interface PreparedMatch {
   shootoutGame: GameStateLike | null;
 }
 
-// Fabricate + write matches for a built season. Returns counts.
-async function seedMatchesForSeason(
+// Fabricate + write matches for a built season (persona-driven), then recompute
+// standings. Returns counts. Exported so the seed-matches endpoint can fill a
+// season you built manually via the build flow.
+export async function seedMatchesForSeason(
   seasonId: string,
   playFraction: number,
   announce: boolean,
