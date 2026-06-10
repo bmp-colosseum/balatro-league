@@ -27,3 +27,19 @@ test("admin can add a player (real end-to-end flow)", async ({ page }) => {
 
   await expect(page.getByText("E2E Tester")).toBeVisible();
 });
+
+test("⌘K palette hides Admin from anon, shows it to admins", async ({ page }) => {
+  // Anonymous — Admin group must not appear.
+  await page.goto("/standings");
+  await page.getByRole("button", { name: "Search" }).click();
+  await expect(page.getByPlaceholder("Jump to a page…")).toBeVisible();
+  await expect(page.getByRole("option", { name: "Standings" })).toBeVisible();
+  await expect(page.getByRole("option", { name: "Admin dashboard" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  // Admin — Admin group appears.
+  await loginAsAdmin(page);
+  await page.goto("/standings");
+  await page.getByRole("button", { name: "Search" }).click();
+  await expect(page.getByRole("option", { name: "Admin dashboard" })).toBeVisible();
+});
