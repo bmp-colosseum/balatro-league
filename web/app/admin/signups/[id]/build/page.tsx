@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import { loadBuildSeasonPage } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
+import { Button } from "@/components/ui/button";
 import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
 import { DraggableRatingTable, type RatingRow } from "@/components/DraggableRatingTable";
@@ -120,13 +121,13 @@ export default async function BuildSeasonPage({
               placeholder="Display name override (optional)"
               style={{ flex: "1 1 200px" }}
             />
-            <button type="submit">Look up & add</button>
+            <Button type="submit">Look up & add</Button>
           </form>
           {allPlayers.length > 0 && (
             <form action={addSignupByPlayerId} style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
               <input type="hidden" name="roundId" value={round.id} />
               <PlayerSearch players={allPlayers} name="playerId" placeholder="…or add an existing player by name" />
-              <button type="submit" className="secondary">Add</button>
+              <Button type="submit" variant="secondary">Add</Button>
             </form>
           )}
         </div>
@@ -137,15 +138,15 @@ export default async function BuildSeasonPage({
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               <form action={autoFillRatingsFromMmr}>
                 <input type="hidden" name="roundId" value={round.id} />
-                <button type="submit" className="secondary" style={{ fontSize: 12 }} title="Sets rating = BMP MMR only for players who don't already have a rating. Leaves returners' league ratings alone.">
+                <Button type="submit" variant="secondary" size="sm" title="Sets rating = BMP MMR only for players who don't already have a rating. Leaves returners' league ratings alone.">
                   Fill missing ratings from BMP MMR
-                </button>
+                </Button>
               </form>
               <form action={refreshSignupMmrSnapshots}>
                 <input type="hidden" name="roundId" value={round.id} />
-                <button type="submit" className="secondary" style={{ fontSize: 12 }}>
+                <Button type="submit" variant="secondary" size="sm">
                   Refresh BMP MMRs
-                </button>
+                </Button>
               </form>
             </div>
           </div>
@@ -249,7 +250,7 @@ export default async function BuildSeasonPage({
                   Pre-filled with your last-used layout (★)
                 </span>
                 <Link href="/admin/seasons/templates" style={{ marginLeft: "auto" }}>
-                  <button type="button" className="secondary">Manage templates</button>
+                  <Button type="button" variant="secondary">Manage templates</Button>
                 </Link>
               </div>
               <TierEditor initial={initialTiers} templates={templates} signupCount={sortedSignups.length} />
@@ -263,9 +264,9 @@ export default async function BuildSeasonPage({
                 Re-build Season {existingSeason.number} · place {playerCount} players
               </ConfirmButton>
             ) : (
-              <button type="submit" style={{ marginTop: 16 }}>
+              <Button type="submit" className="mt-4">
                 Build season + place {playerCount} players
-              </button>
+              </Button>
             )}
           </form>
         </div>

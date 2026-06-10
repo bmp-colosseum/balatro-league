@@ -10,6 +10,7 @@ import { getShowBmpMmr } from "@/lib/preferences";
 import { loadPlayerHistory } from "@/lib/profile";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
+import { Button } from "@/components/ui/button";
 import { recordSetForPlayer, recordForfeitForPlayer } from "@/app/admin/players/actions";
 import { castEasterEggVote, reportFromProfileAction, submitProfileDispute } from "./actions";
 import {
@@ -197,7 +198,7 @@ export default async function ProfilePage({
                     <option value="1-1">1-1 (draw)</option>
                     <option value="0-2">0-2 (I lost both)</option>
                   </select>
-                  <button type="submit">Report</button>
+                  <Button type="submit">Report</Button>
                 </form>
                 <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
                   Web reports are recorded immediately. The result posts to <strong>#results</strong>;
@@ -224,7 +225,7 @@ export default async function ProfilePage({
                     ✓ Subscribed (since {me.interest.subscribedAt.toISOString().slice(0, 10)}). The bot DMs you when the next season&apos;s signups open.
                   </p>
                   <form action={unsubscribeNextSeasonAction}>
-                    <button type="submit" className="secondary">Unsubscribe</button>
+                    <Button type="submit" variant="secondary">Unsubscribe</Button>
                   </form>
                 </>
               ) : (
@@ -233,7 +234,7 @@ export default async function ProfilePage({
                     Get a Discord DM the moment a new season&apos;s signups open.
                   </p>
                   <form action={subscribeNextSeasonAction}>
-                    <button type="submit">🔔 Notify me about the next season</button>
+                    <Button type="submit">🔔 Notify me about the next season</Button>
                   </form>
                 </>
               )}
@@ -245,9 +246,9 @@ export default async function ProfilePage({
               </p>
               <form action={setAutoSignupAction}>
                 <input type="hidden" name="next" value={me.autoSignup ? "0" : "1"} />
-                <button type="submit" className={me.autoSignup ? "secondary" : ""}>
+                <Button type="submit" variant={me.autoSignup ? "secondary" : "default"}>
                   {me.autoSignup ? "Turn off auto-sign-up" : "🔁 Auto-sign me up next season"}
-                </button>
+                </Button>
               </form>
             </div>
 
@@ -261,11 +262,11 @@ export default async function ProfilePage({
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <form action={setCustomNameAction} style={{ display: "flex", gap: 6, flex: "1 1 280px" }}>
                   <input type="text" name="displayName" defaultValue={profile.player.displayName} required maxLength={64} style={{ flex: 1 }} />
-                  <button type="submit">Save custom name</button>
+                  <Button type="submit">Save custom name</Button>
                 </form>
                 {me.hasCustomDisplayName && (
                   <form action={resetToDiscordNameAction}>
-                    <button type="submit" className="secondary">↻ Reset to auto</button>
+                    <Button type="submit" variant="secondary">↻ Reset to auto</Button>
                   </form>
                 )}
               </div>
@@ -428,7 +429,7 @@ export default async function ProfilePage({
                     <option value="1-1">1-1 draw</option>
                     <option value="0-2">{profile.player.displayName} lost 0-2</option>
                   </select>
-                  <button type="submit">Record</button>
+                  <Button type="submit">Record</Button>
                 </form>
               </>
             ) : (
@@ -463,7 +464,7 @@ export default async function ProfilePage({
                   <option value="opponent">opponent wins by DQ</option>
                 </select>
                 <input type="text" name="reason" required placeholder="Reason (admin-only)" style={{ flex: "1 1 200px" }} />
-                <button type="submit">Record DQ</button>
+                <Button type="submit">Record DQ</Button>
               </form>
             </details>
           </div>
@@ -789,9 +790,9 @@ export default async function ProfilePage({
                                       maxLength={500}
                                       style={{ fontSize: 12, width: "100%" }}
                                     />
-                                    <button type="submit" className="secondary" style={{ fontSize: 11 }}>
+                                    <Button type="submit" variant="secondary" size="sm">
                                       Submit dispute
-                                    </button>
+                                    </Button>
                                   </form>
                                 </details>
                               </td>

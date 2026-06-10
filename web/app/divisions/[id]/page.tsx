@@ -11,6 +11,7 @@ import { loadAdminDivisionDetail } from "@/lib/loaders/admin";
 import { prisma } from "@/lib/prisma";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
+import { Button } from "@/components/ui/button";
 import {
   addDivisionMemberByDiscordId,
   bulkAddMembers,
@@ -371,7 +372,7 @@ function UnplayedList({
                   <option value="1-1">Draw 1-1</option>
                   <option value="0-2">I lost 0-2</option>
                 </select>
-                <button type="submit" style={{ fontSize: 11, padding: "1px 8px" }}>Report</button>
+                <Button type="submit" size="sm">Report</Button>
               </form>
             )}
             {!viewerIsPlayer && isAdmin && (
@@ -384,7 +385,7 @@ function UnplayedList({
                   <option value="1-1">Draw 1-1</option>
                   <option value="0-2">{m.b.displayName} 2-0</option>
                 </select>
-                <button type="submit" className="secondary" style={{ fontSize: 11, padding: "1px 8px" }}>Record</button>
+                <Button type="submit" variant="secondary" size="sm">Record</Button>
               </form>
             )}
           </li>
@@ -511,7 +512,7 @@ function AdminSection({
             style={{ width: "100%", fontFamily: "ui-monospace, monospace", fontSize: 12 }}
             required
           />
-          <button type="submit" style={{ marginTop: 6 }}>Add all to division</button>
+          <Button type="submit" className="mt-1.5">Add all to division</Button>
         </form>
       </details>
 
@@ -531,7 +532,7 @@ function AdminSection({
             style={{ width: "100%", fontFamily: "ui-monospace, monospace", fontSize: 12 }}
             required
           />
-          <button type="submit" style={{ marginTop: 6 }}>Record all pairings</button>
+          <Button type="submit" className="mt-1.5">Record all pairings</Button>
         </form>
       </details>
 
@@ -558,7 +559,7 @@ function AdminSection({
             placeholder="Display name override (optional)"
             style={{ flex: "1 1 200px" }}
           />
-          <button type="submit">Add to division</button>
+          <Button type="submit">Add to division</Button>
         </form>
       </div>
 
@@ -592,33 +593,34 @@ function AdminSection({
                       <form action={reactivateDivisionMember}>
                         <input type="hidden" name="divisionId" value={division.id} />
                         <input type="hidden" name="playerId" value={m.playerId} />
-                        <button type="submit" className="secondary" style={{ fontSize: 11 }}>Reactivate</button>
+                        <Button type="submit" variant="secondary" size="sm">Reactivate</Button>
                       </form>
                     ) : (
                       <form action={dropDivisionMember}>
                         <input type="hidden" name="divisionId" value={division.id} />
                         <input type="hidden" name="playerId" value={m.playerId} />
-                        <button
+                        <Button
                           type="submit"
-                          className="secondary"
-                          style={{ fontSize: 11 }}
+                          variant="secondary"
+                          size="sm"
                           title="Mark dropped — keeps played pairings, voids unplayed"
                         >
                           Drop
-                        </button>
+                        </Button>
                       </form>
                     )}
                     <form action={removeDivisionMember}>
                       <input type="hidden" name="divisionId" value={division.id} />
                       <input type="hidden" name="playerId" value={m.playerId} />
-                      <button
+                      <Button
                         type="submit"
-                        className="secondary"
-                        style={{ fontSize: 11, color: "#e74c3c" }}
+                        variant="secondary"
+                        size="sm"
+                        className="text-[#e74c3c]"
                         title="Hard remove: deletes membership + ALL their pairings in this division"
                       >
                         Remove
-                      </button>
+                      </Button>
                     </form>
                   </td>
                 </tr>
@@ -658,13 +660,13 @@ function AdminSection({
                         <option value="1-1">1-1 draw</option>
                         <option value="0-2">{p.playerB.displayName} 2-0</option>
                       </select>
-                      <button type="submit">Override</button>
+                      <Button type="submit">Override</Button>
                     </form>
                   </td>
                   <td>
                     <form action={deletePairing}>
                       <input type="hidden" name="pairingId" value={p.id} />
-                      <button type="submit" className="danger">Delete</button>
+                      <Button type="submit" variant="destructive">Delete</Button>
                     </form>
                   </td>
                 </tr>
@@ -705,7 +707,7 @@ function AdminSection({
             </select>
           </label>
           <input type="text" name="reason" required placeholder="Reason (admin-only)" style={{ flex: "1 1 200px" }} />
-          <button type="submit">Record DQ</button>
+          <Button type="submit">Record DQ</Button>
         </form>
       </div>
 
@@ -745,9 +747,9 @@ function AdminSection({
                         <input type="hidden" name="divisionId" value={division.id} />
                         <input type="hidden" name="p1" value={s.playerAId} />
                         <input type="hidden" name="p2" value={s.playerBId} />
-                        <button type="submit" className="muted" style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontSize: 11 }}>
+                        <Button type="submit" variant="ghost" size="sm" className="text-[#e74c3c]">
                           delete
-                        </button>
+                        </Button>
                       </form>
                     </td>
                   </tr>
@@ -778,7 +780,7 @@ function AdminSection({
               <option key={`sw-${m.playerId}`} value={m.playerId}>{m.player.displayName}</option>
             ))}
           </select>
-          <button type="submit">Record showdown</button>
+          <Button type="submit">Record showdown</Button>
         </form>
       </div>
 
@@ -812,7 +814,7 @@ function AdminSection({
                       <option value="1-1">1-1 draw</option>
                       <option value="0-2">{b.displayName} 2-0</option>
                     </select>
-                    <button type="submit">Record</button>
+                    <Button type="submit">Record</Button>
                   </form>
                 </td>
               </tr>
