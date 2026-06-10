@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { MmrChart } from "@/components/MmrChart";
 import { auth } from "@/auth";
 import { hasTier } from "@/lib/admin";
 import { loadProfileExtras } from "@/lib/loaders/profile-extras";
@@ -335,6 +336,14 @@ export default async function ProfilePage({
                 from <a href={`https://balatromp.com/players/${profile.player.discordId}`} target="_blank" rel="noopener">balatromp.com</a>
               </span>
             </div>
+            {bmpSeasonSnapshots.filter((s) => s.rankedMmr != null).length >= 2 && (
+              <MmrChart
+                data={[...bmpSeasonSnapshots]
+                  .reverse()
+                  .filter((s) => s.rankedMmr != null)
+                  .map((s) => ({ season: formatBmpSeason(s.bmpSeason), mmr: s.rankedMmr as number, peak: s.peakMmr }))}
+              />
+            )}
             {bmpSeasonSnapshots.length > 0 ? (
               <table className="responsive-table" style={{ fontSize: 12, marginTop: 4, width: "100%" }}>
                 <thead>
