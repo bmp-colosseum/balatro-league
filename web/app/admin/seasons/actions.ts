@@ -592,6 +592,47 @@ export async function openSignupsForSeason(formData: FormData) {
   revalidatePath("/admin/seasons");
 }
 
+// Update the close time on an already-open signup round, and re-render the
+// Discord signup post so the new deadline shows. Pass an empty value to clear
+// the deadline (round stays open until manually finalized).
+export async function updateSignupCloseDate(formData: FormData) {
+  const { user } = await requireAdmin();
+  const roundId = String(formData.get("roundId") ?? "");
+  if (!roundId) redirect("/admin/seasons?err=missing-fields");
+
+  const closesAtStr = String(formData.get("closesAt") ?? "").trim();
+  const closesAtDate = closesAtStr ? new Date(closesAtStr) : null;
+  const closesAt = closesAtDate && !Number.isNaN(closesAtDate.getTime()) ? closesAtDate : null;
+
+  const round = await prisma.signupRound.findUnique({ where: { id: roundId } });
+  if (!round) redirect("/admin/seasons?err=round-not-found");
+  if (round!.status !== "OPEN") redirect("/admin/seasons?err=round-not-open");
+
+  const updated = await prisma.signupRound.update({ where: { id: roundId }, data: { closesAt } });
+
+  if (updated.messageId && updated.messageId !== "pending") {
+    const signupCount = await prisma.signup.count({ where: { roundId } });
+    await editChannelMessage(updated.channelId, updated.messageId, buildSignupPayload(updated, signupCount)).catch(
+      (err) => console.warn("[signups.update-close] message edit failed:", err),
+    );
+  }
+
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "signup-round.update-close",
+    targetType: "SignupRound",
+    targetId: roundId,
+    summary: closesAt ? `Updated signup close to ${closesAt.toISOString()}` : "Cleared signup close time",
+    metadata: { roundId, closesAt: closesAt?.toISOString() ?? null },
+  });
+
+  await enqueueLeagueInfoRefresh().catch((err) =>
+    console.warn("[signups.update-close] league-info refresh enqueue failed:", err),
+  );
+  revalidatePath("/admin/seasons");
+  redirect("/admin/seasons?ok=close-updated");
+}
+
 // Enqueue one DM per subscriber. The bot's pg-boss worker drains them
 // asynchronously, retrying failures and surviving crashes — so opening
 // signups never blocks on N round-trips to Discord and we don't lose

@@ -43,7 +43,7 @@ export interface ReportDivisionContext {
 }
 
 export interface ReportPageData {
-  player: { id: string; discordId: string } | null;
+  player: { id: string; discordId: string; displayName: string } | null;
   division: ReportDivisionContext | null;
   recentMatches: ReportRecentMatch[];
 }
@@ -53,7 +53,7 @@ const RECENT_MATCH_LIMIT = 10;
 export async function loadReportPageData(discordId: string): Promise<ReportPageData> {
   const player = await prisma.player.findUnique({
     where: { discordId },
-    select: { id: true, discordId: true },
+    select: { id: true, discordId: true, displayName: true },
   });
   if (!player) return { player: null, division: null, recentMatches: [] };
 

@@ -76,6 +76,7 @@ export default async function ReportPage({
                 opponents={division.reportableOpponents}
                 decks={CANONICAL_DECKS.map((d) => d.name)}
                 stakes={CANONICAL_STAKES.map((s) => s.name)}
+                selfName={player.displayName}
               />
             )}
 

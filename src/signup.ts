@@ -36,7 +36,7 @@ export function signupEmbed(round: SignupRound, signups: Signup[]): EmbedBuilder
   } else if (round.status === "CLOSED") {
     description = "Sign-ups are closed.";
   } else {
-    description = "Season started — to withdraw or make a change, ask a league helper.";
+    description = "Season started — to make a change, ask a league helper.";
   }
 
   return new EmbedBuilder()

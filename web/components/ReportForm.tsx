@@ -14,10 +14,10 @@ export interface ReportOpponent {
   alreadyPending: boolean;
 }
 
-function confirmationLine(name: string, result: string): string {
-  if (result === "2-0") return `you beat ${name} 2–0`;
-  if (result === "0-2") return `${name} beat you 2–0`;
-  return `you drew ${name} 1–1`;
+function confirmationLine(selfName: string, oppName: string, result: string): string {
+  if (result === "2-0") return `${selfName} beat ${oppName} 2–0`;
+  if (result === "0-2") return `${oppName} beat ${selfName} 2–0`;
+  return `${selfName} & ${oppName} drew 1–1`;
 }
 
 export function ReportForm({
@@ -25,11 +25,13 @@ export function ReportForm({
   decks,
   stakes,
   action,
+  selfName,
 }: {
   opponents: ReportOpponent[];
   decks: string[];
   stakes: string[];
   action: (formData: FormData) => void | Promise<void>;
+  selfName: string;
 }) {
   const [opponentId, setOpponentId] = useState("");
   const [result, setResult] = useState("2-0");
@@ -57,9 +59,9 @@ export function ReportForm({
           ))}
         </select>
         <select name="result" required value={result} onChange={(e) => setResult(e.target.value)}>
-          <option value="2-0">{opponent ? `2-0 — you beat ${opponent.displayName}` : "2-0 — you won both"}</option>
-          <option value="1-1">{opponent ? `1-1 — you drew ${opponent.displayName}` : "1-1 — draw"}</option>
-          <option value="0-2">{opponent ? `0-2 — ${opponent.displayName} beat you` : "0-2 — you lost both"}</option>
+          <option value="2-0">{opponent ? `2-0 — ${selfName} beat ${opponent.displayName}` : "2-0 — won both"}</option>
+          <option value="1-1">{opponent ? `1-1 — ${selfName} & ${opponent.displayName} drew` : "1-1 — draw"}</option>
+          <option value="0-2">{opponent ? `0-2 — ${opponent.displayName} beat ${selfName}` : "0-2 — lost both"}</option>
         </select>
         <select name="deck" defaultValue="" title="Optional: deck played">
           <option value="">deck (optional)</option>
@@ -89,7 +91,7 @@ export function ReportForm({
         {opponent ? (
           <>
             You&apos;re reporting:{" "}
-            <strong style={{ color: "var(--text)" }}>{confirmationLine(opponent.displayName, result)}</strong>.
+            <strong style={{ color: "var(--text)" }}>{confirmationLine(selfName, opponent.displayName, result)}</strong>.
             {pending && (
               <span style={{ color: "#f1c40f" }}> {" "}Heads up — a result vs {opponent.displayName} is already pending.</span>
             )}
@@ -101,7 +103,7 @@ export function ReportForm({
 
       <div>
         <button type="submit" disabled={!opponentId}>
-          Report{opponent ? ` — ${confirmationLine(opponent.displayName, result)}` : ""}
+          Report{opponent ? ` — ${confirmationLine(selfName, opponent.displayName, result)}` : ""}
         </button>
       </div>
     </form>

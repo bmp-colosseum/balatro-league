@@ -11,6 +11,7 @@ import {
   deleteSeason,
   finalizeSignupsForSeason,
   openSignupsForSeason,
+  updateSignupCloseDate,
   setSeasonPreset,
   unarchiveSeason,
   unendSeason,
@@ -434,6 +435,14 @@ function LifecycleActions({
           <input type="hidden" name="seasonId" value={season.id} />
           <button type="submit" className="secondary">Finalize signups →</button>
         </form>
+        <details style={{ marginTop: 8 }}>
+          <summary style={{ cursor: "pointer", fontSize: 12 }} className="muted">Change close date</summary>
+          <form action={updateSignupCloseDate} style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <input type="hidden" name="roundId" value={round.id} />
+            <LocalDateTimeField name="closesAt" label="New close time (your time — blank = no deadline)" />
+            <button type="submit" className="secondary">Update</button>
+          </form>
+        </details>
       </div>
     );
   }
