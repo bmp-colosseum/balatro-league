@@ -56,8 +56,13 @@ export function CommandPalette() {
         setOpen((o) => !o);
       }
     };
+    const onToggle = () => setOpen((o) => !o); // fired by the nav Search button
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    window.addEventListener("command:toggle", onToggle);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("command:toggle", onToggle);
+    };
   }, []);
 
   const go = (href: string) => {

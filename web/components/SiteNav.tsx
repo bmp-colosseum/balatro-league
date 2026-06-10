@@ -7,6 +7,7 @@ import { auth } from "@/auth";
 import { isAdminUser } from "@/lib/admin";
 import { getShowBmpMmr } from "@/lib/preferences";
 import { toggleShowBmpMmr } from "@/app/preferences/actions";
+import { CommandButton } from "@/components/CommandButton";
 
 const PUBLIC_LINKS = [
   { href: "/standings", label: "Standings" },
@@ -56,6 +57,7 @@ export async function SiteNav({ activePath }: { activePath: string }) {
       </nav>
 
       <span className="ml-auto flex items-center gap-3">
+        <CommandButton />
         <details className="relative">
           <summary
             title="Settings"
