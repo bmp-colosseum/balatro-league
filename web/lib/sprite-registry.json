@@ -1,0 +1,2513 @@
+{
+  "b_abandoned": {
+    "atlas": "Enhancers.png",
+    "name": "Abandoned Deck",
+    "set": "Back",
+    "x": 3,
+    "y": 3
+  },
+  "b_anaglyph": {
+    "atlas": "Enhancers.png",
+    "name": "Anaglyph Deck",
+    "set": "Back",
+    "x": 2,
+    "y": 4
+  },
+  "b_black": {
+    "atlas": "Enhancers.png",
+    "name": "Black Deck",
+    "set": "Back",
+    "x": 3,
+    "y": 2
+  },
+  "b_blue": {
+    "atlas": "Enhancers.png",
+    "name": "Blue Deck",
+    "set": "Back",
+    "x": 0,
+    "y": 2
+  },
+  "b_challenge": {
+    "atlas": "Enhancers.png",
+    "name": "Challenge Deck",
+    "set": "Back",
+    "x": 0,
+    "y": 4
+  },
+  "b_checkered": {
+    "atlas": "Enhancers.png",
+    "name": "Checkered Deck",
+    "set": "Back",
+    "x": 1,
+    "y": 3
+  },
+  "b_erratic": {
+    "atlas": "Enhancers.png",
+    "name": "Erratic Deck",
+    "set": "Back",
+    "x": 2,
+    "y": 3
+  },
+  "b_ghost": {
+    "atlas": "Enhancers.png",
+    "name": "Ghost Deck",
+    "set": "Back",
+    "x": 6,
+    "y": 2
+  },
+  "b_green": {
+    "atlas": "Enhancers.png",
+    "name": "Green Deck",
+    "set": "Back",
+    "x": 2,
+    "y": 2
+  },
+  "b_magic": {
+    "atlas": "Enhancers.png",
+    "name": "Magic Deck",
+    "set": "Back",
+    "x": 0,
+    "y": 3
+  },
+  "b_nebula": {
+    "atlas": "Enhancers.png",
+    "name": "Nebula Deck",
+    "set": "Back",
+    "x": 3,
+    "y": 0
+  },
+  "b_painted": {
+    "atlas": "Enhancers.png",
+    "name": "Painted Deck",
+    "set": "Back",
+    "x": 4,
+    "y": 3
+  },
+  "b_plasma": {
+    "atlas": "Enhancers.png",
+    "name": "Plasma Deck",
+    "set": "Back",
+    "x": 4,
+    "y": 2
+  },
+  "b_red": {
+    "atlas": "Enhancers.png",
+    "name": "Red Deck",
+    "set": "Back",
+    "x": 0,
+    "y": 0
+  },
+  "b_yellow": {
+    "atlas": "Enhancers.png",
+    "name": "Yellow Deck",
+    "set": "Back",
+    "x": 1,
+    "y": 2
+  },
+  "b_zodiac": {
+    "atlas": "Enhancers.png",
+    "name": "Zodiac Deck",
+    "set": "Back",
+    "x": 3,
+    "y": 4
+  },
+  "c_ankh": {
+    "atlas": "Tarots.png",
+    "name": "Ankh",
+    "set": "Spectral",
+    "x": 0,
+    "y": 5
+  },
+  "c_aura": {
+    "atlas": "Tarots.png",
+    "name": "Aura",
+    "set": "Spectral",
+    "x": 4,
+    "y": 4
+  },
+  "c_base": {
+    "atlas": "Enhancers.png",
+    "name": "Default Base",
+    "set": "Default",
+    "x": 1,
+    "y": 0
+  },
+  "c_black_hole": {
+    "atlas": "Tarots.png",
+    "name": "Black Hole",
+    "set": "Spectral",
+    "x": 9,
+    "y": 3
+  },
+  "c_ceres": {
+    "atlas": "Tarots.png",
+    "name": "Ceres",
+    "set": "Planet",
+    "x": 8,
+    "y": 2
+  },
+  "c_chariot": {
+    "atlas": "Tarots.png",
+    "name": "The Chariot",
+    "set": "Tarot",
+    "x": 7,
+    "y": 0
+  },
+  "c_cryptid": {
+    "atlas": "Tarots.png",
+    "name": "Cryptid",
+    "set": "Spectral",
+    "x": 5,
+    "y": 5
+  },
+  "c_death": {
+    "atlas": "Tarots.png",
+    "name": "Death",
+    "set": "Tarot",
+    "x": 3,
+    "y": 1
+  },
+  "c_deja_vu": {
+    "atlas": "Tarots.png",
+    "name": "Deja Vu",
+    "set": "Spectral",
+    "x": 1,
+    "y": 5
+  },
+  "c_devil": {
+    "atlas": "Tarots.png",
+    "name": "The Devil",
+    "set": "Tarot",
+    "x": 5,
+    "y": 1
+  },
+  "c_earth": {
+    "atlas": "Tarots.png",
+    "name": "Earth",
+    "set": "Planet",
+    "x": 2,
+    "y": 3
+  },
+  "c_ectoplasm": {
+    "atlas": "Tarots.png",
+    "name": "Ectoplasm",
+    "set": "Spectral",
+    "x": 8,
+    "y": 4
+  },
+  "c_emperor": {
+    "atlas": "Tarots.png",
+    "name": "The Emperor",
+    "set": "Tarot",
+    "x": 4,
+    "y": 0
+  },
+  "c_empress": {
+    "atlas": "Tarots.png",
+    "name": "The Empress",
+    "set": "Tarot",
+    "x": 3,
+    "y": 0
+  },
+  "c_eris": {
+    "atlas": "Tarots.png",
+    "name": "Eris",
+    "set": "Planet",
+    "x": 3,
+    "y": 2
+  },
+  "c_familiar": {
+    "atlas": "Tarots.png",
+    "name": "Familiar",
+    "set": "Spectral",
+    "x": 0,
+    "y": 4
+  },
+  "c_fool": {
+    "atlas": "Tarots.png",
+    "name": "The Fool",
+    "set": "Tarot",
+    "x": 0,
+    "y": 0
+  },
+  "c_grim": {
+    "atlas": "Tarots.png",
+    "name": "Grim",
+    "set": "Spectral",
+    "x": 1,
+    "y": 4
+  },
+  "c_hanged_man": {
+    "atlas": "Tarots.png",
+    "name": "The Hanged Man",
+    "set": "Tarot",
+    "x": 2,
+    "y": 1
+  },
+  "c_heirophant": {
+    "atlas": "Tarots.png",
+    "name": "The Hierophant",
+    "set": "Tarot",
+    "x": 5,
+    "y": 0
+  },
+  "c_hermit": {
+    "atlas": "Tarots.png",
+    "name": "The Hermit",
+    "set": "Tarot",
+    "x": 9,
+    "y": 0
+  },
+  "c_hex": {
+    "atlas": "Tarots.png",
+    "name": "Hex",
+    "set": "Spectral",
+    "x": 2,
+    "y": 5
+  },
+  "c_high_priestess": {
+    "atlas": "Tarots.png",
+    "name": "The High Priestess",
+    "set": "Tarot",
+    "x": 2,
+    "y": 0
+  },
+  "c_immolate": {
+    "atlas": "Tarots.png",
+    "name": "Immolate",
+    "set": "Spectral",
+    "x": 9,
+    "y": 4
+  },
+  "c_incantation": {
+    "atlas": "Tarots.png",
+    "name": "Incantation",
+    "set": "Spectral",
+    "x": 2,
+    "y": 4
+  },
+  "c_judgement": {
+    "atlas": "Tarots.png",
+    "name": "Judgement",
+    "set": "Tarot",
+    "x": 0,
+    "y": 2
+  },
+  "c_jupiter": {
+    "atlas": "Tarots.png",
+    "name": "Jupiter",
+    "set": "Planet",
+    "x": 4,
+    "y": 3
+  },
+  "c_justice": {
+    "atlas": "Tarots.png",
+    "name": "Justice",
+    "set": "Tarot",
+    "x": 8,
+    "y": 0
+  },
+  "c_lovers": {
+    "atlas": "Tarots.png",
+    "name": "The Lovers",
+    "set": "Tarot",
+    "x": 6,
+    "y": 0
+  },
+  "c_magician": {
+    "atlas": "Tarots.png",
+    "name": "The Magician",
+    "set": "Tarot",
+    "x": 1,
+    "y": 0
+  },
+  "c_mars": {
+    "atlas": "Tarots.png",
+    "name": "Mars",
+    "set": "Planet",
+    "x": 3,
+    "y": 3
+  },
+  "c_medium": {
+    "atlas": "Tarots.png",
+    "name": "Medium",
+    "set": "Spectral",
+    "x": 4,
+    "y": 5
+  },
+  "c_mercury": {
+    "atlas": "Tarots.png",
+    "name": "Mercury",
+    "set": "Planet",
+    "x": 0,
+    "y": 3
+  },
+  "c_moon": {
+    "atlas": "Tarots.png",
+    "name": "The Moon",
+    "set": "Tarot",
+    "x": 8,
+    "y": 1
+  },
+  "c_neptune": {
+    "atlas": "Tarots.png",
+    "name": "Neptune",
+    "set": "Planet",
+    "x": 7,
+    "y": 3
+  },
+  "c_ouija": {
+    "atlas": "Tarots.png",
+    "name": "Ouija",
+    "set": "Spectral",
+    "x": 7,
+    "y": 4
+  },
+  "c_planet_x": {
+    "atlas": "Tarots.png",
+    "name": "Planet X",
+    "set": "Planet",
+    "x": 9,
+    "y": 2
+  },
+  "c_pluto": {
+    "atlas": "Tarots.png",
+    "name": "Pluto",
+    "set": "Planet",
+    "x": 8,
+    "y": 3
+  },
+  "c_saturn": {
+    "atlas": "Tarots.png",
+    "name": "Saturn",
+    "set": "Planet",
+    "x": 5,
+    "y": 3
+  },
+  "c_sigil": {
+    "atlas": "Tarots.png",
+    "name": "Sigil",
+    "set": "Spectral",
+    "x": 6,
+    "y": 4
+  },
+  "c_soul": {
+    "atlas": "Tarots.png",
+    "name": "The Soul",
+    "set": "Spectral",
+    "x": 2,
+    "y": 2
+  },
+  "c_star": {
+    "atlas": "Tarots.png",
+    "name": "The Star",
+    "set": "Tarot",
+    "x": 7,
+    "y": 1
+  },
+  "c_strength": {
+    "atlas": "Tarots.png",
+    "name": "Strength",
+    "set": "Tarot",
+    "x": 1,
+    "y": 1
+  },
+  "c_sun": {
+    "atlas": "Tarots.png",
+    "name": "The Sun",
+    "set": "Tarot",
+    "x": 9,
+    "y": 1
+  },
+  "c_talisman": {
+    "atlas": "Tarots.png",
+    "name": "Talisman",
+    "set": "Spectral",
+    "x": 3,
+    "y": 4
+  },
+  "c_temperance": {
+    "atlas": "Tarots.png",
+    "name": "Temperance",
+    "set": "Tarot",
+    "x": 4,
+    "y": 1
+  },
+  "c_tower": {
+    "atlas": "Tarots.png",
+    "name": "The Tower",
+    "set": "Tarot",
+    "x": 6,
+    "y": 1
+  },
+  "c_trance": {
+    "atlas": "Tarots.png",
+    "name": "Trance",
+    "set": "Spectral",
+    "x": 3,
+    "y": 5
+  },
+  "c_uranus": {
+    "atlas": "Tarots.png",
+    "name": "Uranus",
+    "set": "Planet",
+    "x": 6,
+    "y": 3
+  },
+  "c_venus": {
+    "atlas": "Tarots.png",
+    "name": "Venus",
+    "set": "Planet",
+    "x": 1,
+    "y": 3
+  },
+  "c_wheel_of_fortune": {
+    "atlas": "Tarots.png",
+    "name": "The Wheel of Fortune",
+    "set": "Tarot",
+    "x": 0,
+    "y": 1
+  },
+  "c_world": {
+    "atlas": "Tarots.png",
+    "name": "The World",
+    "set": "Tarot",
+    "x": 1,
+    "y": 2
+  },
+  "c_wraith": {
+    "atlas": "Tarots.png",
+    "name": "Wraith",
+    "set": "Spectral",
+    "x": 5,
+    "y": 4
+  },
+  "e_base": {
+    "atlas": "Jokers.png",
+    "name": "Base",
+    "set": "Edition",
+    "x": 0,
+    "y": 0
+  },
+  "e_foil": {
+    "atlas": "Jokers.png",
+    "name": "Foil",
+    "set": "Edition",
+    "x": 0,
+    "y": 0
+  },
+  "e_holo": {
+    "atlas": "Jokers.png",
+    "name": "Holographic",
+    "set": "Edition",
+    "x": 0,
+    "y": 0
+  },
+  "e_negative": {
+    "atlas": "Jokers.png",
+    "name": "Negative",
+    "set": "Edition",
+    "x": 0,
+    "y": 0
+  },
+  "e_polychrome": {
+    "atlas": "Jokers.png",
+    "name": "Polychrome",
+    "set": "Edition",
+    "x": 0,
+    "y": 0
+  },
+  "edition_foil": {
+    "atlas": "Editions.png",
+    "name": "Foil",
+    "set": "Edition",
+    "x": 1,
+    "y": 0
+  },
+  "edition_holographic": {
+    "atlas": "Editions.png",
+    "name": "Holographic",
+    "set": "Edition",
+    "x": 2,
+    "y": 0
+  },
+  "edition_negative": {
+    "atlas": "Editions.png",
+    "name": "Negative",
+    "set": "Edition",
+    "x": 4,
+    "y": 0
+  },
+  "edition_polychrome": {
+    "atlas": "Editions.png",
+    "name": "Polychrome",
+    "set": "Edition",
+    "x": 3,
+    "y": 0
+  },
+  "j_8_ball": {
+    "atlas": "Jokers.png",
+    "name": "8 Ball",
+    "set": "Joker",
+    "x": 0,
+    "y": 5
+  },
+  "j_abstract": {
+    "atlas": "Jokers.png",
+    "name": "Abstract Joker",
+    "set": "Joker",
+    "x": 3,
+    "y": 3
+  },
+  "j_acrobat": {
+    "atlas": "Jokers.png",
+    "name": "Acrobat",
+    "set": "Joker",
+    "x": 2,
+    "y": 1
+  },
+  "j_ancient": {
+    "atlas": "Jokers.png",
+    "name": "Ancient Joker",
+    "set": "Joker",
+    "x": 7,
+    "y": 15
+  },
+  "j_arrowhead": {
+    "atlas": "Jokers.png",
+    "name": "Arrowhead",
+    "set": "Joker",
+    "x": 1,
+    "y": 8
+  },
+  "j_astronomer": {
+    "atlas": "Jokers.png",
+    "name": "Astronomer",
+    "set": "Joker",
+    "x": 2,
+    "y": 7
+  },
+  "j_banner": {
+    "atlas": "Jokers.png",
+    "name": "Banner",
+    "set": "Joker",
+    "x": 1,
+    "y": 2
+  },
+  "j_baron": {
+    "atlas": "Jokers.png",
+    "name": "Baron",
+    "set": "Joker",
+    "x": 6,
+    "y": 12
+  },
+  "j_baseball": {
+    "atlas": "Jokers.png",
+    "name": "Baseball Card",
+    "set": "Joker",
+    "x": 6,
+    "y": 14
+  },
+  "j_blackboard": {
+    "atlas": "Jokers.png",
+    "name": "Blackboard",
+    "set": "Joker",
+    "x": 2,
+    "y": 10
+  },
+  "j_bloodstone": {
+    "atlas": "Jokers.png",
+    "name": "Bloodstone",
+    "set": "Joker",
+    "x": 0,
+    "y": 8
+  },
+  "j_blue_joker": {
+    "atlas": "Jokers.png",
+    "name": "Blue Joker",
+    "set": "Joker",
+    "x": 7,
+    "y": 10
+  },
+  "j_blueprint": {
+    "atlas": "Jokers.png",
+    "name": "Blueprint",
+    "set": "Joker",
+    "x": 0,
+    "y": 3
+  },
+  "j_bootstraps": {
+    "atlas": "Jokers.png",
+    "name": "Bootstraps",
+    "set": "Joker",
+    "x": 9,
+    "y": 8
+  },
+  "j_brainstorm": {
+    "atlas": "Jokers.png",
+    "name": "Brainstorm",
+    "set": "Joker",
+    "x": 7,
+    "y": 7
+  },
+  "j_bull": {
+    "atlas": "Jokers.png",
+    "name": "Bull",
+    "set": "Joker",
+    "x": 7,
+    "y": 14
+  },
+  "j_burglar": {
+    "atlas": "Jokers.png",
+    "name": "Burglar",
+    "set": "Joker",
+    "x": 1,
+    "y": 10
+  },
+  "j_burnt": {
+    "atlas": "Jokers.png",
+    "name": "Burnt Joker",
+    "set": "Joker",
+    "x": 3,
+    "y": 7
+  },
+  "j_business": {
+    "atlas": "Jokers.png",
+    "name": "Business Card",
+    "set": "Joker",
+    "x": 1,
+    "y": 4
+  },
+  "j_caino": {
+    "atlas": "Jokers.png",
+    "name": "Caino",
+    "set": "Joker",
+    "x": 3,
+    "y": 8
+  },
+  "j_campfire": {
+    "atlas": "Jokers.png",
+    "name": "Campfire",
+    "set": "Joker",
+    "x": 5,
+    "y": 15
+  },
+  "j_card_sharp": {
+    "atlas": "Jokers.png",
+    "name": "Card Sharp",
+    "set": "Joker",
+    "x": 6,
+    "y": 11
+  },
+  "j_cartomancer": {
+    "atlas": "Jokers.png",
+    "name": "Cartomancer",
+    "set": "Joker",
+    "x": 7,
+    "y": 3
+  },
+  "j_castle": {
+    "atlas": "Jokers.png",
+    "name": "Castle",
+    "set": "Joker",
+    "x": 9,
+    "y": 15
+  },
+  "j_cavendish": {
+    "atlas": "Jokers.png",
+    "name": "Cavendish",
+    "set": "Joker",
+    "x": 5,
+    "y": 11
+  },
+  "j_ceremonial": {
+    "atlas": "Jokers.png",
+    "name": "Ceremonial Dagger",
+    "set": "Joker",
+    "x": 5,
+    "y": 5
+  },
+  "j_certificate": {
+    "atlas": "Jokers.png",
+    "name": "Certificate",
+    "set": "Joker",
+    "x": 8,
+    "y": 8
+  },
+  "j_chaos": {
+    "atlas": "Jokers.png",
+    "name": "Chaos the Clown",
+    "set": "Joker",
+    "x": 1,
+    "y": 0
+  },
+  "j_chicot": {
+    "atlas": "Jokers.png",
+    "name": "Chicot",
+    "set": "Joker",
+    "x": 6,
+    "y": 8,
+    "soul": { "x": 6, "y": 9 }
+  },
+  "j_caino": {
+    "atlas": "Jokers.png",
+    "name": "Canio",
+    "set": "Joker",
+    "x": 3,
+    "y": 8,
+    "soul": { "x": 3, "y": 9 }
+  },
+  "j_clever": {
+    "atlas": "Jokers.png",
+    "name": "Clever Joker",
+    "set": "Joker",
+    "x": 2,
+    "y": 14
+  },
+  "j_cloud_9": {
+    "atlas": "Jokers.png",
+    "name": "Cloud 9",
+    "set": "Joker",
+    "x": 7,
+    "y": 12
+  },
+  "j_constellation": {
+    "atlas": "Jokers.png",
+    "name": "Constellation",
+    "set": "Joker",
+    "x": 9,
+    "y": 10
+  },
+  "j_crafty": {
+    "atlas": "Jokers.png",
+    "name": "Crafty Joker",
+    "set": "Joker",
+    "x": 4,
+    "y": 14
+  },
+  "j_crazy": {
+    "atlas": "Jokers.png",
+    "name": "Crazy Joker",
+    "set": "Joker",
+    "x": 5,
+    "y": 0
+  },
+  "j_credit_card": {
+    "atlas": "Jokers.png",
+    "name": "Credit Card",
+    "set": "Joker",
+    "x": 5,
+    "y": 1
+  },
+  "j_delayed_grat": {
+    "atlas": "Jokers.png",
+    "name": "Delayed Gratification",
+    "set": "Joker",
+    "x": 4,
+    "y": 3
+  },
+  "j_devious": {
+    "atlas": "Jokers.png",
+    "name": "Devious Joker",
+    "set": "Joker",
+    "x": 3,
+    "y": 14
+  },
+  "j_diet_cola": {
+    "atlas": "Jokers.png",
+    "name": "Diet Cola",
+    "set": "Joker",
+    "x": 8,
+    "y": 14
+  },
+  "j_dna": {
+    "atlas": "Jokers.png",
+    "name": "DNA",
+    "set": "Joker",
+    "x": 5,
+    "y": 10
+  },
+  "j_drivers_license": {
+    "atlas": "Jokers.png",
+    "name": "Driver",
+    "set": "Joker",
+    "x": 0,
+    "y": 7
+  },
+  "j_droll": {
+    "atlas": "Jokers.png",
+    "name": "Droll Joker",
+    "set": "Joker",
+    "x": 6,
+    "y": 0
+  },
+  "j_drunkard": {
+    "atlas": "Jokers.png",
+    "name": "Drunkard",
+    "set": "Joker",
+    "x": 1,
+    "y": 1
+  },
+  "j_duo": {
+    "atlas": "Jokers.png",
+    "name": "The Duo",
+    "set": "Joker",
+    "x": 5,
+    "y": 4
+  },
+  "j_dusk": {
+    "atlas": "Jokers.png",
+    "name": "Dusk",
+    "set": "Joker",
+    "x": 4,
+    "y": 7
+  },
+  "j_egg": {
+    "atlas": "Jokers.png",
+    "name": "Egg",
+    "set": "Joker",
+    "x": 0,
+    "y": 10
+  },
+  "j_erosion": {
+    "atlas": "Jokers.png",
+    "name": "Erosion",
+    "set": "Joker",
+    "x": 5,
+    "y": 13
+  },
+  "j_even_steven": {
+    "atlas": "Jokers.png",
+    "name": "Even Steven",
+    "set": "Joker",
+    "x": 8,
+    "y": 3
+  },
+  "j_faceless": {
+    "atlas": "Jokers.png",
+    "name": "Faceless Joker",
+    "set": "Joker",
+    "x": 1,
+    "y": 11
+  },
+  "j_family": {
+    "atlas": "Jokers.png",
+    "name": "The Family",
+    "set": "Joker",
+    "x": 7,
+    "y": 4
+  },
+  "j_fibonacci": {
+    "atlas": "Jokers.png",
+    "name": "Fibonacci",
+    "set": "Joker",
+    "x": 1,
+    "y": 5
+  },
+  "j_flash": {
+    "atlas": "Jokers.png",
+    "name": "Flash Card",
+    "set": "Joker",
+    "x": 0,
+    "y": 15
+  },
+  "j_flower_pot": {
+    "atlas": "Jokers.png",
+    "name": "Flower Pot",
+    "set": "Joker",
+    "x": 0,
+    "y": 6
+  },
+  "j_fortune_teller": {
+    "atlas": "Jokers.png",
+    "name": "Fortune Teller",
+    "set": "Joker",
+    "x": 7,
+    "y": 5
+  },
+  "j_four_fingers": {
+    "atlas": "Jokers.png",
+    "name": "Four Fingers",
+    "set": "Joker",
+    "x": 6,
+    "y": 6
+  },
+  "j_gift": {
+    "atlas": "Jokers.png",
+    "name": "Gift Card",
+    "set": "Joker",
+    "x": 3,
+    "y": 13
+  },
+  "j_glass": {
+    "atlas": "Jokers.png",
+    "name": "Glass Joker",
+    "set": "Joker",
+    "x": 1,
+    "y": 3
+  },
+  "j_gluttenous_joker": {
+    "atlas": "Jokers.png",
+    "name": "Gluttonous Joker",
+    "set": "Joker",
+    "x": 9,
+    "y": 1
+  },
+  "j_golden": {
+    "atlas": "Jokers.png",
+    "name": "Golden Joker",
+    "set": "Joker",
+    "x": 9,
+    "y": 2
+  },
+  "j_greedy_joker": {
+    "atlas": "Jokers.png",
+    "name": "Greedy Joker",
+    "set": "Joker",
+    "x": 6,
+    "y": 1
+  },
+  "j_green_joker": {
+    "atlas": "Jokers.png",
+    "name": "Green Joker",
+    "set": "Joker",
+    "x": 2,
+    "y": 11
+  },
+  "j_gros_michel": {
+    "atlas": "Jokers.png",
+    "name": "Gros Michel",
+    "set": "Joker",
+    "x": 7,
+    "y": 6
+  },
+  "j_hack": {
+    "atlas": "Jokers.png",
+    "name": "Hack",
+    "set": "Joker",
+    "x": 5,
+    "y": 2
+  },
+  "j_half": {
+    "atlas": "Jokers.png",
+    "name": "Half Joker",
+    "set": "Joker",
+    "x": 7,
+    "y": 0
+  },
+  "j_hallucination": {
+    "atlas": "Jokers.png",
+    "name": "Hallucination",
+    "set": "Joker",
+    "x": 9,
+    "y": 13
+  },
+  "j_hanging_chad": {
+    "atlas": "Jokers.png",
+    "name": "Hanging Chad",
+    "set": "Joker",
+    "x": 9,
+    "y": 6
+  },
+  "j_hiker": {
+    "atlas": "Jokers.png",
+    "name": "Hiker",
+    "set": "Joker",
+    "x": 0,
+    "y": 11
+  },
+  "j_hit_the_road": {
+    "atlas": "Jokers.png",
+    "name": "Hit the Road",
+    "set": "Joker",
+    "x": 8,
+    "y": 5
+  },
+  "j_hologram": {
+    "atlas": "Jokers.png",
+    "name": "Hologram",
+    "set": "Joker",
+    "x": 4,
+    "y": 12
+  },
+  "j_ice_cream": {
+    "atlas": "Jokers.png",
+    "name": "Ice Cream",
+    "set": "Joker",
+    "x": 4,
+    "y": 10
+  },
+  "j_idol": {
+    "atlas": "Jokers.png",
+    "name": "The Idol",
+    "set": "Joker",
+    "x": 6,
+    "y": 7
+  },
+  "j_invisible": {
+    "atlas": "Jokers.png",
+    "name": "Invisible Joker",
+    "set": "Joker",
+    "x": 1,
+    "y": 7
+  },
+  "j_joker": {
+    "atlas": "Jokers.png",
+    "name": "Joker",
+    "set": "Joker",
+    "x": 0,
+    "y": 0
+  },
+  "j_jolly": {
+    "atlas": "Jokers.png",
+    "name": "Jolly Joker",
+    "set": "Joker",
+    "x": 2,
+    "y": 0
+  },
+  "j_juggler": {
+    "atlas": "Jokers.png",
+    "name": "Juggler",
+    "set": "Joker",
+    "x": 0,
+    "y": 1
+  },
+  "j_loyalty_card": {
+    "atlas": "Jokers.png",
+    "name": "Loyalty Card",
+    "set": "Joker",
+    "x": 4,
+    "y": 2
+  },
+  "j_luchador": {
+    "atlas": "Jokers.png",
+    "name": "Luchador",
+    "set": "Joker",
+    "x": 1,
+    "y": 13
+  },
+  "j_lucky_cat": {
+    "atlas": "Jokers.png",
+    "name": "Lucky Cat",
+    "set": "Joker",
+    "x": 5,
+    "y": 14
+  },
+  "j_lusty_joker": {
+    "atlas": "Jokers.png",
+    "name": "Lusty Joker",
+    "set": "Joker",
+    "x": 7,
+    "y": 1
+  },
+  "j_mad": {
+    "atlas": "Jokers.png",
+    "name": "Mad Joker",
+    "set": "Joker",
+    "x": 4,
+    "y": 0
+  },
+  "j_madness": {
+    "atlas": "Jokers.png",
+    "name": "Madness",
+    "set": "Joker",
+    "x": 8,
+    "y": 11
+  },
+  "j_mail": {
+    "atlas": "Jokers.png",
+    "name": "Mail-In Rebate",
+    "set": "Joker",
+    "x": 7,
+    "y": 13
+  },
+  "j_marble": {
+    "atlas": "Jokers.png",
+    "name": "Marble Joker",
+    "set": "Joker",
+    "x": 3,
+    "y": 2
+  },
+  "j_matador": {
+    "atlas": "Jokers.png",
+    "name": "Matador",
+    "set": "Joker",
+    "x": 4,
+    "y": 5
+  },
+  "j_merry_andy": {
+    "atlas": "Jokers.png",
+    "name": "Merry Andy",
+    "set": "Joker",
+    "x": 8,
+    "y": 0
+  },
+  "j_midas_mask": {
+    "atlas": "Jokers.png",
+    "name": "Midas Mask",
+    "set": "Joker",
+    "x": 0,
+    "y": 13
+  },
+  "j_mime": {
+    "atlas": "Jokers.png",
+    "name": "Mime",
+    "set": "Joker",
+    "x": 4,
+    "y": 1
+  },
+  "j_misprint": {
+    "atlas": "Jokers.png",
+    "name": "Misprint",
+    "set": "Joker",
+    "x": 6,
+    "y": 2
+  },
+  "j_mr_bones": {
+    "atlas": "Jokers.png",
+    "name": "Mr. Bones",
+    "set": "Joker",
+    "x": 3,
+    "y": 4
+  },
+  "j_mystic_summit": {
+    "atlas": "Jokers.png",
+    "name": "Mystic Summit",
+    "set": "Joker",
+    "x": 2,
+    "y": 2
+  },
+  "j_obelisk": {
+    "atlas": "Jokers.png",
+    "name": "Obelisk",
+    "set": "Joker",
+    "x": 9,
+    "y": 12
+  },
+  "j_odd_todd": {
+    "atlas": "Jokers.png",
+    "name": "Odd Todd",
+    "set": "Joker",
+    "x": 9,
+    "y": 3
+  },
+  "j_onyx_agate": {
+    "atlas": "Jokers.png",
+    "name": "Onyx Agate",
+    "set": "Joker",
+    "x": 2,
+    "y": 8
+  },
+  "j_oops": {
+    "atlas": "Jokers.png",
+    "name": "Oops! All 6s",
+    "set": "Joker",
+    "x": 5,
+    "y": 6
+  },
+  "j_order": {
+    "atlas": "Jokers.png",
+    "name": "The Order",
+    "set": "Joker",
+    "x": 8,
+    "y": 4
+  },
+  "j_pareidolia": {
+    "atlas": "Jokers.png",
+    "name": "Pareidolia",
+    "set": "Joker",
+    "x": 6,
+    "y": 3
+  },
+  "j_perkeo": {
+    "atlas": "Jokers.png",
+    "name": "Perkeo",
+    "set": "Joker",
+    "x": 7,
+    "y": 8,
+    "soul": { "x": 7, "y": 9 }
+  },
+  "j_photograph": {
+    "atlas": "Jokers.png",
+    "name": "Photograph",
+    "set": "Joker",
+    "x": 2,
+    "y": 13
+  },
+  "j_popcorn": {
+    "atlas": "Jokers.png",
+    "name": "Popcorn",
+    "set": "Joker",
+    "x": 1,
+    "y": 15
+  },
+  "j_raised_fist": {
+    "atlas": "Jokers.png",
+    "name": "Raised Fist",
+    "set": "Joker",
+    "x": 8,
+    "y": 2
+  },
+  "j_ramen": {
+    "atlas": "Jokers.png",
+    "name": "Ramen",
+    "set": "Joker",
+    "x": 2,
+    "y": 15
+  },
+  "j_red_card": {
+    "atlas": "Jokers.png",
+    "name": "Red Card",
+    "set": "Joker",
+    "x": 7,
+    "y": 11
+  },
+  "j_reserved_parking": {
+    "atlas": "Jokers.png",
+    "name": "Reserved Parking",
+    "set": "Joker",
+    "x": 6,
+    "y": 13
+  },
+  "j_ride_the_bus": {
+    "atlas": "Jokers.png",
+    "name": "Ride the Bus",
+    "set": "Joker",
+    "x": 1,
+    "y": 6
+  },
+  "j_riff_raff": {
+    "atlas": "Jokers.png",
+    "name": "Riff-raff",
+    "set": "Joker",
+    "x": 1,
+    "y": 12
+  },
+  "j_ring_master": {
+    "atlas": "Jokers.png",
+    "name": "Showman",
+    "set": "Joker",
+    "x": 6,
+    "y": 5
+  },
+  "j_rocket": {
+    "atlas": "Jokers.png",
+    "name": "Rocket",
+    "set": "Joker",
+    "x": 8,
+    "y": 12
+  },
+  "j_rough_gem": {
+    "atlas": "Jokers.png",
+    "name": "Rough Gem",
+    "set": "Joker",
+    "x": 9,
+    "y": 7
+  },
+  "j_runner": {
+    "atlas": "Jokers.png",
+    "name": "Runner",
+    "set": "Joker",
+    "x": 3,
+    "y": 10
+  },
+  "j_satellite": {
+    "atlas": "Jokers.png",
+    "name": "Satellite",
+    "set": "Joker",
+    "x": 8,
+    "y": 7
+  },
+  "j_scary_face": {
+    "atlas": "Jokers.png",
+    "name": "Scary Face",
+    "set": "Joker",
+    "x": 2,
+    "y": 3
+  },
+  "j_scholar": {
+    "atlas": "Jokers.png",
+    "name": "Scholar",
+    "set": "Joker",
+    "x": 0,
+    "y": 4
+  },
+  "j_seance": {
+    "atlas": "Jokers.png",
+    "name": "Seance",
+    "set": "Joker",
+    "x": 0,
+    "y": 12
+  },
+  "j_seeing_double": {
+    "atlas": "Jokers.png",
+    "name": "Seeing Double",
+    "set": "Joker",
+    "x": 4,
+    "y": 4
+  },
+  "j_selzer": {
+    "atlas": "Jokers.png",
+    "name": "Seltzer",
+    "set": "Joker",
+    "x": 3,
+    "y": 15
+  },
+  "j_shoot_the_moon": {
+    "atlas": "Jokers.png",
+    "name": "Shoot the Moon",
+    "set": "Joker",
+    "x": 2,
+    "y": 6
+  },
+  "j_shortcut": {
+    "atlas": "Jokers.png",
+    "name": "Shortcut",
+    "set": "Joker",
+    "x": 3,
+    "y": 12
+  },
+  "j_sixth_sense": {
+    "atlas": "Jokers.png",
+    "name": "Sixth Sense",
+    "set": "Joker",
+    "x": 8,
+    "y": 10
+  },
+  "j_sly": {
+    "atlas": "Jokers.png",
+    "name": "Sly Joker",
+    "set": "Joker",
+    "x": 0,
+    "y": 14
+  },
+  "j_smeared": {
+    "atlas": "Jokers.png",
+    "name": "Smeared Joker",
+    "set": "Joker",
+    "x": 4,
+    "y": 6
+  },
+  "j_smiley": {
+    "atlas": "Jokers.png",
+    "name": "Smiley Face",
+    "set": "Joker",
+    "x": 6,
+    "y": 15
+  },
+  "j_sock_and_buskin": {
+    "atlas": "Jokers.png",
+    "name": "Sock and Buskin",
+    "set": "Joker",
+    "x": 3,
+    "y": 1
+  },
+  "j_space": {
+    "atlas": "Jokers.png",
+    "name": "Space Joker",
+    "set": "Joker",
+    "x": 3,
+    "y": 5
+  },
+  "j_splash": {
+    "atlas": "Jokers.png",
+    "name": "Splash",
+    "set": "Joker",
+    "x": 6,
+    "y": 10
+  },
+  "j_square": {
+    "atlas": "Jokers.png",
+    "name": "Square Joker",
+    "set": "Joker",
+    "x": 9,
+    "y": 11
+  },
+  "j_steel_joker": {
+    "atlas": "Jokers.png",
+    "name": "Steel Joker",
+    "set": "Joker",
+    "x": 7,
+    "y": 2
+  },
+  "j_stencil": {
+    "atlas": "Jokers.png",
+    "name": "Joker Stencil",
+    "set": "Joker",
+    "x": 2,
+    "y": 5
+  },
+  "j_stone": {
+    "atlas": "Jokers.png",
+    "name": "Stone Joker",
+    "set": "Joker",
+    "x": 9,
+    "y": 0
+  },
+  "j_stuntman": {
+    "atlas": "Jokers.png",
+    "name": "Stuntman",
+    "set": "Joker",
+    "x": 8,
+    "y": 6
+  },
+  "j_supernova": {
+    "atlas": "Jokers.png",
+    "name": "Supernova",
+    "set": "Joker",
+    "x": 2,
+    "y": 4
+  },
+  "j_superposition": {
+    "atlas": "Jokers.png",
+    "name": "Superposition",
+    "set": "Joker",
+    "x": 3,
+    "y": 11
+  },
+  "j_swashbuckler": {
+    "atlas": "Jokers.png",
+    "name": "Swashbuckler",
+    "set": "Joker",
+    "x": 9,
+    "y": 5
+  },
+  "j_throwback": {
+    "atlas": "Jokers.png",
+    "name": "Throwback",
+    "set": "Joker",
+    "x": 5,
+    "y": 7
+  },
+  "j_ticket": {
+    "atlas": "Jokers.png",
+    "name": "Golden Ticket",
+    "set": "Joker",
+    "x": 5,
+    "y": 3
+  },
+  "j_to_the_moon": {
+    "atlas": "Jokers.png",
+    "name": "To the Moon",
+    "set": "Joker",
+    "x": 8,
+    "y": 13
+  },
+  "j_todo_list": {
+    "atlas": "Jokers.png",
+    "name": "To Do List",
+    "set": "Joker",
+    "x": 4,
+    "y": 11
+  },
+  "j_trading": {
+    "atlas": "Jokers.png",
+    "name": "Trading Card",
+    "set": "Joker",
+    "x": 9,
+    "y": 14
+  },
+  "j_tribe": {
+    "atlas": "Jokers.png",
+    "name": "The Tribe",
+    "set": "Joker",
+    "x": 9,
+    "y": 4
+  },
+  "j_triboulet": {
+    "atlas": "Jokers.png",
+    "name": "Triboulet",
+    "set": "Joker",
+    "x": 4,
+    "y": 8,
+    "soul": { "x": 4, "y": 9 }
+  },
+  "j_trio": {
+    "atlas": "Jokers.png",
+    "name": "The Trio",
+    "set": "Joker",
+    "x": 6,
+    "y": 4
+  },
+  "j_troubadour": {
+    "atlas": "Jokers.png",
+    "name": "Troubadour",
+    "set": "Joker",
+    "x": 0,
+    "y": 2
+  },
+  "j_trousers": {
+    "atlas": "Jokers.png",
+    "name": "Spare Trousers",
+    "set": "Joker",
+    "x": 4,
+    "y": 15
+  },
+  "j_turtle_bean": {
+    "atlas": "Jokers.png",
+    "name": "Turtle Bean",
+    "set": "Joker",
+    "x": 4,
+    "y": 13
+  },
+  "j_vagabond": {
+    "atlas": "Jokers.png",
+    "name": "Vagabond",
+    "set": "Joker",
+    "x": 5,
+    "y": 12
+  },
+  "j_vampire": {
+    "atlas": "Jokers.png",
+    "name": "Vampire",
+    "set": "Joker",
+    "x": 2,
+    "y": 12
+  },
+  "j_walkie_talkie": {
+    "atlas": "Jokers.png",
+    "name": "Walkie Talkie",
+    "set": "Joker",
+    "x": 8,
+    "y": 15
+  },
+  "j_wee": {
+    "atlas": "Jokers.png",
+    "name": "Wee Joker",
+    "set": "Joker",
+    "x": 0,
+    "y": 0
+  },
+  "j_wily": {
+    "atlas": "Jokers.png",
+    "name": "Wily Joker",
+    "set": "Joker",
+    "x": 1,
+    "y": 14
+  },
+  "j_wrathful_joker": {
+    "atlas": "Jokers.png",
+    "name": "Wrathful Joker",
+    "set": "Joker",
+    "x": 8,
+    "y": 1
+  },
+  "j_yorick": {
+    "atlas": "Jokers.png",
+    "name": "Yorick",
+    "set": "Joker",
+    "x": 5,
+    "y": 8,
+    "soul": { "x": 5, "y": 9 }
+  },
+  "j_zany": {
+    "atlas": "Jokers.png",
+    "name": "Zany Joker",
+    "set": "Joker",
+    "x": 3,
+    "y": 0
+  },
+  "m_bonus": {
+    "atlas": "Enhancers.png",
+    "name": "Bonus",
+    "set": "Enhanced",
+    "x": 1,
+    "y": 1
+  },
+  "m_glass": {
+    "atlas": "Enhancers.png",
+    "name": "Glass Card",
+    "set": "Enhanced",
+    "x": 5,
+    "y": 1
+  },
+  "m_gold": {
+    "atlas": "Enhancers.png",
+    "name": "Gold Card",
+    "set": "Enhanced",
+    "x": 6,
+    "y": 0
+  },
+  "m_lucky": {
+    "atlas": "Enhancers.png",
+    "name": "Lucky Card",
+    "set": "Enhanced",
+    "x": 4,
+    "y": 1
+  },
+  "m_mult": {
+    "atlas": "Enhancers.png",
+    "name": "Mult",
+    "set": "Enhanced",
+    "x": 2,
+    "y": 1
+  },
+  "m_steel": {
+    "atlas": "Enhancers.png",
+    "name": "Steel Card",
+    "set": "Enhanced",
+    "x": 6,
+    "y": 1
+  },
+  "m_stone": {
+    "atlas": "Enhancers.png",
+    "name": "Stone Card",
+    "set": "Enhanced",
+    "x": 5,
+    "y": 0
+  },
+  "m_wild": {
+    "atlas": "Enhancers.png",
+    "name": "Wild Card",
+    "set": "Enhanced",
+    "x": 3,
+    "y": 1
+  },
+  "p_arcana_jumbo_1": {
+    "atlas": "boosters.png",
+    "name": "Jumbo Arcana Pack",
+    "set": "Booster",
+    "x": 0,
+    "y": 2
+  },
+  "p_arcana_jumbo_2": {
+    "atlas": "boosters.png",
+    "name": "Jumbo Arcana Pack",
+    "set": "Booster",
+    "x": 1,
+    "y": 2
+  },
+  "p_arcana_mega_1": {
+    "atlas": "boosters.png",
+    "name": "Mega Arcana Pack",
+    "set": "Booster",
+    "x": 2,
+    "y": 2
+  },
+  "p_arcana_mega_2": {
+    "atlas": "boosters.png",
+    "name": "Mega Arcana Pack",
+    "set": "Booster",
+    "x": 3,
+    "y": 2
+  },
+  "p_arcana_normal_1": {
+    "atlas": "boosters.png",
+    "name": "Arcana Pack",
+    "set": "Booster",
+    "x": 0,
+    "y": 0
+  },
+  "p_arcana_normal_2": {
+    "atlas": "boosters.png",
+    "name": "Arcana Pack",
+    "set": "Booster",
+    "x": 1,
+    "y": 0
+  },
+  "p_arcana_normal_3": {
+    "atlas": "boosters.png",
+    "name": "Arcana Pack",
+    "set": "Booster",
+    "x": 2,
+    "y": 0
+  },
+  "p_arcana_normal_4": {
+    "atlas": "boosters.png",
+    "name": "Arcana Pack",
+    "set": "Booster",
+    "x": 3,
+    "y": 0
+  },
+  "p_buffoon_jumbo_1": {
+    "atlas": "boosters.png",
+    "name": "Jumbo Buffoon Pack",
+    "set": "Booster",
+    "x": 2,
+    "y": 8
+  },
+  "p_buffoon_mega_1": {
+    "atlas": "boosters.png",
+    "name": "Mega Buffoon Pack",
+    "set": "Booster",
+    "x": 3,
+    "y": 8
+  },
+  "p_buffoon_normal_1": {
+    "atlas": "boosters.png",
+    "name": "Buffoon Pack",
+    "set": "Booster",
+    "x": 0,
+    "y": 8
+  },
+  "p_buffoon_normal_2": {
+    "atlas": "boosters.png",
+    "name": "Buffoon Pack",
+    "set": "Booster",
+    "x": 1,
+    "y": 8
+  },
+  "p_celestial_jumbo_1": {
+    "atlas": "boosters.png",
+    "name": "Jumbo Celestial Pack",
+    "set": "Booster",
+    "x": 0,
+    "y": 3
+  },
+  "p_celestial_jumbo_2": {
+    "atlas": "boosters.png",
+    "name": "Jumbo Celestial Pack",
+    "set": "Booster",
+    "x": 1,
+    "y": 3
+  },
+  "p_celestial_mega_1": {
+    "atlas": "boosters.png",
+    "name": "Mega Celestial Pack",
+    "set": "Booster",
+    "x": 2,
+    "y": 3
+  },
+  "p_celestial_mega_2": {
+    "atlas": "boosters.png",
+    "name": "Mega Celestial Pack",
+    "set": "Booster",
+    "x": 3,
+    "y": 3
+  },
+  "p_celestial_normal_1": {
+    "atlas": "boosters.png",
+    "name": "Celestial Pack",
+    "set": "Booster",
+    "x": 0,
+    "y": 1
+  },
+  "p_celestial_normal_2": {
+    "atlas": "boosters.png",
+    "name": "Celestial Pack",
+    "set": "Booster",
+    "x": 1,
+    "y": 1
+  },
+  "p_celestial_normal_3": {
+    "atlas": "boosters.png",
+    "name": "Celestial Pack",
+    "set": "Booster",
+    "x": 2,
+    "y": 1
+  },
+  "p_celestial_normal_4": {
+    "atlas": "boosters.png",
+    "name": "Celestial Pack",
+    "set": "Booster",
+    "x": 3,
+    "y": 1
+  },
+  "p_spectral_jumbo_1": {
+    "atlas": "boosters.png",
+    "name": "Jumbo Spectral Pack",
+    "set": "Booster",
+    "x": 2,
+    "y": 4
+  },
+  "p_spectral_mega_1": {
+    "atlas": "boosters.png",
+    "name": "Mega Spectral Pack",
+    "set": "Booster",
+    "x": 3,
+    "y": 4
+  },
+  "p_spectral_normal_1": {
+    "atlas": "boosters.png",
+    "name": "Spectral Pack",
+    "set": "Booster",
+    "x": 0,
+    "y": 4
+  },
+  "p_spectral_normal_2": {
+    "atlas": "boosters.png",
+    "name": "Spectral Pack",
+    "set": "Booster",
+    "x": 1,
+    "y": 4
+  },
+  "p_standard_jumbo_1": {
+    "atlas": "boosters.png",
+    "name": "Jumbo Standard Pack",
+    "set": "Booster",
+    "x": 0,
+    "y": 7
+  },
+  "p_standard_jumbo_2": {
+    "atlas": "boosters.png",
+    "name": "Jumbo Standard Pack",
+    "set": "Booster",
+    "x": 1,
+    "y": 7
+  },
+  "p_standard_mega_1": {
+    "atlas": "boosters.png",
+    "name": "Mega Standard Pack",
+    "set": "Booster",
+    "x": 2,
+    "y": 7
+  },
+  "p_standard_mega_2": {
+    "atlas": "boosters.png",
+    "name": "Mega Standard Pack",
+    "set": "Booster",
+    "x": 3,
+    "y": 7
+  },
+  "p_standard_normal_1": {
+    "atlas": "boosters.png",
+    "name": "Standard Pack",
+    "set": "Booster",
+    "x": 0,
+    "y": 6
+  },
+  "p_standard_normal_2": {
+    "atlas": "boosters.png",
+    "name": "Standard Pack",
+    "set": "Booster",
+    "x": 1,
+    "y": 6
+  },
+  "p_standard_normal_3": {
+    "atlas": "boosters.png",
+    "name": "Standard Pack",
+    "set": "Booster",
+    "x": 2,
+    "y": 6
+  },
+  "p_standard_normal_4": {
+    "atlas": "boosters.png",
+    "name": "Standard Pack",
+    "set": "Booster",
+    "x": 3,
+    "y": 6
+  },
+  "seal_blue": {
+    "atlas": "Enhancers.png",
+    "name": "Blue Seal",
+    "set": "Seal",
+    "x": 6,
+    "y": 4
+  },
+  "seal_gold": {
+    "atlas": "Enhancers.png",
+    "name": "Gold Seal",
+    "set": "Seal",
+    "x": 2,
+    "y": 0
+  },
+  "seal_purple": {
+    "atlas": "Enhancers.png",
+    "name": "Purple Seal",
+    "set": "Seal",
+    "x": 4,
+    "y": 4
+  },
+  "seal_red": {
+    "atlas": "Enhancers.png",
+    "name": "Red Seal",
+    "set": "Seal",
+    "x": 5,
+    "y": 4
+  },
+  "stake_black": {
+    "atlas": "chips.png",
+    "name": "Black Chip",
+    "set": "Stake",
+    "x": 4,
+    "y": 0
+  },
+  "stake_blue": {
+    "atlas": "chips.png",
+    "name": "Blue Chip",
+    "set": "Stake",
+    "x": 3,
+    "y": 0
+  },
+  "stake_gold": {
+    "atlas": "chips.png",
+    "name": "Gold Chip",
+    "set": "Stake",
+    "x": 2,
+    "y": 1
+  },
+  "stake_green": {
+    "atlas": "chips.png",
+    "name": "Green Chip",
+    "set": "Stake",
+    "x": 2,
+    "y": 0
+  },
+  "stake_orange": {
+    "atlas": "chips.png",
+    "name": "Orange Chip",
+    "set": "Stake",
+    "x": 1,
+    "y": 1
+  },
+  "stake_purple": {
+    "atlas": "chips.png",
+    "name": "Purple Chip",
+    "set": "Stake",
+    "x": 0,
+    "y": 1
+  },
+  "stake_red": {
+    "atlas": "chips.png",
+    "name": "Red Chip",
+    "set": "Stake",
+    "x": 1,
+    "y": 0
+  },
+  "stake_white": {
+    "atlas": "chips.png",
+    "name": "White Chip",
+    "set": "Stake",
+    "x": 0,
+    "y": 0
+  },
+  "tag_boss": {
+    "atlas": "tags.png",
+    "name": "Boss Tag",
+    "set": "Tag",
+    "x": 0,
+    "y": 2
+  },
+  "tag_buffoon": {
+    "atlas": "tags.png",
+    "name": "Buffoon Tag",
+    "set": "Tag",
+    "x": 4,
+    "y": 2
+  },
+  "tag_charm": {
+    "atlas": "tags.png",
+    "name": "Charm Tag",
+    "set": "Tag",
+    "x": 2,
+    "y": 2
+  },
+  "tag_coupon": {
+    "atlas": "tags.png",
+    "name": "Coupon Tag",
+    "set": "Tag",
+    "x": 4,
+    "y": 0
+  },
+  "tag_d_six": {
+    "atlas": "tags.png",
+    "name": "D6 Tag",
+    "set": "Tag",
+    "x": 5,
+    "y": 3
+  },
+  "tag_double": {
+    "atlas": "tags.png",
+    "name": "Double Tag",
+    "set": "Tag",
+    "x": 5,
+    "y": 0
+  },
+  "tag_economy": {
+    "atlas": "tags.png",
+    "name": "Economy Tag",
+    "set": "Tag",
+    "x": 4,
+    "y": 3
+  },
+  "tag_ethereal": {
+    "atlas": "tags.png",
+    "name": "Ethereal Tag",
+    "set": "Tag",
+    "x": 3,
+    "y": 3
+  },
+  "tag_foil": {
+    "atlas": "tags.png",
+    "name": "Foil Tag",
+    "set": "Tag",
+    "x": 3,
+    "y": 0
+  },
+  "tag_garbage": {
+    "atlas": "tags.png",
+    "name": "Garbage Tag",
+    "set": "Tag",
+    "x": 2,
+    "y": 3
+  },
+  "tag_handy": {
+    "atlas": "tags.png",
+    "name": "Handy Tag",
+    "set": "Tag",
+    "x": 1,
+    "y": 3
+  },
+  "tag_holo": {
+    "atlas": "tags.png",
+    "name": "Holographic Tag",
+    "set": "Tag",
+    "x": 0,
+    "y": 1
+  },
+  "tag_investment": {
+    "atlas": "tags.png",
+    "name": "Investment Tag",
+    "set": "Tag",
+    "x": 2,
+    "y": 1
+  },
+  "tag_juggle": {
+    "atlas": "tags.png",
+    "name": "Juggle Tag",
+    "set": "Tag",
+    "x": 5,
+    "y": 1
+  },
+  "tag_meteor": {
+    "atlas": "tags.png",
+    "name": "Meteor Tag",
+    "set": "Tag",
+    "x": 3,
+    "y": 2
+  },
+  "tag_negative": {
+    "atlas": "tags.png",
+    "name": "Negative Tag",
+    "set": "Tag",
+    "x": 2,
+    "y": 0
+  },
+  "tag_orbital": {
+    "atlas": "tags.png",
+    "name": "Orbital Tag",
+    "set": "Tag",
+    "x": 5,
+    "y": 2
+  },
+  "tag_polychrome": {
+    "atlas": "tags.png",
+    "name": "Polychrome Tag",
+    "set": "Tag",
+    "x": 1,
+    "y": 1
+  },
+  "tag_rare": {
+    "atlas": "tags.png",
+    "name": "Rare Tag",
+    "set": "Tag",
+    "x": 1,
+    "y": 0
+  },
+  "tag_skip": {
+    "atlas": "tags.png",
+    "name": "Skip Tag",
+    "set": "Tag",
+    "x": 0,
+    "y": 3
+  },
+  "tag_standard": {
+    "atlas": "tags.png",
+    "name": "Standard Tag",
+    "set": "Tag",
+    "x": 1,
+    "y": 2
+  },
+  "tag_top_up": {
+    "atlas": "tags.png",
+    "name": "Top-up Tag",
+    "set": "Tag",
+    "x": 4,
+    "y": 1
+  },
+  "tag_uncommon": {
+    "atlas": "tags.png",
+    "name": "Uncommon Tag",
+    "set": "Tag",
+    "x": 0,
+    "y": 0
+  },
+  "tag_voucher": {
+    "atlas": "tags.png",
+    "name": "Voucher Tag",
+    "set": "Tag",
+    "x": 3,
+    "y": 1
+  },
+  "v_antimatter": {
+    "atlas": "Vouchers.png",
+    "name": "Antimatter",
+    "set": "Voucher",
+    "x": 7,
+    "y": 1
+  },
+  "v_blank": {
+    "atlas": "Vouchers.png",
+    "name": "Blank",
+    "set": "Voucher",
+    "x": 7,
+    "y": 0
+  },
+  "v_clearance_sale": {
+    "atlas": "Vouchers.png",
+    "name": "Clearance Sale",
+    "set": "Voucher",
+    "x": 3,
+    "y": 0
+  },
+  "v_crystal_ball": {
+    "atlas": "Vouchers.png",
+    "name": "Crystal Ball",
+    "set": "Voucher",
+    "x": 2,
+    "y": 2
+  },
+  "v_directors_cut": {
+    "atlas": "Vouchers.png",
+    "name": "Director",
+    "set": "Voucher",
+    "x": 6,
+    "y": 2
+  },
+  "v_glow_up": {
+    "atlas": "Vouchers.png",
+    "name": "Glow Up",
+    "set": "Voucher",
+    "x": 4,
+    "y": 1
+  },
+  "v_grabber": {
+    "atlas": "Vouchers.png",
+    "name": "Grabber",
+    "set": "Voucher",
+    "x": 5,
+    "y": 0
+  },
+  "v_hieroglyph": {
+    "atlas": "Vouchers.png",
+    "name": "Hieroglyph",
+    "set": "Voucher",
+    "x": 5,
+    "y": 2
+  },
+  "v_hone": {
+    "atlas": "Vouchers.png",
+    "name": "Hone",
+    "set": "Voucher",
+    "x": 4,
+    "y": 0
+  },
+  "v_illusion": {
+    "atlas": "Vouchers.png",
+    "name": "Illusion",
+    "set": "Voucher",
+    "x": 4,
+    "y": 3
+  },
+  "v_liquidation": {
+    "atlas": "Vouchers.png",
+    "name": "Liquidation",
+    "set": "Voucher",
+    "x": 3,
+    "y": 1
+  },
+  "v_magic_trick": {
+    "atlas": "Vouchers.png",
+    "name": "Magic Trick",
+    "set": "Voucher",
+    "x": 4,
+    "y": 2
+  },
+  "v_money_tree": {
+    "atlas": "Vouchers.png",
+    "name": "Money Tree",
+    "set": "Voucher",
+    "x": 1,
+    "y": 3
+  },
+  "v_nacho_tong": {
+    "atlas": "Vouchers.png",
+    "name": "Nacho Tong",
+    "set": "Voucher",
+    "x": 5,
+    "y": 1
+  },
+  "v_observatory": {
+    "atlas": "Vouchers.png",
+    "name": "Observatory",
+    "set": "Voucher",
+    "x": 3,
+    "y": 3
+  },
+  "v_omen_globe": {
+    "atlas": "Vouchers.png",
+    "name": "Omen Globe",
+    "set": "Voucher",
+    "x": 2,
+    "y": 3
+  },
+  "v_overstock_norm": {
+    "atlas": "Vouchers.png",
+    "name": "Overstock",
+    "set": "Voucher",
+    "x": 0,
+    "y": 0
+  },
+  "v_overstock_plus": {
+    "atlas": "Vouchers.png",
+    "name": "Overstock Plus",
+    "set": "Voucher",
+    "x": 0,
+    "y": 1
+  },
+  "v_paint_brush": {
+    "atlas": "Vouchers.png",
+    "name": "Paint Brush",
+    "set": "Voucher",
+    "x": 7,
+    "y": 2
+  },
+  "v_palette": {
+    "atlas": "Vouchers.png",
+    "name": "Palette",
+    "set": "Voucher",
+    "x": 7,
+    "y": 3
+  },
+  "v_petroglyph": {
+    "atlas": "Vouchers.png",
+    "name": "Petroglyph",
+    "set": "Voucher",
+    "x": 5,
+    "y": 3
+  },
+  "v_planet_merchant": {
+    "atlas": "Vouchers.png",
+    "name": "Planet Merchant",
+    "set": "Voucher",
+    "x": 2,
+    "y": 0
+  },
+  "v_planet_tycoon": {
+    "atlas": "Vouchers.png",
+    "name": "Planet Tycoon",
+    "set": "Voucher",
+    "x": 2,
+    "y": 1
+  },
+  "v_recyclomancy": {
+    "atlas": "Vouchers.png",
+    "name": "Recyclomancy",
+    "set": "Voucher",
+    "x": 6,
+    "y": 1
+  },
+  "v_reroll_glut": {
+    "atlas": "Vouchers.png",
+    "name": "Reroll Glut",
+    "set": "Voucher",
+    "x": 0,
+    "y": 3
+  },
+  "v_reroll_surplus": {
+    "atlas": "Vouchers.png",
+    "name": "Reroll Surplus",
+    "set": "Voucher",
+    "x": 0,
+    "y": 2
+  },
+  "v_retcon": {
+    "atlas": "Vouchers.png",
+    "name": "Retcon",
+    "set": "Voucher",
+    "x": 6,
+    "y": 3
+  },
+  "v_seed_money": {
+    "atlas": "Vouchers.png",
+    "name": "Seed Money",
+    "set": "Voucher",
+    "x": 1,
+    "y": 2
+  },
+  "v_tarot_merchant": {
+    "atlas": "Vouchers.png",
+    "name": "Tarot Merchant",
+    "set": "Voucher",
+    "x": 1,
+    "y": 0
+  },
+  "v_tarot_tycoon": {
+    "atlas": "Vouchers.png",
+    "name": "Tarot Tycoon",
+    "set": "Voucher",
+    "x": 1,
+    "y": 1
+  },
+  "v_telescope": {
+    "atlas": "Vouchers.png",
+    "name": "Telescope",
+    "set": "Voucher",
+    "x": 3,
+    "y": 2
+  },
+  "v_wasteful": {
+    "atlas": "Vouchers.png",
+    "name": "Wasteful",
+    "set": "Voucher",
+    "x": 6,
+    "y": 0
+  },
+  "b_mp_violet": {
+    "atlas": "decks.png",
+    "name": "Violet Deck",
+    "set": "Back",
+    "x": 0,
+    "y": 0
+  },
+  "b_mp_indigo": {
+    "atlas": "decks.png",
+    "name": "Indigo Deck",
+    "set": "Back",
+    "x": 1,
+    "y": 0
+  },
+  "b_mp_orange": {
+    "atlas": "decks.png",
+    "name": "Orange Deck",
+    "set": "Back",
+    "x": 2,
+    "y": 0
+  },
+  "b_mp_gradient": {
+    "atlas": "decks.png",
+    "name": "Gradient Deck",
+    "set": "Back",
+    "x": 0,
+    "y": 1
+  },
+  "b_mp_oracle": {
+    "atlas": "decks.png",
+    "name": "Oracle Deck",
+    "set": "Back",
+    "x": 1,
+    "y": 1
+  },
+  "b_mp_cocktail": {
+    "atlas": "decks.png",
+    "name": "Cocktail Deck",
+    "set": "Back",
+    "x": 4,
+    "y": 0
+  },
+  "p_standard_giga": {
+    "atlas": "standard_giga.png",
+    "name": "Giga Standard Pack",
+    "set": "Booster",
+    "x": 0,
+    "y": 0
+  },
+  "j_defensive_joker": {
+    "atlas": "j_defensive_joker.png",
+    "name": "Defensive Joker",
+    "set": "Joker",
+    "x": 0,
+    "y": 0
+  },
+  "j_mp_pizza":            { "atlas": "j_pizza.png",            "name": "Pizza",            "set": "Joker", "x": 0, "y": 0 },
+  "j_mp_lets_go_gambling": { "atlas": "j_lets_go_gambling.png", "name": "Let's Go Gambling","set": "Joker", "x": 0, "y": 0 },
+  "j_mp_conjoined_joker":  { "atlas": "j_conjoined_joker.png",  "name": "Conjoined Joker",  "set": "Joker", "x": 0, "y": 0 },
+  "j_mp_defensive_joker":  { "atlas": "j_defensive_joker.png",  "name": "Defensive Joker",  "set": "Joker", "x": 0, "y": 0 },
+  "j_mp_pacifist":         { "atlas": "j_pacifist.png",         "name": "Pacifist",         "set": "Joker", "x": 0, "y": 0 },
+  "j_mp_penny_pincher":    { "atlas": "j_penny_pincher.png",    "name": "Penny Pincher",    "set": "Joker", "x": 0, "y": 0 },
+  "j_mp_skip_off":         { "atlas": "j_skip_off.png",         "name": "Skip Off",         "set": "Joker", "x": 0, "y": 0 },
+  "j_mp_speedrun":         { "atlas": "j_speedrun.png",         "name": "Speedrun",         "set": "Joker", "x": 0, "y": 0 },
+  "j_mp_taxes":            { "atlas": "j_taxes.png",            "name": "Taxes",            "set": "Joker", "x": 0, "y": 0 },
+  "j_mp_bloodstone":       { "atlas": "Jokers.png", "name": "Bloodstone",   "set": "Joker", "x": 0, "y": 8 },
+  "j_mp_hanging_chad":     { "atlas": "Jokers.png", "name": "Hanging Chad", "set": "Joker", "x": 9, "y": 6 },
+  "j_mp_seltzer":          { "atlas": "Jokers.png", "name": "Seltzer",      "set": "Joker", "x": 3, "y": 15 },
+  "j_mp_ticket":           { "atlas": "Jokers.png", "name": "Ticket",       "set": "Joker", "x": 5, "y": 3 },
+  "j_mp_turtle_bean":      { "atlas": "Jokers.png", "name": "Turtle Bean",  "set": "Joker", "x": 4, "y": 13 },
+  "j_conjoined_joker": {
+    "atlas": "j_conjoined_joker.png",
+    "name": "Conjoined Joker",
+    "set": "Joker",
+    "x": 0,
+    "y": 0
+  },
+  "j_lets_go_gambling": {
+    "atlas": "j_lets_go_gambling.png",
+    "name": "Let's Go Gambling",
+    "set": "Joker",
+    "x": 0,
+    "y": 0
+  },
+  "j_pacifist": {
+    "atlas": "j_pacifist.png",
+    "name": "Pacifist",
+    "set": "Joker",
+    "x": 0,
+    "y": 0
+  },
+  "j_penny_pincher": {
+    "atlas": "j_penny_pincher.png",
+    "name": "Penny Pincher",
+    "set": "Joker",
+    "x": 0,
+    "y": 0
+  },
+  "j_pizza": {
+    "atlas": "j_pizza.png",
+    "name": "Pizza",
+    "set": "Joker",
+    "x": 0,
+    "y": 0
+  },
+  "j_skipoff": {
+    "atlas": "j_skip_off.png",
+    "name": "Skip-Off",
+    "set": "Joker",
+    "x": 0,
+    "y": 0
+  },
+  "j_speedrun": {
+    "atlas": "j_speedrun.png",
+    "name": "Speedrun",
+    "set": "Joker",
+    "x": 0,
+    "y": 0
+  },
+  "j_taxes": {
+    "atlas": "j_taxes.png",
+    "name": "Taxes",
+    "set": "Joker",
+    "x": 0,
+    "y": 0
+  },
+  "c_asteroid": {
+    "atlas": "c_asteroid.png",
+    "name": "Asteroid",
+    "set": "Spectral",
+    "x": 0,
+    "y": 0
+  },
+  "c_mp_asteroid": {
+    "atlas": "c_asteroid.png",
+    "name": "Asteroid",
+    "set": "Spectral",
+    "x": 0,
+    "y": 0
+  },
+  "c_mp_ouija_standard": {
+    "atlas": "c_ouija_2.png",
+    "name": "Ouija",
+    "set": "Spectral",
+    "x": 0,
+    "y": 0
+  }
+}

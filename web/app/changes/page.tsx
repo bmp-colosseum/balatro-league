@@ -8,6 +8,7 @@
 
 import Link from "next/link";
 import { SiteNav } from "@/components/SiteNav";
+import { Sprite } from "@/components/Sprite";
 
 export const dynamic = "force-static";
 
@@ -114,14 +115,14 @@ export default function ChangesPage() {
             </p>
             <QueueExample
               cols={[
-                { type: "CJ", item: "Jimbo" },
-                { type: "CJ", item: "Raised Fist" },
-                { type: "S", item: "Hex", note: "Ghost only" },
-                { type: "RJ", item: "Blueprint" },
-                { type: "T", item: "The Fool" },
+                { type: "CJ", item: "Jimbo", sprite: "j_joker" },
+                { type: "CJ", item: "Raised Fist", sprite: "j_raised_fist" },
+                { type: "S", item: "Hex", note: "Ghost only", sprite: "c_hex" },
+                { type: "RJ", item: "Blueprint", sprite: "j_blueprint" },
+                { type: "T", item: "The Fool", sprite: "c_fool" },
                 { type: "C", item: "A♥" },
-                { type: "P", item: "Pluto" },
-                { type: "S", item: "Ankh", note: "Ghost only" },
+                { type: "P", item: "Pluto", sprite: "c_pluto" },
+                { type: "S", item: "Ankh", note: "Ghost only", sprite: "c_ankh" },
               ]}
             />
             <p style={{ marginBottom: 0 }}>
@@ -141,14 +142,16 @@ export default function ChangesPage() {
           <Callout title="Blocking the Blueprint">
             <p style={{ marginBottom: 6 }}>The rare-joker queue holds: Blueprint → Stuntman → …</p>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
-              <div>
+              <div style={{ textAlign: "center" }}>
                 <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>You let it through</div>
-                <CardRow items={["Blueprint"]} highlight={0} />
+                <Sprite id="j_blueprint" height={64} />
+                <div style={{ fontSize: 11 }}>Blueprint</div>
               </div>
               <div style={{ fontSize: 18, opacity: 0.5 }}>→ block it →</div>
-              <div>
+              <div style={{ textAlign: "center" }}>
                 <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>Next rare slides up</div>
-                <CardRow items={["Stuntman"]} highlight={0} />
+                <Sprite id="j_stuntman" height={64} />
+                <div style={{ fontSize: 11 }}>Stuntman</div>
               </div>
             </div>
           </Callout>
@@ -191,27 +194,27 @@ export default function ChangesPage() {
 
         {/* ============================ CONSUMABLES ============================ */}
         <Section id="consumables" title="Consumables">
-          <Entry name="Asteroid" tag="MP exclusive">
+          <Entry name="Asteroid" tag="MP exclusive" sprite="c_mp_asteroid">
             Delevels your nemesis&apos;s highest-level poker hand. On a tie it delevels in reverse hand
             order (Flush Five → Flush House → … → High Card). It can only hit hands your nemesis has
             unlocked.
           </Entry>
-          <Entry name="Justice" tag="Banned">
+          <Entry name="Justice" tag="Banned" sprite="c_justice">
             Banned in ranked. This doesn&apos;t ban Glass — you can still get Glass from Standard Packs and
             the Familiar / Grim / Incantation spectrals (see Card Modifiers for Glass&apos;s changes).
           </Entry>
-          <Entry name="Ouija" tag="Reworked">
+          <Entry name="Ouija" tag="Reworked" sprite="c_mp_ouija_standard">
             Reworked to destroy 3 random cards and convert the rest to a single random rank. The hand-size
             reduction is removed.
           </Entry>
-          <Entry name="Aura" tag="Order">
+          <Entry name="Aura" tag="Order" sprite="c_aura">
             Works on a game-long queue — same as vanilla.
           </Entry>
-          <Entry name="Wraith" tag="Order">
+          <Entry name="Wraith" tag="Order" sprite="c_wraith">
             Shares a game-long queue with Rare skip tags. This queue does <strong>not</strong> take from the
             shop; the only way to advance it is taking Rare skips or Wraiths.
           </Entry>
-          <Entry name="Judgement" tag="Order">
+          <Entry name="Judgement" tag="Order" sprite="c_judgement">
             On <strong>Orange Stake+</strong> it pulls jokers from its own separate queue. On lower stakes it
             takes the next joker from the shop queue.
           </Entry>
@@ -276,40 +279,45 @@ export default function ChangesPage() {
             Many MP jokers revolve around the PvP blind and your &ldquo;nemesis.&rdquo; Most send a Phantom
             (a copy visible to your opponent) and many are Blueprint-compatible.
           </p>
-          <Entry name="Pacifist · Taxes · Skip Off" tag="MP exclusive">
+          <Entry name="Pacifist · Taxes · Skip Off" tag="MP exclusive" sprite={["j_pacifist", "j_taxes", "j_mp_skip_off"]}>
             Work as described in-game. Pacifist and Taxes are Blueprint-compatible; check Skip Off in the
             collection for its tech.
           </Entry>
-          <Entry name="Defensive Joker" tag="MP exclusive">
+          <Entry name="Defensive Joker" tag="MP exclusive" sprite="j_mp_defensive_joker">
             Shrinks whenever your opponent loses a life to a blind — so on higher stakes it can be optimal
             to throw a round to shrink your nemesis&apos;s Defensive. Blueprint-compatible.
           </Entry>
-          <Entry name="Conjoined Joker" tag="MP exclusive">
+          <Entry name="Conjoined Joker" tag="MP exclusive" sprite="j_conjoined_joker">
             Scales off how many hands your opponent has left. No effect outside the PvP blind (and none if
             your nemesis has played all their hands) — but outside the blind you can read it to learn how
             many hands your nemesis has. Sends a Phantom; Blueprint-compatible.
           </Entry>
-          <Entry name="Pizza" tag="MP exclusive">
+          <Entry name="Pizza" tag="MP exclusive" sprite="j_pizza">
             At the end of a PvP, Pizza is consumed and grants you +2 discards and your nemesis +1, lasting
             until the next ante. Copying it with Blueprint/Brainstorm consumes the Blueprint/Brainstorm.
             Sends a Phantom.
           </Entry>
-          <Entry name="Let&apos;s Go Gambling" tag="MP exclusive">
+          <Entry name="Let&apos;s Go Gambling" tag="MP exclusive" sprite="j_lets_go_gambling">
             Runs on two game-long queues: one for your hits (advances every hand you play) and one for your
             nemesis&apos;s hits (advances for every hand you play in the PvP blind). Sends a Phantom;
             Blueprint-compatible.
           </Entry>
-          <Entry name="Penny Pincher" tag="MP exclusive">
+          <Entry name="Penny Pincher" tag="MP exclusive" sprite="j_penny_pincher">
             Can only appear after Ante 2 — roll into one earlier and it&apos;s skipped (queue progresses).
             Pays 1/3 of what your nemesis spent in the previous ante&apos;s blind shop.
           </Entry>
-          <Entry name="Speedrun" tag="MP exclusive">
+          <Entry name="Speedrun" tag="MP exclusive" sprite="j_speedrun">
             On readying up for PvP, generates a spectral (from the Up Top spectral queue) — as long as your
             nemesis didn&apos;t ready up first this ante, or you ready within 30s of them. Sends a Phantom;
             Blueprint-compatible.
           </Entry>
 
           <SubHeading>Banned in ranked</SubHeading>
+          <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
+            {["j_chicot", "j_matador", "j_mr_bones", "j_luchador"].map((s) => (
+              <Sprite key={s} id={s} height={56} />
+            ))}
+          </div>
           <p>
             <BannedPill>Chicot</BannedPill> <BannedPill>Matador</BannedPill>{" "}
             <BannedPill>Mr. Bones</BannedPill> <BannedPill>Luchador</BannedPill>
@@ -317,22 +325,22 @@ export default function ChangesPage() {
           <p className="muted">Banned for how they interact with the PvP blind.</p>
 
           <SubHeading>Vanilla jokers, changed</SubHeading>
-          <Entry name="Hanging Chad" tag="Reworked">
+          <Entry name="Hanging Chad" tag="Reworked" sprite="j_mp_hanging_chad">
             Retriggers the first <strong>two</strong> cards once each, rather than the first card twice —
             forcing more than one good card in your deck and nerfing photo-chad.
           </Entry>
-          <Entry name="Bean" tag="Reworked">
+          <Entry name="Bean" tag="Reworked" sprite="j_mp_turtle_bean">
             Starts at <strong>4 hand size</strong> instead of 5, reducing the edge of finding it after your
             opponent.
           </Entry>
-          <Entry name="Seltzer" tag="Reworked">
+          <Entry name="Seltzer" tag="Reworked" sprite="j_mp_seltzer">
             Starts at <strong>8 hands</strong> instead of 10, for the same reason.
           </Entry>
-          <Entry name="Golden Ticket" tag="Reworked">
+          <Entry name="Golden Ticket" tag="Reworked" sprite="j_ticket">
             Now <strong>Uncommon</strong> (was Common), gives <strong>$3</strong> (was $4), and no longer
             needs a gold card in your deck to appear in the shop.
           </Entry>
-          <Entry name="Idol" tag="Reworked">
+          <Entry name="Idol" tag="Reworked" sprite="j_idol">
             <p>
               Idol sorts your deck from the cards you have the <strong>most</strong> duplicates of to the
               fewest (ties broken by suit, then rank; Ace is low), then rolls <strong>1–1000</strong> and
@@ -372,7 +380,7 @@ export default function ChangesPage() {
               </p>
             </Callout>
           </Entry>
-          <Entry name="Bloodstone" tag="Reworked">
+          <Entry name="Bloodstone" tag="Reworked" sprite="j_mp_bloodstone">
             <p>
               Runs on two queues. A <strong>game-long</strong> queue advances every time you play a heart
               outside PvP. A separate <strong>PvP queue</strong> resets to the start after every hand you
@@ -397,7 +405,7 @@ export default function ChangesPage() {
               </p>
             </Callout>
           </Entry>
-          <Entry name="Invisible Joker" tag="Reworked">
+          <Entry name="Invisible Joker" tag="Reworked" sprite="j_invisible">
             <p>
               Reworked to cut variance between players. On sell, each joker is given a position by type
               (copies sorted by recency get unique positions) and Invisible copies the joker at the
@@ -466,6 +474,11 @@ export default function ChangesPage() {
 
         {/* ============================ VOUCHERS ============================ */}
         <Section id="vouchers" title="Vouchers">
+          <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
+            {["v_directors_cut", "v_retcon", "v_hieroglyph", "v_petroglyph"].map((s) => (
+              <Sprite key={s} id={s} height={56} />
+            ))}
+          </div>
           <p>
             <BannedPill>Director&apos;s Cut</BannedPill> <BannedPill>Retcon</BannedPill>{" "}
             <BannedPill>Hieroglyph</BannedPill> <BannedPill>Petroglyph</BannedPill>
@@ -485,9 +498,12 @@ export default function ChangesPage() {
           </Entry>
         </Section>
 
-        <p style={{ marginTop: 24, textAlign: "center" }} className="muted">
-          Credit: <strong>&ldquo;Balatro Multiplayer Changes&rdquo;</strong> by SurCats &amp; the BMP dev team.
-          {" "}<Link href="/how-to-play">→ How the league works</Link>
+        <p style={{ marginTop: 24, textAlign: "center", fontSize: 12 }} className="muted">
+          Text: <strong>&ldquo;Balatro Multiplayer Changes&rdquo;</strong> by SurCats &amp; the BMP dev team.
+          {" "}Card art from <em>Balatro</em> (LocalThunk), extracted for the Antelytics viewer.
+        </p>
+        <p style={{ marginTop: 4, textAlign: "center" }}>
+          <Link href="/how-to-play">→ How the league works</Link>
         </p>
       </main>
     </>
@@ -515,20 +531,40 @@ const TAG_STYLE: Record<string, { bg: string; fg: string }> = {
   Order: { bg: "rgba(155,89,182,0.15)", fg: "#9b59b6" },
 };
 
-function Entry({ name, tag, children }: { name: string; tag: keyof typeof TAG_STYLE; children: React.ReactNode }) {
+function Entry({
+  name,
+  tag,
+  sprite,
+  children,
+}: {
+  name: string;
+  tag: keyof typeof TAG_STYLE;
+  sprite?: string | string[];
+  children: React.ReactNode;
+}) {
   const t = TAG_STYLE[tag] ?? TAG_STYLE.Order!;
+  const sprites = sprite ? (Array.isArray(sprite) ? sprite : [sprite]) : [];
   return (
-    <div style={{ marginTop: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <strong>{name}</strong>
-        <span
-          className="pill"
-          style={{ background: t.bg, color: t.fg, fontSize: 11, padding: "1px 8px" }}
-        >
-          {tag}
-        </span>
+    <div style={{ marginTop: 16, display: "flex", gap: 12, alignItems: "flex-start" }}>
+      {sprites.length > 0 && (
+        <div style={{ display: "flex", gap: 2, flexShrink: 0, paddingTop: 2 }}>
+          {sprites.map((s) => (
+            <Sprite key={s} id={s} height={52} />
+          ))}
+        </div>
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <strong>{name}</strong>
+          <span
+            className="pill"
+            style={{ background: t.bg, color: t.fg, fontSize: 11, padding: "1px 8px" }}
+          >
+            {tag}
+          </span>
+        </div>
+        <div className="muted" style={{ marginTop: 2 }}>{children}</div>
       </div>
-      <div className="muted" style={{ marginTop: 2 }}>{children}</div>
     </div>
   );
 }
@@ -562,13 +598,13 @@ function BannedPill({ children }: { children: React.ReactNode }) {
 }
 
 // A row of "queue slot → shop item" columns, for the shop-queue example.
-function QueueExample({ cols }: { cols: { type: string; item: string; note?: string }[] }) {
+function QueueExample({ cols }: { cols: { type: string; item: string; note?: string; sprite?: string }[] }) {
   return (
-    <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: "6px 0" }}>
+    <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "6px 0" }}>
       {cols.map((c, i) => (
         <div
           key={i}
-          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, minWidth: 66 }}
+          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, minWidth: 60 }}
         >
           <span
             className="pill"
@@ -581,14 +617,19 @@ function QueueExample({ cols }: { cols: { type: string; item: string; note?: str
             style={{
               border: "1px solid var(--border)",
               borderRadius: 4,
-              padding: "6px 8px",
-              fontSize: 12,
+              padding: "6px",
+              fontSize: 11,
               textAlign: "center",
               background: "var(--surface-2)",
-              minWidth: 62,
+              minWidth: 58,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 3,
             }}
           >
-            {c.item}
+            {c.sprite ? <Sprite id={c.sprite} height={48} /> : null}
+            <span>{c.item}</span>
             {c.note ? <div className="muted" style={{ fontSize: 9 }}>{c.note}</div> : null}
           </div>
         </div>
