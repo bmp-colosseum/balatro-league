@@ -45,9 +45,27 @@ const GROUPS: { heading: string; items: { label: string; href: string }[] }[] = 
   },
 ];
 
+interface PlayerHit {
+  id: string;
+  displayName: string;
+}
+
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
+  const [players, setPlayers] = useState<PlayerHit[]>([]);
+  const [loadedPlayers, setLoadedPlayers] = useState(false);
   const router = useRouter();
+
+  // Lazy-load the roster the first time the palette opens — no cost on pages
+  // where it's never used. Empty for logged-out users (endpoint gates it).
+  useEffect(() => {
+    if (!open || loadedPlayers) return;
+    setLoadedPlayers(true);
+    fetch("/api/players")
+      .then((r) => r.json())
+      .then((d) => setPlayers(d.players ?? []))
+      .catch(() => {});
+  }, [open, loadedPlayers]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -84,6 +102,15 @@ export function CommandPalette() {
             ))}
           </CommandGroup>
         ))}
+        {players.length > 0 && (
+          <CommandGroup heading="Players">
+            {players.map((p) => (
+              <CommandItem key={p.id} value={`player ${p.displayName}`} onSelect={() => go(`/profile/${p.id}`)}>
+                {p.displayName}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
       </CommandList>
     </CommandDialog>
   );
