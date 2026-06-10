@@ -124,7 +124,9 @@ export default async function JoinPage({
 
         {ok === "signed-up" && (
           <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>
-            ✓ You're signed up. See you in Discord when the season starts.
+            ✓ You're signed up. Next: when signups close, an admin builds the divisions and you&apos;ll
+            get a Discord role + a private channel for your division. Watch Discord — that&apos;s where
+            matches happen.
           </div>
         )}
         {ok === "withdrew" && (
@@ -213,16 +215,22 @@ export default async function JoinPage({
                   {data.openRound.signupCount} player{data.openRound.signupCount === 1 ? "" : "s"} signed up so far.
                 </p>
                 {data.viewerIsSignedUp ? (
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    <span style={{ color: "#2ecc71", fontWeight: 600 }}>
-                      ✓ You're signed up.
-                    </span>
-                    <form action={withdrawFromJoinAction}>
-                      <input type="hidden" name="roundId" value={data.openRound.id} />
-                      <button type="submit" className="secondary" style={{ fontSize: 12 }}>
-                        Withdraw
-                      </button>
-                    </form>
+                  <div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                      <span style={{ color: "#2ecc71", fontWeight: 600 }}>
+                        ✓ You're signed up.
+                      </span>
+                      <form action={withdrawFromJoinAction}>
+                        <input type="hidden" name="roundId" value={data.openRound.id} />
+                        <button type="submit" className="secondary" style={{ fontSize: 12 }}>
+                          Withdraw
+                        </button>
+                      </form>
+                    </div>
+                    <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+                      Nothing more to do right now. When signups close you&apos;ll get a Discord role +
+                      a private division channel. You can withdraw any time before the deadline.
+                    </p>
                   </div>
                 ) : (
                   <form action={signupFromJoinAction}>

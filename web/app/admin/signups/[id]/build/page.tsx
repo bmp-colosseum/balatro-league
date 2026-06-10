@@ -8,6 +8,7 @@ import { TierEditor } from "@/components/TierEditor";
 import { DraggableRatingTable, type RatingRow } from "@/components/DraggableRatingTable";
 import { addSignupByDiscordId, addSignupByPlayerId, autoFillRatingsFromMmr, buildSeason, refreshSignupMmrSnapshots, saveRatings } from "./actions";
 import { PlayerSearch } from "@/components/PlayerSearch";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { nextSeasonNumber } from "@/lib/format-season";
 import { prisma } from "@/lib/prisma";
 
@@ -201,6 +202,16 @@ export default async function BuildSeasonPage({
             {playerCount} signups · default tier layout = {totalSlots} slots. If signups exceed
             slots, the bottom tier absorbs the overflow.
           </p>
+          {existingSeason && (
+            <div
+              className="card"
+              style={{ borderColor: "#f1c40f", color: "#f1c40f", marginBottom: 12 }}
+            >
+              ⚠ <strong>Re-building Season {existingSeason.number}.</strong> This replaces its current
+              divisions and player placements with the layout below. Don&apos;t rebuild a season that&apos;s
+              already in progress — recorded results in those divisions can be lost.
+            </div>
+          )}
           <form action={buildSeason}>
             <input type="hidden" name="roundId" value={round.id} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -244,9 +255,18 @@ export default async function BuildSeasonPage({
               <TierEditor initial={initialTiers} templates={templates} signupCount={sortedSignups.length} />
             </div>
 
-            <button type="submit" style={{ marginTop: 16 }}>
-              Build season + place {playerCount} players
-            </button>
+            {existingSeason ? (
+              <ConfirmButton
+                message={`Re-build Season ${existingSeason.number}? This replaces its current divisions and player placements.`}
+                style={{ marginTop: 16 }}
+              >
+                Re-build Season {existingSeason.number} · place {playerCount} players
+              </ConfirmButton>
+            ) : (
+              <button type="submit" style={{ marginTop: 16 }}>
+                Build season + place {playerCount} players
+              </button>
+            )}
           </form>
         </div>
       </main>

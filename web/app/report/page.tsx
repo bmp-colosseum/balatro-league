@@ -10,6 +10,7 @@ import { loadReportPageData } from "@/lib/loaders/report";
 import { CANONICAL_DECKS, CANONICAL_STAKES } from "@/lib/balatro-info";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
+import { ReportForm } from "@/components/ReportForm";
 import { submitReportFromReportPage, submitReportPageDispute } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -70,35 +71,12 @@ export default async function ReportPage({
             {division.reportableOpponents.length === 0 ? (
               <p className="muted">No opponents left — you've played everyone in your division.</p>
             ) : (
-              <form action={submitReportFromReportPage} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                <span className="muted" style={{ fontSize: 12 }}>vs</span>
-                <select name="opponentId" required style={{ flex: "1 1 240px" }}>
-                  <option value="">— pick an opponent —</option>
-                  {division.reportableOpponents.map((o) => (
-                    <option key={o.playerId} value={o.playerId}>
-                      {o.displayName}{o.alreadyPending ? " (already pending)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <select name="result" required defaultValue="2-0">
-                  <option value="2-0">2-0 (I won both)</option>
-                  <option value="1-1">1-1 (draw)</option>
-                  <option value="0-2">0-2 (I lost both)</option>
-                </select>
-                <select name="deck" defaultValue="" title="Optional: deck played">
-                  <option value="">deck (optional)</option>
-                  {CANONICAL_DECKS.map((d) => (
-                    <option key={d.name} value={d.name}>{d.name}</option>
-                  ))}
-                </select>
-                <select name="stake" defaultValue="" title="Optional: stake played">
-                  <option value="">stake (optional)</option>
-                  {CANONICAL_STAKES.map((s) => (
-                    <option key={s.name} value={s.name}>{s.name}</option>
-                  ))}
-                </select>
-                <button type="submit">Report</button>
-              </form>
+              <ReportForm
+                action={submitReportFromReportPage}
+                opponents={division.reportableOpponents}
+                decks={CANONICAL_DECKS.map((d) => d.name)}
+                stakes={CANONICAL_STAKES.map((s) => s.name)}
+              />
             )}
 
             <p className="muted" style={{ fontSize: 11, marginTop: 12 }}>

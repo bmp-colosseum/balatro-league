@@ -117,6 +117,9 @@ export default async function ProfilePage({
     <>
       <SiteNav activePath="" />
       <main>
+        <p style={{ marginBottom: 4 }}>
+          <Link href="/standings" className="muted" style={{ fontSize: 13 }}>← Standings</Link>
+        </p>
         <h2>{profile.player.displayName}</h2>
 
         <div className="grid grid-2">
@@ -208,7 +211,12 @@ export default async function ProfilePage({
         {me && (
           <>
             <div className="card" style={{ marginTop: 16 }}>
-              <strong>Next-season notifications</strong>
+              <strong>Next season</strong>
+              <p className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+                Two separate things: <strong>🔔 Notify</strong> just DMs you when signups open — you still
+                click Sign up yourself. <strong>🔁 Auto-sign-up</strong> enters you automatically, no action
+                needed.
+              </p>
               {me.interest ? (
                 <>
                   <p className="muted" style={{ fontSize: 12 }}>

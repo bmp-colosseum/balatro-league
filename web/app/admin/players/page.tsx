@@ -9,6 +9,7 @@ import {
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { addFakePlayer, deletePlayer, dropPlayer, recordSetForPlayer, refreshActiveSeasonMmrs, reinstatePlayer, setPlayerDiscordId } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -96,7 +97,13 @@ export default async function AdminPlayersPage({
                     <td>
                       <form action={dropPlayer} style={{ display: "inline-block" }}>
                         <input type="hidden" name="playerId" value={m.playerId} />
-                        <button type="submit" className="secondary" style={{ fontSize: 11 }}>Drop</button>
+                        <ConfirmButton
+                          message={`Drop ${m.displayName} from this division? Their unplayed matches here will be removed. You can reinstate them afterward.`}
+                          className="secondary"
+                          style={{ fontSize: 11 }}
+                        >
+                          Drop
+                        </ConfirmButton>
                       </form>
                     </td>
                   </tr>
@@ -261,7 +268,13 @@ export default async function AdminPlayersPage({
                   <td>
                     <form action={deletePlayer}>
                       <input type="hidden" name="playerId" value={p.id} />
-                      <button type="submit" className="secondary" style={{ fontSize: 11, color: "#e74c3c" }}>Delete</button>
+                      <ConfirmButton
+                        message={`Permanently delete ${p.displayName}? This removes the player and ALL their match history across every season. This cannot be undone.`}
+                        className="secondary"
+                        style={{ fontSize: 11, color: "#e74c3c" }}
+                      >
+                        Delete
+                      </ConfirmButton>
                     </form>
                   </td>
                 </tr>
