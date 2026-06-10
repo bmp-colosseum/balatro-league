@@ -37,7 +37,6 @@ const WIPED_TABLES = [
   "Signup",
   "SignupRound",
   "PlayerMmrSnapshot",
-  "EasterEggVote",
   "SeasonInterest",
   "Season",
   "Player",

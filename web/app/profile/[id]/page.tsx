@@ -13,7 +13,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { recordSetForPlayer, recordForfeitForPlayer } from "@/app/admin/players/actions";
-import { castEasterEggVote, reportFromProfileAction, submitProfileDispute } from "./actions";
+import { reportFromProfileAction, submitProfileDispute } from "./actions";
 import {
   resetToDiscordNameAction,
   setCustomNameAction,
@@ -87,16 +87,14 @@ export default async function ProfilePage({
     (viewerSession?.user as { discordId?: string } | undefined)?.discordId ?? null;
   const showBmpMmr = await getShowBmpMmr();
   const isAdmin = await hasTier("ADMIN");
-  const { viewer, sanji, bmpSeasonSnapshots, fallbackSnapshot, adminCtx, ownActiveDivision } = await loadProfileExtras({
+  const { viewer, bmpSeasonSnapshots, fallbackSnapshot, adminCtx, ownActiveDivision } = await loadProfileExtras({
     profilePlayerId: profile.player.id,
     profileDiscordId: profile.player.discordId,
-    profileDisplayName: profile.player.displayName,
     viewerDiscordId,
     isViewerAdmin: isAdmin,
     showBmpMmr,
   });
   const isOwnProfile = viewer.isOwnProfile;
-  const { isSanji, voterDiscordId, yesVotes, noVotes, myVote } = sanji;
   const traits = await loadPlayerTraits(profile.player.id);
   // Own-profile-only personal settings (folded in from the old /me page).
   const myPrefs = isOwnProfile
@@ -273,61 +271,6 @@ export default async function ProfilePage({
               </div>
             </div>
           </>
-        )}
-
-        {isSanji && (
-          <div className="card" style={{ marginTop: 16, borderColor: "#e67e22" }}>
-            <strong style={{ color: "#e67e22" }}>⚖️ Should we impeach {profile.player.displayName}?</strong>
-            <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <form action={castEasterEggVote} style={{ display: "inline" }}>
-                <input type="hidden" name="targetKey" value="sanji" />
-                <input type="hidden" name="playerId" value={profile.player.id} />
-                <input type="hidden" name="side" value="yes" />
-                <button
-                  type="submit"
-                  disabled={!voterDiscordId}
-                  style={{
-                    background: myVote === "yes" ? "#c0392b" : "rgba(231,76,60,0.2)",
-                    color: myVote === "yes" ? "#fff" : "#e74c3c",
-                    border: "1px solid #e74c3c",
-                    padding: "6px 12px",
-                    borderRadius: 4,
-                    cursor: voterDiscordId ? "pointer" : "not-allowed",
-                    fontWeight: 600,
-                  }}
-                >
-                  🔨 Impeach ({yesVotes})
-                </button>
-              </form>
-              <form action={castEasterEggVote} style={{ display: "inline" }}>
-                <input type="hidden" name="targetKey" value="sanji" />
-                <input type="hidden" name="playerId" value={profile.player.id} />
-                <input type="hidden" name="side" value="no" />
-                <button
-                  type="submit"
-                  disabled={!voterDiscordId}
-                  style={{
-                    background: myVote === "no" ? "#27ae60" : "rgba(46,204,113,0.2)",
-                    color: myVote === "no" ? "#fff" : "#2ecc71",
-                    border: "1px solid #2ecc71",
-                    padding: "6px 12px",
-                    borderRadius: 4,
-                    cursor: voterDiscordId ? "pointer" : "not-allowed",
-                    fontWeight: 600,
-                  }}
-                >
-                  🕊️ Keep ({noVotes})
-                </button>
-              </form>
-              <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
-                {voterDiscordId
-                  ? myVote
-                    ? `You voted ${myVote === "yes" ? "impeach" : "keep"} — click the other to switch.`
-                    : "Cast your one vote."
-                  : "Sign in with Discord to vote."}
-              </span>
-            </div>
-          </div>
         )}
 
         {(bmpSeasonSnapshots.length > 0 || fallbackSnapshot) && (

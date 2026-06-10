@@ -1,10 +1,10 @@
 // Supplementary loaders for the /profile/[id] page — the main history
 // data comes from loadPlayerHistory in @/lib/profile. This file covers
-// the auxiliary queries: viewer identity, easter-egg vote tallies, BMP
-// MMR snapshots, and the admin-only record-set context.
+// the auxiliary queries: viewer identity, BMP MMR snapshots, and the
+// admin-only record-set context.
 //
 // Single bundle so the page can call one function instead of orchestrating
-// five conditional Prisma calls inline.
+// several conditional Prisma calls inline.
 
 import { prisma } from "@/lib/prisma";
 import { formatSeasonLabel } from "@/lib/format-season";
@@ -14,14 +14,6 @@ export interface ProfileViewer {
   playerId: string | null;
   isOwnProfile: boolean;
   isAdmin: boolean;
-}
-
-export interface SanjiVoteData {
-  isSanji: boolean;
-  voterDiscordId: string | null;
-  yesVotes: number;
-  noVotes: number;
-  myVote: "yes" | "no" | null;
 }
 
 export interface ProfileBmpSnapshot {
@@ -63,7 +55,6 @@ export interface OwnActiveDivision {
 
 export interface ProfileExtras {
   viewer: ProfileViewer;
-  sanji: SanjiVoteData;
   bmpSeasonSnapshots: ProfileBmpSnapshot[];
   fallbackSnapshot: ProfileBmpSnapshot | null;
   adminCtx: AdminRecordContext | null;
@@ -73,7 +64,6 @@ export interface ProfileExtras {
 export async function loadProfileExtras(opts: {
   profilePlayerId: string;
   profileDiscordId: string;
-  profileDisplayName: string;
   viewerDiscordId: string | null;
   isViewerAdmin: boolean;
   showBmpMmr: boolean;
@@ -81,13 +71,10 @@ export async function loadProfileExtras(opts: {
   const {
     profilePlayerId,
     profileDiscordId,
-    profileDisplayName,
     viewerDiscordId,
     isViewerAdmin,
     showBmpMmr,
   } = opts;
-
-  const isSanji = profileDisplayName.toLowerCase().includes("sanji");
 
   // Viewer identity — needed to compute isOwnProfile for dispute UI.
   const viewerPlayer = viewerDiscordId
@@ -98,19 +85,7 @@ export async function loadProfileExtras(opts: {
     : null;
 
   // All independent lookups in parallel. Each is a single small query.
-  const [voteCounts, myVoteRow, bmpSeasonSnapshots, adminCtx] = await Promise.all([
-    isSanji
-      ? prisma.easterEggVote.groupBy({
-          by: ["side"],
-          where: { targetKey: "sanji" },
-          _count: { side: true },
-        })
-      : Promise.resolve([] as Array<{ side: string; _count: { side: number } }>),
-    isSanji && viewerDiscordId
-      ? prisma.easterEggVote.findUnique({
-          where: { targetKey_voterDiscordId: { targetKey: "sanji", voterDiscordId: viewerDiscordId } },
-        })
-      : Promise.resolve(null),
+  const [bmpSeasonSnapshots, adminCtx] = await Promise.all([
     showBmpMmr
       ? prisma.playerMmrSnapshot.findMany({
           where: {
@@ -174,11 +149,6 @@ export async function loadProfileExtras(opts: {
         })
       : null;
 
-  const yesVotes = voteCounts.find((c) => c.side === "yes")?._count.side ?? 0;
-  const noVotes = voteCounts.find((c) => c.side === "no")?._count.side ?? 0;
-  const myVote: "yes" | "no" | null =
-    myVoteRow?.side === "yes" || myVoteRow?.side === "no" ? myVoteRow.side : null;
-
   const isOwnProfile = !!viewerPlayer && viewerPlayer.id === profilePlayerId;
   // Only compute the "report a match" context when the viewer IS the
   // profile owner — saves a roundtrip for every random viewer.
@@ -192,13 +162,6 @@ export async function loadProfileExtras(opts: {
       playerId: viewerPlayer?.id ?? null,
       isOwnProfile,
       isAdmin: isViewerAdmin,
-    },
-    sanji: {
-      isSanji,
-      voterDiscordId: viewerDiscordId,
-      yesVotes,
-      noVotes,
-      myVote,
     },
     bmpSeasonSnapshots: sortedSnapshots,
     fallbackSnapshot,

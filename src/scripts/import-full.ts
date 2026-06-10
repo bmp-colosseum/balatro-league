@@ -37,7 +37,6 @@ const ORDER = [
   "playerMmrSnapshot",
   "divisionStandings",
   "seasonInterest",
-  "easterEggVote",
   "adminAuditEvent",
 ] as const;
 
