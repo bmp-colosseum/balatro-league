@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 :root {
   --bg: #0f1115;
@@ -11,11 +12,35 @@
   --accent-2: #5865f2;
   --danger: #e74c3c;
   --success: #2ecc71;
+  --radius: 0.5rem;
 }
 
+/* shadcn/ui design tokens mapped onto the existing dark palette, so shadcn
+   components match the app's theme. The app's raw --muted/--accent (a text
+   colour and gold) are intentionally left alone — shadcn reads --color-* only. */
 @theme inline {
   --color-background: var(--bg);
   --color-foreground: var(--text);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--accent-2);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--surface-2);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--danger);
+  --color-border: var(--border);
+  --color-input: var(--surface-2);
+  --color-ring: var(--accent-2);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
 * { box-sizing: border-box; }

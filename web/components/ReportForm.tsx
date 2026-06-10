@@ -7,6 +7,7 @@
 // Posts to the same server action as before, so the rules are unchanged.
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 
 export interface ReportOpponent {
   playerId: string;
@@ -102,9 +103,9 @@ export function ReportForm({
       </div>
 
       <div>
-        <button type="submit" disabled={!opponentId}>
+        <Button type="submit" disabled={!opponentId}>
           Report{opponent ? ` — ${confirmationLine(selfName, opponent.displayName, result)}` : ""}
-        </button>
+        </Button>
       </div>
     </form>
   );
