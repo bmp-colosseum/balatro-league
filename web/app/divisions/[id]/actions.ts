@@ -8,6 +8,7 @@ import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { enqueueAnnounceResult } from "@/lib/queue";
 import { reportSetFromWeb, type ReportResultStr } from "@/lib/report";
+import { recordResult, overrideResult, forfeitResult, recordShowdown, undoResult } from "@/lib/match-admin";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
 import { resolveDiscordIdToDisplayName } from "@/lib/add-player";
 import { addGuildMemberRole } from "@/lib/discord";
@@ -380,76 +381,23 @@ function gamesFromResult(r: Result): { a: number; b: number } {
 // "Matches — unplayed" picker that lets them set any unplayed pair to any
 // result without being one of the players.
 export async function recordSet(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const divisionId = String(formData.get("divisionId") ?? "");
   const playerAId = String(formData.get("playerAId") ?? "");
   const playerBId = String(formData.get("playerBId") ?? "");
   const result = String(formData.get("result") ?? "") as Result;
   if (!divisionId || !playerAId || !playerBId || !["2-0", "1-1", "0-2"].includes(result)) return;
-
-  const [canonA, canonB] = playerAId < playerBId ? [playerAId, playerBId] : [playerBId, playerAId];
-  const meIsA = playerAId === canonA;
-  const games = gamesFromResult(result);
-  const gamesWonA = meIsA ? games.a : games.b;
-  const gamesWonB = meIsA ? games.b : games.a;
-
-  const winnerId = gamesWonA > gamesWonB ? canonA : gamesWonB > gamesWonA ? canonB : null;
-  const recorded = await prisma.match.upsert({
-    where: { divisionId_playerAId_playerBId_format: { divisionId, playerAId: canonA, playerBId: canonB, format: "LEAGUE_BO2" } },
-    create: {
-      divisionId,
-      playerAId: canonA,
-      playerBId: canonB,
-      format: "LEAGUE_BO2",
-      gamesWonA,
-      gamesWonB,
-      winnerId,
-      status: "CONFIRMED",
-      reportedAt: new Date(),
-      confirmedAt: new Date(),
-      adminOverrideBy: "web-dashboard",
-      adminOverrideReason: "recorded via web dashboard",
-    },
-    update: {
-      gamesWonA,
-      gamesWonB,
-      winnerId,
-      status: "CONFIRMED",
-      confirmedAt: new Date(),
-      adminOverrideBy: "web-dashboard",
-      adminOverrideReason: "recorded via web dashboard (overwrite)",
-    },
-  });
-  // Fire-and-forget Discord announce
-  enqueueAnnounceResult(recorded.id).catch((err) => console.warn("announceResult failed:", err));
-  recomputeDivisionStandings(divisionId).catch(() => {});
+  await recordResult({ divisionId, playerAId, playerBId, result, actor: actorFromAdminUser(user) });
   revalidatePath(`/divisions/${divisionId}`);
 }
 
 export async function overridePairing(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const pairingId = String(formData.get("pairingId") ?? "");
   const result = String(formData.get("result") ?? "") as Result;
   if (!pairingId || !["2-0", "1-1", "0-2"].includes(result)) return;
-  const games = gamesFromResult(result);
-  const updated = await prisma.match.update({
-    where: { id: pairingId },
-    data: {
-      gamesWonA: games.a,
-      gamesWonB: games.b,
-      status: "CONFIRMED",
-      confirmedAt: new Date(),
-      adminOverrideBy: "web-dashboard",
-      adminOverrideReason: "override via web dashboard",
-      // Overriding to a played result clears any forfeit/DQ flag so it no
-      // longer renders "by DQ" (use Delete to undo a DQ entirely).
-      forfeit: false,
-      forfeitReason: null,
-    },
-  });
-  enqueueAnnounceResult(updated.id).catch((err) => console.warn("announceResult failed:", err));
-  recomputeDivisionStandings(updated.divisionId).catch(() => {});
-  revalidatePath(`/divisions/${updated.divisionId}`);
+  const r = await overrideResult({ matchId: pairingId, result, actor: actorFromAdminUser(user) });
+  if (r.ok) revalidatePath(`/divisions/${r.divisionId}`);
 }
 
 // Record (or overwrite) a shootout result for two members in this
@@ -457,66 +405,38 @@ export async function overridePairing(formData: FormData) {
 // side via a form action. Canonical player ordering matches the
 // Pairing convention so the unique constraint catches duplicates.
 export async function recordShootout(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const divisionId = String(formData.get("divisionId") ?? "");
   const p1Id = String(formData.get("p1") ?? "");
   const p2Id = String(formData.get("p2") ?? "");
   const winnerId = String(formData.get("winnerId") ?? "");
-  if (!divisionId || !p1Id || !p2Id || !winnerId) return;
-  if (p1Id === p2Id) return;
-  if (winnerId !== p1Id && winnerId !== p2Id) return;
-  const [canonA, canonB] = p1Id < p2Id ? [p1Id, p2Id] : [p2Id, p1Id];
-  const winA = winnerId === canonA ? 1 : 0;
-  const winB = winnerId === canonB ? 1 : 0;
-  const now = new Date();
-  await prisma.match.upsert({
-    where: {
-      divisionId_playerAId_playerBId_format: { divisionId, playerAId: canonA, playerBId: canonB, format: "SHOOTOUT_BO1" },
-    },
-    create: {
-      divisionId,
-      playerAId: canonA,
-      playerBId: canonB,
-      format: "SHOOTOUT_BO1",
-      gamesWonA: winA,
-      gamesWonB: winB,
-      winnerId,
-      status: "CONFIRMED",
-      reportedAt: now,
-      confirmedAt: now,
-      recordedBy: "web-dashboard",
-    },
-    update: { gamesWonA: winA, gamesWonB: winB, winnerId, status: "CONFIRMED", confirmedAt: now, recordedBy: "web-dashboard" },
-  });
-  recomputeDivisionStandings(divisionId).catch(() => {});
+  await recordShowdown({ divisionId, p1Id, p2Id, winnerId, actor: actorFromAdminUser(user) });
   revalidatePath(`/divisions/${divisionId}`);
 }
 
-// Remove a shootout — sort falls back to the next tiebreaker (wins,
+// Remove a showdown — sort falls back to the next tiebreaker (wins,
 // draws, alphabetical). Useful when an admin records a wrong winner.
 export async function deleteShootout(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const divisionId = String(formData.get("divisionId") ?? "");
   const p1Id = String(formData.get("p1") ?? "");
   const p2Id = String(formData.get("p2") ?? "");
   if (!divisionId || !p1Id || !p2Id) return;
   const [canonA, canonB] = p1Id < p2Id ? [p1Id, p2Id] : [p2Id, p1Id];
-  await prisma.match.deleteMany({
-    where: { divisionId, playerAId: canonA, playerBId: canonB, format: "SHOOTOUT_BO1" },
+  const m = await prisma.match.findUnique({
+    where: { divisionId_playerAId_playerBId_format: { divisionId, playerAId: canonA, playerBId: canonB, format: "SHOOTOUT_BO1" } },
+    select: { id: true },
   });
-  recomputeDivisionStandings(divisionId).catch(() => {});
+  if (m) await undoResult({ matchId: m.id, actor: actorFromAdminUser(user) });
   revalidatePath(`/divisions/${divisionId}`);
 }
 
 export async function deletePairing(formData: FormData) {
-  await requireAdmin();
+  const { user } = await requireAdmin();
   const pairingId = String(formData.get("pairingId") ?? "");
   if (!pairingId) return;
-  const p = await prisma.match.findUnique({ where: { id: pairingId } });
-  if (!p) return;
-  await prisma.match.delete({ where: { id: pairingId } });
-  recomputeDivisionStandings(p.divisionId).catch(() => {});
-  revalidatePath(`/divisions/${p.divisionId}`);
+  const r = await undoResult({ matchId: pairingId, actor: actorFromAdminUser(user) });
+  if (r.ok) revalidatePath(`/divisions/${r.divisionId}`);
 }
 
 // Record (or FIX) a forfeit / DQ between two members of this division. Upserts
@@ -530,59 +450,6 @@ export async function recordForfeitInDivision(formData: FormData) {
   const winnerId = String(formData.get("winnerId") ?? "");
   const loserId = String(formData.get("loserId") ?? "");
   const reason = String(formData.get("reason") ?? "").trim();
-  if (!divisionId || !winnerId || !loserId || winnerId === loserId || !reason) return;
-
-  const [canonA, canonB] = winnerId < loserId ? [winnerId, loserId] : [loserId, winnerId];
-  const winnerIsA = winnerId === canonA;
-  const gamesWonA = winnerIsA ? 2 : 0;
-  const gamesWonB = winnerIsA ? 0 : 2;
-
-  const recorded = await prisma.match.upsert({
-    where: {
-      divisionId_playerAId_playerBId_format: {
-        divisionId,
-        playerAId: canonA,
-        playerBId: canonB,
-        format: "LEAGUE_BO2",
-      },
-    },
-    create: {
-      divisionId,
-      playerAId: canonA,
-      playerBId: canonB,
-      format: "LEAGUE_BO2",
-      gamesWonA,
-      gamesWonB,
-      winnerId,
-      status: "CONFIRMED",
-      reportedAt: new Date(),
-      confirmedAt: new Date(),
-      adminOverrideBy: "web-dashboard",
-      adminOverrideReason: "forfeit / DQ",
-      forfeit: true,
-      forfeitReason: reason,
-    },
-    update: {
-      gamesWonA,
-      gamesWonB,
-      winnerId,
-      status: "CONFIRMED",
-      confirmedAt: new Date(),
-      adminOverrideBy: "web-dashboard",
-      adminOverrideReason: "forfeit / DQ",
-      forfeit: true,
-      forfeitReason: reason,
-    },
-  });
-  recordAudit({
-    actor: actorFromAdminUser(user),
-    action: "match.forfeit",
-    targetType: "Match",
-    targetId: recorded.id,
-    summary: `Forfeit win (2-0 by DQ), winner ${winnerId}`,
-    metadata: { winnerId, loserId, reason, divisionId },
-  });
-  enqueueAnnounceResult(recorded.id).catch(() => {});
-  recomputeDivisionStandings(divisionId).catch(() => {});
+  await forfeitResult({ divisionId, winnerId, loserId, reason, actor: actorFromAdminUser(user) });
   revalidatePath(`/divisions/${divisionId}`);
 }
