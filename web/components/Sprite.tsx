@@ -23,6 +23,11 @@ const ATLAS_META: Record<string, { tileW: number; tileH: number; cols: number; r
   "Jokers.png": { tileW: 142, tileH: 190, cols: 10, rows: 16 },
   "Tarots.png": { tileW: 142, tileH: 190, cols: 10, rows: 6 },
   "Vouchers.png": { tileW: 142, tileH: 190, cols: 9, rows: 4 },
+  "Enhancers.png": { tileW: 142, tileH: 190, cols: 7, rows: 5 },
+  "boosters.png": { tileW: 142, tileH: 190, cols: 4, rows: 9 },
+  "decks.png": { tileW: 142, tileH: 190, cols: 5, rows: 2 },
+  "tags.png": { tileW: 68, tileH: 68, cols: 6, rows: 5 },
+  "standard_giga.png": { tileW: 142, tileH: 190, cols: 1, rows: 1 },
   // Individual single-tile multiplayer sprites.
   "j_pizza.png": { tileW: 142, tileH: 190, cols: 1, rows: 1 },
   "j_conjoined_joker.png": { tileW: 142, tileH: 190, cols: 1, rows: 1 },

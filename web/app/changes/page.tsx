@@ -222,7 +222,7 @@ export default function ChangesPage() {
 
         {/* ============================ CARD MODIFIERS ============================ */}
         <Section id="card-modifiers" title="Card modifiers">
-          <Entry name="Glass" tag="Reworked">
+          <Entry name="Glass" tag="Reworked" sprite="m_glass">
             <p>
               Even with Justice banned, Glass is still available (Standard Packs / Familiar / Grim /
               Incantation). It now gives <strong>1.5× mult</strong> on trigger instead of vanilla&apos;s 2×.
@@ -234,28 +234,32 @@ export default function ChangesPage() {
               the 2nd breaks, and so on — regardless of position or seal.
             </p>
           </Entry>
-          <Entry name="Lucky" tag="Order">
+          <Entry name="Lucky" tag="Order" sprite="m_lucky">
             Runs on two game-long queues — one for the 1/5 mult chance, one for the 1/15 $20 chance. Same
             as vanilla.
           </Entry>
-          <Entry name="Purple Seal" tag="Order">
+          <Entry name="Purple Seal" tag="Order" sprite="seal_purple">
             Pulls from the Up Top tarot queue.
           </Entry>
         </Section>
 
         {/* ============================ PACKS ============================ */}
         <Section id="packs" title="Packs">
-          <Entry name="Giga Standard" tag="MP exclusive">
+          <Entry name="Giga Standard" tag="MP exclusive" sprite="p_standard_giga">
             An Orange-Deck-exclusive pack: 10 standard cards, choose 4. It&apos;s <strong>unskippable</strong> —
             you must take 4.
           </Entry>
-          <Entry name="Arcana / Celestial / Spectral packs" tag="Order">
+          <Entry
+            name="Arcana / Celestial / Spectral packs"
+            tag="Order"
+            sprite={["p_arcana_normal_1", "p_celestial_normal_1", "p_spectral_normal_1"]}
+          >
             Each takes from its consumable&apos;s <strong>Pack</strong> queue (see the shop-queue section).
           </Entry>
-          <Entry name="Buffoon packs" tag="Order">
+          <Entry name="Buffoon packs" tag="Order" sprite="p_buffoon_normal_1">
             Take directly from the shop queue: Normal takes the next 2 jokers, Jumbo/Mega the next 4.
           </Entry>
-          <Entry name="Standard packs" tag="Order">
+          <Entry name="Standard packs" tag="Order" sprite="p_standard_normal_1">
             Pull from a game-long playing-card queue that&apos;s <em>separate</em> from the Magic Trick card
             queue. Opening order matters: a Normal then a Jumbo can strand cards you wanted that you&apos;d
             have gotten opening them the other way around.
@@ -264,10 +268,10 @@ export default function ChangesPage() {
 
         {/* ============================ DECKS ============================ */}
         <Section id="decks" title="Decks">
-          <Entry name="Orange Deck" tag="MP exclusive">
+          <Entry name="Orange Deck" tag="MP exclusive" sprite="b_mp_orange">
             Start with a <strong>Giga Standard Pack</strong> and <strong>2 copies of The Hanged Man</strong>.
           </Entry>
-          <Entry name="Purple Deck" tag="MP exclusive">
+          <Entry name="Purple Deck" tag="MP exclusive" sprite="b_mp_violet">
             <strong>+1 voucher slot</strong>, and during Ante 1 vouchers are <strong>50% off</strong>.
           </Entry>
         </Section>
@@ -442,31 +446,39 @@ export default function ChangesPage() {
 
         {/* ============================ SKIP TAGS ============================ */}
         <Section id="skip-tags" title="Skip tags">
-          <Entry name="Boss Reroll Tag" tag="Banned">
+          <Entry name="Boss Reroll Tag" tag="Banned" sprite="tag_boss">
             Banned for its interaction with the PvP blind.
           </Entry>
-          <Entry name="Foil · Holographic · Polychrome · Negative tags" tag="Order">
+          <Entry
+            name="Foil · Holographic · Polychrome · Negative tags"
+            tag="Order"
+            sprite={["tag_foil", "tag_holo", "tag_polychrome", "tag_negative"]}
+          >
             Work as expected (apply the edition to your next joker / give a Negative joker).
           </Entry>
-          <Entry name="Charm · Meteor · Standard · Spectral tags" tag="Order">
+          <Entry
+            name="Charm · Meteor · Standard · Spectral tags"
+            tag="Order"
+            sprite={["tag_charm", "tag_meteor", "tag_standard", "tag_ethereal"]}
+          >
             Act as if you opened a pack of that type and pull from that type&apos;s Pack queue (including Giga
-            Standard on Orange Deck).
+            Standard on Orange Deck). <span className="muted">(The spectral-pack tag is the in-game Ethereal Tag.)</span>
           </Entry>
-          <Entry name="Rare Tag" tag="Order">
+          <Entry name="Rare Tag" tag="Order" sprite="tag_rare">
             Shares a game-long queue with Wraith that does not take from the shop — only Rare skips and
             Wraiths advance it.
           </Entry>
-          <Entry name="Uncommon Tag" tag="Order">
+          <Entry name="Uncommon Tag" tag="Order" sprite="tag_uncommon">
             Has its own game-long uncommon-joker queue, separate from the shop. Taking Uncommon skips is the
             only way to advance it — an extra shot at an Idol, Dusk, or Mime your nemesis will never see.
           </Entry>
-          <Entry name="Voucher Tag" tag="Order">
+          <Entry name="Voucher Tag" tag="Order" sprite="tag_voucher">
             Advances the voucher queue the same way seeing a new ante does.
           </Entry>
-          <Entry name="Riff-Raff · Top Up Tag" tag="Order">
+          <Entry name="Riff-Raff · Top Up Tag" tag="Order" sprite={["j_riff_raff", "tag_top_up"]}>
             Same shared off-shop queue as noted under Jokers.
           </Entry>
-          <Entry name="Orbital Tag" tag="Order">
+          <Entry name="Orbital Tag" tag="Order" sprite="tag_orbital">
             Only change is Mac/Windows standardization — can still desync if players have different hands
             unlocked.
           </Entry>
