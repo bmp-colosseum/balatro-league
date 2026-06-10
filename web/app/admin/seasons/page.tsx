@@ -326,9 +326,9 @@ export default async function AdminSeasonsPage({
             actual signups, after signups close.
           </p>
           <form action={createSeason}>
-            <label>Subtitle <input name="subtitle" placeholder="Optional subtitle (e.g. 'Launch')" /></label>
-            <label>Group size <input name="targetGroupSize" type="number" min={2} max={20} defaultValue={5} /></label>
-            <label>Min group <input name="minGroupSize" type="number" min={2} max={20} defaultValue={3} /></label>
+            <label>Subtitle <Input name="subtitle" placeholder="Optional subtitle (e.g. 'Launch')" /></label>
+            <label>Group size <Input name="targetGroupSize" type="number" min={2} max={20} defaultValue={5} /></label>
+            <label>Min group <Input name="minGroupSize" type="number" min={2} max={20} defaultValue={3} /></label>
 
             <Button type="submit" className="mt-3">Create season</Button>
           </form>
@@ -492,7 +492,7 @@ function DiscordBootstrap({
         <form action={setSeasonDiscordCategory} style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <input type="hidden" name="id" value={season.id} />
           <label className="muted" style={{ fontSize: 12 }}>Category ID:</label>
-          <input
+          <Input
             type="text"
             name="discordCategoryId"
             defaultValue={season.discordCategoryId ?? ""}

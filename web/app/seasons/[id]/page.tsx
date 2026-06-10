@@ -154,7 +154,7 @@ function PublicSummary({
               <form action={setTierPromoteRelegateCount} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 400 }}>
                 <input type="hidden" name="tierId" value={tier.id} />
                 <span className="muted">Edit:</span>
-                <input
+                <Input
                   type="number"
                   name="count"
                   min={0}
@@ -207,7 +207,7 @@ function PublicSummary({
                                   <form action={setFinalGlobalRank} style={{ display: "flex", gap: 4 }}>
                                     <input type="hidden" name="seasonId" value={season.id} />
                                     <input type="hidden" name="playerId" value={r.player.id} />
-                                    <input
+                                    <Input
                                       type="number"
                                       name="rank"
                                       defaultValue={r.finalGlobalRank ?? ""}
@@ -293,7 +293,7 @@ async function AdminSeasonPanel({
         <form action={renameSeason} style={{ display: "flex", gap: 4, alignItems: "center" }}>
           <input type="hidden" name="id" value={season.id} />
           <span className="muted" style={{ fontSize: 12 }}>—</span>
-          <input
+          <Input
             type="text"
             name="subtitle"
             defaultValue={season.subtitle ?? ""}
@@ -530,7 +530,7 @@ async function AdminSeasonPanel({
           <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
             <form action={setSeasonDiscordCategory} style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <input type="hidden" name="id" value={season.id} />
-              <input
+              <Input
                 type="text"
                 name="discordCategoryId"
                 defaultValue={season.discordCategoryId ?? ""}
@@ -541,7 +541,7 @@ async function AdminSeasonPanel({
             </form>
             <form action={setSeasonResultsWebhook} style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <input type="hidden" name="id" value={season.id} />
-              <input
+              <Input
                 type="text"
                 name="resultsWebhookUrl"
                 defaultValue={season.resultsWebhookUrl ?? ""}
@@ -552,7 +552,7 @@ async function AdminSeasonPanel({
             </form>
             <form action={setSeasonResultsChannel} style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <input type="hidden" name="id" value={season.id} />
-              <input
+              <Input
                 type="text"
                 name="resultsChannelId"
                 defaultValue={season.resultsChannelId ?? ""}
@@ -650,7 +650,7 @@ function LifecycleActions({
               </span>
               <form action={setSeasonScheduledStart} style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
                 <input type="hidden" name="id" value={season.id} />
-                <input
+                <Input
                   type="datetime-local"
                   name="scheduledStartAt"
                   defaultValue={toLocalDatetimeInput(season.scheduledStartAt)}
@@ -672,7 +672,7 @@ function LifecycleActions({
               <label className="muted" style={{ fontSize: 12 }}>
                 Auto-start at (your local time):
               </label>
-              <input type="datetime-local" name="scheduledStartAt" required style={{ fontSize: 12 }} />
+              <Input type="datetime-local" name="scheduledStartAt" required style={{ fontSize: 12 }} />
               <Button type="submit" variant="secondary" size="sm">Schedule</Button>
             </form>
           )}

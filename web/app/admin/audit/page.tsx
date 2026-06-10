@@ -10,6 +10,7 @@ import { requireAdmin } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { AdminNav } from "@/components/AdminNav";
 
 export const dynamic = "force-dynamic";
@@ -172,15 +173,15 @@ export default async function AdminAuditPage({
           </label>
           <label>
             <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Summary contains</div>
-            <input name="q" type="text" placeholder="text search…" defaultValue={sp.q ?? ""} />
+            <Input name="q" type="text" placeholder="text search…" defaultValue={sp.q ?? ""} />
           </label>
           <label>
             <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Since</div>
-            <input name="since" type="datetime-local" defaultValue={sp.since ?? ""} />
+            <Input name="since" type="datetime-local" defaultValue={sp.since ?? ""} />
           </label>
           <label>
             <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Until</div>
-            <input name="until" type="datetime-local" defaultValue={sp.until ?? ""} />
+            <Input name="until" type="datetime-local" defaultValue={sp.until ?? ""} />
           </label>
           <div style={{ display: "flex", gap: 8 }}>
             <Button type="submit">Apply</Button>

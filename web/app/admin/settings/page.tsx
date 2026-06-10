@@ -7,6 +7,7 @@ import { DEFAULTS } from "@/lib/league-settings";
 import { prisma } from "@/lib/prisma";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { SiteNav } from "@/components/SiteNav";
 import {
   deleteRulesTemplate,
@@ -77,7 +78,7 @@ export default async function AdminSettingsPage({
               <input type="hidden" name="id" value={t.id} />
               <label style={{ display: "block", marginBottom: 12 }}>
                 Name
-                <input name="name" defaultValue={t.name} required style={{ width: "100%", maxWidth: 320 }} />
+                <Input name="name" defaultValue={t.name} required style={{ width: "100%", maxWidth: 320 }} />
               </label>
 
               <Section title="Timeouts">
@@ -129,7 +130,7 @@ export default async function AdminSettingsPage({
           <form action={saveRulesTemplate} style={{ marginTop: 12 }}>
             <label style={{ display: "block", marginBottom: 12 }}>
               Name
-              <input name="name" placeholder="e.g. Casual" required style={{ width: "100%", maxWidth: 320 }} />
+              <Input name="name" placeholder="e.g. Casual" required style={{ width: "100%", maxWidth: 320 }} />
             </label>
             <Section title="Timeouts">
               <Field
@@ -188,7 +189,7 @@ function Field({
         )}
         {hint && <div className="muted" style={{ fontSize: 11, fontWeight: 400 }}>{hint}</div>}
       </label>
-      <input
+      <Input
         id={name}
         name={name}
         type="number"

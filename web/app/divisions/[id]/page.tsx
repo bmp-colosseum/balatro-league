@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   addDivisionMemberByDiscordId,
   bulkAddMembers,
@@ -545,7 +546,7 @@ function AdminSection({
         </p>
         <form action={addDivisionMemberByDiscordId} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           <input type="hidden" name="divisionId" value={division.id} />
-          <input
+          <Input
             type="text"
             name="discordId"
             placeholder="Discord ID (17-20 digits)"
@@ -553,7 +554,7 @@ function AdminSection({
             pattern="\d{17,20}"
             style={{ flex: "1 1 200px" }}
           />
-          <input
+          <Input
             type="text"
             name="displayName"
             placeholder="Display name override (optional)"
@@ -706,7 +707,7 @@ function AdminSection({
               ))}
             </select>
           </label>
-          <input type="text" name="reason" required placeholder="Reason (admin-only)" style={{ flex: "1 1 200px" }} />
+          <Input type="text" name="reason" required placeholder="Reason (admin-only)" style={{ flex: "1 1 200px" }} />
           <Button type="submit">Record DQ</Button>
         </form>
       </div>

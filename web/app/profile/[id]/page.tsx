@@ -11,6 +11,7 @@ import { loadPlayerHistory } from "@/lib/profile";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { recordSetForPlayer, recordForfeitForPlayer } from "@/app/admin/players/actions";
 import { castEasterEggVote, reportFromProfileAction, submitProfileDispute } from "./actions";
 import {
@@ -261,7 +262,7 @@ export default async function ProfilePage({
               </p>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <form action={setCustomNameAction} style={{ display: "flex", gap: 6, flex: "1 1 280px" }}>
-                  <input type="text" name="displayName" defaultValue={profile.player.displayName} required maxLength={64} style={{ flex: 1 }} />
+                  <Input type="text" name="displayName" defaultValue={profile.player.displayName} required maxLength={64} style={{ flex: 1 }} />
                   <Button type="submit">Save custom name</Button>
                 </form>
                 {me.hasCustomDisplayName && (
@@ -463,7 +464,7 @@ export default async function ProfilePage({
                   <option value="self">{profile.player.displayName} wins by DQ</option>
                   <option value="opponent">opponent wins by DQ</option>
                 </select>
-                <input type="text" name="reason" required placeholder="Reason (admin-only)" style={{ flex: "1 1 200px" }} />
+                <Input type="text" name="reason" required placeholder="Reason (admin-only)" style={{ flex: "1 1 200px" }} />
                 <Button type="submit">Record DQ</Button>
               </form>
             </details>

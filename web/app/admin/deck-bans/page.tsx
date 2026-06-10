@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/admin";
 import { loadDeckBansPage } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { AdminNav } from "@/components/AdminNav";
 import { CANONICAL_DECKS, CANONICAL_STAKES, deckDescription, stakeDescription } from "@/lib/balatro-info";
 import defaults from "@/lib/match-defaults.json";
@@ -195,7 +196,7 @@ function PresetSidebar({
 function CreatePresetForm({ seedAvailable }: { seedAvailable: boolean }) {
   return (
     <form action={createPreset} style={{ display: "grid", gap: 6 }}>
-      <input type="text" name="name" placeholder="New preset name" required />
+      <Input type="text" name="name" placeholder="New preset name" required />
       {seedAvailable && (
         <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}>
           <input type="checkbox" name="seedDefaults" defaultChecked />
@@ -226,7 +227,7 @@ function PresetEditor({
           <form action={renamePreset} style={{ display: "flex", gap: 6, alignItems: "center", flex: 1 }}>
             <input type="hidden" name="id" value={preset.id} />
             <strong style={{ marginRight: 4 }}>Name:</strong>
-            <input type="text" name="name" defaultValue={preset.name} required style={{ flex: 1 }} />
+            <Input type="text" name="name" defaultValue={preset.name} required style={{ flex: 1 }} />
             <Button type="submit">Save name</Button>
           </form>
           <form action={deletePreset}>

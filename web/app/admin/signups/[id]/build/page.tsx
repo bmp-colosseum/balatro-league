@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/admin";
 import { loadBuildSeasonPage } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
 import { DraggableRatingTable, type RatingRow } from "@/components/DraggableRatingTable";
@@ -107,7 +108,7 @@ export default async function BuildSeasonPage({
           </p>
           <form action={addSignupByDiscordId} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <input type="hidden" name="roundId" value={round.id} />
-            <input
+            <Input
               type="text"
               name="discordId"
               placeholder="Discord ID (17-20 digits)"
@@ -115,7 +116,7 @@ export default async function BuildSeasonPage({
               pattern="\d{17,20}"
               style={{ flex: "1 1 200px" }}
             />
-            <input
+            <Input
               type="text"
               name="displayName"
               placeholder="Display name override (optional)"
@@ -222,15 +223,15 @@ export default async function BuildSeasonPage({
                 ) : (
                   <>Subtitle (optional) — will create <strong>Season {nextNumber}</strong></>
                 )}
-                <input name="subtitle" defaultValue={existingSeason?.subtitle ?? ""} placeholder="Optional subtitle (e.g. 'Launch')" style={{ width: "100%" }} />
+                <Input name="subtitle" defaultValue={existingSeason?.subtitle ?? ""} placeholder="Optional subtitle (e.g. 'Launch')" style={{ width: "100%" }} />
               </label>
               <label>
                 Group size
-                <input name="targetGroupSize" type="number" min={2} max={20} defaultValue={5} style={{ width: "100%" }} />
+                <Input name="targetGroupSize" type="number" min={2} max={20} defaultValue={5} style={{ width: "100%" }} />
               </label>
               <label>
                 Min group
-                <input name="minGroupSize" type="number" min={2} max={20} defaultValue={3} style={{ width: "100%" }} />
+                <Input name="minGroupSize" type="number" min={2} max={20} defaultValue={3} style={{ width: "100%" }} />
               </label>
               <label>
                 Deck preset
