@@ -10,10 +10,12 @@
 // frozen history.
 
 import Link from "next/link";
+import { Suspense } from "react";
 import { requireAdmin } from "@/lib/admin";
 import { loadAdminDisputes } from "@/lib/loaders/admin";
 import { AdminNav } from "@/components/AdminNav";
 import { SiteNav } from "@/components/SiteNav";
+import { FlashToast } from "@/components/FlashToast";
 import { acceptDisputeProposal, rejectDispute, setDisputeResult } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +26,7 @@ export default async function AdminDisputesPage({
   searchParams: Promise<{ ok?: string; err?: string }>;
 }) {
   await requireAdmin();
-  const { ok, err } = await searchParams;
+  void searchParams; // flashes handled client-side by <FlashToast>
 
   const disputes = await loadAdminDisputes();
 
@@ -40,21 +42,15 @@ export default async function AdminDisputesPage({
           admin page to enter the right result manually.
         </p>
 
-        {ok === "accepted" && (
-          <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>
-            ✓ Proposed correction accepted. Standings updated.
-          </div>
-        )}
-        {ok === "rejected" && (
-          <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>
-            ✓ Dispute rejected, original result kept.
-          </div>
-        )}
-        {err && (
-          <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c" }}>
-            {err}
-          </div>
-        )}
+        <Suspense fallback={null}>
+          <FlashToast
+            messages={{
+              accepted: "Proposed correction accepted. Standings updated.",
+              rejected: "Dispute rejected, original result kept.",
+              custom: "Corrected result set.",
+            }}
+          />
+        </Suspense>
 
         {disputes.length === 0 ? (
           <div className="card muted">No open disputes. Nice.</div>
