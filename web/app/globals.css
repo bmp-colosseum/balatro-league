@@ -101,6 +101,56 @@ section[id]:target > h3 {
   .standings-cards { display: block; margin-top: 8px; }
 }
 
+/* Reusable: dense table on desktop → labeled cards on phones. Add the
+   `responsive-table` class to a <table>, a `data-label` to each <td>, and
+   `card-header` to the cell that should be the card title (usually the name). */
+@media (max-width: 640px) {
+  /* Nav bars wrap instead of overflowing the viewport. */
+  header.site-nav { flex-wrap: wrap; gap: 12px; padding: 10px 16px; }
+  header.site-nav nav { flex-wrap: wrap; gap: 8px; }
+  .subnav nav { flex-wrap: wrap; gap: 8px; }
+  main { padding: 0 16px; margin: 16px auto; }
+
+  table.responsive-table thead { display: none; }
+  table.responsive-table,
+  table.responsive-table tbody,
+  table.responsive-table tr,
+  table.responsive-table td { display: block; width: 100%; }
+  table.responsive-table tr {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    padding: 6px 10px;
+  }
+  table.responsive-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    border: none;
+    padding: 3px 0;
+    text-align: right;
+  }
+  table.responsive-table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: left;
+    white-space: nowrap;
+  }
+  table.responsive-table td.card-header {
+    justify-content: flex-start;
+    font-weight: 600;
+    font-size: 15px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
+  table.responsive-table td.card-header::before { content: none; }
+}
+
 .grid { display: grid; gap: 16px; }
 /* Cards in grid-2 hold standings tables. Standings has ~10 columns
    now (incl. Overall, Match W%, W/D/L%, Game W%), so we bumped the

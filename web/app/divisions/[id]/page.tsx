@@ -119,7 +119,7 @@ export default async function PublicDivisionPage({
         <div className="card">
           <strong>Standings</strong>
           <div className="table-scroll" style={{ marginTop: 8 }}>
-          <table className="table-dense">
+          <table className="table-dense responsive-table">
             <thead>
               <tr>
                 <th></th>
@@ -141,11 +141,11 @@ export default async function PublicDivisionPage({
                 );
                 return (
                   <tr key={r.player.id}>
-                    <td>{medal}</td>
-                    <td>{r.dropped ? <s>{link}</s> : link}{r.dropped && <span className="muted"> (dropped)</span>}</td>
-                    <td><strong>{r.points}</strong></td>
-                    <td>{r.wins}-{r.draws}-{r.losses}</td>
-                    <td>{r.gamesWon}-{r.gamesLost}</td>
+                    <td data-label="Rank">{medal}</td>
+                    <td className="card-header">{r.dropped ? <s>{link}</s> : link}{r.dropped && <span className="muted"> (dropped)</span>}</td>
+                    <td data-label="Pts"><strong>{r.points}</strong></td>
+                    <td data-label="W-D-L">{r.wins}-{r.draws}-{r.losses}</td>
+                    <td data-label="Games">{r.gamesWon}-{r.gamesLost}</td>
                   </tr>
                 );
               })}

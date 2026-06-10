@@ -21,7 +21,7 @@ export default async function PlayersPage() {
       <main>
         <h2>Players ({players.length})</h2>
         <div className="card">
-          <table>
+          <table className="responsive-table">
             <thead>
               <tr>
                 <th>Player</th>
@@ -34,12 +34,12 @@ export default async function PlayersPage() {
               ) : (
                 players.map((p) => (
                   <tr key={p.id}>
-                    <td>
+                    <td className="card-header">
                       <Link href={`/profile/${p.id}`} style={{ color: "var(--text)" }}>
                         {p.displayName}
                       </Link>
                     </td>
-                    <td>
+                    <td data-label="Division">
                       {p.membership ? (
                         <>
                           <Link href={`/seasons/${p.membership.division.seasonId}`} className="muted" style={{ textDecoration: "none" }}>

@@ -336,7 +336,7 @@ export default async function ProfilePage({
               </span>
             </div>
             {bmpSeasonSnapshots.length > 0 ? (
-              <table style={{ fontSize: 12, marginTop: 4, width: "100%" }}>
+              <table className="responsive-table" style={{ fontSize: 12, marginTop: 4, width: "100%" }}>
                 <thead>
                   <tr>
                     <th>Season</th>
@@ -352,25 +352,25 @@ export default async function ProfilePage({
                 <tbody>
                   {bmpSeasonSnapshots.map((snap, i) => (
                     <tr key={snap.id}>
-                      <td>
+                      <td className="card-header">
                         <strong>{formatBmpSeason(snap.bmpSeason)}</strong>
                         {i === 0 && <span className="muted" style={{ fontSize: 11 }}> · current</span>}
                       </td>
-                      <td><strong>{snap.rankedMmr}</strong></td>
-                      <td>
+                      <td data-label="MMR"><strong>{snap.rankedMmr}</strong></td>
+                      <td data-label="Tier">
                         <span className="pill" style={{ background: "rgba(118,199,255,0.15)", color: "#76c7ff", fontSize: 11 }}>
                           {snap.rankedTier}
                         </span>
                       </td>
-                      <td>{snap.peakMmr ?? <span className="muted">—</span>}</td>
-                      <td>
+                      <td data-label="Peak">{snap.peakMmr ?? <span className="muted">—</span>}</td>
+                      <td data-label="W-L">
                         {snap.wins != null && snap.losses != null
                           ? `${snap.wins}-${snap.losses}`
                           : <span className="muted">—</span>}
                       </td>
-                      <td>{snap.winRatePct != null ? `${snap.winRatePct}%` : <span className="muted">—</span>}</td>
-                      <td>{snap.leaderboardRank != null ? `#${snap.leaderboardRank}` : <span className="muted">—</span>}</td>
-                      <td>{snap.peakStreak != null && snap.peakStreak > 0 ? snap.peakStreak : <span className="muted">—</span>}</td>
+                      <td data-label="Win %">{snap.winRatePct != null ? `${snap.winRatePct}%` : <span className="muted">—</span>}</td>
+                      <td data-label="Rank">{snap.leaderboardRank != null ? `#${snap.leaderboardRank}` : <span className="muted">—</span>}</td>
+                      <td data-label="Streak">{snap.peakStreak != null && snap.peakStreak > 0 ? snap.peakStreak : <span className="muted">—</span>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -690,7 +690,7 @@ export default async function ProfilePage({
                     )}
                   </span>
                 </div>
-                <table>
+                <table className="responsive-table">
                   <thead>
                     <tr>
                       <th>Date</th>
@@ -715,13 +715,13 @@ export default async function ProfilePage({
                           : { bg: "rgba(241,196,15,0.15)", fg: "#f1c40f", label: "D" };
                         return (
                           <tr key={i} style={isDisputed ? { opacity: 0.7 } : undefined}>
-                            <td>{date}</td>
-                            <td>
+                            <td data-label="Date">{date}</td>
+                            <td className="card-header">
                               {isShootout && <span title="Showdown (1-game tiebreaker)" style={{ marginRight: 4 }}>⚔</span>}
                               <Link href={`/profile/${m.opponentPlayerId}`} style={{ color: "var(--text)" }}>{m.opponentDisplayName}</Link>
                               {isShootout && <span className="muted" style={{ marginLeft: 6, fontSize: 11 }}>(showdown)</span>}
                             </td>
-                            <td>
+                            <td data-label="Score">
                               <strong>{m.myGames}–{m.opponentGames}</strong>
                               {m.games.length > 0 && (
                                 <div className="muted" style={{ fontSize: 10, marginTop: 2 }}>
@@ -753,7 +753,7 @@ export default async function ProfilePage({
                                 </div>
                               )}
                             </td>
-                            <td><span className="pill" style={{ background: outcomePill.bg, color: outcomePill.fg, fontSize: isDisputed ? 10 : undefined }}>{outcomePill.label}</span></td>
+                            <td data-label="Result"><span className="pill" style={{ background: outcomePill.bg, color: outcomePill.fg, fontSize: isDisputed ? 10 : undefined }}>{outcomePill.label}</span></td>
                             {isOwnProfile && h.isActive && isShootout && (
                               <td className="muted" style={{ fontSize: 11 }}>—</td>
                             )}
