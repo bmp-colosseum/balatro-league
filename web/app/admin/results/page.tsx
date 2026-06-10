@@ -4,9 +4,11 @@
 //
 // Entry: pick a division, OR search a player to jump to their division.
 
+import { Suspense } from "react";
 import { requireAdmin } from "@/lib/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
+import { FlashToast } from "@/components/FlashToast";
 import { PlayerSearch } from "@/components/PlayerSearch";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { loadResultsPage, type ResultsMember } from "@/lib/loaders/admin-results";
@@ -28,7 +30,7 @@ export default async function ResultsPage({
   searchParams: Promise<{ division?: string; player?: string; ok?: string }>;
 }) {
   await requireAdmin();
-  const { division: divisionId, player: playerId, ok } = await searchParams;
+  const { division: divisionId, player: playerId } = await searchParams;
   const data = await loadResultsPage({ divisionId, playerId });
   const sel = data.selection;
 
@@ -42,9 +44,7 @@ export default async function ResultsPage({
           Record, override, forfeit/DQ, settle a showdown, or undo any match — all in one place.
         </p>
 
-        {ok && OK_MSG[ok] && (
-          <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>✓ {OK_MSG[ok]}</div>
-        )}
+        <Suspense fallback={null}><FlashToast messages={OK_MSG} /></Suspense>
 
         {/* ---- Entry: division picker + player search ---- */}
         <div className="card" style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
