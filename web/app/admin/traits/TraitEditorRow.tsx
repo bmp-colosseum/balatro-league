@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import type { TraitAdminRow } from "@/lib/loaders/traits-admin";
 
@@ -153,7 +154,7 @@ export function TraitEditorRow({
             </label>
             <label style={{ display: "grid", gap: 2, fontSize: 12 }}>
               <span className="muted">Description</span>
-              <textarea name="description" defaultValue={row.description} rows={2} style={{ resize: "vertical" }} />
+              <Textarea name="description" defaultValue={row.description} rows={2} style={{ resize: "vertical" }} />
               <span className="muted" style={{ fontSize: 10 }}>default: {row.defaultDescription}</span>
             </label>
           </div>

@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import {
   addDivisionMemberByDiscordId,
@@ -506,7 +507,7 @@ function AdminSection({
         </p>
         <form action={bulkAddMembers}>
           <input type="hidden" name="divisionId" value={divisionId} />
-          <textarea
+          <Textarea
             name="lines"
             rows={8}
             placeholder={"123456789012345678\n234567890123456789\n# comment lines are ok\n<@345678901234567890>"}
@@ -526,7 +527,7 @@ function AdminSection({
         </p>
         <form action={bulkRecordPairings}>
           <input type="hidden" name="divisionId" value={divisionId} />
-          <textarea
+          <Textarea
             name="lines"
             rows={8}
             placeholder={"123456789012345678 234567890123456789 2-0\n123456789012345678 345678901234567890 1-1"}

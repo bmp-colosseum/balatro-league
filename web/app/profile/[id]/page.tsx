@@ -11,6 +11,7 @@ import { loadPlayerHistory } from "@/lib/profile";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { recordSetForPlayer, recordForfeitForPlayer } from "@/app/admin/players/actions";
 import { reportFromProfileAction, submitProfileDispute } from "./actions";
@@ -727,7 +728,7 @@ export default async function ProfilePage({
                                       <option value="1-1">1-1 (draw)</option>
                                       <option value="0-2">0-2 (I lost both)</option>
                                     </select>
-                                    <textarea
+                                    <Textarea
                                       name="reason"
                                       rows={2}
                                       placeholder="Optional context for the helper…"

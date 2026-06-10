@@ -6,6 +6,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { bulkImportSeason } from "./actions";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 export const dynamic = "force-dynamic";
 
@@ -101,7 +102,7 @@ export default async function BulkImportPage({
               Matches <code>scripts/out/participants.csv</code> exactly (header row optional, auto-detected).
               Skips rows without a valid Discord ID.
             </p>
-            <textarea
+            <Textarea
               name="members"
               rows={12}
               placeholder={"division,display_name,discord_id\nCommon 6,Bob,123456789012345678\nCommon 6,DJ,234567890123456789\n..."}
@@ -117,7 +118,7 @@ export default async function BulkImportPage({
               Matches <code>scripts/out/matches.csv</code> exactly. <code>player1</code>/<code>player2</code> can be either
               a Discord ID or a display name from the members import. Rows where <code>state ≠ complete</code> are skipped.
             </p>
-            <textarea
+            <Textarea
               name="matches"
               rows={12}
               placeholder={"division,player1,player2,result,state\nCommon 6,Bob,DJ,2-0,complete\nCommon 6,Ohdamn,F8,1-1,complete\n..."}
