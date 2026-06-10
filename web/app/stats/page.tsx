@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { SiteNav } from "@/components/SiteNav";
+import { BanRateChart } from "@/components/BanRateChart";
 import { loadStatsPageData, type StatsLeaderRow, type StatsDeckRow, type StatsBanRow } from "@/lib/loaders/stats";
 
 export const dynamic = "force-dynamic";
@@ -86,6 +87,12 @@ export default async function StatsPage() {
         </p>
 
         <h3 style={{ marginTop: 24 }}>Most-banned decks + stakes</h3>
+        {data.mostBannedDecks.length >= 2 && (
+          <div className="card">
+            <strong>Deck ban rate</strong>
+            <BanRateChart data={data.mostBannedDecks.map((r) => ({ name: r.name, rate: r.banRatePct }))} />
+          </div>
+        )}
         <div className="grid grid-2">
           <BanCard title="Most-banned decks" rows={data.mostBannedDecks} />
           <BanCard title="Most-banned stakes" rows={data.mostBannedStakes} />
