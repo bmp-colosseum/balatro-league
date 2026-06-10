@@ -498,11 +498,11 @@ async function exportResults(interaction: ChatInputCommandInteraction) {
     const buf = serializeExport(data);
     const filename = exportFilename();
     const attachment = new AttachmentBuilder(buf, { name: filename });
-    const pairings = data.seasons.reduce((sum, s) => sum + s.divisions.reduce((d, dv) => d + dv.pairings.length, 0), 0);
+    const matchCount = data.seasons.reduce((sum, s) => sum + s.divisions.reduce((d, dv) => d + dv.matches.length, 0), 0);
     await interaction.editReply({
       content:
         `📦 League snapshot: ${data.seasons.length} seasons, ${data.players.length} players, ` +
-        `${pairings} pairings. ` +
+        `${matchCount} matches. ` +
         `File size ${(buf.length / 1024).toFixed(1)}KB.`,
       files: [attachment],
     });
@@ -510,7 +510,7 @@ async function exportResults(interaction: ChatInputCommandInteraction) {
       actor: actorFromInteractionUser(interaction.user),
       action: "league.export",
       summary: `Exported league snapshot (${data.seasons.length} seasons, ${data.players.length} players)`,
-      metadata: { seasonCount: data.seasons.length, playerCount: data.players.length, pairingCount: pairings, sizeBytes: buf.length },
+      metadata: { seasonCount: data.seasons.length, playerCount: data.players.length, matchCount, sizeBytes: buf.length },
     });
   } catch (err) {
     console.warn("[admin export-results] failed:", err);

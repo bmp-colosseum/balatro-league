@@ -48,12 +48,14 @@ interface ExportSeason {
       droppedAt: string | null;
       dropoutReason: string | null;
     }>;
-    pairings: Array<{
+    matches: Array<{
       id: string;
+      format: string;
       playerAId: string;
       playerBId: string;
       gamesWonA: number;
       gamesWonB: number;
+      winnerId: string | null;
       status: string;
       reportedAt: string | null;
       confirmedAt: string | null;
@@ -97,13 +99,15 @@ export async function buildLeagueExport(): Promise<LeagueExport> {
                 dropoutReason: true,
               },
             },
-            pairings: {
+            matches: {
               select: {
                 id: true,
+                format: true,
                 playerAId: true,
                 playerBId: true,
                 gamesWonA: true,
                 gamesWonB: true,
+                winnerId: true,
                 status: true,
                 reportedAt: true,
                 confirmedAt: true,
@@ -152,12 +156,14 @@ export async function buildLeagueExport(): Promise<LeagueExport> {
           droppedAt: m.droppedAt ? m.droppedAt.toISOString() : null,
           dropoutReason: m.dropoutReason,
         })),
-        pairings: d.pairings.map((p) => ({
+        matches: d.matches.map((p) => ({
           id: p.id,
+          format: p.format,
           playerAId: p.playerAId,
           playerBId: p.playerBId,
           gamesWonA: p.gamesWonA,
           gamesWonB: p.gamesWonB,
+          winnerId: p.winnerId,
           status: p.status,
           reportedAt: p.reportedAt ? p.reportedAt.toISOString() : null,
           confirmedAt: p.confirmedAt ? p.confirmedAt.toISOString() : null,
@@ -185,8 +191,8 @@ export function exportFilename(): string {
 const FULL_MODELS = [
   "player", "playerMmrSnapshot", "easterEggVote", "season", "signupRound", "signup",
   "matchConfigPreset", "matchSession", "leagueConfig", "seasonInterest", "roleBinding",
-  "tierTemplate", "tier", "division", "divisionStandings", "shootout", "divisionMember",
-  "pairing", "leagueRulesTemplate", "adminAuditEvent",
+  "tierTemplate", "tier", "division", "divisionStandings", "divisionMember",
+  "match", "game", "gameDeck", "leagueRulesTemplate", "adminAuditEvent",
 ] as const;
 
 export async function buildFullExport(): Promise<{ data: Record<string, unknown>; rowCount: number }> {

@@ -28,37 +28,33 @@ datasource db {
 }
 
 model Player {
-  id              String   @id @default(cuid())
-  discordId       String   @unique
+  id                   String   @id @default(cuid())
+  discordId            String   @unique
   // The currently-shown name. Auto-synced from Discord on /me visit UNLESS
   // hasCustomDisplayName=true (user has set their own override).
-  displayName     String
+  displayName          String
   // Whether the player explicitly set their own displayName. False (default)
   // means "let Discord be the source of truth — auto-sync on login." True
   // means "they typed this, leave it alone."
-  hasCustomDisplayName Boolean @default(false)
-  createdAt       DateTime @default(now())
+  hasCustomDisplayName Boolean  @default(false)
+  createdAt            DateTime @default(now())
   // Admin-managed skill rating. Used by auto-seed-by-rating to place players into divisions.
   // Null = unrated (auto-seed treats as 0 / lowest).
-  rating          Int?
+  rating               Int?
   // Optional note explaining the rating (e.g. "Balatro MP MMR 540, Glass tier")
-  ratingNote      String?
+  ratingNote           String?
 
   memberships     DivisionMember[]
-  pairingsAsA     Pairing[] @relation("PairingPlayerA")
-  pairingsAsB     Pairing[] @relation("PairingPlayerB")
-  reportedPairings Pairing[] @relation("PairingReporter")
-  disputedPairings Pairing[] @relation("PairingDisputer")
-  // Unified Match model (expand phase — coexists with Pairing until cut-over).
-  matchesAsA      Match[]   @relation("MatchPlayerA")
-  matchesAsB      Match[]   @relation("MatchPlayerB")
-  reportedMatches Match[]   @relation("MatchReporter")
-  disputedMatches Match[]   @relation("MatchDisputer")
+  // Unified Match model — the source of truth (Pairing/Shootout dropped in 4c).
+  matchesAsA      Match[]             @relation("MatchPlayerA")
+  matchesAsB      Match[]             @relation("MatchPlayerB")
+  reportedMatches Match[]             @relation("MatchReporter")
+  disputedMatches Match[]             @relation("MatchDisputer")
   mmrSnapshots    PlayerMmrSnapshot[]
   strikes         Strike[]
   // Opt-in: auto-enroll this player into the next signup round when it opens.
   // Default off — players choose this on /me. They can still withdraw after.
-  autoSignup      Boolean   @default(false)
+  autoSignup      Boolean             @default(false)
 
   @@index([rating])
 }
@@ -70,11 +66,11 @@ model Strike {
   id           String   @id @default(cuid())
   playerId     String
   reason       String
-  issuedById   String   // Discord id of the admin who logged it
+  issuedById   String // Discord id of the admin who logged it
   issuedByName String
   createdAt    DateTime @default(now())
 
-  player       Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
   @@index([playerId])
 }
@@ -90,47 +86,47 @@ model Strike {
 // re-scraping (their site only shows current state, so historical data
 // would otherwise be lost forever).
 model PlayerMmrSnapshot {
-  id          String   @id @default(cuid())
+  id              String   @id @default(cuid())
   // Canonical key — present even when no Player row exists yet (new
   // signups that haven't been turned into Players by build-season).
-  discordId   String
+  discordId       String
   // Set when a Player row exists; null for snapshots captured during
   // signup-close before the new player has been materialized. Backfilled
   // by build-season when it creates the Player row.
-  playerId    String?
-  player      Player?  @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  playerId        String?
+  player          Player?  @relation(fields: [playerId], references: [id], onDelete: SetNull)
   // Null = ad-hoc capture not tied to a specific season (e.g., admin
   // hit refresh). Otherwise the season this snapshot was taken FOR
   // (typically the season the player just signed up to).
-  seasonId    String?
-  capturedAt  DateTime @default(now())
+  seasonId        String?
+  capturedAt      DateTime @default(now())
   // Source = "balatromp.com" for now; future-proofs adding other rating
   // sources (e.g., a self-reported manual entry).
-  source      String   @default("balatromp.com")
+  source          String   @default("balatromp.com")
   // BMP-season this snapshot belongs to (e.g. "season6"). Null = captured
   // without specifying a season (request was for current state). Set when
   // we explicitly fetch a prior BMP season so we can show last-2-seasons
   // trend on the profile.
-  bmpSeason   String?
+  bmpSeason       String?
   // Nullable because the player may not have an account on balatromp,
   // or the fetch may have failed — we still want a row recording the
   // attempt rather than silently dropping it (fetchError captures why).
-  rankedMmr   Int?
-  rankedTier  String?
-  totalGames  Int?
+  rankedMmr       Int?
+  rankedTier      String?
+  totalGames      Int?
   // Stored as integer 0-100 (e.g., 52 = 52%). Easier to sort/filter than
   // a float and we don't need sub-percent precision for seeding.
-  winRatePct  Int?
+  winRatePct      Int?
   // Direct from the tRPC response — let players see peak MMR they ever
   // hit in this season, raw W/L counts (winRatePct is derived), longest
   // win streak, and leaderboard rank position at capture time.
-  peakMmr     Int?
-  wins        Int?
-  losses      Int?
-  peakStreak  Int?
+  peakMmr         Int?
+  wins            Int?
+  losses          Int?
+  peakStreak      Int?
   leaderboardRank Int?
-  rawHtml     String?
-  fetchError  String?
+  rawHtml         String?
+  fetchError      String?
 
   @@index([discordId, capturedAt])
   @@index([discordId, bmpSeason, capturedAt])
@@ -145,42 +141,42 @@ model PlayerMmrSnapshot {
 // so each logged-in user can only vote once per target; submitting the
 // opposite side just updates the existing row.
 model EasterEggVote {
-  id              String   @id @default(cuid())
-  targetKey       String
-  voterDiscordId  String
-  side            String   // "yes" | "no"
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(cuid())
+  targetKey      String
+  voterDiscordId String
+  side           String // "yes" | "no"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@unique([targetKey, voterDiscordId])
   @@index([targetKey, side])
 }
 
 model Season {
-  id          String   @id @default(cuid())
+  id               String    @id @default(cuid())
   // Sequential season number — required and globally unique. The
   // user-facing label is derived as "Season {number}" (with optional
   // " — {subtitle}" suffix), so seasons are identified by their number
   // and not by free-form name. See formatSeasonLabel() helpers.
-  number      Int      @unique
+  number           Int       @unique
   // Optional human subtitle, e.g. "Launch" or "Anniversary". Null for
   // the default label of just "Season N".
-  subtitle    String?
-  startedAt   DateTime @default(now())
+  subtitle         String?
+  startedAt        DateTime  @default(now())
   // If set, the match-sweep loop auto-activates this season (flips
   // isActive=true) the next time it runs after this timestamp. Admin
   // can edit/clear at any point before activation. Cleared on activate.
   scheduledStartAt DateTime?
-  endedAt     DateTime?
+  endedAt          DateTime?
   // Archived seasons are hidden from default lists (admin + public). Use
   // for old seasons you want kept-but-out-of-the-way.
-  archivedAt  DateTime?
-  isActive    Boolean  @default(true)
+  archivedAt       DateTime?
+  isActive         Boolean   @default(true)
   // Target players per division. Driving fewer games per player → use 4 instead of 5.
-  targetGroupSize Int  @default(5)
+  targetGroupSize  Int       @default(5)
   // Don't auto-create a division with fewer than this many players (smaller leftover groups
   // are flagged as warnings instead of becoming tiny divisions).
-  minGroupSize    Int  @default(3)
+  minGroupSize     Int       @default(3)
 
   // Which match-config preset /start-match uses for this season. Null falls
   // back to the preset named "Default" at match-time.
@@ -197,25 +193,25 @@ model Season {
 
   // Discord category to nest per-division channels under. Set once per season
   // via /admin/seasons. If null, division channels are created at top level.
-  discordCategoryId   String?
+  discordCategoryId String?
 
   // Per-season overrides for results announcements. If null, fall back to
   // the global LeagueConfig.ResultsWebhookUrl / env RESULTS_CHANNEL_ID.
   // Lets each season post results to its own dedicated channel without
   // having to touch env vars between seasons.
-  resultsWebhookUrl   String?
-  resultsChannelId    String?
+  resultsWebhookUrl String?
+  resultsChannelId  String?
 
-  divisions   Division[]
-  tiers       Tier[]
+  divisions Division[]
+  tiers     Tier[]
 
   @@index([isActive])
 }
 
 enum SignupStatus {
   OPEN
-  CLOSED  // signups locked; awaiting build-season
-  BUILT   // converted into a Season
+  CLOSED // signups locked; awaiting build-season
+  BUILT // converted into a Season
 }
 
 // A round of signups. Lives independently of Season so signups for "next season"
@@ -224,30 +220,30 @@ model SignupRound {
   id                String       @id @default(cuid())
   name              String
   guildId           String
-  channelId         String       // channel the signup embed lives in
-  messageId         String       // the signup message we re-edit as people sign up
+  channelId         String // channel the signup embed lives in
+  messageId         String // the signup message we re-edit as people sign up
   status            SignupStatus @default(OPEN)
   openedAt          DateTime     @default(now())
   // Scheduled close time chosen at open — shown as a Discord timestamp in the
   // signup post and used as the withdraw deadline. Null = no announced deadline.
   closesAt          DateTime?
   closedAt          DateTime?
-  resultingSeasonId String?      // set when build-season turns this into a Season
+  resultingSeasonId String? // set when build-season turns this into a Season
 
-  signups           Signup[]
+  signups Signup[]
 
   @@index([status])
 }
 
 model Signup {
-  id          String      @id @default(cuid())
+  id          String   @id @default(cuid())
   roundId     String
   discordId   String
   displayName String
-  withdrawn   Boolean     @default(false)
-  signedUpAt  DateTime    @default(now())
+  withdrawn   Boolean  @default(false)
+  signedUpAt  DateTime @default(now())
 
-  round       SignupRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  round SignupRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
 
   @@unique([roundId, discordId])
   @@index([roundId, withdrawn])
@@ -265,38 +261,38 @@ model MatchConfigPreset {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  seasons   Season[]
+  seasons Season[]
 }
 
 // A guided 2-game series session driven by the bot in a Discord thread.
 // Tracks coin toss + ban/pick state. When complete, writes a CONFIRMED Pairing.
 enum MatchSessionState {
-  WAITING_ACCEPT        // posted, awaiting opponent click
-  GAME_1_BAN            // banning phase for game 1
-  GAME_1_PICK           // first player picks from final 2
-  GAME_1_PLAYING        // played in Balatro, waiting for winner report
-  GAME_2_CHOOSE_FIRST   // game 1 loser picks who bans first in game 2
-  GAME_2_BAN            // banning phase for game 2
+  WAITING_ACCEPT // posted, awaiting opponent click
+  GAME_1_BAN // banning phase for game 1
+  GAME_1_PICK // first player picks from final 2
+  GAME_1_PLAYING // played in Balatro, waiting for winner report
+  GAME_2_CHOOSE_FIRST // game 1 loser picks who bans first in game 2
+  GAME_2_BAN // banning phase for game 2
   GAME_2_PICK
   GAME_2_PLAYING
-  GAME_3_CHOOSE_FIRST   // BO3 only — game 2 loser picks who bans first in game 3
+  GAME_3_CHOOSE_FIRST // BO3 only — game 2 loser picks who bans first in game 3
   GAME_3_BAN
   GAME_3_PICK
   GAME_3_PLAYING
-  PAUSED                // mutual-consent pause after game 1; pausedFromState remembers where to resume
-  COMPLETE              // pairing written (or just done if casual)
-  CANCELLED             // never accepted or admin-killed
+  PAUSED // mutual-consent pause after game 1; pausedFromState remembers where to resume
+  COMPLETE // pairing written (or just done if casual)
+  CANCELLED // never accepted or admin-killed
 }
 
 model MatchSession {
-  id            String            @id @default(cuid())
-  divisionId    String?           // null when isCasual=true (no league context)
-  playerAId     String            // initiator (ran /start-match OR /challenge)
-  playerBId     String            // opponent
-  state         MatchSessionState @default(WAITING_ACCEPT)
+  id                      String             @id @default(cuid())
+  divisionId              String? // null when isCasual=true (no league context)
+  playerAId               String // initiator (ran /start-match OR /challenge)
+  playerBId               String // opponent
+  state                   MatchSessionState  @default(WAITING_ACCEPT)
   // Set when state=PAUSED — the previous state to resume back to once
   // both players consent. Cleared on resume/cancel/complete.
-  pausedFromState MatchSessionState?
+  pausedFromState         MatchSessionState?
   // Player IDs who voted for a pending pause / resume. First click sets
   // it; opposite-player click flips state and clears it. Cleared on
   // any non-pause/resume button click that mutates state.
@@ -318,26 +314,26 @@ model MatchSession {
   // Bumped on every update; used for optimistic concurrency control so
   // racing button clicks can't double-write the state machine. Any update
   // is gated by `where: { id, version }` — a stale click hits 0 rows updated.
-  version       Int               @default(0)
+  version                 Int                @default(0)
   // Casual /challenge match — no division/season required, no Pairing
   // written at COMPLETE, no auto-announce. Otherwise uses the same
   // ban/pick state machine and Discord rendering.
-  isCasual      Boolean           @default(false)
+  isCasual                Boolean            @default(false)
   // 1, 2, or 3. 1 = one game and done. 2 = league default. 3 = play game 3
   // only if game 1 and 2 split (1-1 W-L).
-  bestOf        Int               @default(2)
+  bestOf                  Int                @default(2)
   // True when this is a tiebreaker shootout (e.g. /start-match mode:shootout
   // between two players tied for promo/relegation after a 1-1 regular-season
   // h2h). Forces bestOf=1 and writes a Shootout row instead of a Pairing
   // at COMPLETE. Mutually exclusive with isCasual in practice.
-  isShootout    Boolean           @default(false)
-  threadId      String?           // Discord thread id (set once accepted)
-  channelId     String?           // parent channel of the thread
+  isShootout              Boolean            @default(false)
+  threadId                String? // Discord thread id (set once accepted)
+  channelId               String? // parent channel of the thread
   // Discord message id of the public match embed. Stored so the
   // private ban-menu (ephemeral) flow can edit the public message
   // cross-interaction via REST when bans are confirmed. Set once
   // when the message is first posted; survives state changes.
-  matchMessageId String?
+  matchMessageId          String?
 
   // Set the first time a helper is summoned for this match (via the
   // Call helper button). Gates re-calls so the helper role can't be
@@ -346,19 +342,19 @@ model MatchSession {
   helperCalledAt DateTime?
 
   // JSON blobs so we can evolve state shape without migrations.
-  pool          String?           // [{deck, stake}, ...] generated at accept
+  pool                String? // [{deck, stake}, ...] generated at accept
   // Snapshot of the league match policy at session-create time: JSON of
   // {firstPlayerBans, secondPlayerBans, poolSize, picksFromRemaining}.
   // Null = fall back to current LeagueSettings defaults (covers legacy
   // rows from before this column existed). Stored on the session so an
   // in-flight match never breaks if an admin tweaks the policy mid-game.
-  policy        String?
+  policy              String?
   // Locked-in agreed deck/stake combo. Set ONLY when both players have
   // agreed via the in-thread propose/accept flow (or via the legacy
   // slash-command args, deprecated). JSON {deck, stake}. When set, the
   // match skips ban/pick entirely — every game uses this combo. Null
   // = normal ban/pick path.
-  customCombo   String?
+  customCombo         String?
   // In-flight proposal during negotiation. JSON: { by: playerId of the
   // proposer, deck?: string, stake?: string, status: 'building' |
   // 'pending' }. 'building' = proposer is still picking their deck or
@@ -366,23 +362,23 @@ model MatchSession {
   // to Accept / Counter / Cancel. Cleared once a proposal is agreed
   // to (moved into customCombo) or cancelled.
   customComboProposal String?
-  game1         String?           // {firstId, bans: [...], pickedDeck, winnerId}
-  game2         String?
-  game3         String?           // populated only when bestOf=3 and game 1+2 split
+  game1               String? // {firstId, bans: [...], pickedDeck, winnerId}
+  game2               String?
+  game3               String? // populated only when bestOf=3 and game 1+2 split
 
-  pairingId     String?           // populated when COMPLETE (only for league matches)
+  pairingId String? // populated when COMPLETE (only for league matches)
 
-  createdAt     DateTime          @default(now())
+  createdAt        DateTime  @default(now())
   // Bumps automatically on every Prisma update via @updatedAt.
   // Used by match-sweep to find stale sessions (no activity for 24h)
   // and auto-cancel them, so abandoned mid-game sessions don't stick
   // around forever.
-  updatedAt     DateTime          @updatedAt @default(now())
+  updatedAt        DateTime  @default(now()) @updatedAt
   // When the invite expires (WAITING_ACCEPT only). Survives bot restarts —
   // the previous setTimeout-only approach lost timers on every deploy.
-  expiresAt     DateTime?
-  acceptedAt    DateTime?
-  completedAt   DateTime?
+  expiresAt        DateTime?
+  acceptedAt       DateTime?
+  completedAt      DateTime?
   // Set once the archive.stale-threads cron has locked + archived the
   // session's Discord thread (or determined the thread is gone). Lets
   // the sweep skip already-processed sessions cheaply. The inline
@@ -407,13 +403,13 @@ model MatchSession {
 // Multiple Discord roles can map to the same tier (e.g. two separate
 // "League Helper" roles).
 enum PermissionTier {
-  OWNER   // full power, including destructive ops + role binding
-  ADMIN   // season/division management, force-resolve disputes, export
-  HELPER  // dispute mediation: join match channels, record verbal results
-  DEVOPS  // infra alerts only (queue stalls, rate-limit floods). Does
-          // NOT grant league-admin powers — distinct surface from ADMIN
-          // so the people who can debug stack traces aren't pinged for
-          // game mediation, and vice versa.
+  OWNER // full power, including destructive ops + role binding
+  ADMIN // season/division management, force-resolve disputes, export
+  HELPER // dispute mediation: join match channels, record verbal results
+  DEVOPS // infra alerts only (queue stalls, rate-limit floods). Does
+  // NOT grant league-admin powers — distinct surface from ADMIN
+  // so the people who can debug stack traces aren't pinged for
+  // game mediation, and vice versa.
 }
 
 // Global key-value config for the bot — things like the results-webhook
@@ -424,7 +420,7 @@ model LeagueConfig {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
-  updatedBy String?  // Discord ID of whoever set it
+  updatedBy String? // Discord ID of whoever set it
 }
 
 // Opt-in list for next-season notifications. Bot DMs every entry when
@@ -441,7 +437,7 @@ model RoleBinding {
   discordRoleId String         @unique
   tier          PermissionTier
   createdAt     DateTime       @default(now())
-  createdBy     String?        // discord user id of who set it
+  createdBy     String? // discord user id of who set it
 
   @@index([tier])
 }
@@ -451,27 +447,27 @@ model RoleBinding {
 // A magic "Last used" template is auto-upserted after every season create
 // so the form pre-fills with the most recent shape.
 model TierTemplate {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  config    String   // JSON array of TierConfig
-  isLastUsed Boolean @default(false)
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  name       String   @unique
+  config     String // JSON array of TierConfig
+  isLastUsed Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
 }
 
 // Per-season tier. Position 1 = top of the pyramid (e.g., Legendary).
 // Each tier groups 1+ divisions. Promotion/relegation runs between adjacent positions.
 model Tier {
-  id        String     @id @default(cuid())
-  seasonId  String
-  position  Int        // 1 = top. Determines promo/relegation order.
-  name      String     // Display name: "Legendary", "Champions", etc.
+  id                   String @id @default(cuid())
+  seasonId             String
+  position             Int // 1 = top. Determines promo/relegation order.
+  name                 String // Display name: "Legendary", "Champions", etc.
   // How many players promote up from THIS tier (top N) and relegate
   // down (bottom N) at end-of-season. Symmetric — one field for both
   // directions. Defaults to 1 to match the original hardcoded
   // behavior. Drives the ↑/↓ markers on /standings; end-season
   // recompute doesn't care since next-season build seeds by global
   // rank and handles the rebalance naturally.
-  promoteRelegateCount Int @default(1)
+  promoteRelegateCount Int    @default(1)
 
   season    Season     @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   divisions Division[]
@@ -482,18 +478,18 @@ model Tier {
 }
 
 model Division {
-  id          String   @id @default(cuid())
-  seasonId    String
-  tierId      String
+  id               String  @id @default(cuid())
+  seasonId         String
+  tierId           String
   // Index within the tier (1-based). Sibling divisions at the same tier are parallel.
-  groupNumber Int
+  groupNumber      Int
   // Display label, e.g. "Rare 3", "Legendary", or any custom name.
-  name        String
+  name             String
   // Optional per-division target size — overrides Season.targetGroupSize for
   // this division's "X/Y players" display + auto-assign behavior. Lets a
   // division be intentionally larger or smaller than the season default
   // without affecting other divisions.
-  targetSize  Int?
+  targetSize       Int?
   // Optional Discord role + channel IDs the bot manages for this division
   discordRoleId    String?
   discordChannelId String?
@@ -502,17 +498,15 @@ model Division {
   // as a bragging-rights badge. championPlayerId is the rank-1
   // finisher — null when admin hasn't awarded yet OR the division had
   // an unresolved tie at #1 (skipped, re-runnable after shootout).
-  championRoleId    String?
-  championPlayerId  String?
+  championRoleId   String?
+  championPlayerId String?
 
-  season      Season            @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  tier        Tier              @relation(fields: [tierId], references: [id], onDelete: Cascade)
-  members     DivisionMember[]
-  pairings    Pairing[]
-  matches     Match[]
+  season  Season           @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  tier    Tier             @relation(fields: [tierId], references: [id], onDelete: Cascade)
+  members DivisionMember[]
+  matches Match[]
 
-  standings   DivisionStandings?
-  shootouts   Shootout[]
+  standings DivisionStandings?
 
   @@unique([seasonId, tierId, groupNumber])
   @@index([seasonId])
@@ -543,75 +537,29 @@ model DivisionStandings {
   rowsJson   String
 }
 
-// Shootout result for a tied promo/relegation pair. Only consulted when
-// the standings sort can't separate two players via points + head-to-head
-// (i.e., they drew 1-1 against each other in the round-robin). Winner
-// sorts above loser. One shootout per pair per division — unique
-// constraint enforces that.
-//
-// Recorded by /admin record-shootout (Helper+) or /report-shootout
-// (self-service, auto-confirmed). Standings cache recomputes on any
-// Shootout write so the sort reflects the result immediately.
-// Tracks where the public report embed for a Pairing was posted, so the
-// 2-min auto-confirm job and the Confirm/Dispute button handlers can
-// re-edit it in place. Added alongside the opponent-confirms reporting
-// flow — was redundant when /report auto-confirmed immediately.
-//
-// Kept as direct columns on Pairing (vs a side table) because they're
-// 1:1 with the row's lifecycle and queried on every confirm/dispute
-// interaction.
-
-model Shootout {
-  id          String   @id @default(cuid())
-  divisionId  String
-  division    Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
-  // Canonical order: playerAId < playerBId by id. Same ordering as
-  // Pairing so we can look up either pair (A,B) or (B,A) with the
-  // same key.
-  playerAId   String
-  playerBId   String
-  // Winner is one of playerAId or playerBId (enforced in app code,
-  // not at DB level — keep schema simple).
-  winnerId    String
-  recordedAt  DateTime @default(now())
-  // Discord ID of the admin/helper who recorded via /admin command,
-  // OR "self-report" if a player used /report-shootout.
-  recordedBy  String
-  notes       String?
-  // The single tiebreaker game's ban/pick GameState as JSON — SAME column
-  // type + encoding as MatchSession.game1/2/3 (TEXT holding JSON.stringify),
-  // so a shootout carries the deck+stake it was played on and feeds the
-  // deck/stake stats + profile history just like a normal game. Null for
-  // shootouts recorded without game data.
-  game        String?
-
-  @@unique([divisionId, playerAId, playerBId])
-  @@index([divisionId])
-}
-
 enum DivisionMemberStatus {
   ACTIVE
-  DROPPED   // quit mid-season; existing pairings stay, unplayed ones become forfeits at admin's option
+  DROPPED // quit mid-season; existing pairings stay, unplayed ones become forfeits at admin's option
 }
 
 model DivisionMember {
-  id            String              @id @default(cuid())
-  divisionId    String
+  id              String               @id @default(cuid())
+  divisionId      String
   // Denormalized from Division.seasonId so we can enforce one-member-per-
   // season-per-player at the DB layer via @@unique([seasonId, playerId]).
   // Kept in sync by placePlayerInDivision (the only write path).
-  seasonId      String
-  playerId      String
-  joinedAt      DateTime            @default(now())
-  status        DivisionMemberStatus @default(ACTIVE)
-  droppedAt     DateTime?
-  dropoutReason String?
+  seasonId        String
+  playerId        String
+  joinedAt        DateTime             @default(now())
+  status          DivisionMemberStatus @default(ACTIVE)
+  droppedAt       DateTime?
+  dropoutReason   String?
   // Snapshot of Player.rating at the moment the season was BUILT —
   // i.e. the "seed" rank admin set during the drag/sort/build flow.
   // Frozen in time per-season so we can show "entered at #N, finished
   // at #M" in profile / standings without confusing the live
   // Player.rating with the as-of-build snapshot.
-  seedRank Int?
+  seedRank        Int?
   // Snapshot of Player.rating (= global rank) at end-of-season. Written by
   // endSeason for each ACTIVE member at the same moment Player.rating is
   // updated. Lets us answer "what was X's global rank when Season 4
@@ -626,10 +574,10 @@ model DivisionMember {
   // re-opening the draft view (e.g., for an unended season) keeps the
   // last-known shape. Defaults to 0; rebalanced per-division on every
   // positional move.
-  draftOrder    Int                 @default(0)
+  draftOrder      Int                  @default(0)
 
-  division      Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
-  player        Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  division Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  player   Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
   @@unique([divisionId, playerId])
   // Hard guarantee: a player can be in at most one division per season.
@@ -639,151 +587,76 @@ model DivisionMember {
 }
 
 enum PairingStatus {
-  PENDING    // submitted by reporter, awaiting opponent confirm
-  CONFIRMED  // opponent confirmed OR admin force-resolved → counts in standings
-  DISPUTED   // opponent rejected → needs admin attention
-  CANCELLED  // admin voided
-}
-
-// A 2-game series between two players within a Division. Exactly one row per unordered pair.
-model Pairing {
-  id           String        @id @default(cuid())
-  divisionId   String
-  playerAId    String        // canonical: playerA.id < playerB.id (lexicographic) so the pair is unique
-  playerBId    String
-  // Games won by A and by B across the 2-game series. Together they sum to 2 (or 0 if not yet reported).
-  gamesWonA    Int           @default(0)
-  gamesWonB    Int           @default(0)
-  status       PairingStatus @default(PENDING)
-  reporterId   String?       // which player submitted /report
-  reportedAt   DateTime?
-  confirmedAt  DateTime?
-  // If status=CONFIRMED via admin override, who and why
-  adminOverrideBy String?
-  adminOverrideReason String?
-  // Where the public report embed was posted (Discord IDs). Populated
-  // when /report or the web report submits and triggers a #results
-  // post; used by the 2-min auto-confirm cron + Confirm/Dispute buttons
-  // to edit the original embed in place.
-  reportChannelId String?
-  reportMessageId String?
-
-  // Dispute details. All null for non-disputed pairings.
-  //   disputedById             — which player initiated the dispute
-  //   disputeProposedGamesWonA/B — what the disputer says it should be.
-  //                              Null if disputed without a proposed
-  //                              correction (legacy Discord-button path).
-  //                              Admin can one-click accept the proposal
-  //                              via /admin/disputes.
-  //   disputeReason            — free-text explanation, optional
-  //   disputedAt               — when the dispute was filed (NOT
-  //                              cleared on resolution; persists for audit)
-  //   disputeThreadId          — Discord thread spawned for helper
-  //                              mediation. Set after spawn so we don't
-  //                              double-create on re-dispute.
-  disputedById              String?
-  disputeProposedGamesWonA  Int?
-  disputeProposedGamesWonB  Int?
-  disputeReason             String?
-  disputedAt                DateTime?
-  disputeThreadId           String?
-
-  // True if AT LEAST one of the games in this pairing was forfeited via
-  // the opponent-DC button instead of a normal winner vote. Doesn't
-  // affect standings math (a DC-win still scores 2-0 the same way) —
-  // surfaced on history/admin views so audit can spot serial DC'ers.
-  // Per-game DC attribution lives in the MatchSession GameState JSON.
-  hadDc                     Boolean       @default(false)
-
-  // Optional deck/stake captured on a manual report (the combo that was
-  // played). Null when not provided / when the result came from the guided
-  // match flow (that stores per-game detail in the MatchSession instead).
-  reportedDeck              String?
-  reportedStake             String?
-
-  division     Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
-  playerA      Player   @relation("PairingPlayerA", fields: [playerAId], references: [id])
-  playerB      Player   @relation("PairingPlayerB", fields: [playerBId], references: [id])
-  reporter     Player?  @relation("PairingReporter", fields: [reporterId], references: [id])
-  disputer     Player?  @relation("PairingDisputer", fields: [disputedById], references: [id])
-
-  @@unique([divisionId, playerAId, playerBId])
-  @@index([divisionId, status])
-  // The unique constraint above covers playerAId lookups (leading column)
-  // but not playerBId. Profile-history loads do `OR: [{playerAId}, {playerBId}]`
-  // across many divisions; without this the playerBId arm full-scans.
-  @@index([playerBId])
+  PENDING // submitted by reporter, awaiting opponent confirm
+  CONFIRMED // opponent confirmed OR admin force-resolved → counts in standings
+  DISPUTED // opponent rejected → needs admin attention
+  CANCELLED // admin voided
 }
 
 // ---------------------------------------------------------------------------
-// Unified relational match model (EXPAND phase of an expand/contract
-// migration). A Match is the durable record of a played series between two
-// players in a division — a standard best-of-2 (LEAGUE_BO2) or a 1-game
-// tiebreaker (SHOOTOUT_BO1). Games + bans are REAL ROWS, not JSON, so
-// deck/stake stats, traits, and "most-banned" become indexed SQL aggregates
-// instead of app-side JSON parsing.
-//
-// This coexists with Pairing/Shootout during the migration: the backfill
-// endpoint populates it, then writers/readers cut over, then Pairing/Shootout
-// + the MatchSession game JSON columns are dropped (contract phase). The live
-// MatchSession ban/pick driver is unchanged — it projects to these rows on
-// completion. Match.id/Game/Ban reuse source ids during backfill so the
-// conversion is idempotent and traceable.
+// Unified relational match model — the SOURCE OF TRUTH for played series
+// (legacy Pairing/Shootout were dropped in the 4c contract migration). A Match
+// is the durable record of a series between two players in a division: a
+// standard best-of-2 (LEAGUE_BO2) or a 1-game tiebreaker (SHOOTOUT_BO1). Games
+// + bans are REAL ROWS (Game/GameDeck), not JSON, so deck/stake stats, traits,
+// and "most-banned" are indexed SQL aggregates instead of app-side JSON
+// parsing. The live MatchSession ban/pick driver writes directly to these rows
+// on completion.
 
 enum MatchFormat {
-  LEAGUE_BO2    // standard best-of-2 series
-  SHOOTOUT_BO1  // 1-game tiebreaker
+  LEAGUE_BO2 // standard best-of-2 series
+  SHOOTOUT_BO1 // 1-game tiebreaker
 }
 
 model Match {
-  id           String        @id @default(cuid())
-  divisionId   String
-  playerAId    String        // canonical: playerA.id < playerB.id
-  playerBId    String
-  format       MatchFormat   @default(LEAGUE_BO2)
-  gamesWonA    Int           @default(0)
-  gamesWonB    Int           @default(0)
+  id                       String        @id @default(cuid())
+  divisionId               String
+  playerAId                String // canonical: playerA.id < playerB.id
+  playerBId                String
+  format                   MatchFormat   @default(LEAGUE_BO2)
+  gamesWonA                Int           @default(0)
+  gamesWonB                Int           @default(0)
   // Convenience winner (one of playerAId/playerBId). Always set for a
   // shootout; null for a BO2 that finished 1-1.
-  winnerId     String?
-  status       PairingStatus @default(PENDING)
-  reporterId   String?
-  reportedAt   DateTime?
-  confirmedAt  DateTime?
-  adminOverrideBy     String?
-  adminOverrideReason String?
-  reportChannelId String?
-  reportMessageId String?
-  disputedById              String?
-  disputeProposedGamesWonA  Int?
-  disputeProposedGamesWonB  Int?
-  disputeReason             String?
-  disputedAt                DateTime?
-  disputeThreadId           String?
-  hadDc                     Boolean       @default(false)
+  winnerId                 String?
+  status                   PairingStatus @default(PENDING)
+  reporterId               String?
+  reportedAt               DateTime?
+  confirmedAt              DateTime?
+  adminOverrideBy          String?
+  adminOverrideReason      String?
+  reportChannelId          String?
+  reportMessageId          String?
+  disputedById             String?
+  disputeProposedGamesWonA Int?
+  disputeProposedGamesWonB Int?
+  disputeReason            String?
+  disputedAt               DateTime?
+  disputeThreadId          String?
+  hadDc                    Boolean       @default(false)
   // Forfeit / DQ: the win was awarded without playing it out (no-show,
   // drop-out, rule violation, …). Scored as a normal result (typically 2-0)
   // but flagged so the UI can render "W by DQ". forfeitReason is ADMIN-ONLY
   // free text (who/why) — never shown to other players.
-  forfeit                   Boolean       @default(false)
-  forfeitReason             String?
+  forfeit                  Boolean       @default(false)
+  forfeitReason            String?
   // Optional combo from a manual report with no per-game detail. When the
   // guided flow ran, per-game decks/stakes live on Game rows instead.
-  reportedDeck              String?
-  reportedStake             String?
+  reportedDeck             String?
+  reportedStake            String?
   // Shootout provenance (absorbed from the old Shootout model). recordedBy
   // is a Discord id or "self-report"; notes is free text. Null for normal
   // BO2 matches.
-  recordedBy                String?
-  notes                     String?
-  createdAt    DateTime      @default(now())
+  recordedBy               String?
+  notes                    String?
+  createdAt                DateTime      @default(now())
 
-  division     Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
-  playerA      Player   @relation("MatchPlayerA", fields: [playerAId], references: [id])
-  playerB      Player   @relation("MatchPlayerB", fields: [playerBId], references: [id])
-  reporter     Player?  @relation("MatchReporter", fields: [reporterId], references: [id])
-  disputer     Player?  @relation("MatchDisputer", fields: [disputedById], references: [id])
-  games        Game[]
+  division Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  playerA  Player   @relation("MatchPlayerA", fields: [playerAId], references: [id])
+  playerB  Player   @relation("MatchPlayerB", fields: [playerBId], references: [id])
+  reporter Player?  @relation("MatchReporter", fields: [reporterId], references: [id])
+  disputer Player?  @relation("MatchDisputer", fields: [disputedById], references: [id])
+  games    Game[]
 
   // One BO2 + one shootout can both exist for a pair, so format is part of
   // the uniqueness (vs Pairing's pair-only unique).
@@ -796,20 +669,20 @@ model Match {
 // deck+stake it was played on plus per-game flags. firstPlayerId/winnerId/
 // dcByPlayerId are player ids (no FK — same as the old GameState, kept light).
 model Game {
-  id            String  @id @default(cuid())
-  matchId       String
-  num           Int     // 1, 2, 3 — shootout uses 1
-  firstPlayerId String  // who banned first this game
-  winnerId      String? // null if indeterminate (rare)
-  deck          String  // the picked/played deck
-  stake         String  // the picked/played stake
-  dcByPlayerId  String? // set if the game was a disconnect forfeit
+  id                  String  @id @default(cuid())
+  matchId             String
+  num                 Int // 1, 2, 3 — shootout uses 1
+  firstPlayerId       String // who banned first this game
+  winnerId            String? // null if indeterminate (rare)
+  deck                String // the picked/played deck
+  stake               String // the picked/played stake
+  dcByPlayerId        String? // set if the game was a disconnect forfeit
   pickedRandomly      Boolean @default(false)
   firstBannedRandomly Boolean @default(false)
   otherBannedRandomly Boolean @default(false)
 
-  match         Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  pool          GameDeck[]
+  match Match      @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  pool  GameDeck[]
 
   @@unique([matchId, num])
   @@index([matchId])
@@ -829,14 +702,14 @@ model Game {
 model GameDeck {
   id         String  @id @default(cuid())
   gameId     String
-  poolIdx    Int     // slot in the game's pool array (0-based)
+  poolIdx    Int // slot in the game's pool array (0-based)
   deck       String
   stake      String
   picked     Boolean @default(false)
-  banOrdinal Int?    // null = survived (not banned)
+  banOrdinal Int? // null = survived (not banned)
   bannedById String? // who banned it (null if not banned)
 
-  game       Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
 
   @@unique([gameId, poolIdx])
   @@index([gameId])
@@ -852,20 +725,20 @@ model GameDeck {
 // (e.g. "Casual Rules", "Strict 2-Ban") and pick per season on the
 // season detail page.
 model LeagueRulesTemplate {
-  id                       String   @id @default(cuid())
-  name                     String   @unique
-  isDefault                Boolean  @default(false)
+  id        String  @id @default(cuid())
+  name      String  @unique
+  isDefault Boolean @default(false)
 
   // Timeouts. Scoring (3/1/0) and ban/pick policy (4/3/9/2) are
   // hardcoded constants in web/lib/league-settings.ts — not stored
   // per-template.
-  matchInviteExpiryMinutes Int      @default(5)
-  reportAutoConfirmSeconds Int      @default(120)
+  matchInviteExpiryMinutes Int @default(5)
+  reportAutoConfirmSeconds Int @default(120)
 
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  seasons                  Season[]
+  seasons Season[]
 
   @@index([isDefault])
 }
@@ -887,15 +760,15 @@ model LeagueRulesTemplate {
 // have a human actor (cron jobs, auto-confirms) actorDiscordId is the
 // literal string "system" and actorName the job name.
 model AdminAuditEvent {
-  id              String   @id @default(cuid())
-  createdAt       DateTime @default(now())
-  actorDiscordId  String
-  actorName       String
-  action          String
-  targetType      String?  // "MatchSession" | "Season" | "Pairing" | "Player" | "LeagueConfig" | ...
-  targetId        String?
-  summary         String   // one-line human description
-  metadata        Json?    // structured payload — reason, before/after snapshots, etc.
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  actorDiscordId String
+  actorName      String
+  action         String
+  targetType     String? // "MatchSession" | "Season" | "Pairing" | "Player" | "LeagueConfig" | ...
+  targetId       String?
+  summary        String // one-line human description
+  metadata       Json? // structured payload — reason, before/after snapshots, etc.
 
   @@index([createdAt])
   @@index([actorDiscordId, createdAt])
@@ -920,9 +793,9 @@ enum SupportTicketStatus {
 model SupportTicket {
   id            String              @id @default(cuid())
   guildId       String
-  channelId     String              // the support channel the thread lives under
-  threadId      String              // the private ticket thread
-  requesterId   String              // Discord id of who opened it
+  channelId     String // the support channel the thread lives under
+  threadId      String // the private ticket thread
+  requesterId   String // Discord id of who opened it
   requesterName String
   issue         String
   status        SupportTicketStatus @default(OPEN)

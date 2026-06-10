@@ -1,7 +1,7 @@
 // Standings calculation. Pure function over confirmed pairings — easy to unit-test and reuse
 // from /standings, /admin previews, the sim script, and end-of-season promotion logic.
 
-import type { Pairing, Player } from "@prisma/client";
+import type { Match, Player } from "@prisma/client";
 import { DEFAULTS, type ScoringConfig } from "./league-settings.js";
 
 export interface StandingRow {
@@ -28,7 +28,7 @@ export interface ShootoutInput {
 // defaults to 3/1/0 when not passed (sim/legacy callers).
 export function computeStandings(
   players: Player[],
-  pairings: Array<Pick<Pairing, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
+  pairings: Array<Pick<Match, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
   shootouts: ShootoutInput[] = [],
   scoring: ScoringConfig = DEFAULTS.scoring,
 ): StandingRow[] {
@@ -85,7 +85,7 @@ export function computeStandings(
 // web/lib/standings.ts.
 function sortStandings(
   rows: StandingRow[],
-  pairings: Array<Pick<Pairing, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
+  pairings: Array<Pick<Match, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
   shootouts: ShootoutInput[],
 ): StandingRow[] {
   return rows.slice().sort((x, y) => {
@@ -115,7 +115,7 @@ function shootoutBetween(xId: string, yId: string, shootouts: ShootoutInput[]): 
 function headToHead(
   xId: string,
   yId: string,
-  pairings: Array<Pick<Pairing, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
+  pairings: Array<Pick<Match, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
 ): number {
   const meeting = pairings.find(
     (p) => (p.playerAId === xId && p.playerBId === yId) || (p.playerAId === yId && p.playerBId === xId),
