@@ -49,7 +49,22 @@ export default function ChangesPage() {
           It covers ranked only and doesn&apos;t re-explain unchanged vanilla behavior.
         </p>
 
-        <nav className="card" style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <nav
+          className="card"
+          style={{
+            marginTop: 12,
+            marginBottom: 16,
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+            position: "sticky",
+            top: 0,
+            zIndex: 20,
+            // Solid background so section content doesn't bleed through while it floats.
+            background: "var(--surface)",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.35)",
+          }}
+        >
           {SECTIONS.map((s) => (
             <a key={s.id} href={`#${s.id}`} className="pill" style={{ textDecoration: "none" }}>
               {s.label}
@@ -93,27 +108,50 @@ export default function ChangesPage() {
           </p>
           <Callout title="Worked example">
             <p>
-              Suppose the master queue reads:
-              <br />
-              <code>CJ · CJ · S · RJ · T · C · P · S · CJ · T · P · …</code>
-              <br />
-              (CJ = common joker, RJ = rare, T = tarot, P = planet, S = spectral, C = playing card)
+              Suppose the master queue reads (CJ = common joker, RJ = rare, T = tarot, P = planet,
+              S = spectral, C = playing card), and each sub-queue holds the items shown. On Ghost Deck,
+              the shop reads off the top of whatever queue each slot points to:
             </p>
-            <p>
-              The 1st slot is a common joker → first shop item is <strong>Jimbo</strong>. 2nd is also
-              common → <strong>Raised Fist</strong>. The 3rd is a spectral: <em>on Ghost Deck</em> you&apos;d
-              see a <strong>Hex</strong>; otherwise that slot is skipped and the queue progresses to the
-              rare joker, <strong>Blueprint</strong>.
+            <QueueExample
+              cols={[
+                { type: "CJ", item: "Jimbo" },
+                { type: "CJ", item: "Raised Fist" },
+                { type: "S", item: "Hex", note: "Ghost only" },
+                { type: "RJ", item: "Blueprint" },
+                { type: "T", item: "The Fool" },
+                { type: "C", item: "A♥" },
+                { type: "P", item: "Pluto" },
+                { type: "S", item: "Ankh", note: "Ghost only" },
+              ]}
+            />
+            <p style={{ marginBottom: 0 }}>
+              The 3rd slot is a spectral — <em>on Ghost Deck</em> you see a <strong>Hex</strong>; on any
+              other deck that slot is skipped and the queue progresses straight to the rare,{" "}
+              <strong>Blueprint</strong>.
             </p>
           </Callout>
-          <p>
+
+          <p style={{ marginTop: 14 }}>
             <strong>Blocking shifts the queue.</strong> If something can&apos;t appear — you blocked it, or
             it&apos;s a planet for a hand you haven&apos;t unlocked — that sub-queue simply skips to its next
-            item. Block the Blueprint and the next rare (e.g. Stuntman) takes its place. Roll into an
-            Eris you haven&apos;t unlocked and you get the next planet (Mars) instead. Because the playing-card
-            queue only advances when you actually <em>see</em> it, not buying Magic Trick means you never
-            consume those entries — they wait for when you do.
+            item. Roll into an Eris you haven&apos;t unlocked and you get the next planet (Mars) instead.
+            Because the playing-card queue only advances when you actually <em>see</em> it, not buying
+            Magic Trick means you never consume those entries — they wait for when you do.
           </p>
+          <Callout title="Blocking the Blueprint">
+            <p style={{ marginBottom: 6 }}>The rare-joker queue holds: Blueprint → Stuntman → …</p>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
+              <div>
+                <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>You let it through</div>
+                <CardRow items={["Blueprint"]} highlight={0} />
+              </div>
+              <div style={{ fontSize: 18, opacity: 0.5 }}>→ block it →</div>
+              <div>
+                <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>Next rare slides up</div>
+                <CardRow items={["Stuntman"]} highlight={0} />
+              </div>
+            </div>
+          </Callout>
 
           <SubHeading>Part 2 — &ldquo;Up Top&rdquo; vs &ldquo;Pack&rdquo; queues</SubHeading>
           <p>
@@ -306,6 +344,33 @@ export default function ChangesPage() {
               very likely hit too; if it hits the last card in your sorted deck, theirs almost certainly
               missed unless their deck is perfectly stacked.
             </p>
+            <Callout title="Same roll, different hit">
+              <p style={{ marginBottom: 6 }}>
+                Both decks sorted most-common → least. Say the roll lands on <strong>position 5</strong>:
+              </p>
+              <div style={{ marginBottom: 8 }}>
+                <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
+                  Player 1 — loosely stacked (pos 5 = 2♣, <em>not</em> their most-common)
+                </div>
+                <CardRow
+                  items={["K♥", "K♥", "5♥", "5♥", "2♣", "2♣", "7♠", "A♠", "3♣", "4♦"]}
+                  highlight={4}
+                />
+              </div>
+              <div>
+                <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
+                  Player 2 — tightly stacked (pos 5 = JD, still in their top group)
+                </div>
+                <CardRow
+                  items={["6♣", "6♣", "6♣", "J♦", "J♦", "3♥", "3♥", "4♠", "8♥", "A♣"]}
+                  highlight={4}
+                />
+              </div>
+              <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
+                Same number rolled for both — but the player who stacked their deck better gets the more
+                valuable hit. (Sort order: most copies → suit → rank; Ace is low.)
+              </p>
+            </Callout>
           </Entry>
           <Entry name="Bloodstone" tag="Reworked">
             <p>
@@ -318,6 +383,19 @@ export default function ChangesPage() {
               the same number of times get the same number of hits — even if one plays with 3 hands left
               and the other with 0.
             </p>
+            <Callout title="PvP queue resets each hand">
+              <p style={{ marginBottom: 6 }}>
+                Say the ante&apos;s PvP queue is <code>1 1 0 0 1 0 0 1 0 1 1 1 1 1 1</code>{" "}
+                (1 = hit, 0 = miss):
+              </p>
+              <BitQueue bits="110010010111111" used={7} />
+              <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
+                A hand that triggers Bloodstone <strong>7 times</strong> consumes the first 7 (
+                <strong>3 hits</strong>), then the queue <strong>resets to the start</strong> — so the next
+                hand that triggers 7 times also gets exactly 3. Both players&apos; equal-size hands score
+                identically regardless of hands left.
+              </p>
+            </Callout>
           </Entry>
           <Entry name="Invisible Joker" tag="Reworked">
             <p>
@@ -418,7 +496,7 @@ export default function ChangesPage() {
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
-    <section className="card" id={id} style={{ marginTop: 12, scrollMarginTop: 16 }}>
+    <section className="card" id={id} style={{ marginTop: 12, scrollMarginTop: 72 }}>
       <h3 style={{ marginTop: 0 }}>{title}</h3>
       {children}
     </section>
@@ -480,5 +558,105 @@ function BannedPill({ children }: { children: React.ReactNode }) {
     >
       {children}
     </span>
+  );
+}
+
+// A row of "queue slot → shop item" columns, for the shop-queue example.
+function QueueExample({ cols }: { cols: { type: string; item: string; note?: string }[] }) {
+  return (
+    <div style={{ display: "flex", gap: 6, overflowX: "auto", padding: "6px 0" }}>
+      {cols.map((c, i) => (
+        <div
+          key={i}
+          style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, minWidth: 66 }}
+        >
+          <span
+            className="pill"
+            style={{ fontSize: 10, padding: "1px 7px", background: "rgba(155,89,182,0.18)", color: "#9b59b6" }}
+          >
+            {c.type}
+          </span>
+          <span style={{ fontSize: 14, opacity: 0.35, lineHeight: 1 }}>↓</span>
+          <div
+            style={{
+              border: "1px solid var(--border)",
+              borderRadius: 4,
+              padding: "6px 8px",
+              fontSize: 12,
+              textAlign: "center",
+              background: "var(--surface-2)",
+              minWidth: 62,
+            }}
+          >
+            {c.item}
+            {c.note ? <div className="muted" style={{ fontSize: 9 }}>{c.note}</div> : null}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// A row of card/joker chips; suits colored, an optional highlighted index.
+function CardRow({ items, highlight }: { items: string[]; highlight?: number }) {
+  return (
+    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+      {items.map((it, i) => {
+        const isCard = /[♥♦♠♣]/.test(it);
+        const red = /[♥♦]/.test(it);
+        const on = i === highlight;
+        return (
+          <span
+            key={i}
+            style={{
+              border: on ? "2px solid var(--accent)" : "1px solid var(--border)",
+              borderRadius: 4,
+              padding: on ? "3px 7px" : "4px 8px",
+              fontSize: 12,
+              fontWeight: isCard ? 600 : 400,
+              color: red ? "#e74c3c" : "var(--text)",
+              background: on ? "rgba(241,196,15,0.14)" : "var(--surface-2)",
+            }}
+          >
+            {it}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// A row of 1/0 queue cells: ✓ = hit (green), · = miss; first `used` are
+// marked as consumed (accent border, full opacity).
+function BitQueue({ bits, used }: { bits: string; used?: number }) {
+  return (
+    <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+      {bits.split("").map((b, i) => {
+        const hit = b === "1";
+        const consumed = used !== undefined && i < used;
+        return (
+          <span
+            key={i}
+            title={consumed ? "this hand" : undefined}
+            style={{
+              width: 22,
+              height: 26,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 4,
+              fontSize: 13,
+              fontWeight: 700,
+              border: consumed ? "2px solid var(--accent)" : "1px solid var(--border)",
+              background: hit ? "rgba(46,204,113,0.18)" : "rgba(255,255,255,0.03)",
+              color: hit ? "#2ecc71" : "var(--muted)",
+              opacity: consumed ? 1 : 0.5,
+            }}
+          >
+            {hit ? "✓" : "·"}
+          </span>
+        );
+      })}
+    </div>
   );
 }
