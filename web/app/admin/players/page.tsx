@@ -10,6 +10,9 @@ import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { addFakePlayer, deletePlayer, dropPlayer, recordSetForPlayer, refreshActiveSeasonMmrs, reinstatePlayer, setPlayerDiscordId } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -91,7 +94,7 @@ export default async function AdminPlayersPage({
                           <option value="1-1">1-1</option>
                           <option value="0-2">0-2 (lost)</option>
                         </select>
-                        <button type="submit" className="secondary" style={{ fontSize: 11 }}>Record</button>
+                        <Button type="submit" variant="secondary" size="sm">Record</Button>
                       </form>
                     </td>
                     <td>
@@ -130,7 +133,7 @@ export default async function AdminPlayersPage({
                       <td>
                         <form action={reinstatePlayer} style={{ display: "inline-block" }}>
                           <input type="hidden" name="playerId" value={m.playerId} />
-                          <button type="submit" className="secondary" style={{ fontSize: 11 }}>Reinstate</button>
+                          <Button type="submit" variant="secondary" size="sm">Reinstate</Button>
                         </form>
                       </td>
                     </tr>
@@ -159,14 +162,14 @@ export default async function AdminPlayersPage({
           <strong>Add fake player</strong>
           <p className="muted" style={{ fontSize: 12 }}>For testing without real Discord accounts.</p>
           <form action={addFakePlayer} style={{ display: "flex", gap: 6 }}>
-            <input name="name" required placeholder="Alice" />
+            <Input name="name" required placeholder="Alice" className="max-w-40" />
             <select name="divisionId" defaultValue="">
               <option value="">— unassigned —</option>
               {nav.divisionsInSelectedSeason.map((d) => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
             </select>
-            <button type="submit">Add</button>
+            <Button type="submit">Add</Button>
           </form>
         </div>
 
@@ -174,9 +177,7 @@ export default async function AdminPlayersPage({
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
             <strong>BMP MMR snapshots</strong>
             <form action={refreshActiveSeasonMmrs}>
-              <button type="submit" className="secondary" style={{ fontSize: 12 }}>
-                Refresh BMP MMRs (active season)
-              </button>
+              <Button type="submit" variant="secondary" size="sm">Refresh BMP MMRs (active season)</Button>
             </form>
           </div>
           <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
@@ -221,7 +222,7 @@ export default async function AdminPlayersPage({
                           <TierPill name={p.membership.divisionName} position={p.membership.tierPosition} />
                         </Link>
                         {p.membership.dropped && (
-                          <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "#e74c3c", marginLeft: 6 }}>DROPPED</span>
+                          <Badge variant="destructive" className="ml-1.5">DROPPED</Badge>
                         )}
                       </>
                     ) : (
@@ -245,7 +246,7 @@ export default async function AdminPlayersPage({
                           <option value="1-1">1-1</option>
                           <option value="0-2">0-2</option>
                         </select>
-                        <button type="submit" className="secondary" style={{ fontSize: 11 }}>Record</button>
+                        <Button type="submit" variant="secondary" size="sm">Record</Button>
                       </form>
                     ) : (
                       <span className="muted" style={{ fontSize: 11 }}>—</span>
@@ -254,15 +255,15 @@ export default async function AdminPlayersPage({
                   <td>
                     <form action={setPlayerDiscordId} style={{ display: "flex", gap: 4 }}>
                       <input type="hidden" name="playerId" value={p.id} />
-                      <input
+                      <Input
                         type="text"
                         name="discordId"
                         defaultValue={p.discordId}
                         pattern="\d{17,20}"
                         title="17-20 digits"
-                        style={{ fontSize: 11, width: 170, fontFamily: "ui-monospace, monospace" }}
+                        className="w-44 font-mono"
                       />
-                      <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+                      <Button type="submit" variant="secondary" size="sm">Save</Button>
                     </form>
                   </td>
                   <td>
