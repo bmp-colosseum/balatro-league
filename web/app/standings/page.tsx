@@ -94,6 +94,39 @@ function standingRateTooltip(r: StandingRow): string {
   const loss = Math.round((r.losses / r.played) * 100);
   return `Win ${win}% · Draw ${draw}% · Loss ${loss}% (${r.played} matches)`;
 }
+// Rank + movement/clinch/showdown badges, shared by the desktop table and the
+// mobile cards so the two never drift.
+function RowBadges({
+  medal,
+  promoting,
+  relegating,
+  clinchStatus,
+  showdown,
+}: {
+  medal: string;
+  promoting: boolean;
+  relegating: boolean;
+  clinchStatus?: "up" | "down";
+  showdown: boolean;
+}) {
+  return (
+    <>
+      {medal}
+      {promoting && <> <span title="Promotion position" style={{ color: "#2ecc71" }}>↑</span></>}
+      {relegating && <> <span title="Relegation position" style={{ color: "#e74c3c" }}>↓</span></>}
+      {clinchStatus === "up" && (
+        <> <span title="Clinched promotion — guaranteed to move up regardless of remaining matches" style={{ color: "#2ecc71" }}>🔒↑</span></>
+      )}
+      {clinchStatus === "down" && (
+        <> <span title="Relegation locked — guaranteed to move down regardless of remaining matches" style={{ color: "#e74c3c" }}>🔒↓</span></>
+      )}
+      {showdown && (
+        <span title="Tied for promotion/relegation — play a showdown and /report-shootout" style={{ color: "#f1c40f", marginLeft: 4 }}>⚔</span>
+      )}
+    </>
+  );
+}
+
 function gameRateTooltip(r: StandingRow): string {
   const total = r.gamesWon + r.gamesLost;
   if (total === 0) return "No games played yet.";
@@ -255,6 +288,18 @@ export default async function StandingsPage() {
                         }
                       }
                       void tierColors;
+                      // Compute the per-row display bits once, then render them
+                      // as a table (desktop) and as stacked cards (mobile).
+                      const displayRows = rows.map((r, i) => ({
+                        r,
+                        medal: i < 3 ? ["🥇", "🥈", "🥉"][i]! : `${i + 1}.`,
+                        promoting: complete && i < effective && !isTopTier && !promoTieRowSet.has(i),
+                        relegating:
+                          complete && i >= rows.length - effective && !isBottomTier && !relegationTieRowSet.has(i),
+                        clinchStatus: complete ? undefined : clinch.get(r.player.id),
+                        showdown: complete && (promoTieRowSet.has(i) || relegationTieRowSet.has(i)),
+                        mmr: data.mmrByPlayerId.get(r.player.id),
+                      }));
                       return (
                         <div key={div.id} className="card">
                           <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
@@ -274,7 +319,7 @@ export default async function StandingsPage() {
                               {complete ? "✅" : ""} {playedMatches}/{expectedMatches} matches
                             </span>
                           </div>
-                          <div className="table-scroll" style={{ marginTop: 8 }}>
+                          <div className="table-scroll standings-table-wrap" style={{ marginTop: 8 }}>
                           <table className="table-dense">
                             <thead>
                               <tr>
@@ -296,46 +341,15 @@ export default async function StandingsPage() {
                                   <td colSpan={showBmpMmr ? 8 : 7} className="muted">No matches played yet.</td>
                                 </tr>
                               ) : (
-                                rows.map((r, i) => {
-                                  const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
+                                displayRows.map(({ r, medal, promoting, relegating, clinchStatus, showdown, mmr }) => {
                                   const link = (
                                     <Link href={`/profile/${r.player.id}`} style={{ color: "var(--text)" }}>
                                       {r.player.displayName}
                                     </Link>
                                   );
-                                  const mmr = data.mmrByPlayerId.get(r.player.id);
-                                  // `effective` was computed above for the same division.
-                                  const isPromoting =
-                                    complete && i < effective && !isTopTier && !promoTieRowSet.has(i);
-                                  const isRelegating =
-                                    complete && i >= rows.length - effective && !isBottomTier && !relegationTieRowSet.has(i);
-                                  const movementMarker = isPromoting ? (
-                                    <span title="Promotion position" style={{ color: "#2ecc71" }}>↑</span>
-                                  ) : isRelegating ? (
-                                    <span title="Relegation position" style={{ color: "#e74c3c" }}>↓</span>
-                                  ) : null;
-                                  // Clinch badge — only while the round-robin is
-                                  // still in progress (once complete the ↑/↓ tells
-                                  // the final story).
-                                  const clinchStatus = complete ? undefined : clinch.get(r.player.id);
-                                  const clinchMarker = clinchStatus === "up" ? (
-                                    <span title="Clinched promotion — guaranteed to move up regardless of remaining matches" style={{ color: "#2ecc71" }}>🔒↑</span>
-                                  ) : clinchStatus === "down" ? (
-                                    <span title="Relegation locked — guaranteed to move down regardless of remaining matches" style={{ color: "#e74c3c" }}>🔒↓</span>
-                                  ) : null;
-                                  const shootoutNeeded =
-                                    complete && (promoTieRowSet.has(i) || relegationTieRowSet.has(i));
-                                  const shootoutMarker = shootoutNeeded ? (
-                                    <span
-                                      title="Tied for promotion/relegation — play a showdown and /report-shootout"
-                                      style={{ color: "#f1c40f", marginLeft: 4 }}
-                                    >
-                                      ⚔
-                                    </span>
-                                  ) : null;
                                   return (
                                     <tr key={r.player.id}>
-                                      <td>{medal}{movementMarker && <> {movementMarker}</>}{clinchMarker && <> {clinchMarker}</>}{shootoutMarker}</td>
+                                      <td><RowBadges medal={medal} promoting={promoting} relegating={relegating} clinchStatus={clinchStatus} showdown={showdown} /></td>
                                       <td>{r.dropped ? <s>{link}</s> : link}</td>
                                       <td><strong>{r.points}</strong></td>
                                       <td title={standingRateTooltip(r)}>{r.wins}-{r.draws}-{r.losses}</td>
@@ -359,6 +373,28 @@ export default async function StandingsPage() {
                               )}
                             </tbody>
                           </table>
+                          </div>
+                          {/* Mobile: stacked cards — CSS toggles table vs cards at 640px. */}
+                          <div className="standings-cards">
+                            {rows.length === 0 ? (
+                              <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>No matches played yet.</p>
+                            ) : (
+                              displayRows.map(({ r, medal, promoting, relegating, clinchStatus, showdown, mmr }) => (
+                                <div key={r.player.id} className="standings-card">
+                                  <div className="standings-card-head">
+                                    <span><RowBadges medal={medal} promoting={promoting} relegating={relegating} clinchStatus={clinchStatus} showdown={showdown} /></span>
+                                    <Link href={`/profile/${r.player.id}`} className="standings-card-name" style={{ color: "var(--text)" }}>
+                                      {r.dropped ? <s>{r.player.displayName}</s> : r.player.displayName}
+                                    </Link>
+                                    <strong style={{ whiteSpace: "nowrap" }}>{r.points} pts</strong>
+                                  </div>
+                                  <div className="standings-card-sub muted">
+                                    {r.wins}-{r.draws}-{r.losses} W-D-L · {r.gamesWon}-{r.gamesLost} games · {r.played} played
+                                    {showBmpMmr && mmr ? <> · MMR {renderMmrCell(mmr, data.bmpCurrentSeason)}</> : null}
+                                  </div>
+                                </div>
+                              ))
+                            )}
                           </div>
                           {div.shootouts.length > 0 && (
                             <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
