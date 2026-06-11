@@ -57,6 +57,13 @@ h1, h2, h3 { margin: 0 0 8px 0; }
 h2 { font-size: 24px; }
 h3 { font-size: 18px; }
 
+/* Balatro-ish pixel font for headings + anything tagged .pixel (e.g. the
+   card-rank labels in standings). Body text stays system for readability. */
+h1, h2, h3, .pixel {
+  font-family: var(--font-pixel), "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+  letter-spacing: 0.5px;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
