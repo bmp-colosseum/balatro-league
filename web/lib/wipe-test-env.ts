@@ -1,7 +1,7 @@
 // Test-environment data wipe. Drops every row across every gameplay
-// table — players, seasons, divisions, pairings, shootouts, match
+// table — players, seasons, divisions, matches/games, match
 // sessions, signups, snapshots, standings cache, season-interest
-// follows, easter-egg votes — leaving the league with a clean slate
+// follows — leaving the league with a clean slate
 // while preserving operator config (LeagueConfig, RoleBinding,
 // TierTemplate, MatchConfigPreset, LeagueRulesTemplate) and the audit
 // log itself.
@@ -27,8 +27,6 @@ const WIPED_TABLES = [
   "Match",
   "Game",
   "GameDeck",
-  "Pairing",
-  "Shootout",
   "MatchSession",
   "DivisionStandings",
   "DivisionMember",

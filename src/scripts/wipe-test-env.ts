@@ -76,7 +76,7 @@ async function main(): Promise<void> {
     console.error("    target = " + webUrl);
     console.error("");
     console.error("    Tables wiped: Player, Season, Tier, Division, DivisionMember,");
-    console.error("                  Pairing, Shootout, MatchSession, Signup, SignupRound,");
+    console.error("                  Match, Game, GameDeck, MatchSession, Signup, SignupRound,");
     console.error("                  PlayerMmrSnapshot, DivisionStandings,");
     console.error("                  SeasonInterest");
     console.error("");
