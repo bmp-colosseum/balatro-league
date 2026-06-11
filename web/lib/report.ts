@@ -10,6 +10,7 @@ import {
   enqueueDm,
 } from "@/lib/queue";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
+import { recordAudit } from "@/lib/audit";
 
 // Compose the DM body sent to the opponent when a web-side report
 // confirms a match. Phrased from the opponent's POV so they don't have
@@ -172,8 +173,19 @@ export async function reportSetFromWeb(
   // on their /report page even if the DM never lands.
   const opponent = await prisma.player.findUnique({
     where: { id: opponentPlayerId },
-    select: { discordId: true },
+    select: { discordId: true, displayName: true },
   });
+
+  // Audit the player-reported result (the bot already audits Discord reports;
+  // this covers web reports). Actor = the reporting player, not an admin.
+  await recordAudit({
+    actor: { discordId: reporter.discordId, displayName: reporter.displayName },
+    action: "match.report.web",
+    targetType: "Match",
+    targetId: pairing.id,
+    summary: `${reporter.displayName} reported ${result} vs ${opponent?.displayName ?? "opponent"} (${division.name})`,
+    metadata: { result, deck: reportedDeck, stake: reportedStake, divisionId: division.id, opponentPlayerId },
+  }).catch(() => { /* audit must never block a report */ });
   if (opponent?.discordId) {
     const reporterGames = reporterIsA ? gamesWonA : gamesWonB;
     const opponentGames = reporterIsA ? gamesWonB : gamesWonA;
@@ -261,6 +273,15 @@ export async function disputeMatchFromWeb(
   enqueueDisputeSpawnThread(pairingId).catch((err) =>
     console.warn("[web dispute] thread spawn enqueue failed:", err),
   );
+
+  await recordAudit({
+    actor: { discordId: player.discordId, displayName: player.displayName },
+    action: "match.dispute.web",
+    targetType: "Match",
+    targetId: pairingId,
+    summary: `${player.displayName} disputed a match (proposed ${proposed})${cleanReason ? ` — ${cleanReason}` : ""}`,
+    metadata: { proposed, reason: cleanReason, divisionId: pairing.divisionId },
+  }).catch(() => { /* audit must never block a dispute */ });
 
   return { ok: true, pairingId };
 }
