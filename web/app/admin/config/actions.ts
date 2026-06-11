@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/admin";
+import { requireAdmin, requireOwner } from "@/lib/admin";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import type { PermissionTier } from "@prisma/client";
 
@@ -67,11 +67,11 @@ export async function clearConfigValue(formData: FormData) {
 // (snowflake) and the tier enum. Unique constraint on discordRoleId
 // means re-adding an existing role updates it via upsert.
 export async function addRoleBinding(formData: FormData) {
-  const { user } = await requireAdmin();
+  const { user } = await requireOwner();
   const discordRoleId = String(formData.get("discordRoleId") ?? "").trim();
   const tierRaw = String(formData.get("tier") ?? "").trim();
   if (!/^\d{17,20}$/.test(discordRoleId)) return;
-  if (tierRaw !== "OWNER" && tierRaw !== "ADMIN" && tierRaw !== "MOD") return;
+  if (!["OWNER", "ADMIN", "HELPER", "DEVOPS"].includes(tierRaw)) return;
   const tier = tierRaw as PermissionTier;
   await prisma.roleBinding.upsert({
     where: { discordRoleId },
@@ -90,7 +90,7 @@ export async function addRoleBinding(formData: FormData) {
 }
 
 export async function removeRoleBinding(formData: FormData) {
-  const { user } = await requireAdmin();
+  const { user } = await requireOwner();
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return;
   const previous = await prisma.roleBinding.findUnique({ where: { id } });

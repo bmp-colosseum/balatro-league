@@ -68,6 +68,16 @@ export async function isAdminUser(): Promise<boolean> {
   return hasTier("ADMIN");
 }
 
+// OWNER-only gate. Role binding (role → tier) is owner-only so an ADMIN
+// can't bind a role to OWNER and escalate themselves. Mirrors the bot's
+// /league set-role, which is also OWNER-gated.
+export async function requireOwner() {
+  const session = await auth();
+  if (!session?.user) redirect("/auth/signin");
+  if (!(await hasTier("OWNER"))) redirect("/admin/config?err=owner-only");
+  return { session, user: session.user as { discordId: string; name?: string | null } };
+}
+
 // DevOps access is checked explicitly (not via hasTier) because DEVOPS
 // sits OUTSIDE the league-admin ladder — a user who is ADMIN does NOT
 // automatically have DevOps access. DevOps is a separate, parallel

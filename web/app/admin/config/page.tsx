@@ -7,7 +7,7 @@
 // Everything is admin-friendly form-based instead of requiring SQL. All
 // writes go through scoped server actions in actions.ts.
 
-import { requireAdmin } from "@/lib/admin";
+import { requireAdmin, hasTier } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
@@ -70,6 +70,9 @@ const SITE_KEYS = [
 
 export default async function AdminConfigPage() {
   await requireAdmin();
+  // Role binding (role → tier) is OWNER-only — an ADMIN binding a role to
+  // OWNER would be self-escalation. Non-owners see config but not the binder.
+  const isOwner = await hasTier("OWNER");
   const [configRows, roleBindings] = await Promise.all([
     prisma.leagueConfig.findMany(),
     prisma.roleBinding.findMany({ orderBy: { tier: "asc" } }),
@@ -99,13 +102,15 @@ export default async function AdminConfigPage() {
           <a href="/admin/settings">/admin/settings</a>.
         </p>
 
+        {isOwner ? (
         <div className="card" style={{ marginTop: 16 }}>
           <strong>Role bindings ({roleBindings.length})</strong>
           <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-            Maps Discord role IDs to permission tiers (OWNER &gt; ADMIN &gt; MOD). Owner
-            is also pinned via the LEAGUE_OWNER_DISCORD_ID env var as a lockout-prevention
-            fallback. Use <code>/league set-role</code> in Discord for the easier path —
-            it accepts an @role mention, this page wants raw IDs.
+            Maps Discord role IDs to permission tiers: <strong>OWNER &gt; ADMIN &gt; HELPER</strong>,
+            plus <strong>DEVOPS</strong> (infra-only, off the ladder). Owner is also pinned via the
+            LEAGUE_OWNER_DISCORD_ID env var as a lockout-prevention fallback. Use{" "}
+            <code>/league set-role</code> in Discord for the easier path — it accepts an @role
+            mention, this page wants raw IDs.
           </p>
           <form action={addRoleBinding} style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
             <Input type="text" name="discordRoleId" placeholder="Discord role ID (17-20 digits)" required pattern="\d{17,20}" className="flex-1 min-w-[200px]" />
@@ -116,7 +121,8 @@ export default async function AdminConfigPage() {
               options={[
                 { value: "OWNER", label: "OWNER" },
                 { value: "ADMIN", label: "ADMIN" },
-                { value: "MOD", label: "MOD" },
+                { value: "HELPER", label: "HELPER" },
+                { value: "DEVOPS", label: "DEVOPS" },
               ]}
             />
             <Button type="submit">Add binding</Button>
@@ -147,6 +153,12 @@ export default async function AdminConfigPage() {
             </tbody>
           </table>
         </div>
+        ) : (
+          <div className="card muted" style={{ marginTop: 16 }}>
+            <strong>Role bindings</strong> are owner-only. Ask the league owner — or use{" "}
+            <code>/league set-role</code> in Discord — to change role → tier mappings.
+          </div>
+        )}
       </main>
     </>
   );
