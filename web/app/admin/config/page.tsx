@@ -1,8 +1,9 @@
-// Admin-only config page. Three sections:
-//   1. Channels & external — the channel-id KV values + webhook URLs
-//   2. League rules — scoring + ban policy + timeouts (tunable in-game)
-//   3. Role bindings — view + add + remove role → tier mappings
+// Admin-only config page. Sections:
+//   - Categories / Channels & external — category + channel-id KV values + webhook URLs
+//   - Mode, Community, Public/join, BMP — assorted LeagueConfig KV knobs
+//   - Role bindings — view + add + remove role → tier mappings
 //
+// Scoring / match policy / timeouts live on /admin/settings, NOT here.
 // Everything is admin-friendly form-based instead of requiring SQL. All
 // writes go through scoped server actions in actions.ts.
 

@@ -15,13 +15,8 @@ import { Input } from "@/components/ui/input";
 import { FormSelect } from "@/components/FormSelect";
 import { recordSetForPlayer, recordForfeitForPlayer } from "@/app/admin/players/actions";
 import { reportFromProfileAction, submitProfileDispute } from "./actions";
-import {
-  resetToDiscordNameAction,
-  setCustomNameAction,
-  setAutoSignupAction,
-  subscribeNextSeasonAction,
-  unsubscribeNextSeasonAction,
-} from "@/app/me/actions";
+import { resetToDiscordNameAction, setCustomNameAction } from "@/app/me/actions";
+import { NextSeasonCard } from "@/components/NextSeasonCard";
 import { prisma } from "@/lib/prisma";
 import type { SeasonHistoryEntry, FavoriteEntry } from "@/lib/profile";
 
@@ -253,45 +248,7 @@ export default async function ProfilePage({
         {/* Personal settings — only on your own profile (folded in from /me). */}
         {me && (
           <>
-            <div className="card" style={{ marginTop: 16 }}>
-              <strong>Next season</strong>
-              <p className="muted" style={{ fontSize: 11, marginTop: 2 }}>
-                Two separate things: <strong>🔔 Notify</strong> just DMs you when signups open — you still
-                click Sign up yourself. <strong>🔁 Auto-sign-up</strong> enters you automatically, no action
-                needed.
-              </p>
-              {me.interest ? (
-                <>
-                  <p className="muted" style={{ fontSize: 12 }}>
-                    ✓ Subscribed (since {me.interest.subscribedAt.toISOString().slice(0, 10)}). The bot DMs you when the next season&apos;s signups open.
-                  </p>
-                  <form action={unsubscribeNextSeasonAction}>
-                    <Button type="submit" variant="secondary">Unsubscribe</Button>
-                  </form>
-                </>
-              ) : (
-                <>
-                  <p className="muted" style={{ fontSize: 12 }}>
-                    Get a Discord DM the moment a new season&apos;s signups open.
-                  </p>
-                  <form action={subscribeNextSeasonAction}>
-                    <Button type="submit">🔔 Notify me about the next season</Button>
-                  </form>
-                </>
-              )}
-              <hr style={{ margin: "12px 0", border: "none", borderTop: "1px solid var(--border)" }} />
-              <p className="muted" style={{ fontSize: 12 }}>
-                {me.autoSignup
-                  ? "✓ Auto-sign-up is ON — you'll be entered into the next season's signups automatically the moment they open (you can still withdraw)."
-                  : "Auto-sign-up is off. Turn it on to be entered into the next season's signups automatically when they open."}
-              </p>
-              <form action={setAutoSignupAction}>
-                <input type="hidden" name="next" value={me.autoSignup ? "0" : "1"} />
-                <Button type="submit" variant={me.autoSignup ? "secondary" : "default"}>
-                  {me.autoSignup ? "Turn off auto-sign-up" : "🔁 Auto-sign me up next season"}
-                </Button>
-              </form>
-            </div>
+            <NextSeasonCard interest={me.interest} autoSignup={me.autoSignup} />
 
             <div className="card" style={{ marginTop: 16 }}>
               <strong>Display name</strong>

@@ -6,7 +6,7 @@ import { auth, signOut } from "@/auth";
 import { loadMePageData } from "@/lib/loaders/me";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
-import { subscribeNextSeasonAction, unsubscribeNextSeasonAction, setAutoSignupAction } from "./actions";
+import { NextSeasonCard } from "@/components/NextSeasonCard";
 
 export const dynamic = "force-dynamic";
 
@@ -85,41 +85,10 @@ export default async function MePage({
           </div>
         )}
 
-        <div className="card">
-          <strong>Next-season notifications</strong>
-          {interest ? (
-            <>
-              <p className="muted" style={{ fontSize: 12 }}>
-                ✓ You're subscribed (since {interest.subscribedAt.toISOString().slice(0, 10)}). The bot will DM you when the next season's signups open.
-              </p>
-              <form action={unsubscribeNextSeasonAction}>
-                <Button type="submit" variant="secondary">Unsubscribe</Button>
-              </form>
-            </>
-          ) : (
-            <>
-              <p className="muted" style={{ fontSize: 12 }}>
-                Get a Discord DM the moment a new season's signups open. Useful if you don't check the server often.
-              </p>
-              <form action={subscribeNextSeasonAction}>
-                <Button type="submit">🔔 Notify me about the next season</Button>
-              </form>
-            </>
-          )}
-        </div>
-
-        <div className="card">
-          <strong>Auto-sign-up for next season</strong>
-          <p className="muted" style={{ fontSize: 12 }}>
-            Different from Notify: this <strong>enters you automatically</strong> the moment the
-            next season&apos;s signups open — no action needed (you can still withdraw). It creates
-            your player profile so you&apos;re ready to play.
-          </p>
-          <form action={setAutoSignupAction}>
-            <input type="hidden" name="next" value="1" />
-            <Button type="submit">🔁 Auto-sign me up next season</Button>
-          </form>
-        </div>
+        {/* No player record yet → autoSignup=null so the card shows the
+            "enable (creates your profile)" variant. Same component the
+            profile page uses, so the two surfaces stay identical. */}
+        <NextSeasonCard interest={interest} autoSignup={null} />
 
         <div className="card">
           <strong>Not in the league yet</strong>
