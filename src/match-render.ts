@@ -17,7 +17,7 @@ import {
   stakeDescription,
 } from "./balatro-info.js";
 import { deckEmoji, deckEmojiPartial, stakeEmoji, stakeEmojiPartial } from "./balatro-emojis.js";
-import { parsePolicy, phaseFor, remainingCombos, type GameState } from "./match-session.js";
+import { parsePolicy, phaseFor, remainingCombos, MAX_GAME_LIVES, type GameState } from "./match-session.js";
 import type { DeckEntry } from "./match-config.js";
 
 function parseGame(json: string | null): GameState | null {
@@ -524,6 +524,27 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
         pickRandomRow,
       ],
     };
+  }
+
+  if (phase.kind === "AWAIT_LIVES") {
+    // Winner agreed; the WINNER now records how many lives they had left.
+    // Required before the match advances. Only the winner's buttons act
+    // (the handler guards), but we render them for everyone to see.
+    const winner = phase.winnerId === a.id ? a : b;
+    embed.setDescription(
+      `🏆 **${winner.displayName}** won game ${gameNumber}!\n\n` +
+        `**${winner.displayName}** — how many lives did you have left? ` +
+        `(For the standings tiebreaker. Only you can set this.)`,
+    );
+    const livesRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      ...Array.from({ length: MAX_GAME_LIVES }, (_, i) => i + 1).map((n) =>
+        new ButtonBuilder()
+          .setCustomId(`match:lives:${s.id}:${n}`)
+          .setLabel(`${n} ${n === 1 ? "life" : "lives"}`)
+          .setStyle(ButtonStyle.Success),
+      ),
+    );
+    return { embeds: [embed], components: [livesRow] };
   }
 
   if (phase.kind === "PLAYING") {

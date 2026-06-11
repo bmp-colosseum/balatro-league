@@ -26,6 +26,12 @@ export interface GameState {
   bans: number[];         // indices into THIS game's pool that have been banned
   pickedDeckIdx?: number; // which remaining combo was picked (index into this game's pool)
   winnerId?: string;      // confirmed winner (both players' votes agreed)
+  // Lives the winner had remaining at the end of this game (attrition
+  // format, 1..MAX_GAME_LIVES). Captured as a REQUIRED step right after the
+  // winner is agreed — the game isn't "done" until this is set. Skipped for
+  // DC-forfeit games (no real attrition result). Persisted to
+  // Game.winnerLives and consumed by the 3+-way-tie standings tiebreaker.
+  winnerLives?: number;
   // Per-game deck/stake pool. Generated fresh when this game starts so
   // game2 and game3 don't reuse game1's shuffle — bans reset to a new
   // random subset of the preset each round.
@@ -70,6 +76,11 @@ export const FIRST_PLAYER_BAN_TOTAL = 4;
 export const SECOND_PLAYER_BAN_TOTAL = 3;
 export const PICKS = 1;
 
+// Lives a game starts with (attrition format). The winner's REMAINING lives
+// (1..MAX_GAME_LIVES) are captured after each game for the life-differential
+// tiebreaker. Loser is 0 by definition.
+export const MAX_GAME_LIVES = 4;
+
 // Policy snapshot — what's stamped on each MatchSession at create time.
 // Stays static for that session even if the admin changes LeagueSettings
 // mid-match. Reads back via parsePolicy(session.policy) ?? DEFAULTS.
@@ -110,6 +121,9 @@ export type Phase =
   | { kind: "BAN"; whoseBanId: string; remainingForThem: number; totalDone: number }
   | { kind: "PICK"; pickerId: string }
   | { kind: "PLAYING" }
+  // Winner agreed, but their remaining lives haven't been entered yet. Only
+  // the winner can record it; the game isn't DONE until they do.
+  | { kind: "AWAIT_LIVES"; winnerId: string }
   | { kind: "DONE" };
 
 // Given current game state, player IDs, and the session's stamped ban
@@ -125,7 +139,14 @@ export function phaseFor(
   const otherId = game.firstId === playerAId ? playerBId : playerAId;
   const banCount = game.bans.length;
   const { firstPlayerBans, secondPlayerBans, poolSize } = policy;
-  if (game.winnerId) return { kind: "DONE" };
+  if (game.winnerId) {
+    // DC forfeits skip lives capture (no real attrition result). Otherwise
+    // the winner must record their remaining lives before the game is done.
+    if (!game.dcByPlayerId && game.winnerLives == null) {
+      return { kind: "AWAIT_LIVES", winnerId: game.winnerId };
+    }
+    return { kind: "DONE" };
+  }
   if (game.pickedDeckIdx !== undefined) return { kind: "PLAYING" };
 
   // Step 1: first player bans 1

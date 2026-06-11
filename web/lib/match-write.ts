@@ -15,6 +15,7 @@ export interface GameStateLike {
   dcByPlayerId?: string;
   bans?: number[];
   winnerId?: string;
+  winnerLives?: number;
   pickedRandomly?: boolean;
   firstBannedRandomly?: boolean;
   otherBannedRandomly?: boolean;
@@ -41,6 +42,7 @@ export async function writeMatchGame(
       num,
       firstPlayerId: firstId,
       winnerId: g.winnerId ?? null,
+      winnerLives: g.winnerLives ?? null,
       deck: picked.deck,
       stake: picked.stake,
       dcByPlayerId: g.dcByPlayerId ?? null,
@@ -51,6 +53,7 @@ export async function writeMatchGame(
     update: {
       firstPlayerId: firstId,
       winnerId: g.winnerId ?? null,
+      winnerLives: g.winnerLives ?? null,
       deck: picked.deck,
       stake: picked.stake,
       dcByPlayerId: g.dcByPlayerId ?? null,

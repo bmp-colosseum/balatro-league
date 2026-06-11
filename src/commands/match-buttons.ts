@@ -46,6 +46,7 @@ import {
   parsePolicy,
   phaseFor,
   remainingCombos,
+  MAX_GAME_LIVES,
   type GameState,
 } from "../match-session.js";
 import type { ButtonHandler, SelectMenuHandler } from "./types.js";
@@ -222,6 +223,7 @@ export const matchButtons: ButtonHandler = {
     if (action === "pick") return handlePick(interaction, session, parts[3]);
     if (action === "pickrandom") return handlePickRandom(interaction, session);
     if (action === "winner") return handleWinner(interaction, session, parts[3]);
+    if (action === "lives") return handleLives(interaction, session, parts[3]);
     if (action === "dc") return handleDc(interaction, session);
     if (action === "dcconfirm") return handleDcConfirm(interaction, session);
     if (action === "dcdispute") return handleDcDispute(interaction, session);
@@ -981,21 +983,54 @@ async function handleWinner(interaction: ButtonInteraction, session: MatchSessio
     return refreshMessage(interaction, updated);
   }
 
-  // Both voted the same way → that's the winner. Continue with existing
-  // game-advance / finalize logic.
+  // Both voted the same way → that's the winner.
   newGame.winnerId = newGame.voteByA;
 
-  // Helper: count wins per player across played games (treating in-progress
-  // game as just-recorded if applicable).
+  // REQUIRED lives capture: a non-DC league game isn't done until the winner
+  // records their remaining lives. Persist the winner and re-render (phaseFor
+  // now returns AWAIT_LIVES → the lives prompt); handleLives() resumes the
+  // advance once the winner picks. DC forfeits (no attrition result) and
+  // casual /challenge games (don't count for standings) skip straight to the
+  // advance.
+  if (!session.isCasual && !newGame.dcByPlayerId && newGame.winnerLives == null) {
+    const updated = await updateSession(session, {
+      [gameField]: JSON.stringify(newGame),
+    } as Prisma.MatchSessionUpdateManyMutationInput);
+    if (!updated) return raceLost(interaction);
+    return refreshMessage(interaction, updated);
+  }
+
+  return advanceAfterGameWin(interaction, session, newGame, gameField);
+}
+
+// Advance the match after a game's winner — and, for non-DC games, the
+// winner's lives — are recorded: start the next game or finalize. Called by
+// handleWinner (DC forfeits, which skip lives) and handleLives (after the
+// winner records their lives). `gameField` is the game that just completed.
+async function advanceAfterGameWin(
+  interaction: ButtonInteraction,
+  session: MatchSession,
+  newGame: GameState,
+  gameField: "game1" | "game2" | "game3",
+) {
+  const isGame1 = gameField === "game1";
+  const isGame2 = gameField === "game2";
+
+  // Count wins per player. The just-completed game uses newGame's winner
+  // (session[gameField] may or may not be persisted yet, depending on the
+  // caller); the other games come from stored state.
   const winsFor = (id: string, includeCurrent: boolean) => {
-    const g1 = parseGame(session.game1)?.winnerId;
-    const g2 = parseGame(session.game2)?.winnerId;
-    const g3 = parseGame(session.game3)?.winnerId;
+    const stored = {
+      game1: parseGame(session.game1)?.winnerId,
+      game2: parseGame(session.game2)?.winnerId,
+      game3: parseGame(session.game3)?.winnerId,
+    };
     let count = 0;
-    if (g1 === id) count++;
-    if (g2 === id && !(isGame2 && includeCurrent)) count++;
-    if (g3 === id && !(isGame3 && includeCurrent)) count++;
-    if (includeCurrent && winnerIdRaw === id) count++;
+    for (const f of ["game1", "game2", "game3"] as const) {
+      if (includeCurrent && f === gameField) continue; // counted via newGame below
+      if (stored[f] === id) count++;
+    }
+    if (includeCurrent && newGame.winnerId === id) count++;
     return count;
   };
 
@@ -1063,6 +1098,33 @@ async function handleWinner(interaction: ButtonInteraction, session: MatchSessio
 
   // Game 3 (BO3 only): always finalize.
   return finalizeMatch(interaction, session, newGame, "game3");
+}
+
+// Winner records how many lives they had left (1..MAX_GAME_LIVES). Required
+// before the match advances; only the winning player can set it. Once set we
+// hand off to advanceAfterGameWin to start the next game / finalize.
+async function handleLives(interaction: ButtonInteraction, session: MatchSession, livesRaw: string | undefined) {
+  const lives = Number(livesRaw);
+  if (!Number.isInteger(lives) || lives < 1 || lives > MAX_GAME_LIVES) {
+    return reply(interaction, "That lives button looks broken — refresh Discord and try again.");
+  }
+  const isGame1 = session.state === "GAME_1_PLAYING";
+  const isGame2 = session.state === "GAME_2_PLAYING";
+  const isGame3 = session.state === "GAME_3_PLAYING";
+  if (!isGame1 && !isGame2 && !isGame3) return reply(interaction, "This match isn't waiting for a lives count.");
+  const gameField: "game1" | "game2" | "game3" = isGame1 ? "game1" : isGame2 ? "game2" : "game3";
+  const game = parseGame(session[gameField]);
+  if (!game || !game.winnerId) return reply(interaction, "No game winner recorded yet — vote on the winner first.");
+  if (game.winnerLives != null) return reply(interaction, "Lives are already recorded for this game.");
+
+  const { playerA, playerB } = await loadPlayers(session);
+  const winnerDiscordId = game.winnerId === playerA.id ? playerA.discordId : playerB.discordId;
+  if (interaction.user.id !== winnerDiscordId) {
+    return reply(interaction, "Only the winner of this game can record their remaining lives.");
+  }
+
+  const newGame: GameState = { ...game, winnerLives: lives };
+  return advanceAfterGameWin(interaction, session, newGame, gameField);
 }
 
 // "Call helper" button → opens a modal asking for a reason. Modal
