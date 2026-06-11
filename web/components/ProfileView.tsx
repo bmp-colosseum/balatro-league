@@ -33,65 +33,34 @@ function seasonRateTooltip(h: SeasonHistoryEntry): string {
 
 // One "favourite" row — deck and/or stake thumbnail + name + a count
 // (× plays, or W for wins). Combos carry "Deck · Stake" so we split + show both.
-function favRow(
-  r: FavoriteEntry,
-  kind: "deck" | "stake" | "combo",
-  metric: "played" | "won",
-  totalGames: number,
-  max: number,
-) {
+function favRow(r: FavoriteEntry, kind: "deck" | "stake" | "combo", metric: "played" | "won") {
   const [deckName, stakeName] = kind === "combo" ? r.name.split(" · ") : [r.name, r.name];
-  const value = metric === "won" ? r.gamesWon : r.gamesPlayed;
-  // Percentage next to the count: most-played = this item's share of all the
-  // player's games; most-won = the win rate on it.
-  const pct =
-    metric === "won"
-      ? r.gamesPlayed > 0
-        ? Math.round((r.gamesWon / r.gamesPlayed) * 100)
-        : null
-      : totalGames > 0
-        ? Math.round((r.gamesPlayed / totalGames) * 100)
-        : null;
-  // Proportional bar (relative to the top item in this list) so the column
-  // reads as a ranking instead of a far-flung lonely number.
-  const barPct = max > 0 ? Math.max(4, Math.round((value / max) * 100)) : 0;
-  const barColor = metric === "won" ? "rgba(46,204,113,0.16)" : "rgba(88,101,242,0.18)";
-  const pctTitle =
-    metric === "won"
-      ? `Won ${r.gamesWon} of ${r.gamesPlayed} games on this — ${pct ?? 0}% win rate`
-      : `${r.gamesPlayed} of ${totalGames} career games — ${pct ?? 0}% of your play`;
+  // Clean count row — icon(s), name, and the raw count. No bars, no
+  // percentages (deck/stake win rates live in the performance cards above).
   return (
-    <li
-      key={r.name}
-      title={pctTitle}
-      style={{ position: "relative", display: "flex", alignItems: "center", gap: 6, padding: "4px 8px", borderRadius: 4, overflow: "hidden" }}
-    >
-      <div aria-hidden style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${barPct}%`, background: barColor }} />
+    <li key={r.name} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0" }}>
       {(kind === "deck" || kind === "combo") && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={deckImage(deckName!)} alt="" width={16} height={16} style={{ position: "relative", borderRadius: 2 }} />
+        <img src={deckImage(deckName!)} alt="" width={16} height={16} style={{ borderRadius: 2 }} />
       )}
       {(kind === "stake" || kind === "combo") && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={stakeImage(kind === "combo" ? stakeName! : r.name)} alt="" width={16} height={16} style={{ position: "relative", borderRadius: 2 }} />
+        <img src={stakeImage(kind === "combo" ? stakeName! : r.name)} alt="" width={16} height={16} style={{ borderRadius: 2 }} />
       )}
-      <span style={{ position: "relative", flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</span>
-      <span style={{ position: "relative", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
+      <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</span>
+      <span style={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
         {metric === "won" ? `${r.gamesWon}W` : `${r.gamesPlayed}×`}
-        {pct != null && <span className="muted" style={{ marginLeft: 5, fontWeight: 400 }}>{pct}%</span>}
       </span>
     </li>
   );
 }
-function favBlock(title: string, rows: FavoriteEntry[], kind: "deck" | "stake" | "combo", metric: "played" | "won", totalGames: number) {
+function favBlock(title: string, rows: FavoriteEntry[], kind: "deck" | "stake" | "combo", metric: "played" | "won") {
   if (rows.length === 0) return null;
-  // Rows arrive sorted desc by the active metric, so the first row is the max.
-  const max = Math.max(...rows.map((r) => (metric === "won" ? r.gamesWon : r.gamesPlayed)), 1);
   return (
     <div style={{ marginBottom: 10 }}>
       <div className="muted" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>{title}</div>
       <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 12, display: "flex", flexDirection: "column", gap: 2 }}>
-        {rows.map((r) => favRow(r, kind, metric, totalGames, max))}
+        {rows.map((r) => favRow(r, kind, metric))}
       </ul>
     </div>
   );
@@ -569,18 +538,18 @@ export async function ProfileView({
               <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
                 Top decks, stakes &amp; combos by games played.
               </p>
-              {favBlock("Decks", profile.favorites.mostPlayed.decks, "deck", "played", t.totalGames)}
-              {favBlock("Stakes", profile.favorites.mostPlayed.stakes, "stake", "played", t.totalGames)}
-              {favBlock("Combos", profile.favorites.mostPlayed.combos, "combo", "played", t.totalGames)}
+              {favBlock("Decks", profile.favorites.mostPlayed.decks, "deck", "played")}
+              {favBlock("Stakes", profile.favorites.mostPlayed.stakes, "stake", "played")}
+              {favBlock("Combos", profile.favorites.mostPlayed.combos, "combo", "played")}
             </div>
             <div className="card">
               <strong>🏆 Most won</strong>
               <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
                 Top decks, stakes &amp; combos by games won.
               </p>
-              {favBlock("Decks", profile.favorites.mostWon.decks, "deck", "won", t.totalGames)}
-              {favBlock("Stakes", profile.favorites.mostWon.stakes, "stake", "won", t.totalGames)}
-              {favBlock("Combos", profile.favorites.mostWon.combos, "combo", "won", t.totalGames)}
+              {favBlock("Decks", profile.favorites.mostWon.decks, "deck", "won")}
+              {favBlock("Stakes", profile.favorites.mostWon.stakes, "stake", "won")}
+              {favBlock("Combos", profile.favorites.mostWon.combos, "combo", "won")}
             </div>
           </div>
         )}
