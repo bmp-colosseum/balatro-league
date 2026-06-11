@@ -133,6 +133,18 @@ section[id]:target > h3 {
   /* Both navs are Tailwind now; just tighten the main padding on phones. */
   main { padding: 0 16px; margin: 16px auto; }
 
+  /* Safety net: any wide table that didn't opt into the card layout
+     (.responsive-table) becomes its own horizontal-scroll container on phones,
+     so a many-column admin table scrolls instead of forcing the whole page
+     wider. Tables already inside a .table-scroll wrapper are left alone. */
+  main table:not(.responsive-table) {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+  .table-scroll > table { display: table; }
+
   table.responsive-table thead { display: none; }
   table.responsive-table,
   table.responsive-table tbody,

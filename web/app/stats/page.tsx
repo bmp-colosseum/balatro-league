@@ -164,33 +164,35 @@ function ItemTable({
   return (
     <div className="card">
       <strong>{title}</strong>
-      <table className="table-dense" style={{ width: "100%", fontSize: 13, marginTop: 8 }}>
-        <thead>
-          <tr>
-            <th></th>
-            <th>Name</th>
-            <th style={{ textAlign: "right" }}>Games</th>
-            <th style={{ textAlign: "right" }}>Win%</th>
-            <th style={{ minWidth: 110 }}>Ban rate</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.name}>
-              <td style={{ width: 28 }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imageFor(r.name)} alt="" width={22} height={22} style={{ borderRadius: 3, display: "block" }} />
-              </td>
-              <td>{r.name}</td>
-              <td style={{ textAlign: "right" }}>{r.gamesTotal > 0 ? r.gamesTotal : <span className="muted">—</span>}</td>
-              <td style={{ textAlign: "right" }} className="muted">{r.gamesTotal > 0 ? `${r.winRatePct}%` : "—"}</td>
-              <td>
-                <BanBar pct={r.banRatePct} appearances={r.appearancesTotal} />
-              </td>
+      <div className="table-scroll">
+        <table className="table-dense" style={{ width: "100%", fontSize: 13, marginTop: 8 }}>
+          <thead>
+            <tr>
+              <th></th>
+              <th>Name</th>
+              <th style={{ textAlign: "right" }}>Games</th>
+              <th style={{ textAlign: "right" }}>Win%</th>
+              <th style={{ minWidth: 90 }}>Ban rate</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.name}>
+                <td style={{ width: 28 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={imageFor(r.name)} alt="" width={22} height={22} style={{ borderRadius: 3, display: "block" }} />
+                </td>
+                <td>{r.name}</td>
+                <td style={{ textAlign: "right" }}>{r.gamesTotal > 0 ? r.gamesTotal : <span className="muted">—</span>}</td>
+                <td style={{ textAlign: "right" }} className="muted">{r.gamesTotal > 0 ? `${r.winRatePct}%` : "—"}</td>
+                <td>
+                  <BanBar pct={r.banRatePct} appearances={r.appearancesTotal} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -213,27 +215,29 @@ function ComboCard({
       {rows.length === 0 ? (
         <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>No data yet.</div>
       ) : (
-        <table className="table-dense" style={{ width: "100%", fontSize: 13, marginTop: 8 }}>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={`${r.deck}·${r.stake}`}>
-                <td style={{ width: 24 }} className="muted">{i + 1}.</td>
-                <td style={{ width: 44 }}>
-                  <span style={{ display: "inline-flex", gap: 2 }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={deckImage(r.deck)} alt="" width={20} height={20} style={{ borderRadius: 3 }} />
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={stakeImage(r.stake)} alt="" width={20} height={20} style={{ borderRadius: 3 }} />
-                  </span>
-                </td>
-                <td>{r.deck} <span className="muted">·</span> {r.stake}</td>
-                <td style={{ textAlign: "right" }}>
-                  <strong>{valueLabel(r)}</strong>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="table-scroll">
+          <table className="table-dense" style={{ width: "100%", fontSize: 13, marginTop: 8 }}>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={`${r.deck}·${r.stake}`}>
+                  <td style={{ width: 24 }} className="muted">{i + 1}.</td>
+                  <td style={{ width: 44 }}>
+                    <span style={{ display: "inline-flex", gap: 2 }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={deckImage(r.deck)} alt="" width={20} height={20} style={{ borderRadius: 3 }} />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={stakeImage(r.stake)} alt="" width={20} height={20} style={{ borderRadius: 3 }} />
+                    </span>
+                  </td>
+                  <td>{r.deck} <span className="muted">·</span> {r.stake}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <strong>{valueLabel(r)}</strong>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
