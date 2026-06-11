@@ -4,7 +4,7 @@ import { loadStandingsPageData, type StandingsMmrEntry } from "@/lib/loaders/sta
 import { getShowBmpMmr } from "@/lib/preferences";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
-import type { StandingRow } from "@/lib/standings";
+import { rankLabel, type StandingRow } from "@/lib/standings";
 
 // Pretty-print a BMP season tag like "season6" → "S6". Falls back to
 // raw tag for anything that doesn't match (defensive: shouldn't happen
@@ -292,7 +292,7 @@ export default async function StandingsPage() {
                       // as a table (desktop) and as stacked cards (mobile).
                       const displayRows = rows.map((r, i) => ({
                         r,
-                        medal: i < 3 ? ["🥇", "🥈", "🥉"][i]! : `${i + 1}.`,
+                        medal: rankLabel(r, i),
                         promoting: complete && i < effective && !isTopTier && !promoTieRowSet.has(i),
                         relegating:
                           complete && i >= rows.length - effective && !isBottomTier && !relegationTieRowSet.has(i),

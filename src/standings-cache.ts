@@ -10,7 +10,7 @@
 
 import { prisma } from "./db.js";
 import { getLeagueSettingsForSeason } from "./league-settings.js";
-import { computeStandings, type StandingRow } from "./standings.js";
+import { assignRanks, computeStandings, type StandingRow } from "./standings.js";
 
 interface CachedRow {
   playerId: string;
@@ -21,9 +21,7 @@ interface CachedRow {
   gamesWon: number;
   gamesLost: number;
   played: number;
-  // Bot-side StandingRow doesn't carry tiedWithPrev (web's standings
-  // helper has it; bot's doesn't). Field reserved for forward-compat
-  // when/if we unify the two modules.
+  tiedWithPrev?: boolean;
 }
 
 export async function recomputeDivisionStandings(divisionId: string): Promise<void> {
@@ -63,6 +61,7 @@ export async function recomputeDivisionStandings(divisionId: string): Promise<vo
     gamesWon: r.gamesWon,
     gamesLost: r.gamesLost,
     played: r.played,
+    tiedWithPrev: r.tiedWithPrev,
   }));
   await prisma.divisionStandings.upsert({
     where: { divisionId },
@@ -112,6 +111,7 @@ export async function loadDivisionStandings(divisionId: string): Promise<Standin
       gamesWon: r.gamesWon,
       gamesLost: r.gamesLost,
       played: r.played,
+      tiedWithPrev: r.tiedWithPrev,
       }));
     await prisma.divisionStandings.create({
       data: { divisionId, rowsJson: JSON.stringify(payload) },
@@ -127,8 +127,8 @@ export async function loadDivisionStandings(divisionId: string): Promise<Standin
     where: { id: { in: payload.map((r) => r.playerId) } },
   });
   const playerById = new Map(players.map((p) => [p.id, p]));
-  return payload
-    .map((r) => {
+  const hydrated = payload
+    .map((r): StandingRow | null => {
       const player = playerById.get(r.playerId);
       if (!player) return null;
       return {
@@ -140,7 +140,10 @@ export async function loadDivisionStandings(divisionId: string): Promise<Standin
         gamesWon: r.gamesWon,
         gamesLost: r.gamesLost,
         played: r.played,
-      } satisfies StandingRow;
+        tiedWithPrev: r.tiedWithPrev,
+      };
     })
     .filter((r): r is StandingRow => r !== null);
+  // Cached payload preserves sort order + tiedWithPrev; derive shared ranks.
+  return assignRanks(hydrated);
 }

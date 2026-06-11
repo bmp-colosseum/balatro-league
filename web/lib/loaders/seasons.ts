@@ -65,6 +65,10 @@ export interface SeasonDetailStandingRow {
   // Set when the season has been ended (computed by computeRatingDeltas
   // + written by endSeason). Null while the season is in-progress.
   finalGlobalRank: number | null;
+  // Live standings rank (ties shared) for in-progress display.
+  rank?: number;
+  tiedWithPrev?: boolean;
+  tiedWithNext?: boolean;
 }
 
 export interface SeasonDetailDivision {
@@ -151,6 +155,9 @@ export async function loadSeasonDetail(seasonId: string): Promise<SeasonDetailDa
         gamesLost: r.gamesLost,
         dropped: droppedIds.has(r.player.id),
         finalGlobalRank: finalRankByPlayer.get(r.player.id) ?? null,
+        rank: r.rank,
+        tiedWithPrev: r.tiedWithPrev,
+        tiedWithNext: r.tiedWithNext,
       }));
       return { id: d.id, name: d.name, groupNumber: d.groupNumber, rows };
     }),

@@ -13,7 +13,7 @@ import { LocalDateTimeField } from "@/components/LocalDateTimeField";
 import { LocalDateTime } from "@/components/LocalDateTime";
 import { SeasonDeckPresetPicker } from "@/components/SeasonDeckPresetPicker";
 import { tierColors } from "@/lib/tier-colors";
-import { computeStandings } from "@/lib/standings";
+import { computeStandings, rankLabel } from "@/lib/standings";
 import { listGuildTextChannels } from "@/lib/discord";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { setFinalGlobalRank } from "./actions";
@@ -197,7 +197,7 @@ function PublicSummary({
                       <tr><td colSpan={isEnded ? 6 : 5} className="muted">No matches played.</td></tr>
                     ) : (
                       div.rows.map((r, i) => {
-                        const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
+                        const medal = rankLabel(r, i);
                         const link = (
                           <Link href={`/profile/${r.player.id}`} style={{ color: "var(--text)" }}>
                             {r.player.displayName}

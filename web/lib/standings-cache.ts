@@ -5,7 +5,7 @@
 import type { Player } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getLeagueSettingsForSeason } from "@/lib/league-settings";
-import { computeStandings, type StandingRow } from "@/lib/standings";
+import { assignRanks, computeStandings, type StandingRow } from "@/lib/standings";
 
 interface CachedRow {
   playerId: string;
@@ -121,7 +121,7 @@ export async function loadDivisionStandings(divisionId: string): Promise<Standin
 
 // Turn a cached payload + a player lookup into StandingRows. Pure — no DB.
 function hydrateRows(payload: CachedRow[], playerById: Map<string, Player>): StandingRow[] {
-  return payload
+  const rows = payload
     .map((r): StandingRow | null => {
       const player = playerById.get(r.playerId);
       if (!player) return null;
@@ -139,6 +139,8 @@ function hydrateRows(payload: CachedRow[], playerById: Map<string, Player>): Sta
       return row;
     })
     .filter((r): r is StandingRow => r !== null);
+  // Cached payload preserves sort order + tiedWithPrev; derive shared ranks.
+  return assignRanks(rows);
 }
 
 // Batched version of loadDivisionStandings for the /standings page, which

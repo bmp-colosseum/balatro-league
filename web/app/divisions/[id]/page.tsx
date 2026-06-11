@@ -6,6 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { hasTier } from "@/lib/admin";
+import { rankLabel } from "@/lib/standings";
 import { loadDivisionPageData, type DivisionRecentPairing, type DivisionUnplayed } from "@/lib/loaders/division";
 import { loadAdminDivisionDetail } from "@/lib/loaders/admin";
 import { prisma } from "@/lib/prisma";
@@ -138,7 +139,7 @@ export default async function PublicDivisionPage({
               {standings.length === 0 ? (
                 <tr><td colSpan={5} className="muted">No matches played yet.</td></tr>
               ) : standings.map((r, i) => {
-                const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
+                const medal = rankLabel(r, i);
                 const link = (
                   <Link href={`/profile/${r.player.id}`} style={{ color: "var(--text)" }}>
                     {r.player.displayName}

@@ -136,4 +136,16 @@ describe("computeStandings — sort & tiebreakers", () => {
     const rows = computeStandings(players, pairings, shootouts);
     expect(ids(rows)).toEqual(["c", "a", "b"]); // Carol wins; Alice/Bob tied → alphabetical
   });
+
+  it("gives genuinely-tied players a SHARED rank (standard competition ranking)", () => {
+    // Alpha beats both; Bob & Cara draw each other → tied on everything.
+    const players = [P("a", "Alpha"), P("b", "Bob"), P("c", "Cara")];
+    const pairings = [M("a", "b", 2, 0), M("a", "c", 2, 0), M("b", "c", 1, 1)];
+    const rows = computeStandings(players, pairings);
+    // Order: Alpha (rank 1), then Bob & Cara tied (rank 2, 2).
+    expect(rows.map((r) => r.rank)).toEqual([1, 2, 2]);
+    expect(rows[1]!.tiedWithNext).toBe(true); // Bob tied with the one below
+    expect(rows[2]!.tiedWithPrev).toBe(true); // Cara tied with the one above
+    expect(rows[0]!.tiedWithPrev).toBeUndefined(); // Alpha not tied
+  });
 });
