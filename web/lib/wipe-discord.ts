@@ -1,33 +1,31 @@
-// Discord-side counterpart to wipe-test-env. Deletes every league-
-// related artifact the bot created in the guild — categories,
-// channels, roles — and clears every DB column that pointed at them.
-// Designed to leave the guild looking like the bot was never there.
+// Discord-side counterpart to wipe-test-env. Deletes the league artifacts the
+// bot created in the guild — by TRACKED ID, not by name — and clears the DB
+// columns that pointed at them. Designed to leave the guild looking like the
+// bot was never there, WITHOUT touching anything the bot didn't record.
 //
-// What gets deleted:
-//   - Categories matching league name patterns ('🃏 Balatro League',
-//     '🎴 Matches', '🃏 Season *', '📦 * Archive')
-//   - All channels inside those categories (regardless of name —
-//     anything sitting under a league category counts as league
-//     state)
-//   - Roles matching league name patterns ('League *', 'Season N · *',
-//     '🏆 Season N · * Champion')
-//   - Roles tracked in Division.discordRoleId (in case admin renamed
-//     them — the ID still wins)
-//   - Channels tracked in LeagueConfig channel ID keys + Division.
-//     discordChannelId (same defensive idea)
+// What gets deleted (all by id, so a renamed channel/role still goes):
+//   - Categories: the configured league_category_id + matches_category_id,
+//     plus every Season.discordCategoryId.
+//   - Channels: every channel tracked in a LeagueConfig channel-id key or
+//     Division.discordChannelId, PLUS every channel sitting under one of the
+//     tracked categories above (catches league-chat / league-signups etc.
+//     that have no dedicated config key).
+//   - Roles: every Division.discordRoleId + RoleBinding role, plus roles
+//     matching the bot's own role-name patterns (the League Player / season
+//     champion / tier roles aren't tracked by id anywhere else).
 //
-// What gets cleared in the DB after:
-//   - LeagueConfig keys for bot-commands / backups / devops /
-//     challenges / announcements / discord-server-invite-url
-//   - RoleBinding rows
-//   - Division.discordRoleId, Division.discordChannelId,
-//     Season.discordCategoryId
+// What it deliberately does NOT do anymore: sweep channels by matching a
+// category *name* (e.g. "🃏 Balatro League"). That was the over-deletion
+// risk — it nuked anything an admin parked under a league category and could
+// false-match a coincidentally-named category. Deletion is now id-driven.
 //
-// What stays:
-//   - The guild itself (we don't have permissions to delete guilds
-//     and we wouldn't want to anyway)
-//   - @everyone role
-//   - Anything the bot didn't create (server's own #general, etc.)
+// ⚠️ Caveat for the configured-category feature: if league_category_id /
+// matches_category_id point at a SHARED category you didn't let the bot
+// create, the child sweep WILL delete everything in it. Only point those at
+// categories the bot owns if you intend to wipe them.
+//
+// What stays: the guild + @everyone, managed roles, and anything the bot
+// never recorded creating (untracked categories/channels — delete manually).
 
 import { prisma } from "@/lib/prisma";
 import {
@@ -38,27 +36,32 @@ import {
 } from "@/lib/discord";
 import { recordAudit, type AuditActor } from "@/lib/audit";
 
-const CATEGORY_NAME_PATTERNS: RegExp[] = [
-  /^🃏 Balatro League$/i,
-  /^🎴 Matches$/i,
-  /^🃏 Season /i,
-  /^📦 .* Archive$/i,
-];
-
+// Roles the bot creates that aren't tracked by id (Player role + per-season
+// champion/tier roles). Division roles + bound roles are deleted by id; these
+// are the name-only stragglers. Patterns are specific enough to be safe.
 const ROLE_NAME_PATTERNS: RegExp[] = [
   /^League (Player|Admin|Helper|DevOps)$/i,
   /^Season \d+ · /i,
   /^🏆 Season \d+ · .* Champion$/i,
 ];
 
+// Every LeagueConfig key that holds a channel id the bot created.
 const CONFIG_CHANNEL_KEYS = [
+  "league_info_channel_id",
   "bot_commands_channel_id",
+  "results_channel_id",
+  "results_human_channel_id",
+  "announcements_channel_id",
+  "feedback_channel_id",
+  "admin_channel_id",
+  "support_channel_id",
+  "general_channel_id",
   "backup_channel_id",
   "devops_channel_id",
   "challenges_channel_id",
-  "announcements_channel_id",
-  "results_channel_id",
 ];
+// LeagueConfig keys that hold a CATEGORY id.
+const CONFIG_CATEGORY_KEYS = ["league_category_id", "matches_category_id"];
 
 const CHANNEL_TYPE_CATEGORY = 4;
 
@@ -86,8 +89,7 @@ export async function wipeDiscordLeagueState(
     seasonsCleared: 0,
   };
 
-  // Phase 1: collect IDs from the DB so we can delete by id even if
-  // the channel/role got renamed since creation.
+  // Phase 1: collect tracked IDs from the DB — channels, categories, roles.
   const divisions = await prisma.division.findMany({
     where: { OR: [{ discordChannelId: { not: null } }, { discordRoleId: { not: null } }] },
     select: { discordChannelId: true, discordRoleId: true },
@@ -98,64 +100,65 @@ export async function wipeDiscordLeagueState(
     if (d.discordChannelId) knownChannelIds.add(d.discordChannelId);
     if (d.discordRoleId) knownRoleIds.add(d.discordRoleId);
   }
-  const configChannelIds = await prisma.leagueConfig.findMany({
-    where: { key: { in: CONFIG_CHANNEL_KEYS } },
-    select: { value: true },
+
+  const configRows = await prisma.leagueConfig.findMany({
+    where: { key: { in: [...CONFIG_CHANNEL_KEYS, ...CONFIG_CATEGORY_KEYS] } },
+    select: { key: true, value: true },
   });
-  for (const c of configChannelIds) {
-    if (c.value) knownChannelIds.add(c.value);
+  const knownCategoryIds = new Set<string>();
+  for (const c of configRows) {
+    if (!c.value) continue;
+    if (CONFIG_CATEGORY_KEYS.includes(c.key)) knownCategoryIds.add(c.value);
+    else knownChannelIds.add(c.value);
   }
-  const boundRoles = await prisma.roleBinding.findMany({
-    select: { discordRoleId: true },
+
+  // Season categories are always bot-created — wipe them + their children.
+  const seasonCats = await prisma.season.findMany({
+    where: { discordCategoryId: { not: null } },
+    select: { discordCategoryId: true },
   });
+  for (const s of seasonCats) {
+    if (s.discordCategoryId) knownCategoryIds.add(s.discordCategoryId);
+  }
+
+  const boundRoles = await prisma.roleBinding.findMany({ select: { discordRoleId: true } });
   for (const r of boundRoles) knownRoleIds.add(r.discordRoleId);
 
-  // Phase 2: enumerate the guild to find league-pattern matches by name,
-  // unioned with the known-id set from above.
+  // Phase 2: enumerate the guild.
   const [allChannels, allRoles] = await Promise.all([
     listAllGuildChannels(guildId),
     listGuildRoles(guildId),
   ]);
 
-  const leagueCategories = allChannels.filter(
-    (c) =>
-      c.type === CHANNEL_TYPE_CATEGORY &&
-      CATEGORY_NAME_PATTERNS.some((re) => re.test(c.name)),
-  );
-  const categoryIds = new Set(leagueCategories.map((c) => c.id));
-
-  // Channels to delete: anything sitting under a league category OR
-  // explicitly tracked via DB.
+  // Channels to delete: tracked by id OR sitting under a tracked category.
   const channelsToDelete = allChannels.filter(
     (c) =>
       c.type !== CHANNEL_TYPE_CATEGORY &&
-      (knownChannelIds.has(c.id) || (c.parent_id && categoryIds.has(c.parent_id))),
+      (knownChannelIds.has(c.id) || (c.parent_id != null && knownCategoryIds.has(c.parent_id))),
   );
-
-  // Delete channels first (categories can't be deleted while they
-  // still contain children).
   for (const c of channelsToDelete) {
     const ok = await deleteChannel(c.id);
     if (ok) result.channelsDeleted++;
   }
-  // Then delete the categories themselves.
-  for (const cat of leagueCategories) {
+
+  // Then the tracked categories themselves (now childless).
+  const categoriesToDelete = allChannels.filter(
+    (c) => c.type === CHANNEL_TYPE_CATEGORY && knownCategoryIds.has(c.id),
+  );
+  for (const cat of categoriesToDelete) {
     const ok = await deleteChannel(cat.id);
     if (ok) result.categoriesDeleted++;
   }
-  // Plus any orphan IDs from the DB that didn't appear in the guild
-  // listing (channel was already deleted, but the DB still pointed at
-  // it). deleteChannel returns true on 404 so this won't blow up.
+
+  // Orphan tracked channel IDs that didn't appear in the live listing
+  // (already deleted, but the DB still pointed at them). 404 = no-op.
   const listedChannelIds = new Set(allChannels.map((c) => c.id));
   for (const id of knownChannelIds) {
-    if (!listedChannelIds.has(id)) {
-      await deleteChannel(id); // Returns true on 404 — no count bump.
-    }
+    if (!listedChannelIds.has(id)) await deleteChannel(id);
   }
 
-  // Phase 3: roles. Discord refuses to delete `managed` roles (bot's
-  // own integration role, premium subscriber role, etc.) — filter those
-  // out so we don't burn API budget on guaranteed-409s.
+  // Phase 3: roles — tracked by id OR matching the bot's role-name patterns.
+  // Managed roles (bot integration, booster) + @everyone are never touched.
   const rolesToDelete = allRoles.filter(
     (r) =>
       !r.managed &&
@@ -169,7 +172,7 @@ export async function wipeDiscordLeagueState(
 
   // Phase 4: clear the DB columns + LeagueConfig keys + RoleBindings.
   const cleared = await prisma.leagueConfig.deleteMany({
-    where: { key: { in: CONFIG_CHANNEL_KEYS } },
+    where: { key: { in: [...CONFIG_CHANNEL_KEYS, ...CONFIG_CATEGORY_KEYS] } },
   });
   result.configKeysCleared = cleared.count;
 
