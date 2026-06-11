@@ -8,14 +8,28 @@
 // idle until the timeout kicks in.
 
 import { PrismaClient } from "@prisma/client";
+import { env } from "./env.js";
 
 declare global {
   // eslint-disable-next-line no-var
   var __botPrisma: PrismaClient | undefined;
 }
 
+// Cap Prisma's pool. Railway's tier shares ~22 Postgres connections between
+// the bot (Prisma + pg-boss max:3), the web app, and any seed scripts — and
+// Prisma otherwise defaults to cpus*2+1 per process, which exhausts it ("too
+// many clients already"). 5 here + 3 for pg-boss keeps the bot well under
+// budget. Respects an explicit connection_limit already on the URL.
+function pooledDbUrl(limit: number): string {
+  const base = env.DATABASE_URL;
+  if (base.includes("connection_limit")) return base;
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}connection_limit=${limit}&pool_timeout=20`;
+}
+
 export const prisma = globalThis.__botPrisma ??
   new PrismaClient({
+    datasourceUrl: pooledDbUrl(5),
     log: process.env.NODE_ENV === "production" ? ["error"] : ["error", "warn"],
   });
 
