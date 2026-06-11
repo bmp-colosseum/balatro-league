@@ -15,6 +15,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // Equivalent to AUTH_TRUST_HOST=true but doesn't depend on env-var
   // detection working correctly.
   trustHost: true,
+  // Share the session cookie across sub-domains when AUTH_COOKIE_DOMAIN is set
+  // (e.g. ".balatroleague.com" in prod) so a login on www carries to the apex
+  // (and vice-versa) instead of forcing a re-auth on each. Unset locally / on
+  // the test service → NextAuth's host-only default, which works on localhost
+  // and the *.railway.app URL. (A cookie can't span two DIFFERENT domains, so
+  // this only unifies www + apex of one domain — not prod vs the test URL.)
+  ...(process.env.AUTH_COOKIE_DOMAIN
+    ? {
+        cookies: {
+          sessionToken: {
+            name: "__Secure-authjs.session-token",
+            options: {
+              httpOnly: true,
+              sameSite: "lax" as const,
+              path: "/",
+              secure: true,
+              domain: process.env.AUTH_COOKIE_DOMAIN,
+            },
+          },
+        },
+      }
+    : {}),
   providers: [
     Discord({
       clientId: process.env.DISCORD_CLIENT_ID,
