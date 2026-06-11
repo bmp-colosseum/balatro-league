@@ -506,6 +506,61 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
   return { player, history, totals, deckPerformance, stakePerformance, favorites, headToHeads };
 }
 
+// One deck/stake this player has banned, with how often they banned it vs.
+// how often it appeared in their pools (ban rate). Mirrors the league-wide
+// ban rate on /stats, but scoped to this player.
+export interface BanStatEntry {
+  name: string;
+  bans: number;
+  appearances: number;
+  banRatePct: number;
+}
+export interface PlayerBanStats {
+  decks: BanStatEntry[];
+  stakes: BanStatEntry[];
+}
+
+// What a player bans, from the full GameDeck pools of their confirmed games.
+// For each deck/stake: appearances = times it was in their pool; bans = times
+// THEY banned it. Returned top-5 by ban count (tie-broken by rate).
+export async function loadPlayerBanStats(playerId: string): Promise<PlayerBanStats> {
+  const games = await prisma.game.findMany({
+    where: {
+      dcByPlayerId: null,
+      match: { status: "CONFIRMED", OR: [{ playerAId: playerId }, { playerBId: playerId }] },
+    },
+    select: { pool: { select: { deck: true, stake: true, bannedById: true } } },
+  });
+
+  const deckApp = new Map<string, number>();
+  const deckBan = new Map<string, number>();
+  const stakeApp = new Map<string, number>();
+  const stakeBan = new Map<string, number>();
+  const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+
+  for (const g of games) {
+    for (const d of g.pool) {
+      bump(deckApp, d.deck);
+      bump(stakeApp, d.stake);
+      if (d.bannedById === playerId) {
+        bump(deckBan, d.deck);
+        bump(stakeBan, d.stake);
+      }
+    }
+  }
+
+  const build = (appMap: Map<string, number>, banMap: Map<string, number>): BanStatEntry[] =>
+    [...banMap.entries()]
+      .map(([name, bans]) => {
+        const appearances = appMap.get(name) ?? bans;
+        return { name, bans, appearances, banRatePct: appearances === 0 ? 0 : Math.round((bans / appearances) * 100) };
+      })
+      .sort((a, b) => b.bans - a.bans || b.banRatePct - a.banRatePct)
+      .slice(0, 5);
+
+  return { decks: build(deckApp, deckBan), stakes: build(stakeApp, stakeBan) };
+}
+
 function emptyTotals(): PlayerHistory["totals"] {
   return {
     seasons: 0,

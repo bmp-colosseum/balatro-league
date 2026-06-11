@@ -6,7 +6,7 @@ import { loadProfileExtras } from "@/lib/loaders/profile-extras";
 import { loadPlayerTraits } from "@/lib/loaders/player-traits";
 import { deckImage, stakeImage } from "@/lib/balatro-slugs";
 import { getShowBmpMmr } from "@/lib/preferences";
-import { loadPlayerHistory } from "@/lib/profile";
+import { loadPlayerHistory, loadPlayerBanStats } from "@/lib/profile";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,7 @@ import { reportFromProfileAction, submitProfileDispute } from "@/app/profile/[id
 import { resetToDiscordNameAction, setCustomNameAction } from "@/app/me/actions";
 import { NextSeasonCard } from "@/components/NextSeasonCard";
 import { prisma } from "@/lib/prisma";
-import type { SeasonHistoryEntry, FavoriteEntry } from "@/lib/profile";
+import type { SeasonHistoryEntry, FavoriteEntry, BanStatEntry } from "@/lib/profile";
 
 // Builds the hover tooltip for a season card's "W-D-L" inline number.
 // Spells out the rates explicitly so a glance over a player's career
@@ -67,6 +67,28 @@ function favRow(r: FavoriteEntry, kind: "deck" | "stake" | "combo", metric: "pla
         }}
       >
         {winRate}%
+      </span>
+    </li>
+  );
+}
+// One "most-banned" row: icon, name, ban rate (how often this player bans it
+// when it appears) + the bans/appearances record. Ban rate isn't good/bad, so
+// it's a neutral orange, not win/loss colours.
+function banRow(r: BanStatEntry, kind: "deck" | "stake") {
+  return (
+    <li
+      key={r.name}
+      title={`Banned ${r.bans} of the ${r.appearances} times it appeared in your pool`}
+      style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0" }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={kind === "deck" ? deckImage(r.name) : stakeImage(r.name)} alt="" width={16} height={16} style={{ borderRadius: 2 }} />
+      <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</span>
+      <span className="muted" style={{ whiteSpace: "nowrap", fontSize: 11, fontVariantNumeric: "tabular-nums" }}>
+        {r.bans}/{r.appearances}
+      </span>
+      <span style={{ whiteSpace: "nowrap", fontWeight: 600, fontVariantNumeric: "tabular-nums", minWidth: 36, textAlign: "right", color: "#e67e22" }}>
+        {r.banRatePct}%
       </span>
     </li>
   );
@@ -133,6 +155,9 @@ export async function ProfileView({
         autoSignup: myPrefs?.autoSignup ?? false,
       }
     : null;
+
+  // What this player bans (most-banned decks/stakes + their ban rate).
+  const banStats = await loadPlayerBanStats(profile.player.id);
 
   return (
     <>
@@ -568,6 +593,34 @@ export async function ProfileView({
               {favBlock("Stakes", profile.favorites.mostWon.stakes, "stake", "won")}
               {favBlock("Combos", profile.favorites.mostWon.combos, "combo", "won")}
             </div>
+          </div>
+        )}
+
+        {/* What this player bans — their most-banned decks/stakes + ban rate. */}
+        {(banStats.decks.length > 0 || banStats.stakes.length > 0) && (
+          <div className="grid grid-2" style={{ marginTop: 16 }}>
+            {banStats.decks.length > 0 && (
+              <div className="card">
+                <strong>🚫 Most-banned decks</strong>
+                <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
+                  How often you ban each deck when it shows up in your pool.
+                </p>
+                <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 12, display: "flex", flexDirection: "column", gap: 2 }}>
+                  {banStats.decks.map((r) => banRow(r, "deck"))}
+                </ul>
+              </div>
+            )}
+            {banStats.stakes.length > 0 && (
+              <div className="card">
+                <strong>🚫 Most-banned stakes</strong>
+                <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
+                  How often you ban each stake when it shows up in your pool.
+                </p>
+                <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 12, display: "flex", flexDirection: "column", gap: 2 }}>
+                  {banStats.stakes.map((r) => banRow(r, "stake"))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 
