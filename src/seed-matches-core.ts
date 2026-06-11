@@ -25,9 +25,10 @@ import type { DeckEntry } from "./match-config.js";
 
 const POOL_SIZE = 9;
 const TOTAL_BANS = 7; // 1 (first) + 3 (second) + 3 (first) → 2 remain, second picks 1
-// How many match writes to have in flight at once. Bounded so a big
-// multi-season run doesn't exhaust the Prisma connection pool.
-const WRITE_CONCURRENCY = 12;
+// How many match writes to have in flight at once. Bounded low so a big
+// multi-season run coexists with the web + bot Prisma pools under the DB's
+// max_connections (higher values were quick to exhaust a small Postgres).
+const WRITE_CONCURRENCY = 5;
 
 interface PreparedMatch {
   divisionId: string;

@@ -185,18 +185,17 @@ async function nextRoster(
   // New players replace the dropped ones (population stays constant). Give
   // them ratings just past the current max so they seed into the bottom tier.
   const maxRating = kept.reduce((mx, p) => Math.max(mx, p.rating ?? 0), 0);
+  // Freshly-allocated ids (never reused) → one batched insert, no upsert needed.
   const newcomers: Roster[] = [];
+  const newcomerRows: { discordId: string; displayName: string; rating: number }[] = [];
   for (let k = 0; k < dropCount; k++) {
     const idx = allocId();
     const discordId = `e2e-${idx}`;
     const displayName = `Demo Player ${idx + 1}`;
-    await prisma.player.upsert({
-      where: { discordId },
-      create: { discordId, displayName, rating: maxRating + 1 + k },
-      update: { displayName, rating: maxRating + 1 + k },
-    });
     newcomers.push({ discordId, displayName });
+    newcomerRows.push({ discordId, displayName, rating: maxRating + 1 + k });
   }
+  if (newcomerRows.length) await prisma.player.createMany({ data: newcomerRows, skipDuplicates: true });
 
   return [...kept.map((p) => ({ discordId: p.discordId, displayName: p.displayName })), ...newcomers];
 }
@@ -216,19 +215,20 @@ async function main(): Promise<void> {
   let idCounter = 0;
   const allocId = () => idCounter++;
 
-  // Season 1 roster: a fresh population, ranked 1..P.
+  // Season 1 roster: a fresh population, ranked 1..P. Build in memory, then one
+  // batched insert instead of N sequential upserts. --reset clears prior e2e
+  // players first; skipDuplicates keeps a no-reset re-run safe (deterministic
+  // data, so re-creating identical rows is a no-op).
   let roster: Roster[] = [];
+  const seedPlayers: { discordId: string; displayName: string; rating: number }[] = [];
   for (let i = 0; i < args.players; i++) {
     const idx = allocId();
     const discordId = `e2e-${idx}`;
     const displayName = `Demo Player ${idx + 1}`;
-    await prisma.player.upsert({
-      where: { discordId },
-      create: { discordId, displayName, rating: idx + 1 },
-      update: { displayName, rating: idx + 1 },
-    });
     roster.push({ discordId, displayName });
+    seedPlayers.push({ discordId, displayName, rating: idx + 1 });
   }
+  await prisma.player.createMany({ data: seedPlayers, skipDuplicates: true });
 
   // Division count: explicit --divisions wins, else derive from a target
   // size so big leagues get many small divisions (a 1000-player league in 2
