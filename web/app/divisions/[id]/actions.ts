@@ -414,18 +414,21 @@ export async function recordShootout(formData: FormData) {
   revalidatePath(`/divisions/${divisionId}`);
 }
 
-// Resolve a tie of any size: the admin lists the tied players in finishing
-// order (place1, place2, …) and we write the round-robin of showdowns that
-// encodes it. Handles 3-way+ ties the single p1-vs-p2 showdown can't.
+// Resolve a tie of any size: the admin types a placement number per tied
+// player (1 = winner; equal numbers = those players stay tied with each other),
+// and we write the showdowns that encode it. Handles 3-way+ ties the single
+// p1-vs-p2 showdown can't, while letting the "losers" remain tied.
 export async function resolveTieAction(formData: FormData) {
   const { user } = await requireAdmin();
   const divisionId = String(formData.get("divisionId") ?? "");
-  const ordered: string[] = [];
-  for (let i = 1; i <= 12; i++) {
-    const v = String(formData.get(`place${i}`) ?? "").trim();
-    if (v) ordered.push(v);
+  const placements: Array<{ playerId: string; place: number }> = [];
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("place_")) continue;
+    const playerId = key.slice("place_".length);
+    const place = parseInt(String(value), 10);
+    if (playerId && Number.isFinite(place)) placements.push({ playerId, place });
   }
-  const r = await resolveTieWithShowdowns({ divisionId, orderedPlayerIds: ordered, actor: actorFromAdminUser(user) });
+  const r = await resolveTieWithShowdowns({ divisionId, placements, actor: actorFromAdminUser(user) });
   if (!r.ok) redirect(`/divisions/${divisionId}?err=${encodeURIComponent(r.reason)}`);
   revalidatePath(`/divisions/${divisionId}`);
   redirect(`/divisions/${divisionId}?ok=tie-resolved`);

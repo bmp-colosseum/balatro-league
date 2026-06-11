@@ -806,29 +806,24 @@ function AdminSection({
         </form>
       </div>
 
-      {/* Resolve a tie of ANY size (3-way+) — lists the tied players in
-          finishing order and writes the round-robin of showdowns for it. */}
+      {/* Resolve a tie of ANY size (3-way+) — type a placement per tied player;
+          equal numbers stay tied with each other, so you can pick the winner
+          and leave the rest level. Writes the showdowns that encode it. */}
       <div className="card">
         <strong>⚖ Resolve a tie (any size)</strong>
         <p className="muted" style={{ fontSize: 12 }}>
-          For a 3-way+ tie the single showdown above can&apos;t express: list the tied players in
-          finishing order (best first) and we&apos;ll record the showdowns that order them. Leave
-          the rest blank. Re-submitting overwrites.
+          For a 3-way+ tie the single showdown above can&apos;t express. Type a placement for the
+          tied players — <strong>1 = winner</strong>. Players with the <strong>same number stay tied</strong>{" "}
+          with each other (e.g. <code>1, 2, 2</code> = one winner, the other two left level). Leave
+          everyone else blank. Re-submitting overwrites this group.
         </p>
-        <form action={resolveTieAction} style={{ display: "grid", gap: 6, maxWidth: 340 }}>
+        <form action={resolveTieAction} style={{ display: "grid", gap: 4, maxWidth: 320 }}>
           <input type="hidden" name="divisionId" value={division.id} />
-          {Array.from({ length: Math.min(members.length, 8) }, (_, k) => (
-            <div key={k} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <span className="muted" style={{ width: 64, fontSize: 12 }}>
-                {["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"][k]} place
-              </span>
-              <FormSelect
-                name={`place${k + 1}`}
-                placeholder="— skip —"
-                triggerClassName="flex-1 min-w-[160px]"
-                options={members.map((m) => ({ value: m.playerId, label: m.player.displayName }))}
-              />
-            </div>
+          {members.map((m) => (
+            <label key={m.playerId} style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 13 }}>{m.player.displayName}</span>
+              <Input type="number" name={`place_${m.playerId}`} min={1} placeholder="—" className="w-16" />
+            </label>
           ))}
           <Button type="submit" variant="secondary" style={{ marginTop: 4 }}>Resolve tie</Button>
         </form>

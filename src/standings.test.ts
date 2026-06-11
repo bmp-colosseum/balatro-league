@@ -122,4 +122,18 @@ describe("computeStandings — sort & tiebreakers", () => {
     const rows = computeStandings(players, pairings, shootouts);
     expect(ids(rows)).toEqual(["z", "m", "x"]);
   });
+
+  it("picks a 3-way tie winner while leaving the other two tied (no showdown between them)", () => {
+    // All three tied on points. The winner (Carol) has a showdown over each of
+    // the other two, but Alice & Bob have NO showdown between them — so they
+    // stay tied and fall back to alphabetical. Carol still rises to the top.
+    const players = [P("c", "Carol"), P("a", "Alice"), P("b", "Bob")];
+    const pairings = [M("c", "a", 1, 1), M("c", "b", 1, 1), M("a", "b", 1, 1)];
+    const shootouts: ShootoutInput[] = [
+      { playerAId: "c", playerBId: "a", winnerId: "c" },
+      { playerAId: "c", playerBId: "b", winnerId: "c" },
+    ];
+    const rows = computeStandings(players, pairings, shootouts);
+    expect(ids(rows)).toEqual(["c", "a", "b"]); // Carol wins; Alice/Bob tied → alphabetical
+  });
 });

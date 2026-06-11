@@ -282,40 +282,81 @@ export async function recordShowdown(args: {
   return { ok: true, matchId: match.id, divisionId };
 }
 
-// Resolve a tie of ANY size by writing the round-robin of showdowns that
-// encodes the given finishing order: each earlier-placed player is recorded as
-// beating every later-placed one. The standings shootout tiebreaker then orders
-// the group exactly as specified — so a 3-way+ tie the single p1-vs-p2 showdown
-// can't express is handled by listing the players in order. A bit heavy-handed
-// (N*(N-1)/2 showdown rows for an N-way tie) but it reuses the existing pairwise
-// machinery with no schema or scoring changes. Idempotent (recordShowdown
-// upserts on the canonical pair), so re-submitting a new order overwrites.
+// Resolve a tie of ANY size from a per-player PLACEMENT map (1 = winner) where
+// ties are allowed: players given the SAME place stay tied with each other.
+// We write one showdown per pair with DIFFERENT places (lower place wins) and
+// none between equal-placed players — so e.g. {A:1, B:2, C:2} records A beating
+// B and C while B & C are left tied (broken by the normal wins/draws/name
+// fallback). Exactly "pick the winner(s), leave the rest tied".
+//
+// Authoritative: first clears existing showdowns AMONG the involved group, so
+// re-submitting (including turning a forced order back into a tie) fully takes
+// effect. Showdowns involving players outside the group are untouched. Reuses
+// the existing pairwise shootout tiebreaker — no schema or scoring changes.
 export async function resolveTieWithShowdowns(args: {
   divisionId: string;
-  orderedPlayerIds: string[]; // finishing order, best first
+  placements: Array<{ playerId: string; place: number }>;
   actor: AuditActor;
-}): Promise<MatchAdminOutcome> {
-  const { divisionId, orderedPlayerIds, actor } = args;
-  // Drop blanks + dupes, preserving order.
-  const ids = orderedPlayerIds.filter((v, i) => v && orderedPlayerIds.indexOf(v) === i);
-  if (ids.length < 2) {
-    return { ok: false, reason: "Pick at least two distinct players, in finishing order." };
+}): Promise<{ ok: true; divisionId: string; showdownsWritten: number } | { ok: false; reason: string }> {
+  const { divisionId, actor } = args;
+  // First place per player wins; drop blanks/dupes.
+  const byPlayer = new Map<string, number>();
+  for (const p of args.placements) {
+    if (p.playerId && Number.isFinite(p.place) && !byPlayer.has(p.playerId)) byPlayer.set(p.playerId, p.place);
   }
-  let last: MatchAdminOutcome | null = null;
-  for (let i = 0; i < ids.length; i++) {
-    for (let j = i + 1; j < ids.length; j++) {
-      last = await recordShowdown({
-        divisionId,
-        p1Id: ids[i]!,
-        p2Id: ids[j]!,
-        winnerId: ids[i]!,
-        actor,
-        notes: "manual tie resolution",
+  const involved = [...byPlayer.entries()].map(([playerId, place]) => ({ playerId, place }));
+  if (involved.length < 2) return { ok: false, reason: "Assign a place to at least two players." };
+  if (new Set(involved.map((e) => e.place)).size < 2) {
+    return { ok: false, reason: "Everyone has the same place — give the winner a lower number (e.g. 1, 2, 2)." };
+  }
+
+  const ids = involved.map((e) => e.playerId);
+  // Authoritative reset for this group's showdowns.
+  await prisma.match.deleteMany({
+    where: { divisionId, format: "SHOOTOUT_BO1", playerAId: { in: ids }, playerBId: { in: ids } },
+  });
+
+  const now = new Date();
+  let showdownsWritten = 0;
+  for (let i = 0; i < involved.length; i++) {
+    for (let j = i + 1; j < involved.length; j++) {
+      const a = involved[i]!;
+      const b = involved[j]!;
+      if (a.place === b.place) continue; // equal → stay tied, no showdown
+      const winnerId = a.place < b.place ? a.playerId : b.playerId;
+      const [canonA, canonB] = canonicalPair(a.playerId, b.playerId);
+      await prisma.match.create({
+        data: {
+          divisionId,
+          playerAId: canonA,
+          playerBId: canonB,
+          format: "SHOOTOUT_BO1",
+          gamesWonA: winnerId === canonA ? 1 : 0,
+          gamesWonB: winnerId === canonB ? 1 : 0,
+          winnerId,
+          status: "CONFIRMED",
+          reportedAt: now,
+          confirmedAt: now,
+          recordedBy: actor.discordId,
+        },
       });
-      if (!last.ok) return last;
+      showdownsWritten++;
     }
   }
-  return last ?? { ok: false, reason: "Nothing recorded." };
+
+  await recordAudit({
+    actor,
+    action: "showdown.resolve-tie",
+    targetType: "Division",
+    targetId: divisionId,
+    summary: `Resolved a tie among ${involved.length} players (${showdownsWritten} showdowns)`,
+    metadata: { placements: involved },
+  });
+  // One recompute after the whole batch (covers the all-tied-after-clear case).
+  recomputeDivisionStandings(divisionId).catch((err) =>
+    console.warn("[match-admin] standings recompute failed:", err),
+  );
+  return { ok: true, divisionId, showdownsWritten };
 }
 
 // Delete a match outright (undo a result/DQ/showdown). Standings fall back to
