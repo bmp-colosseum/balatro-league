@@ -10,8 +10,21 @@ import { prisma } from "@/lib/prisma";
 export async function GET() {
   const session = await auth();
   const loggedIn = !!session?.user;
+
+  // Division (standings) pages are public, so surface the active season's
+  // divisions to everyone — anyone can jump straight to one from the palette.
+  const activeSeason = await prisma.season.findFirst({ where: { isActive: true }, select: { id: true } });
+  const divisionRows = activeSeason
+    ? await prisma.division.findMany({
+        where: { seasonId: activeSeason.id },
+        select: { id: true, name: true },
+        orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
+      })
+    : [];
+  const divisions = divisionRows.map((d) => ({ id: d.id, label: d.name }));
+
   if (!loggedIn) {
-    return NextResponse.json({ loggedIn: false, admin: false, players: [] });
+    return NextResponse.json({ loggedIn: false, admin: false, players: [], divisions });
   }
 
   const admin = await isAdminUser();
@@ -20,5 +33,5 @@ export async function GET() {
     orderBy: { displayName: "asc" },
     take: 1000,
   });
-  return NextResponse.json({ loggedIn, admin, players });
+  return NextResponse.json({ loggedIn, admin, players, divisions });
 }

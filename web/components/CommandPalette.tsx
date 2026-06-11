@@ -56,21 +56,29 @@ interface Ctx {
   loggedIn: boolean;
   admin: boolean;
   players: { id: string; displayName: string }[];
+  divisions: { id: string; label: string }[];
 }
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
-  const [ctx, setCtx] = useState<Ctx>({ loggedIn: false, admin: false, players: [] });
+  const [ctx, setCtx] = useState<Ctx>({ loggedIn: false, admin: false, players: [], divisions: [] });
   const [loaded, setLoaded] = useState(false);
   const router = useRouter();
 
-  // Lazy-load permission context + roster the first time the palette opens.
+  // Lazy-load permission context + roster + divisions the first time it opens.
   useEffect(() => {
     if (!open || loaded) return;
     setLoaded(true);
     fetch("/api/command-context")
       .then((r) => r.json())
-      .then((d) => setCtx({ loggedIn: !!d.loggedIn, admin: !!d.admin, players: d.players ?? [] }))
+      .then((d) =>
+        setCtx({
+          loggedIn: !!d.loggedIn,
+          admin: !!d.admin,
+          players: d.players ?? [],
+          divisions: d.divisions ?? [],
+        }),
+      )
       .catch(() => {});
   }, [open, loaded]);
 
@@ -115,6 +123,15 @@ export function CommandPalette() {
               {ADMIN_PAGES.map((it) => (
                 <CommandItem key={it.href} value={`admin ${it.label}`} onSelect={() => go(it.href)}>
                   {it.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+          {ctx.divisions.length > 0 && (
+            <CommandGroup heading="Divisions">
+              {ctx.divisions.map((d) => (
+                <CommandItem key={d.id} value={`division ${d.label}`} onSelect={() => go(`/divisions/${d.id}`)}>
+                  {d.label}
                 </CommandItem>
               ))}
             </CommandGroup>
