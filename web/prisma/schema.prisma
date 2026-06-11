@@ -644,6 +644,7 @@ model Match {
   // the uniqueness (vs Pairing's pair-only unique).
   @@unique([divisionId, playerAId, playerBId, format])
   @@index([divisionId, status])
+  @@index([playerAId])
   @@index([playerBId])
 }
 

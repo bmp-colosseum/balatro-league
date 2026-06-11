@@ -242,9 +242,13 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
   // back together (format distinguishes them), each with its per-game rows
   // (deck/stake/winner). No JSON, no separate shootout/session queries.
   // CONFIRMED + DISPUTED; DISPUTED renders a badge + "Update dispute" button.
+  // Match by the player directly (indexed on both playerAId and playerBId) —
+  // NOT by `divisionId IN [all their divisions]`, which made Postgres scan
+  // every match in those divisions. A player's matches are all in divisions
+  // they're a member of, so the division filter was redundant; we still group
+  // by mm.divisionId below.
   const myMatches = await prisma.match.findMany({
     where: {
-      divisionId: { in: divisionIds },
       status: { in: ["CONFIRMED", "DISPUTED"] },
       OR: [{ playerAId: playerId }, { playerBId: playerId }],
     },
