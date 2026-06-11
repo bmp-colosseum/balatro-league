@@ -184,7 +184,7 @@ export const startMatch: SlashCommand = {
       const parent = interaction.channel as TextChannel;
       const suffix = session.id.slice(-6);
       const thread = await parent.threads.create({
-        name: `Match · ${me.displayName} vs ${opp.displayName} · ${suffix}`,
+        name: `Match: ${me.displayName} vs ${opp.displayName} (${suffix})`,
         type: ChannelType.PrivateThread,
         autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
         invitable: false,

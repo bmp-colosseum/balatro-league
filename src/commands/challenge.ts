@@ -127,7 +127,7 @@ export const challenge: SlashCommand = {
     try {
       const suffix = session.id.slice(-6);
       const thread = await parent.threads.create({
-        name: `Challenge · ${me.displayName} vs ${opp.displayName} · ${suffix}`,
+        name: `Challenge: ${me.displayName} vs ${opp.displayName} (${suffix})`,
         type: ChannelType.PrivateThread,
         // 60 min is the minimum auto-archive for private threads. Session
         // expiry runs separately (5 min default) — match-sweep cancels

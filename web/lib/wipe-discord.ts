@@ -41,8 +41,10 @@ import { recordAudit, type AuditActor } from "@/lib/audit";
 // are the name-only stragglers. Patterns are specific enough to be safe.
 const ROLE_NAME_PATTERNS: RegExp[] = [
   /^League (Player|Admin|Helper|DevOps)$/i,
-  /^Season \d+ · /i,
-  /^🏆 Season \d+ · .* Champion$/i,
+  // Division roles "Season N: <div>" and champion roles "🏆 Season N <div>
+  // Champion". (Older "Season N · …" with a middot still matches the [: ·].)
+  /^Season \d+[: ·]/i,
+  /^🏆 Season \d+ .* Champion$/i,
 ];
 
 // Every LeagueConfig key that holds a channel id the bot created.
@@ -91,14 +93,21 @@ export async function wipeDiscordLeagueState(
 
   // Phase 1: collect tracked IDs from the DB — channels, categories, roles.
   const divisions = await prisma.division.findMany({
-    where: { OR: [{ discordChannelId: { not: null } }, { discordRoleId: { not: null } }] },
-    select: { discordChannelId: true, discordRoleId: true },
+    where: {
+      OR: [
+        { discordChannelId: { not: null } },
+        { discordRoleId: { not: null } },
+        { championRoleId: { not: null } },
+      ],
+    },
+    select: { discordChannelId: true, discordRoleId: true, championRoleId: true },
   });
   const knownChannelIds = new Set<string>();
   const knownRoleIds = new Set<string>();
   for (const d of divisions) {
     if (d.discordChannelId) knownChannelIds.add(d.discordChannelId);
     if (d.discordRoleId) knownRoleIds.add(d.discordRoleId);
+    if (d.championRoleId) knownRoleIds.add(d.championRoleId);
   }
 
   const configRows = await prisma.leagueConfig.findMany({
@@ -180,8 +189,14 @@ export async function wipeDiscordLeagueState(
   result.roleBindingsDeleted = bindings.count;
 
   const divisionsCleared = await prisma.division.updateMany({
-    where: { OR: [{ discordChannelId: { not: null } }, { discordRoleId: { not: null } }] },
-    data: { discordChannelId: null, discordRoleId: null },
+    where: {
+      OR: [
+        { discordChannelId: { not: null } },
+        { discordRoleId: { not: null } },
+        { championRoleId: { not: null } },
+      ],
+    },
+    data: { discordChannelId: null, discordRoleId: null, championRoleId: null },
   });
   result.divisionsCleared = divisionsCleared.count;
 

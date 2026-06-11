@@ -702,7 +702,7 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
       try {
         const suffix = session.id.slice(-6);
         const thread = await parentChannel.threads.create({
-          name: `Match · ${playerA.displayName} vs ${playerB.displayName} · ${suffix}`,
+          name: `Match: ${playerA.displayName} vs ${playerB.displayName} (${suffix})`,
           type: ChannelType.PrivateThread,
           autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
           invitable: false,

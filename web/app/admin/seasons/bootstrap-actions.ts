@@ -328,7 +328,7 @@ export async function awardSeasonChampionRoles(formData: FormData) {
       where: { id: div.id },
       data: { championPlayerId: winner.player.id },
     });
-    const roleName = `🏆 ${formatSeasonLabel(season)} · ${div.name} Champion`;
+    const roleName = `🏆 ${formatSeasonLabel(season)} ${div.name} Champion`;
     await enqueueAwardChampionRole({
       guildId,
       divisionId: div.id,

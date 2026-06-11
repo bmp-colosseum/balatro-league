@@ -874,7 +874,7 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
   // strand the role on a re-run.
   let roleId = div.discordRoleId;
   if (!roleId) {
-    const role = await createGuildRole(guildId, `${seasonLabel} · ${div.name}`, { mentionable: true });
+    const role = await createGuildRole(guildId, `${seasonLabel}: ${div.name}`, { mentionable: true });
     if (!role) throw new Error(`createGuildRole failed for division ${div.id}`);
     roleId = role.id;
     await prisma.division.update({ where: { id: div.id }, data: { discordRoleId: roleId } });
