@@ -265,7 +265,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     // aliases so re-running bootstrap renames them in place (keeps history).
     const infoChan = await ensureChannel("league-info", "League rules, schedule, announcements. Read-only for most.");
     const signupChan = await ensureChannel("league-signups", "Signup embeds posted here by the web admin. Players click the button to register.", ChannelType.GuildText, ["signups"]);
-    const resultsChan = await ensureChannel("league-results", "Auto-posted by the bot whenever a match is recorded.", ChannelType.GuildText, ["results"]);
+    const resultsChan = await ensureChannel("league-results-bot", "Bot-only: match results auto-post here. Players can react + use slash commands but can't post.", ChannelType.GuildText, ["results", "league-results"]);
     const chatChan = await ensureChannel("league-chat", "General league chat. Match scheduling, banter, etc.");
     const botCmdChan = await ensureChannel("league-bot-commands", "General bot commands: /random, /profile, /standings, etc. Most replies are private (only you see them) so you can run commands from any channel.", ChannelType.GuildText, ["bot-commands"]);
     const announcementsChan = await ensureChannel(
@@ -310,6 +310,49 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       where: { key: "feedback_channel_id" },
       create: { key: "feedback_channel_id", value: feedbackChan.id, updatedBy: interaction.user.id },
       update: { value: feedbackChan.id, updatedBy: interaction.user.id },
+    });
+
+    // Lock #league-results-bot to bot-only posting: @everyone keeps view +
+    // slash commands + reactions but can't send messages; the bot can post.
+    // Best-effort + idempotent (re-running re-applies) — a perms hiccup here
+    // must not abort the whole bootstrap.
+    try {
+      await resultsChan.permissionOverwrites.edit(guild.roles.everyone.id, {
+        ViewChannel: true,
+        ReadMessageHistory: true,
+        UseApplicationCommands: true,
+        AddReactions: true,
+        SendMessages: false,
+        SendMessagesInThreads: false,
+        CreatePublicThreads: false,
+        CreatePrivateThreads: false,
+      });
+      await resultsChan.permissionOverwrites.edit(interaction.client.user.id, {
+        ViewChannel: true,
+        SendMessages: true,
+        SendMessagesInThreads: true,
+        EmbedLinks: true,
+        AttachFiles: true,
+        ManageMessages: true,
+        ManageWebhooks: true,
+      });
+    } catch (err) {
+      console.warn("[bootstrap] couldn't lock #league-results-bot:", err);
+      reused.push("#league-results-bot (couldn't set bot-only perms — set '@everyone: deny Send Messages' manually)");
+    }
+
+    // Human-facing results channel — open for manual posting if the bot's
+    // auto-post in #league-results-bot ever has an issue. Created after the
+    // bot channel so the old "league-results" was already renamed away.
+    const humanResultsChan = await ensureChannel(
+      "league-results",
+      "Post results here manually if the bot's auto-post in #league-results-bot ever misses one. Open to everyone.",
+      ChannelType.GuildText,
+    );
+    await prisma.leagueConfig.upsert({
+      where: { key: "results_human_channel_id" },
+      create: { key: "results_human_channel_id", value: humanResultsChan.id, updatedBy: interaction.user.id },
+      update: { value: humanResultsChan.id, updatedBy: interaction.user.id },
     });
 
     // Auto-create a Match Results webhook on #results so the announce
@@ -625,12 +668,13 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       created.length > 0 ? `  Created: ${created.join(", ")}` : `  (nothing new — everything already existed)`,
       reused.length > 0 ? `  Reused: ${reused.join(", ")}` : null,
       webhookWarning
-        ? `\n⚠️ **Match Results webhook didn't get created** — the bot probably needs **Manage Webhooks** in <#${resultsChan.id}>. Either:\n  • Grant the bot Manage Webhooks at the channel or category level, OR\n  • Create the webhook manually in **#league-results → Edit Channel → Integrations → Webhooks**, then paste the URL via \`/league set-results-webhook url:<url>\`\n  Error: \`${webhookWarning}\``
+        ? `\n⚠️ **Match Results webhook didn't get created** — the bot probably needs **Manage Webhooks** in <#${resultsChan.id}>. Either:\n  • Grant the bot Manage Webhooks at the channel or category level, OR\n  • Create the webhook manually in **#league-results-bot → Edit Channel → Integrations → Webhooks**, then paste the URL via \`/league set-results-webhook url:<url>\`\n  Error: \`${webhookWarning}\``
         : null,
       ``,
       `📌 <#${infoChan.id}> — league-info`,
       `📝 <#${signupChan.id}> — league-signups`,
-      `🏆 <#${resultsChan.id}> — league-results (auto-announce target)`,
+      `🏆 <#${resultsChan.id}> — league-results-bot (bot-only auto-post target)`,
+      `🏆 <#${humanResultsChan.id}> — league-results (humans post here manually if needed)`,
       `📣 <#${announcementsChan.id}> — league-announcements (season starts, recaps)`,
       `💬 <#${chatChan.id}> — league-chat`,
       `🗣️ <#${feedbackChan.id}> — league-feedback (player suggestions + bug reports)`,
