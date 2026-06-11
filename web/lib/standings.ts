@@ -53,7 +53,9 @@ export function rankLabel(
   fallbackIndex: number,
 ): string {
   const n = row.rank ?? fallbackIndex + 1;
-  if (row.tiedWithPrev || row.tiedWithNext) return `T${n}`;
+  // Tied players share their rank shown as "#N" (e.g. #1 #1 #1 for a 3-way
+  // tie). Clean top-3 get a medal; everyone else a plain "N.".
+  if (row.tiedWithPrev || row.tiedWithNext) return `#${n}`;
   if (n <= 3) return ["🥇", "🥈", "🥉"][n - 1]!;
   return `${n}.`;
 }

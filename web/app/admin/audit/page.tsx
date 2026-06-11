@@ -6,6 +6,7 @@
 
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { SiteNav } from "@/components/SiteNav";
@@ -17,6 +18,44 @@ import { AdminNav } from "@/components/AdminNav";
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 50;
+
+// The filter-dropdown lists (distinct actors/actions/targets) and the unfiltered
+// total require full scans of the audit table — expensive and slow-changing, so
+// cache them. The paginated page rows stay live (cursor-based, indexed).
+const loadAuditFilterOptions = unstable_cache(
+  async () => {
+    const [actorRows, actionRows, targetRows] = await Promise.all([
+      prisma.adminAuditEvent.findMany({
+        distinct: ["actorDiscordId"],
+        select: { actorDiscordId: true, actorName: true },
+        orderBy: { actorName: "asc" },
+        take: 200,
+      }),
+      prisma.adminAuditEvent.findMany({
+        distinct: ["action"],
+        select: { action: true },
+        orderBy: { action: "asc" },
+        take: 200,
+      }),
+      prisma.adminAuditEvent.findMany({
+        distinct: ["targetType"],
+        where: { targetType: { not: null } },
+        select: { targetType: true },
+        orderBy: { targetType: "asc" },
+        take: 200,
+      }),
+    ]);
+    return { actorRows, actionRows, targetRows };
+  },
+  ["audit-filter-options"],
+  { revalidate: 300, tags: ["audit"] },
+);
+
+const loadAuditTotalCount = unstable_cache(
+  async () => prisma.adminAuditEvent.count(),
+  ["audit-total-count"],
+  { revalidate: 60, tags: ["audit"] },
+);
 
 interface SearchParams {
   actor?: string;
@@ -75,35 +114,18 @@ export default async function AdminAuditPage({
     where.createdAt = { ...(where.createdAt as object | undefined), lt: before };
   }
 
-  // Pull rows for this page + the distinct actor/action/target lists for
-  // the filter dropdowns. Distinct queries are cheap because of the
-  // indexes — and we cap at 200 just in case.
-  const [rows, actorRows, actionRows, targetRows, totalCount] = await Promise.all([
+  // The live, indexed bit: this page's rows. The filter dropdowns + the
+  // unfiltered total come from the cached helpers (slow-changing). An exact
+  // filtered count is only computed when a filter is actually applied.
+  const hasFilter = !!(sp.actor || sp.action || sp.target || sp.since || sp.until || sp.q);
+  const [rows, { actorRows, actionRows, targetRows }, totalCount] = await Promise.all([
     prisma.adminAuditEvent.findMany({
       where,
       orderBy: { createdAt: "desc" },
       take: PAGE_SIZE + 1, // one extra to know if there's a next page
     }),
-    prisma.adminAuditEvent.findMany({
-      distinct: ["actorDiscordId"],
-      select: { actorDiscordId: true, actorName: true },
-      orderBy: { actorName: "asc" },
-      take: 200,
-    }),
-    prisma.adminAuditEvent.findMany({
-      distinct: ["action"],
-      select: { action: true },
-      orderBy: { action: "asc" },
-      take: 200,
-    }),
-    prisma.adminAuditEvent.findMany({
-      distinct: ["targetType"],
-      where: { targetType: { not: null } },
-      select: { targetType: true },
-      orderBy: { targetType: "asc" },
-      take: 200,
-    }),
-    prisma.adminAuditEvent.count({ where }),
+    loadAuditFilterOptions(),
+    hasFilter ? prisma.adminAuditEvent.count({ where }) : loadAuditTotalCount(),
   ]);
 
   const hasNextPage = rows.length > PAGE_SIZE;
@@ -226,7 +248,10 @@ export default async function AdminAuditPage({
                     {row.actorDiscordId === "system" ? (
                       <span className="muted">system</span>
                     ) : (
-                      <span title={row.actorDiscordId}>{row.actorName}</span>
+                      <span>
+                        {row.actorName}{" "}
+                        <span className="muted" style={{ fontSize: 11, fontFamily: "monospace" }}>{row.actorDiscordId}</span>
+                      </span>
                     )}
                   </td>
                   <td style={{ padding: "6px 4px", fontFamily: "monospace", fontSize: 12, color: "#bdc3c7" }}>

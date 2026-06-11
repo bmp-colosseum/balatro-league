@@ -179,7 +179,7 @@ export function formatStandingsTable(divisionName: string, rows: StandingRow[]):
   const lines = rows.map((r, i) => {
     const n = r.rank ?? i + 1;
     const tied = r.tiedWithPrev || r.tiedWithNext;
-    const rank = `${tied ? "T" : ""}${n}.`.padEnd(3);
+    const rank = `${tied ? `#${n}` : `${n}.`}`.padEnd(3);
     const name = r.player.displayName.padEnd(16);
     const pts = `${r.points}p`.padStart(4);
     const record = `${r.wins}W-${r.draws}D-${r.losses}L`.padEnd(8);
@@ -198,9 +198,9 @@ export function formatDivisionField(rows: StandingRow[], expectedSize: number): 
     .map((r, i) => {
       const n = r.rank ?? i + 1;
       const tied = r.tiedWithPrev || r.tiedWithNext;
-      // Tied players share a rank (shown as `T2`); clean top-3 get a medal.
+      // Tied players share a rank (shown as `#2`); clean top-3 get a medal.
       const prefix = tied
-        ? `\`T${n.toString().padStart(2)}\``
+        ? `\`#${n.toString().padStart(2)}\``
         : n <= MEDAL.length
           ? MEDAL[n - 1]
           : `\`${n.toString().padStart(2)}.\``;
