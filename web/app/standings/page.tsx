@@ -303,7 +303,7 @@ export default async function StandingsPage() {
                       return (
                         <div key={div.id} className="card">
                           <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                            <strong>
+                            <strong className="pixel" style={{ fontSize: 18 }}>
                               <Link href={`/divisions/${div.id}`} style={{ textDecoration: "none" }}>{div.name}</Link>
                             </strong>
                             <span

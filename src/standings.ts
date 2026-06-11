@@ -189,8 +189,6 @@ export function formatStandingsTable(divisionName: string, rows: StandingRow[]):
   return `${header}\n\`\`\`\n${lines.join("\n")}\n\`\`\``;
 }
 
-const MEDAL = ["🥇", "🥈", "🥉"];
-
 // Compact one-line-per-player rendering used in embed fields.
 export function formatDivisionField(rows: StandingRow[], expectedSize: number): string {
   if (rows.length === 0) return "_(no players)_";
@@ -198,12 +196,10 @@ export function formatDivisionField(rows: StandingRow[], expectedSize: number): 
     .map((r, i) => {
       const n = r.rank ?? i + 1;
       const tied = r.tiedWithPrev || r.tiedWithNext;
-      // Tied players share a rank (shown as `#2`); clean top-3 get a medal.
+      // Plain numbers; tied players share a rank shown as `#2`.
       const prefix = tied
         ? `\`#${n.toString().padStart(2)}\``
-        : n <= MEDAL.length
-          ? MEDAL[n - 1]
-          : `\`${n.toString().padStart(2)}.\``;
+        : `\`${n.toString().padStart(2)}.\``;
       const stats = `**${r.points}** pts · ${r.wins}-${r.draws}-${r.losses} · ${r.gamesWon}-${r.gamesLost} g`;
       const name = r.dropped ? `~~${r.player.displayName}~~ _(dropped)_` : r.player.displayName;
       return `${prefix} ${name} — ${stats}`;

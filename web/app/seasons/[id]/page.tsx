@@ -175,7 +175,7 @@ function PublicSummary({
           <div className="grid grid-2">
             {tier.divisions.map((div) => (
               <div key={div.id} className="card">
-                <strong>
+                <strong className="pixel" style={{ fontSize: 18 }}>
                   <Link href={`/divisions/${div.id}`} style={{ textDecoration: "none" }}>{div.name}</Link>
                 </strong>
                 <div className="table-scroll" style={{ marginTop: 8 }}>

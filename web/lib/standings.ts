@@ -45,19 +45,17 @@ export function assignRanks(rows: StandingRow[]): StandingRow[] {
   return rows;
 }
 
-// Display label for a standing row's rank: a medal for a clean top-3, the
-// shared number prefixed "T" for a genuine tie (e.g. "T3"), else "N.". Ties
-// show the SAME number on every tied row — that's the visible "real tie".
+// Display label for a standing row's rank: a plain number (1, 2, 3, …). Ties
+// share the SAME number prefixed "#" on every tied row (e.g. "#1 #1 #1" for a
+// 3-way tie) — that's the visible "real tie". (Card-themed labels are for the
+// DIVISION names, not the in-division leaderboard.)
 export function rankLabel(
   row: { rank?: number; tiedWithPrev?: boolean; tiedWithNext?: boolean },
   fallbackIndex: number,
 ): string {
   const n = row.rank ?? fallbackIndex + 1;
-  // Tied players share their rank shown as "#N" (e.g. #1 #1 #1 for a 3-way
-  // tie). Clean top-3 get a medal; everyone else a plain "N.".
   if (row.tiedWithPrev || row.tiedWithNext) return `#${n}`;
-  if (n <= 3) return ["🥇", "🥈", "🥉"][n - 1]!;
-  return `${n}.`;
+  return `${n}`;
 }
 
 export interface ShootoutInput {
