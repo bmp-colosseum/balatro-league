@@ -85,6 +85,27 @@ export default async function AdminSeasonsPage({
           </div>
         )}
 
+        <details className="card">
+          <summary style={{ cursor: "pointer" }}>
+            <strong>+ Create new season</strong>
+            <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
+              Next up: Season {nextNumber}
+            </span>
+          </summary>
+          <p className="muted" style={{ marginTop: 8 }}>
+            Number is assigned automatically — just an optional subtitle and
+            group sizes here. Tiers and divisions are built later, from the
+            actual signups, after signups close.
+          </p>
+          <form action={createSeason}>
+            <label>Subtitle <Input name="subtitle" placeholder="Optional subtitle (e.g. 'Launch')" /></label>
+            <label>Group size <Input name="targetGroupSize" type="number" min={2} max={20} defaultValue={5} /></label>
+            <label>Min group <Input name="minGroupSize" type="number" min={2} max={20} defaultValue={3} /></label>
+
+            <Button type="submit" className="mt-3">Create season</Button>
+          </form>
+        </details>
+
         {timelineSeasons.length > 0 && (
           <div className="card">
             <strong>Season timeline</strong>
@@ -313,27 +334,6 @@ export default async function AdminSeasonsPage({
             );
           })}
         </div>
-
-        <details className="card" style={{ marginTop: 24 }}>
-          <summary style={{ cursor: "pointer" }}>
-            <strong>+ Create new season</strong>
-            <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
-              Next up: Season {nextNumber}
-            </span>
-          </summary>
-          <p className="muted" style={{ marginTop: 8 }}>
-            Number is assigned automatically — just an optional subtitle and
-            group sizes here. Tiers and divisions are built later, from the
-            actual signups, after signups close.
-          </p>
-          <form action={createSeason}>
-            <label>Subtitle <Input name="subtitle" placeholder="Optional subtitle (e.g. 'Launch')" /></label>
-            <label>Group size <Input name="targetGroupSize" type="number" min={2} max={20} defaultValue={5} /></label>
-            <label>Min group <Input name="minGroupSize" type="number" min={2} max={20} defaultValue={3} /></label>
-
-            <Button type="submit" className="mt-3">Create season</Button>
-          </form>
-        </details>
       </main>
     </>
   );
