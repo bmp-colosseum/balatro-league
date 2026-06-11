@@ -8,9 +8,11 @@ test("standings page renders", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /standings/i })).toBeVisible();
 });
 
-test("stats page renders (with the chart container)", async ({ page }) => {
+test("stats page renders", async ({ page }) => {
   await page.goto("/stats");
   await expect(page.getByRole("heading", { name: /league stats/i })).toBeVisible();
+  // Deck/stake tables render (the all-decks-with-icons rework).
+  await expect(page.getByRole("heading", { name: /decks & stakes/i })).toBeVisible();
 });
 
 test("⌘K command palette opens and navigates (regression)", async ({ page }) => {
