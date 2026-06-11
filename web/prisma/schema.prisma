@@ -658,6 +658,13 @@ model Game {
   num                 Int // 1, 2, 3 — shootout uses 1
   firstPlayerId       String // who banned first this game
   winnerId            String? // null if indeterminate (rare)
+  // Lives the WINNER had remaining at the end of this game (attrition
+  // format). The loser is at 0 by definition, so net life differential
+  // for a player = Σ(their winnerLives in games won) − Σ(opponent's
+  // winnerLives in games lost). Used as the 3+-way-tie standings
+  // tiebreaker after head-to-head. Null = not captured (manual /report,
+  // admin record-set, forfeit, pre-feature games).
+  winnerLives         Int? // 1..N remaining for winnerId; null if not captured
   deck                String // the picked/played deck
   stake               String // the picked/played stake
   dcByPlayerId        String? // set if the game was a disconnect forfeit
