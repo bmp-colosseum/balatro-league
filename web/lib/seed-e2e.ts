@@ -209,8 +209,6 @@ interface PreparedMatch {
   winsB: number;
   hadDc: boolean;
   playedAt: Date;
-  shootoutWinnerId: string | null;
-  shootoutGame: GameStateLike | null;
 }
 
 // Fabricate + write matches for a built season (persona-driven), then recompute
@@ -260,27 +258,12 @@ export async function seedMatchesForSeason(
         }
         const hadDc = games.some((g) => g.dcByPlayerId);
         const playedAt = new Date(baseTime + Math.floor(rng() * 20) * 86400000);
-        let shootoutWinnerId: string | null = null;
-        let shootoutGame: GameStateLike | null = null;
-        if (winsA === 1 && winsB === 1 && rng() < 0.5) {
-          shootoutWinnerId = rng() < 0.5 ? canonA : canonB;
-          const sFirst = rng() < 0.5 ? canonA : canonB;
-          const sOther = sFirst === canonA ? canonB : canonA;
-          shootoutGame = generateGame(
-            rng,
-            generatePool(decks, stakes, POOL_SIZE, rng),
-            sFirst,
-            personaFor(sFirst),
-            personaFor(sOther),
-            shootoutWinnerId,
-          );
-        }
-        prepared.push({ divisionId: division.id, canonA, canonB, games, winsA, winsB, hadDc, playedAt, shootoutWinnerId, shootoutGame });
+        prepared.push({ divisionId: division.id, canonA, canonB, games, winsA, winsB, hadDc, playedAt });
       }
     }
   }
 
-  let shootouts = 0;
+  // Write the regular-season matches.
   await runWithConcurrency(prepared, WRITE_CONCURRENCY, async (p) => {
     const winnerId = p.winsA > p.winsB ? p.canonA : p.winsB > p.winsA ? p.canonB : null;
     const match = await prisma.match.create({
@@ -301,30 +284,51 @@ export async function seedMatchesForSeason(
     });
     await writeMatchGames(match.id, p.canonA, p.canonB, p.games);
     if (announce) await enqueueAnnounceResult(match.id).catch(() => {});
-    if (p.shootoutWinnerId) {
-      const sWinA = p.shootoutWinnerId === p.canonA ? 1 : 0;
-      const sWinB = p.shootoutWinnerId === p.canonB ? 1 : 0;
-      const shootout = await prisma.match.create({
-        data: {
-          divisionId: p.divisionId,
-          playerAId: p.canonA,
-          playerBId: p.canonB,
-          format: "SHOOTOUT_BO1",
-          gamesWonA: sWinA,
-          gamesWonB: sWinB,
-          winnerId: p.shootoutWinnerId,
-          status: "CONFIRMED",
-          reportedAt: p.playedAt,
-          confirmedAt: p.playedAt,
-          recordedBy: "seed-e2e",
-        },
-      });
-      if (p.shootoutGame) await writeMatchGames(shootout.id, p.canonA, p.canonB, [p.shootoutGame]);
-      shootouts++;
+  });
+
+  // Showdowns are a TIEBREAKER, not a coin-flip on every draw. Create one only
+  // for a pair that drew their head-to-head (1-1) AND finished tied on total
+  // points — the exact real-world condition for a showdown. So instead of a
+  // dozen showdowns between unrelated pairs, you get the handful that actually
+  // need one. Points are from regular matches only (showdowns don't score).
+  const pointsByPlayer = new Map<string, number>();
+  const addPts = (id: string, pts: number) => pointsByPlayer.set(id, (pointsByPlayer.get(id) ?? 0) + pts);
+  for (const p of prepared) {
+    if (p.winsA === 2) addPts(p.canonA, 3);
+    else if (p.winsB === 2) addPts(p.canonB, 3);
+    else {
+      addPts(p.canonA, 1);
+      addPts(p.canonB, 1);
     }
+  }
+  const showdownPairs = prepared.filter(
+    (p) => p.winsA === 1 && p.winsB === 1 && pointsByPlayer.get(p.canonA) === pointsByPlayer.get(p.canonB),
+  );
+  await runWithConcurrency(showdownPairs, WRITE_CONCURRENCY, async (p) => {
+    const rng = makeRng(`showdown:${p.divisionId}:${p.canonA}:${p.canonB}`);
+    const winnerId = rng() < 0.5 ? p.canonA : p.canonB;
+    const sFirst = rng() < 0.5 ? p.canonA : p.canonB;
+    const sOther = sFirst === p.canonA ? p.canonB : p.canonA;
+    const game = generateGame(rng, generatePool(decks, stakes, POOL_SIZE, rng), sFirst, personaFor(sFirst), personaFor(sOther), winnerId);
+    const shootout = await prisma.match.create({
+      data: {
+        divisionId: p.divisionId,
+        playerAId: p.canonA,
+        playerBId: p.canonB,
+        format: "SHOOTOUT_BO1",
+        gamesWonA: winnerId === p.canonA ? 1 : 0,
+        gamesWonB: winnerId === p.canonB ? 1 : 0,
+        winnerId,
+        status: "CONFIRMED",
+        reportedAt: p.playedAt,
+        confirmedAt: p.playedAt,
+        recordedBy: "seed-e2e",
+      },
+    });
+    await writeMatchGames(shootout.id, p.canonA, p.canonB, [game]);
   });
   await runWithConcurrency(divisions, WRITE_CONCURRENCY, (d) => recomputeDivisionStandings(d.id));
-  return { matches: prepared.length, games: prepared.length * 2, shootouts };
+  return { matches: prepared.length, games: prepared.length * 2, shootouts: showdownPairs.length };
 }
 
 async function resetDemos(): Promise<void> {
