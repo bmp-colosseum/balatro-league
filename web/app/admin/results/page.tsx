@@ -13,6 +13,7 @@ import { PlayerSearch } from "@/components/PlayerSearch";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FormSelect } from "@/components/FormSelect";
 import { loadResultsPage, type ResultsMember } from "@/lib/loaders/admin-results";
 import { recordResultAction, overrideResultAction, forfeitAction, showdownAction, undoAction } from "./actions";
 
@@ -52,12 +53,13 @@ export default async function ResultsPage({
         <div className="card" style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
           <form method="get" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
             <label className="muted" style={{ fontSize: 12 }}>Division</label>
-            <select name="division" defaultValue={sel?.division.id ?? ""} style={{ minWidth: 220 }}>
-              <option value="">— pick a division —</option>
-              {data.divisions.map((d) => (
-                <option key={d.id} value={d.id}>{d.tierName} — {d.name}</option>
-              ))}
-            </select>
+            <FormSelect
+              name="division"
+              defaultValue={sel?.division.id ?? ""}
+              triggerClassName="min-w-[220px]"
+              placeholder="— pick a division —"
+              options={data.divisions.map((d) => ({ value: d.id, label: `${d.tierName} — ${d.name}` }))}
+            />
             <Button type="submit">Go</Button>
           </form>
           {data.hasActiveSeason && (
@@ -92,11 +94,16 @@ export default async function ResultsPage({
                 <MemberSelect name="playerAId" members={sel.members} label="A…" />
                 <span className="muted">vs</span>
                 <MemberSelect name="playerBId" members={sel.members} label="B…" />
-                <select name="result" required defaultValue="2-0">
-                  <option value="2-0">A wins 2-0</option>
-                  <option value="1-1">1-1 draw</option>
-                  <option value="0-2">B wins 2-0</option>
-                </select>
+                <FormSelect
+                  name="result"
+                  required
+                  defaultValue="2-0"
+                  options={[
+                    { value: "2-0", label: "A wins 2-0" },
+                    { value: "1-1", label: "1-1 draw" },
+                    { value: "0-2", label: "B wins 2-0" },
+                  ]}
+                />
                 <Button type="submit">Record</Button>
               </form>
             </section>
@@ -159,11 +166,16 @@ export default async function ResultsPage({
                             <form action={overrideResultAction} style={{ display: "flex", gap: 4 }}>
                               <input type="hidden" name="divisionId" value={sel.division.id} />
                               <input type="hidden" name="matchId" value={m.id} />
-                              <select name="result" defaultValue={`${m.gamesWonA}-${m.gamesWonB}`} style={{ fontSize: 11 }}>
-                                <option value="2-0">{m.aName} 2-0</option>
-                                <option value="1-1">1-1</option>
-                                <option value="0-2">{m.bName} 2-0</option>
-                              </select>
+                              <FormSelect
+                                name="result"
+                                defaultValue={`${m.gamesWonA}-${m.gamesWonB}`}
+                                size="sm"
+                                options={[
+                                  { value: "2-0", label: `${m.aName} 2-0` },
+                                  { value: "1-1", label: "1-1" },
+                                  { value: "0-2", label: `${m.bName} 2-0` },
+                                ]}
+                              />
                               <Button type="submit" variant="secondary" size="sm">Set</Button>
                             </form>
                           ) : (
@@ -198,11 +210,12 @@ export default async function ResultsPage({
 
 function MemberSelect({ name, members, label }: { name: string; members: ResultsMember[]; label: string }) {
   return (
-    <select name={name} required defaultValue="" style={{ minWidth: 140 }}>
-      <option value="" disabled>{label}</option>
-      {members.map((m) => (
-        <option key={`${name}-${m.playerId}`} value={m.playerId}>{m.displayName}</option>
-      ))}
-    </select>
+    <FormSelect
+      name={name}
+      required
+      triggerClassName="min-w-[140px]"
+      placeholder={label}
+      options={members.map((m) => ({ value: m.playerId, label: m.displayName }))}
+    />
   );
 }

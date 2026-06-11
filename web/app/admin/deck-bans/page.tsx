@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/admin";
 import { loadDeckBansPage } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
+import { FormSelect } from "@/components/FormSelect";
 import { Input } from "@/components/ui/input";
 import { AdminNav } from "@/components/AdminNav";
 import { CANONICAL_DECKS, CANONICAL_STAKES, deckDescription, stakeDescription } from "@/lib/balatro-info";
@@ -329,16 +330,13 @@ function ListEditor({
       <strong>{title} ({items.length})</strong>
       <form action={addAction} style={{ display: "flex", gap: 6, marginTop: 8 }}>
         <input type="hidden" name="id" value={presetId} />
-        <select name="name" required defaultValue="" style={{ flex: 1 }}>
-          <option value="" disabled>
-            {available.length === 0 ? `All ${title.toLowerCase()} added` : `Add a ${title.toLowerCase().replace(/s$/, "")}…`}
-          </option>
-          {available.map((c) => (
-            <option key={c.name} value={c.name}>
-              {c.name} — {c.description}
-            </option>
-          ))}
-        </select>
+        <FormSelect
+          name="name"
+          required
+          triggerClassName="flex-1"
+          placeholder={available.length === 0 ? `All ${title.toLowerCase()} added` : `Add a ${title.toLowerCase().replace(/s$/, "")}…`}
+          options={available.map((c) => ({ value: c.name, label: `${c.name} — ${c.description}` }))}
+        />
         <Button type="submit" disabled={available.length === 0}>Add</Button>
       </form>
       <ul style={{ marginTop: 12, padding: 0, listStyle: "none" }}>

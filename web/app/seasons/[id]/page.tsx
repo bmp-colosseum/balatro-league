@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FormSelect } from "@/components/FormSelect";
 import { DraggableDivisionsEditor, type EditorMember, type EditorTier } from "@/components/DraggableDivisionsEditor";
 import { LocalDateTimeField } from "@/components/LocalDateTimeField";
 import { LocalDateTime } from "@/components/LocalDateTime";
@@ -514,14 +515,15 @@ async function AdminSeasonPanel({
         <form action={setSeasonRulesTemplate} style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           <input type="hidden" name="seasonId" value={season.id} />
           <label className="muted" style={{ fontSize: 12 }}>Rules template:</label>
-          <select name="leagueRulesTemplateId" defaultValue={season.leagueRulesTemplateId ?? ""} style={{ fontSize: 12 }}>
-            <option value="">— Use default —</option>
-            {rulesTemplates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.isDefault ? "★ " : ""}{t.name}
-              </option>
-            ))}
-          </select>
+          <FormSelect
+            name="leagueRulesTemplateId"
+            defaultValue={season.leagueRulesTemplateId ?? ""}
+            size="sm"
+            options={[
+              { value: "", label: "— Use default —" },
+              ...rulesTemplates.map((t) => ({ value: t.id, label: `${t.isDefault ? "★ " : ""}${t.name}` })),
+            ]}
+          />
           <Button type="submit" variant="secondary" size="sm">Save</Button>
           <Link href="/admin/settings" className="muted" style={{ fontSize: 11 }}>Manage templates →</Link>
         </form>
@@ -711,12 +713,13 @@ function LifecycleActions({
       <summary style={{ cursor: "pointer" }}><strong>Open signups for this season →</strong></summary>
       <form action={openSignupsForSeason} style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
         <input type="hidden" name="seasonId" value={season.id} />
-        <select name="channelId" required style={{ flex: "1 1 200px" }}>
-          <option value="">— Pick a Discord channel —</option>
-          {channels.map((c) => (
-            <option key={c.id} value={c.id}>#{c.name}</option>
-          ))}
-        </select>
+        <FormSelect
+          name="channelId"
+          required
+          triggerClassName="flex-1 min-w-[200px]"
+          placeholder="— Pick a Discord channel —"
+          options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
+        />
         <LocalDateTimeField name="closesAt" label="Signups close (your time, optional)" />
         <Button type="submit" disabled={channels.length === 0}>Open signups</Button>
       </form>

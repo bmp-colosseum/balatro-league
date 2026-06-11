@@ -18,6 +18,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { FlashToast } from "@/components/FlashToast";
 import { acceptDisputeProposal, rejectDispute, setDisputeResult } from "./actions";
 import { Button } from "@/components/ui/button";
+import { FormSelect } from "@/components/FormSelect";
 
 export const dynamic = "force-dynamic";
 
@@ -129,12 +130,16 @@ export default async function AdminDisputesPage({
                   {/* Set a different result than reported OR proposed. */}
                   <form action={setDisputeResult} style={{ display: "flex", gap: 4, alignItems: "center" }}>
                     <input type="hidden" name="pairingId" value={d.pairingId} />
-                    <select name="result" required defaultValue="">
-                      <option value="" disabled>set other result…</option>
-                      <option value="2-0">{d.playerA.displayName} won 2-0</option>
-                      <option value="1-1">draw 1-1</option>
-                      <option value="0-2">{d.playerB.displayName} won 2-0</option>
-                    </select>
+                    <FormSelect
+                      name="result"
+                      required
+                      placeholder="set other result…"
+                      options={[
+                        { value: "2-0", label: `${d.playerA.displayName} won 2-0` },
+                        { value: "1-1", label: "draw 1-1" },
+                        { value: "0-2", label: `${d.playerB.displayName} won 2-0` },
+                      ]}
+                    />
                     <Button type="submit" variant="secondary">Apply</Button>
                   </form>
                   {d.disputeThreadId && (

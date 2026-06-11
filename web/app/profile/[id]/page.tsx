@@ -13,6 +13,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { FormSelect } from "@/components/FormSelect";
 import { recordSetForPlayer, recordForfeitForPlayer } from "@/app/admin/players/actions";
 import { reportFromProfileAction, submitProfileDispute } from "./actions";
 import {
@@ -187,17 +188,23 @@ export default async function ProfilePage({
                 <form action={reportFromProfileAction} style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
                   <input type="hidden" name="profileId" value={profile.player.id} />
                   <span className="muted" style={{ fontSize: 12 }}>vs</span>
-                  <select name="opponentId" required style={{ flex: "1 1 200px" }}>
-                    <option value="">— pick an opponent —</option>
-                    {ownActiveDivision.reportableOpponents.map((o) => (
-                      <option key={o.playerId} value={o.playerId}>{o.displayName}</option>
-                    ))}
-                  </select>
-                  <select name="result" required defaultValue="2-0">
-                    <option value="2-0">2-0 (I won both)</option>
-                    <option value="1-1">1-1 (draw)</option>
-                    <option value="0-2">0-2 (I lost both)</option>
-                  </select>
+                  <FormSelect
+                    name="opponentId"
+                    required
+                    triggerClassName="flex-1 min-w-[200px]"
+                    placeholder="— pick an opponent —"
+                    options={ownActiveDivision.reportableOpponents.map((o) => ({ value: o.playerId, label: o.displayName }))}
+                  />
+                  <FormSelect
+                    name="result"
+                    required
+                    defaultValue="2-0"
+                    options={[
+                      { value: "2-0", label: "2-0 (I won both)" },
+                      { value: "1-1", label: "1-1 (draw)" },
+                      { value: "0-2", label: "0-2 (I lost both)" },
+                    ]}
+                  />
                   <Button type="submit">Report</Button>
                 </form>
                 <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
@@ -363,17 +370,22 @@ export default async function ProfilePage({
                 <form action={recordSetForPlayer} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   <input type="hidden" name="divisionId" value={adminCtx.divisionId} />
                   <input type="hidden" name="playerId" value={profile.player.id} />
-                  <select name="opponentId" required style={{ flex: "1 1 200px" }}>
-                    <option value="">— pick opponent —</option>
-                    {adminCtx.opponents.map((o) => (
-                      <option key={o.playerId} value={o.playerId}>{o.displayName}</option>
-                    ))}
-                  </select>
-                  <select name="result" defaultValue="2-0">
-                    <option value="2-0">{profile.player.displayName} won 2-0</option>
-                    <option value="1-1">1-1 draw</option>
-                    <option value="0-2">{profile.player.displayName} lost 0-2</option>
-                  </select>
+                  <FormSelect
+                    name="opponentId"
+                    required
+                    triggerClassName="flex-1 min-w-[200px]"
+                    placeholder="— pick opponent —"
+                    options={adminCtx.opponents.map((o) => ({ value: o.playerId, label: o.displayName }))}
+                  />
+                  <FormSelect
+                    name="result"
+                    defaultValue="2-0"
+                    options={[
+                      { value: "2-0", label: `${profile.player.displayName} won 2-0` },
+                      { value: "1-1", label: "1-1 draw" },
+                      { value: "0-2", label: `${profile.player.displayName} lost 0-2` },
+                    ]}
+                  />
                   <Button type="submit">Record</Button>
                 </form>
               </>
@@ -398,16 +410,21 @@ export default async function ProfilePage({
               <form action={recordForfeitForPlayer} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                 <input type="hidden" name="divisionId" value={adminCtx.divisionId} />
                 <input type="hidden" name="playerId" value={profile.player.id} />
-                <select name="opponentId" required style={{ flex: "1 1 180px" }}>
-                  <option value="">— pick opponent —</option>
-                  {adminCtx.allOpponents.map((o) => (
-                    <option key={o.playerId} value={o.playerId}>{o.displayName}</option>
-                  ))}
-                </select>
-                <select name="winner" defaultValue="self">
-                  <option value="self">{profile.player.displayName} wins by DQ</option>
-                  <option value="opponent">opponent wins by DQ</option>
-                </select>
+                <FormSelect
+                  name="opponentId"
+                  required
+                  triggerClassName="flex-1 min-w-[180px]"
+                  placeholder="— pick opponent —"
+                  options={adminCtx.allOpponents.map((o) => ({ value: o.playerId, label: o.displayName }))}
+                />
+                <FormSelect
+                  name="winner"
+                  defaultValue="self"
+                  options={[
+                    { value: "self", label: `${profile.player.displayName} wins by DQ` },
+                    { value: "opponent", label: "opponent wins by DQ" },
+                  ]}
+                />
                 <Input type="text" name="reason" required placeholder="Reason (admin-only)" style={{ flex: "1 1 200px" }} />
                 <Button type="submit">Record DQ</Button>
               </form>
@@ -722,12 +739,16 @@ export default async function ProfilePage({
                                     <input type="hidden" name="pairingId" value={m.pairingId} />
                                     <input type="hidden" name="profileId" value={profile.player.id} />
                                     <label style={{ fontSize: 11 }} className="muted">What it should be (your POV):</label>
-                                    <select name="proposed" defaultValue="unsure" style={{ fontSize: 12 }}>
-                                      <option value="unsure">— not sure, let helper decide —</option>
-                                      <option value="2-0">2-0 (I won both)</option>
-                                      <option value="1-1">1-1 (draw)</option>
-                                      <option value="0-2">0-2 (I lost both)</option>
-                                    </select>
+                                    <FormSelect
+                                      name="proposed"
+                                      defaultValue="unsure"
+                                      options={[
+                                        { value: "unsure", label: "— not sure, let helper decide —" },
+                                        { value: "2-0", label: "2-0 (I won both)" },
+                                        { value: "1-1", label: "1-1 (draw)" },
+                                        { value: "0-2", label: "0-2 (I lost both)" },
+                                      ]}
+                                    />
                                     <Textarea
                                       name="reason"
                                       rows={2}

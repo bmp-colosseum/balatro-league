@@ -11,6 +11,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Button } from "@/components/ui/button";
+import { FormSelect } from "@/components/FormSelect";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { addFakePlayer, deletePlayer, dropPlayer, recordSetForPlayer, refreshActiveSeasonMmrs, reinstatePlayer, setPlayerDiscordId } from "./actions";
@@ -83,17 +84,24 @@ export default async function AdminPlayersPage({
                         <input type="hidden" name="divisionId" value={view.division.id} />
                         <input type="hidden" name="playerId" value={m.playerId} />
                         <span className="muted" style={{ fontSize: 11 }}>vs</span>
-                        <select name="opponentId" required style={{ fontSize: 11, maxWidth: 140 }}>
-                          <option value="">—</option>
-                          {m.unplayedOpponents.map((o) => (
-                            <option key={o.playerId} value={o.playerId}>{o.displayName}</option>
-                          ))}
-                        </select>
-                        <select name="result" defaultValue="2-0" style={{ fontSize: 11 }}>
-                          <option value="2-0">2-0 (won)</option>
-                          <option value="1-1">1-1</option>
-                          <option value="0-2">0-2 (lost)</option>
-                        </select>
+                        <FormSelect
+                          name="opponentId"
+                          required
+                          size="sm"
+                          triggerClassName="max-w-[140px]"
+                          placeholder="—"
+                          options={m.unplayedOpponents.map((o) => ({ value: o.playerId, label: o.displayName }))}
+                        />
+                        <FormSelect
+                          name="result"
+                          defaultValue="2-0"
+                          size="sm"
+                          options={[
+                            { value: "2-0", label: "2-0 (won)" },
+                            { value: "1-1", label: "1-1" },
+                            { value: "0-2", label: "0-2 (lost)" },
+                          ]}
+                        />
                         <Button type="submit" variant="secondary" size="sm">Record</Button>
                       </form>
                     </td>
@@ -163,12 +171,14 @@ export default async function AdminPlayersPage({
           <p className="muted" style={{ fontSize: 12 }}>For testing without real Discord accounts.</p>
           <form action={addFakePlayer} style={{ display: "flex", gap: 6 }}>
             <Input name="name" required placeholder="Alice" className="max-w-40" />
-            <select name="divisionId" defaultValue="">
-              <option value="">— unassigned —</option>
-              {nav.divisionsInSelectedSeason.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
+            <FormSelect
+              name="divisionId"
+              defaultValue=""
+              options={[
+                { value: "", label: "— unassigned —" },
+                ...nav.divisionsInSelectedSeason.map((d) => ({ value: d.id, label: d.name })),
+              ]}
+            />
             <Button type="submit">Add</Button>
           </form>
         </div>
@@ -235,17 +245,24 @@ export default async function AdminPlayersPage({
                         <input type="hidden" name="divisionId" value={p.membership.divisionId} />
                         <input type="hidden" name="playerId" value={p.id} />
                         <span className="muted" style={{ fontSize: 11 }}>vs</span>
-                        <select name="opponentId" required style={{ fontSize: 11, maxWidth: 140 }}>
-                          <option value="">—</option>
-                          {p.membership.unplayedOpponents.map((o) => (
-                            <option key={o.playerId} value={o.playerId}>{o.displayName}</option>
-                          ))}
-                        </select>
-                        <select name="result" defaultValue="2-0" style={{ fontSize: 11 }}>
-                          <option value="2-0">2-0</option>
-                          <option value="1-1">1-1</option>
-                          <option value="0-2">0-2</option>
-                        </select>
+                        <FormSelect
+                          name="opponentId"
+                          required
+                          size="sm"
+                          triggerClassName="max-w-[140px]"
+                          placeholder="—"
+                          options={p.membership.unplayedOpponents.map((o) => ({ value: o.playerId, label: o.displayName }))}
+                        />
+                        <FormSelect
+                          name="result"
+                          defaultValue="2-0"
+                          size="sm"
+                          options={[
+                            { value: "2-0", label: "2-0" },
+                            { value: "1-1", label: "1-1" },
+                            { value: "0-2", label: "0-2" },
+                          ]}
+                        />
                         <Button type="submit" variant="secondary" size="sm">Record</Button>
                       </form>
                     ) : (
@@ -306,34 +323,40 @@ function PageHeader({
         <form method="get" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <strong>Season:</strong>
-            <select name="season" defaultValue={selectedSeasonId ?? ""}>
-              <option value="">— pick a season —</option>
-              {nav.seasons.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}{s.isActive ? " (active)" : ""}</option>
-              ))}
-            </select>
+            <FormSelect
+              name="season"
+              defaultValue={selectedSeasonId ?? ""}
+              placeholder="— pick a season —"
+              options={nav.seasons.map((s) => ({ value: s.id, label: `${s.name}${s.isActive ? " (active)" : ""}` }))}
+            />
           </label>
           {selectedSeasonId && (
             <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <strong>Division:</strong>
-              <select name="division" defaultValue={selectedDivisionId ?? ""}>
-                <option value="">— all in season —</option>
-                {nav.divisionsInSelectedSeason.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
+              <FormSelect
+                name="division"
+                defaultValue={selectedDivisionId ?? ""}
+                options={[
+                  { value: "", label: "— all in season —" },
+                  ...nav.divisionsInSelectedSeason.map((d) => ({ value: d.id, label: d.name })),
+                ]}
+              />
             </label>
           )}
           {!selectedDivisionId && (
             <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <strong>Sort:</strong>
-              <select name="sort" defaultValue={sort}>
-                <option value="name">Name (A-Z)</option>
-                <option value="rating-desc">Rating (high → low)</option>
-                <option value="rating-asc">Rating (low → high)</option>
-                <option value="ranked-only">Ranked only</option>
-                <option value="unranked-only">Unranked only</option>
-              </select>
+              <FormSelect
+                name="sort"
+                defaultValue={sort}
+                options={[
+                  { value: "name", label: "Name (A-Z)" },
+                  { value: "rating-desc", label: "Rating (high → low)" },
+                  { value: "rating-asc", label: "Rating (low → high)" },
+                  { value: "ranked-only", label: "Ranked only" },
+                  { value: "unranked-only", label: "Unranked only" },
+                ]}
+              />
             </label>
           )}
           <Button type="submit" variant="secondary">Apply</Button>

@@ -12,6 +12,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FormSelect } from "@/components/FormSelect";
 import {
   addRoleBinding,
   clearConfigValue,
@@ -99,11 +100,16 @@ export default async function AdminConfigPage() {
           </p>
           <form action={addRoleBinding} style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
             <Input type="text" name="discordRoleId" placeholder="Discord role ID (17-20 digits)" required pattern="\d{17,20}" className="flex-1 min-w-[200px]" />
-            <select name="tier" required defaultValue="ADMIN">
-              <option value="OWNER">OWNER</option>
-              <option value="ADMIN">ADMIN</option>
-              <option value="MOD">MOD</option>
-            </select>
+            <FormSelect
+              name="tier"
+              required
+              defaultValue="ADMIN"
+              options={[
+                { value: "OWNER", label: "OWNER" },
+                { value: "ADMIN", label: "ADMIN" },
+                { value: "MOD", label: "MOD" },
+              ]}
+            />
             <Button type="submit">Add binding</Button>
           </form>
           <table style={{ marginTop: 12 }}>

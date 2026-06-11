@@ -4,6 +4,7 @@ import { loadAdminSeasonsIndex } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FormSelect } from "@/components/FormSelect";
 import { AdminNav } from "@/components/AdminNav";
 import { LocalDateTimeField } from "@/components/LocalDateTimeField";
 import {
@@ -455,12 +456,13 @@ function LifecycleActions({
       <summary style={{ cursor: "pointer" }}><strong>Open signups for this season →</strong></summary>
       <form action={openSignupsForSeason} style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
         <input type="hidden" name="seasonId" value={season.id} />
-        <select name="channelId" required style={{ flex: "1 1 200px" }}>
-          <option value="">— Pick a Discord channel —</option>
-          {channels.map((c) => (
-            <option key={c.id} value={c.id}>#{c.name}</option>
-          ))}
-        </select>
+        <FormSelect
+          name="channelId"
+          required
+          triggerClassName="flex-1 min-w-[200px]"
+          placeholder="— Pick a Discord channel —"
+          options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
+        />
         <LocalDateTimeField name="closesAt" label="Signups close (your time, optional)" />
         <Button type="submit" disabled={channels.length === 0}>Open signups</Button>
       </form>

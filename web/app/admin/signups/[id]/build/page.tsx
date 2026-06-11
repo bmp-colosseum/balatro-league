@@ -5,6 +5,7 @@ import { loadBuildSeasonPage } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FormSelect } from "@/components/FormSelect";
 import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
 import { DraggableRatingTable, type RatingRow } from "@/components/DraggableRatingTable";
@@ -235,12 +236,15 @@ export default async function BuildSeasonPage({
               </label>
               <label>
                 Deck preset
-                <select name="matchConfigPresetId" defaultValue="" style={{ width: "100%" }}>
-                  <option value="">— Use Default —</option>
-                  {presets.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
+                <FormSelect
+                  name="matchConfigPresetId"
+                  defaultValue=""
+                  triggerClassName="w-full"
+                  options={[
+                    { value: "", label: "— Use Default —" },
+                    ...presets.map((p) => ({ value: p.id, label: p.name })),
+                  ]}
+                />
               </label>
             </div>
 
