@@ -53,11 +53,11 @@ export function rankLabel(
   fallbackIndex: number,
 ): string {
   const n = row.rank ?? fallbackIndex + 1;
-  // Card-themed ranks: the top of each division is the Ace ("A"), then 2, 3,
-  // 4, 5… Tied players share their rank shown as "#N" (e.g. #2 #2 for a tie).
-  if (n === 1) return "A";
+  // Tied players share their rank shown as "#N" (e.g. #1 #1 #1 for a 3-way
+  // tie). Clean top-3 get a medal; everyone else a plain "N.".
   if (row.tiedWithPrev || row.tiedWithNext) return `#${n}`;
-  return `${n}`;
+  if (n <= 3) return ["🥇", "🥈", "🥉"][n - 1]!;
+  return `${n}.`;
 }
 
 export interface ShootoutInput {
