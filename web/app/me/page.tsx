@@ -6,7 +6,7 @@ import { auth, signOut } from "@/auth";
 import { loadMePageData } from "@/lib/loaders/me";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
-import { subscribeNextSeasonAction, unsubscribeNextSeasonAction } from "./actions";
+import { subscribeNextSeasonAction, unsubscribeNextSeasonAction, setAutoSignupAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -109,10 +109,24 @@ export default async function MePage({
         </div>
 
         <div className="card">
+          <strong>Auto-sign-up for next season</strong>
+          <p className="muted" style={{ fontSize: 12 }}>
+            Different from Notify: this <strong>enters you automatically</strong> the moment the
+            next season&apos;s signups open — no action needed (you can still withdraw). It creates
+            your player profile so you&apos;re ready to play.
+          </p>
+          <form action={setAutoSignupAction}>
+            <input type="hidden" name="next" value="1" />
+            <Button type="submit">🔁 Auto-sign me up next season</Button>
+          </form>
+        </div>
+
+        <div className="card">
           <strong>Not in the league yet</strong>
           <p className="muted">
-            You're logged in but no Player record exists for your Discord ID. Find the Sign Up
-            button in your league's Discord channel, or ask an admin to add you.
+            You&apos;re logged in but no Player record exists for your Discord ID. Use the auto-sign-up
+            button above, find the Sign Up button in your league&apos;s Discord channel, or ask an admin
+            to add you.
           </p>
         </div>
       </main>

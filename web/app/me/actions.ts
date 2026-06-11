@@ -45,13 +45,30 @@ export async function resetToDiscordNameAction() {
 // next signup round the moment it opens (they can still withdraw). Lives on
 // the profile owner settings.
 export async function setAutoSignupAction(formData: FormData) {
-  const discordId = await currentDiscordId();
+  const session = await auth();
+  const u = session?.user as { discordId?: string; name?: string } | undefined;
+  const discordId = u?.discordId ?? null;
   if (!discordId) return;
   const next = String(formData.get("next") ?? "") === "1";
-  const player = await prisma.player.findUnique({ where: { discordId }, select: { id: true } });
-  if (!player) return;
-  await prisma.player.update({ where: { id: player.id }, data: { autoSignup: next } });
-  revalidatePath(`/profile/${player.id}`);
+  if (next) {
+    // Enabling auto-sign-up means "enter me as a player when the next round
+    // opens" — so create the Player record if the user doesn't have one yet.
+    // This lets admins / not-yet-joined users opt in directly (previously a
+    // silent no-op because the flag lives on Player).
+    const player = await prisma.player.upsert({
+      where: { discordId },
+      create: { discordId, displayName: u?.name?.trim() || "Player", autoSignup: true },
+      update: { autoSignup: true },
+    });
+    revalidatePath(`/profile/${player.id}`);
+  } else {
+    // Disabling only matters if a Player exists.
+    const player = await prisma.player.findUnique({ where: { discordId }, select: { id: true } });
+    if (!player) return;
+    await prisma.player.update({ where: { id: player.id }, data: { autoSignup: false } });
+    revalidatePath(`/profile/${player.id}`);
+  }
+  revalidatePath("/me");
 }
 
 export async function subscribeNextSeasonAction() {
