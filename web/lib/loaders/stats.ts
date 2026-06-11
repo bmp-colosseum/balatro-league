@@ -9,7 +9,7 @@
 
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { CANONICAL_DECKS, CANONICAL_STAKES, type BalatroItem } from "@/lib/balatro-info";
+import { CANONICAL_DECKS, CANONICAL_STAKES } from "@/lib/balatro-info";
 
 export interface StatsLeaderRow {
   playerId: string;
@@ -60,17 +60,35 @@ export interface StatsPageData {
 // flukes from dominating. (Per-deck/stake rows show their own sample size.)
 const MIN_COMBO_APPEARANCES = 8;
 
-// Merge the canonical item list with play + ban aggregates so EVERY deck/stake
-// shows up (including ones never played yet — e.g. Orange), sorted by games.
+// The league's "Standard" pool — only these decks/stakes are in ranked
+// rotation, so stats show exactly them (not all 22 canonical decks). Falls back
+// to the full canonical list if no standard preset is configured yet.
+async function getStandardPool(): Promise<{ decks: string[]; stakes: string[] }> {
+  const cfg = await prisma.leagueConfig.findFirst({
+    where: { key: "season_default_preset_id" },
+    select: { value: true },
+  });
+  if (cfg?.value) {
+    const preset = await prisma.matchConfigPreset.findUnique({
+      where: { id: cfg.value },
+      select: { decks: true, stakes: true },
+    });
+    if (preset && (preset.decks.length > 0 || preset.stakes.length > 0)) {
+      return { decks: preset.decks, stakes: preset.stakes };
+    }
+  }
+  return { decks: CANONICAL_DECKS.map((d) => d.name), stakes: CANONICAL_STAKES.map((s) => s.name) };
+}
+
+// One row per deck/stake in the given pool, folding in play + ban aggregates.
+// Rows for items never played yet still appear (so the full standard pool is
+// always visible), sorted by games played.
 function buildItemRows(
-  canonical: readonly BalatroItem[],
+  poolNames: readonly string[],
   gameAgg: Map<string, { games: number; won: number }>,
   banAgg: Map<string, { appearances: number; bans: number }>,
 ): StatsItemRow[] {
-  const names = new Set<string>(canonical.map((c) => c.name));
-  for (const n of gameAgg.keys()) names.add(n);
-  for (const n of banAgg.keys()) names.add(n);
-  return [...names]
+  return [...new Set(poolNames)]
     .map((name) => {
       const g = gameAgg.get(name);
       const b = banAgg.get(name);
@@ -164,8 +182,9 @@ async function computeStatsPageData(): Promise<StatsPageData> {
   const stakeGameMap = new Map(stakeGameAgg.map((r) => [r.stake, { games: r._count._all, won: r._count.winnerId }]));
   const deckBanMap = new Map(deckBanAgg.map((r) => [r.deck, { appearances: r._count._all, bans: r._count.banOrdinal }]));
   const stakeBanMap = new Map(stakeBanAgg.map((r) => [r.stake, { appearances: r._count._all, bans: r._count.banOrdinal }]));
-  const decks = buildItemRows(CANONICAL_DECKS, deckGameMap, deckBanMap);
-  const stakes = buildItemRows(CANONICAL_STAKES, stakeGameMap, stakeBanMap);
+  const pool = await getStandardPool();
+  const decks = buildItemRows(pool.decks, deckGameMap, deckBanMap);
+  const stakes = buildItemRows(pool.stakes, stakeGameMap, stakeBanMap);
 
   // ── Combos (deck × stake) ──────────────────────────────────────────
   const mostPlayedCombos: StatsComboRow[] = playedComboAgg

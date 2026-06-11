@@ -68,7 +68,7 @@ export default async function StatsPage() {
 
         <h3 style={{ marginTop: 24 }}>Decks &amp; stakes</h3>
         <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>
-          Every deck and stake, by games played. <strong>Ban rate</strong> = how often it was banned when it
+          Every deck and stake in the league&apos;s standard pool, by games played. <strong>Ban rate</strong> = how often it was banned when it
           appeared in a match&apos;s pick pool. Per-player win rates live on each <Link href="/players">player&apos;s profile</Link>.
         </p>
         <div className="grid grid-2">
