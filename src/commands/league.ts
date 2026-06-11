@@ -226,10 +226,24 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
         }
         return existing;
       }
-      const ch = await guild.channels.create({ name, type, parent: categoryId, topic });
-      created.push(`#${name}`);
-      justCreated.add(ch.id);
-      return ch;
+      try {
+        const ch = await guild.channels.create({ name, type, parent: categoryId, topic });
+        created.push(`#${name}`);
+        justCreated.add(ch.id);
+        return ch;
+      } catch (err) {
+        // Announcement channels (type 5) require a Community-enabled server.
+        // On a non-Community guild Discord rejects the type outright
+        // (BASE_TYPE_CHOICES) — fall back to a normal text channel so
+        // bootstrap still succeeds. The bot posts via REST regardless of type.
+        if (type !== ChannelType.GuildText) {
+          const ch = await guild.channels.create({ name, type: ChannelType.GuildText, parent: categoryId, topic });
+          created.push(`#${name} (text channel — enable Community on the server to make it a proper announcement channel)`);
+          justCreated.add(ch.id);
+          return ch;
+        }
+        throw err;
+      }
     }
     // All public channels are "league-" prefixed so they don't collide with a
     // server's own generic #results / #signups / #announcements when the bot
