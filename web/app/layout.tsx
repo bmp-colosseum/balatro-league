@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
-import { Pixelify_Sans } from "next/font/google";
+import { Silkscreen } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { CommandPalette } from "@/components/CommandPalette";
 
-// Chunky pixel font for headings + accents — a nod to Balatro's m6x11 look,
+// Crisp pixel font for headings + accents — a nod to Balatro's pixel look,
 // without hurting readability of the dense tables (body text stays system).
-const pixel = Pixelify_Sans({
+// Silkscreen has sharper, blockier glyphs than Pixelify (whose rounded digits
+// read poorly).
+const pixel = Silkscreen({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "700"],
   variable: "--font-pixel",
   display: "swap",
 });

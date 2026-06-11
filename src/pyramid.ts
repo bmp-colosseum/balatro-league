@@ -53,5 +53,5 @@ export function tiersToText(tiers: TierConfig[]): string {
 // division tier is just the tier name ("Legendary").
 export function defaultDivisionNames(tier: TierConfig): string[] {
   if (tier.divisionCount === 1) return [tier.name];
-  return Array.from({ length: tier.divisionCount }, (_, i) => `${tier.name} ${i === 0 ? "A" : i + 1}`);
+  return Array.from({ length: tier.divisionCount }, (_, i) => `${tier.name} ${i === 0 ? "A (1)" : i + 1}`);
 }
