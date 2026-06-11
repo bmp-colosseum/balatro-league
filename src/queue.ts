@@ -889,7 +889,14 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
   // 3) Channel — falls back to top level if category is full (50-channel cap)
   let channelId = div.discordChannelId;
   if (!channelId) {
-    const channelName = div.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    // Drop the "(1)" display suffix, then sanitize for Discord (lowercase,
+    // non-alphanumeric runs → a single dash) and trim leading/trailing dashes
+    // so "Diamond A (1)" → "diamond-a", not "diamond-a-1-".
+    const channelName = div.name
+      .replace(/\s*\(\d+\)/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
     let channel = await createGuildTextChannel(guildId, channelName, {
       parentId,
       topic: `${seasonLabel} — ${div.name}`,
