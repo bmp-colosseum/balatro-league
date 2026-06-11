@@ -2,6 +2,9 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/admin";
 import { loadAdminSeasonsIndex } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { FormSelect } from "@/components/FormSelect";
 import { AdminNav } from "@/components/AdminNav";
 import { LocalDateTimeField } from "@/components/LocalDateTimeField";
 import {
@@ -278,13 +281,13 @@ export default async function AdminSeasonsPage({
                   {s.archivedAt ? (
                     <form action={unarchiveSeason}>
                       <input type="hidden" name="id" value={s.id} />
-                      <button type="submit" className="secondary" style={{ fontSize: 11 }}>Unarchive</button>
+                      <Button type="submit" variant="secondary" size="sm">Unarchive</Button>
                     </form>
                   ) : (
                     s.endedAt && (
                       <form action={archiveSeason}>
                         <input type="hidden" name="id" value={s.id} />
-                        <button type="submit" className="secondary" style={{ fontSize: 11 }}>📦 Archive</button>
+                        <Button type="submit" variant="secondary" size="sm">📦 Archive</Button>
                       </form>
                     )
                   )}
@@ -297,10 +300,10 @@ export default async function AdminSeasonsPage({
                   <form action={deleteSeason} style={{ marginTop: 6, display: "flex", gap: 6, alignItems: "center" }}>
                     <input type="hidden" name="id" value={s.id} />
                     <span className="muted" style={{ fontSize: 11 }}>Type "{formatSeasonLabel(s)}" to confirm:</span>
-                    <input type="text" name="confirm" placeholder={formatSeasonLabel(s)} required style={{ flex: 1, fontSize: 11 }} />
-                    <button type="submit" style={{ fontSize: 11, background: "#e74c3c", color: "white", border: "none" }}>
+                    <Input type="text" name="confirm" placeholder={formatSeasonLabel(s)} required className="flex-1 text-[11px]" />
+                    <Button type="submit" variant="destructive" size="sm">
                       Delete
-                    </button>
+                    </Button>
                   </form>
                   <div className="muted" style={{ fontSize: 10, marginTop: 4 }}>
                     Cascades: tiers, divisions, members, pairings. Signup rounds get unlinked but kept.
@@ -324,11 +327,11 @@ export default async function AdminSeasonsPage({
             actual signups, after signups close.
           </p>
           <form action={createSeason}>
-            <label>Subtitle <input name="subtitle" placeholder="Optional subtitle (e.g. 'Launch')" /></label>
-            <label>Group size <input name="targetGroupSize" type="number" min={2} max={20} defaultValue={5} /></label>
-            <label>Min group <input name="minGroupSize" type="number" min={2} max={20} defaultValue={3} /></label>
+            <label>Subtitle <Input name="subtitle" placeholder="Optional subtitle (e.g. 'Launch')" /></label>
+            <label>Group size <Input name="targetGroupSize" type="number" min={2} max={20} defaultValue={5} /></label>
+            <label>Min group <Input name="minGroupSize" type="number" min={2} max={20} defaultValue={3} /></label>
 
-            <button type="submit" style={{ marginTop: 12 }}>Create season</button>
+            <Button type="submit" className="mt-3">Create season</Button>
           </form>
         </details>
       </main>
@@ -375,9 +378,9 @@ function LifecycleActions({
           </summary>
           <form action={unendSeason} style={{ marginTop: 6 }}>
             <input type="hidden" name="id" value={season.id} />
-            <button type="submit" className="secondary" style={{ fontSize: 11 }}>
+            <Button type="submit" variant="secondary" size="sm">
               Unend
-            </button>
+            </Button>
             <span className="muted" style={{ fontSize: 10, marginLeft: 6 }}>
               Re-running End season afterwards will rewrite Player.rating from this season's standings.
             </span>
@@ -392,7 +395,7 @@ function LifecycleActions({
     return (
       <div style={{ marginTop: 8 }}>
         <Link href={`/admin/seasons/${season.id}/end`}>
-          <button type="button">End season →</button>
+          <Button type="button">End season →</Button>
         </Link>
       </div>
     );
@@ -404,7 +407,7 @@ function LifecycleActions({
       <div style={{ marginTop: 8 }}>
         <form action={activateSeason}>
           <input type="hidden" name="id" value={season.id} />
-          <button type="submit"><strong>Start season →</strong></button>
+          <Button type="submit"><strong>Start season →</strong></Button>
         </form>
         <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
           {playerCount} player(s) placed. Starting flips this to the active season for /standings + /report.
@@ -418,7 +421,7 @@ function LifecycleActions({
     return (
       <div style={{ marginTop: 8 }}>
         <Link href={`/admin/signups/${round.id}/build`}>
-          <button type="button"><strong>Build divisions from {round._count.signups} signups →</strong></button>
+          <Button type="button"><strong>Build divisions from {round._count.signups} signups →</strong></Button>
         </Link>
       </div>
     );
@@ -433,14 +436,14 @@ function LifecycleActions({
         </div>
         <form action={finalizeSignupsForSeason}>
           <input type="hidden" name="seasonId" value={season.id} />
-          <button type="submit" className="secondary">Finalize signups →</button>
+          <Button type="submit" variant="secondary">Finalize signups →</Button>
         </form>
         <details style={{ marginTop: 8 }}>
           <summary style={{ cursor: "pointer", fontSize: 12 }} className="muted">Change close date</summary>
           <form action={updateSignupCloseDate} style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap", alignItems: "flex-end" }}>
             <input type="hidden" name="roundId" value={round.id} />
             <LocalDateTimeField name="closesAt" label="New close time (your time — blank = no deadline)" />
-            <button type="submit" className="secondary">Update</button>
+            <Button type="submit" variant="secondary">Update</Button>
           </form>
         </details>
       </div>
@@ -453,14 +456,15 @@ function LifecycleActions({
       <summary style={{ cursor: "pointer" }}><strong>Open signups for this season →</strong></summary>
       <form action={openSignupsForSeason} style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
         <input type="hidden" name="seasonId" value={season.id} />
-        <select name="channelId" required style={{ flex: "1 1 200px" }}>
-          <option value="">— Pick a Discord channel —</option>
-          {channels.map((c) => (
-            <option key={c.id} value={c.id}>#{c.name}</option>
-          ))}
-        </select>
+        <FormSelect
+          name="channelId"
+          required
+          triggerClassName="flex-1 min-w-[200px]"
+          placeholder="— Pick a Discord channel —"
+          options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
+        />
         <LocalDateTimeField name="closesAt" label="Signups close (your time, optional)" />
-        <button type="submit" disabled={channels.length === 0}>Open signups</button>
+        <Button type="submit" disabled={channels.length === 0}>Open signups</Button>
       </form>
       <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
         Posts a signup embed in the channel. Players click Sign Up; you Finalize when ready, then Build divisions from the signups.
@@ -490,20 +494,20 @@ function DiscordBootstrap({
         <form action={setSeasonDiscordCategory} style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <input type="hidden" name="id" value={season.id} />
           <label className="muted" style={{ fontSize: 12 }}>Category ID:</label>
-          <input
+          <Input
             type="text"
             name="discordCategoryId"
             defaultValue={season.discordCategoryId ?? ""}
             placeholder="(optional — channels at top level if blank)"
             style={{ flex: 1, fontSize: 12 }}
           />
-          <button type="submit" className="secondary" style={{ fontSize: 12 }}>Save</button>
+          <Button type="submit" variant="secondary" size="sm">Save</Button>
         </form>
         <form action={bootstrapSeasonDiscord}>
           <input type="hidden" name="id" value={season.id} />
-          <button type="submit" disabled={remaining === 0} style={{ fontSize: 12 }}>
+          <Button type="submit" disabled={remaining === 0}>
             {remaining === 0 ? "All divisions ready" : `Set up ${remaining} remaining division(s)`}
-          </button>
+          </Button>
         </form>
       </div>
     </details>

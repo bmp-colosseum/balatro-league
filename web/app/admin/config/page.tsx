@@ -10,6 +10,9 @@ import { requireAdmin } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { FormSelect } from "@/components/FormSelect";
 import {
   addRoleBinding,
   clearConfigValue,
@@ -96,13 +99,18 @@ export default async function AdminConfigPage() {
             it accepts an @role mention, this page wants raw IDs.
           </p>
           <form action={addRoleBinding} style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-            <input type="text" name="discordRoleId" placeholder="Discord role ID (17-20 digits)" required pattern="\d{17,20}" style={{ flex: "1 1 200px" }} />
-            <select name="tier" required defaultValue="ADMIN">
-              <option value="OWNER">OWNER</option>
-              <option value="ADMIN">ADMIN</option>
-              <option value="MOD">MOD</option>
-            </select>
-            <button type="submit">Add binding</button>
+            <Input type="text" name="discordRoleId" placeholder="Discord role ID (17-20 digits)" required pattern="\d{17,20}" className="flex-1 min-w-[200px]" />
+            <FormSelect
+              name="tier"
+              required
+              defaultValue="ADMIN"
+              options={[
+                { value: "OWNER", label: "OWNER" },
+                { value: "ADMIN", label: "ADMIN" },
+                { value: "MOD", label: "MOD" },
+              ]}
+            />
+            <Button type="submit">Add binding</Button>
           </form>
           <table style={{ marginTop: 12 }}>
             <thead>
@@ -120,9 +128,9 @@ export default async function AdminConfigPage() {
                   <td>
                     <form action={removeRoleBinding} style={{ display: "inline" }}>
                       <input type="hidden" name="id" value={b.id} />
-                      <button type="submit" className="muted" style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer" }}>
+                      <Button type="submit" variant="ghost" size="sm" className="text-[#e74c3c]">
                         remove
-                      </button>
+                      </Button>
                     </form>
                   </td>
                 </tr>
@@ -164,23 +172,23 @@ function ConfigSection({
                 <td>
                   <form action={setConfigValue} style={{ display: "flex", gap: 6 }}>
                     <input type="hidden" name="key" value={key} />
-                    <input
+                    <Input
                       type="text"
                       name="value"
                       defaultValue={value}
                       placeholder={value ? "" : "(unset)"}
-                      style={{ flex: 1, fontSize: 12 }}
+                      className="flex-1 text-xs"
                     />
-                    <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+                    <Button type="submit" variant="secondary" size="sm">Save</Button>
                   </form>
                 </td>
                 <td>
                   {value && (
                     <form action={clearConfigValue} style={{ display: "inline" }}>
                       <input type="hidden" name="key" value={key} />
-                      <button type="submit" className="muted" style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontSize: 11 }}>
+                      <Button type="submit" variant="ghost" size="sm" className="text-[#e74c3c]">
                         clear
-                      </button>
+                      </Button>
                     </form>
                   )}
                 </td>

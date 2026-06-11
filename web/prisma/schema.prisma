@@ -134,24 +134,6 @@ model PlayerMmrSnapshot {
   @@index([seasonId])
 }
 
-// Light-weight kv-ish vote table for player-page easter eggs (e.g. the
-// "impeach Sanji" buttons). targetKey identifies who's being voted on
-// (just a string slug — no FK so we can add new targets without a
-// migration), side is "yes" / "no". Unique on (targetKey, voterDiscordId)
-// so each logged-in user can only vote once per target; submitting the
-// opposite side just updates the existing row.
-model EasterEggVote {
-  id             String   @id @default(cuid())
-  targetKey      String
-  voterDiscordId String
-  side           String // "yes" | "no"
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  @@unique([targetKey, voterDiscordId])
-  @@index([targetKey, side])
-}
-
 model Season {
   id               String    @id @default(cuid())
   // Sequential season number — required and globally unique. The

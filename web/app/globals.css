@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 :root {
   --bg: #0f1115;
@@ -11,11 +12,35 @@
   --accent-2: #5865f2;
   --danger: #e74c3c;
   --success: #2ecc71;
+  --radius: 0.5rem;
 }
 
+/* shadcn/ui design tokens mapped onto the existing dark palette, so shadcn
+   components match the app's theme. The app's raw --muted/--accent (a text
+   colour and gold) are intentionally left alone — shadcn reads --color-* only. */
 @theme inline {
   --color-background: var(--bg);
   --color-foreground: var(--text);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--accent-2);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--surface-2);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--danger);
+  --color-border: var(--border);
+  --color-input: var(--surface-2);
+  --color-ring: var(--accent-2);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
 
 * { box-sizing: border-box; }
@@ -105,11 +130,20 @@ section[id]:target > h3 {
    `responsive-table` class to a <table>, a `data-label` to each <td>, and
    `card-header` to the cell that should be the card title (usually the name). */
 @media (max-width: 640px) {
-  /* Nav bars wrap instead of overflowing the viewport. */
-  header.site-nav { flex-wrap: wrap; gap: 12px; padding: 10px 16px; }
-  header.site-nav nav { flex-wrap: wrap; gap: 8px; }
-  .subnav nav { flex-wrap: wrap; gap: 8px; }
+  /* Both navs are Tailwind now; just tighten the main padding on phones. */
   main { padding: 0 16px; margin: 16px auto; }
+
+  /* Safety net: any wide table that didn't opt into the card layout
+     (.responsive-table) becomes its own horizontal-scroll container on phones,
+     so a many-column admin table scrolls instead of forcing the whole page
+     wider. Tables already inside a .table-scroll wrapper are left alone. */
+  main table:not(.responsive-table) {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+  .table-scroll > table { display: table; }
 
   table.responsive-table thead { display: none; }
   table.responsive-table,
@@ -163,29 +197,7 @@ section[id]:target > h3 {
 .stat .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
 .stat .value { font-size: 28px; font-weight: 600; margin-top: 4px; }
 
-header.site-nav {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 12px 24px;
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-header.site-nav h1 { margin: 0; font-size: 16px; }
-header.site-nav nav { display: flex; gap: 16px; }
-header.site-nav nav a { color: var(--muted); padding: 4px 8px; border-radius: 4px; }
-header.site-nav nav a.active { color: var(--text); background: var(--surface-2); }
 main { max-width: 1100px; margin: 24px auto; padding: 0 24px; }
-
-.subnav {
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--border);
-  padding: 8px 24px;
-}
-.subnav-inner { max-width: 1100px; margin: 0 auto; }
-.subnav nav { display: flex; gap: 12px; }
-.subnav nav a { color: var(--muted); padding: 4px 10px; border-radius: 4px; font-size: 13px; }
-.subnav nav a.active { color: var(--accent-2); background: var(--bg); }
 
 /* form bits */
 input[type="text"], input[type="number"], input[type="datetime-local"],

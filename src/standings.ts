@@ -14,12 +14,38 @@ export interface StandingRow {
   gamesLost: number;
   played: number;     // confirmed pairings
   dropped?: boolean;  // marked when this row's member status is DROPPED
+  // Ties are real: players equal on the whole chain (no shootout) SHARE a rank
+  // rather than being force-ordered alphabetically. tiedWithPrev/Next mark the
+  // group; rank is standard competition ranking (1, 2, 2, 4). Mirrors web.
+  tiedWithPrev?: boolean;
+  tiedWithNext?: boolean;
+  rank?: number;
 }
 
 export interface ShootoutInput {
   playerAId: string;
   playerBId: string;
   winnerId: string;
+}
+
+// Standard competition ranking: tied rows (tiedWithPrev) share the group's
+// first rank; the next distinct group resumes at its positional index. Sets
+// tiedWithNext. Expects rows already sorted + tied-marked.
+export function assignRanks(rows: StandingRow[]): StandingRow[] {
+  rows.forEach((cur, i) => {
+    if (i === 0) {
+      cur.rank = 1;
+      return;
+    }
+    const prev = rows[i - 1]!;
+    if (cur.tiedWithPrev) {
+      cur.rank = prev.rank;
+      prev.tiedWithNext = true;
+    } else {
+      cur.rank = i + 1;
+    }
+  });
+  return rows;
 }
 
 // Confirmed-only. Status filtering is the caller's job. Shootouts (when
@@ -88,7 +114,7 @@ function sortStandings(
   pairings: Array<Pick<Match, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
   shootouts: ShootoutInput[],
 ): StandingRow[] {
-  return rows.slice().sort((x, y) => {
+  const sorted = rows.slice().sort((x, y) => {
     if (y.points !== x.points) return y.points - x.points;
     const h2h = headToHead(x.player.id, y.player.id, pairings);
     if (h2h !== 0) return h2h;
@@ -98,6 +124,22 @@ function sortStandings(
     if (y.draws !== x.draws) return y.draws - x.draws;
     return x.player.displayName.localeCompare(y.player.displayName);
   });
+  // Flag rows tied on the whole chain (alphabetical broke the row order only,
+  // not the ranking) so they can SHARE a rank.
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = sorted[i - 1]!;
+    const cur = sorted[i]!;
+    if (
+      prev.points === cur.points &&
+      headToHead(prev.player.id, cur.player.id, pairings) === 0 &&
+      shootoutBetween(prev.player.id, cur.player.id, shootouts) === 0 &&
+      prev.wins === cur.wins &&
+      prev.draws === cur.draws
+    ) {
+      cur.tiedWithPrev = true;
+    }
+  }
+  return assignRanks(sorted);
 }
 
 function shootoutBetween(xId: string, yId: string, shootouts: ShootoutInput[]): number {
@@ -135,7 +177,9 @@ export function formatStandingsTable(divisionName: string, rows: StandingRow[]):
   if (rows.length === 0) return `${header}\n_(no players)_`;
 
   const lines = rows.map((r, i) => {
-    const rank = `${i + 1}.`.padEnd(3);
+    const n = r.rank ?? i + 1;
+    const tied = r.tiedWithPrev || r.tiedWithNext;
+    const rank = `${tied ? "T" : ""}${n}.`.padEnd(3);
     const name = r.player.displayName.padEnd(16);
     const pts = `${r.points}p`.padStart(4);
     const record = `${r.wins}W-${r.draws}D-${r.losses}L`.padEnd(8);
@@ -152,7 +196,14 @@ export function formatDivisionField(rows: StandingRow[], expectedSize: number): 
   if (rows.length === 0) return "_(no players)_";
   return rows
     .map((r, i) => {
-      const prefix = i < MEDAL.length ? MEDAL[i] : `\`${(i + 1).toString().padStart(2)}.\``;
+      const n = r.rank ?? i + 1;
+      const tied = r.tiedWithPrev || r.tiedWithNext;
+      // Tied players share a rank (shown as `T2`); clean top-3 get a medal.
+      const prefix = tied
+        ? `\`T${n.toString().padStart(2)}\``
+        : n <= MEDAL.length
+          ? MEDAL[n - 1]
+          : `\`${n.toString().padStart(2)}.\``;
       const stats = `**${r.points}** pts · ${r.wins}-${r.draws}-${r.losses} · ${r.gamesWon}-${r.gamesLost} g`;
       const name = r.dropped ? `~~${r.player.displayName}~~ _(dropped)_` : r.player.displayName;
       return `${prefix} ${name} — ${stats}`;

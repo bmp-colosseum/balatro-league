@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { auth, signOut } from "@/auth";
 import { loadMePageData } from "@/lib/loaders/me";
 import { SiteNav } from "@/components/SiteNav";
+import { Button } from "@/components/ui/button";
 import { subscribeNextSeasonAction, unsubscribeNextSeasonAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -68,7 +69,7 @@ export default async function MePage({
           </div>
           <span style={{ marginLeft: "auto" }}>
             <form action={logoutAction}>
-              <button type="submit" className="secondary">Logout</button>
+              <Button type="submit" variant="secondary">Logout</Button>
             </form>
           </span>
         </div>
@@ -92,7 +93,7 @@ export default async function MePage({
                 ✓ You're subscribed (since {interest.subscribedAt.toISOString().slice(0, 10)}). The bot will DM you when the next season's signups open.
               </p>
               <form action={unsubscribeNextSeasonAction}>
-                <button type="submit" className="secondary">Unsubscribe</button>
+                <Button type="submit" variant="secondary">Unsubscribe</Button>
               </form>
             </>
           ) : (
@@ -101,7 +102,7 @@ export default async function MePage({
                 Get a Discord DM the moment a new season's signups open. Useful if you don't check the server often.
               </p>
               <form action={subscribeNextSeasonAction}>
-                <button type="submit">🔔 Notify me about the next season</button>
+                <Button type="submit">🔔 Notify me about the next season</Button>
               </form>
             </>
           )}

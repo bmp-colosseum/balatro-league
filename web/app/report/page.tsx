@@ -10,6 +10,9 @@ import { loadReportPageData } from "@/lib/loaders/report";
 import { CANONICAL_DECKS, CANONICAL_STAKES } from "@/lib/balatro-info";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
+import { Button } from "@/components/ui/button";
+import { FormSelect } from "@/components/FormSelect";
+import { Textarea } from "@/components/ui/textarea";
 import { ReportForm } from "@/components/ReportForm";
 import { submitReportFromReportPage, submitReportPageDispute } from "./actions";
 
@@ -143,22 +146,26 @@ export default async function ReportPage({
                           <form action={submitReportPageDispute} style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4, minWidth: 220 }}>
                             <input type="hidden" name="pairingId" value={m.pairingId} />
                             <label style={{ fontSize: 11 }} className="muted">What it should be (your POV):</label>
-                            <select name="proposed" defaultValue="unsure" style={{ fontSize: 12 }}>
-                              <option value="unsure">— not sure, let helper decide —</option>
-                              <option value="2-0">2-0 (I won both)</option>
-                              <option value="1-1">1-1 (draw)</option>
-                              <option value="0-2">0-2 (I lost both)</option>
-                            </select>
-                            <textarea
+                            <FormSelect
+                              name="proposed"
+                              defaultValue="unsure"
+                              options={[
+                                { value: "unsure", label: "— not sure, let helper decide —" },
+                                { value: "2-0", label: "2-0 (I won both)" },
+                                { value: "1-1", label: "1-1 (draw)" },
+                                { value: "0-2", label: "0-2 (I lost both)" },
+                              ]}
+                            />
+                            <Textarea
                               name="reason"
                               rows={2}
                               placeholder="Optional context for the helper…"
                               maxLength={500}
                               style={{ fontSize: 12 }}
                             />
-                            <button type="submit" className="secondary" style={{ fontSize: 11 }}>
+                            <Button type="submit" variant="secondary" style={{ fontSize: 11 }}>
                               Submit dispute
-                            </button>
+                            </Button>
                           </form>
                         </details>
                       </td>

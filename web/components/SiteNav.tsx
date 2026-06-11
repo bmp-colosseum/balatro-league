@@ -1,10 +1,13 @@
 // Shared site nav. Server component — reads session + admin tier from helpers.
+// Tailwind utilities for layout (wraps on mobile); the settings menu stays a
+// native <details> for zero-JS accessibility.
 
 import Link from "next/link";
 import { auth } from "@/auth";
 import { isAdminUser } from "@/lib/admin";
 import { getShowBmpMmr } from "@/lib/preferences";
 import { toggleShowBmpMmr } from "@/app/preferences/actions";
+import { CommandButton } from "@/components/CommandButton";
 
 const PUBLIC_LINKS = [
   { href: "/standings", label: "Standings" },
@@ -30,86 +33,65 @@ export async function SiteNav({ activePath }: { activePath: string }) {
   if (isAdmin) links.push({ href: "/admin", label: "Admin" });
 
   return (
-    <header className="site-nav">
-      <h1>🃏 Balatro League</h1>
-      <nav>
+    <header className="flex flex-wrap items-center gap-3 border-b border-border bg-card px-4 py-2.5 md:gap-6 md:px-6 md:py-3">
+      <h1 className="m-0 text-base">🃏 Balatro League</h1>
+      <nav className="flex flex-wrap gap-1 md:gap-2">
         {links.map((link) => {
           const isActive =
-            link.href === "/admin"
-              ? activePath.startsWith("/admin")
-              : link.href === activePath;
+            link.href === "/admin" ? activePath.startsWith("/admin") : link.href === activePath;
           return (
-            <Link key={link.href} href={link.href} className={isActive ? "active" : ""}>
+            <Link
+              key={link.href}
+              href={link.href}
+              className={
+                "rounded px-2 py-1 transition-colors " +
+                (isActive
+                  ? "bg-secondary text-foreground"
+                  : "text-[var(--muted)] hover:text-foreground")
+              }
+            >
               {link.label}
             </Link>
           );
         })}
       </nav>
-      <span style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
-        <details style={{ position: "relative" }}>
+
+      <span className="ml-auto flex items-center gap-3">
+        <CommandButton />
+        <details className="relative">
           <summary
             title="Settings"
             aria-label="Settings"
-            style={{
-              listStyle: "none",
-              cursor: "pointer",
-              fontSize: 18,
-              lineHeight: 1,
-              userSelect: "none",
-            }}
+            className="cursor-pointer list-none text-lg leading-none select-none"
           >
             ⚙️
           </summary>
-          <div
-            style={{
-              position: "absolute",
-              top: "calc(100% + 6px)",
-              right: 0,
-              minWidth: 220,
-              background: "var(--surface, #1a1a1a)",
-              border: "1px solid var(--border, #333)",
-              borderRadius: 6,
-              padding: 8,
-              boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-              zIndex: 50,
-            }}
-          >
+          <div className="absolute right-0 top-[calc(100%+6px)] z-50 min-w-[220px] rounded-md border border-border bg-card p-2 shadow-lg">
             <form action={toggleShowBmpMmr}>
               <input type="hidden" name="next" value={showingBmpMmr ? "0" : "1"} />
               <input type="hidden" name="returnTo" value={activePath || "/"} />
               <button
                 type="submit"
-                style={{
-                  background: "none",
-                  border: "none",
-                  padding: "6px 4px",
-                  fontSize: 13,
-                  cursor: "pointer",
-                  color: "var(--text)",
-                  width: "100%",
-                  textAlign: "left",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                }}
+                className="flex w-full cursor-pointer items-center gap-2 rounded border-none bg-transparent px-1 py-1.5 text-left text-[13px] text-foreground hover:bg-secondary"
               >
-                <span style={{ fontSize: 14 }}>{showingBmpMmr ? "☑" : "☐"}</span>
+                <span className="text-sm">{showingBmpMmr ? "☑" : "☐"}</span>
                 <span>Show BMP MMR</span>
               </button>
             </form>
           </div>
         </details>
+
         {isLoggedIn ? (
           <>
-            <Link href="/me" style={{ color: "var(--text)" }}>
+            <Link href="/me" className="text-foreground">
               {user?.name ?? "(unknown)"}
             </Link>
-            <Link href="/api/auth/signout" className="muted" style={{ fontSize: 12 }}>
+            <Link href="/api/auth/signout" className="muted text-xs">
               logout
             </Link>
           </>
         ) : (
-          <Link href="/auth/signin" className="muted" style={{ fontSize: 12 }}>
+          <Link href="/auth/signin" className="muted text-xs">
             Login with Discord
           </Link>
         )}

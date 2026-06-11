@@ -32,7 +32,8 @@ export interface RatingDelta {
   playerId: string;
   displayName: string;
   oldRating: number | null;
-  newRating: number;
+  newRating: number; // strict 1..N — used to seed next season (no ties)
+  finalRank: number; // displayed final placement — genuinely-tied players SHARE one
   delta: number;
   tierPosition: number;
   finishPosition: number;
@@ -67,6 +68,7 @@ export function computeRatingDeltas(
     divisionGroupNumber: number;
     finishPosition: number;
     divisionSize: number;
+    tiedWithPrev: boolean; // tied with the player above in their division standings
   }
   const entries: FlatEntry[] = [];
   divisions.forEach((div, divIdx) => {
@@ -85,6 +87,7 @@ export function computeRatingDeltas(
         divisionGroupNumber: groupNumber,
         finishPosition: idx + 1,
         divisionSize: active.length,
+        tiedWithPrev: idx > 0 && row.tiedWithPrev === true,
       });
     });
   });
@@ -129,6 +132,29 @@ export function computeRatingDeltas(
     rankByPlayer.set(topB, rA);
   }
 
+  // finalRank (the DISPLAYED placement) allows ties: walk the strict rating
+  // order and let a player share the rank of the one above when they were tied
+  // in the same division's standings. Standard competition ranking → 1,2,2,4.
+  // `newRating` stays strict (1..N) so next season's seeding is unambiguous.
+  const entryByPlayer = new Map(entries.map((e) => [e.playerId, e]));
+  const byRating = entries.slice().sort((a, b) => rankByPlayer.get(a.playerId)! - rankByPlayer.get(b.playerId)!);
+  const finalRankByPlayer = new Map<string, number>();
+  byRating.forEach((e, i) => {
+    const myRating = rankByPlayer.get(e.playerId)!;
+    if (i === 0) {
+      finalRankByPlayer.set(e.playerId, myRating);
+      return;
+    }
+    const prev = byRating[i - 1]!;
+    const sameDiv =
+      entryByPlayer.get(e.playerId)!.tierPosition === prev.tierPosition &&
+      entryByPlayer.get(e.playerId)!.divisionGroupNumber === prev.divisionGroupNumber;
+    finalRankByPlayer.set(
+      e.playerId,
+      e.tiedWithPrev && sameDiv ? finalRankByPlayer.get(prev.playerId)! : myRating,
+    );
+  });
+
   return entries.map((e) => {
     const newRating = rankByPlayer.get(e.playerId)!;
     return {
@@ -136,6 +162,7 @@ export function computeRatingDeltas(
       displayName: e.displayName,
       oldRating: e.oldRating,
       newRating,
+      finalRank: finalRankByPlayer.get(e.playerId) ?? newRating,
       delta: newRating - (e.oldRating ?? 0),
       tierPosition: e.tierPosition,
       finishPosition: e.finishPosition,
@@ -258,17 +285,17 @@ export async function endSeasonCore(seasonId: string, actor: AuditActor): Promis
   });
 
   const deltas = computeRatingDeltas(season.tiers.length, divisionsForRating);
-  const newRatingByPlayer = new Map(deltas.map((d) => [d.playerId, d.newRating]));
 
   // Single transaction so a partial failure doesn't leave the league half-rated.
+  // rating = strict seeding order; finalGlobalRank = displayed placement (ties allowed).
   await prisma.$transaction([
     ...deltas.map((d) =>
       prisma.player.update({ where: { id: d.playerId }, data: { rating: d.newRating } }),
     ),
-    ...Array.from(newRatingByPlayer.entries()).map(([playerId, rank]) =>
+    ...deltas.map((d) =>
       prisma.divisionMember.updateMany({
-        where: { seasonId: season.id, playerId, status: "ACTIVE" },
-        data: { finalGlobalRank: rank },
+        where: { seasonId: season.id, playerId: d.playerId, status: "ACTIVE" },
+        data: { finalGlobalRank: d.finalRank },
       }),
     ),
     prisma.season.update({

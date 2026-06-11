@@ -4,11 +4,16 @@
 //
 // Entry: pick a division, OR search a player to jump to their division.
 
+import { Suspense } from "react";
 import { requireAdmin } from "@/lib/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
+import { FlashToast } from "@/components/FlashToast";
 import { PlayerSearch } from "@/components/PlayerSearch";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { FormSelect } from "@/components/FormSelect";
 import { loadResultsPage, type ResultsMember } from "@/lib/loaders/admin-results";
 import { recordResultAction, overrideResultAction, forfeitAction, showdownAction, undoAction } from "./actions";
 
@@ -28,7 +33,7 @@ export default async function ResultsPage({
   searchParams: Promise<{ division?: string; player?: string; ok?: string }>;
 }) {
   await requireAdmin();
-  const { division: divisionId, player: playerId, ok } = await searchParams;
+  const { division: divisionId, player: playerId } = await searchParams;
   const data = await loadResultsPage({ divisionId, playerId });
   const sel = data.selection;
 
@@ -42,27 +47,26 @@ export default async function ResultsPage({
           Record, override, forfeit/DQ, settle a showdown, or undo any match — all in one place.
         </p>
 
-        {ok && OK_MSG[ok] && (
-          <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>✓ {OK_MSG[ok]}</div>
-        )}
+        <Suspense fallback={null}><FlashToast messages={OK_MSG} /></Suspense>
 
         {/* ---- Entry: division picker + player search ---- */}
         <div className="card" style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
           <form method="get" style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
             <label className="muted" style={{ fontSize: 12 }}>Division</label>
-            <select name="division" defaultValue={sel?.division.id ?? ""} style={{ minWidth: 220 }}>
-              <option value="">— pick a division —</option>
-              {data.divisions.map((d) => (
-                <option key={d.id} value={d.id}>{d.tierName} — {d.name}</option>
-              ))}
-            </select>
-            <button type="submit">Go</button>
+            <FormSelect
+              name="division"
+              defaultValue={sel?.division.id ?? ""}
+              triggerClassName="min-w-[220px]"
+              placeholder="— pick a division —"
+              options={data.divisions.map((d) => ({ value: d.id, label: `${d.tierName} — ${d.name}` }))}
+            />
+            <Button type="submit">Go</Button>
           </form>
           {data.hasActiveSeason && (
             <form method="get" style={{ display: "flex", gap: 6, alignItems: "center", flex: "1 1 260px" }}>
               <label className="muted" style={{ fontSize: 12 }}>or player</label>
               <PlayerSearch players={data.allPlayers.map((p) => ({ id: p.playerId, displayName: p.displayName }))} name="player" placeholder="…jump to a player's division" />
-              <button type="submit" className="secondary">Find</button>
+              <Button type="submit" variant="secondary">Find</Button>
             </form>
           )}
         </div>
@@ -90,12 +94,17 @@ export default async function ResultsPage({
                 <MemberSelect name="playerAId" members={sel.members} label="A…" />
                 <span className="muted">vs</span>
                 <MemberSelect name="playerBId" members={sel.members} label="B…" />
-                <select name="result" required defaultValue="2-0">
-                  <option value="2-0">A wins 2-0</option>
-                  <option value="1-1">1-1 draw</option>
-                  <option value="0-2">B wins 2-0</option>
-                </select>
-                <button type="submit">Record</button>
+                <FormSelect
+                  name="result"
+                  required
+                  defaultValue="2-0"
+                  options={[
+                    { value: "2-0", label: "A wins 2-0" },
+                    { value: "1-1", label: "1-1 draw" },
+                    { value: "0-2", label: "B wins 2-0" },
+                  ]}
+                />
+                <Button type="submit">Record</Button>
               </form>
             </section>
 
@@ -111,8 +120,8 @@ export default async function ResultsPage({
                 <MemberSelect name="winnerId" members={sel.members} label="winner…" />
                 <span className="muted" style={{ fontSize: 12 }}>loser</span>
                 <MemberSelect name="loserId" members={sel.members} label="forfeited…" />
-                <input name="reason" required placeholder="Reason (admin-only)" style={{ flex: "1 1 200px" }} />
-                <button type="submit">Record DQ</button>
+                <Input name="reason" required placeholder="Reason (admin-only)" className="flex-1 min-w-[200px]" />
+                <Button type="submit">Record DQ</Button>
               </form>
             </section>
 
@@ -129,7 +138,7 @@ export default async function ResultsPage({
                 <MemberSelect name="p2Id" members={sel.members} label="p2…" />
                 <span className="muted" style={{ fontSize: 12 }}>winner</span>
                 <MemberSelect name="winnerId" members={sel.members} label="winner…" />
-                <button type="submit">Record showdown</button>
+                <Button type="submit">Record showdown</Button>
               </form>
             </section>
 
@@ -157,12 +166,17 @@ export default async function ResultsPage({
                             <form action={overrideResultAction} style={{ display: "flex", gap: 4 }}>
                               <input type="hidden" name="divisionId" value={sel.division.id} />
                               <input type="hidden" name="matchId" value={m.id} />
-                              <select name="result" defaultValue={`${m.gamesWonA}-${m.gamesWonB}`} style={{ fontSize: 11 }}>
-                                <option value="2-0">{m.aName} 2-0</option>
-                                <option value="1-1">1-1</option>
-                                <option value="0-2">{m.bName} 2-0</option>
-                              </select>
-                              <button type="submit" className="secondary" style={{ fontSize: 11 }}>Set</button>
+                              <FormSelect
+                                name="result"
+                                defaultValue={`${m.gamesWonA}-${m.gamesWonB}`}
+                                size="sm"
+                                options={[
+                                  { value: "2-0", label: `${m.aName} 2-0` },
+                                  { value: "1-1", label: "1-1" },
+                                  { value: "0-2", label: `${m.bName} 2-0` },
+                                ]}
+                              />
+                              <Button type="submit" variant="secondary" size="sm">Set</Button>
                             </form>
                           ) : (
                             <span className="muted" style={{ fontSize: 11 }}>—</span>
@@ -196,11 +210,12 @@ export default async function ResultsPage({
 
 function MemberSelect({ name, members, label }: { name: string; members: ResultsMember[]; label: string }) {
   return (
-    <select name={name} required defaultValue="" style={{ minWidth: 140 }}>
-      <option value="" disabled>{label}</option>
-      {members.map((m) => (
-        <option key={`${name}-${m.playerId}`} value={m.playerId}>{m.displayName}</option>
-      ))}
-    </select>
+    <FormSelect
+      name={name}
+      required
+      triggerClassName="min-w-[140px]"
+      placeholder={label}
+      options={members.map((m) => ({ value: m.playerId, label: m.displayName }))}
+    />
   );
 }

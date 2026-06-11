@@ -9,6 +9,9 @@ import type { Prisma } from "@prisma/client";
 import { requireAdmin } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { SiteNav } from "@/components/SiteNav";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { FormSelect } from "@/components/FormSelect";
 import { AdminNav } from "@/components/AdminNav";
 
 export const dynamic = "force-dynamic";
@@ -142,47 +145,57 @@ export default async function AdminAuditPage({
         <form method="get" action="/admin/audit" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, alignItems: "end", marginBottom: 16 }}>
           <label>
             <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Actor</div>
-            <select name="actor" defaultValue={sp.actor ?? ""}>
-              <option value="">All actors</option>
-              {actorRows.map((a) => (
-                <option key={a.actorDiscordId} value={a.actorDiscordId}>
-                  {a.actorName} {a.actorDiscordId === "system" ? "" : `· ${a.actorDiscordId.slice(-6)}`}
-                </option>
-              ))}
-            </select>
+            <FormSelect
+              name="actor"
+              defaultValue={sp.actor ?? ""}
+              triggerClassName="w-full"
+              options={[
+                { value: "", label: "All actors" },
+                ...actorRows.map((a) => ({
+                  value: a.actorDiscordId,
+                  label: `${a.actorName}${a.actorDiscordId === "system" ? "" : ` · ${a.actorDiscordId.slice(-6)}`}`,
+                })),
+              ]}
+            />
           </label>
           <label>
             <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Action</div>
-            <select name="action" defaultValue={sp.action ?? ""}>
-              <option value="">All actions</option>
-              {actionRows.map((a) => (
-                <option key={a.action} value={a.action}>{a.action}</option>
-              ))}
-            </select>
+            <FormSelect
+              name="action"
+              defaultValue={sp.action ?? ""}
+              triggerClassName="w-full"
+              options={[
+                { value: "", label: "All actions" },
+                ...actionRows.map((a) => ({ value: a.action, label: a.action })),
+              ]}
+            />
           </label>
           <label>
             <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Target type</div>
-            <select name="target" defaultValue={sp.target ?? ""}>
-              <option value="">Any target</option>
-              {targetRows.map((t) => (
-                <option key={t.targetType!} value={t.targetType!}>{t.targetType}</option>
-              ))}
-            </select>
+            <FormSelect
+              name="target"
+              defaultValue={sp.target ?? ""}
+              triggerClassName="w-full"
+              options={[
+                { value: "", label: "Any target" },
+                ...targetRows.map((t) => ({ value: t.targetType!, label: t.targetType! })),
+              ]}
+            />
           </label>
           <label>
             <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Summary contains</div>
-            <input name="q" type="text" placeholder="text search…" defaultValue={sp.q ?? ""} />
+            <Input name="q" type="text" placeholder="text search…" defaultValue={sp.q ?? ""} />
           </label>
           <label>
             <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Since</div>
-            <input name="since" type="datetime-local" defaultValue={sp.since ?? ""} />
+            <Input name="since" type="datetime-local" defaultValue={sp.since ?? ""} />
           </label>
           <label>
             <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>Until</div>
-            <input name="until" type="datetime-local" defaultValue={sp.until ?? ""} />
+            <Input name="until" type="datetime-local" defaultValue={sp.until ?? ""} />
           </label>
           <div style={{ display: "flex", gap: 8 }}>
-            <button type="submit">Apply</button>
+            <Button type="submit">Apply</Button>
             <Link href="/admin/audit" className="secondary" style={{ alignSelf: "center" }}>Reset</Link>
           </div>
           <div className="muted" style={{ textAlign: "right", fontSize: 12 }}>

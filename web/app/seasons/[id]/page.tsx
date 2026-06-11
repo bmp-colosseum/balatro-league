@@ -5,12 +5,15 @@ import { loadSeasonDetail } from "@/lib/loaders/seasons";
 import { loadAdminSeasonDetail } from "@/lib/loaders/admin";
 import { prisma } from "@/lib/prisma";
 import { SiteNav } from "@/components/SiteNav";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { FormSelect } from "@/components/FormSelect";
 import { DraggableDivisionsEditor, type EditorMember, type EditorTier } from "@/components/DraggableDivisionsEditor";
 import { LocalDateTimeField } from "@/components/LocalDateTimeField";
 import { LocalDateTime } from "@/components/LocalDateTime";
 import { SeasonDeckPresetPicker } from "@/components/SeasonDeckPresetPicker";
 import { tierColors } from "@/lib/tier-colors";
-import { computeStandings } from "@/lib/standings";
+import { computeStandings, rankLabel } from "@/lib/standings";
 import { listGuildTextChannels } from "@/lib/discord";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { setFinalGlobalRank } from "./actions";
@@ -149,18 +152,23 @@ function PublicSummary({
               top {tier.promoteRelegateCount} ↑ promote · bottom {tier.promoteRelegateCount} ↓ relegate
             </span>
             {isAdmin && (
-              <form action={setTierPromoteRelegateCount} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 400 }}>
+              <form
+                action={setTierPromoteRelegateCount}
+                style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 400 }}
+                title="How many players move up/down between divisions when the season ends: the top N of each division promote a tier, the bottom N relegate a tier."
+              >
                 <input type="hidden" name="tierId" value={tier.id} />
-                <span className="muted">Edit:</span>
-                <input
+                <span className="muted">Promote / relegate per division:</span>
+                <Input
                   type="number"
                   name="count"
                   min={0}
                   max={10}
                   defaultValue={tier.promoteRelegateCount}
+                  title="How many players move up/down between divisions when the season ends."
                   style={{ width: 48, fontSize: 11, padding: "1px 4px" }}
                 />
-                <button type="submit" className="secondary" style={{ fontSize: 11, padding: "1px 6px" }}>Save</button>
+                <Button type="submit" variant="secondary" size="sm">Save</Button>
               </form>
             )}
           </h3>
@@ -189,7 +197,7 @@ function PublicSummary({
                       <tr><td colSpan={isEnded ? 6 : 5} className="muted">No matches played.</td></tr>
                     ) : (
                       div.rows.map((r, i) => {
-                        const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
+                        const medal = rankLabel(r, i);
                         const link = (
                           <Link href={`/profile/${r.player.id}`} style={{ color: "var(--text)" }}>
                             {r.player.displayName}
@@ -205,7 +213,7 @@ function PublicSummary({
                                   <form action={setFinalGlobalRank} style={{ display: "flex", gap: 4 }}>
                                     <input type="hidden" name="seasonId" value={season.id} />
                                     <input type="hidden" name="playerId" value={r.player.id} />
-                                    <input
+                                    <Input
                                       type="number"
                                       name="rank"
                                       defaultValue={r.finalGlobalRank ?? ""}
@@ -213,7 +221,7 @@ function PublicSummary({
                                       placeholder="—"
                                       style={{ width: 60, fontSize: 12, padding: "1px 4px" }}
                                     />
-                                    <button type="submit" className="secondary" style={{ fontSize: 11, padding: "1px 6px" }}>Save</button>
+                                    <Button type="submit" variant="secondary" size="sm">Save</Button>
                                   </form>
                                 ) : (
                                   <span className="muted">{r.finalGlobalRank != null ? `#${r.finalGlobalRank}` : "—"}</span>
@@ -291,14 +299,14 @@ async function AdminSeasonPanel({
         <form action={renameSeason} style={{ display: "flex", gap: 4, alignItems: "center" }}>
           <input type="hidden" name="id" value={season.id} />
           <span className="muted" style={{ fontSize: 12 }}>—</span>
-          <input
+          <Input
             type="text"
             name="subtitle"
             defaultValue={season.subtitle ?? ""}
             placeholder="Optional subtitle (e.g. 'Launch')"
             style={{ fontSize: 14, padding: "2px 6px", minWidth: 240 }}
           />
-          <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+          <Button type="submit" variant="secondary" size="sm">Save</Button>
         </form>
         {season.isActive && (
           <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "#2ecc71" }}>ACTIVE</span>
@@ -339,7 +347,7 @@ async function AdminSeasonPanel({
             {signupRound?._count.signups != null && ` ${signupRound._count.signups} signed up so far.`}
           </p>
           <Link href={`/admin/seasons/${season.id}/bulk-import`}>
-            <button type="button" className="secondary" style={{ marginTop: 8 }}>📥 Or bulk-import members directly</button>
+            <Button type="button" variant="secondary" className="mt-2">📥 Or bulk-import members directly</Button>
           </Link>
         </div>
       ) : (
@@ -347,7 +355,7 @@ async function AdminSeasonPanel({
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16 }}>
             <h3 style={{ margin: 0 }}>Divisions</h3>
             <Link href={`/admin/seasons/${season.id}/bulk-import`} style={{ marginLeft: "auto" }}>
-              <button type="button" className="secondary">📥 Bulk import members + pairings</button>
+              <Button type="button" variant="secondary">📥 Bulk import members + pairings</Button>
             </Link>
             <DiscordBootstrap season={season} />
           </div>
@@ -462,7 +470,7 @@ async function AdminSeasonPanel({
                 </p>
                 <form action={archiveSeasonChannels}>
                   <input type="hidden" name="id" value={season.id} />
-                  <button type="submit" className="secondary">Archive division channels →</button>
+                  <Button type="submit" variant="secondary">Archive division channels →</Button>
                 </form>
               </div>
             )}
@@ -476,7 +484,7 @@ async function AdminSeasonPanel({
               </p>
               <form action={awardSeasonChampionRoles}>
                 <input type="hidden" name="id" value={season.id} />
-                <button type="submit" className="secondary">Award champion roles →</button>
+                <Button type="submit" variant="secondary">Award champion roles →</Button>
               </form>
             </div>
 
@@ -490,7 +498,7 @@ async function AdminSeasonPanel({
                 </p>
                 <form action={stripSeasonDivisionRoles}>
                   <input type="hidden" name="id" value={season.id} />
-                  <button type="submit" className="secondary">Strip roles from players →</button>
+                  <Button type="submit" variant="secondary">Strip roles from players →</Button>
                 </form>
               </div>
             )}
@@ -512,15 +520,16 @@ async function AdminSeasonPanel({
         <form action={setSeasonRulesTemplate} style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
           <input type="hidden" name="seasonId" value={season.id} />
           <label className="muted" style={{ fontSize: 12 }}>Rules template:</label>
-          <select name="leagueRulesTemplateId" defaultValue={season.leagueRulesTemplateId ?? ""} style={{ fontSize: 12 }}>
-            <option value="">— Use default —</option>
-            {rulesTemplates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.isDefault ? "★ " : ""}{t.name}
-              </option>
-            ))}
-          </select>
-          <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+          <FormSelect
+            name="leagueRulesTemplateId"
+            defaultValue={season.leagueRulesTemplateId ?? ""}
+            size="sm"
+            options={[
+              { value: "", label: "— Use default —" },
+              ...rulesTemplates.map((t) => ({ value: t.id, label: `${t.isDefault ? "★ " : ""}${t.name}` })),
+            ]}
+          />
+          <Button type="submit" variant="secondary" size="sm">Save</Button>
           <Link href="/admin/settings" className="muted" style={{ fontSize: 11 }}>Manage templates →</Link>
         </form>
         <details style={{ marginTop: 8 }}>
@@ -528,36 +537,36 @@ async function AdminSeasonPanel({
           <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
             <form action={setSeasonDiscordCategory} style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <input type="hidden" name="id" value={season.id} />
-              <input
+              <Input
                 type="text"
                 name="discordCategoryId"
                 defaultValue={season.discordCategoryId ?? ""}
                 placeholder="Category ID for division channels (auto-created if blank)"
                 style={{ flex: 1, fontSize: 12 }}
               />
-              <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+              <Button type="submit" variant="secondary" size="sm">Save</Button>
             </form>
             <form action={setSeasonResultsWebhook} style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <input type="hidden" name="id" value={season.id} />
-              <input
+              <Input
                 type="text"
                 name="resultsWebhookUrl"
                 defaultValue={season.resultsWebhookUrl ?? ""}
                 placeholder="Results webhook URL (falls back to global if blank)"
                 style={{ flex: 1, fontSize: 12 }}
               />
-              <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+              <Button type="submit" variant="secondary" size="sm">Save</Button>
             </form>
             <form action={setSeasonResultsChannel} style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <input type="hidden" name="id" value={season.id} />
-              <input
+              <Input
                 type="text"
                 name="resultsChannelId"
                 defaultValue={season.resultsChannelId ?? ""}
                 placeholder="Results channel ID for bot-REST fallback (optional)"
                 style={{ flex: 1, fontSize: 12 }}
               />
-              <button type="submit" className="secondary" style={{ fontSize: 11 }}>Save</button>
+              <Button type="submit" variant="secondary" size="sm">Save</Button>
             </form>
           </div>
         </details>
@@ -575,10 +584,10 @@ async function AdminSeasonPanel({
         <form action={deleteSeason} style={{ marginTop: 6, display: "flex", gap: 6, alignItems: "center" }}>
           <input type="hidden" name="id" value={season.id} />
           <span className="muted" style={{ fontSize: 11 }}>Type "{formatSeasonLabel(season)}" to confirm:</span>
-          <input type="text" name="confirm" placeholder={formatSeasonLabel(season)} required style={{ flex: 1, fontSize: 11 }} />
-          <button type="submit" style={{ fontSize: 11, background: "#e74c3c", color: "white", border: "none" }}>
+          <Input type="text" name="confirm" placeholder={formatSeasonLabel(season)} required className="flex-1 text-[11px]" />
+          <Button type="submit" variant="destructive" size="sm">
             Delete season
-          </button>
+          </Button>
         </form>
         <div className="muted" style={{ fontSize: 10, marginTop: 4 }}>
           Cascades: tiers, divisions, members, pairings. Signup rounds get unlinked but kept.
@@ -623,7 +632,7 @@ function LifecycleActions({
     return (
       <div className="card">
         <Link href={`/admin/seasons/${season.id}/end`}>
-          <button type="button">End season →</button>
+          <Button type="button">End season →</Button>
         </Link>
       </div>
     );
@@ -633,7 +642,7 @@ function LifecycleActions({
       <div className="card">
         <form action={activateSeason} style={{ display: "inline-flex" }}>
           <input type="hidden" name="id" value={season.id} />
-          <button type="submit"><strong>Start season →</strong></button>
+          <Button type="submit"><strong>Start season →</strong></Button>
         </form>
         <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
           {playerCount} player(s) placed. Starting flips this to the active season for /standings + /report.
@@ -648,17 +657,17 @@ function LifecycleActions({
               </span>
               <form action={setSeasonScheduledStart} style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
                 <input type="hidden" name="id" value={season.id} />
-                <input
+                <Input
                   type="datetime-local"
                   name="scheduledStartAt"
                   defaultValue={toLocalDatetimeInput(season.scheduledStartAt)}
                   style={{ fontSize: 12 }}
                 />
-                <button type="submit" className="secondary" style={{ fontSize: 11 }}>Update</button>
+                <Button type="submit" variant="secondary" size="sm">Update</Button>
               </form>
               <form action={clearSeasonScheduledStart}>
                 <input type="hidden" name="id" value={season.id} />
-                <button type="submit" className="secondary" style={{ fontSize: 11, color: "#e74c3c" }}>Cancel schedule</button>
+                <Button type="submit" variant="secondary" size="sm" className="text-[#e74c3c]">Cancel schedule</Button>
               </form>
             </div>
           ) : (
@@ -670,8 +679,8 @@ function LifecycleActions({
               <label className="muted" style={{ fontSize: 12 }}>
                 Auto-start at (your local time):
               </label>
-              <input type="datetime-local" name="scheduledStartAt" required style={{ fontSize: 12 }} />
-              <button type="submit" className="secondary" style={{ fontSize: 11 }}>Schedule</button>
+              <Input type="datetime-local" name="scheduledStartAt" required style={{ fontSize: 12 }} />
+              <Button type="submit" variant="secondary" size="sm">Schedule</Button>
             </form>
           )}
           <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
@@ -686,7 +695,7 @@ function LifecycleActions({
     return (
       <div className="card">
         <Link href={`/admin/signups/${round.id}/build`}>
-          <button type="button"><strong>Build divisions from {round._count.signups} signups →</strong></button>
+          <Button type="button"><strong>Build divisions from {round._count.signups} signups →</strong></Button>
         </Link>
       </div>
     );
@@ -699,7 +708,7 @@ function LifecycleActions({
         </div>
         <form action={finalizeSignupsForSeason}>
           <input type="hidden" name="seasonId" value={season.id} />
-          <button type="submit" className="secondary">Finalize signups →</button>
+          <Button type="submit" variant="secondary">Finalize signups →</Button>
         </form>
       </div>
     );
@@ -709,14 +718,15 @@ function LifecycleActions({
       <summary style={{ cursor: "pointer" }}><strong>Open signups for this season →</strong></summary>
       <form action={openSignupsForSeason} style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
         <input type="hidden" name="seasonId" value={season.id} />
-        <select name="channelId" required style={{ flex: "1 1 200px" }}>
-          <option value="">— Pick a Discord channel —</option>
-          {channels.map((c) => (
-            <option key={c.id} value={c.id}>#{c.name}</option>
-          ))}
-        </select>
+        <FormSelect
+          name="channelId"
+          required
+          triggerClassName="flex-1 min-w-[200px]"
+          placeholder="— Pick a Discord channel —"
+          options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
+        />
         <LocalDateTimeField name="closesAt" label="Signups close (your time, optional)" />
-        <button type="submit" disabled={channels.length === 0}>Open signups</button>
+        <Button type="submit" disabled={channels.length === 0}>Open signups</Button>
       </form>
     </details>
   );
@@ -738,9 +748,9 @@ function DiscordBootstrap({
       <div style={{ marginTop: 8, padding: 8, background: "var(--surface-2)", borderRadius: 4, display: "grid", gap: 6, minWidth: 320 }}>
         <form action={bootstrapSeasonDiscord}>
           <input type="hidden" name="id" value={season.id} />
-          <button type="submit" disabled={remaining === 0} style={{ fontSize: 12 }}>
+          <Button type="submit" disabled={remaining === 0}>
             {remaining === 0 ? "All divisions ready" : `Set up ${remaining} remaining division(s)`}
-          </button>
+          </Button>
         </form>
       </div>
     </details>

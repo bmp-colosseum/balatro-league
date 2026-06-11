@@ -130,8 +130,10 @@ describe("planSeason — promotion / relegation from prior season", () => {
       minGroupSize: 2,
     });
 
-    const tierOf = (signupId: string) =>
-      plan.tiers.find((t) => t.divisions.some((d) => d.signupIds.includes(signupId)))?.name;
+    const tierOf = (signupId: string | undefined) =>
+      signupId == null
+        ? undefined
+        : plan.tiers.find((t) => t.divisions.some((d) => d.signupIds.includes(signupId)))?.name;
 
     expect(tierOf(signupIdByDiscord.goldTop)).toBe("Gold"); // winner of top tier stays top
     expect(tierOf(signupIdByDiscord.goldBot)).toBe("Silver"); // relegated down

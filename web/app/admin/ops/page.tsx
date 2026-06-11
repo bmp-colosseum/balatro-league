@@ -4,6 +4,7 @@
 
 import { requireOwnerOrDevops } from "@/lib/admin";
 import { SiteNav } from "@/components/SiteNav";
+import { Button } from "@/components/ui/button";
 import { AdminNav } from "@/components/AdminNav";
 import { runMatchSweepAction } from "./actions";
 
@@ -92,7 +93,7 @@ export default async function AdminOpsPage({
             <li><strong>Orphan threads</strong> (manual-only) — scans both <em>active</em> AND <em>archived</em> threads under known match-parent channels (challenges + divisions). Any without a MatchSession row gets deleted.</li>
           </ul>
           <form action={runMatchSweepAction} style={{ marginTop: 8 }}>
-            <button type="submit" className="secondary">Run sweep now</button>
+            <Button type="submit" variant="secondary">Run sweep now</Button>
           </form>
         </div>
       </main>

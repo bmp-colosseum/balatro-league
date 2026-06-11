@@ -1,6 +1,9 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import type { TraitAdminRow } from "@/lib/loaders/traits-admin";
 
 // Draw the chosen image onto a canvas scaled to fit `max`×`max` (never
@@ -126,14 +129,15 @@ export function TraitEditorRow({
               {busy ? "resizing…" : "upload icon"}
             </label>
             {preview && (
-              <button
+              <Button
                 type="button"
                 onClick={clearIcon}
-                className="muted"
-                style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontSize: 11 }}
+                variant="ghost"
+                size="sm"
+                className="text-[#e74c3c]"
               >
                 remove icon
-              </button>
+              </Button>
             )}
           </div>
 
@@ -141,23 +145,23 @@ export function TraitEditorRow({
           <div style={{ display: "grid", gap: 8, flex: 1 }}>
             <label style={{ display: "grid", gap: 2, fontSize: 12 }}>
               <span className="muted">Label</span>
-              <input type="text" name="label" defaultValue={row.label} />
+              <Input type="text" name="label" defaultValue={row.label} />
               <span className="muted" style={{ fontSize: 10 }}>default: {row.defaultLabel}</span>
             </label>
             <label style={{ display: "grid", gap: 2, fontSize: 12, maxWidth: 120 }}>
               <span className="muted">Emoji (fallback)</span>
-              <input type="text" name="emoji" defaultValue={row.emoji} maxLength={8} />
+              <Input type="text" name="emoji" defaultValue={row.emoji} maxLength={8} />
             </label>
             <label style={{ display: "grid", gap: 2, fontSize: 12 }}>
               <span className="muted">Description</span>
-              <textarea name="description" defaultValue={row.description} rows={2} style={{ resize: "vertical" }} />
+              <Textarea name="description" defaultValue={row.description} rows={2} style={{ resize: "vertical" }} />
               <span className="muted" style={{ fontSize: 10 }}>default: {row.defaultDescription}</span>
             </label>
           </div>
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button type="submit" disabled={busy}>Save</button>
+          <Button type="submit" disabled={busy}>Save</Button>
           {row.overridden && <span className="muted" style={{ fontSize: 11 }}>customised</span>}
         </div>
       </form>
@@ -165,13 +169,14 @@ export function TraitEditorRow({
       {row.overridden && (
         <form action={resetAction}>
           <input type="hidden" name="key" value={row.key} />
-          <button
+          <Button
             type="submit"
-            className="muted"
-            style={{ background: "none", border: "1px solid var(--border)", color: "#e74c3c", cursor: "pointer", fontSize: 12, padding: "2px 8px", borderRadius: 4 }}
+            variant="outline"
+            size="sm"
+            className="text-[#e74c3c]"
           >
             Reset to default
-          </button>
+          </Button>
         </form>
       )}
     </div>

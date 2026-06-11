@@ -17,6 +17,45 @@ export interface StandingRow {
   // no shootout has been recorded between them. UI shows a ⚔ marker
   // prompting admin to record one (or for players to play + report).
   tiedWithPrev?: boolean;
+  tiedWithNext?: boolean;
+  // Standard competition ranking ("1224"): genuinely-tied players SHARE a rank
+  // instead of being force-ordered alphabetically. The row order is still
+  // deterministic (alphabetical within a tie group) for stable display.
+  rank?: number;
+}
+
+// Assign display ranks via standard competition ranking: tied rows (tiedWithPrev)
+// share the rank of the group's first row; the next distinct group resumes at
+// its positional index (1, 2, 2, 4). Sets tiedWithNext so a row knows it's part
+// of a tie from the upper side too. Expects rows already sorted + tied-marked.
+export function assignRanks(rows: StandingRow[]): StandingRow[] {
+  rows.forEach((cur, i) => {
+    if (i === 0) {
+      cur.rank = 1;
+      return;
+    }
+    const prev = rows[i - 1]!;
+    if (cur.tiedWithPrev) {
+      cur.rank = prev.rank;
+      prev.tiedWithNext = true;
+    } else {
+      cur.rank = i + 1;
+    }
+  });
+  return rows;
+}
+
+// Display label for a standing row's rank: a medal for a clean top-3, the
+// shared number prefixed "T" for a genuine tie (e.g. "T3"), else "N.". Ties
+// show the SAME number on every tied row — that's the visible "real tie".
+export function rankLabel(
+  row: { rank?: number; tiedWithPrev?: boolean; tiedWithNext?: boolean },
+  fallbackIndex: number,
+): string {
+  const n = row.rank ?? fallbackIndex + 1;
+  if (row.tiedWithPrev || row.tiedWithNext) return `T${n}`;
+  if (n <= 3) return ["🥇", "🥈", "🥉"][n - 1]!;
+  return `${n}.`;
 }
 
 export interface ShootoutInput {
@@ -102,7 +141,7 @@ function sortStandings(
       cur.tiedWithPrev = true;
     }
   }
-  return sorted;
+  return assignRanks(sorted);
 }
 
 function shootoutBetween(xId: string, yId: string, shootouts: ShootoutInput[]): number {

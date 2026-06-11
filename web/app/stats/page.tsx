@@ -2,9 +2,18 @@
 
 import Link from "next/link";
 import { SiteNav } from "@/components/SiteNav";
-import { loadStatsPageData, type StatsLeaderRow, type StatsDeckRow, type StatsBanRow } from "@/lib/loaders/stats";
+import { deckImage, stakeImage } from "@/lib/balatro-slugs";
+import {
+  loadStatsPageData,
+  type StatsLeaderRow,
+  type StatsItemRow,
+  type StatsComboRow,
+} from "@/lib/loaders/stats";
 
 export const dynamic = "force-dynamic";
+
+// Below this many pool appearances a ban rate isn't meaningful — show "—".
+const MIN_BAN_APPEARANCES = 5;
 
 export default async function StatsPage() {
   const data = await loadStatsPageData();
@@ -13,27 +22,12 @@ export default async function StatsPage() {
       <SiteNav activePath="/stats" />
       <main>
         <h2>League stats</h2>
-        <p className="muted">Career numbers across every season. Live updates as matches confirm.</p>
+        <p className="muted">Career numbers across every season. Updates a few minutes after matches confirm.</p>
 
         <div className="grid grid-3" style={{ marginTop: 16 }}>
-          <LeaderCard
-            title="Top global rank"
-            subtitle="Lower = better"
-            rows={data.topByRating}
-            valueFormat={(v) => `#${v}`}
-          />
-          <LeaderCard
-            title="Most match wins"
-            subtitle="2-0 results, all-time"
-            rows={data.topByMatchWins}
-            valueFormat={(v) => `${v}`}
-          />
-          <LeaderCard
-            title="Most games won"
-            subtitle="Game-level, all-time"
-            rows={data.topByGameWins}
-            valueFormat={(v) => `${v}`}
-          />
+          <LeaderCard title="Top global rank" subtitle="Lower = better" rows={data.topByRating} valueFormat={(v) => `#${v}`} />
+          <LeaderCard title="Most match wins" subtitle="2-0 results, all-time" rows={data.topByMatchWins} valueFormat={(v) => `${v}`} />
+          <LeaderCard title="Most games won" subtitle="Game-level, all-time" rows={data.topByGameWins} valueFormat={(v) => `${v}`} />
         </div>
 
         <h3 style={{ marginTop: 24 }}>Streaks</h3>
@@ -44,7 +38,7 @@ export default async function StatsPage() {
         ) : (
           <div className="card">
             <p className="muted" style={{ fontSize: 11, marginTop: 0 }}>
-              Consecutive match wins ending at the player's most recent confirmed match. ✓ = currently active.
+              Consecutive match wins ending at the player&apos;s most recent confirmed match. ● = streak still live.
             </p>
             <table className="table-dense" style={{ width: "100%" }}>
               <thead>
@@ -59,12 +53,8 @@ export default async function StatsPage() {
                   <tr key={r.playerId}>
                     <td>{i + 1}.</td>
                     <td>
-                      <Link href={`/profile/${r.playerId}`} style={{ color: "var(--text)" }}>
-                        {r.displayName}
-                      </Link>
-                      {r.isActive && (
-                        <span style={{ marginLeft: 6, color: "#2ecc71", fontSize: 11 }}>● active</span>
-                      )}
+                      <Link href={`/profile/${r.playerId}`} style={{ color: "var(--text)" }}>{r.displayName}</Link>
+                      {r.isActive && <span style={{ marginLeft: 6, color: "#2ecc71", fontSize: 11 }}>● active</span>}
                     </td>
                     <td style={{ textAlign: "right" }}>
                       <strong>{r.streak}</strong>
@@ -76,23 +66,30 @@ export default async function StatsPage() {
           </div>
         )}
 
-        <h3 style={{ marginTop: 24 }}>Most-played decks + stakes</h3>
-        <div className="grid grid-2">
-          <ComboCard title="Most-played decks" rows={data.mostPlayedDecks} />
-          <ComboCard title="Most-played stakes" rows={data.mostPlayedStakes} />
-        </div>
-        <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-          Per-player deck + stake win rates live on each <Link href="/players">player's profile</Link>.
+        <h3 style={{ marginTop: 24 }}>Decks &amp; stakes</h3>
+        <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>
+          Every deck and stake in the league&apos;s standard pool, by games played. <strong>Ban rate</strong> = how often it was banned when it
+          appeared in a match&apos;s pick pool. Per-player win rates live on each <Link href="/players">player&apos;s profile</Link>.
         </p>
+        <div className="grid grid-2">
+          <ItemTable title="Decks" rows={data.decks} imageFor={deckImage} />
+          <ItemTable title="Stakes" rows={data.stakes} imageFor={stakeImage} />
+        </div>
 
-        <h3 style={{ marginTop: 24 }}>Most-banned decks + stakes</h3>
+        <h3 style={{ marginTop: 24 }}>Deck + stake combos</h3>
         <div className="grid grid-2">
-          <BanCard title="Most-banned decks" rows={data.mostBannedDecks} />
-          <BanCard title="Most-banned stakes" rows={data.mostBannedStakes} />
+          <ComboCard
+            title="Most-played combos"
+            rows={data.mostPlayedCombos}
+            valueLabel={(r) => `${r.gamesTotal} games`}
+          />
+          <ComboCard
+            title="Most-banned combos"
+            subtitle={`Highest ban rate (min ${8} appearances)`}
+            rows={data.mostBannedCombos}
+            valueLabel={(r) => `${r.banRatePct}%`}
+          />
         </div>
-        <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-          Ban rate = bans ÷ pool appearances. Decks with fewer than 5 appearances are filtered out.
-        </p>
       </main>
     </>
   );
@@ -124,9 +121,7 @@ function LeaderCard({
                 <tr key={r.playerId}>
                   <td style={{ width: 24 }}>{medal}</td>
                   <td>
-                    <Link href={`/profile/${r.playerId}`} style={{ color: "var(--text)" }}>
-                      {r.displayName}
-                    </Link>
+                    <Link href={`/profile/${r.playerId}`} style={{ color: "var(--text)" }}>{r.displayName}</Link>
                   </td>
                   <td style={{ textAlign: "right" }}>
                     <strong>{valueFormat(r.value)}</strong>
@@ -141,70 +136,109 @@ function LeaderCard({
   );
 }
 
-function BanCard({ title, rows }: { title: string; rows: StatsBanRow[] }) {
+// Inline ban-rate bar — readable label (the deck/stake name + icon) lives in the
+// row, so the bar just needs the magnitude. Replaces the old cramped bar chart.
+function BanBar({ pct, appearances }: { pct: number; appearances: number }) {
+  if (appearances < MIN_BAN_APPEARANCES) {
+    return <span className="muted" style={{ fontSize: 11 }}>—</span>;
+  }
   return (
-    <div className="card">
-      <strong>{title}</strong>
-      {rows.length === 0 ? (
-        <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>No data yet.</div>
-      ) : (
-        <table className="table-dense" style={{ width: "100%", fontSize: 13, marginTop: 8 }}>
-          <thead>
-            <tr>
-              <th></th>
-              <th>Name</th>
-              <th style={{ textAlign: "right" }}>Bans</th>
-              <th style={{ textAlign: "right" }}>Rate</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={r.name}>
-                <td style={{ width: 24 }} className="muted">{i + 1}.</td>
-                <td>{r.name}</td>
-                <td style={{ textAlign: "right" }}>
-                  <strong>{r.bansTotal}</strong>
-                  <span className="muted" style={{ fontSize: 11 }}> / {r.appearancesTotal}</span>
-                </td>
-                <td style={{ textAlign: "right" }} className="muted">{r.banRatePct}%</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ flex: 1, minWidth: 48, height: 8, background: "var(--surface-2)", borderRadius: 4, overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", background: "var(--danger)" }} />
+      </div>
+      <span className="muted" style={{ fontSize: 11, width: 30, textAlign: "right" }}>{pct}%</span>
     </div>
   );
 }
 
-function ComboCard({ title, rows }: { title: string; rows: StatsDeckRow[] }) {
+function ItemTable({
+  title,
+  rows,
+  imageFor,
+}: {
+  title: string;
+  rows: StatsItemRow[];
+  imageFor: (name: string) => string;
+}) {
   return (
     <div className="card">
       <strong>{title}</strong>
-      {rows.length === 0 ? (
-        <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>No data yet.</div>
-      ) : (
+      <div className="table-scroll">
         <table className="table-dense" style={{ width: "100%", fontSize: 13, marginTop: 8 }}>
           <thead>
             <tr>
               <th></th>
               <th>Name</th>
               <th style={{ textAlign: "right" }}>Games</th>
+              <th style={{ textAlign: "right" }}>Win%</th>
+              <th style={{ minWidth: 90 }}>Ban rate</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, i) => (
+            {rows.map((r) => (
               <tr key={r.name}>
-                <td style={{ width: 24 }} className="muted">{i + 1}.</td>
+                <td style={{ width: 28 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={imageFor(r.name)} alt="" width={22} height={22} style={{ borderRadius: 3, display: "block" }} />
+                </td>
                 <td>{r.name}</td>
-                <td style={{ textAlign: "right" }}>
-                  <strong>{r.gamesTotal}</strong>
+                <td style={{ textAlign: "right" }}>{r.gamesTotal > 0 ? r.gamesTotal : <span className="muted">—</span>}</td>
+                <td style={{ textAlign: "right" }} className="muted">{r.gamesTotal > 0 ? `${r.winRatePct}%` : "—"}</td>
+                <td>
+                  <BanBar pct={r.banRatePct} appearances={r.appearancesTotal} />
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      )}
+      </div>
     </div>
   );
 }
 
+function ComboCard({
+  title,
+  subtitle,
+  rows,
+  valueLabel,
+}: {
+  title: string;
+  subtitle?: string;
+  rows: StatsComboRow[];
+  valueLabel: (r: StatsComboRow) => string;
+}) {
+  return (
+    <div className="card">
+      <strong>{title}</strong>
+      {subtitle && <p className="muted" style={{ fontSize: 11, marginTop: 2, marginBottom: 0 }}>{subtitle}</p>}
+      {rows.length === 0 ? (
+        <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>No data yet.</div>
+      ) : (
+        <div className="table-scroll">
+          <table className="table-dense" style={{ width: "100%", fontSize: 13, marginTop: 8 }}>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={`${r.deck}·${r.stake}`}>
+                  <td style={{ width: 24 }} className="muted">{i + 1}.</td>
+                  <td style={{ width: 44 }}>
+                    <span style={{ display: "inline-flex", gap: 2 }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={deckImage(r.deck)} alt="" width={20} height={20} style={{ borderRadius: 3 }} />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={stakeImage(r.stake)} alt="" width={20} height={20} style={{ borderRadius: 3 }} />
+                    </span>
+                  </td>
+                  <td>{r.deck} <span className="muted">·</span> {r.stake}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <strong>{valueLabel(r)}</strong>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

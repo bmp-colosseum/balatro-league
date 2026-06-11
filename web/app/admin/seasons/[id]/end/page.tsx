@@ -5,6 +5,7 @@ import { loadEndSeasonPreview } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { endSeason } from "../../actions";
+import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
@@ -117,7 +118,7 @@ export default async function EndSeasonPreviewPage({
           </p>
           <form action={endSeason} style={{ display: "flex", gap: 8 }}>
             <input type="hidden" name="id" value={season.id} />
-            <button type="submit">End season + apply ratings</button>
+            <Button type="submit">End season + apply ratings</Button>
             <Link href="/admin/seasons" className="secondary">Cancel</Link>
           </form>
         </div>

@@ -3,6 +3,9 @@ import { notFound, redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import { loadBuildSeasonPage } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { FormSelect } from "@/components/FormSelect";
 import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
 import { DraggableRatingTable, type RatingRow } from "@/components/DraggableRatingTable";
@@ -106,7 +109,7 @@ export default async function BuildSeasonPage({
           </p>
           <form action={addSignupByDiscordId} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <input type="hidden" name="roundId" value={round.id} />
-            <input
+            <Input
               type="text"
               name="discordId"
               placeholder="Discord ID (17-20 digits)"
@@ -114,19 +117,19 @@ export default async function BuildSeasonPage({
               pattern="\d{17,20}"
               style={{ flex: "1 1 200px" }}
             />
-            <input
+            <Input
               type="text"
               name="displayName"
               placeholder="Display name override (optional)"
               style={{ flex: "1 1 200px" }}
             />
-            <button type="submit">Look up & add</button>
+            <Button type="submit">Look up & add</Button>
           </form>
           {allPlayers.length > 0 && (
             <form action={addSignupByPlayerId} style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
               <input type="hidden" name="roundId" value={round.id} />
               <PlayerSearch players={allPlayers} name="playerId" placeholder="…or add an existing player by name" />
-              <button type="submit" className="secondary">Add</button>
+              <Button type="submit" variant="secondary">Add</Button>
             </form>
           )}
         </div>
@@ -137,15 +140,15 @@ export default async function BuildSeasonPage({
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               <form action={autoFillRatingsFromMmr}>
                 <input type="hidden" name="roundId" value={round.id} />
-                <button type="submit" className="secondary" style={{ fontSize: 12 }} title="Sets rating = BMP MMR only for players who don't already have a rating. Leaves returners' league ratings alone.">
+                <Button type="submit" variant="secondary" size="sm" title="Sets rating = BMP MMR only for players who don't already have a rating. Leaves returners' league ratings alone.">
                   Fill missing ratings from BMP MMR
-                </button>
+                </Button>
               </form>
               <form action={refreshSignupMmrSnapshots}>
                 <input type="hidden" name="roundId" value={round.id} />
-                <button type="submit" className="secondary" style={{ fontSize: 12 }}>
+                <Button type="submit" variant="secondary" size="sm">
                   Refresh BMP MMRs
-                </button>
+                </Button>
               </form>
             </div>
           </div>
@@ -221,24 +224,27 @@ export default async function BuildSeasonPage({
                 ) : (
                   <>Subtitle (optional) — will create <strong>Season {nextNumber}</strong></>
                 )}
-                <input name="subtitle" defaultValue={existingSeason?.subtitle ?? ""} placeholder="Optional subtitle (e.g. 'Launch')" style={{ width: "100%" }} />
+                <Input name="subtitle" defaultValue={existingSeason?.subtitle ?? ""} placeholder="Optional subtitle (e.g. 'Launch')" style={{ width: "100%" }} />
               </label>
               <label>
                 Group size
-                <input name="targetGroupSize" type="number" min={2} max={20} defaultValue={5} style={{ width: "100%" }} />
+                <Input name="targetGroupSize" type="number" min={2} max={20} defaultValue={5} style={{ width: "100%" }} />
               </label>
               <label>
                 Min group
-                <input name="minGroupSize" type="number" min={2} max={20} defaultValue={3} style={{ width: "100%" }} />
+                <Input name="minGroupSize" type="number" min={2} max={20} defaultValue={3} style={{ width: "100%" }} />
               </label>
               <label>
                 Deck preset
-                <select name="matchConfigPresetId" defaultValue="" style={{ width: "100%" }}>
-                  <option value="">— Use Default —</option>
-                  {presets.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
+                <FormSelect
+                  name="matchConfigPresetId"
+                  defaultValue=""
+                  triggerClassName="w-full"
+                  options={[
+                    { value: "", label: "— Use Default —" },
+                    ...presets.map((p) => ({ value: p.id, label: p.name })),
+                  ]}
+                />
               </label>
             </div>
 
@@ -249,7 +255,7 @@ export default async function BuildSeasonPage({
                   Pre-filled with your last-used layout (★)
                 </span>
                 <Link href="/admin/seasons/templates" style={{ marginLeft: "auto" }}>
-                  <button type="button" className="secondary">Manage templates</button>
+                  <Button type="button" variant="secondary">Manage templates</Button>
                 </Link>
               </div>
               <TierEditor initial={initialTiers} templates={templates} signupCount={sortedSignups.length} />
@@ -263,9 +269,9 @@ export default async function BuildSeasonPage({
                 Re-build Season {existingSeason.number} · place {playerCount} players
               </ConfirmButton>
             ) : (
-              <button type="submit" style={{ marginTop: 16 }}>
+              <Button type="submit" className="mt-4">
                 Build season + place {playerCount} players
-              </button>
+              </Button>
             )}
           </form>
         </div>

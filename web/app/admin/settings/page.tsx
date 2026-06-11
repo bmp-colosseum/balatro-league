@@ -6,6 +6,8 @@ import { requireOwnerOrDevops } from "@/lib/admin";
 import { DEFAULTS } from "@/lib/league-settings";
 import { prisma } from "@/lib/prisma";
 import { AdminNav } from "@/components/AdminNav";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { SiteNav } from "@/components/SiteNav";
 import {
   deleteRulesTemplate,
@@ -76,7 +78,7 @@ export default async function AdminSettingsPage({
               <input type="hidden" name="id" value={t.id} />
               <label style={{ display: "block", marginBottom: 12 }}>
                 Name
-                <input name="name" defaultValue={t.name} required style={{ width: "100%", maxWidth: 320 }} />
+                <Input name="name" defaultValue={t.name} required style={{ width: "100%", maxWidth: 320 }} />
               </label>
 
               <Section title="Timeouts">
@@ -97,7 +99,7 @@ export default async function AdminSettingsPage({
               </Section>
 
               <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
-                <button type="submit">Save changes</button>
+                <Button type="submit">Save changes</Button>
               </div>
             </form>
 
@@ -105,13 +107,13 @@ export default async function AdminSettingsPage({
               {!t.isDefault && (
                 <form action={setDefaultRulesTemplate}>
                   <input type="hidden" name="id" value={t.id} />
-                  <button type="submit" className="secondary">★ Make default</button>
+                  <Button type="submit" variant="secondary">★ Make default</Button>
                 </form>
               )}
               {!t.isDefault && (
                 <form action={deleteRulesTemplate}>
                   <input type="hidden" name="id" value={t.id} />
-                  <button type="submit" className="danger">Delete</button>
+                  <Button type="submit" variant="destructive">Delete</Button>
                 </form>
               )}
               {t.isDefault && (
@@ -128,7 +130,7 @@ export default async function AdminSettingsPage({
           <form action={saveRulesTemplate} style={{ marginTop: 12 }}>
             <label style={{ display: "block", marginBottom: 12 }}>
               Name
-              <input name="name" placeholder="e.g. Casual" required style={{ width: "100%", maxWidth: 320 }} />
+              <Input name="name" placeholder="e.g. Casual" required style={{ width: "100%", maxWidth: 320 }} />
             </label>
             <Section title="Timeouts">
               <Field
@@ -144,7 +146,7 @@ export default async function AdminSettingsPage({
                 fallback={DEFAULTS.reportAutoConfirmSeconds}
               />
             </Section>
-            <button type="submit" style={{ marginTop: 16 }}>Create template</button>
+            <Button type="submit" className="mt-4">Create template</Button>
           </form>
         </details>
       </main>
@@ -187,7 +189,7 @@ function Field({
         )}
         {hint && <div className="muted" style={{ fontSize: 11, fontWeight: 400 }}>{hint}</div>}
       </label>
-      <input
+      <Input
         id={name}
         name={name}
         type="number"

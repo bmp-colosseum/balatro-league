@@ -6,11 +6,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { hasTier } from "@/lib/admin";
+import { rankLabel } from "@/lib/standings";
 import { loadDivisionPageData, type DivisionRecentPairing, type DivisionUnplayed } from "@/lib/loaders/division";
 import { loadAdminDivisionDetail } from "@/lib/loaders/admin";
 import { prisma } from "@/lib/prisma";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
+import { Button } from "@/components/ui/button";
+import { FormSelect } from "@/components/FormSelect";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import {
   addDivisionMemberByDiscordId,
   bulkAddMembers,
@@ -26,6 +31,7 @@ import {
   recordShootout,
   removeDivisionMember,
   reportFromDivisionAction,
+  resolveTieAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -133,7 +139,7 @@ export default async function PublicDivisionPage({
               {standings.length === 0 ? (
                 <tr><td colSpan={5} className="muted">No matches played yet.</td></tr>
               ) : standings.map((r, i) => {
-                const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
+                const medal = rankLabel(r, i);
                 const link = (
                   <Link href={`/profile/${r.player.id}`} style={{ color: "var(--text)" }}>
                     {r.player.displayName}
@@ -366,12 +372,17 @@ function UnplayedList({
               <form action={reportFromDivisionAction} style={{ display: "flex", gap: 4, alignItems: "center" }}>
                 <input type="hidden" name="divisionId" value={divisionId} />
                 <input type="hidden" name="opponentId" value={opponent.id} />
-                <select name="result" defaultValue="2-0" style={{ fontSize: 11, padding: "1px 4px" }}>
-                  <option value="2-0">I won 2-0</option>
-                  <option value="1-1">Draw 1-1</option>
-                  <option value="0-2">I lost 0-2</option>
-                </select>
-                <button type="submit" style={{ fontSize: 11, padding: "1px 8px" }}>Report</button>
+                <FormSelect
+                  name="result"
+                  defaultValue="2-0"
+                  size="sm"
+                  options={[
+                    { value: "2-0", label: "I won 2-0" },
+                    { value: "1-1", label: "Draw 1-1" },
+                    { value: "0-2", label: "I lost 0-2" },
+                  ]}
+                />
+                <Button type="submit" size="sm">Report</Button>
               </form>
             )}
             {!viewerIsPlayer && isAdmin && (
@@ -379,12 +390,18 @@ function UnplayedList({
                 <input type="hidden" name="divisionId" value={divisionId} />
                 <input type="hidden" name="playerAId" value={m.a.id} />
                 <input type="hidden" name="playerBId" value={m.b.id} />
-                <select name="result" defaultValue="2-0" style={{ fontSize: 11, padding: "1px 4px" }} title="Result from playerA's POV">
-                  <option value="2-0">{m.a.displayName} 2-0</option>
-                  <option value="1-1">Draw 1-1</option>
-                  <option value="0-2">{m.b.displayName} 2-0</option>
-                </select>
-                <button type="submit" className="secondary" style={{ fontSize: 11, padding: "1px 8px" }}>Record</button>
+                <FormSelect
+                  name="result"
+                  defaultValue="2-0"
+                  size="sm"
+                  title="Result from playerA's POV"
+                  options={[
+                    { value: "2-0", label: `${m.a.displayName} 2-0` },
+                    { value: "1-1", label: "Draw 1-1" },
+                    { value: "0-2", label: `${m.b.displayName} 2-0` },
+                  ]}
+                />
+                <Button type="submit" variant="secondary" size="sm">Record</Button>
               </form>
             )}
           </li>
@@ -504,14 +521,14 @@ function AdminSection({
         </p>
         <form action={bulkAddMembers}>
           <input type="hidden" name="divisionId" value={divisionId} />
-          <textarea
+          <Textarea
             name="lines"
             rows={8}
             placeholder={"123456789012345678\n234567890123456789\n# comment lines are ok\n<@345678901234567890>"}
             style={{ width: "100%", fontFamily: "ui-monospace, monospace", fontSize: 12 }}
             required
           />
-          <button type="submit" style={{ marginTop: 6 }}>Add all to division</button>
+          <Button type="submit" className="mt-1.5">Add all to division</Button>
         </form>
       </details>
 
@@ -524,14 +541,14 @@ function AdminSection({
         </p>
         <form action={bulkRecordPairings}>
           <input type="hidden" name="divisionId" value={divisionId} />
-          <textarea
+          <Textarea
             name="lines"
             rows={8}
             placeholder={"123456789012345678 234567890123456789 2-0\n123456789012345678 345678901234567890 1-1"}
             style={{ width: "100%", fontFamily: "ui-monospace, monospace", fontSize: 12 }}
             required
           />
-          <button type="submit" style={{ marginTop: 6 }}>Record all pairings</button>
+          <Button type="submit" className="mt-1.5">Record all pairings</Button>
         </form>
       </details>
 
@@ -544,7 +561,7 @@ function AdminSection({
         </p>
         <form action={addDivisionMemberByDiscordId} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           <input type="hidden" name="divisionId" value={division.id} />
-          <input
+          <Input
             type="text"
             name="discordId"
             placeholder="Discord ID (17-20 digits)"
@@ -552,13 +569,13 @@ function AdminSection({
             pattern="\d{17,20}"
             style={{ flex: "1 1 200px" }}
           />
-          <input
+          <Input
             type="text"
             name="displayName"
             placeholder="Display name override (optional)"
             style={{ flex: "1 1 200px" }}
           />
-          <button type="submit">Add to division</button>
+          <Button type="submit">Add to division</Button>
         </form>
       </div>
 
@@ -592,33 +609,34 @@ function AdminSection({
                       <form action={reactivateDivisionMember}>
                         <input type="hidden" name="divisionId" value={division.id} />
                         <input type="hidden" name="playerId" value={m.playerId} />
-                        <button type="submit" className="secondary" style={{ fontSize: 11 }}>Reactivate</button>
+                        <Button type="submit" variant="secondary" size="sm">Reactivate</Button>
                       </form>
                     ) : (
                       <form action={dropDivisionMember}>
                         <input type="hidden" name="divisionId" value={division.id} />
                         <input type="hidden" name="playerId" value={m.playerId} />
-                        <button
+                        <Button
                           type="submit"
-                          className="secondary"
-                          style={{ fontSize: 11 }}
+                          variant="secondary"
+                          size="sm"
                           title="Mark dropped — keeps played pairings, voids unplayed"
                         >
                           Drop
-                        </button>
+                        </Button>
                       </form>
                     )}
                     <form action={removeDivisionMember}>
                       <input type="hidden" name="divisionId" value={division.id} />
                       <input type="hidden" name="playerId" value={m.playerId} />
-                      <button
+                      <Button
                         type="submit"
-                        className="secondary"
-                        style={{ fontSize: 11, color: "#e74c3c" }}
+                        variant="secondary"
+                        size="sm"
+                        className="text-[#e74c3c]"
                         title="Hard remove: deletes membership + ALL their pairings in this division"
                       >
                         Remove
-                      </button>
+                      </Button>
                     </form>
                   </td>
                 </tr>
@@ -653,18 +671,22 @@ function AdminSection({
                   <td>
                     <form action={overridePairing} style={{ display: "flex", gap: 4 }}>
                       <input type="hidden" name="pairingId" value={p.id} />
-                      <select name="result" defaultValue={`${p.gamesWonA}-${p.gamesWonB}` as string}>
-                        <option value="2-0">{p.playerA.displayName} 2-0</option>
-                        <option value="1-1">1-1 draw</option>
-                        <option value="0-2">{p.playerB.displayName} 2-0</option>
-                      </select>
-                      <button type="submit">Override</button>
+                      <FormSelect
+                        name="result"
+                        defaultValue={`${p.gamesWonA}-${p.gamesWonB}`}
+                        options={[
+                          { value: "2-0", label: `${p.playerA.displayName} 2-0` },
+                          { value: "1-1", label: "1-1 draw" },
+                          { value: "0-2", label: `${p.playerB.displayName} 2-0` },
+                        ]}
+                      />
+                      <Button type="submit">Override</Button>
                     </form>
                   </td>
                   <td>
                     <form action={deletePairing}>
                       <input type="hidden" name="pairingId" value={p.id} />
-                      <button type="submit" className="danger">Delete</button>
+                      <Button type="submit" variant="destructive">Delete</Button>
                     </form>
                   </td>
                 </tr>
@@ -688,24 +710,24 @@ function AdminSection({
           <input type="hidden" name="divisionId" value={divisionId} />
           <label style={{ fontSize: 12 }}>
             Winner{" "}
-            <select name="winnerId" required defaultValue="">
-              <option value="" disabled>— winner —</option>
-              {members.filter((m) => m.status === "ACTIVE").map((m) => (
-                <option key={m.playerId} value={m.playerId}>{m.player.displayName}</option>
-              ))}
-            </select>
+            <FormSelect
+              name="winnerId"
+              required
+              placeholder="— winner —"
+              options={members.filter((m) => m.status === "ACTIVE").map((m) => ({ value: m.playerId, label: m.player.displayName }))}
+            />
           </label>
           <label style={{ fontSize: 12 }}>
             DQ&apos;d{" "}
-            <select name="loserId" required defaultValue="">
-              <option value="" disabled>— loser —</option>
-              {members.filter((m) => m.status === "ACTIVE").map((m) => (
-                <option key={m.playerId} value={m.playerId}>{m.player.displayName}</option>
-              ))}
-            </select>
+            <FormSelect
+              name="loserId"
+              required
+              placeholder="— loser —"
+              options={members.filter((m) => m.status === "ACTIVE").map((m) => ({ value: m.playerId, label: m.player.displayName }))}
+            />
           </label>
-          <input type="text" name="reason" required placeholder="Reason (admin-only)" style={{ flex: "1 1 200px" }} />
-          <button type="submit">Record DQ</button>
+          <Input type="text" name="reason" required placeholder="Reason (admin-only)" style={{ flex: "1 1 200px" }} />
+          <Button type="submit">Record DQ</Button>
         </form>
       </div>
 
@@ -745,9 +767,9 @@ function AdminSection({
                         <input type="hidden" name="divisionId" value={division.id} />
                         <input type="hidden" name="p1" value={s.playerAId} />
                         <input type="hidden" name="p2" value={s.playerBId} />
-                        <button type="submit" className="muted" style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontSize: 11 }}>
+                        <Button type="submit" variant="ghost" size="sm" className="text-[#e74c3c]">
                           delete
-                        </button>
+                        </Button>
                       </form>
                     </td>
                   </tr>
@@ -758,27 +780,53 @@ function AdminSection({
         )}
         <form action={recordShootout} style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
           <input type="hidden" name="divisionId" value={division.id} />
-          <select name="p1" required defaultValue="" style={{ minWidth: 140 }}>
-            <option value="" disabled>p1…</option>
-            {members.map((m) => (
-              <option key={`s1-${m.playerId}`} value={m.playerId}>{m.player.displayName}</option>
-            ))}
-          </select>
+          <FormSelect
+            name="p1"
+            required
+            triggerClassName="min-w-[140px]"
+            placeholder="p1…"
+            options={members.map((m) => ({ value: m.playerId, label: m.player.displayName }))}
+          />
           <span className="muted">vs</span>
-          <select name="p2" required defaultValue="" style={{ minWidth: 140 }}>
-            <option value="" disabled>p2…</option>
-            {members.map((m) => (
-              <option key={`s2-${m.playerId}`} value={m.playerId}>{m.player.displayName}</option>
-            ))}
-          </select>
+          <FormSelect
+            name="p2"
+            required
+            triggerClassName="min-w-[140px]"
+            placeholder="p2…"
+            options={members.map((m) => ({ value: m.playerId, label: m.player.displayName }))}
+          />
           <span className="muted">winner:</span>
-          <select name="winnerId" required defaultValue="" style={{ minWidth: 140 }}>
-            <option value="" disabled>winner…</option>
-            {members.map((m) => (
-              <option key={`sw-${m.playerId}`} value={m.playerId}>{m.player.displayName}</option>
-            ))}
-          </select>
-          <button type="submit">Record showdown</button>
+          <FormSelect
+            name="winnerId"
+            required
+            triggerClassName="min-w-[140px]"
+            placeholder="winner…"
+            options={members.map((m) => ({ value: m.playerId, label: m.player.displayName }))}
+          />
+          <Button type="submit">Record showdown</Button>
+        </form>
+      </div>
+
+      {/* Resolve a tie of ANY size (3-way+) — type a placement per tied player;
+          equal numbers stay tied with each other, so you can pick the winner
+          and leave the rest level. Writes the showdowns that encode it. */}
+      <div className="card">
+        <strong>⚖ Resolve a tie (any size)</strong>
+        <p className="muted" style={{ fontSize: 12 }}>
+          For a 3-way+ tie the single showdown above can&apos;t express. Type a placement for the
+          tied players — <strong>1 = winner</strong>. Players with the <strong>same number stay tied</strong>{" "}
+          with each other (e.g. <code>1, 2, 2</code> = one winner, the other two left level). Leave
+          everyone else blank. Re-submitting overwrites this group.
+        </p>
+        <form action={resolveTieAction} style={{ display: "grid", gap: 4, maxWidth: 320 }}>
+          <input type="hidden" name="divisionId" value={division.id} />
+          {members.map((m) => (
+            <label key={m.playerId} style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: 13 }}>{m.player.displayName}</span>
+              <Input type="number" name={`place_${m.playerId}`} min={1} placeholder="—" className="w-16" />
+            </label>
+          ))}
+          <Button type="submit" variant="secondary" style={{ marginTop: 4 }}>Resolve tie</Button>
         </form>
       </div>
 
@@ -806,13 +854,16 @@ function AdminSection({
                     <input type="hidden" name="divisionId" value={division.id} />
                     <input type="hidden" name="playerAId" value={a.id} />
                     <input type="hidden" name="playerBId" value={b.id} />
-                    <select name="result" defaultValue="">
-                      <option value="">— pick result —</option>
-                      <option value="2-0">{a.displayName} 2-0</option>
-                      <option value="1-1">1-1 draw</option>
-                      <option value="0-2">{b.displayName} 2-0</option>
-                    </select>
-                    <button type="submit">Record</button>
+                    <FormSelect
+                      name="result"
+                      placeholder="— pick result —"
+                      options={[
+                        { value: "2-0", label: `${a.displayName} 2-0` },
+                        { value: "1-1", label: "1-1 draw" },
+                        { value: "0-2", label: `${b.displayName} 2-0` },
+                      ]}
+                    />
+                    <Button type="submit">Record</Button>
                   </form>
                 </td>
               </tr>

@@ -2,6 +2,9 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/admin";
 import { loadDeckBansPage } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
+import { Button } from "@/components/ui/button";
+import { FormSelect } from "@/components/FormSelect";
+import { Input } from "@/components/ui/input";
 import { AdminNav } from "@/components/AdminNav";
 import { CANONICAL_DECKS, CANONICAL_STAKES, deckDescription, stakeDescription } from "@/lib/balatro-info";
 import defaults from "@/lib/match-defaults.json";
@@ -100,9 +103,9 @@ export default async function DeckSelectionPage({
             <p className="muted">Create one with Balatro&apos;s stock decks/stakes, or start from scratch.</p>
             <div style={{ display: "flex", gap: 8 }}>
               <form action={seedStockPreset}>
-                <button type="submit">
+                <Button type="submit">
                   Seed a &apos;Stock&apos; preset ({defaults.decks.length} decks, {defaults.stakes.length} stakes)
-                </button>
+                </Button>
               </form>
               <CreatePresetForm seedAvailable={false} />
             </div>
@@ -194,14 +197,14 @@ function PresetSidebar({
 function CreatePresetForm({ seedAvailable }: { seedAvailable: boolean }) {
   return (
     <form action={createPreset} style={{ display: "grid", gap: 6 }}>
-      <input type="text" name="name" placeholder="New preset name" required />
+      <Input type="text" name="name" placeholder="New preset name" required />
       {seedAvailable && (
         <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}>
           <input type="checkbox" name="seedDefaults" defaultChecked />
           Pre-fill with Balatro defaults
         </label>
       )}
-      <button type="submit">Create preset</button>
+      <Button type="submit">Create preset</Button>
     </form>
   );
 }
@@ -225,14 +228,14 @@ function PresetEditor({
           <form action={renamePreset} style={{ display: "flex", gap: 6, alignItems: "center", flex: 1 }}>
             <input type="hidden" name="id" value={preset.id} />
             <strong style={{ marginRight: 4 }}>Name:</strong>
-            <input type="text" name="name" defaultValue={preset.name} required style={{ flex: 1 }} />
-            <button type="submit">Save name</button>
+            <Input type="text" name="name" defaultValue={preset.name} required style={{ flex: 1 }} />
+            <Button type="submit">Save name</Button>
           </form>
           <form action={deletePreset}>
             <input type="hidden" name="id" value={preset.id} />
-            <button type="submit" className="secondary" style={{ color: "#e74c3c" }}>
+            <Button type="submit" variant="secondary" className="text-[#e74c3c]">
               Delete preset
-            </button>
+            </Button>
           </form>
         </div>
         <p className="muted" style={{ marginTop: 8 }}>
@@ -246,23 +249,23 @@ function PresetEditor({
           <form action={setPresetRole}>
             <input type="hidden" name="id" value={preset.id} />
             <input type="hidden" name="role" value={SEASON_DEFAULT_PRESET_ID_KEY} />
-            <button type="submit" disabled={isSeasonDefault}>
+            <Button type="submit" disabled={isSeasonDefault}>
               {isSeasonDefault ? "✓ Used as Standard (league bans/picks)" : "Use as Standard (league bans/picks)"}
-            </button>
+            </Button>
           </form>
           <form action={setPresetRole}>
             <input type="hidden" name="id" value={preset.id} />
             <input type="hidden" name="role" value={CASUAL_PRESET_ID_KEY} />
-            <button type="submit" disabled={isCasual}>
+            <Button type="submit" disabled={isCasual}>
               {isCasual ? "✓ Used for /challenge" : "Use for /challenge"}
-            </button>
+            </Button>
           </form>
           <form action={setPresetRole}>
             <input type="hidden" name="id" value={preset.id} />
             <input type="hidden" name="role" value={CUSTOM_COMBO_PRESET_ID_KEY} />
-            <button type="submit" disabled={isCustomCombo}>
+            <Button type="submit" disabled={isCustomCombo}>
               {isCustomCombo ? "✓ Used as Custom (custom-combo picker)" : "Use as Custom (custom-combo picker)"}
-            </button>
+            </Button>
           </form>
         </div>
       </div>
@@ -327,17 +330,14 @@ function ListEditor({
       <strong>{title} ({items.length})</strong>
       <form action={addAction} style={{ display: "flex", gap: 6, marginTop: 8 }}>
         <input type="hidden" name="id" value={presetId} />
-        <select name="name" required defaultValue="" style={{ flex: 1 }}>
-          <option value="" disabled>
-            {available.length === 0 ? `All ${title.toLowerCase()} added` : `Add a ${title.toLowerCase().replace(/s$/, "")}…`}
-          </option>
-          {available.map((c) => (
-            <option key={c.name} value={c.name}>
-              {c.name} — {c.description}
-            </option>
-          ))}
-        </select>
-        <button type="submit" disabled={available.length === 0}>Add</button>
+        <FormSelect
+          name="name"
+          required
+          triggerClassName="flex-1"
+          placeholder={available.length === 0 ? `All ${title.toLowerCase()} added` : `Add a ${title.toLowerCase().replace(/s$/, "")}…`}
+          options={available.map((c) => ({ value: c.name, label: `${c.name} — ${c.description}` }))}
+        />
+        <Button type="submit" disabled={available.length === 0}>Add</Button>
       </form>
       <ul style={{ marginTop: 12, padding: 0, listStyle: "none" }}>
         {items.map((name) => (
@@ -379,18 +379,9 @@ function ListEditor({
             <form action={removeAction}>
               <input type="hidden" name="id" value={presetId} />
               <input type="hidden" name="name" value={name} />
-              <button
-                type="submit"
-                className="muted"
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#e74c3c",
-                  cursor: "pointer",
-                }}
-              >
+              <Button type="submit" variant="ghost" size="sm" className="text-[#e74c3c]">
                 remove
-              </button>
+              </Button>
             </form>
           </li>
         ))}

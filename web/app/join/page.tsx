@@ -8,6 +8,7 @@
 // All data flows through loadJoinPageData; mutations live in actions.ts.
 
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { auth } from "@/auth";
 import { isAdminUser } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
@@ -222,9 +223,7 @@ export default async function JoinPage({
                       </span>
                       <form action={withdrawFromJoinAction}>
                         <input type="hidden" name="roundId" value={data.openRound.id} />
-                        <button type="submit" className="secondary" style={{ fontSize: 12 }}>
-                          Withdraw
-                        </button>
+                        <Button type="submit" variant="secondary" size="sm">Withdraw</Button>
                       </form>
                     </div>
                     <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
@@ -235,20 +234,9 @@ export default async function JoinPage({
                 ) : (
                   <form action={signupFromJoinAction}>
                     <input type="hidden" name="roundId" value={data.openRound.id} />
-                    <button
-                      type="submit"
-                      style={{
-                        background: "#2ecc71",
-                        color: "white",
-                        padding: "8px 16px",
-                        borderRadius: 4,
-                        border: "none",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                    >
+                    <Button type="submit" className="bg-[var(--success)] text-white hover:opacity-90">
                       🃏 Sign me up
-                    </button>
+                    </Button>
                     <p className="muted" style={{ fontSize: 11, marginTop: 6 }}>
                       You can also click the <strong>Sign Up</strong> button on the signup post in Discord.
                       Both create the same registration.
@@ -268,27 +256,12 @@ export default async function JoinPage({
                       <span style={{ color: "#2ecc71", fontWeight: 600 }}>
                         ✓ You'll be notified when signups open.
                       </span>
-                      <button type="submit" className="secondary" style={{ fontSize: 12 }}>
-                        Turn off
-                      </button>
+                      <Button type="submit" variant="secondary" size="sm">Turn off</Button>
                     </div>
                   </form>
                 ) : (
                   <form action={subscribeFromJoinAction}>
-                    <button
-                      type="submit"
-                      style={{
-                        background: "#5865f2",
-                        color: "white",
-                        padding: "8px 16px",
-                        borderRadius: 4,
-                        border: "none",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                    >
-                      🔔 Notify me when next season opens
-                    </button>
+                    <Button type="submit">🔔 Notify me when next season opens</Button>
                     <p className="muted" style={{ fontSize: 11, marginTop: 6 }}>
                       The bot DMs you the moment the league admin opens the next signup round.
                       Manage from your <Link href="/me">profile</Link> any time.

@@ -1,17 +1,28 @@
-// Public onboarding page for new (and returning) players. Walks through
-// the signup → divisions → playing → reporting → end-of-season loop.
-// Linked from /report's footer and the site nav.
+// Onboarding page for new (and returning) players: the signup → divisions →
+// playing → reporting → end-of-season loop. Admin-only while it's a work in
+// progress — non-admins get a 404 so it doesn't surface until it's ready.
 
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { hasTier } from "@/lib/admin";
 import { SiteNav } from "@/components/SiteNav";
+import { WipBanner } from "@/components/WipBanner";
 
-export const dynamic = "force-static";
+// Must be dynamic to read the session for the admin gate (was force-static).
+export const dynamic = "force-dynamic";
 
-export default function HowToPlayPage() {
+export const metadata = {
+  title: "How to play — Balatro League",
+  robots: { index: false, follow: false },
+};
+
+export default async function HowToPlayPage() {
+  if (!(await hasTier("ADMIN"))) notFound();
   return (
     <>
       <SiteNav activePath="/how-to-play" />
       <main>
+        <WipBanner note="Draft onboarding guide — not shown to players yet." />
         <h2>How to play</h2>
         <p className="muted">
           A short guide to the Balatro League round-robin format. Skim it once and you're

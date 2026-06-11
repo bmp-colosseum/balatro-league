@@ -23,3 +23,6 @@ backups/
 
 # vitest integration: embedded postgres connection url
 .vitest-pg-url
+
+# Next.js build artifacts (stray root-level traces)
+.next/

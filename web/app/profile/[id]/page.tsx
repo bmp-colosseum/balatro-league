@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { MmrChart } from "@/components/MmrChart";
 import { auth } from "@/auth";
 import { hasTier } from "@/lib/admin";
 import { loadProfileExtras } from "@/lib/loaders/profile-extras";
@@ -9,8 +10,12 @@ import { getShowBmpMmr } from "@/lib/preferences";
 import { loadPlayerHistory } from "@/lib/profile";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { FormSelect } from "@/components/FormSelect";
 import { recordSetForPlayer, recordForfeitForPlayer } from "@/app/admin/players/actions";
-import { castEasterEggVote, reportFromProfileAction, submitProfileDispute } from "./actions";
+import { reportFromProfileAction, submitProfileDispute } from "./actions";
 import {
   resetToDiscordNameAction,
   setCustomNameAction,
@@ -84,16 +89,14 @@ export default async function ProfilePage({
     (viewerSession?.user as { discordId?: string } | undefined)?.discordId ?? null;
   const showBmpMmr = await getShowBmpMmr();
   const isAdmin = await hasTier("ADMIN");
-  const { viewer, sanji, bmpSeasonSnapshots, fallbackSnapshot, adminCtx, ownActiveDivision } = await loadProfileExtras({
+  const { viewer, bmpSeasonSnapshots, fallbackSnapshot, adminCtx, ownActiveDivision } = await loadProfileExtras({
     profilePlayerId: profile.player.id,
     profileDiscordId: profile.player.discordId,
-    profileDisplayName: profile.player.displayName,
     viewerDiscordId,
     isViewerAdmin: isAdmin,
     showBmpMmr,
   });
   const isOwnProfile = viewer.isOwnProfile;
-  const { isSanji, voterDiscordId, yesVotes, noVotes, myVote } = sanji;
   const traits = await loadPlayerTraits(profile.player.id);
   // Own-profile-only personal settings (folded in from the old /me page).
   const myPrefs = isOwnProfile
@@ -185,18 +188,24 @@ export default async function ProfilePage({
                 <form action={reportFromProfileAction} style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
                   <input type="hidden" name="profileId" value={profile.player.id} />
                   <span className="muted" style={{ fontSize: 12 }}>vs</span>
-                  <select name="opponentId" required style={{ flex: "1 1 200px" }}>
-                    <option value="">— pick an opponent —</option>
-                    {ownActiveDivision.reportableOpponents.map((o) => (
-                      <option key={o.playerId} value={o.playerId}>{o.displayName}</option>
-                    ))}
-                  </select>
-                  <select name="result" required defaultValue="2-0">
-                    <option value="2-0">2-0 (I won both)</option>
-                    <option value="1-1">1-1 (draw)</option>
-                    <option value="0-2">0-2 (I lost both)</option>
-                  </select>
-                  <button type="submit">Report</button>
+                  <FormSelect
+                    name="opponentId"
+                    required
+                    triggerClassName="flex-1 min-w-[200px]"
+                    placeholder="— pick an opponent —"
+                    options={ownActiveDivision.reportableOpponents.map((o) => ({ value: o.playerId, label: o.displayName }))}
+                  />
+                  <FormSelect
+                    name="result"
+                    required
+                    defaultValue="2-0"
+                    options={[
+                      { value: "2-0", label: "2-0 (I won both)" },
+                      { value: "1-1", label: "1-1 (draw)" },
+                      { value: "0-2", label: "0-2 (I lost both)" },
+                    ]}
+                  />
+                  <Button type="submit">Report</Button>
                 </form>
                 <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
                   Web reports are recorded immediately. The result posts to <strong>#results</strong>;
@@ -223,7 +232,7 @@ export default async function ProfilePage({
                     ✓ Subscribed (since {me.interest.subscribedAt.toISOString().slice(0, 10)}). The bot DMs you when the next season&apos;s signups open.
                   </p>
                   <form action={unsubscribeNextSeasonAction}>
-                    <button type="submit" className="secondary">Unsubscribe</button>
+                    <Button type="submit" variant="secondary">Unsubscribe</Button>
                   </form>
                 </>
               ) : (
@@ -232,7 +241,7 @@ export default async function ProfilePage({
                     Get a Discord DM the moment a new season&apos;s signups open.
                   </p>
                   <form action={subscribeNextSeasonAction}>
-                    <button type="submit">🔔 Notify me about the next season</button>
+                    <Button type="submit">🔔 Notify me about the next season</Button>
                   </form>
                 </>
               )}
@@ -244,9 +253,9 @@ export default async function ProfilePage({
               </p>
               <form action={setAutoSignupAction}>
                 <input type="hidden" name="next" value={me.autoSignup ? "0" : "1"} />
-                <button type="submit" className={me.autoSignup ? "secondary" : ""}>
+                <Button type="submit" variant={me.autoSignup ? "secondary" : "default"}>
                   {me.autoSignup ? "Turn off auto-sign-up" : "🔁 Auto-sign me up next season"}
-                </button>
+                </Button>
               </form>
             </div>
 
@@ -259,72 +268,17 @@ export default async function ProfilePage({
               </p>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <form action={setCustomNameAction} style={{ display: "flex", gap: 6, flex: "1 1 280px" }}>
-                  <input type="text" name="displayName" defaultValue={profile.player.displayName} required maxLength={64} style={{ flex: 1 }} />
-                  <button type="submit">Save custom name</button>
+                  <Input type="text" name="displayName" defaultValue={profile.player.displayName} required maxLength={64} style={{ flex: 1 }} />
+                  <Button type="submit">Save custom name</Button>
                 </form>
                 {me.hasCustomDisplayName && (
                   <form action={resetToDiscordNameAction}>
-                    <button type="submit" className="secondary">↻ Reset to auto</button>
+                    <Button type="submit" variant="secondary">↻ Reset to auto</Button>
                   </form>
                 )}
               </div>
             </div>
           </>
-        )}
-
-        {isSanji && (
-          <div className="card" style={{ marginTop: 16, borderColor: "#e67e22" }}>
-            <strong style={{ color: "#e67e22" }}>⚖️ Should we impeach {profile.player.displayName}?</strong>
-            <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <form action={castEasterEggVote} style={{ display: "inline" }}>
-                <input type="hidden" name="targetKey" value="sanji" />
-                <input type="hidden" name="playerId" value={profile.player.id} />
-                <input type="hidden" name="side" value="yes" />
-                <button
-                  type="submit"
-                  disabled={!voterDiscordId}
-                  style={{
-                    background: myVote === "yes" ? "#c0392b" : "rgba(231,76,60,0.2)",
-                    color: myVote === "yes" ? "#fff" : "#e74c3c",
-                    border: "1px solid #e74c3c",
-                    padding: "6px 12px",
-                    borderRadius: 4,
-                    cursor: voterDiscordId ? "pointer" : "not-allowed",
-                    fontWeight: 600,
-                  }}
-                >
-                  🔨 Impeach ({yesVotes})
-                </button>
-              </form>
-              <form action={castEasterEggVote} style={{ display: "inline" }}>
-                <input type="hidden" name="targetKey" value="sanji" />
-                <input type="hidden" name="playerId" value={profile.player.id} />
-                <input type="hidden" name="side" value="no" />
-                <button
-                  type="submit"
-                  disabled={!voterDiscordId}
-                  style={{
-                    background: myVote === "no" ? "#27ae60" : "rgba(46,204,113,0.2)",
-                    color: myVote === "no" ? "#fff" : "#2ecc71",
-                    border: "1px solid #2ecc71",
-                    padding: "6px 12px",
-                    borderRadius: 4,
-                    cursor: voterDiscordId ? "pointer" : "not-allowed",
-                    fontWeight: 600,
-                  }}
-                >
-                  🕊️ Keep ({noVotes})
-                </button>
-              </form>
-              <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
-                {voterDiscordId
-                  ? myVote
-                    ? `You voted ${myVote === "yes" ? "impeach" : "keep"} — click the other to switch.`
-                    : "Cast your one vote."
-                  : "Sign in with Discord to vote."}
-              </span>
-            </div>
-          </div>
         )}
 
         {(bmpSeasonSnapshots.length > 0 || fallbackSnapshot) && (
@@ -335,6 +289,14 @@ export default async function ProfilePage({
                 from <a href={`https://balatromp.com/players/${profile.player.discordId}`} target="_blank" rel="noopener">balatromp.com</a>
               </span>
             </div>
+            {bmpSeasonSnapshots.filter((s) => s.rankedMmr != null).length >= 2 && (
+              <MmrChart
+                data={[...bmpSeasonSnapshots]
+                  .reverse()
+                  .filter((s) => s.rankedMmr != null)
+                  .map((s) => ({ season: formatBmpSeason(s.bmpSeason), mmr: s.rankedMmr as number, peak: s.peakMmr }))}
+              />
+            )}
             {bmpSeasonSnapshots.length > 0 ? (
               <table className="responsive-table" style={{ fontSize: 12, marginTop: 4, width: "100%" }}>
                 <thead>
@@ -408,18 +370,23 @@ export default async function ProfilePage({
                 <form action={recordSetForPlayer} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   <input type="hidden" name="divisionId" value={adminCtx.divisionId} />
                   <input type="hidden" name="playerId" value={profile.player.id} />
-                  <select name="opponentId" required style={{ flex: "1 1 200px" }}>
-                    <option value="">— pick opponent —</option>
-                    {adminCtx.opponents.map((o) => (
-                      <option key={o.playerId} value={o.playerId}>{o.displayName}</option>
-                    ))}
-                  </select>
-                  <select name="result" defaultValue="2-0">
-                    <option value="2-0">{profile.player.displayName} won 2-0</option>
-                    <option value="1-1">1-1 draw</option>
-                    <option value="0-2">{profile.player.displayName} lost 0-2</option>
-                  </select>
-                  <button type="submit">Record</button>
+                  <FormSelect
+                    name="opponentId"
+                    required
+                    triggerClassName="flex-1 min-w-[200px]"
+                    placeholder="— pick opponent —"
+                    options={adminCtx.opponents.map((o) => ({ value: o.playerId, label: o.displayName }))}
+                  />
+                  <FormSelect
+                    name="result"
+                    defaultValue="2-0"
+                    options={[
+                      { value: "2-0", label: `${profile.player.displayName} won 2-0` },
+                      { value: "1-1", label: "1-1 draw" },
+                      { value: "0-2", label: `${profile.player.displayName} lost 0-2` },
+                    ]}
+                  />
+                  <Button type="submit">Record</Button>
                 </form>
               </>
             ) : (
@@ -443,18 +410,23 @@ export default async function ProfilePage({
               <form action={recordForfeitForPlayer} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                 <input type="hidden" name="divisionId" value={adminCtx.divisionId} />
                 <input type="hidden" name="playerId" value={profile.player.id} />
-                <select name="opponentId" required style={{ flex: "1 1 180px" }}>
-                  <option value="">— pick opponent —</option>
-                  {adminCtx.allOpponents.map((o) => (
-                    <option key={o.playerId} value={o.playerId}>{o.displayName}</option>
-                  ))}
-                </select>
-                <select name="winner" defaultValue="self">
-                  <option value="self">{profile.player.displayName} wins by DQ</option>
-                  <option value="opponent">opponent wins by DQ</option>
-                </select>
-                <input type="text" name="reason" required placeholder="Reason (admin-only)" style={{ flex: "1 1 200px" }} />
-                <button type="submit">Record DQ</button>
+                <FormSelect
+                  name="opponentId"
+                  required
+                  triggerClassName="flex-1 min-w-[180px]"
+                  placeholder="— pick opponent —"
+                  options={adminCtx.allOpponents.map((o) => ({ value: o.playerId, label: o.displayName }))}
+                />
+                <FormSelect
+                  name="winner"
+                  defaultValue="self"
+                  options={[
+                    { value: "self", label: `${profile.player.displayName} wins by DQ` },
+                    { value: "opponent", label: "opponent wins by DQ" },
+                  ]}
+                />
+                <Input type="text" name="reason" required placeholder="Reason (admin-only)" style={{ flex: "1 1 200px" }} />
+                <Button type="submit">Record DQ</Button>
               </form>
             </details>
           </div>
@@ -767,22 +739,26 @@ export default async function ProfilePage({
                                     <input type="hidden" name="pairingId" value={m.pairingId} />
                                     <input type="hidden" name="profileId" value={profile.player.id} />
                                     <label style={{ fontSize: 11 }} className="muted">What it should be (your POV):</label>
-                                    <select name="proposed" defaultValue="unsure" style={{ fontSize: 12 }}>
-                                      <option value="unsure">— not sure, let helper decide —</option>
-                                      <option value="2-0">2-0 (I won both)</option>
-                                      <option value="1-1">1-1 (draw)</option>
-                                      <option value="0-2">0-2 (I lost both)</option>
-                                    </select>
-                                    <textarea
+                                    <FormSelect
+                                      name="proposed"
+                                      defaultValue="unsure"
+                                      options={[
+                                        { value: "unsure", label: "— not sure, let helper decide —" },
+                                        { value: "2-0", label: "2-0 (I won both)" },
+                                        { value: "1-1", label: "1-1 (draw)" },
+                                        { value: "0-2", label: "0-2 (I lost both)" },
+                                      ]}
+                                    />
+                                    <Textarea
                                       name="reason"
                                       rows={2}
                                       placeholder="Optional context for the helper…"
                                       maxLength={500}
                                       style={{ fontSize: 12, width: "100%" }}
                                     />
-                                    <button type="submit" className="secondary" style={{ fontSize: 11 }}>
+                                    <Button type="submit" variant="secondary" size="sm">
                                       Submit dispute
-                                    </button>
+                                    </Button>
                                   </form>
                                 </details>
                               </td>

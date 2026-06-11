@@ -1,5 +1,6 @@
 import { signIn } from "@/auth";
 import { SiteNav } from "@/components/SiteNav";
+import { Button } from "@/components/ui/button";
 
 export default function SignInPage() {
   async function loginAction() {
@@ -18,7 +19,7 @@ export default function SignInPage() {
             signup rounds.
           </p>
           <form action={loginAction}>
-            <button type="submit">Login with Discord</button>
+            <Button type="submit">Login with Discord</Button>
           </form>
         </div>
       </main>

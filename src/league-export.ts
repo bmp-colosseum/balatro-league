@@ -189,7 +189,7 @@ export function exportFilename(): string {
 // FULL dump — every row of every model, for an exact rebuild after a schema
 // change. Shared by the export:full script and the daily Discord backup.
 const FULL_MODELS = [
-  "player", "playerMmrSnapshot", "easterEggVote", "season", "signupRound", "signup",
+  "player", "playerMmrSnapshot", "season", "signupRound", "signup",
   "matchConfigPreset", "matchSession", "leagueConfig", "seasonInterest", "roleBinding",
   "tierTemplate", "tier", "division", "divisionStandings", "divisionMember",
   "match", "game", "gameDeck", "leagueRulesTemplate", "adminAuditEvent",

@@ -7,17 +7,21 @@
 // exact when editing. Same static-guide shape as /how-to-play and /traits.
 
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { hasTier } from "@/lib/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { Sprite } from "@/components/Sprite";
+import { WipBanner } from "@/components/WipBanner";
 
-export const dynamic = "force-static";
+// Admin-only while it's a work in progress: non-admins get a 404 so the page
+// doesn't surface at all (not even by direct URL). Must be dynamic to read the
+// session — can't stay force-static. Also kept noindex pending SurCats' okay.
+export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Multiplayer changes — Balatro League",
   description:
     "How Balatro Multiplayer's ranked ruleset differs from vanilla Balatro: the shop queue, consumables, jokers, packs, and more.",
-  // Unlisted for now: reachable by direct URL but kept out of nav and search
-  // engines until SurCats okays republishing the source doc.
   robots: { index: false, follow: false },
 };
 
@@ -33,11 +37,13 @@ const SECTIONS: { id: string; label: string }[] = [
   { id: "misc", label: "Misc" },
 ];
 
-export default function ChangesPage() {
+export default async function ChangesPage() {
+  if (!(await hasTier("ADMIN"))) notFound();
   return (
     <>
       <SiteNav activePath="/changes" />
       <main>
+        <WipBanner note="Draft of the MP-changes reference — hidden until SurCats okays republishing the source doc." />
         <h2>What&apos;s different in Balatro Multiplayer</h2>
         <p className="muted">
           Multiplayer changes a lot of vanilla Balatro&apos;s mechanics and RNG. This page collects

@@ -27,6 +27,23 @@ jobs:
       # no Docker service needed on the runner.
       - run: npm run test:integration
 
-  # NOTE: a web job (cd web && tsc --noEmit / next build) is a worthwhile
-  # follow-up, but needs next-env.d.ts generated first (a fresh checkout has
-  # none), so it's intentionally omitted here rather than shipped red.
+  web-e2e:
+    name: web — E2E (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npx playwright install --with-deps chromium
+        working-directory: web
+      # Fully hermetic: e2e/server.mjs boots an embedded Postgres + the web app
+      # with test env (dummy Discord creds, no bot) — no real Discord, no
+      # external services. Also catches build/module-resolution errors, since
+      # the global layout (⌘K palette) is compiled on the first page load.
+      - run: npm run e2e
+        working-directory: web
