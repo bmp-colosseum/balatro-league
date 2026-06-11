@@ -20,7 +20,10 @@ import defaults from "@/lib/match-defaults.json";
 
 const DEMO_SUBTITLE = "E2E Demo";
 const POOL_SIZE = 9;
-const WRITE_CONCURRENCY = 12;
+// Conservative pool footprint: at most this many concurrent DB writes, so the
+// seed coexists with the web + bot Prisma pools under the DB's max_connections.
+// (Higher values were quick to exhaust a small Postgres' client limit.)
+const WRITE_CONCURRENCY = 5;
 
 interface DeckEntry {
   deck: string;
@@ -367,18 +370,18 @@ async function nextRoster(prevSeasonId: string, churn: number, rng: () => number
   const kept = shuffled.slice(0, keepMin);
   const dropCount = returners.length - kept.length;
   const maxRating = kept.reduce((mx, p) => Math.max(mx, p.rating ?? 0), 0);
+  // New joiners use freshly-allocated ids (never reused), so one batched insert
+  // is safe — no existing rows to update.
   const newcomers: Roster[] = [];
+  const newcomerRows: { discordId: string; displayName: string; rating: number }[] = [];
   for (let k = 0; k < dropCount; k++) {
     const idx = allocId();
     const discordId = `e2e-${idx}`;
     const displayName = `Demo Player ${idx + 1}`;
-    await prisma.player.upsert({
-      where: { discordId },
-      create: { discordId, displayName, rating: maxRating + 1 + k },
-      update: { displayName, rating: maxRating + 1 + k },
-    });
     newcomers.push({ discordId, displayName });
+    newcomerRows.push({ discordId, displayName, rating: maxRating + 1 + k });
   }
+  if (newcomerRows.length) await prisma.player.createMany({ data: newcomerRows, skipDuplicates: true });
   return [...kept.map((p) => ({ discordId: p.discordId, displayName: p.displayName })), ...newcomers];
 }
 
@@ -413,18 +416,20 @@ export async function runSeedE2E(opts: SeedE2EOptions, actor: AuditActor): Promi
   let idCounter = 0;
   const allocId = () => idCounter++;
 
+  // Season-1 roster. Build the rows in memory, then one batched insert instead
+  // of N sequential upsert round-trips. reset() (when requested) clears prior
+  // e2e players first; skipDuplicates keeps a no-reset re-run safe — the data is
+  // deterministic (rating = idx+1), so re-creating identical rows is a no-op.
   let roster: Roster[] = [];
+  const seedPlayers: { discordId: string; displayName: string; rating: number }[] = [];
   for (let i = 0; i < players; i++) {
     const idx = allocId();
     const discordId = `e2e-${idx}`;
     const displayName = `Demo Player ${idx + 1}`;
-    await prisma.player.upsert({
-      where: { discordId },
-      create: { discordId, displayName, rating: idx + 1 },
-      update: { displayName, rating: idx + 1 },
-    });
     roster.push({ discordId, displayName });
+    seedPlayers.push({ discordId, displayName, rating: idx + 1 });
   }
+  await prisma.player.createMany({ data: seedPlayers, skipDuplicates: true });
 
   let prevSeasonId: string | null = null;
   let lastSeasonId: string | null = null;
