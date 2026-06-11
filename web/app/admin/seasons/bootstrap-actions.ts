@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/admin";
+import { requireAdmin, requireOwner } from "@/lib/admin";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import {
   ensureGuildCategory,
@@ -154,6 +155,55 @@ export async function bootstrapSeasonDiscord(formData: FormData) {
     metadata: { queuedCount: queued },
   });
 
+  revalidatePath("/admin/seasons");
+  revalidatePath(`/seasons/${id}`);
+}
+
+// Re-home a season's Discord presence to the CURRENT guild (DISCORD_GUILD_ID)
+// — for moving the league to a new server mid-season. Gameplay data is never
+// touched; only the stale guild-specific links are cleared, then the season is
+// re-bootstrapped into the new guild:
+//   1. Clear Season.discordCategoryId + every division's discordChannelId /
+//      discordRoleId / championRoleId (they point at the OLD server).
+//   2. runSeasonDiscordBootstrap → re-creates the season category, each
+//      division's channel + role, and re-assigns the role to members (who
+//      must already be in the new server).
+//
+// Prereqs (do these first): set DISCORD_GUILD_ID to the new guild, invite the
+// bot + players there, and run /league setup in the new server (re-creates the
+// league channels + staff roles/bindings). OWNER-only + typed confirm because
+// running it on the WRONG (still-valid) guild would orphan the live channels.
+export async function rehomeSeasonDiscord(formData: FormData) {
+  const { user } = await requireOwner();
+  const id = String(formData.get("id") ?? "");
+  const confirm = String(formData.get("confirm") ?? "").trim();
+  if (!id) return;
+  if (confirm !== "REHOME") {
+    redirect(`/admin/seasons?err=${encodeURIComponent('Type REHOME to confirm re-homing this season.')}`);
+  }
+  const season = await prisma.season.findUnique({ where: { id }, select: { id: true, number: true, subtitle: true } });
+  if (!season) return;
+
+  // 1) Clear the stale guild-specific links (NOT gameplay).
+  await prisma.season.update({ where: { id }, data: { discordCategoryId: null } });
+  const cleared = await prisma.division.updateMany({
+    where: { seasonId: id },
+    data: { discordChannelId: null, discordRoleId: null, championRoleId: null },
+  });
+
+  // 2) Re-bootstrap into the current guild (now that the ids are clear, none
+  // are skipped). Recreates category + division channels/roles + member roles.
+  const queued = await runSeasonDiscordBootstrap(id);
+
+  const seasonLabel = formatSeasonLabel(season);
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "season.rehome-discord",
+    targetType: "Season",
+    targetId: id,
+    summary: `Re-homed "${seasonLabel}" to the current guild — cleared ${cleared.count} divisions, queued ${queued ?? 0} re-bootstraps`,
+    metadata: { divisionsCleared: cleared.count, queued: queued ?? 0 },
+  });
   revalidatePath("/admin/seasons");
   revalidatePath(`/seasons/${id}`);
 }

@@ -19,7 +19,7 @@ import {
   unarchiveSeason,
   unendSeason,
 } from "./actions";
-import { bootstrapSeasonDiscord, setSeasonDiscordCategory } from "./bootstrap-actions";
+import { bootstrapSeasonDiscord, setSeasonDiscordCategory, rehomeSeasonDiscord } from "./bootstrap-actions";
 import { SeasonDeckPresetPicker } from "@/components/SeasonDeckPresetPicker";
 import { listGuildTextChannels } from "@/lib/discord";
 import { formatSeasonLabel, nextSeasonNumber } from "@/lib/format-season";
@@ -509,6 +509,27 @@ function DiscordBootstrap({
             {remaining === 0 ? "All divisions ready" : `Set up ${remaining} remaining division(s)`}
           </Button>
         </form>
+
+        {/* Mid-season move to a new server. Owner-only; clears the stale
+            old-guild links and re-bootstraps into the current DISCORD_GUILD_ID.
+            Gameplay data is untouched. */}
+        <details style={{ marginTop: 4 }}>
+          <summary style={{ cursor: "pointer", fontSize: 11, color: "#e67e22" }}>
+            ⇄ Re-home to a new server
+          </summary>
+          <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>
+            For moving the league to a new Discord <strong>mid-season</strong>. <strong>First:</strong> point
+            <code> DISCORD_GUILD_ID</code> at the new server, invite the bot + players, and run
+            <code> /league setup</code> there. <strong>Then</strong> this clears this season&apos;s old-server
+            channel/role links and re-creates them in the new server (re-assigning division roles). No
+            gameplay data is touched. Type <code>REHOME</code> to confirm.
+          </div>
+          <form action={rehomeSeasonDiscord} style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
+            <input type="hidden" name="id" value={season.id} />
+            <Input type="text" name="confirm" placeholder="REHOME" className="w-28 text-xs" />
+            <Button type="submit" variant="destructive" size="sm">Re-home season</Button>
+          </form>
+        </details>
       </div>
     </details>
   );
