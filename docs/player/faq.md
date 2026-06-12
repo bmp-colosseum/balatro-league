@@ -9,9 +9,9 @@ When a season's signups are open, click **Sign Up** in `#league-signups`, or go 
 (get a DM when signups open) or **🔁 Auto-sign-up** (get entered automatically).
 
 ### How am I placed into a division?
-By skill. We seed you into a **tier** (skill band) and a **division** within it,
-using your BMP rank as a starting point and your past league results once you have
-them.
+By skill — it's an **admin judgment call**, not an automatic formula. Your **BMP MMR
+helps** (as a reference), along with your past league results once you have them, but
+the admins make the final placement.
 
 ### What does my rank mean?
 Inside a division you're ranked `1, 2, 3…` by **points** (then tiebreakers). Across

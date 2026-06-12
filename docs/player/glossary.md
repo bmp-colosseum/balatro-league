@@ -14,9 +14,9 @@ One-liners for every term you'll see around the league.
 - **Real tie** — when players are equal on the whole tiebreaker chain, they **share a rank** (shown `#2 #2`) instead of being ordered alphabetically.
 - **Lives** — the 4 lives a Balatro MP game starts with. The winner's remaining lives are recorded per game and used as a tiebreaker reference.
 - **Ban/pick** — choosing the deck/stake for a game by banning down a 9-combo pool (ban 1 / ban 3 / ban 3 / pick 1 of 2).
-- **Seed** — your starting rank when placed into a season, based on your rating/BMP rank.
-- **Rating / global rank** — your skill number across the whole league; written at season end, used to place you next season.
-- **MMR** — your Balatro Multiplayer ranked rating, used as an input to your seed.
+- **Seed** — your starting placement in a season. Decided by the admins (a judgment call), with BMP MMR and past results as helping references — not an automatic formula.
+- **Rating / global rank** — your skill number across the whole league; written at season end, used to help place you next season.
+- **MMR** — your Balatro Multiplayer ranked rating. One of the references admins use when placing you — a helper, not the decider.
 - **Promotion / relegation** — moving up (promotion) or down (relegation) a tier between seasons based on where you finished.
 - **DQ / forfeit** — a result (usually 2-0) awarded by an admin without playing it out — no-show, drop-out, or rule break. Shows as "W by DQ".
 - **Dispute** — flagging a reported score as wrong so a helper/admin reviews it.

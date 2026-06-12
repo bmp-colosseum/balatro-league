@@ -13,8 +13,8 @@ for standings, profiles, and history.
 Balatro Multiplayer already has a **ranked queue** — solo-queue matchmaking against
 anonymous opponents near your MMR, with a rating you grind up and down. That's great
 for a quick game. **The league is a different thing, built *on top* of ranked, not a
-replacement for it.** In fact your ranked **MMR is what we use to seed you** when you
-join — so the two work together.
+replacement for it.** In fact your ranked **MMR is one of the things the admins look
+at when they place you** — so the two work together.
 
 What the ranked queue *doesn't* give you, and the league does:
 
