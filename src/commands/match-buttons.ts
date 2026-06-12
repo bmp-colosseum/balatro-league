@@ -29,6 +29,7 @@ import {
 } from "discord.js";
 import { MatchSessionState, Prisma, type MatchSession } from "@prisma/client";
 import { enqueueAnnounceResult } from "../queue.js";
+import { announceChallengeResult } from "../announce.js";
 import { SYSTEM_ACTOR, recordAudit } from "../audit.js";
 import { isCanonicalDeck } from "../balatro-info.js";
 import { resolveChallengesChannelId } from "../challenges-channel.js";
@@ -1519,10 +1520,27 @@ async function finalizeMatch(
     },
   });
 
-  // Casual /challenge — no Pairing write, no announce. Show result + close.
+  // Casual /challenge — no Pairing write. Refresh + close, then post a
+  // scoreline to the challenge-results feed so there's a browsable log of
+  // casual play (best-effort; falls back to #challenges if no feed configured).
   if (session.isCasual || !session.divisionId) {
     await refreshMessage(interaction, updated);
     closeMatchChannel(interaction, updated.id, updated.threadId).catch(() => {});
+    const g1s = finalGameField === "game1" ? finalGame : g1;
+    const g2s = finalGameField === "game2" ? finalGame : g2;
+    const g3s = finalGameField === "game3" ? finalGame : g3;
+    const comboOf = (g: GameState): { deck: string | null; stake: string | null } => {
+      const c = g.pickedDeckIdx !== undefined ? g.pool[g.pickedDeckIdx] : undefined;
+      return c ? { deck: c.deck, stake: c.stake } : { deck: null, stake: null };
+    };
+    announceChallengeResult({
+      sessionId: updated.id,
+      playerA: { discordId: playerA.discordId, displayName: playerA.displayName },
+      playerB: { discordId: playerB.discordId, displayName: playerB.displayName },
+      winsA: aWins,
+      winsB: bWins,
+      combos: [g1s, g2s, g3s].filter((g): g is GameState => !!g).map(comboOf),
+    }).catch(() => {});
     return;
   }
 

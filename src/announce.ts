@@ -135,3 +135,81 @@ export async function announceResult(pairingId: string): Promise<void> {
     }
   }
 }
+
+// Casual /challenge result feed. Casual matches write no Match row (no division,
+// not standings-affecting), so this takes the data inline instead of a pairing
+// id. Delivery + config precedence mirror announceResult, but with a final
+// fallback to the #challenges channel so it posts with zero extra setup. No
+// dispute button — casual results aren't recorded, so there's nothing to flag.
+export async function announceChallengeResult(opts: {
+  sessionId: string;
+  playerA: { discordId: string; displayName: string };
+  playerB: { discordId: string; displayName: string };
+  winsA: number;
+  winsB: number;
+  combos: Array<{ deck: string | null; stake: string | null }>;
+}): Promise<void> {
+  const webhookUrl =
+    (await getConfig(LeagueConfigKey.ChallengeResultsWebhookUrl)) || undefined;
+  const channelId =
+    (await getConfig(LeagueConfigKey.ChallengeResultsChannelId)) ||
+    (await getConfig(LeagueConfigKey.ChallengesChannelId)) ||
+    undefined;
+  if (!webhookUrl && !channelId) return;
+
+  const { playerA, playerB, winsA, winsB } = opts;
+  let title: string;
+  let color: number;
+  if (winsA > winsB) {
+    title = `🎴 ${playerA.displayName} beats ${playerB.displayName}`;
+    color = 0x9b59b6;
+  } else if (winsB > winsA) {
+    title = `🎴 ${playerB.displayName} beats ${playerA.displayName}`;
+    color = 0x9b59b6;
+  } else {
+    title = `🎴 ${playerA.displayName} draws ${playerB.displayName}`;
+    color = 0x95a5a6;
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle(title)
+    .setDescription(
+      `<@${playerA.discordId}> **${winsA}–${winsB}** <@${playerB.discordId}>\n_Casual challenge — not counted toward standings._`,
+    )
+    .setColor(color)
+    .setFooter({ text: "Challenge" })
+    .setTimestamp(new Date());
+  const played = opts.combos
+    .map((c, i) => {
+      const v = [c.deck, c.stake].filter(Boolean).join(" / ");
+      return v ? `Game ${i + 1}: ${v}` : null;
+    })
+    .filter(Boolean) as string[];
+  if (played.length > 0) {
+    embed.addFields({ name: "🃏 Decks played", value: played.join("\n"), inline: false });
+  }
+
+  if (channelId) {
+    try {
+      const body: RESTPostAPIChannelMessageJSONBody = { embeds: [embed.toJSON()] };
+      await rest().post(Routes.channelMessages(channelId), { body });
+      return;
+    } catch (err) {
+      console.warn("[announceChallengeResult] REST post failed:", err);
+    }
+  }
+  if (webhookUrl) {
+    try {
+      const res = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ embeds: [embed.toJSON()] }),
+      });
+      if (!res.ok) {
+        console.warn(`[announceChallengeResult] webhook failed: ${res.status} ${await res.text()}`);
+      }
+    } catch (err) {
+      console.warn("[announceChallengeResult] webhook errored:", err);
+    }
+  }
+}

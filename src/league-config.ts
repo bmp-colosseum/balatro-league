@@ -60,6 +60,13 @@ export const LeagueConfigKey = {
   // ResultsChannelId (#league-results-bot); this one is for people to post in
   // if the bot's auto-post ever has an issue.
   ResultsHumanChannelId: "results_human_channel_id",
+  // Casual /challenge result feed. When a casual match completes, the bot posts
+  // a scoreline embed here so there's a browsable log of challenge results
+  // (people use /challenge outside league play too). Resolution mirrors league
+  // results: webhook → channel id → falls back to the #challenges channel so it
+  // works with zero config. Webhook avoids the bot's global rate-limit budget.
+  ChallengeResultsWebhookUrl: "challenge_results_webhook_url",
+  ChallengeResultsChannelId: "challenge_results_channel_id",
 
   // Sign-ups-only / soft-launch mode. Set to "true" to disable every slash
   // command except /help while keeping the sign-up flow live. Use when the bot

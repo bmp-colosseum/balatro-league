@@ -35,6 +35,8 @@ const CHANNEL_KEYS = [
   { key: "bot_commands_channel_id", label: "Bot-commands channel ID", help: "Where /challenge/etc. work outside of division channels. Auto-created on bot startup if unset." },
   { key: "backup_channel_id", label: "Backup channel ID", help: "Daily league backup attachments land here. Should be staff-only." },
   { key: "challenges_channel_id", label: "Challenges channel ID", help: "Parent channel for /challenge match threads. Optional." },
+  { key: "challenge_results_channel_id", label: "Challenge results channel ID", help: "Where casual /challenge results post as a browsable feed. Defaults to the #challenges channel if unset. Right-click channel → Copy Channel ID." },
+  { key: "challenge_results_webhook_url", label: "Challenge results webhook URL", help: "Optional webhook for the casual /challenge result feed (avoids the bot's rate-limit budget). Takes priority over the channel ID. Channel → Edit → Integrations → Webhooks → copy URL." },
   { key: "devops_channel_id", label: "DevOps channel ID", help: "Queue-stall + rate-limit alerts. Tech-only." },
 ];
 
