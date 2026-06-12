@@ -31,3 +31,6 @@ backups/
 test-results/
 web/test-results/
 web/playwright-report/
+
+# match-core build output
+packages/*/dist/
