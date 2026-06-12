@@ -10,7 +10,7 @@ import {
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
 } from "discord.js";
-import { CANONICAL_DECKS, CANONICAL_STAKES, deckDescription, stakeDescription } from "../balatro-info.js";
+import { CANONICAL_DECKS, CANONICAL_STAKES, canonicalDeckIndex, canonicalStakeIndex, deckDescription, stakeDescription } from "../balatro-info.js";
 import { deckEmoji, stakeEmoji } from "../balatro-emojis.js";
 import { presetForCasualMatch, generatePool } from "../match-config.js";
 import { getLeagueSettings } from "../league-settings.js";
@@ -100,11 +100,17 @@ export const randomBans: SlashCommand = {
   async execute(interaction: ChatInputCommandInteraction) {
     const { decks, stakes } = await rollPool();
     const { matchPolicy } = await getLeagueSettings();
-    const combos = generatePool(decks, stakes, matchPolicy.poolSize);
+    // Random SELECTION of combos, then sorted by stake (difficulty) → deck so
+    // the list reads stake-first the way people think about bans.
+    const combos = generatePool(decks, stakes, matchPolicy.poolSize).sort(
+      (a, b) =>
+        canonicalStakeIndex(a.stake) - canonicalStakeIndex(b.stake) ||
+        canonicalDeckIndex(a.deck) - canonicalDeckIndex(b.deck),
+    );
     const lines = combos.map((c, i) => {
-      const deck = `${deckEmoji(c.deck) ?? ""} ${c.deck}`.trim();
       const stake = `${stakeEmoji(c.stake) ?? ""} ${c.stake}`.trim();
-      return `**${i + 1}.** ${deck} — ${stake}`;
+      const deck = `${deckEmoji(c.deck) ?? ""} ${c.deck}`.trim();
+      return `**${i + 1}.** ${stake} — ${deck}`;
     });
     const embed = new EmbedBuilder()
       .setTitle(`🎲 Random ban pool — ${combos.length} combos`)

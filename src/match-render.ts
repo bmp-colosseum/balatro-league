@@ -296,9 +296,9 @@ function renderWaitingAccept(s: MatchSession, a: Player, b: Player) {
       if (c.deck && c.stake) {
         const deckIcon = deckEmoji(c.deck) ?? "";
         const stakeIcon = stakeEmoji(c.stake) ?? "";
-        const icons = [deckIcon, stakeIcon].filter(Boolean).join(" ");
+        const icons = [stakeIcon, deckIcon].filter(Boolean).join(" ");
         comboLine =
-          `\n\n🎯 **Agreed combo** (skips ban/pick): ${icons ? `${icons} ` : ""}**${c.deck} / ${c.stake}**`;
+          `\n\n🎯 **Agreed combo** (skips ban/pick): ${icons ? `${icons} ` : ""}**${c.stake} / ${c.deck}**`;
       }
     } catch {
       // ignore — malformed customCombo just doesn't render
@@ -394,8 +394,8 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
     const poolLines = sortedRemaining.map(({ combo }, i) => {
       const di = deckEmoji(combo.deck) ?? "";
       const si = stakeEmoji(combo.stake) ?? "";
-      const icons = [di, si].filter(Boolean).join(" ");
-      return `${i + 1}. ${icons ? `${icons} ` : ""}${combo.deck} / ${combo.stake}`;
+      const icons = [si, di].filter(Boolean).join(" ");
+      return `${i + 1}. ${icons ? `${icons} ` : ""}${combo.stake} / ${combo.deck}`;
     });
     embed.setDescription(
       `🎯 **${whose.displayName}** is banning — pick **${expected}**.\n\n` +
@@ -418,15 +418,15 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
         sortedRemaining.map(({ idx, combo }) => {
           const deckDesc = deckDescription(combo.deck);
           const stakeDesc = stakeDescription(combo.stake);
-          let desc = deckDesc ?? "";
-          if (stakeDesc && desc.length + stakeDesc.length + 12 <= 100) {
-            desc = desc ? `${desc} · ${combo.stake}: ${stakeDesc}` : `${combo.stake}: ${stakeDesc}`;
+          let desc = stakeDesc ? `${combo.stake}: ${stakeDesc}` : "";
+          if (deckDesc && desc.length + deckDesc.length + 12 <= 100) {
+            desc = desc ? `${desc} · ${combo.deck}: ${deckDesc}` : `${combo.deck}: ${deckDesc}`;
           }
           return {
-            label: `${combo.deck} / ${combo.stake}`,
+            label: `${combo.stake} / ${combo.deck}`,
             value: String(idx),
             description: desc ? desc.slice(0, 100) : undefined,
-            emoji: deckEmojiPartial(combo.deck),
+            emoji: stakeEmojiPartial(combo.stake),
           };
         }),
       );
@@ -474,12 +474,12 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
       const stakeDesc = stakeDescription(combo.stake);
       const deckIcon = deckEmoji(combo.deck) ?? "";
       const stakeIcon = stakeEmoji(combo.stake) ?? "";
-      const icons = [deckIcon, stakeIcon].filter(Boolean).join(" ");
+      const icons = [stakeIcon, deckIcon].filter(Boolean).join(" ");
       const iconPrefix = icons ? `${icons} ` : "";
       return (
-        `**${i + 1}. ${iconPrefix}${combo.deck} / ${combo.stake}**` +
-        (deckDesc ? `\n  · ${combo.deck}: ${deckDesc}` : "") +
-        (stakeDesc ? `\n  · ${combo.stake} stake: ${stakeDesc}` : "")
+        `**${i + 1}. ${iconPrefix}${combo.stake} / ${combo.deck}**` +
+        (stakeDesc ? `\n  · ${combo.stake} stake: ${stakeDesc}` : "") +
+        (deckDesc ? `\n  · ${combo.deck}: ${deckDesc}` : "")
       );
     });
     embed.setDescription(
@@ -499,15 +499,15 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
         sortedPickRemaining.map(({ idx, combo }) => {
           const deckDesc = deckDescription(combo.deck);
           const stakeDesc = stakeDescription(combo.stake);
-          let desc = deckDesc ?? "";
-          if (stakeDesc && desc.length + stakeDesc.length + 12 <= 100) {
-            desc = desc ? `${desc} · ${combo.stake}: ${stakeDesc}` : `${combo.stake}: ${stakeDesc}`;
+          let desc = stakeDesc ? `${combo.stake}: ${stakeDesc}` : "";
+          if (deckDesc && desc.length + deckDesc.length + 12 <= 100) {
+            desc = desc ? `${desc} · ${combo.deck}: ${deckDesc}` : `${combo.deck}: ${deckDesc}`;
           }
           return {
-            label: `${combo.deck} / ${combo.stake}`,
+            label: `${combo.stake} / ${combo.deck}`,
             value: String(idx),
             description: desc ? desc.slice(0, 100) : undefined,
-            emoji: deckEmojiPartial(combo.deck),
+            emoji: stakeEmojiPartial(combo.stake),
           };
         }),
       );
