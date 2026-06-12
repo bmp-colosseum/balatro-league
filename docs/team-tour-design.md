@@ -1,273 +1,261 @@
 # Team Tour — Design Doc
 
-_Draft v0.1 — for review. Nothing here is built yet._
+_v0.2 — for review. Nothing built yet. Updated from the live event docs in
+`D:\STuffinside` (TT10 rules + a completed 20-team season's sheets)._
 
-A team-based BMP event (Pizza Power Team Tour): captains draft players, teams play
-weekly 1v1 best-of-3 sets, regular season → playoffs. Built on a **shared match
-core** extracted from the Balatro League app, as its **own application**.
+Pizza Power **Team Tour**: captains draft players, teams play weekly 1v1
+best-of-X sets, regular season → playoffs, persisting across seasons (rings,
+Hall of Fame). Built on a **shared match core** extracted from the Balatro
+League app, as its **own application**.
 
 ---
 
-## 1. The core insight
+## 0. Decisions locked (rounds 1–4)
 
-A single **set** in Team Tour (player vs player, bo3, white stake, 4 lives, deck
-ban/pick, report + confirm, DC rules) is — almost exactly — a **`Match`** in the
-league app. The novel part is the **team/league structure** wrapped around the
-matches. So the plan is:
+| # | Decision | Choice |
+|---|---|---|
+| Match coupling | Core `Match` is **competition-agnostic** (no `divisionId`); host app links it | ✅ Decouple fully |
+| League migration | League moves onto the core **later**, not now | ✅ Later |
+| Hosting | **Fully separate** — own Railway services + DB + Discord bot token | ✅ Separate |
+| Seeds | Seed = **draft pick order** (committee-set draft order, lowest picks first) | ✅ |
+| Draft UX | **Live async draft tool** (your-turn pings, multi-day) | ✅ |
+| Pairings | **Guided ±2-seed negotiation tool**, with **TO override** for dead-ends | ✅ |
+| Set length | **Variable** (Bo-X, default per season — Bo3 or Bo5; players may agree higher) | ✅ |
+| Schedule | **Auto-generate** (round-robin + rival week + cross-conf + seeded week) | ✅ |
+| Conferences | **Configurable N** per season (names + team counts vary) | ✅ |
+| Match flow | **Bot guided flow AND manual `/report`** both supported | ✅ |
+| Stake/deck | **Reuse the league `MatchConfigPreset`** system (white-stake + ban policy = a preset) | ✅ |
+| Subs | **TO swaps a player**; lineups versioned per week | ✅ |
+| Captain self-pick | Captain **picks themselves** at their seed round during the draft | ✅ |
 
-- **Extract** the match engine into a shared package (`match-core`).
-- **Build** Team Tour as a thin app on top that supplies its own competition
-  structure (teams, conferences, weeks, draft, playoffs).
-- The League app eventually consumes the same core (incrementally; not required
-  for Team Tour to ship).
+Still open → §10.
+
+---
+
+## 1. The core insight & terminology
+
+A **Set** (1v1, best-of-X, deck ban/pick, lives, report→confirm, DC rules) ≈ a
+league **`Match`**. We extract that engine and wrap Team Tour structure around it.
+**We adopt the event's own terms** to avoid confusion:
+
+| Team Tour term | Our model | Notes |
+|---|---|---|
+| **Game** | core `Game` | one Balatro game |
+| **Set** | core `Match` (wrapped by `TourSet`) | a 1v1 best-of-X between two players |
+| **Matchup** | `Matchup` | a team-vs-team week; N parallel Sets; majority of Set wins takes it |
+| **Week** | `Week` | round-robin / rival / cross-conf / seeded / playoff |
 
 ---
 
 ## 2. Architecture: shared core, separate app
 
-### Proposed monorepo layout
 ```
-balatro/                      (workspace root, pnpm/npm workspaces)
-  packages/
-    match-core/               ← the shared engine
-      prisma/core.prisma      ← Player, Match, Game, GameDeck, MatchConfigPreset, …
-      src/                    ← ban/pick state machine, lives, result rules,
-                                 deck pool/config, DC policy, dispute logic,
-                                 Discord match-thread helpers (framework-agnostic TS)
+balatro/ (workspace, npm/pnpm workspaces)
+  packages/match-core/
+    prisma/core.prisma   ← Player, Match, Game, GameDeck, MatchConfigPreset
+    src/                 ← ban/pick state machine, lives, win/DC resolution,
+                            report→confirm→dispute, deck-pool gen, Discord
+                            match-thread helpers (framework-agnostic TS)
   apps/
-    league-bot/  league-web/  ← existing app (migrates onto core later)
-    tour-bot/    tour-web/     ← NEW Team Tour app
+    league-bot / league-web   ← existing app (adopts core LATER)
+    tour-bot   / tour-web     ← NEW Team Tour app (its own DB + Discord bot)
 ```
 
-### What lives in `match-core`
-- **Models:** `Player`, `Match`, `Game`, `GameDeck`, `MatchConfigPreset` (decks/
-  stakes/pool), and the match-session/ban-pick state.
-- **Logic:** the guided ban/pick flow, lives capture, win/DC resolution, report →
-  confirm → dispute, the deck-pool generator, and the Discord match-thread
-  lifecycle. All of this is competition-agnostic.
-- **Crucially decoupled:** core `Match` has **no `divisionId`** (that's
-  league-specific today). A match knows only its two players, its games, its
-  result, and an opaque `contextId` the host app interprets. See §8-A.
-
-### Schema strategy
-- Prisma 6 supports a **multi-file schema folder**. Each app's `prisma/` folder =
-  a synced copy of `core.prisma` + its own `app.prisma`. A small sync step
-  (you already have `sync-schema.mjs`) copies the core fragment into each app.
-- **Separate databases per app.** BMP players are global (Discord IDs are stable
-  across servers), but the events are independent — Team Tour gets its own DB
-  with the core tables + its Team-Tour tables. No shared DB, no cross-event
-  coupling.
-
-### Runtime
-Each app is still **bot + web** (same split as today). `tour-bot` runs the
-`/start-match`-equivalent and Discord plumbing; `tour-web` is the dashboard
-(teams, schedule, standings, draft board).
+- **Core `Match` is competition-agnostic** — no `divisionId`. Tour links via
+  `TourSet.matchId`; the league links from its side when it migrates.
+- **Schema:** Prisma multi-file folder — each app's `prisma/` = synced `core.prisma`
+  + its own `app.prisma`. (Reuse the existing `sync-schema.mjs` idea.)
+- **Per-app DB.** Tour gets its own database. Players are identified by Discord ID
+  (global), but the events don't share storage.
+- Each app is **bot + web** as today.
 
 ---
 
 ## 3. Reuse map
 
-| Team Tour needs | Status |
+| Need | Status |
 |---|---|
-| 1v1 best-of-3 with deck ban/pick | ✅ core (ban/pick is configurable; "ban 5 / pick 3 / choose 1" is a policy) |
-| 4 lives capture | ✅ core (`Game.winnerLives`) |
-| White stake + deck pool | ✅ core (one `MatchConfigPreset`) |
-| Report + react-to-confirm | ✅ core |
-| DC before/after PvP ante 2 | ✅ core DC policy (maps to crash-before/after rules) |
-| Disputes, audit, profiles, Discord bootstrap | ✅ reusable |
-| Bot-run ban/pick (vs TT's "flip a coin") | ✅ **upgrade** — TT players get a real guided flow |
-| Teams, conferences, weeks, matchups | ❌ new |
-| Snake draft | ❌ new |
-| Weekly captain pairing negotiation | ❌ new |
-| Team standings + tiebreakers | ❌ new (match primitives reusable) |
-| Playoffs bracket + seed selection | ❌ new |
-| Self-scheduling (#schedules), deadlines | ❌ new (lightweight) |
+| 1v1 best-of-X, deck ban/pick, lives, report→confirm, disputes | ✅ core |
+| Deck/stake config (white + ban policy) | ✅ core `MatchConfigPreset` |
+| DC ruleset (pre/post a threshold turn → replay / forfeit) | ✅ core DC policy (threshold configurable) |
+| Bot guided flow **and** manual `/report` | ✅ both exist |
+| Audit, profiles, Discord channel/role bootstrap | ✅ reusable |
+| Teams, conferences, weeks, matchups, draft, pairings, playoffs | ❌ new |
+| Per-week lineups, rivals, coinflip, officials, awards, cross-season | ❌ new |
+
+**Ban policy note:** TT's "ban 5 → pick 3 → choose 1 of 3" is a different *shape*
+than the league's current ban policy. The core policy needs a small extension to
+express it. (Phase 0.)
 
 ---
 
-## 4. Team Tour data model (sketch — `tour/app.prisma`)
+## 4. Data model (sketch — `tour/app.prisma` + cross-season)
 
+### Season-spanning identity
 ```prisma
-model Team {
-  id           String   @id @default(cuid())
-  seasonId     String
-  conferenceId String
-  name         String
-  captainId    String              // Player.id
-  members      TeamMember[]
-  // … colors / logo later
-}
+model Player   { id; discordId @unique; displayName; /* + balatromp link */ }
+model Team     { id; name; /* persists across seasons; per-season via TeamSeason */ }
+```
 
-model Conference {
-  id        String  @id @default(cuid())
-  seasonId  String
-  name      String                 // "East", "West"
-  teams     Team[]
-}
-
-model TeamMember {
-  id        String  @id @default(cuid())
-  teamId    String
-  playerId  String
-  seed      Int                    // 1..9 within the team (from BMP S2 MMR)
-  isCaptain Boolean @default(false)
-  @@unique([teamId, playerId])
-}
-
+### Per-season competition
+```prisma
 model TourSeason {
-  id            String   @id @default(cuid())
-  name          String
-  teamSize      Int                // 7 or 9
-  setsToWin     Int                // 4 (of 7) or 5 (of 9)
-  weeks         Week[]
-  state         TourState          // DRAFTING | REGULAR | PLAYOFFS | DONE
+  id; name; teamSize Int; setsToWin Int; defaultBestOf Int;
+  state TourState;            // SIGNUPS|DRAFTING|REGULAR|PLAYOFFS|DONE
 }
+model Conference { id; seasonId; name; }            // names vary per season
 
+model TeamSeason {                                   // a team's entry in a season
+  id; seasonId; teamId; conferenceId; captainPlayerId;
+  seed Int;                                          // team seed = captain's draft seed
+  rivalTeamSeasonId String?;                         // pre-draft chosen rival (Rival Week)
+}
+model Roster {                                       // per-WEEK lineup snapshot (subs)
+  id; teamSeasonId; weekBlock String;                // "W1-4" | "W5-8" | "PLAYOFFS"
+  entries RosterEntry[];
+}
+model RosterEntry { id; rosterId; playerId; seed Int; isCaptain Boolean; }
+```
+
+### Weeks, matchups, sets
+```prisma
 model Week {
-  id          String        @id @default(cuid())
-  seasonId    String
-  number      Int                  // 1..7 regular, then playoffs
-  kind        WeekKind             // ROUND_ROBIN | CROSS_CONF | SEEDED | PLAYOFF
-  opensAt     DateTime?
-  deadlineAt  DateTime?            // sets must be scheduled by Thu 11:59 EST
-  matchups    TeamMatchup[]
+  id; seasonId; number Int;
+  kind WeekKind;             // ROUND_ROBIN|RIVAL|CROSS_CONF|SEEDED|PLAYOFF
+  opensAt; deadlineAt;       // sets scheduled by Thu 11:59 ET
 }
-
-model TeamMatchup {
-  id          String   @id @default(cuid())
-  weekId      String
-  teamAId     String
-  teamBId     String
-  sets        Set[]
-  // derived: setsWonA / setsWonB → winner when one hits setsToWin
+model Matchup {              // team vs team, one week
+  id; weekId; teamSeasonAId; teamSeasonBId;
+  sendFirst String?;         // who sends first (coinflip; higher seed auto in playoffs)
+  officialPlayerId String?;  // assigned caster/official ("Advantages")
+  // derived: setsWonA/B → winner at setsToWin
 }
-
-// A single player-vs-player set inside a team matchup. Wraps a core Match.
-model Set {
-  id            String  @id @default(cuid())
-  teamMatchupId String
-  matchId       String? @unique     // ← core Match (null until played)
-  playerAId     String              // Team A's player (seed S)
-  playerBId     String              // Team B's player (within ±2 seeds)
-  seedSlot      Int                 // ordering / pairing slot
-  status        SetStatus           // PROPOSED | SCHEDULED | PLAYED | FORFEIT
-  scheduledAt   DateTime?
-}
-
-// Draft
-model Draft {
-  id        String  @id @default(cuid())
-  seasonId  String
-  order     String[]               // captain/team ids in snake order
-  picks     DraftPick[]
-  state     DraftState
-}
-model DraftPick {
-  id        String  @id @default(cuid())
-  draftId   String
-  round     Int
-  pickIndex Int
-  teamId    String
-  playerId  String?                // null until made
-}
-
-// Playoffs
-model PlayoffSlot {
-  id        String  @id @default(cuid())
-  seasonId  String
-  seed      Int
-  teamId    String?
-  opponentTeamId String?           // 1-seed picks from 5–8, etc.
+model TourSet {              // a 1v1 best-of-X inside a Matchup
+  id; matchupId; matchId String? @unique;   // ← core Match (null until played)
+  playerAId; playerBId; seedA Int; seedB Int;
+  bestOf Int;
+  status SetStatus;          // PROPOSED|SCHEDULED|REPORTED|CONFIRMED|DISPUTED|FORFEIT
+  scheduledAt;
 }
 ```
 
-(Names/fields illustrative — we'll firm them up.)
+### Draft
+```prisma
+model Draft     { id; seasonId; order String[]; state DraftState; }   // snake order of teams
+model DraftPick { id; draftId; round; pickIndex; teamSeasonId; playerId String?; }
+```
+
+### Playoffs
+```prisma
+model PlayoffEntry { id; seasonId; teamSeasonId; seed Int; viaWildcard Boolean; }
+model PlayoffSeries{ id; seasonId; round PlayoffRound; teamAId; teamBId; matchupId String?; }
+```
+
+### Cross-season (the `alltime/` layer)
+```prisma
+model Championship { id; seasonId; teamId; }              // "rings"
+model Award        { id; seasonId; kind AwardKind; playerId?; teamId?; meta Json; }
+// AwardKind: MVP|ROOKIE|COMEBACK|CAPTAIN|MOST_IMPROVED|BEST_SET|BIGGEST_STEAL
+// Best-Set meta = the set; Biggest-Steal meta = draft pick #.
+// All-time leaderboard, Hall of Fame, H2H history, draft classes = derived views.
+```
+
+(Illustrative — fields firm up in Phase 0/1.)
 
 ---
 
-## 5. Core flows
+## 5. Standings & tiebreakers
 
-### 5.1 Draft (snake)
-- TOs set captain order (lowest-seed captain picks first).
-- Snake: round 1 forward, round 2 reverse, … Each captain reserves their own seed
-  slot. Bot/web UI: on your turn, pick from the available pool; auto-advance.
-- Spans days (timezones) — so it's **async with a "your pick" ping**, not a live
-  timer. Output: `TeamMember` rows with seeds.
+Per conference, W–L at **three levels**: **Matchups (weeks)**, **Sets**, **Games**.
+Tiebreaker order (from the rules):
+1. **Matchup record** (primary)
+2. **Set record** (W% across 1v1 sets)
+3. **Game record** within sets
+4. **In-conference record**
+5. **Head-to-head**
 
-### 5.2 Weekly pairing negotiation
-- For a `TeamMatchup`, captains alternate proposing players (Cap A proposes,
-  Cap B responds with their player, then Cap B proposes, …) until all slots
-  filled. Constraint: opponents within **±2 seeds**.
-- UI: a captain-only board per matchup; propose → opponent confirms → `Set` rows
-  created. Validation enforces the ±2-seed rule and prevents double-booking.
-
-### 5.3 Playing a set
-- Pure **core**: `/start-match`-equivalent in `tour-bot`, bo3, white-stake preset,
-  4 lives, ban-5/pick-3/choose-1 policy. Produces a core `Match`; `Set.matchId`
-  links it.
-
-### 5.4 Reporting → team week score
-- Set result rolls up: `TeamMatchup.setsWonA/B`. When a team hits `setsToWin`,
-  the week is decided. Results still go through core report+confirm.
-
-### 5.5 Standings & tiebreakers
-Per conference, by **week record** (W/L), then:
-1. Set record (win% across individual sets)
-2. Games won vs lost within sets
-3. In-conference record
-
-(All derivable from `TeamMatchup` + `Set` + `Match`/`Game`.)
-
-### 5.6 Playoffs
-- Top N per conference (+ wildcards). Seed by the tiebreaker chain above.
-- **Seed-based selection:** 1-seed picks its opponent from seeds 5–8, then 2-seed
-  from the rest, etc. → `PlayoffSlot`. Then it's normal weeks for 3 weeks.
-
-### 5.7 Scheduling
-- Lightweight: a `#schedules` form / web form writes `Set.scheduledAt`; a deadline
-  check (Thu 11:59 EST) flags un-scheduled sets for TO attention (auto-forfeit is
-  TO discretion, so we *surface* it, not auto-apply).
+(The live sheet only sorts on matchups — note: _"tie breakers are not programmed
+correctly."_ We implement the full chain. Variable Bo-X is normalized for the game
+tiebreaker.)
 
 ---
 
-## 6. Not code — policy / TO discretion
+## 6. Core flows
+
+### 6.1 Draft (snake, async)
+Committee sets team draft order (lowest seed picks first). Snake forward/reverse
+per round. On your turn: pick from the pool → next captain pinged. **Captain picks
+themselves** on their seed round. Each pick's order = that player's intra-team seed.
+
+### 6.2 Weekly pairings (guided ±2-seed + coinflip)
+Per Matchup: a **coinflip** sets who sends first (higher seed auto-wins in
+playoffs). Captains alternate **propose → respond**; the responder may only pick a
+player **within ±2 seeds** of the proposed one. Tool tracks used players, validates
+±2, creates `TourSet`s. **TO override** for dead-ends/subs.
+
+### 6.3 Playing + reporting a set
+Through the tour-bot guided flow (ban/pick + lives + winner vote → recorded) **or**
+manual `/report`; results post to `#results` and require **both players to confirm**
+(reaction or button) → Set `CONFIRMED`. Disputes via core.
+
+### 6.4 Schedule generation
+Per season: in-conference **round-robin**, **Rival Week** (each team vs its pre-draft
+rival), **Cross-Conference Week**, **Seeded Week** (#1 vs #last, mirrored). Generator
+adapts to conference sizes; TOs can tweak.
+
+### 6.5 Playoffs
+Qualify **top-2 per conference + best-record wildcards** (→ 8). Seed by the §5 chain.
+**Re-seed by choice:** #1 picks its opponent from seeds 5–8, #2 from the rest, …;
+#1 and #2 placed on opposite sides. Single-elim **QF → SF → Final** over 3 weeks,
+still full team matchups.
+
+### 6.6 Officials / casters ("Advantages")
+A pool of officials assignable per Matchup (`Matchup.officialPlayerId`). Optional —
+who casts/streams/holds the send advantage. **Likely Phase 3+.**
+
+---
+
+## 7. Not code — policy / TO discretion
 Conduct, warnings, extensions, stream-sniping, sub approvals, mid-set coaching,
-restart etiquette — all human-judgment, case-by-case. At most we add a small
-**warning log** (who/why/when) later. We do **not** automate enforcement.
+restart etiquette — human judgment. At most a lightweight **warning log** later. We
+**surface** (e.g. un-scheduled sets past the Thursday deadline) but don't
+auto-enforce.
 
 ---
 
-## 7. Phased build plan
-- **Phase 0 — extraction:** carve `match-core` out of the league (decouple `Match`
-  from `Division`; set up the workspace + schema sync). Biggest one-time cost.
-- **Phase 1 — admin MVP:** Team/Conference/Week/TeamMatchup/Set schema + TO tools
-  to make teams, seed players, generate the weekly schedule, and view **team
-  standings**. Sets played via core. Draft + pairings done by hand. → a runnable
-  event.
-- **Phase 2 — captain tooling:** snake **draft** + **weekly pairing negotiation**
-  (the high-value automation).
-- **Phase 3 — the rest:** self-scheduling + deadlines, **playoffs** bracket + seed
-  selection, cross-conf/seeded-week schedule generation.
+## 8. DC ruleset (configurable, from the docs)
+Reconnect → continue. DC **before** the threshold (pre-PvP / pre-turn-3, per season)
+with no reconnect → **replay the game**. DC **at/after** the threshold → **the
+disconnector forfeits that game**. Malicious DC / server issues → TO discretion.
+Maps onto the core DC policy with a configurable threshold.
 
 ---
 
-## 8. Open decisions (need your call)
-- **A. Match ↔ competition link.** Make core `Match` competition-agnostic (no
-  `divisionId`; host app links via its own table — Tour's `Set`, League's join).
-  This is the key extraction decision and the main cost of "shared core." Agree?
-- **B. Does the League actually migrate onto core now, or later?** Recommend
-  **later** — extract core *for Tour*, leave the league running as-is, migrate it
-  when convenient. Avoids destabilizing a live league.
-- **C. Seeds & MMR.** Seeds come from "BMP S2 ranked MMR." Do we pull MMR via the
-  existing balatromp scraper, or do TOs enter seeds manually? (MVP: manual.)
-- **D. Team size.** Model supports 7 or 9 via `teamSize`/`setsToWin`. Lock per
-  season at create time. OK?
-- **E. Hosting.** Separate Railway services + DB + Discord app for Team Tour
-  (its own bot token). Confirm.
+## 9. Phased build plan
+- **Phase 0 — extraction:** carve out `match-core` (decouple `Match` from
+  `Division`, workspace + schema sync, extend ban policy for ban-5/pick-3/choose-1).
+- **Phase 1 — admin MVP:** Season/Conference/TeamSeason/Roster/Week/Matchup/TourSet
+  schema + TO tools to make teams, seed via draft order, **auto-generate schedule**,
+  and **3-level standings + tiebreakers**. Sets via core; draft + pairings by hand at
+  first. → runnable event.
+- **Phase 2 — captain tooling:** live **snake draft** + **guided pairing
+  negotiation** (coinflip, ±2, TO override).
+- **Phase 3 — the rest:** playoffs (wildcards + re-seed-by-choice), self-scheduling +
+  deadlines, officials/casters, **cross-season** (rings, Hall of Fame, all-time LB,
+  awards, H2H history).
 
 ---
 
-## 9. First concrete step (proposed)
-Once §8 is settled: stand up the workspace + `match-core` package boundary
-(Phase 0) **or**, if you'd rather see value first, prototype Phase 1's schema +
-standings in a throwaway branch to validate the data model before the extraction.
+## 10. Still-open decisions
+- **A. Cross-season scope.** Model `Player`/`Team`/`Championship`/`Award` as
+  season-spanning from day 1 (cheap, future-proofs rings + Hall of Fame), but build
+  the cross-season *views* in Phase 3? (Recommend yes.)
+- **B. Officials/casters.** Build the "Advantages" assignment, or skip for the first
+  season? (Recommend skip → Phase 3.)
+- **C. Set length default.** Per season config — TT10 leans Bo3-ish, the data season
+  ran Bo5. Confirm it's a per-season setting with a default.
+- **D. Signups.** Reuse the league's signup flow (Discord embed + button) for player
+  registration into the pool, then draft from it? (Recommend yes.)
+- **E. Identity sharing.** Tour DB is separate, but should it import the BMP
+  player/MMR data the league already scrapes, or scrape independently? (Recommend
+  independent scrape in the Tour app, sharing the `balatromp` core util.)
