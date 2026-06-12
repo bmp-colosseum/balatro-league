@@ -22,7 +22,9 @@ const PLAYER_COMMANDS = [
   { cmd: "/report-shootout @opponent winner:@p", desc: "Log a 1-game showdown (tiebreaker)" },
   { cmd: "/challenge @opponent", desc: "Casual match against anyone — not recorded to standings" },
   { cmd: "/helper [reason]", desc: "Call a moderator into the current thread/channel" },
+  { cmd: "/pool", desc: "See which decks + stakes are currently in rotation" },
   { cmd: "/random", desc: "Roll a random deck + stake (also /random-deck, /random-stake)" },
+  { cmd: "/random-bans", desc: "Roll a full ban pool (9 combos) to ban down yourselves" },
 ];
 
 const ADMIN_COMMANDS = [

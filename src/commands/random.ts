@@ -12,7 +12,8 @@ import {
 } from "discord.js";
 import { CANONICAL_DECKS, CANONICAL_STAKES, deckDescription, stakeDescription } from "../balatro-info.js";
 import { deckEmoji, stakeEmoji } from "../balatro-emojis.js";
-import { presetForCasualMatch } from "../match-config.js";
+import { presetForCasualMatch, generatePool } from "../match-config.js";
+import { getLeagueSettings } from "../league-settings.js";
 import type { SlashCommand } from "./types.js";
 
 function pick<T>(items: readonly T[]): T {
@@ -78,6 +79,32 @@ export const randomStake: SlashCommand = {
   async execute(interaction: ChatInputCommandInteraction) {
     const { stakes } = await rollPool();
     const embed = rollEmbed({ stake: pick(stakes) });
+    await interaction.reply({ embeds: [embed] });
+  },
+};
+
+// /random-bans — roll a full ban pool (deck+stake combos) so two players can
+// ban it down themselves, outside the guided flow. Same pool size as a real
+// league game (matchPolicy.poolSize, default 9) and the same casual deck/stake
+// set /challenge and /random draw from.
+export const randomBans: SlashCommand = {
+  data: new SlashCommandBuilder()
+    .setName("random-bans")
+    .setDescription("Roll a random ban pool (deck+stake combos) to ban down yourselves."),
+  async execute(interaction: ChatInputCommandInteraction) {
+    const { decks, stakes } = await rollPool();
+    const { matchPolicy } = await getLeagueSettings();
+    const combos = generatePool(decks, stakes, matchPolicy.poolSize);
+    const lines = combos.map((c, i) => {
+      const deck = `${deckEmoji(c.deck) ?? ""} ${c.deck}`.trim();
+      const stake = `${stakeEmoji(c.stake) ?? ""} ${c.stake}`.trim();
+      return `**${i + 1}.** ${deck} — ${stake}`;
+    });
+    const embed = new EmbedBuilder()
+      .setTitle(`🎲 Random ban pool — ${combos.length} combos`)
+      .setColor(0x9b59b6)
+      .setDescription(lines.join("\n"))
+      .setFooter({ text: "Ban it down between you — same pool /challenge uses." });
     await interaction.reply({ embeds: [embed] });
   },
 };
