@@ -13,7 +13,6 @@ import {
 import { PermissionTier } from "@prisma/client";
 import { prisma } from "../db.js";
 import { PERM_PRESETS } from "../discord-helpers.js";
-import { ensureSupportChannel } from "../support-channel.js";
 import { webUrl, WEB_HOST } from "../web-url.js";
 import { clearConfig, getConfig, LeagueConfigKey, setConfig } from "../league-config.js";
 import { requireOwner } from "../permissions.js";
@@ -671,12 +670,22 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       update: { value: adminChan.id, updatedBy: interaction.user.id },
     });
 
-    // Support channel (#support, where /support opens ticket threads). Reuses
-    // the standalone helper — creates it + stores support_channel_id if unset.
-    // (No longer auto-created on boot, so it's set up here with everything else.)
-    await ensureSupportChannel().catch((err) =>
-      console.warn("[bootstrap] support-channel init failed:", err),
+    // Support channel: where /support opens private ticket threads. Created
+    // under the league category like every other channel (id-or-exact-name-or-
+    // create), and the id stored. If a loose top-level "#support" already exists
+    // and is pinned in support_channel_id, this adopts it — renaming it to
+    // league-support and moving it into the league category.
+    const supportChan = await ensureChannel(
+      "league-support",
+      "Need help? Run /support to open a private ticket — a league helper will be pinged.",
+      ChannelType.GuildText,
+      LeagueConfigKey.SupportChannelId,
     );
+    await prisma.leagueConfig.upsert({
+      where: { key: "support_channel_id" },
+      create: { key: "support_channel_id", value: supportChan.id, updatedBy: interaction.user.id },
+      update: { value: supportChan.id, updatedBy: interaction.user.id },
+    });
 
     // Casual matches get their own '🎴 Matches' category with a single
     // #challenges parent channel — /challenge threads spawn there.
