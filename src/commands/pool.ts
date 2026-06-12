@@ -42,6 +42,9 @@ function poolFields(label: string, preset: PresetLike | null) {
 }
 
 export const pool: SlashCommand = {
+  // Posts a public embed in the invoking channel → confine to the allowed
+  // bot-commands channel(s).
+  channelScope: "bot-commands-only",
   data: new SlashCommandBuilder()
     .setName("pool")
     .setDescription("Show the decks + stakes currently in rotation."),

@@ -51,6 +51,9 @@ function rollEmbed(opts: { deck?: string; stake?: string }): EmbedBuilder {
 }
 
 export const random: SlashCommand = {
+  // Posts a public embed in the invoking channel, so confine it to the
+  // allowed bot-commands channel(s) to avoid spamming general/division chat.
+  channelScope: "bot-commands-only",
   data: new SlashCommandBuilder()
     .setName("random")
     .setDescription("Roll a random deck + stake from the challenge pool."),
@@ -62,6 +65,7 @@ export const random: SlashCommand = {
 };
 
 export const randomDeck: SlashCommand = {
+  channelScope: "bot-commands-only",
   data: new SlashCommandBuilder()
     .setName("random-deck")
     .setDescription("Roll a random deck from the challenge pool."),
@@ -73,6 +77,7 @@ export const randomDeck: SlashCommand = {
 };
 
 export const randomStake: SlashCommand = {
+  channelScope: "bot-commands-only",
   data: new SlashCommandBuilder()
     .setName("random-stake")
     .setDescription("Roll a random stake from the challenge pool."),
@@ -88,6 +93,7 @@ export const randomStake: SlashCommand = {
 // league game (matchPolicy.poolSize, default 9) and the same casual deck/stake
 // set /challenge and /random draw from.
 export const randomBans: SlashCommand = {
+  channelScope: "bot-commands-only",
   data: new SlashCommandBuilder()
     .setName("random-bans")
     .setDescription("Roll a random ban pool (deck+stake combos) to ban down yourselves."),

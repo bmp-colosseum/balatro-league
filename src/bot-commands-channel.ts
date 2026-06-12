@@ -10,9 +10,29 @@ import { env } from "./env.js";
 import { resolveConfiguredCategory, createGuildTextChannel } from "./discord-helpers.js";
 import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
 
+// The bot-commands channel value may be a comma- (or whitespace-) separated
+// LIST of channel ids — admins can allow public player commands in several
+// channels. Split + trim into clean ids.
+function parseIdList(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  return raw.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+}
+
+// Single id — the FIRST configured bot-commands channel. Used by callers that
+// need one channel to POST to (e.g. report embeds when not in a division
+// channel). Tolerates a CSV value by taking the first entry.
 export async function resolveBotCommandsChannelId(): Promise<string | null> {
-  if (env.BOT_COMMANDS_CHANNEL_ID) return env.BOT_COMMANDS_CHANNEL_ID;
-  return getConfig(LeagueConfigKey.BotCommandsChannelId);
+  const raw = env.BOT_COMMANDS_CHANNEL_ID || (await getConfig(LeagueConfigKey.BotCommandsChannelId));
+  return parseIdList(raw)[0] ?? null;
+}
+
+// Full allow-list of channels where public ("not ephemeral") player commands
+// may run: every configured bot-commands channel (CSV) PLUS the admin channel
+// so staff can run them in admin chat. Membership-checked by the scope gate.
+export async function resolveBotCommandsChannelIds(): Promise<string[]> {
+  const primary = env.BOT_COMMANDS_CHANNEL_ID || (await getConfig(LeagueConfigKey.BotCommandsChannelId));
+  const admin = await getConfig(LeagueConfigKey.AdminChannelId);
+  return Array.from(new Set([...parseIdList(primary), ...parseIdList(admin)]));
 }
 
 export async function ensureBotCommandsChannel(): Promise<void> {

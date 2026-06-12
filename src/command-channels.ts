@@ -7,9 +7,16 @@
 // the bot bootstraps a season's division channels. This lets us avoid an
 // env-driven whitelist that admin would have to update every season.
 
-import { resolveBotCommandsChannelId } from "./bot-commands-channel.js";
+import { resolveBotCommandsChannelIds } from "./bot-commands-channel.js";
 import { prisma } from "./db.js";
 import type { ChannelScope } from "./commands/types.js";
+
+// Human-readable list of the allowed channels for an error message. Shows
+// clickable <#id> mentions, or guidance when none are configured.
+function allowedMention(ids: string[]): string {
+  if (ids.length === 0) return "the bot-commands channel (admin: set it in /admin/config)";
+  return ids.map((id) => `<#${id}>`).join(" or ");
+}
 
 export interface ChannelCheckResult {
   allowed: boolean;
@@ -27,21 +34,16 @@ export async function checkChannelScope(
   if (!channelId) return { allowed: false, reason: "This command must be used in a channel." };
 
   if (scope === "match-flow") {
-    const botCommandsChannelId = await resolveBotCommandsChannelId();
-    if (botCommandsChannelId && channelId === botCommandsChannelId) {
-      return { allowed: true };
-    }
+    const allowed = await resolveBotCommandsChannelIds();
+    if (allowed.includes(channelId)) return { allowed: true };
     const div = await prisma.division.findFirst({
       where: { discordChannelId: channelId },
       select: { id: true },
     });
     if (div) return { allowed: true };
-    const botCommandsMention = botCommandsChannelId
-      ? `<#${botCommandsChannelId}>`
-      : "the bot-commands channel (admin: run /league set-bot-commands-channel)";
     return {
       allowed: false,
-      reason: `Run this in your division channel or ${botCommandsMention}.`,
+      reason: `Run this in your division channel or ${allowedMention(allowed)}.`,
     };
   }
 
@@ -58,16 +60,11 @@ export async function checkChannelScope(
   }
 
   if (scope === "bot-commands-only") {
-    const botCommandsChannelId = await resolveBotCommandsChannelId();
-    if (botCommandsChannelId && channelId === botCommandsChannelId) {
-      return { allowed: true };
-    }
-    const mention = botCommandsChannelId
-      ? `<#${botCommandsChannelId}>`
-      : "the bot-commands channel (admin: run /league set-bot-commands-channel)";
+    const allowed = await resolveBotCommandsChannelIds();
+    if (allowed.includes(channelId)) return { allowed: true };
     return {
       allowed: false,
-      reason: `Run this in ${mention} — keeps casual/report commands separate from division play.`,
+      reason: `Run this in ${allowedMention(allowed)} — keeps public bot output out of the other channels.`,
     };
   }
 
