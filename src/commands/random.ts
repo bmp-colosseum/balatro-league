@@ -42,8 +42,9 @@ function block(icon: string, name: string, desc: string | undefined): string {
 function rollEmbed(opts: { deck?: string; stake?: string }): EmbedBuilder {
   const { deck, stake } = opts;
   const blocks: string[] = [];
-  if (deck) blocks.push(block(deckEmoji(deck) ?? "", deck, deckDescription(deck)));
+  // Stake first — players anchor on the stake, then the deck.
   if (stake) blocks.push(block(stakeEmoji(stake) ?? "", stake, stakeDescription(stake)));
+  if (deck) blocks.push(block(deckEmoji(deck) ?? "", deck, deckDescription(deck)));
   return new EmbedBuilder()
     .setTitle("🎲 Random roll")
     .setColor(0x9b59b6)
