@@ -44,13 +44,22 @@ the **new server's icon** → **Copy Server ID**. Keep it handy.
 
 > ✅ It's a long number like `1509692752902885527`.
 
-### Step 2 — Point the bot at the new server
-Railway → your **bot** service → **Variables**:
-- Find **`DISCORD_GUILD_ID`** → change its value to the **new server's ID** from
-  Step 1 → save. The bot restarts pointing at the new server.
-- **Do NOT touch `DATABASE_URL`** or anything else.
+### Step 2 — Point everything at the new server (BOTH services)
+Set `DISCORD_GUILD_ID` to the **new server's ID** (from Step 1) on **both** Railway
+services:
+- the **bot** service, AND
+- the **web** service.
 
-> ✅ Check: after a minute, the bot shows online in the **new** server.
+**Why both:** the bot operates in whatever guild this points at — and the **Re-home
+button (Step 4) runs in the *web* service** and uses this to decide *which server to
+build the channels in*. If the web still points at the old guild, Re-home would
+rebuild your divisions in the **old** server, and staff web-admin access would check
+the wrong guild. So they **must match**.
+
+- **Do NOT touch `DATABASE_URL`** on either service.
+
+> ✅ Check: after a minute the bot is online in the **new** server, and on both
+> services `DISCORD_GUILD_ID` is the **same new ID**.
 > 🛟 **Reversible:** everything up to here is undoable — set `DISCORD_GUILD_ID` back
 > to the old ID and you're exactly where you started. (The Re-home in Step 4 is the
 > commit point.)
