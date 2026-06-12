@@ -8,21 +8,34 @@ round-robin against your group, and **move up or down** between seasons based on
 you finish. It runs in Discord (matches, ban/pick, results) with a companion website
 for standings, profiles, and history.
 
+## How it's different from the ranked queue
+
+Balatro Multiplayer already has a **ranked queue** — solo-queue matchmaking against
+anonymous opponents near your MMR, with a rating you grind up and down. That's great
+for a quick game. **The league is a different thing, built *on top* of ranked, not a
+replacement for it.** In fact your ranked **MMR is what we use to seed you** when you
+join — so the two work together.
+
+What the ranked queue *doesn't* give you, and the league does:
+
+- **A season and a standings race.** Your results add up to a real table you're
+  climbing, not just a hidden number that ticks up and down. There's a beginning,
+  a middle, and a finish line every season.
+- **The same opponents, again and again.** You're in a fixed **division** of named
+  players — you'll get rematches, build rivalries, and know exactly who you're up
+  against, instead of a stranger every queue.
+- **A ladder you actually move on.** Finish well and you **promote** to a tougher
+  tier next season; finish low and you drop. You climb a ladder of *defined groups*,
+  not an invisible MMR curve.
+- **Community and coaching.** Because it's the same people season to season — and
+  because you play those just above and below you — the players above you are here
+  to **coach you up**, not just beat you and vanish into the next queue.
+
 ## Why it exists
 
-Pick-up BMP games are great, but they're a coin flip — you either stomp someone or
-get stomped, and there's no thread connecting one game to the next. The league fixes
-both:
-
-- **Fair games.** Tiers and divisions mean you're matched against people your own
-  size. A new player gets real, winnable games; a strong player gets real
-  competition. Nobody's wasting their time.
-- **Something to play *for*.** Every match counts toward your division standings,
-  and finishing well **promotes** you up a tier next season. There's a ladder to
-  climb and a record that follows you.
-- **A reason to get better.** Because you play people just above and below you, the
-  gap is always close enough to learn from — and the players above you are there to
-  **coach**, not just to win.
+To turn "I played some ranked games" into **a season worth playing through** — with
+people you know, stakes that build over weeks, a record that follows you, and a
+community around it. Same great BMP games; a reason to keep showing up.
 
 ## What it's trying to do
 
