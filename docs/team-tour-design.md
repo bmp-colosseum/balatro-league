@@ -266,6 +266,35 @@ Maps onto the core DC policy with a configurable threshold.
 - **BMP rank:** scrape independently (shared `balatromp` util), **display only** —
   not used for seeding (seeds = draft order).
 
+## 11b. BUILD STATUS — resume here
+
+_If you're a new conversation: read this doc top-to-bottom, then continue from
+"Next" below. All design decisions are settled (§0, §10). The **league app
+(`src/` + `web/`) is intentionally untouched** and still deploys — don't move or
+modify it; Team Tour is additive._
+
+**Done (Phase 0):**
+- ✅ `packages/match-core/` — `prisma/core.prisma` (competition-agnostic engine
+  schema) + `src/match-state.ts` (pure ban/pick state machine). Typechecks.
+- ✅ `apps/tour/prisma/schema/` — `core.prisma` (synced copy) + `tour.prisma`
+  (full Team Tour model). Merged schema **validates**. `npm run sync:core` keeps
+  the core fragment in sync.
+- ✅ Verified the league bot + web typecheck and its 26 tests pass — untouched.
+
+**Next (in order):**
+1. Port the Prisma-dependent engine into `match-core` with a **client-injection**
+   pattern (result/DC resolution + `Game`/`GameDeck` writes, from the league's
+   `match-write` + winner/DC logic).
+2. **Extend `BanPickPolicy`** + `phaseFor` for Team Tour's **ban-5 → pick-3 →
+   choose-1-of-3** (currently the league pattern).
+3. Stand up the **Tour Discord app (bot token) + its own Postgres DB** → then
+   scaffold `apps/tour` bot + web runtimes and `prisma generate`.
+4. Phase 1 features: teams/draft-order seeding, **auto schedule generation**,
+   **3-level standings + tiebreakers**.
+5. Phase 2: live snake **draft** + guided **pairing negotiation** (coinflip, ±2).
+6. Phase 3: playoffs (wildcards + re-seed-by-choice), scheduling deadlines,
+   officials/casters, cross-season (rings, Hall of Fame, all-time LB, awards).
+
 ## 11. Phase 0 — concrete first steps
 1. Convert the repo to an **npm workspace** (root `package.json` with `workspaces:
    ["packages/*", "apps/*"]`); league `src/`+`web/` stay where they are for now.

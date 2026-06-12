@@ -1,0 +1,250 @@
+// Team Tour app schema. Merged with `core.prisma` (the shared match engine) via
+// Prisma's multi-file schema folder. The generator + datasource live here; the
+// core fragment has none.
+//
+// Decoupling rule (design §0-A): Tour models reference core `Player`/`Match` by
+// PLAIN ID STRING (e.g. captainPlayerId, TourSet.matchId) — NOT a Prisma
+// relation — so `core.prisma` carries no Tour-specific back-relations and stays
+// reusable. App code joins by id. Relations are only used WITHIN the Tour models.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ──────────────────────────────────────────────────────────────────
+enum TourSeasonState {
+  SIGNUPS
+  DRAFTING
+  REGULAR
+  PLAYOFFS
+  DONE
+}
+
+enum WeekKind {
+  ROUND_ROBIN
+  RIVAL // week vs the captain-chosen pre-draft rival
+  CROSS_CONF // random cross-conference week
+  SEEDED // final regular week: #1 vs #last, mirrored
+  PLAYOFF
+}
+
+enum SetStatus {
+  PROPOSED // pairing created, not scheduled
+  SCHEDULED
+  REPORTED // result in, awaiting both-player confirm
+  CONFIRMED
+  DISPUTED
+  FORFEIT
+}
+
+enum DraftState {
+  PENDING
+  ACTIVE
+  DONE
+}
+
+enum PlayoffRound {
+  QUARTERFINAL
+  SEMIFINAL
+  FINAL
+}
+
+enum AwardKind {
+  MVP
+  ROOKIE
+  COMEBACK
+  CAPTAIN
+  MOST_IMPROVED
+  BEST_SET
+  BIGGEST_STEAL
+}
+
+// ── Season-spanning identity ───────────────────────────────────────────────
+// (Player lives in core.prisma — referenced by id everywhere here.)
+model Team {
+  id          String       @id @default(cuid())
+  name        String
+  createdAt   DateTime     @default(now())
+  teamSeasons TeamSeason[]
+}
+
+// ── Per-season competition ─────────────────────────────────────────────────
+model TourSeason {
+  id            String          @id @default(cuid())
+  name          String
+  teamSize      Int // 7 or 9 (or whatever a season runs)
+  setsToWin     Int // majority — 4 of 7, 5 of 9
+  defaultBestOf Int             @default(3) // per-set default; players may agree higher
+  state         TourSeasonState @default(SIGNUPS)
+  createdAt     DateTime        @default(now())
+
+  conferences Conference[]
+  teamSeasons TeamSeason[]
+  weeks       Week[]
+  draft       Draft?
+}
+
+model Conference {
+  id       String     @id @default(cuid())
+  seasonId String
+  name     String // "Eris" / "Pluto" / … — varies per season
+
+  season      TourSeason   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  teamSeasons TeamSeason[]
+
+  @@unique([seasonId, name])
+}
+
+// A team's entry in one season: its conference, captain, seed, and rival.
+model TeamSeason {
+  id             String  @id @default(cuid())
+  seasonId       String
+  teamId         String
+  conferenceId   String
+  captainPlayerId String // core Player.id (by id, no relation)
+  seed           Int // team seed = captain's draft seed
+  rivalTeamSeasonId String? // pre-draft chosen rival (Rival Week), by id
+
+  season     TourSeason   @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  team       Team         @relation(fields: [teamId], references: [id])
+  conference Conference   @relation(fields: [conferenceId], references: [id])
+  rosters    Roster[]
+
+  @@unique([seasonId, teamId])
+}
+
+// Per-week-block lineup snapshot (subs / roster changes are versioned).
+model Roster {
+  id           String        @id @default(cuid())
+  teamSeasonId String
+  weekBlock    String // "W1-4" | "W5-8" | "PLAYOFFS"
+  entries      RosterEntry[]
+
+  teamSeason TeamSeason @relation(fields: [teamSeasonId], references: [id], onDelete: Cascade)
+
+  @@unique([teamSeasonId, weekBlock])
+}
+
+model RosterEntry {
+  id        String  @id @default(cuid())
+  rosterId  String
+  playerId  String // core Player.id
+  seed      Int // intra-team seed (1..N = draft order)
+  isCaptain Boolean @default(false)
+
+  roster Roster @relation(fields: [rosterId], references: [id], onDelete: Cascade)
+
+  @@unique([rosterId, playerId])
+}
+
+// ── Weeks, matchups, sets ──────────────────────────────────────────────────
+model Week {
+  id         String    @id @default(cuid())
+  seasonId   String
+  number     Int
+  kind       WeekKind
+  opensAt    DateTime?
+  deadlineAt DateTime? // sets must be scheduled by here (Thu 11:59 ET)
+
+  season   TourSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  matchups Matchup[]
+
+  @@unique([seasonId, number])
+}
+
+// One team-vs-team matchup in a week. N parallel TourSets; majority of set wins
+// takes the matchup. teamSeason A/B referenced by id (no relation — keeps
+// TeamSeason free of two noisy back-relations).
+model Matchup {
+  id                    String   @id @default(cuid())
+  weekId                String
+  teamSeasonAId         String
+  teamSeasonBId         String
+  sendFirstTeamSeasonId String? // coinflip winner (higher seed auto in playoffs)
+  officialPlayerId      String? // assigned caster/official ("Advantages") — Phase 3
+
+  week Week      @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  sets TourSet[]
+}
+
+// A single 1v1 best-of-X set inside a matchup. Wraps a core Match by id.
+model TourSet {
+  id          String    @id @default(cuid())
+  matchupId   String
+  matchId     String?   @unique // core Match.id (null until played; by id, no relation)
+  playerAId   String // core Player.id (Team A's player, seed seedA)
+  playerBId   String // core Player.id (within ±2 of seedA)
+  seedA       Int
+  seedB       Int
+  bestOf      Int
+  status      SetStatus @default(PROPOSED)
+  scheduledAt DateTime?
+
+  matchup Matchup @relation(fields: [matchupId], references: [id], onDelete: Cascade)
+}
+
+// ── Draft ──────────────────────────────────────────────────────────────────
+model Draft {
+  id        String      @id @default(cuid())
+  seasonId  String      @unique
+  state     DraftState  @default(PENDING)
+  orderJson String // JSON: teamSeason ids in snake order
+  picks     DraftPick[]
+
+  season TourSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+}
+
+model DraftPick {
+  id           String  @id @default(cuid())
+  draftId      String
+  round        Int
+  pickIndex    Int // overall pick number (seed within the team derives from this)
+  teamSeasonId String
+  playerId     String? // core Player.id (null until the pick is made)
+
+  draft Draft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  @@unique([draftId, pickIndex])
+}
+
+// ── Playoffs ───────────────────────────────────────────────────────────────
+model PlayoffEntry {
+  id           String  @id @default(cuid())
+  seasonId     String
+  teamSeasonId String
+  seed         Int
+  viaWildcard  Boolean @default(false)
+
+  @@unique([seasonId, teamSeasonId])
+}
+
+model PlayoffSeries {
+  id            String       @id @default(cuid())
+  seasonId      String
+  round         PlayoffRound
+  teamSeasonAId String?
+  teamSeasonBId String?
+  matchupId     String? // the Matchup that plays out this series
+}
+
+// ── Cross-season (Hall of Fame / rings / awards) ───────────────────────────
+model Championship {
+  id        String   @id @default(cuid())
+  seasonId  String
+  teamId    String // the winning Team (season-spanning)
+  createdAt DateTime @default(now())
+}
+
+model Award {
+  id       String    @id @default(cuid())
+  seasonId String
+  kind     AwardKind
+  playerId String? // core Player.id (when player-scoped)
+  teamId   String? // when team-scoped
+  meta     Json? // e.g. Best-Set = the set; Biggest-Steal = draft pick #
+}

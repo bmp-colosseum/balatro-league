@@ -1,0 +1,21 @@
+{
+  "name": "@balatro/tour",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "prisma": {
+    "schema": "prisma/schema"
+  },
+  "scripts": {
+    "sync:core": "node scripts/sync-core.mjs",
+    "prisma:validate": "prisma validate",
+    "prisma:generate": "prisma generate"
+  },
+  "dependencies": {
+    "@balatro/match-core": "file:../../packages/match-core",
+    "@prisma/client": "^6.19.3"
+  },
+  "devDependencies": {
+    "prisma": "^6.19.3"
+  }
+}
