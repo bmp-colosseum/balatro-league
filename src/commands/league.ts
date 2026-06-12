@@ -450,6 +450,20 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       create: { key: "results_human_channel_id", value: humanResultsChan.id, updatedBy: interaction.user.id },
       update: { value: humanResultsChan.id, updatedBy: interaction.user.id },
     });
+    // Explicitly ensure #league-results is POSTABLE by everyone. This channel is
+    // the human-postable backup, but an earlier rename could have left a stale
+    // bot-only deny overwrite on it — clear that by allowing @everyone to post.
+    try {
+      await humanResultsChan.permissionOverwrites.edit(guild.roles.everyone.id, {
+        ViewChannel: true,
+        SendMessages: true,
+        AddReactions: true,
+        ReadMessageHistory: true,
+      });
+    } catch (err) {
+      console.warn("[bootstrap] couldn't ensure #league-results is postable:", err);
+      reused.push("#league-results (couldn't confirm it's postable — check '@everyone: Send Messages' is allowed)");
+    }
 
     // Auto-create a Match Results webhook on #results so the announce
     // path uses the webhook (preferred — gives nicer formatting + no
