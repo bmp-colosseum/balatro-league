@@ -28,8 +28,13 @@ League app, as its **own application**.
 | Subs | **TO swaps a player**; lineups versioned per week | ✅ |
 | Captain self-pick | Captain **picks themselves** at their seed round during the draft | ✅ |
 | Repo | **Monorepo** — this repo (`BalatroLeague`) is the root. `packages/match-core` + `apps/tour` are added **alongside** the existing league; the league stays at its current paths (keeps deploying) and migrates into `apps/league` **later** (per the League-migration decision) | ✅ |
+| Cross-season | **Model season-spanning now** (Player/Team/Championship/Award), build the cross-season views (Hall of Fame, all-time LB, rings, H2H) in Phase 3 | ✅ |
+| Officials/casters | **Skip for season 1** → Phase 3 | ✅ |
+| Signups | **Tour-specific signup** (capture availability/timezone + captain-volunteer flag) feeding the draft pool | ✅ |
+| BMP MMR | **Display only** — independently scrape BMP rank (shared `balatromp` util) to show on profiles / help captains; **not** used for seeding | ✅ |
+| Set length | **Per-season config** with a default (Bo3 or Bo5); players may agree higher per set | ✅ |
 
-Still open → §10.
+**All major design decisions are settled.** The doc is ready to drive Phase 0.
 
 > **Transitional layout (so the live league never breaks):** Phase 0 adds
 > `packages/match-core` and `apps/tour` next to the existing `src/` + `web/`.
@@ -252,16 +257,23 @@ Maps onto the core DC policy with a configurable threshold.
 
 ---
 
-## 10. Still-open decisions
-- **A. Cross-season scope.** Model `Player`/`Team`/`Championship`/`Award` as
-  season-spanning from day 1 (cheap, future-proofs rings + Hall of Fame), but build
-  the cross-season *views* in Phase 3? (Recommend yes.)
-- **B. Officials/casters.** Build the "Advantages" assignment, or skip for the first
-  season? (Recommend skip → Phase 3.)
-- **C. Set length default.** Per season config — TT10 leans Bo3-ish, the data season
-  ran Bo5. Confirm it's a per-season setting with a default.
-- **D. Signups.** Reuse the league's signup flow (Discord embed + button) for player
-  registration into the pool, then draft from it? (Recommend yes.)
-- **E. Identity sharing.** Tour DB is separate, but should it import the BMP
-  player/MMR data the league already scrapes, or scrape independently? (Recommend
-  independent scrape in the Tour app, sharing the `balatromp` core util.)
+## 10. Resolved (was "open")
+- **Cross-season:** model season-spanning entities now, build the views in Phase 3.
+- **Officials/casters:** skip season 1 → Phase 3.
+- **Set length:** per-season config + default; per-set override by agreement.
+- **Signups:** **Tour-specific** signup — capture **availability/timezone** and a
+  **captain-volunteer** flag, feeding the draft pool.
+- **BMP rank:** scrape independently (shared `balatromp` util), **display only** —
+  not used for seeding (seeds = draft order).
+
+## 11. Phase 0 — concrete first steps
+1. Convert the repo to an **npm workspace** (root `package.json` with `workspaces:
+   ["packages/*", "apps/*"]`); league `src/`+`web/` stay where they are for now.
+2. Scaffold **`packages/match-core`**: move the framework-agnostic match engine
+   (ban/pick state machine, lives, win/DC resolution, deck-pool gen) + `core.prisma`
+   (Player, Match, Game, GameDeck, MatchConfigPreset). **Decouple `Match` from
+   `Division`** (drop the FK; host links from its side).
+3. **Extend the ban policy** to express **ban-5 → pick-3 → choose-1-of-3**.
+4. Scaffold **`apps/tour`** (bot + web) depending on `match-core`, with its own
+   Prisma schema (`core.prisma` synced + `tour.prisma`) and its own DB.
+5. Stand up the Tour Discord app (bot token) + Railway services when ready to deploy.
