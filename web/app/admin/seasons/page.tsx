@@ -44,6 +44,7 @@ export default async function AdminSeasonsPage({
     orphanRounds,
     channels,
     archivedCount,
+    signupsDefaultChannelId,
   } = await loadAdminSeasonsIndex({
     showArchived,
     listGuildTextChannels,
@@ -289,6 +290,7 @@ export default async function AdminSeasonsPage({
                   season={s}
                   round={roundsBySeason.get(s.id) ?? null}
                   channels={channels}
+                  signupsDefaultChannelId={signupsDefaultChannelId}
                   playerCount={players}
                 />
 
@@ -356,11 +358,13 @@ function LifecycleActions({
   season,
   round,
   channels,
+  signupsDefaultChannelId,
   playerCount,
 }: {
   season: LifecycleSeason;
   round: LifecycleRound | null;
   channels: LifecycleChannel[];
+  signupsDefaultChannelId: string | null;
   playerCount: number;
 }) {
   // Step 1: ended → show date + escape hatch to reopen. Unend doesn't
@@ -461,6 +465,11 @@ function LifecycleActions({
           required
           triggerClassName="flex-1 min-w-[200px]"
           placeholder="— Pick a Discord channel —"
+          defaultValue={
+            signupsDefaultChannelId && channels.some((c) => c.id === signupsDefaultChannelId)
+              ? signupsDefaultChannelId
+              : ""
+          }
           options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
         />
         <LocalDateTimeField name="closesAt" label="Signups close (your time, optional)" />

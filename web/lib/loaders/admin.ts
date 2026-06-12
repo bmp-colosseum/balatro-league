@@ -1144,6 +1144,8 @@ export interface AdminSeasonsPageData {
   orphanRounds: OrphanSignupRound[];
   channels: Array<{ id: string; name: string }>;
   archivedCount: number;
+  /** Configured default signups channel (LeagueConfig.signups_channel_id) — pre-selects the Open-signups picker. */
+  signupsDefaultChannelId: string | null;
 }
 
 const DEFAULT_TIERS_FALLBACK = [
@@ -1177,7 +1179,7 @@ export async function loadAdminSeasonsIndex(opts: {
   listGuildTextChannels: (guildId: string) => Promise<Array<{ id: string; name: string }>>;
   guildId: string | undefined;
 }): Promise<AdminSeasonsPageData> {
-  const [seasons, templatesRaw, lastUsed, presets, defaultPreset, signupRounds, archivedCount, orphanRoundsRaw] =
+  const [seasons, templatesRaw, lastUsed, presets, defaultPreset, signupRounds, archivedCount, orphanRoundsRaw, signupsConfig] =
     await Promise.all([
       fetchAdminSeasons(opts.showArchived),
       prisma.tierTemplate.findMany({
@@ -1221,6 +1223,10 @@ export async function loadAdminSeasonsIndex(opts: {
         },
         orderBy: { openedAt: "desc" },
       }),
+      prisma.leagueConfig.findUnique({
+        where: { key: "signups_channel_id" },
+        select: { value: true },
+      }),
     ]);
 
   const needsChannels = seasons.some(
@@ -1257,6 +1263,7 @@ export async function loadAdminSeasonsIndex(opts: {
     orphanRounds,
     channels,
     archivedCount,
+    signupsDefaultChannelId: signupsConfig?.value ?? null,
   };
 }
 

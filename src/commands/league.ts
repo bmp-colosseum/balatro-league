@@ -322,7 +322,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     // joins an existing community. Legacy unprefixed names are passed as
     // aliases so re-running bootstrap renames them in place (keeps history).
     const infoChan = await ensureChannel("league-info", "League rules, schedule, announcements. Read-only for most.", ChannelType.GuildText, [], LeagueConfigKey.LeagueInfoChannelId);
-    const signupChan = await ensureChannel("league-signups", "Signup embeds posted here by the web admin. Players click the button to register.", ChannelType.GuildText, ["signups"]);
+    const signupChan = await ensureChannel("league-signups", "Signup embeds posted here by the web admin. Players click the button to register.", ChannelType.GuildText, ["signups"], LeagueConfigKey.SignupsChannelId);
     const resultsChan = await ensureChannel("league-results-bot", "Bot-only: match results auto-post here. Players can react + use slash commands but can't post.", ChannelType.GuildText, ["results", "league-results"], LeagueConfigKey.ResultsChannelId);
     const chatChan = await ensureChannel("league-chat", "General league chat. Match scheduling, banter, etc.", ChannelType.GuildText, [], LeagueConfigKey.GeneralChannelId);
     const botCmdChan = await ensureChannel("league-bot-commands", "General bot commands: /random, /profile, /standings, etc. Most replies are private (only you see them) so you can run commands from any channel.", ChannelType.GuildText, ["bot-commands"], LeagueConfigKey.BotCommandsChannelId);
@@ -365,6 +365,11 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       where: { key: "league_info_channel_id" },
       create: { key: "league_info_channel_id", value: infoChan.id, updatedBy: interaction.user.id },
       update: { value: infoChan.id, updatedBy: interaction.user.id },
+    });
+    await prisma.leagueConfig.upsert({
+      where: { key: "signups_channel_id" },
+      create: { key: "signups_channel_id", value: signupChan.id, updatedBy: interaction.user.id },
+      update: { value: signupChan.id, updatedBy: interaction.user.id },
     });
     await prisma.leagueConfig.upsert({
       where: { key: "feedback_channel_id" },

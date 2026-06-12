@@ -139,6 +139,11 @@ export const LeagueConfigKey = {
   // Persisted from /league bootstrap-server; the refresh worker
   // re-edits the pinned message on signup/season events.
   LeagueInfoChannelId: "league_info_channel_id",
+  // Default channel the season signup embed posts to (e.g. #league-signups).
+  // The web Open-signups form pre-selects this; /league setup adopts a channel
+  // pinned here. The actual posted channel is still stored per-round on
+  // SignupRound.channelId — this is just the default + the adoption target.
+  SignupsChannelId: "signups_channel_id",
   // Message id of the self-updating league-info message. We edit THIS
   // message on every refresh (regardless of whether it's currently
   // pinned) so a lost/removed pin can't make the worker post duplicates.
