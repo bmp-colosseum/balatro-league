@@ -1,7 +1,9 @@
 // /random, /random-deck, /random-stake — fun rolls, no game-state side
 // effects. /random is the headline (deck + stake together); the two
-// single-item variants are the less-used cousins. All roll from the full
-// canonical Balatro set so they work in any server with no preset config.
+// single-item variants are the less-used cousins. They roll from the same
+// deck + stake pool /challenge uses (the casual preset), so a roll is always
+// something you could actually play. Falls back to the full canonical Balatro
+// set when no casual preset is configured, so it still works on a fresh server.
 
 import {
   EmbedBuilder,
@@ -10,10 +12,22 @@ import {
 } from "discord.js";
 import { CANONICAL_DECKS, CANONICAL_STAKES, deckDescription, stakeDescription } from "../balatro-info.js";
 import { deckEmoji, stakeEmoji } from "../balatro-emojis.js";
+import { presetForCasualMatch } from "../match-config.js";
 import type { SlashCommand } from "./types.js";
 
-function pickName(items: readonly { name: string }[]): string {
-  return items[Math.floor(Math.random() * items.length)]!.name;
+function pick<T>(items: readonly T[]): T {
+  return items[Math.floor(Math.random() * items.length)]!;
+}
+
+// Resolve the deck + stake names to roll from: the casual preset (same pool as
+// /challenge) when set, otherwise the full canonical set so a fresh server with
+// no preset still rolls something.
+async function rollPool(): Promise<{ decks: string[]; stakes: string[] }> {
+  const preset = await presetForCasualMatch();
+  return {
+    decks: preset && preset.decks.length > 0 ? preset.decks : CANONICAL_DECKS.map((d) => d.name),
+    stakes: preset && preset.stakes.length > 0 ? preset.stakes : CANONICAL_STAKES.map((s) => s.name),
+  };
 }
 
 // One block per rolled item: emoji + name on one line, its description
@@ -38,9 +52,10 @@ function rollEmbed(opts: { deck?: string; stake?: string }): EmbedBuilder {
 export const random: SlashCommand = {
   data: new SlashCommandBuilder()
     .setName("random")
-    .setDescription("Roll a random deck + stake."),
+    .setDescription("Roll a random deck + stake from the challenge pool."),
   async execute(interaction: ChatInputCommandInteraction) {
-    const embed = rollEmbed({ deck: pickName(CANONICAL_DECKS), stake: pickName(CANONICAL_STAKES) });
+    const { decks, stakes } = await rollPool();
+    const embed = rollEmbed({ deck: pick(decks), stake: pick(stakes) });
     await interaction.reply({ embeds: [embed] });
   },
 };
@@ -48,9 +63,10 @@ export const random: SlashCommand = {
 export const randomDeck: SlashCommand = {
   data: new SlashCommandBuilder()
     .setName("random-deck")
-    .setDescription("Roll a random deck."),
+    .setDescription("Roll a random deck from the challenge pool."),
   async execute(interaction: ChatInputCommandInteraction) {
-    const embed = rollEmbed({ deck: pickName(CANONICAL_DECKS) });
+    const { decks } = await rollPool();
+    const embed = rollEmbed({ deck: pick(decks) });
     await interaction.reply({ embeds: [embed] });
   },
 };
@@ -58,9 +74,10 @@ export const randomDeck: SlashCommand = {
 export const randomStake: SlashCommand = {
   data: new SlashCommandBuilder()
     .setName("random-stake")
-    .setDescription("Roll a random stake."),
+    .setDescription("Roll a random stake from the challenge pool."),
   async execute(interaction: ChatInputCommandInteraction) {
-    const embed = rollEmbed({ stake: pickName(CANONICAL_STAKES) });
+    const { stakes } = await rollPool();
+    const embed = rollEmbed({ stake: pick(stakes) });
     await interaction.reply({ embeds: [embed] });
   },
 };
