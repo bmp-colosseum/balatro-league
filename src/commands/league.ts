@@ -400,6 +400,30 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       reused.push("#league-results-bot (couldn't set bot-only perms — set '@everyone: deny Send Messages' manually)");
     }
 
+    // Lock #league-info to read-only: it's the bot-maintained pinned 'how it
+    // works' + live-season message, so @everyone can view + react but not post.
+    try {
+      await infoChan.permissionOverwrites.edit(guild.roles.everyone.id, {
+        ViewChannel: true,
+        ReadMessageHistory: true,
+        AddReactions: true,
+        SendMessages: false,
+        SendMessagesInThreads: false,
+        CreatePublicThreads: false,
+        CreatePrivateThreads: false,
+      });
+      await infoChan.permissionOverwrites.edit(interaction.client.user.id, {
+        ViewChannel: true,
+        SendMessages: true,
+        EmbedLinks: true,
+        AttachFiles: true,
+        ManageMessages: true,
+      });
+    } catch (err) {
+      console.warn("[bootstrap] couldn't lock #league-info:", err);
+      reused.push("#league-info (couldn't set read-only perms — set '@everyone: deny Send Messages' manually)");
+    }
+
     // Human-facing results channel — open for manual posting if the bot's
     // auto-post in #league-results-bot ever has an issue. Created after the
     // bot channel so the old "league-results" was already renamed away.
