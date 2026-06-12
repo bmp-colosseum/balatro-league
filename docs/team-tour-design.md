@@ -27,8 +27,14 @@ League app, as its **own application**.
 | Stake/deck | **Reuse the league `MatchConfigPreset`** system (white-stake + ban policy = a preset) | ✅ |
 | Subs | **TO swaps a player**; lineups versioned per week | ✅ |
 | Captain self-pick | Captain **picks themselves** at their seed round during the draft | ✅ |
+| Repo | **Monorepo** — this repo (`BalatroLeague`) is the root. `packages/match-core` + `apps/tour` are added **alongside** the existing league; the league stays at its current paths (keeps deploying) and migrates into `apps/league` **later** (per the League-migration decision) | ✅ |
 
 Still open → §10.
+
+> **Transitional layout (so the live league never breaks):** Phase 0 adds
+> `packages/match-core` and `apps/tour` next to the existing `src/` + `web/`.
+> The league keeps deploying from its current paths unchanged; moving it into
+> `apps/league/` (and updating Railway build paths) is a separate, later step.
 
 ---
 
