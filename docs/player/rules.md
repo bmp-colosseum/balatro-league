@@ -12,9 +12,11 @@ you are there to coach.
 
 1. **Sign up** when a new season opens (a button in `#league-signups`, or on the
    site at `/join`).
-2. **Placement** — the admins place you into a **tier** and a **division** based on
-   their read of your skill. Your **BMP MMR is a helper** here (a useful reference),
-   but it isn't an automatic seed — placement is a judgment call.
+2. **Placement** — the admins seed each season using, **in priority order**: your
+   **previous-season finish** (if you've played before) → your **Balatro ranked
+   MMR** → their **judgment** to reconcile. Returning players are anchored by where
+   they ended last season; brand-new players start from their BMP MMR; judgment
+   fills the gaps. It's a judgment call, not an automatic formula.
 3. **Play** — a round-robin inside your division: you play everyone in it once.
 4. **Season ends** — final standings lock in.
 5. **Promotion / relegation** — top finishers move **up** a tier, bottom finishers

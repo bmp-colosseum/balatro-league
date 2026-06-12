@@ -9,9 +9,10 @@ When a season's signups are open, click **Sign Up** in `#league-signups`, or go 
 (get a DM when signups open) or **🔁 Auto-sign-up** (get entered automatically).
 
 ### How am I placed into a division?
-By skill — it's an **admin judgment call**, not an automatic formula. Your **BMP MMR
-helps** (as a reference), along with your past league results once you have them, but
-the admins make the final placement.
+The admins seed you, weighing — **in order** — your **previous-season finish** (if
+any), your **Balatro ranked MMR**, and their **judgment**. So returning players are
+anchored by last season's result, brand-new players start from BMP MMR, and the
+admins reconcile the rest. It's a judgment call, not an automatic formula.
 
 ### What does my rank mean?
 Inside a division you're ranked `1, 2, 3…` by **points** (then tiebreakers). Across
@@ -22,20 +23,20 @@ decides next season's placement.
 A best-of-2 set: **2-0 = 3 points**, **1-1 = 1 point each**, **0-2 = 0**.
 
 ### We're tied on points — who's ahead?
-In order: **head-to-head** (only if one of you won the meeting **2-0**), then a
-**showdown** if there is one, then **match wins**, then **draws**. If you're still
-exactly even, it's a **real tie** and you **share the rank** (`#2 #2`). Full detail
-in [standings.md](standings.md).
+In order: **more wins** → **head-to-head** (if one of you swept the other **2-0**) →
+a **BO1 showdown** between you. For a **3+-way** tie it's **lives** instead of a
+showdown. If nothing separates you, it's a **real tie** and you **share the rank**
+(`#2 #2`). Full detail in [standings.md](standings.md).
 
 ### What's a showdown?
-A single extra game to break a tie between **two** players who finished level on
-points and **drew their head-to-head** (1-1). Winner ranks higher. It doesn't change
-anyone's points.
+A single **BO1** to break a tie between **two** players still level after points,
+wins, and head-to-head. Winner ranks higher; it doesn't change anyone's points.
+(These often decide the promotion/relegation boundary.)
 
 ### What about a 3-way (or bigger) tie?
-A showdown only works for two players, so an admin **resolves bigger ties by hand**.
-They can reference each player's **net life differential** as a guide, but it isn't
-automatic.
+A showdown is only between two players, so a **3+-way tie is broken by lives** — each
+player's net life differential (lives you kept winning, minus opponents' lives kept
+beating you). An admin applies it.
 
 ### How do I play a match?
 `/start-match @opponent` for the guided ban/pick flow (recommended), or play in BMP

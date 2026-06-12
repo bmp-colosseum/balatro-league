@@ -24,12 +24,15 @@ Players are sorted by this chain, **in order** — the first thing that separate
 players wins:
 
 1. **Points** (most first).
-2. **Head-to-head** — if you're tied on points, *did one of you beat the other?*
-3. **Showdown** — a played 1-game tiebreaker, if one exists.
-4. **Match wins** (more 2-0s).
-5. **Draws** (more 1-1s).
-6. If you're **still** dead even on everything above → it's a **real tie** (you
-   share the rank).
+2. **Wins** — more 2-0 wins. Two players can be level on points but differ on wins
+   (e.g. 3 wins + 0 draws = 9 pts beats 2 wins + 3 draws = 9 pts), and the decisive
+   wins rank higher.
+3. **Head-to-head** — did one of you sweep the other when you met? (See below.)
+4. **The tiebreaker game / lives:**
+   - **Two players** still tied → a **BO1 showdown** between them; the winner ranks
+     higher.
+   - **Three or more** tied → **lives** decide it (see below).
+5. If nothing above separates you → it's a **real tie** and you **share the rank**.
 
 ### Head-to-head — the important detail
 
@@ -45,11 +48,12 @@ So "we're tied on points but I beat them" only helps if that win was a sweep.
 
 ---
 
-## Showdowns (a.k.a. tiebreakers)
+## Showdowns — the BO1 tiebreaker
 
-When **exactly two** players are tied on points and their head-to-head was a
-**1-1 draw**, the tie can be settled with a **showdown** — a single extra game
-between them. The winner ranks above the loser.
+When **two** players are still tied after points, wins, and head-to-head, the tie is
+settled with a **showdown** — a single **BO1** (one extra game) between them. The
+winner ranks above the loser. (These often decide who promotes or relegates at the
+boundary, so they matter.)
 
 - A showdown is played through the bot (`/start-match` in showdown mode) or
   recorded by an admin.
@@ -69,16 +73,15 @@ alphabetically.
   a three-way tie at the top.
 - The next distinct player resumes at the proper position (so `1, 2, 2, 4`).
 
-### Breaking a 3-or-more-way tie
+### Breaking a 3-or-more-way tie — lives
 
-A showdown only works for **two** players. For a **3+-way** tie, an admin resolves
-it **by hand** (placing the tied players) — this keeps flexibility for how a given
-season wants to handle it.
+A showdown is only between **two** players, so a **three-or-more-way** tie is broken
+by **lives**. Each tied player has a **net life differential** — how many lives you
+kept across games you won, minus how many your opponents kept when they beat you.
+Higher = you were "closer to winning" → higher rank.
 
-To help that call, admins can see each tied player's **net life differential** — how
-many lives you kept across games you won, minus how many your opponents kept when
-they beat you. Higher = you were "closer to winning." It's a **reference** the admin
-can use; it isn't applied automatically.
+An admin applies this (so there's room to handle an unusual season differently if
+needed), but **lives are the criterion** for 3+-way ties.
 
 ---
 

@@ -10,11 +10,11 @@ One-liners for every term you'll see around the league.
 - **Points** — 3 for a 2-0 win, 1 for a 1-1 draw, 0 for a loss. Drives your division rank.
 - **W / D / L** — matchups Won (2-0) / Drawn (1-1) / Lost (0-2).
 - **Head-to-head (H2H)** — your direct result vs another player. Breaks a points-tie **only if one of you won the meeting 2-0**.
-- **Showdown** — a one-game tiebreaker between two players tied on points who drew their head-to-head. Winner ranks higher; doesn't affect points.
+- **Showdown** — a one-game (**BO1**) tiebreaker between two players still tied after points, wins, and head-to-head. Winner ranks higher; doesn't affect points. (3+-way ties use **lives** instead.)
 - **Real tie** — when players are equal on the whole tiebreaker chain, they **share a rank** (shown `#2 #2`) instead of being ordered alphabetically.
 - **Lives** — the 4 lives a Balatro MP game starts with. The winner's remaining lives are recorded per game and used as a tiebreaker reference.
 - **Ban/pick** — choosing the deck/stake for a game by banning down a 9-combo pool (ban 1 / ban 3 / ban 3 / pick 1 of 2).
-- **Seed** — your starting placement in a season. Decided by the admins (a judgment call), with BMP MMR and past results as helping references — not an automatic formula.
+- **Seed** — your starting placement in a season. Decided by the admins, weighing — in order — your **previous-season finish**, your **BMP MMR**, then **judgment**. Not an automatic formula.
 - **Rating / global rank** — your skill number across the whole league; written at season end, used to help place you next season.
 - **MMR** — your Balatro Multiplayer ranked rating. One of the references admins use when placing you — a helper, not the decider.
 - **Promotion / relegation** — moving up (promotion) or down (relegation) a tier between seasons based on where you finished.
