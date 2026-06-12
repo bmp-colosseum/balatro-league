@@ -16,7 +16,7 @@ import {
   type TextChannel,
 } from "discord.js";
 import { MatchSessionState } from "@prisma/client";
-import { enqueueAnnounceResult } from "../queue.js";
+import { enqueueAnnounceResult, runDisplayNameRefresh } from "../queue.js";
 import { actorFromInteractionUser, recordAudit } from "../audit.js";
 import { activeSeasonMemberAutocomplete } from "./autocomplete.js";
 import { prisma } from "../db.js";
@@ -140,6 +140,11 @@ export const admin: SlashCommand = {
     )
     .addSubcommand((sub) =>
       sub
+        .setName("sync-names")
+        .setDescription("Resync player display names from their current Discord server names (skips custom-set names)."),
+    )
+    .addSubcommand((sub) =>
+      sub
         .setName("cancel-match")
         .setDescription("Force-cancel a wedged match session (any state). Use when players are stuck.")
         .addStringOption((opt) =>
@@ -199,6 +204,7 @@ export const admin: SlashCommand = {
     if (sub === "strikes") return listStrikes(interaction);
     if (sub === "export-results") return exportResults(interaction);
     if (sub === "reload-emojis") return reloadEmojis(interaction);
+    if (sub === "sync-names") return syncNames(interaction);
     if (sub === "cancel-match") return cancelMatch(interaction);
   },
 };
@@ -283,6 +289,29 @@ async function reloadEmojis(interaction: ChatInputCommandInteraction) {
   } catch (err) {
     console.warn("[admin reload-emojis] failed:", err);
     await interaction.editReply("❌ Reload failed — check the bot logs.");
+  }
+}
+
+// Resync every player's displayName from their CURRENT Discord server name
+// (nickname → global name → username). Skips players who set a custom name via
+// /me (hasCustomDisplayName=true) and anyone who left the guild. Runs daily on
+// its own, but this is the manual "do it now" trigger — handy right after a
+// server move so names reflect the new server immediately.
+async function syncNames(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  try {
+    const { updated, checked } = await runDisplayNameRefresh();
+    await interaction.editReply(
+      `✅ Synced display names from Discord — **${updated}** updated of **${checked}** checked (custom-set names were left alone).`,
+    );
+    recordAudit({
+      actor: actorFromInteractionUser(interaction.user),
+      action: "players.sync-names",
+      summary: `Manual display-name resync: ${updated}/${checked} updated`,
+    });
+  } catch (err) {
+    console.warn("[admin sync-names] failed:", err);
+    await interaction.editReply("❌ Name sync failed — check the bot logs.");
   }
 }
 

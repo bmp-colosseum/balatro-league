@@ -42,9 +42,8 @@ function block(icon: string, name: string, desc: string | undefined): string {
 function rollEmbed(opts: { deck?: string; stake?: string }): EmbedBuilder {
   const { deck, stake } = opts;
   const blocks: string[] = [];
-  // Stake first — players anchor on the stake, then the deck.
-  if (stake) blocks.push(block(stakeEmoji(stake) ?? "", stake, stakeDescription(stake)));
   if (deck) blocks.push(block(deckEmoji(deck) ?? "", deck, deckDescription(deck)));
+  if (stake) blocks.push(block(stakeEmoji(stake) ?? "", stake, stakeDescription(stake)));
   return new EmbedBuilder()
     .setTitle("🎲 Random roll")
     .setColor(0x9b59b6)
@@ -101,17 +100,17 @@ export const randomBans: SlashCommand = {
   async execute(interaction: ChatInputCommandInteraction) {
     const { decks, stakes } = await rollPool();
     const { matchPolicy } = await getLeagueSettings();
-    // Random SELECTION of combos, then sorted by stake (difficulty) → deck so
-    // the list reads stake-first the way people think about bans.
+    // Random SELECTION of combos, then ordered by stake (difficulty) → deck so
+    // the list is grouped by stake. Labels read deck-first.
     const combos = generatePool(decks, stakes, matchPolicy.poolSize).sort(
       (a, b) =>
         canonicalStakeIndex(a.stake) - canonicalStakeIndex(b.stake) ||
         canonicalDeckIndex(a.deck) - canonicalDeckIndex(b.deck),
     );
     const lines = combos.map((c, i) => {
-      const stake = `${stakeEmoji(c.stake) ?? ""} ${c.stake}`.trim();
       const deck = `${deckEmoji(c.deck) ?? ""} ${c.deck}`.trim();
-      return `**${i + 1}.** ${stake} — ${deck}`;
+      const stake = `${stakeEmoji(c.stake) ?? ""} ${c.stake}`.trim();
+      return `**${i + 1}.** ${deck} — ${stake}`;
     });
     const embed = new EmbedBuilder()
       .setTitle(`🎲 Random ban pool — ${combos.length} combos`)
