@@ -29,15 +29,20 @@ export interface ChannelCheckResult {
 export async function checkChannelScope(
   scope: ChannelScope | undefined,
   channelId: string | null,
+  // For threads, the PARENT channel id. A command run in a thread is allowed if
+  // the thread's parent channel is allowed — so e.g. /helper still works inside
+  // a match/dispute thread spawned under the bot-commands channel.
+  parentId?: string | null,
 ): Promise<ChannelCheckResult> {
   if (!scope || scope === "any") return { allowed: true };
   if (!channelId) return { allowed: false, reason: "This command must be used in a channel." };
+  const ids = [channelId, ...(parentId ? [parentId] : [])];
 
   if (scope === "match-flow") {
     const allowed = await resolveBotCommandsChannelIds();
-    if (allowed.includes(channelId)) return { allowed: true };
+    if (ids.some((id) => allowed.includes(id))) return { allowed: true };
     const div = await prisma.division.findFirst({
-      where: { discordChannelId: channelId },
+      where: { discordChannelId: { in: ids } },
       select: { id: true },
     });
     if (div) return { allowed: true };
@@ -49,7 +54,7 @@ export async function checkChannelScope(
 
   if (scope === "division-only") {
     const div = await prisma.division.findFirst({
-      where: { discordChannelId: channelId },
+      where: { discordChannelId: { in: ids } },
       select: { id: true },
     });
     if (div) return { allowed: true };
@@ -61,7 +66,7 @@ export async function checkChannelScope(
 
   if (scope === "bot-commands-only") {
     const allowed = await resolveBotCommandsChannelIds();
-    if (allowed.includes(channelId)) return { allowed: true };
+    if (ids.some((id) => allowed.includes(id))) return { allowed: true };
     return {
       allowed: false,
       reason: `Run this in ${allowedMention(allowed)} — keeps public bot output out of the other channels.`,

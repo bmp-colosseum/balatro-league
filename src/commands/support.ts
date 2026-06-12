@@ -20,6 +20,9 @@ import { summonHelpers } from "./helper.js";
 import type { SlashCommand } from "./types.js";
 
 export const support: SlashCommand = {
+  // Opens a ticket thread + pings helpers — keep it in the bot-commands
+  // channel(s) (threads under them are allowed too via the scope check).
+  channelScope: "bot-commands-only",
   data: new SlashCommandBuilder()
     .setName("support")
     .setDescription("Open a private support ticket — a league helper will be pinged.")

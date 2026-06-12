@@ -10,7 +10,7 @@ import {
 } from "discord.js";
 import { CANONICAL_DECKS, CANONICAL_STAKES } from "../balatro-info.js";
 import { deckEmoji, stakeEmoji } from "../balatro-emojis.js";
-import { presetForCasualMatch, presetForSeason } from "../match-config.js";
+import { presetForCasualMatch, presetForCustomCombo, presetForSeason } from "../match-config.js";
 import { activePublicSeason } from "../active-season.js";
 import { formatSeasonLabel } from "../format-season.js";
 import type { SlashCommand } from "./types.js";
@@ -49,22 +49,34 @@ export const pool: SlashCommand = {
     .setName("pool")
     .setDescription("Show the decks + stakes currently in rotation."),
   async execute(interaction: ChatInputCommandInteraction) {
-    const [casual, season] = await Promise.all([presetForCasualMatch(), activePublicSeason()]);
+    const [casual, custom, season] = await Promise.all([
+      presetForCasualMatch(),
+      presetForCustomCombo(),
+      activePublicSeason(),
+    ]);
     const leaguePreset = season ? await presetForSeason(season.id) : null;
-    const samePreset = !!(leaguePreset && casual && leaguePreset.id === casual.id);
+
+    // Each "context" that has a pool, in display order. Contexts that resolve
+    // to the SAME preset are merged into one section so we don't repeat an
+    // identical deck list (custom-combo falls back to the casual preset, so
+    // they're usually the same).
+    const contexts: Array<{ label: string; preset: PresetLike | null }> = [];
+    if (season) contexts.push({ label: `🏆 ${formatSeasonLabel(season)}`, preset: leaguePreset ?? casual });
+    contexts.push({ label: "🎴 Challenge", preset: casual });
+    contexts.push({ label: "🎛 Custom combos", preset: custom });
+
+    const groups = new Map<string, { labels: string[]; preset: PresetLike | null }>();
+    for (const c of contexts) {
+      const key = c.preset?.id ?? "__canonical__";
+      const g = groups.get(key);
+      if (g) g.labels.push(c.label);
+      else groups.set(key, { labels: [c.label], preset: c.preset });
+    }
 
     const embed = new EmbedBuilder().setTitle("🃏 Deck & stake pools").setColor(0x9b59b6);
-
-    if (season) {
-      const label = samePreset
-        ? `🏆 ${formatSeasonLabel(season)} & 🎴 Challenge`
-        : `🏆 League — ${formatSeasonLabel(season)}`;
-      embed.addFields(...poolFields(label, leaguePreset ?? casual));
+    for (const g of groups.values()) {
+      embed.addFields(...poolFields(g.labels.join(" & "), g.preset));
     }
-    if (!samePreset) {
-      embed.addFields(...poolFields("🎴 Challenge", casual));
-    }
-
     embed.setFooter({ text: "Roll one with /random, or a full ban pool with /random-bans." });
     await interaction.reply({ embeds: [embed] });
   },

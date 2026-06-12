@@ -70,6 +70,10 @@ export async function summonHelpers(args: {
 }
 
 export const helper: SlashCommand = {
+  // Posts a public ping, so confine to the bot-commands channel(s) — but the
+  // scope check also allows THREADS spawned under an allowed channel (match /
+  // dispute threads), which is where /helper is normally used.
+  channelScope: "bot-commands-only",
   data: new SlashCommandBuilder()
     .setName("helper")
     .setDescription("Call a moderator into this thread/channel for assistance.")
