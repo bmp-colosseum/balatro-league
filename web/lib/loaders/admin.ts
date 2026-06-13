@@ -1108,6 +1108,9 @@ export type AdminSeasonsRound = {
   channelId: string;
   resultingSeasonId: string | null;
   _count: { signups: number };
+  // Active (non-withdrawn) roster, earliest first — so admins can see who's
+  // actually in while a round is still open, without opening the build flow.
+  signups: { displayName: string; signedUpAt: Date }[];
 };
 
 // Signup rounds that exist without a linked Season yet — created via
@@ -1202,7 +1205,14 @@ export async function loadAdminSeasonsIndex(opts: {
           status: true,
           channelId: true,
           resultingSeasonId: true,
-          _count: { select: { signups: true } },
+          // Active (non-withdrawn) only, matching the public embed's count and
+          // the roster list below — so "N joined" and the names agree.
+          _count: { select: { signups: { where: { withdrawn: false } } } },
+          signups: {
+            where: { withdrawn: false },
+            select: { displayName: true, signedUpAt: true },
+            orderBy: { signedUpAt: "asc" },
+          },
         },
       }),
       prisma.season.count({ where: { archivedAt: { not: null } } }),

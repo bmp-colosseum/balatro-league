@@ -352,8 +352,30 @@ interface LifecycleRound {
   status: "OPEN" | "CLOSED" | "BUILT";
   channelId: string;
   _count: { signups: number };
+  signups: { displayName: string; signedUpAt: Date }[];
 }
 interface LifecycleChannel { id: string; name: string }
+
+// Collapsible roster of the people currently signed up (active, non-withdrawn).
+// Names are admin-only — the public signup embed shows the count alone — so
+// this is the only spot an admin can eyeball who's actually in before building.
+function SignupRoster({ signups }: { signups: { displayName: string; signedUpAt: Date }[] }) {
+  if (signups.length === 0) {
+    return <div className="muted" style={{ fontSize: 12, margin: "4px 0" }}>No one signed up yet.</div>;
+  }
+  return (
+    <details style={{ margin: "4px 0 8px" }}>
+      <summary style={{ cursor: "pointer", fontSize: 12 }} className="muted">
+        View who&apos;s signed up ({signups.length})
+      </summary>
+      <ol style={{ margin: "6px 0 0", paddingLeft: 28, fontSize: 13, lineHeight: 1.5 }}>
+        {signups.map((s, i) => (
+          <li key={`${s.displayName}-${i}`}>{s.displayName}</li>
+        ))}
+      </ol>
+    </details>
+  );
+}
 
 function LifecycleActions({
   season,
@@ -425,6 +447,7 @@ function LifecycleActions({
   if (round && round.status === "CLOSED") {
     return (
       <div style={{ marginTop: 8 }}>
+        <SignupRoster signups={round.signups} />
         <Link href={`/admin/signups/${round.id}/build`}>
           <Button type="button"><strong>Build divisions from {round._count.signups} signups →</strong></Button>
         </Link>
@@ -439,6 +462,7 @@ function LifecycleActions({
         <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
           🟢 Signups open in <code>#{channels.find((c) => c.id === round.channelId)?.name ?? round.channelId}</code> — {round._count.signups} joined
         </div>
+        <SignupRoster signups={round.signups} />
         <form action={finalizeSignupsForSeason}>
           <input type="hidden" name="seasonId" value={season.id} />
           <Button type="submit" variant="secondary">Finalize signups →</Button>
