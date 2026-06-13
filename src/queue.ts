@@ -20,10 +20,7 @@ import { PgBoss, type Job } from "pg-boss";
 import { announceResult } from "./announce.js";
 import { detectCurrentBmpSeason, fetchPlayerStats } from "./balatromp.js";
 import { spawnDisputeThread } from "./dispute-thread.js";
-import { resolveBackupChannelId } from "./backup-channel.js";
-import { resolveDevopsChannelId } from "./devops-channel.js";
 import { webUrl } from "./web-url.js";
-import { resolveBotCommandsChannelId } from "./bot-commands-channel.js";
 import { prisma } from "./db.js";
 import { composeLeagueInfoContent } from "./league-info-content.js";
 import { env } from "./env.js";
@@ -57,12 +54,10 @@ import {
   removeGuildMemberRole as removeGuildMemberRoleViaBot,
 } from "./discord-helpers.js";
 import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
-import { buildFullExport, buildLeagueExport, exportFilename, fullExportFilename, serializeExport } from "./league-export.js";
 import { formatSeasonLabel } from "./format-season.js";
 import { postPendingReport } from "./report-flow.js";
 import { autoConfirmReport } from "./report-auto-confirm.js";
 import { getLeagueSettings } from "./league-settings.js";
-import { ChannelType, AttachmentBuilder } from "discord.js";
 
 let boss: PgBoss | null = null;
 
@@ -91,7 +86,6 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("bootstrap.division");
   await boss.createQueue("snapshot.mmr");
   await boss.createQueue("refresh.active-mmrs");
-  await boss.createQueue("backup.league");
   await boss.createQueue("report.post-pending");
   await boss.createQueue("report.auto-confirm");
   await boss.createQueue("devops.queue-stall-check");
@@ -262,19 +256,6 @@ export async function initQueue(): Promise<void> {
   ensureBmpCurrentSeasonDetected().catch((err) =>
     console.warn("[bmp] initial season detect failed:", err),
   );
-
-  // Daily league backup: build JSON snapshot, post to bot-commands as
-  // an attachment. Off-platform redundancy in case Railway's Postgres
-  // loses data — admin scrolls back through bot-commands attachments
-  // and picks the most recent before whatever broke.
-  await boss.work("backup.league", { batchSize: 1 }, async () => {
-    await runLeagueBackup();
-  });
-  // Daily at 06:00 UTC. Idempotent like the refresh schedule. File size
-  // is tiny (~250KB at current scale) so 7x the volume of weekly is a
-  // non-issue for Discord storage.
-  await boss.schedule("backup.league", "0 6 * * *");
-  console.log("[pg-boss] scheduled backup.league @ 06:00 UTC daily");
 
   // Worker: refresh every player's display name from their CURRENT server
   // (guild) display name — so the league shows their nickname, and tracks
@@ -477,69 +458,6 @@ export async function runDisplayNameRefresh(): Promise<{ updated: number; checke
   }
   console.log(`[refresh.display-names] updated ${updated}/${players.length}`);
   return { updated, checked: players.length };
-}
-
-export async function runLeagueBackup(): Promise<{
-  postedTo: string | null;
-  fileSize: number;
-  filename: string;
-}> {
-  const data = await buildLeagueExport();
-  const buf = serializeExport(data);
-  const filename = exportFilename();
-  const client = tryGetDiscordClient();
-  if (!client) {
-    console.warn("[backup.league] Discord client not ready; skipping post");
-    return { postedTo: null, fileSize: buf.length, filename };
-  }
-  // Resolution: explicit BackupChannelId override (env or LeagueConfig)
-  // → devops channel (default) → bot-commands (last-ditch fallback).
-  // Backups land in the devops channel by default so we don't have to
-  // maintain a separate staff-private channel just for weekly JSON
-  // attachments — devops is already staff-only and gets bot output
-  // anyway. If admin wants backups split out, they set BackupChannelId.
-  const channelId =
-    (await resolveBackupChannelId()) ??
-    (await resolveDevopsChannelId()) ??
-    (await resolveBotCommandsChannelId());
-  if (!channelId) {
-    console.warn("[backup.league] no destination channel resolved; skipping post");
-    return { postedTo: null, fileSize: buf.length, filename };
-  }
-  try {
-    const channel = await client.channels.fetch(channelId);
-    if (!channel || channel.type !== ChannelType.GuildText) {
-      console.warn(`[backup.league] channel ${channelId} not a text channel`);
-      return { postedTo: null, fileSize: buf.length, filename };
-    }
-    const files = [new AttachmentBuilder(buf, { name: filename })];
-    // Also attach the FULL dump (every model) for an exact rebuild — as
-    // long as it fits under Discord's bot upload limit (~8MB). Beyond that
-    // we skip it and rely on `npm run export:full` / pg_dump off-platform.
-    let fullNote = "";
-    try {
-      const { data: fullData, rowCount } = await buildFullExport();
-      const fullBuf = Buffer.from(JSON.stringify(fullData), "utf-8");
-      if (fullBuf.length <= 7_500_000) {
-        files.push(new AttachmentBuilder(fullBuf, { name: fullExportFilename() }));
-        fullNote = ` + full dump (${rowCount} rows, ${Math.round(fullBuf.length / 1024)}KB)`;
-      } else {
-        fullNote = ` — full dump skipped (${Math.round(fullBuf.length / 1024)}KB > Discord limit; use export:full)`;
-      }
-    } catch (err) {
-      console.warn("[backup.league] full export failed:", err);
-    }
-    await channel.send({
-      content:
-        `📦 Daily league backup — ${data.seasons.length} seasons, ${data.players.length} players${fullNote}. ` +
-        `Source of truth if Railway eats itself.`,
-      files,
-    });
-    return { postedTo: channelId, fileSize: buf.length, filename };
-  } catch (err) {
-    console.warn("[backup.league] post failed:", err);
-    return { postedTo: null, fileSize: buf.length, filename };
-  }
 }
 
 // Re-snapshot every CURRENT participant — either everyone in the open

@@ -22,15 +22,10 @@ const schema = z.object({
   // division (mostly /challenge for casual matches). Optional — if unset,
   // match-flow commands only work in division channels.
   BOT_COMMANDS_CHANNEL_ID: z.string().optional(),
-  // Channel ID for daily league backups (JSON snapshot attachment).
-  // Should be admin-private — backup includes seasons/divisions/pairings
-  // which is sensitive league config. If unset, bot auto-creates a
-  // '📦 league-backups' channel restricted to staff roles on startup.
-  BACKUP_CHANNEL_ID: z.string().optional(),
   // Channel ID for DevOps alerts (queue stalls, rate-limit floods, infra
-  // health). Distinct from BACKUP_CHANNEL_ID — backups go to staff, infra
-  // alerts go to the people who can debug them. If unset, bot auto-creates
-  // a '🔧 devops' channel restricted to the DEVOPS role on startup.
+  // health). Infra alerts go to the people who can debug them. If unset,
+  // the bot auto-creates a '🔧 devops' channel restricted to the DEVOPS
+  // role on startup.
   DEVOPS_CHANNEL_ID: z.string().optional(),
   // Channel ID for league-wide announcements (scheduled season starts,
   // season recaps, league news). Public — every member sees and reads,

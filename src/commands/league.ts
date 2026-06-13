@@ -590,47 +590,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
 
     // Backup channel — admin/helper-only via permission overwrites. Needs
     // the staff role IDs we just upserted, so it lives after ensureRole.
-    // Find-or-create same as the public channels; if existing, leave its
-    // perms alone (admin may have customized them).
-    async function ensureBackupChannel() {
-      const existing = guild.channels.cache.find(
-        (c) => c.type === ChannelType.GuildText && c.name === "league-backups" && c.parentId === categoryId,
-      );
-      if (existing && existing.type === ChannelType.GuildText) {
-        reused.push(`#league-backups`);
-        return existing;
-      }
-      // OWNER tier role(s) — bound after bootstrap usually. Include now
-      // so first-pass bootstrap doesn't lock them out if already bound.
-      // (Existing channels' overwrites don't auto-update on later role
-      // binding changes — that's a separate gap to address if it bites.)
-      const ownerBindings = await prisma.roleBinding.findMany({ where: { tier: "OWNER" } });
-      const ch = await guild.channels.create({
-        name: "league-backups",
-        type: ChannelType.GuildText,
-        parent: categoryId,
-        topic: "📦 Daily JSON snapshots of restorable league state. Staff-only.",
-        permissionOverwrites: [
-          { id: guild.roles.everyone.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-          { id: adminRole.id, allow: [...PERM_PRESETS.MEMBER_ALLOW] },
-          { id: helperRole.id, allow: [...PERM_PRESETS.MEMBER_ALLOW] },
-          ...ownerBindings.map((b) => ({ id: b.discordRoleId, allow: [...PERM_PRESETS.MEMBER_ALLOW] })),
-          // Bot itself needs the wider BOT_ALLOW set to upload the
-          // daily attachment + manage its own messages.
-          { id: interaction.client.user.id, allow: [...PERM_PRESETS.BOT_ALLOW] },
-        ],
-      });
-      created.push(`#league-backups (private, staff-only)`);
-      return ch;
-    }
-    const backupChan = await ensureBackupChannel();
-    await prisma.leagueConfig.upsert({
-      where: { key: "backup_channel_id" },
-      create: { key: "backup_channel_id", value: backupChan.id, updatedBy: interaction.user.id },
-      update: { value: backupChan.id, updatedBy: interaction.user.id },
-    });
-
-    // DevOps channel — separate from league-backups. Infra alerts
+    // DevOps channel. Infra alerts
     // (queue stalls, rate-limit floods) post here pinging @League DevOps
     // and don't bother league admins who can't act on tech issues.
     async function ensureDevopsChan() {
@@ -677,7 +637,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     // Admin chat — private coordination channel for league staff (admins +
     // helpers + owners). The bot doesn't post here; it's stored as
     // admin_channel_id so the site/bot can reference it. Staff-only via
-    // overwrites, same shape as #league-backups.
+    // @everyone deny-ViewChannel + per-role allows.
     async function ensureAdminChan() {
       const existing = guild.channels.cache.find(
         (c) =>
@@ -802,7 +762,6 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       `💬 <#${chatChan.id}> — league-chat`,
       `🗣️ <#${feedbackChan.id}> — league-feedback (player suggestions + bug reports)`,
       `🤖 <#${botCmdChan.id}> — league-bot-commands (casual /challenge, /report)`,
-      `📦 <#${backupChan.id}> — league-backups (staff-only, daily snapshots)`,
       `🔧 <#${devopsChan.id}> — league-devops (DevOps-only, queue stalls + infra alerts)`,
       `🛠️ <#${adminChan.id}> — league-admin (staff-only chat)`,
       `🎴 <#${challengesChan.id}> — challenges (parent for casual /challenge threads, under 🎴 Matches)`,
@@ -911,7 +870,6 @@ async function checkSetup(interaction: ChatInputCommandInteraction) {
   await checkChannel("bot_commands_channel_id", "Bot commands");
   await checkChannel("results_channel_id", "Results");
   await checkChannel("announcements_channel_id", "Announcements");
-  await checkChannel("backup_channel_id", "Backups");
   await checkChannel("devops_channel_id", "DevOps");
   await checkChannel("challenges_channel_id", "Challenges (casual)");
 
@@ -1083,7 +1041,7 @@ const RESET_CONFIRMATION_PHRASE = "RESET DISCORD STATE";
 // Cleared:
 //   Division.discordChannelId / discordRoleId
 //   Season.discordCategoryId / resultsChannelId / resultsWebhookUrl
-//   LeagueConfig.BotCommandsChannelId / BackupChannelId / ResultsWebhookUrl
+//   LeagueConfig.BotCommandsChannelId / ResultsWebhookUrl
 //   RoleBinding (all rows — bootstrap recreates them)
 //
 // Doesn't touch MatchSession.threadId or SignupRound.channelId/messageId
@@ -1128,7 +1086,6 @@ async function resetDiscordState(interaction: ChatInputCommandInteraction) {
         key: {
           in: [
             LeagueConfigKey.BotCommandsChannelId,
-            LeagueConfigKey.BackupChannelId,
             LeagueConfigKey.ResultsWebhookUrl,
           ],
         },

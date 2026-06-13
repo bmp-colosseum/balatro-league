@@ -16,10 +16,6 @@ export const LeagueConfigKey = {
   // env.BOT_COMMANDS_CHANNEL_ID → LeagueConfig.BotCommandsChannelId →
   // auto-created on bot startup if neither is set.
   BotCommandsChannelId: "bot_commands_channel_id",
-  // Channel where daily league backup attachments are posted. Should be
-  // staff-only since the JSON includes sensitive league config. Same
-  // env → LeagueConfig → auto-create resolution as BotCommandsChannelId.
-  BackupChannelId: "backup_channel_id",
   // Current BMP season tag, e.g. "season6". Auto-detected from
   // balatromp.com/leaderboards on bot startup + daily refresh; admin can
   // override by setting manually. Null/unset = only the no-season-param
