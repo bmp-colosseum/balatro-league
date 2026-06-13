@@ -10,6 +10,19 @@ function discordTs(d: Date, style: "F" | "R"): string {
   return `<t:${Math.floor(d.getTime() / 1000)}:${style}>`;
 }
 
+// "<start> → <end> (2 weeks)" when both ends are known, else null. Shown so
+// players see how long the season runs before they commit. Length renders in
+// whole weeks when it divides evenly, otherwise in days.
+export function seasonWindowValue(startsAt: Date | null, endsAt: Date | null): string | null {
+  if (!startsAt || !endsAt) return null;
+  const days = Math.round((endsAt.getTime() - startsAt.getTime()) / 86_400_000);
+  const length =
+    days > 0 && days % 7 === 0
+      ? `${days / 7} week${days / 7 === 1 ? "" : "s"}`
+      : `${days} day${days === 1 ? "" : "s"}`;
+  return `${discordTs(startsAt, "F")} → ${discordTs(endsAt, "F")} (${length})`;
+}
+
 export function signupEmbed(round: SignupRound, signups: Signup[]): EmbedBuilder {
   const active = signups.filter((s) => !s.withdrawn);
 
@@ -39,12 +52,16 @@ export function signupEmbed(round: SignupRound, signups: Signup[]): EmbedBuilder
     description = "Season started — to make a change, ask a league helper.";
   }
 
-  return new EmbedBuilder()
+  const window = seasonWindowValue(round.seasonStartsAt, round.seasonEndsAt);
+
+  const embed = new EmbedBuilder()
     .setTitle(`🃏  ${round.name}`)
     .setDescription(description)
     .addFields({ name: "Status", value: status, inline: false })
     .setColor(round.status === "OPEN" ? 0x5865f2 : 0x99aab5)
     .setFooter({ text: `Round ${round.id}` });
+  if (window) embed.addFields({ name: "Season", value: window, inline: false });
+  return embed;
 }
 
 export function signupButtons(round: SignupRound): ActionRowBuilder<ButtonBuilder> {

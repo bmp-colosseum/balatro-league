@@ -210,6 +210,11 @@ model SignupRound {
   // signup post and used as the withdraw deadline. Null = no announced deadline.
   closesAt          DateTime?
   closedAt          DateTime?
+  // Planned season window, chosen at open and shown in the signup post as
+  // Discord timestamps so players know how long the season runs before they
+  // commit. Display-only — both null = the window line is omitted.
+  seasonStartsAt    DateTime?
+  seasonEndsAt      DateTime?
   resultingSeasonId String? // set when build-season turns this into a Season
 
   signups Signup[]

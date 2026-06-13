@@ -463,8 +463,22 @@ export async function unendSeason(formData: FormData) {
   revalidatePath("/admin/seasons");
 }
 
+// "<start> → <end> (2 weeks)" when both ends are known, else null. Mirrors
+// seasonWindowValue() on the bot side (src/signup.ts) so the post the web opens
+// matches what the bot re-renders on each signup.
+function seasonWindowValue(startsAt: Date | null, endsAt: Date | null): string | null {
+  if (!startsAt || !endsAt) return null;
+  const ts = (d: Date, style: "F" | "R") => `<t:${Math.floor(d.getTime() / 1000)}:${style}>`;
+  const days = Math.round((endsAt.getTime() - startsAt.getTime()) / 86_400_000);
+  const length =
+    days > 0 && days % 7 === 0
+      ? `${days / 7} week${days / 7 === 1 ? "" : "s"}`
+      : `${days} day${days === 1 ? "" : "s"}`;
+  return `${ts(startsAt, "F")} → ${ts(endsAt, "F")} (${length})`;
+}
+
 function buildSignupPayload(
-  round: { id: string; name: string; closesAt: Date | null },
+  round: { id: string; name: string; closesAt: Date | null; seasonStartsAt: Date | null; seasonEndsAt: Date | null },
   signupCount = 0,
 ): {
   embeds: MessageEmbed[];
@@ -476,10 +490,15 @@ function buildSignupPayload(
   const closeLine = round.closesAt
     ? `Sign-ups close <t:${Math.floor(round.closesAt.getTime() / 1000)}:F> (<t:${Math.floor(round.closesAt.getTime() / 1000)}:R>). Withdraw any time before then.`
     : "Withdraw any time before sign-ups close.";
+  const window = seasonWindowValue(round.seasonStartsAt, round.seasonEndsAt);
+  const fields: NonNullable<MessageEmbed["fields"]> = [
+    { name: "Status", value: `**${signupCount} signed up**`, inline: false },
+  ];
+  if (window) fields.push({ name: "Season", value: window, inline: false });
   const embed: MessageEmbed = {
     title: `🃏  ${round.name}`,
     description: `Click below to register. ${closeLine}`,
-    fields: [{ name: "Status", value: `**${signupCount} signed up**`, inline: false }],
+    fields,
     color: 0x5865f2,
     footer: { text: `Round ${round.id}` },
   };
@@ -539,6 +558,16 @@ export async function openSignupsForSeason(formData: FormData) {
   const closesAtDate = closesAtStr ? new Date(closesAtStr) : null;
   const closesAt = closesAtDate && !Number.isNaN(closesAtDate.getTime()) ? closesAtDate : null;
 
+  // Optional planned season window — display-only, shown in the signup post so
+  // players know how long the season runs before committing.
+  const parseDate = (key: string): Date | null => {
+    const raw = String(formData.get(key) ?? "").trim();
+    const d = raw ? new Date(raw) : null;
+    return d && !Number.isNaN(d.getTime()) ? d : null;
+  };
+  const seasonStartsAt = parseDate("seasonStartsAt");
+  const seasonEndsAt = parseDate("seasonEndsAt");
+
   const seasonLabel = formatSeasonLabel(season!);
   const round = await prisma.signupRound.create({
     data: {
@@ -549,6 +578,8 @@ export async function openSignupsForSeason(formData: FormData) {
       resultingSeasonId: season!.id,
       status: "OPEN",
       closesAt,
+      seasonStartsAt,
+      seasonEndsAt,
     },
   });
 
@@ -632,6 +663,58 @@ export async function updateSignupCloseDate(formData: FormData) {
   );
   revalidatePath("/admin/seasons");
   redirect("/admin/seasons?ok=close-updated");
+}
+
+// Set (or clear) the planned season window on an already-open round and
+// re-render the Discord signup post so the "Season" line updates. Blank both
+// fields to remove the window. Display-only — doesn't affect any scheduling.
+export async function updateSeasonWindow(formData: FormData) {
+  const { user } = await requireAdmin();
+  const roundId = String(formData.get("roundId") ?? "");
+  if (!roundId) redirect("/admin/seasons?err=missing-fields");
+
+  const parseDate = (key: string): Date | null => {
+    const raw = String(formData.get(key) ?? "").trim();
+    const d = raw ? new Date(raw) : null;
+    return d && !Number.isNaN(d.getTime()) ? d : null;
+  };
+  const seasonStartsAt = parseDate("seasonStartsAt");
+  const seasonEndsAt = parseDate("seasonEndsAt");
+
+  const round = await prisma.signupRound.findUnique({ where: { id: roundId } });
+  if (!round) redirect("/admin/seasons?err=round-not-found");
+  if (round!.status !== "OPEN") redirect("/admin/seasons?err=round-not-open");
+
+  const updated = await prisma.signupRound.update({
+    where: { id: roundId },
+    data: { seasonStartsAt, seasonEndsAt },
+  });
+
+  if (updated.messageId && updated.messageId !== "pending") {
+    const signupCount = await prisma.signup.count({ where: { roundId } });
+    await editChannelMessage(updated.channelId, updated.messageId, buildSignupPayload(updated, signupCount)).catch(
+      (err) => console.warn("[signups.update-window] message edit failed:", err),
+    );
+  }
+
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "signup-round.update-window",
+    targetType: "SignupRound",
+    targetId: roundId,
+    summary:
+      seasonStartsAt && seasonEndsAt
+        ? `Set season window ${seasonStartsAt.toISOString()} → ${seasonEndsAt.toISOString()}`
+        : "Cleared season window",
+    metadata: {
+      roundId,
+      seasonStartsAt: seasonStartsAt?.toISOString() ?? null,
+      seasonEndsAt: seasonEndsAt?.toISOString() ?? null,
+    },
+  });
+
+  revalidatePath("/admin/seasons");
+  redirect("/admin/seasons?ok=window-updated");
 }
 
 // Enqueue one DM per subscriber. The bot's pg-boss worker drains them

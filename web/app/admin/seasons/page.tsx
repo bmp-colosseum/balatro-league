@@ -15,6 +15,7 @@ import {
   finalizeSignupsForSeason,
   openSignupsForSeason,
   updateSignupCloseDate,
+  updateSeasonWindow,
   setSeasonPreset,
   unarchiveSeason,
   unendSeason,
@@ -450,6 +451,15 @@ function LifecycleActions({
             <Button type="submit" variant="secondary">Update</Button>
           </form>
         </details>
+        <details style={{ marginTop: 8 }}>
+          <summary style={{ cursor: "pointer", fontSize: 12 }} className="muted">Set season window</summary>
+          <form action={updateSeasonWindow} style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <input type="hidden" name="roundId" value={round.id} />
+            <LocalDateTimeField name="seasonStartsAt" label="Season starts (your time — blank both to clear)" />
+            <LocalDateTimeField name="seasonEndsAt" label="Season ends (your time)" />
+            <Button type="submit" variant="secondary">Update</Button>
+          </form>
+        </details>
       </div>
     );
   }
@@ -473,6 +483,8 @@ function LifecycleActions({
           options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
         />
         <LocalDateTimeField name="closesAt" label="Signups close (your time, optional)" />
+        <LocalDateTimeField name="seasonStartsAt" label="Season starts (your time, optional)" />
+        <LocalDateTimeField name="seasonEndsAt" label="Season ends (your time, optional)" />
         <Button type="submit" disabled={channels.length === 0}>Open signups</Button>
       </form>
       <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
