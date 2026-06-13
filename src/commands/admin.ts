@@ -7,7 +7,6 @@
 // rankings, presets, etc.) live on www.balatroleague.com.
 
 import {
-  AttachmentBuilder,
   ChannelType,
   MessageFlags,
   PermissionFlagsBits,
@@ -20,7 +19,6 @@ import { enqueueAnnounceResult, runDisplayNameRefresh } from "../queue.js";
 import { actorFromInteractionUser, recordAudit } from "../audit.js";
 import { activeSeasonMemberAutocomplete } from "./autocomplete.js";
 import { prisma } from "../db.js";
-import { buildLeagueExport, exportFilename, serializeExport } from "../league-export.js";
 import { requireAdmin, requireHelper } from "../permissions.js";
 import { getOrCreatePlayer } from "../players.js";
 import { gamesFromResult, parsePairingResult } from "../scoring.js";
@@ -103,11 +101,6 @@ export const admin: SlashCommand = {
             .setDescription("Match session ID — shown in the embed footer as 'Match {id}'")
             .setRequired(true),
         ),
-    )
-    .addSubcommand((sub) =>
-      sub
-        .setName("export-results")
-        .setDescription("Dump the league's restorable state as a JSON file attachment."),
     )
     .addSubcommand((sub) =>
       sub
@@ -202,7 +195,6 @@ export const admin: SlashCommand = {
     if (sub === "forfeit") return recordForfeit(interaction);
     if (sub === "strike") return recordStrike(interaction);
     if (sub === "strikes") return listStrikes(interaction);
-    if (sub === "export-results") return exportResults(interaction);
     if (sub === "reload-emojis") return reloadEmojis(interaction);
     if (sub === "sync-names") return syncNames(interaction);
     if (sub === "cancel-match") return cancelMatch(interaction);
@@ -515,37 +507,6 @@ async function recordShootout(interaction: ChatInputCommandInteraction) {
 // Exported so /report-shootout (in src/commands/report.ts) can call the
 // same persistence helper without duplicating the validation logic.
 export const __shootoutHelper = persistShootout;
-
-// Build a fresh league snapshot and post it as an ephemeral attachment
-// reply so only the admin who ran the command sees the file. The weekly
-// cron-driven backup posts publicly to bot-commands; this command is
-// for ad-hoc dumps without spamming the channel.
-async function exportResults(interaction: ChatInputCommandInteraction) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  try {
-    const data = await buildLeagueExport();
-    const buf = serializeExport(data);
-    const filename = exportFilename();
-    const attachment = new AttachmentBuilder(buf, { name: filename });
-    const matchCount = data.seasons.reduce((sum, s) => sum + s.divisions.reduce((d, dv) => d + dv.matches.length, 0), 0);
-    await interaction.editReply({
-      content:
-        `📦 League snapshot: ${data.seasons.length} seasons, ${data.players.length} players, ` +
-        `${matchCount} matches. ` +
-        `File size ${(buf.length / 1024).toFixed(1)}KB.`,
-      files: [attachment],
-    });
-    recordAudit({
-      actor: actorFromInteractionUser(interaction.user),
-      action: "league.export",
-      summary: `Exported league snapshot (${data.seasons.length} seasons, ${data.players.length} players)`,
-      metadata: { seasonCount: data.seasons.length, playerCount: data.players.length, matchCount, sizeBytes: buf.length },
-    });
-  } catch (err) {
-    console.warn("[admin export-results] failed:", err);
-    await interaction.editReply("Export failed — check bot logs.");
-  }
-}
 
 // Add the calling admin to a specific match channel's permission overwrites.
 // Match channels are private (only the 2 players see them by default), so
