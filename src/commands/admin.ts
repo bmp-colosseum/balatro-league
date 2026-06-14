@@ -93,6 +93,18 @@ export const admin: SlashCommand = {
     )
     .addSubcommand((sub) =>
       sub
+        .setName("void-player")
+        .setDescription("DQ a player by VOIDING all their games (no 2-0s to opponents, no losses to them).")
+        .addUserOption((opt) => opt.setName("player").setDescription("Player to void + remove from the season").setRequired(true))
+        .addStringOption((opt) =>
+          opt
+            .setName("reason")
+            .setDescription("Admin-only reason (recorded for audit, NOT shown to other players)")
+            .setRequired(true),
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub
         .setName("join-match")
         .setDescription("Add yourself to a private match channel to mediate a dispute.")
         .addStringOption((opt) =>
@@ -193,6 +205,7 @@ export const admin: SlashCommand = {
     if (!(await requireAdmin(interaction))) return;
     if (sub === "override-result") return forceResult(interaction);
     if (sub === "forfeit") return recordForfeit(interaction);
+    if (sub === "void-player") return voidPlayer(interaction);
     if (sub === "strike") return recordStrike(interaction);
     if (sub === "strikes") return listStrikes(interaction);
     if (sub === "reload-emojis") return reloadEmojis(interaction);
@@ -802,6 +815,79 @@ async function recordForfeit(interaction: ChatInputCommandInteraction) {
 
   await interaction.editReply(
     `✅ Recorded **${winner.displayName}** def. **${loser.displayName}** — **2-0 by DQ** in **${division.name}**.\n` +
+      `Reason (admin-only): _${reason}_`,
+  );
+}
+
+// DQ a player by VOIDING their season instead of forfeiting individual games:
+// every league match they're part of is set to CANCELLED and they're dropped
+// from their division. Standings count only ACTIVE members' CONFIRMED matches
+// (and skip any pairing whose player isn't active), so this hands NO 2-0s to
+// opponents and records NO losses for the voided player — they're erased from
+// the table as if they never played. Reason is admin-only; unlike /admin
+// forfeit, nothing is announced publicly.
+async function voidPlayer(interaction: ChatInputCommandInteraction) {
+  const playerUser = interaction.options.getUser("player", true);
+  const reason = interaction.options.getString("reason", true).trim();
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const activeSeason = await prisma.season.findFirst({ where: { isActive: true } });
+  if (!activeSeason) {
+    await interaction.editReply("No active season.");
+    return;
+  }
+
+  const player = await getOrCreatePlayer(playerUser);
+
+  // Their division this season (unique per [seasonId, playerId]).
+  const member = await prisma.divisionMember.findFirst({
+    where: { playerId: player.id, division: { seasonId: activeSeason.id } },
+    include: { division: true },
+  });
+  if (!member) {
+    await interaction.editReply(`${playerUser.username} isn't in a division this season.`);
+    return;
+  }
+  const division = member.division;
+
+  // Void every league match they're in (confirmed, pending, or disputed) by
+  // flipping it to CANCELLED — excluded from standings, so opponents keep
+  // nothing from these games and the voided player records no losses.
+  const voided = await prisma.match.updateMany({
+    where: {
+      divisionId: division.id,
+      format: "LEAGUE_BO2",
+      status: { in: ["CONFIRMED", "PENDING", "DISPUTED"] },
+      OR: [{ playerAId: player.id }, { playerBId: player.id }],
+    },
+    data: {
+      status: "CANCELLED",
+      adminOverrideBy: interaction.user.id,
+      adminOverrideReason: "DQ void",
+    },
+  });
+
+  // Drop them from the division so they fall out of the ACTIVE standings.
+  await prisma.divisionMember.update({
+    where: { id: member.id },
+    data: { status: "DROPPED", droppedAt: new Date() },
+  });
+
+  await recomputeDivisionStandings(division.id).catch(() => {});
+
+  recordAudit({
+    actor: actorFromInteractionUser(interaction.user),
+    action: "player.void",
+    targetType: "Player",
+    targetId: player.id,
+    summary: `DQ void: removed ${player.displayName} from ${division.name}, voided ${voided.count} match(es)`,
+    metadata: { playerId: player.id, divisionId: division.id, seasonId: activeSeason.id, voidedMatches: voided.count, reason },
+  });
+
+  await interaction.editReply(
+    `✅ Voided **${player.displayName}** in **${division.name}** — **${voided.count}** match(es) cancelled, removed from standings.\n` +
+      `No 2-0s awarded to opponents, no losses recorded against them.\n` +
       `Reason (admin-only): _${reason}_`,
   );
 }

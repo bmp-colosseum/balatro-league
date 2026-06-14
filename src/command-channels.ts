@@ -67,6 +67,13 @@ export async function checkChannelScope(
   if (scope === "bot-commands-only") {
     const allowed = await resolveBotCommandsChannelIds();
     if (ids.some((id) => allowed.includes(id))) return { allowed: true };
+    // Diagnostic: when this blocks unexpectedly it's almost always a stored-id
+    // mismatch (mentions/names instead of snowflakes). Log what we resolved.
+    console.warn(
+      `[scope] bot-commands-only blocked in ${channelId}` +
+        (parentId ? ` (parent ${parentId})` : "") +
+        ` — allowed=[${allowed.join(",") || "none"}]`,
+    );
     return {
       allowed: false,
       reason: `Run this in ${allowedMention(allowed)} — keeps public bot output out of the other channels.`,

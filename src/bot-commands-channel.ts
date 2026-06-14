@@ -12,10 +12,16 @@ import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
 
 // The bot-commands channel value may be a comma- (or whitespace-) separated
 // LIST of channel ids — admins can allow public player commands in several
-// channels. Split + trim into clean ids.
+// channels. We extract every Discord snowflake (17-20 digit run) from the raw
+// value, which makes this tolerant of how admins actually paste ids:
+//   "123, 456"        → ["123","456"]
+//   "<#123> <#456>"   → ["123","456"]   (channel MENTIONS copied from Discord)
+//   "#name, 456"      → ["456"]          (a channel NAME has no snowflake, dropped)
+// Without this, a single pasted <#…> mention or stray '#' made the whole list
+// fail to match interaction.channelId, so commands worked in NO channel.
 function parseIdList(raw: string | null | undefined): string[] {
   if (!raw) return [];
-  return raw.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+  return raw.match(/\d{17,20}/g) ?? [];
 }
 
 // Single id — the FIRST configured bot-commands channel. Used by callers that
