@@ -19,6 +19,7 @@ import {
   clearConfigValue,
   removeRoleBinding,
   setConfigValue,
+  setShowDiscordIds,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -92,6 +93,26 @@ export default async function AdminConfigPage() {
           form-based now. Changes apply immediately (LeagueConfig has a ~30s in-memory
           cache on the bot side, so rules tweaks take up to that long to propagate).
         </p>
+
+        <div className="card" style={{ marginTop: 16 }}>
+          <strong>Display</strong>
+          <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            Controls whether Discord IDs show in the admin player &amp; signup lists
+            (seasons roster, build roster, division detail) across every page.
+          </p>
+          <form action={setShowDiscordIds} style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8 }}>
+            <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13 }}>
+              <input
+                type="checkbox"
+                name="enabled"
+                value="true"
+                defaultChecked={(valueByKey.get("admin_show_discord_ids") ?? "true") !== "false"}
+              />
+              Show Discord IDs in admin player &amp; signup lists
+            </label>
+            <Button type="submit" variant="secondary" size="sm">Save</Button>
+          </form>
+        </div>
 
         <ConfigSection title="Categories" keys={CATEGORY_KEYS} valueByKey={valueByKey} />
         <ConfigSection title="Channels & external" keys={CHANNEL_KEYS} valueByKey={valueByKey} />

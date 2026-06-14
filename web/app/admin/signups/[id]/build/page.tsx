@@ -13,6 +13,7 @@ import { addSignupByDiscordId, addSignupByPlayerId, autoFillRatingsFromMmr, buil
 import { PlayerSearch } from "@/components/PlayerSearch";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { nextSeasonNumber } from "@/lib/format-season";
+import { getShowDiscordIds } from "@/lib/admin-prefs";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,7 @@ export default async function BuildSeasonPage({
   const { id } = await params;
   const { err } = await searchParams;
 
+  const showDiscordIds = await getShowDiscordIds();
   const result = await loadBuildSeasonPage(id);
   if (result === "NOT_FOUND") notFound();
   if (result === "BUILT_REDIRECT") redirect(`/admin/seasons`);
@@ -195,7 +197,7 @@ export default async function BuildSeasonPage({
             const remountKey = ratingRows
               .map((r) => `${r.discordId}:${r.leagueRating ?? "x"}:${r.bmpMmr ?? "x"}`)
               .join("|");
-            return <DraggableRatingTable key={remountKey} initial={ratingRows} formAction={saveRatings} roundId={round.id} />;
+            return <DraggableRatingTable key={remountKey} initial={ratingRows} formAction={saveRatings} roundId={round.id} showDiscordId={showDiscordIds} />;
           })()}
         </div>
 

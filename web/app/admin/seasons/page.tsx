@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/admin";
 import { loadAdminSeasonsIndex } from "@/lib/loaders/admin";
+import { getShowDiscordIds } from "@/lib/admin-prefs";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +55,7 @@ export default async function AdminSeasonsPage({
     guildId: process.env.DISCORD_GUILD_ID,
   });
   const nextNumber = await nextSeasonNumber(prisma);
+  const showDiscordIds = await getShowDiscordIds();
 
   // Timeline ordering: ACTIVE first, then ended descending by endedAt
   // (most-recently-ended is the one whose final standings drive next
@@ -295,6 +297,7 @@ export default async function AdminSeasonsPage({
                   channels={channels}
                   signupsDefaultChannelId={signupsDefaultChannelId}
                   playerCount={players}
+                  showDiscordIds={showDiscordIds}
                 />
 
                 {s.archivedAt && (
@@ -361,10 +364,10 @@ interface LifecycleChannel { id: string; name: string }
 // Roster list + a button to re-pull names from Discord. Refresh updates each
 // signup's @username and global display name (and backfills global names
 // captured before the column existed).
-function RosterPanel({ round }: { round: LifecycleRound }) {
+function RosterPanel({ round, showDiscordIds }: { round: LifecycleRound; showDiscordIds: boolean }) {
   return (
     <div style={{ margin: "4px 0 8px" }}>
-      <SignupRoster signups={round.signups} />
+      <SignupRoster signups={round.signups} defaultShowId={showDiscordIds} />
       {round.signups.length > 0 && (
         <form action={refreshSignupNames} style={{ marginTop: 4 }}>
           <input type="hidden" name="roundId" value={round.id} />
@@ -388,12 +391,14 @@ function LifecycleActions({
   channels,
   signupsDefaultChannelId,
   playerCount,
+  showDiscordIds,
 }: {
   season: LifecycleSeason;
   round: LifecycleRound | null;
   channels: LifecycleChannel[];
   signupsDefaultChannelId: string | null;
   playerCount: number;
+  showDiscordIds: boolean;
 }) {
   // Step 1: ended → show date + escape hatch to reopen. Unend doesn't
   // touch ratings; it just clears endedAt so endSeason can re-run if a
@@ -452,7 +457,7 @@ function LifecycleActions({
   if (round && round.status === "CLOSED") {
     return (
       <div style={{ marginTop: 8 }}>
-        <RosterPanel round={round} />
+        <RosterPanel round={round} showDiscordIds={showDiscordIds} />
         <Link href={`/admin/signups/${round.id}/build`}>
           <Button type="button"><strong>Build divisions from {round._count.signups} signups →</strong></Button>
         </Link>
@@ -467,7 +472,7 @@ function LifecycleActions({
         <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
           🟢 Signups open in <code>#{channels.find((c) => c.id === round.channelId)?.name ?? round.channelId}</code> — {round._count.signups} joined
         </div>
-        <RosterPanel round={round} />
+        <RosterPanel round={round} showDiscordIds={showDiscordIds} />
         <form action={finalizeSignupsForSeason}>
           <input type="hidden" name="seasonId" value={season.id} />
           <Button type="submit" variant="secondary">Finalize signups →</Button>

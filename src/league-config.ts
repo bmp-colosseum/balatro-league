@@ -70,6 +70,11 @@ export const LeagueConfigKey = {
   // season actually starts; flip back to "false" (or clear it) on launch.
   SignupsOnlyMode: "signups_only_mode",
 
+  // Admin display preference: show Discord IDs in admin player/signup lists
+  // (seasons roster, build roster, division detail). "false" hides them;
+  // unset/"true" shows them. Toggled from /admin/config → Display.
+  AdminShowDiscordIds: "admin_show_discord_ids",
+
   // Lightweight league: set to "true" to NOT auto-create per-division Discord
   // channels/roles when a season activates. Matches happen in #bot-commands,
   // results announce to the central results channel, standings live on the web.

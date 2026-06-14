@@ -7,6 +7,7 @@ import {
   type AdminPlayersListSort,
 } from "@/lib/loaders/admin";
 import { tierColors } from "@/lib/tier-colors";
+import { getShowDiscordIds } from "@/lib/admin-prefs";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -25,6 +26,7 @@ export default async function AdminPlayersPage({
 }) {
   await requireAdmin();
   const { season: seasonId, division: divisionId, sort = "name" } = await searchParams;
+  const showDiscordIds = await getShowDiscordIds();
   const nav = await loadPlayersPageNav({ seasonId, divisionId });
 
   // Mode A — division scoped
@@ -73,7 +75,7 @@ export default async function AdminPlayersPage({
                       <Link href={`/profile/${m.playerId}`} style={{ color: "var(--text)" }}>
                         <strong>{m.displayName}</strong>
                       </Link>
-                      <div className="muted" style={{ fontSize: 10 }}>{m.discordId}</div>
+                      {showDiscordIds && <div className="muted" style={{ fontSize: 10 }}>{m.discordId}</div>}
                     </td>
                     <td>{m.rank ?? "—"}</td>
                     <td><strong>{m.points}</strong></td>
@@ -127,7 +129,7 @@ export default async function AdminPlayersPage({
             <details className="card">
               <summary style={{ cursor: "pointer" }}><strong>Inactive (dropped) — {view.inactive.length}</strong></summary>
               <table style={{ marginTop: 8 }}>
-                <thead><tr><th>Player</th><th>Dropped</th><th>Discord</th><th></th></tr></thead>
+                <thead><tr><th>Player</th><th>Dropped</th>{showDiscordIds && <th>Discord</th>}<th></th></tr></thead>
                 <tbody>
                   {view.inactive.map((m) => (
                     <tr key={m.membershipId}>
@@ -137,7 +139,7 @@ export default async function AdminPlayersPage({
                         </Link>
                       </td>
                       <td className="muted">{m.droppedAt?.toISOString().slice(0, 10) ?? "—"}</td>
-                      <td><span className="muted" style={{ fontSize: 11 }}>{m.discordId}</span></td>
+                      {showDiscordIds && <td><span className="muted" style={{ fontSize: 11 }}>{m.discordId}</span></td>}
                       <td>
                         <form action={reinstatePlayer} style={{ display: "inline-block" }}>
                           <input type="hidden" name="playerId" value={m.playerId} />

@@ -56,10 +56,12 @@ export function DraggableRatingTable({
   initial,
   formAction,
   roundId,
+  showDiscordId = true,
 }: {
   initial: RatingRow[];
   formAction: (formData: FormData) => void | Promise<void>;
   roundId: string;
+  showDiscordId?: boolean;
 }) {
   const [rows, setRows] = useState<RatingRow[]>(initial);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
@@ -276,7 +278,9 @@ export function DraggableRatingTable({
                   ) : (
                     <strong>{r.displayName}</strong>
                   )}{" "}
-                  <span className="muted" style={{ fontSize: 11 }}>{r.discordId}</span>
+                  {showDiscordId && (
+                    <span className="muted" style={{ fontSize: 11 }}>{r.discordId}</span>
+                  )}
                 </td>
                 <td>
                   <span

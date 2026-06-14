@@ -20,9 +20,15 @@ export interface RosterEntry {
   inGuild: boolean | null;
 }
 
-export function SignupRoster({ signups }: { signups: RosterEntry[] }) {
+export function SignupRoster({
+  signups,
+  defaultShowId = false,
+}: {
+  signups: RosterEntry[];
+  defaultShowId?: boolean;
+}) {
   const [query, setQuery] = useState("");
-  const [showId, setShowId] = useState(false);
+  const [showId, setShowId] = useState(defaultShowId);
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
