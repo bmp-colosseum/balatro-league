@@ -73,7 +73,9 @@ export function SignupRoster({ signups }: { signups: RosterEntry[] }) {
               <span style={{ display: "inline-flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
                 <span style={s.inGuild === false ? { opacity: 0.6 } : undefined}>
                   {label(s)}
-                  <DiscordId value={s.discordId} />
+                  {/* @username (Signup.displayName) — only when the label is the
+                      global name, else it'd just duplicate the name shown. */}
+                  <DiscordId value={s.discordId} username={s.globalName ? s.displayName : undefined} />
                 </span>
                 {s.inGuild === false && (
                   <span style={{ color: "#e67e22", fontSize: 11 }} title="Signed up but not currently a member of the Discord server">

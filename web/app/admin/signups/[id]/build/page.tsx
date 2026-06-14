@@ -55,7 +55,7 @@ export default async function BuildSeasonPage({
     : null;
   // Existing players for the "add by name" search picker.
   const allPlayers = await prisma.player.findMany({
-    select: { id: true, displayName: true, discordId: true },
+    select: { id: true, displayName: true, discordId: true, username: true },
     orderBy: { displayName: "asc" },
   });
 

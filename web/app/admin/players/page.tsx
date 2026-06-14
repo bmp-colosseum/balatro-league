@@ -74,7 +74,7 @@ export default async function AdminPlayersPage({
                       <Link href={`/profile/${m.playerId}`} style={{ color: "var(--text)" }}>
                         <strong>{m.displayName}</strong>
                       </Link>
-                      <DiscordId value={m.discordId} />
+                      <DiscordId value={m.discordId} username={m.username} />
                     </td>
                     <td>{m.rank ?? "—"}</td>
                     <td><strong>{m.points}</strong></td>
@@ -136,7 +136,7 @@ export default async function AdminPlayersPage({
                         <Link href={`/profile/${m.playerId}`} style={{ color: "var(--text)" }}>
                           <s>{m.displayName}</s>
                         </Link>
-                        <DiscordId value={m.discordId} />
+                        <DiscordId value={m.discordId} username={m.username} />
                       </td>
                       <td className="muted">{m.droppedAt?.toISOString().slice(0, 10) ?? "—"}</td>
                       <td>
@@ -224,7 +224,7 @@ export default async function AdminPlayersPage({
                     <Link href={`/profile/${p.id}`} style={{ color: "var(--text)" }}>
                       <strong>{p.displayName}</strong>
                     </Link>
-                    <DiscordId value={p.discordId} />
+                    <DiscordId value={p.discordId} username={p.username} />
                   </td>
                   <td>{p.rating ?? <span className="muted">unranked</span>}</td>
                   <td>

@@ -161,7 +161,7 @@ export default async function ResultsPage({
                   <tbody>
                     {sel.matches.map((m) => (
                       <tr key={m.id}>
-                        <td>{m.aName}<DiscordId value={m.aDiscordId} /> <span className="muted">vs</span> {m.bName}<DiscordId value={m.bDiscordId} /></td>
+                        <td>{m.aName}<DiscordId value={m.aDiscordId} username={m.aUsername} /> <span className="muted">vs</span> {m.bName}<DiscordId value={m.bDiscordId} username={m.bUsername} /></td>
                         <td><strong>{m.gamesWonA}-{m.gamesWonB}</strong></td>
                         <td style={{ fontSize: 11 }} className="muted">
                           {m.format === "SHOOTOUT_BO1" ? "⚔ showdown" : m.forfeit ? "by DQ" : "league"}

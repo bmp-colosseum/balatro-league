@@ -7,6 +7,7 @@ import { cookies } from "next/headers";
 
 const SHOW_BMP_MMR_COOKIE = "show_bmp_mmr";
 const SHOW_DISCORD_IDS_COOKIE = "show_discord_ids";
+const SHOW_USERNAMES_COOKIE = "show_usernames";
 
 const PREF_COOKIE_OPTS = {
   // 1 year — preference, not a session token.
@@ -36,4 +37,17 @@ export async function setShowDiscordIds(show: boolean): Promise<void> {
   const store = await cookies();
   if (show) store.set(SHOW_DISCORD_IDS_COOKIE, "1", PREF_COOKIE_OPTS);
   else store.delete(SHOW_DISCORD_IDS_COOKIE);
+}
+
+// Public Discord @username display. DEFAULT ON — absence of the cookie means
+// show, an explicit "0" hides. So "on" is the no-cookie state.
+export async function getShowUsernames(): Promise<boolean> {
+  const store = await cookies();
+  return store.get(SHOW_USERNAMES_COOKIE)?.value !== "0";
+}
+
+export async function setShowUsernames(show: boolean): Promise<void> {
+  const store = await cookies();
+  if (show) store.delete(SHOW_USERNAMES_COOKIE); // absence = on (default)
+  else store.set(SHOW_USERNAMES_COOKIE, "0", PREF_COOKIE_OPTS);
 }

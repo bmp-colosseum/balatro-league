@@ -207,7 +207,7 @@ function PublicSummary({
                         return (
                           <tr key={r.player.id}>
                             <td>{medal}</td>
-                            <td>{r.dropped ? <s>{link}</s> : link}<DiscordId value={r.player.discordId} /></td>
+                            <td>{r.dropped ? <s>{link}</s> : link}<DiscordId value={r.player.discordId} username={r.player.username} /></td>
                             {isEnded && (
                               <td>
                                 {isAdmin ? (
@@ -281,7 +281,7 @@ async function AdminSeasonPanel({
   });
   // Existing players for the draft editor's "add existing player" search.
   const allPlayers = await prisma.player.findMany({
-    select: { id: true, displayName: true, discordId: true },
+    select: { id: true, displayName: true, discordId: true, username: true },
     orderBy: { displayName: "asc" },
   });
 

@@ -29,6 +29,7 @@ export interface ReportRecentMatch {
   opponentPlayerId: string;
   opponentDisplayName: string;
   opponentDiscordId: string;
+  opponentUsername: string | null;
   myGames: number;
   opponentGames: number;
   outcome: "WIN" | "DRAW" | "LOSS";
@@ -102,8 +103,8 @@ export async function loadReportPageData(discordId: string): Promise<ReportPageD
       gamesWonA: true,
       gamesWonB: true,
       confirmedAt: true,
-      playerA: { select: { id: true, displayName: true, discordId: true } },
-      playerB: { select: { id: true, displayName: true, discordId: true } },
+      playerA: { select: { id: true, displayName: true, discordId: true, username: true } },
+      playerB: { select: { id: true, displayName: true, discordId: true, username: true } },
     },
     orderBy: { confirmedAt: "desc" },
   });
@@ -140,6 +141,7 @@ export async function loadReportPageData(discordId: string): Promise<ReportPageD
         opponentPlayerId: opp.id,
         opponentDisplayName: opp.displayName,
         opponentDiscordId: opp.discordId,
+        opponentUsername: opp.username,
         myGames,
         opponentGames: oppGames,
         outcome,

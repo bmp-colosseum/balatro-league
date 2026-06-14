@@ -29,7 +29,7 @@ export async function GET() {
 
   const admin = await isAdminUser();
   const players = await prisma.player.findMany({
-    select: { id: true, displayName: true, discordId: true },
+    select: { id: true, displayName: true, discordId: true, username: true },
     orderBy: { displayName: "asc" },
     take: 1000,
   });

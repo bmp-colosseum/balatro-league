@@ -9,6 +9,7 @@ export interface PlayersListEntry {
   id: string;
   displayName: string;
   discordId: string;
+  username: string | null;
   membership: {
     division: {
       id: string;
@@ -25,6 +26,7 @@ export async function loadPlayersList(): Promise<PlayersListEntry[]> {
     select: {
       id: true,
       discordId: true,
+      username: true,
       displayName: true,
       memberships: {
         where: { division: { season: { isActive: true } } },
@@ -51,6 +53,7 @@ export async function loadPlayersList(): Promise<PlayersListEntry[]> {
         id: p.id,
         displayName: p.displayName,
         discordId: p.discordId,
+        username: p.username,
         membership: m
           ? {
               division: {

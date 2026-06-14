@@ -39,7 +39,7 @@ export default async function PlayersPage() {
                       <Link href={`/profile/${p.id}`} style={{ color: "var(--text)" }}>
                         {p.displayName}
                       </Link>
-                      <DiscordId value={p.discordId} />
+                      <DiscordId value={p.discordId} username={p.username} />
                     </td>
                     <td data-label="Division">
                       {p.membership ? (

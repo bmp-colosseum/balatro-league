@@ -46,7 +46,7 @@ export default async function TraitsAdminPage() {
                     {row.holders.map((h) => (
                       <li key={h.id}>
                         <Link href={`/profile/${h.id}`}>{h.name}</Link>
-                        <DiscordId value={h.discordId} />
+                        <DiscordId value={h.discordId} username={h.username} />
                       </li>
                     ))}
                   </ul>

@@ -33,6 +33,11 @@ model Player {
   // The currently-shown name. Auto-synced from Discord on /me visit UNLESS
   // hasCustomDisplayName=true (user has set their own override).
   displayName          String
+  // The player's Discord @username (handle), e.g. "coolguy". Distinct from
+  // displayName (which is their global/nick name) and discordId (numeric).
+  // Synced from Discord alongside displayName; shown publicly so people can
+  // find each other on Discord. Null until first synced.
+  username             String?
   // Whether the player explicitly set their own displayName. False (default)
   // means "let Discord be the source of truth — auto-sync on login." True
   // means "they typed this, leave it alone."

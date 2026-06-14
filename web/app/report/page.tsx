@@ -136,7 +136,7 @@ export default async function ReportPage({
                       <td>{date}</td>
                       <td>
                         <Link href={`/profile/${m.opponentPlayerId}`} style={{ color: "var(--text)" }}>{m.opponentDisplayName}</Link>
-                        <DiscordId value={m.opponentDiscordId} />
+                        <DiscordId value={m.opponentDiscordId} username={m.opponentUsername} />
                       </td>
                       <td><strong>{m.myGames}–{m.opponentGames}</strong></td>
                       <td><span className="pill" style={{ background: outcome.bg, color: outcome.fg, fontSize: isDisputed ? 10 : undefined }}>{outcome.label}</span></td>

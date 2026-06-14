@@ -15,6 +15,7 @@ export interface StatsLeaderRow {
   playerId: string;
   displayName: string;
   discordId: string;
+  username: string | null;
   value: number;
 }
 
@@ -47,6 +48,7 @@ export interface StatsStreakRow {
   playerId: string;
   displayName: string;
   discordId: string;
+  username: string | null;
   streak: number;
   isActive: boolean;
 }
@@ -140,7 +142,7 @@ async function computeStatsPageData(): Promise<StatsPageData> {
       where: { rating: { not: null } },
       orderBy: { rating: "asc" },
       take: 5,
-      select: { id: true, displayName: true, discordId: true, rating: true },
+      select: { id: true, displayName: true, discordId: true, username: true, rating: true },
     }),
     prisma.match.groupBy({ by: ["playerAId"], where: { ...matchWhere, gamesWonA: 2 }, _count: { _all: true } }),
     prisma.match.groupBy({ by: ["playerBId"], where: { ...matchWhere, gamesWonB: 2 }, _count: { _all: true } }),
@@ -158,6 +160,7 @@ async function computeStatsPageData(): Promise<StatsPageData> {
     playerId: p.id,
     displayName: p.displayName,
     discordId: p.discordId,
+    username: p.username,
     value: p.rating ?? 0,
   }));
 
@@ -174,13 +177,15 @@ async function computeStatsPageData(): Promise<StatsPageData> {
   const leaderIds = new Set<string>([...topMatch.map((e) => e[0]), ...topGames.map((e) => e[0])]);
   const leaderNames = leaderIds.size === 0
     ? []
-    : await prisma.player.findMany({ where: { id: { in: [...leaderIds] } }, select: { id: true, displayName: true, discordId: true } });
+    : await prisma.player.findMany({ where: { id: { in: [...leaderIds] } }, select: { id: true, displayName: true, discordId: true, username: true } });
   const nameById = new Map(leaderNames.map((p) => [p.id, p.displayName]));
   const discordById = new Map(leaderNames.map((p) => [p.id, p.discordId]));
+  const usernameById = new Map(leaderNames.map((p) => [p.id, p.username]));
   const toLeaderRow = ([playerId, value]: [string, number]): StatsLeaderRow => ({
     playerId,
     displayName: nameById.get(playerId) ?? "Unknown",
     discordId: discordById.get(playerId) ?? "",
+    username: usernameById.get(playerId) ?? null,
     value,
   });
   const topByMatchWins = topMatch.map(toLeaderRow);
@@ -271,10 +276,11 @@ async function computeStreaks(): Promise<StatsStreakRow[]> {
   }
   const namesNeeded = await prisma.player.findMany({
     where: { id: { in: activePlayerIds } },
-    select: { id: true, displayName: true, discordId: true },
+    select: { id: true, displayName: true, discordId: true, username: true },
   });
   const namesById = new Map(namesNeeded.map((p) => [p.id, p.displayName]));
   const discordById = new Map(namesNeeded.map((p) => [p.id, p.discordId]));
+  const usernameById = new Map(namesNeeded.map((p) => [p.id, p.username]));
   const streaks: StatsStreakRow[] = [];
   for (const [playerId, list] of pairingsByPlayer) {
     let streak = 0;
@@ -292,7 +298,7 @@ async function computeStreaks(): Promise<StatsStreakRow[]> {
       }
     }
     if (streak >= 3) {
-      streaks.push({ playerId, displayName: namesById.get(playerId) ?? "Unknown", discordId: discordById.get(playerId) ?? "", streak, isActive: activeStreak });
+      streaks.push({ playerId, displayName: namesById.get(playerId) ?? "Unknown", discordId: discordById.get(playerId) ?? "", username: usernameById.get(playerId) ?? null, streak, isActive: activeStreak });
     }
   }
   return streaks.sort((a, b) => b.streak - a.streak).slice(0, 5);

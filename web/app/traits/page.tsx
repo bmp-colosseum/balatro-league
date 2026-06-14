@@ -69,7 +69,7 @@ export default async function TraitsGuidePage() {
                         <span key={h.id}>
                           {i > 0 && ", "}
                           <Link href={`/profile/${h.id}`}>{h.name}</Link>
-                          <DiscordId value={h.discordId} />
+                          <DiscordId value={h.discordId} username={h.username} />
                         </span>
                       ))}
                     </>

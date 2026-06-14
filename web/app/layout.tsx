@@ -3,7 +3,7 @@ import { Silkscreen } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { CommandPalette } from "@/components/CommandPalette";
-import { getShowDiscordIds } from "@/lib/preferences";
+import { getShowDiscordIds, getShowUsernames } from "@/lib/preferences";
 import { isAdminUser } from "@/lib/admin";
 
 // Crisp pixel font for headings + accents — a nod to Balatro's pixel look,
@@ -28,9 +28,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // non-admin can never reveal raw user IDs, cookie or not. (Public username
   // display is separate and not gated here.)
   const showDiscordIds = (await getShowDiscordIds()) && (await isAdminUser());
+  // Public Discord usernames — everyone, default on (⚙️ toggle).
+  const showUsernames = await getShowUsernames();
+  const bodyClass = [showDiscordIds ? "show-discord-ids" : "", showUsernames ? "show-usernames" : ""]
+    .filter(Boolean)
+    .join(" ");
   return (
     <html lang="en" className={pixel.variable}>
-      <body className={showDiscordIds ? "show-discord-ids" : undefined}>
+      <body className={bodyClass || undefined}>
         {children}
         <CommandPalette />
         <Toaster richColors position="top-center" />

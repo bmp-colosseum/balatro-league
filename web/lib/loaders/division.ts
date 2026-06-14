@@ -13,7 +13,7 @@ import { loadDivisionStandings } from "@/lib/standings-cache";
 import { formatSeasonLabel } from "@/lib/format-season";
 
 export interface DivisionStandingRow {
-  player: { id: string; displayName: string; discordId: string; rating: number | null };
+  player: { id: string; displayName: string; discordId: string; username: string | null; rating: number | null };
   points: number;
   wins: number;
   draws: number;
@@ -28,8 +28,8 @@ export interface DivisionStandingRow {
 export interface DivisionRecentPairing {
   id: string;
   date: Date | null;
-  playerA: { id: string; displayName: string; discordId: string };
-  playerB: { id: string; displayName: string; discordId: string };
+  playerA: { id: string; displayName: string; discordId: string; username: string | null };
+  playerB: { id: string; displayName: string; discordId: string; username: string | null };
   gamesWonA: number;
   gamesWonB: number;
   forfeit: boolean;
@@ -41,15 +41,15 @@ export interface DivisionRecentPairing {
 export interface DivisionShootout {
   id: string;
   recordedAt: Date;
-  winner: { id: string; displayName: string; discordId: string };
-  loser: { id: string; displayName: string; discordId: string };
+  winner: { id: string; displayName: string; discordId: string; username: string | null };
+  loser: { id: string; displayName: string; discordId: string; username: string | null };
   notes: string | null;
   selfReported: boolean;
 }
 
 export interface DivisionUnplayed {
-  a: { id: string; displayName: string; discordId: string };
-  b: { id: string; displayName: string; discordId: string };
+  a: { id: string; displayName: string; discordId: string; username: string | null };
+  b: { id: string; displayName: string; discordId: string; username: string | null };
 }
 
 export interface DivisionPageData {
@@ -84,7 +84,7 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
         select: {
           playerId: true,
           status: true,
-          player: { select: { id: true, displayName: true, discordId: true } },
+          player: { select: { id: true, displayName: true, discordId: true, username: true } },
         },
         orderBy: { joinedAt: "asc" },
       },
@@ -100,7 +100,7 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
   // Cached standings — same source as /standings, no recompute.
   const standingsRows = await loadDivisionStandings(divisionId);
   const standings: DivisionStandingRow[] = standingsRows.map((r) => ({
-    player: { id: r.player.id, displayName: r.player.displayName, discordId: r.player.discordId, rating: r.player.rating },
+    player: { id: r.player.id, displayName: r.player.displayName, discordId: r.player.discordId, username: r.player.username, rating: r.player.rating },
     points: r.points,
     wins: r.wins,
     draws: r.draws,
@@ -122,8 +122,8 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
       gamesWonA: true,
       gamesWonB: true,
       forfeit: true,
-      playerA: { select: { id: true, displayName: true, discordId: true } },
-      playerB: { select: { id: true, displayName: true, discordId: true } },
+      playerA: { select: { id: true, displayName: true, discordId: true, username: true } },
+      playerB: { select: { id: true, displayName: true, discordId: true, username: true } },
     },
     orderBy: { confirmedAt: "desc" },
   });

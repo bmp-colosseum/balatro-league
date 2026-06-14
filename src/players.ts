@@ -34,12 +34,22 @@ export async function getOrCreatePlayer(user: User, serverName?: string) {
   const existing = await prisma.player.findUnique({ where: { discordId: user.id } });
   if (existing) {
     const next = serverName?.trim();
-    if (next && !existing.hasCustomDisplayName && next !== existing.displayName) {
-      return prisma.player.update({ where: { discordId: user.id }, data: { displayName: next } });
+    // Keep the @username in sync regardless of the custom-display-name flag —
+    // it's a separate field (the Discord handle), not the shown name.
+    const usernameChanged = user.username !== existing.username;
+    const nameChanged = !!next && !existing.hasCustomDisplayName && next !== existing.displayName;
+    if (usernameChanged || nameChanged) {
+      return prisma.player.update({
+        where: { discordId: user.id },
+        data: {
+          username: user.username,
+          ...(nameChanged ? { displayName: next } : {}),
+        },
+      });
     }
     return existing;
   }
   return prisma.player.create({
-    data: { discordId: user.id, displayName: serverName?.trim() || user.username },
+    data: { discordId: user.id, displayName: serverName?.trim() || user.username, username: user.username },
   });
 }

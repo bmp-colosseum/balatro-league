@@ -124,7 +124,7 @@ export interface HeadToHead {
 }
 
 export interface PlayerHistory {
-  player: { id: string; discordId: string; displayName: string; rating: number | null };
+  player: { id: string; discordId: string; displayName: string; username: string | null; rating: number | null };
   history: SeasonHistoryEntry[];
   totals: {
     seasons: number;
@@ -177,7 +177,7 @@ interface CachedRow {
 export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory | null> {
   const player = await prisma.player.findUnique({
     where: { id: playerId },
-    select: { id: true, discordId: true, displayName: true, rating: true },
+    select: { id: true, discordId: true, displayName: true, username: true, rating: true },
   });
   if (!player) return null;
 

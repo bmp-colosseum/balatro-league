@@ -445,9 +445,11 @@ export async function runDisplayNameRefresh(): Promise<{ updated: number; checke
     console.warn(`[refresh.display-names] couldn't fetch guild ${guildId}`);
     return { updated: 0, checked: 0 };
   }
+  // Fetch ALL players: username syncs for everyone (it's the Discord handle,
+  // independent of a custom display name), while displayName only syncs for
+  // players who haven't set their own (hasCustomDisplayName=false).
   const players = await prisma.player.findMany({
-    where: { hasCustomDisplayName: false },
-    select: { id: true, discordId: true, displayName: true },
+    select: { id: true, discordId: true, displayName: true, username: true, hasCustomDisplayName: true },
   });
   let updated = 0;
   for (const p of players) {
@@ -457,8 +459,11 @@ export async function runDisplayNameRefresh(): Promise<{ updated: number; checke
     // Global display name first, then server nickname, then @username — keep
     // league names tied to the real Discord identity, matching guildDisplayName().
     const name = member.user.globalName ?? member.nickname ?? member.user.username;
-    if (name && name !== p.displayName) {
-      await prisma.player.update({ where: { id: p.id }, data: { displayName: name } });
+    const data: { displayName?: string; username?: string } = {};
+    if (!p.hasCustomDisplayName && name && name !== p.displayName) data.displayName = name;
+    if (member.user.username !== p.username) data.username = member.user.username;
+    if (Object.keys(data).length > 0) {
+      await prisma.player.update({ where: { id: p.id }, data });
       updated++;
     }
   }

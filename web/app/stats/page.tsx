@@ -55,7 +55,7 @@ export default async function StatsPage() {
                     <td>{i + 1}.</td>
                     <td>
                       <Link href={`/profile/${r.playerId}`} style={{ color: "var(--text)" }}>{r.displayName}</Link>
-                      <DiscordId value={r.discordId} />
+                      <DiscordId value={r.discordId} username={r.username} />
                       {r.isActive && <span style={{ marginLeft: 6, color: "#2ecc71", fontSize: 11 }}>● active</span>}
                     </td>
                     <td style={{ textAlign: "right" }}>
@@ -125,7 +125,7 @@ function LeaderCard({
                   <td style={{ width: 24 }}>{medal}</td>
                   <td>
                     <Link href={`/profile/${r.playerId}`} style={{ color: "var(--text)" }}>{r.displayName}</Link>
-                    <DiscordId value={r.discordId} />
+                    <DiscordId value={r.discordId} username={r.username} />
                   </td>
                   <td style={{ textAlign: "right" }}>
                     <strong>{valueFormat(r.value)}</strong>

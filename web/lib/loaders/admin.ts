@@ -26,13 +26,13 @@ export interface AdminDisputeRow {
   divisionId: string;
   divisionName: string;
   tierName: string;
-  playerA: { id: string; displayName: string; discordId: string };
-  playerB: { id: string; displayName: string; discordId: string };
+  playerA: { id: string; displayName: string; discordId: string; username: string | null };
+  playerB: { id: string; displayName: string; discordId: string; username: string | null };
   gamesWonA: number;
   gamesWonB: number;
   disputedAt: Date | null;
-  disputer: { id: string; displayName: string; discordId: string } | null;
-  reporter: { id: string; displayName: string; discordId: string } | null;
+  disputer: { id: string; displayName: string; discordId: string; username: string | null } | null;
+  reporter: { id: string; displayName: string; discordId: string; username: string | null } | null;
   disputeProposedGamesWonA: number | null;
   disputeProposedGamesWonB: number | null;
   disputeReason: string | null;
@@ -52,10 +52,10 @@ export async function loadAdminDisputes(): Promise<AdminDisputeRow[]> {
       disputeProposedGamesWonB: true,
       disputeReason: true,
       disputeThreadId: true,
-      playerA: { select: { id: true, displayName: true, discordId: true } },
-      playerB: { select: { id: true, displayName: true, discordId: true } },
-      disputer: { select: { id: true, displayName: true, discordId: true } },
-      reporter: { select: { id: true, displayName: true, discordId: true } },
+      playerA: { select: { id: true, displayName: true, discordId: true, username: true } },
+      playerB: { select: { id: true, displayName: true, discordId: true, username: true } },
+      disputer: { select: { id: true, displayName: true, discordId: true, username: true } },
+      reporter: { select: { id: true, displayName: true, discordId: true, username: true } },
       division: {
         select: {
           name: true,
@@ -391,6 +391,7 @@ export interface AdminDivisionMemberRow {
   playerId: string;
   displayName: string;
   discordId: string;
+  username: string | null;
   rating: number | null;
   droppedAt: Date | null;
   status: "ACTIVE" | "DROPPED";
@@ -456,6 +457,7 @@ export async function loadAdminPlayersDivisionView(
       playerId: m.playerId,
       displayName: m.player.displayName,
       discordId: m.player.discordId,
+      username: m.player.username,
       rating: m.player.rating,
       droppedAt: m.droppedAt,
       status: m.status,
@@ -488,6 +490,7 @@ export interface AdminPlayersListRow {
   id: string;
   displayName: string;
   discordId: string;
+  username: string | null;
   rating: number | null;
   membership: {
     divisionId: string;
@@ -511,6 +514,7 @@ export async function loadAdminPlayersListView(opts: {
     select: {
       id: true,
       discordId: true,
+      username: true,
       displayName: true,
       rating: true,
       memberships: {
@@ -576,6 +580,7 @@ export async function loadAdminPlayersListView(opts: {
       id: p.id,
       displayName: p.displayName,
       discordId: p.discordId,
+      username: p.username,
       rating: p.rating,
       membership: div
         ? {

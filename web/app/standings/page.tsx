@@ -351,7 +351,7 @@ export default async function StandingsPage() {
                                   return (
                                     <tr key={r.player.id}>
                                       <td><RowBadges medal={medal} promoting={promoting} relegating={relegating} clinchStatus={clinchStatus} showdown={showdown} /></td>
-                                      <td>{r.dropped ? <s>{link}</s> : link}<DiscordId value={r.player.discordId} /></td>
+                                      <td>{r.dropped ? <s>{link}</s> : link}<DiscordId value={r.player.discordId} username={r.player.username} /></td>
                                       <td><strong>{r.points}</strong></td>
                                       <td title={standingRateTooltip(r)}>{r.wins}-{r.draws}-{r.losses}</td>
                                       <td>
@@ -386,7 +386,7 @@ export default async function StandingsPage() {
                                     <span><RowBadges medal={medal} promoting={promoting} relegating={relegating} clinchStatus={clinchStatus} showdown={showdown} /></span>
                                     <Link href={`/profile/${r.player.id}`} className="standings-card-name" style={{ color: "var(--text)" }}>
                                       {r.dropped ? <s>{r.player.displayName}</s> : r.player.displayName}
-                                      <DiscordId value={r.player.discordId} />
+                                      <DiscordId value={r.player.discordId} username={r.player.username} />
                                     </Link>
                                     <strong style={{ whiteSpace: "nowrap" }}>{r.points} pts</strong>
                                   </div>

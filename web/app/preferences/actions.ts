@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { setShowBmpMmr, setShowDiscordIds } from "@/lib/preferences";
+import { setShowBmpMmr, setShowDiscordIds, setShowUsernames } from "@/lib/preferences";
 
 // Flip the show-BMP-MMR cookie. Reads current state from the submitted
 // form so the same action handles both directions (show + hide) — caller
@@ -20,6 +20,14 @@ export async function toggleShowBmpMmr(formData: FormData) {
 export async function toggleShowDiscordIds(formData: FormData) {
   const next = String(formData.get("next") ?? "") === "1";
   await setShowDiscordIds(next);
+  const returnTo = String(formData.get("returnTo") ?? "/");
+  revalidatePath(returnTo);
+}
+
+// Flip the show-Discord-usernames cookie (public; default on).
+export async function toggleShowUsernames(formData: FormData) {
+  const next = String(formData.get("next") ?? "") === "1";
+  await setShowUsernames(next);
   const returnTo = String(formData.get("returnTo") ?? "/");
   revalidatePath(returnTo);
 }

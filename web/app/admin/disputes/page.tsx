@@ -66,10 +66,10 @@ export default async function AdminDisputesPage({
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
                   <strong>
                     <Link href={`/profile/${d.playerA.id}`} style={{ color: "var(--text)" }}>{d.playerA.displayName}</Link>
-                    <DiscordId value={d.playerA.discordId} />
+                    <DiscordId value={d.playerA.discordId} username={d.playerA.username} />
                     {" vs "}
                     <Link href={`/profile/${d.playerB.id}`} style={{ color: "var(--text)" }}>{d.playerB.displayName}</Link>
-                    <DiscordId value={d.playerB.discordId} />
+                    <DiscordId value={d.playerB.discordId} username={d.playerB.username} />
                   </strong>
                   <Link href={`/divisions/${d.divisionId}`} className="muted" style={{ fontSize: 12 }}>
                     {d.divisionName} · {d.tierName}
@@ -94,7 +94,7 @@ export default async function AdminDisputesPage({
                       <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
                         Reported by{" "}
                         <Link href={`/profile/${d.reporter.id}`} style={{ color: "var(--text)" }}>{d.reporter.displayName}</Link>
-                        <DiscordId value={d.reporter.discordId} />
+                        <DiscordId value={d.reporter.discordId} username={d.reporter.username} />
                       </div>
                     )}
                   </div>

@@ -54,7 +54,7 @@ export async function loadSeasonsIndex(): Promise<SeasonIndexEntry[]> {
 }
 
 export interface SeasonDetailStandingRow {
-  player: { id: string; displayName: string; discordId: string };
+  player: { id: string; displayName: string; discordId: string; username: string | null };
   points: number;
   wins: number;
   draws: number;
@@ -146,7 +146,7 @@ export async function loadSeasonDetail(seasonId: string): Promise<SeasonDetailDa
         d.members.map((m) => [m.playerId, m.finalGlobalRank]),
       );
       const rows = (byDiv.get(d.id) ?? []).map((r): SeasonDetailStandingRow => ({
-        player: { id: r.player.id, displayName: r.player.displayName, discordId: r.player.discordId },
+        player: { id: r.player.id, displayName: r.player.displayName, discordId: r.player.discordId, username: r.player.username },
         points: r.points,
         wins: r.wins,
         draws: r.draws,

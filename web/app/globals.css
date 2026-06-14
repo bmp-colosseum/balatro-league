@@ -259,3 +259,14 @@ body.show-discord-ids .discord-id {
   margin-left: 6px;
   user-select: all;
 }
+
+/* Discord @username chips next to player names. Public — shown by default
+   (the ⚙️ "Show Discord usernames" toggle hides them per-browser). */
+.discord-username { display: none; }
+body.show-usernames .discord-username {
+  display: inline;
+  font-size: 0.82em;
+  color: var(--muted);
+  margin-left: 6px;
+  user-select: all;
+}

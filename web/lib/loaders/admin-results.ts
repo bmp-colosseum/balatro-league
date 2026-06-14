@@ -13,6 +13,7 @@ export interface ResultsMember {
   playerId: string;
   displayName: string;
   discordId: string;
+  username: string | null;
 }
 export interface ResultsMatch {
   id: string;
@@ -23,6 +24,8 @@ export interface ResultsMatch {
   bName: string;
   aDiscordId: string;
   bDiscordId: string;
+  aUsername: string | null;
+  bUsername: string | null;
   gamesWonA: number;
   gamesWonB: number;
   status: string;
@@ -44,8 +47,8 @@ export interface ResultsPageData {
 
 export async function loadResultsPage(opts: { divisionId?: string; playerId?: string }): Promise<ResultsPageData> {
   const allPlayers = (
-    await prisma.player.findMany({ select: { id: true, displayName: true, discordId: true }, orderBy: { displayName: "asc" } })
-  ).map((p) => ({ playerId: p.id, displayName: p.displayName, discordId: p.discordId }));
+    await prisma.player.findMany({ select: { id: true, displayName: true, discordId: true, username: true }, orderBy: { displayName: "asc" } })
+  ).map((p) => ({ playerId: p.id, displayName: p.displayName, discordId: p.discordId, username: p.username }));
 
   const season = await prisma.season.findFirst({ where: { isActive: true }, select: { id: true } });
   if (!season) {
@@ -65,11 +68,11 @@ export async function loadResultsPage(opts: { divisionId?: string; playerId?: st
   if (!divisionId && opts.playerId) {
     const mem = await prisma.divisionMember.findFirst({
       where: { playerId: opts.playerId, status: "ACTIVE", division: { seasonId: season.id } },
-      select: { divisionId: true, player: { select: { id: true, displayName: true, discordId: true } } },
+      select: { divisionId: true, player: { select: { id: true, displayName: true, discordId: true, username: true } } },
     });
     if (mem) {
       divisionId = mem.divisionId;
-      resolvedFromPlayer = { playerId: mem.player.id, displayName: mem.player.displayName, discordId: mem.player.discordId };
+      resolvedFromPlayer = { playerId: mem.player.id, displayName: mem.player.displayName, discordId: mem.player.discordId, username: mem.player.username };
     }
   }
 
@@ -78,12 +81,13 @@ export async function loadResultsPage(opts: { divisionId?: string; playerId?: st
   if (division) {
     const membersRaw = await prisma.divisionMember.findMany({
       where: { divisionId: division.id, status: "ACTIVE" },
-      select: { playerId: true, player: { select: { displayName: true, discordId: true } } },
+      select: { playerId: true, player: { select: { displayName: true, discordId: true, username: true } } },
       orderBy: { player: { displayName: "asc" } },
     });
-    const members: ResultsMember[] = membersRaw.map((m) => ({ playerId: m.playerId, displayName: m.player.displayName, discordId: m.player.discordId }));
+    const members: ResultsMember[] = membersRaw.map((m) => ({ playerId: m.playerId, displayName: m.player.displayName, discordId: m.player.discordId, username: m.player.username }));
     const nameById = new Map(members.map((m) => [m.playerId, m.displayName]));
     const discordById = new Map(membersRaw.map((m) => [m.playerId, m.player.discordId]));
+    const usernameById = new Map(membersRaw.map((m) => [m.playerId, m.player.username]));
 
     const matchesRaw = await prisma.match.findMany({
       where: { divisionId: division.id },
@@ -102,6 +106,8 @@ export async function loadResultsPage(opts: { divisionId?: string; playerId?: st
       bName: nameById.get(m.playerBId) ?? m.playerBId,
       aDiscordId: discordById.get(m.playerAId) ?? "",
       bDiscordId: discordById.get(m.playerBId) ?? "",
+      aUsername: usernameById.get(m.playerAId) ?? null,
+      bUsername: usernameById.get(m.playerBId) ?? null,
       gamesWonA: m.gamesWonA,
       gamesWonB: m.gamesWonB,
       status: String(m.status),
