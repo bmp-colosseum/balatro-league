@@ -450,7 +450,9 @@ export async function runDisplayNameRefresh(): Promise<{ updated: number; checke
     if (!isDiscordSnowflake(p.discordId)) continue; // seeded/mock id — skip the API call
     const member = await guild.members.fetch(p.discordId).catch(() => null);
     if (!member) continue; // left the guild
-    const name = member.displayName; // nickname ?? global name ?? username
+    // Global display name first, then server nickname, then @username — keep
+    // league names tied to the real Discord identity, matching guildDisplayName().
+    const name = member.user.globalName ?? member.nickname ?? member.user.username;
     if (name && name !== p.displayName) {
       await prisma.player.update({ where: { id: p.id }, data: { displayName: name } });
       updated++;

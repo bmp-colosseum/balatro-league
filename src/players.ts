@@ -1,30 +1,35 @@
 import { GuildMember, type User } from "discord.js";
 import { prisma } from "./db.js";
 
-// The player's CURRENT server (guild) display name from an interaction:
-// nickname ?? global name ?? username. The invoking member rides along in
-// every guild interaction payload, so this needs NO privileged GuildMembers
-// intent. Returns undefined outside a guild / when unavailable.
+// The player's preferred Discord name from an interaction: account-level
+// global display name first, then server nickname, then @username. We prefer
+// the global profile so league names reflect a player's real Discord identity
+// (and stay consistent with the signup roster) rather than a server-specific
+// nickname. The invoking member rides along in every guild interaction
+// payload, so this needs NO privileged GuildMembers intent. Returns undefined
+// outside a guild / when unavailable.
 export function guildDisplayName(interaction: { member: unknown }): string | undefined {
   const m = interaction.member;
-  if (m instanceof GuildMember) return m.displayName || undefined;
-  if (m && typeof m === "object" && "nick" in m) {
-    const nick = (m as { nick?: string | null }).nick;
-    return nick ?? undefined;
+  if (m instanceof GuildMember) {
+    return m.user.globalName ?? m.nickname ?? m.user.username ?? undefined;
+  }
+  if (m && typeof m === "object") {
+    const raw = m as { nick?: string | null; user?: { global_name?: string | null; username?: string } };
+    return raw.user?.global_name ?? raw.nick ?? raw.user?.username ?? undefined;
   }
   return undefined;
 }
 
 // Look up the Player row for a Discord user, creating one if it doesn't exist.
 //
-// Display name tracks their SERVER nickname: pass guildDisplayName(interaction)
+// Display name tracks their Discord global name: pass guildDisplayName(interaction)
 // for the invoking user and we keep their name in sync with it. We NEVER:
 //   - overwrite a name the player set themselves on the website
 //     (hasCustomDisplayName), nor
 //   - clobber the stored name with the global username when no server name is
 //     supplied (e.g. for an opponent we only have a User). Leaving it alone
 //     lets the daily refresh.display-names sync — which pulls every non-custom
-//     player's guild nick — stay authoritative.
+//     player's global name — stay authoritative.
 export async function getOrCreatePlayer(user: User, serverName?: string) {
   const existing = await prisma.player.findUnique({ where: { discordId: user.id } });
   if (existing) {

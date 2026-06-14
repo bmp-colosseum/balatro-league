@@ -33,7 +33,7 @@ function rest(): REST {
 }
 
 interface DiscordMember {
-  user?: { id: string; username: string };
+  user?: { id: string; username: string; global_name?: string | null };
   nick?: string | null;
   roles: string[];
 }
@@ -65,12 +65,13 @@ export async function fetchDiscordUser(userId: string): Promise<DiscordUser | nu
   }
 }
 
-// Preferred display name for a user. Guild nick first (server-specific),
-// then global username.
+// Preferred display name for a user: account-level global name first, then
+// the server nickname, then the @username. Prefers the real Discord identity
+// over a server-specific nickname, matching the bot's guildDisplayName().
 export async function resolveDisplayName(guildId: string | undefined, userId: string): Promise<string | null> {
   if (guildId) {
     const m = await fetchGuildMember(guildId, userId);
-    if (m) return m.nick || m.user?.username || null;
+    if (m) return m.user?.global_name || m.nick || m.user?.username || null;
   }
   const u = await fetchDiscordUser(userId);
   if (u) return u.global_name || u.username || null;
