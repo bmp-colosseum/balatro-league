@@ -105,6 +105,19 @@ export const admin: SlashCommand = {
     )
     .addSubcommand((sub) =>
       sub
+        .setName("void-match")
+        .setDescription("Void ONE game between two players (cancels it — counts for neither). For a misreport / replay.")
+        .addUserOption((opt) => opt.setName("p1").setDescription("Player 1").setRequired(true))
+        .addUserOption((opt) => opt.setName("p2").setDescription("Player 2").setRequired(true))
+        .addStringOption((opt) =>
+          opt
+            .setName("reason")
+            .setDescription("Admin-only reason (recorded for audit, NOT shown to other players)")
+            .setRequired(true),
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub
         .setName("join-match")
         .setDescription("Add yourself to a private match channel to mediate a dispute.")
         .addStringOption((opt) =>
@@ -206,6 +219,7 @@ export const admin: SlashCommand = {
     if (sub === "override-result") return forceResult(interaction);
     if (sub === "forfeit") return recordForfeit(interaction);
     if (sub === "void-player") return voidPlayer(interaction);
+    if (sub === "void-match") return voidMatch(interaction);
     if (sub === "strike") return recordStrike(interaction);
     if (sub === "strikes") return listStrikes(interaction);
     if (sub === "reload-emojis") return reloadEmojis(interaction);
@@ -888,6 +902,71 @@ async function voidPlayer(interaction: ChatInputCommandInteraction) {
   await interaction.editReply(
     `✅ Voided **${player.displayName}** in **${division.name}** — **${voided.count}** match(es) cancelled, removed from standings.\n` +
       `No 2-0s awarded to opponents, no losses recorded against them.\n` +
+      `Reason (admin-only): _${reason}_`,
+  );
+}
+
+// Void ONE specific game between two players: flip just that LEAGUE_BO2 match to
+// CANCELLED so it counts for neither side. Use for a misreport / agreed replay,
+// vs /admin void-player which erases a whole player. Both players stay in the
+// division; only this one result is wiped.
+async function voidMatch(interaction: ChatInputCommandInteraction) {
+  const p1User = interaction.options.getUser("p1", true);
+  const p2User = interaction.options.getUser("p2", true);
+  const reason = interaction.options.getString("reason", true).trim();
+  if (p1User.id === p2User.id) {
+    await interaction.reply({ content: "Pick two different players.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const activeSeason = await prisma.season.findFirst({ where: { isActive: true } });
+  if (!activeSeason) {
+    await interaction.editReply("No active season.");
+    return;
+  }
+
+  const p1 = await getOrCreatePlayer(p1User);
+  const p2 = await getOrCreatePlayer(p2User);
+  const [playerAId, playerBId] = p1.id < p2.id ? [p1.id, p2.id] : [p2.id, p1.id];
+
+  // Their LEAGUE_BO2 match this season (matches are keyed by division + pair).
+  const match = await prisma.match.findFirst({
+    where: {
+      playerAId,
+      playerBId,
+      format: "LEAGUE_BO2",
+      division: { seasonId: activeSeason.id },
+    },
+    include: { division: true },
+  });
+  if (!match) {
+    await interaction.editReply(`No league match found between **${p1.displayName}** and **${p2.displayName}** this season.`);
+    return;
+  }
+  if (match.status === "CANCELLED") {
+    await interaction.editReply(`That match is already voided.`);
+    return;
+  }
+
+  await prisma.match.update({
+    where: { id: match.id },
+    data: { status: "CANCELLED", adminOverrideBy: interaction.user.id, adminOverrideReason: `void: ${reason}` },
+  });
+  await recomputeDivisionStandings(match.divisionId).catch(() => {});
+
+  recordAudit({
+    actor: actorFromInteractionUser(interaction.user),
+    action: "match.void",
+    targetType: "Match",
+    targetId: match.id,
+    summary: `Voided ${p1.displayName} vs ${p2.displayName} in ${match.division.name}`,
+    metadata: { matchId: match.id, p1: p1.id, p2: p2.id, divisionId: match.divisionId, seasonId: activeSeason.id, reason },
+  });
+
+  await interaction.editReply(
+    `✅ Voided the game between **${p1.displayName}** and **${p2.displayName}** in **${match.division.name}** — it now counts for neither player.\n` +
       `Reason (admin-only): _${reason}_`,
   );
 }
