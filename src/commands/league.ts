@@ -430,11 +430,42 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
         reused.push(`${label} (couldn't set read-only perms — set '@everyone: deny Send Messages' manually)`);
       }
     }
+    // Postable lock for channels members chat in: explicitly GRANT @everyone the
+    // full posting set so it doesn't depend on the server's base @everyone role.
+    // Some servers strip Attach Files / Embed Links / Add Reactions from
+    // @everyone to curb spam — without an explicit allow here, members could
+    // type text but not post images, links, or react. Best-effort + idempotent.
+    async function lockPostable(
+      channel: Awaited<ReturnType<typeof ensureChannel>>,
+      label: string,
+    ) {
+      try {
+        await channel.permissionOverwrites.edit(guild.roles.everyone.id, {
+          ViewChannel: true,
+          ReadMessageHistory: true,
+          SendMessages: true,
+          SendMessagesInThreads: true,
+          AddReactions: true,
+          EmbedLinks: true,
+          AttachFiles: true,
+          UseExternalEmojis: true,
+          UseApplicationCommands: true,
+        });
+      } catch (err) {
+        console.warn(`[bootstrap] couldn't set ${label} postable:`, err);
+        reused.push(`${label} (couldn't grant @everyone posting perms — set 'Attach Files' + 'Embed Links' manually)`);
+      }
+    }
     // Reactions are allowed only in #league-announcements (engagement on news);
     // #league-info and #league-signups stay fully silent.
     await lockReadOnly(infoChan, "#league-info", false);
     await lockReadOnly(announcementsChan, "#league-announcements", true);
     await lockReadOnly(signupChan, "#league-signups", false);
+    // The members-chat channels: explicitly postable (images/links/reactions)
+    // regardless of the server's base @everyone perms.
+    await lockPostable(chatChan, "#league-chat");
+    await lockPostable(botCmdChan, "#league-bot-commands");
+    await lockPostable(feedbackChan, "#league-feedback");
 
     // Human-facing results channel — open for manual posting if the bot's
     // auto-post in #league-results-bot ever has an issue. Created after the
@@ -450,20 +481,11 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       create: { key: "results_human_channel_id", value: humanResultsChan.id, updatedBy: interaction.user.id },
       update: { value: humanResultsChan.id, updatedBy: interaction.user.id },
     });
-    // Explicitly ensure #league-results is POSTABLE by everyone. This channel is
-    // the human-postable backup, but an earlier rename could have left a stale
-    // bot-only deny overwrite on it — clear that by allowing @everyone to post.
-    try {
-      await humanResultsChan.permissionOverwrites.edit(guild.roles.everyone.id, {
-        ViewChannel: true,
-        SendMessages: true,
-        AddReactions: true,
-        ReadMessageHistory: true,
-      });
-    } catch (err) {
-      console.warn("[bootstrap] couldn't ensure #league-results is postable:", err);
-      reused.push("#league-results (couldn't confirm it's postable — check '@everyone: Send Messages' is allowed)");
-    }
+    // Explicitly ensure #league-results is POSTABLE by everyone — including
+    // images/links. It's the human-postable backup, but an earlier rename could
+    // have left a stale bot-only deny overwrite; lockPostable clears that and
+    // grants the full posting set.
+    await lockPostable(humanResultsChan, "#league-results");
 
     // Auto-create a Match Results webhook on #results so the announce
     // path uses the webhook (preferred — gives nicer formatting + no
