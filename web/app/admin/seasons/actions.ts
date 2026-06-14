@@ -10,6 +10,7 @@ import { formatSeasonLabel, nextSeasonNumber } from "@/lib/format-season";
 import {
   createChannelInvite,
   editChannelMessage,
+  fetchDiscordUser,
   postChannelMessage,
   type ComponentActionRow,
   type MessageEmbed,
@@ -715,6 +716,46 @@ export async function updateSeasonWindow(formData: FormData) {
 
   revalidatePath("/admin/seasons");
   redirect("/admin/seasons?ok=window-updated");
+}
+
+// Re-pull each active signup's current Discord @username + global display name
+// from the API and store them, so the admin roster reflects renames (and
+// backfills global names captured before that column existed). REST throttling
+// is handled by @discordjs/rest, so firing them together is safe at our scale.
+export async function refreshSignupNames(formData: FormData) {
+  const { user } = await requireAdmin();
+  const roundId = String(formData.get("roundId") ?? "");
+  if (!roundId) redirect("/admin/seasons?err=missing-fields");
+
+  const signups = await prisma.signup.findMany({
+    where: { roundId, withdrawn: false },
+    select: { id: true, discordId: true },
+  });
+
+  const results = await Promise.all(
+    signups.map(async (s) => {
+      const u = await fetchDiscordUser(s.discordId);
+      if (!u) return false;
+      await prisma.signup.update({
+        where: { id: s.id },
+        data: { displayName: u.username, globalName: u.global_name ?? null },
+      });
+      return true;
+    }),
+  );
+  const updated = results.filter(Boolean).length;
+
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "signup-round.refresh-names",
+    targetType: "SignupRound",
+    targetId: roundId,
+    summary: `Refreshed ${updated}/${signups.length} signup names from Discord`,
+    metadata: { roundId, total: signups.length, updated },
+  });
+
+  revalidatePath("/admin/seasons");
+  redirect(`/admin/seasons?ok=names-refreshed-${updated}`);
 }
 
 // Enqueue one DM per subscriber. The bot's pg-boss worker drains them

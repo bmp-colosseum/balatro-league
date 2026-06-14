@@ -16,6 +16,7 @@ import {
   openSignupsForSeason,
   updateSignupCloseDate,
   updateSeasonWindow,
+  refreshSignupNames,
   setSeasonPreset,
   unarchiveSeason,
   unendSeason,
@@ -357,6 +358,30 @@ interface LifecycleRound {
 }
 interface LifecycleChannel { id: string; name: string }
 
+// Roster list + a button to re-pull names from Discord. Refresh updates each
+// signup's @username and global display name (and backfills global names
+// captured before the column existed).
+function RosterPanel({ round }: { round: LifecycleRound }) {
+  return (
+    <div style={{ margin: "4px 0 8px" }}>
+      <SignupRoster signups={round.signups} />
+      {round.signups.length > 0 && (
+        <form action={refreshSignupNames} style={{ marginTop: 4 }}>
+          <input type="hidden" name="roundId" value={round.id} />
+          <Button
+            type="submit"
+            variant="secondary"
+            size="sm"
+            title="Re-pull each player's current Discord username + global display name"
+          >
+            ↻ Refresh names from Discord
+          </Button>
+        </form>
+      )}
+    </div>
+  );
+}
+
 function LifecycleActions({
   season,
   round,
@@ -427,7 +452,7 @@ function LifecycleActions({
   if (round && round.status === "CLOSED") {
     return (
       <div style={{ marginTop: 8 }}>
-        <SignupRoster signups={round.signups} />
+        <RosterPanel round={round} />
         <Link href={`/admin/signups/${round.id}/build`}>
           <Button type="button"><strong>Build divisions from {round._count.signups} signups →</strong></Button>
         </Link>
@@ -442,7 +467,7 @@ function LifecycleActions({
         <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
           🟢 Signups open in <code>#{channels.find((c) => c.id === round.channelId)?.name ?? round.channelId}</code> — {round._count.signups} joined
         </div>
-        <SignupRoster signups={round.signups} />
+        <RosterPanel round={round} />
         <form action={finalizeSignupsForSeason}>
           <input type="hidden" name="seasonId" value={season.id} />
           <Button type="submit" variant="secondary">Finalize signups →</Button>
