@@ -96,13 +96,17 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("league-info.refresh");
   await boss.createQueue("refresh.display-names");
 
-  // One-shot cleanup for retired queues. archive.stale-threads was the
-  // pre-5c2bc7c hourly cron that got merged into match-sweep's 60s
-  // interval. Its cron schedule row + accumulated jobs (no worker
-  // listens anymore) stay in pg-boss forever unless we explicitly
-  // delete them. unschedule + deleteQueue are idempotent — keeping
-  // them on every boot is cheap insurance.
-  for (const retired of ["archive.stale-threads"]) {
+  // One-shot cleanup for retired queues. Their cron schedule rows +
+  // accumulated jobs (no worker listens anymore) stay in pg-boss forever
+  // unless we explicitly delete them — and the stall detector flags the
+  // piled-up 'created' jobs as a false alarm. unschedule + deleteQueue are
+  // idempotent, so keeping them on every boot is cheap insurance.
+  //   archive.stale-threads — pre-5c2bc7c hourly cron, merged into
+  //                           match-sweep's 60s interval.
+  //   backup.league         — the daily Discord backup, removed in favor of
+  //                           DB backups; its schedule kept enqueuing jobs
+  //                           that triggered a "backup job stuck" alert.
+  for (const retired of ["archive.stale-threads", "backup.league"]) {
     await boss.unschedule(retired).catch(() => {});
     await boss.deleteQueue(retired).catch(() => {});
   }
