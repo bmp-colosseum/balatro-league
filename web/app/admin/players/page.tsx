@@ -7,7 +7,7 @@ import {
   type AdminPlayersListSort,
 } from "@/lib/loaders/admin";
 import { tierColors } from "@/lib/tier-colors";
-import { getShowDiscordIds } from "@/lib/admin-prefs";
+import { getShowDiscordIds } from "@/lib/preferences";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { ConfirmButton } from "@/components/ConfirmButton";

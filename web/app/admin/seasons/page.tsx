@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/admin";
 import { loadAdminSeasonsIndex } from "@/lib/loaders/admin";
-import { getShowDiscordIds } from "@/lib/admin-prefs";
+import { getShowDiscordIds } from "@/lib/preferences";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

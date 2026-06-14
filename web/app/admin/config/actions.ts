@@ -6,28 +6,6 @@ import { requireAdmin, requireOwner } from "@/lib/admin";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import type { PermissionTier } from "@prisma/client";
 
-// Toggle the global "show Discord IDs in admin lists" preference. An unchecked
-// checkbox submits no `enabled` field, so absence = off.
-export async function setShowDiscordIds(formData: FormData) {
-  const { user } = await requireAdmin();
-  const value = formData.get("enabled") === "true" ? "true" : "false";
-  const previous = await prisma.leagueConfig.findUnique({ where: { key: "admin_show_discord_ids" } });
-  await prisma.leagueConfig.upsert({
-    where: { key: "admin_show_discord_ids" },
-    create: { key: "admin_show_discord_ids", value, updatedBy: user.discordId },
-    update: { value, updatedBy: user.discordId },
-  });
-  recordAudit({
-    actor: actorFromAdminUser(user),
-    action: "config.set",
-    targetType: "LeagueConfig",
-    targetId: "admin_show_discord_ids",
-    summary: `Set Show Discord IDs = ${value}`,
-    metadata: { previousValue: previous?.value ?? null, newValue: value },
-  });
-  revalidatePath("/admin/config");
-}
-
 // Upsert a LeagueConfig KV row. Empty string clears (parity with the
 // 'clear' button — explicit empty input deletes the row).
 export async function setConfigValue(formData: FormData) {

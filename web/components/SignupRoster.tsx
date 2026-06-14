@@ -28,7 +28,9 @@ export function SignupRoster({
   defaultShowId?: boolean;
 }) {
   const [query, setQuery] = useState("");
-  const [showId, setShowId] = useState(defaultShowId);
+  // Discord-ID visibility follows the global per-browser preference (the ⚙️
+  // "Show Discord IDs" toggle in the nav), passed down as defaultShowId.
+  const showId = defaultShowId;
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -68,9 +70,6 @@ export function SignupRoster({
           onChange={(e) => setQuery(e.target.value)}
           style={{ flex: "1 1 240px", minWidth: 200, fontSize: 13 }}
         />
-        <label style={{ fontSize: 12, display: "flex", gap: 4, alignItems: "center" }} className="muted">
-          <input type="checkbox" checked={showId} onChange={(e) => setShowId(e.target.checked)} /> Show Discord ID
-        </label>
       </div>
 
       {matches.length === 0 ? (

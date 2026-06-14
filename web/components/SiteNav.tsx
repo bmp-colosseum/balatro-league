@@ -5,8 +5,8 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import { isAdminUser } from "@/lib/admin";
-import { getShowBmpMmr } from "@/lib/preferences";
-import { toggleShowBmpMmr } from "@/app/preferences/actions";
+import { getShowBmpMmr, getShowDiscordIds } from "@/lib/preferences";
+import { toggleShowBmpMmr, toggleShowDiscordIds } from "@/app/preferences/actions";
 import { CommandButton } from "@/components/CommandButton";
 
 const PUBLIC_LINKS = [
@@ -24,6 +24,7 @@ export async function SiteNav({ activePath }: { activePath: string }) {
   const user = session?.user as { name?: string | null } | undefined;
   const isAdmin = isLoggedIn ? await isAdminUser() : false;
   const showingBmpMmr = await getShowBmpMmr();
+  const showingDiscordIds = await getShowDiscordIds();
 
   const links: { href: string; label: string }[] = [...PUBLIC_LINKS];
   if (isLoggedIn) {
@@ -76,6 +77,17 @@ export async function SiteNav({ activePath }: { activePath: string }) {
               >
                 <span className="text-sm">{showingBmpMmr ? "☑" : "☐"}</span>
                 <span>Show BMP MMR</span>
+              </button>
+            </form>
+            <form action={toggleShowDiscordIds}>
+              <input type="hidden" name="next" value={showingDiscordIds ? "0" : "1"} />
+              <input type="hidden" name="returnTo" value={activePath || "/"} />
+              <button
+                type="submit"
+                className="flex w-full cursor-pointer items-center gap-2 rounded border-none bg-transparent px-1 py-1.5 text-left text-[13px] text-foreground hover:bg-secondary"
+              >
+                <span className="text-sm">{showingDiscordIds ? "☑" : "☐"}</span>
+                <span>Show Discord IDs</span>
               </button>
             </form>
           </div>

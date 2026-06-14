@@ -13,7 +13,7 @@ import { addSignupByDiscordId, addSignupByPlayerId, autoFillRatingsFromMmr, buil
 import { PlayerSearch } from "@/components/PlayerSearch";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { nextSeasonNumber } from "@/lib/format-season";
-import { getShowDiscordIds } from "@/lib/admin-prefs";
+import { getShowDiscordIds } from "@/lib/preferences";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
