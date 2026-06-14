@@ -79,17 +79,19 @@ export async function SiteNav({ activePath }: { activePath: string }) {
                 <span>Show BMP MMR</span>
               </button>
             </form>
-            <form action={toggleShowDiscordIds}>
-              <input type="hidden" name="next" value={showingDiscordIds ? "0" : "1"} />
-              <input type="hidden" name="returnTo" value={activePath || "/"} />
-              <button
-                type="submit"
-                className="flex w-full cursor-pointer items-center gap-2 rounded border-none bg-transparent px-1 py-1.5 text-left text-[13px] text-foreground hover:bg-secondary"
-              >
-                <span className="text-sm">{showingDiscordIds ? "☑" : "☐"}</span>
-                <span>Show Discord IDs</span>
-              </button>
-            </form>
+            {isAdmin && (
+              <form action={toggleShowDiscordIds}>
+                <input type="hidden" name="next" value={showingDiscordIds ? "0" : "1"} />
+                <input type="hidden" name="returnTo" value={activePath || "/"} />
+                <button
+                  type="submit"
+                  className="flex w-full cursor-pointer items-center gap-2 rounded border-none bg-transparent px-1 py-1.5 text-left text-[13px] text-foreground hover:bg-secondary"
+                >
+                  <span className="text-sm">{showingDiscordIds ? "☑" : "☐"}</span>
+                  <span>Show Discord IDs (admin)</span>
+                </button>
+              </form>
+            )}
           </div>
         </details>
 

@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { CommandPalette } from "@/components/CommandPalette";
 import { getShowDiscordIds } from "@/lib/preferences";
+import { isAdminUser } from "@/lib/admin";
 
 // Crisp pixel font for headings + accents — a nod to Balatro's pixel look,
 // without hurting readability of the dense tables (body text stays system).
@@ -22,10 +23,11 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  // Per-browser "Show Discord IDs" preference (⚙️ menu). Drives a body class so
-  // every <DiscordId> across the app shows/hides via CSS without each page
-  // having to thread the cookie down.
-  const showDiscordIds = await getShowDiscordIds();
+  // Numeric Discord IDs are ADMIN-ONLY. The body class is applied only when the
+  // viewer is an admin AND has the ⚙️ "Show Discord IDs" toggle on — so a
+  // non-admin can never reveal raw user IDs, cookie or not. (Public username
+  // display is separate and not gated here.)
+  const showDiscordIds = (await getShowDiscordIds()) && (await isAdminUser());
   return (
     <html lang="en" className={pixel.variable}>
       <body className={showDiscordIds ? "show-discord-ids" : undefined}>
