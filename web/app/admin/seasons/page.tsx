@@ -22,6 +22,7 @@ import {
 } from "./actions";
 import { bootstrapSeasonDiscord, setSeasonDiscordCategory, rehomeSeasonDiscord } from "./bootstrap-actions";
 import { SeasonDeckPresetPicker } from "@/components/SeasonDeckPresetPicker";
+import { SignupRoster } from "@/components/SignupRoster";
 import { listGuildTextChannels } from "@/lib/discord";
 import { formatSeasonLabel, nextSeasonNumber } from "@/lib/format-season";
 import { prisma } from "@/lib/prisma";
@@ -352,30 +353,9 @@ interface LifecycleRound {
   status: "OPEN" | "CLOSED" | "BUILT";
   channelId: string;
   _count: { signups: number };
-  signups: { displayName: string; signedUpAt: Date }[];
+  signups: { displayName: string; discordId: string; signedUpAt: Date }[];
 }
 interface LifecycleChannel { id: string; name: string }
-
-// Collapsible roster of the people currently signed up (active, non-withdrawn).
-// Names are admin-only — the public signup embed shows the count alone — so
-// this is the only spot an admin can eyeball who's actually in before building.
-function SignupRoster({ signups }: { signups: { displayName: string; signedUpAt: Date }[] }) {
-  if (signups.length === 0) {
-    return <div className="muted" style={{ fontSize: 12, margin: "4px 0" }}>No one signed up yet.</div>;
-  }
-  return (
-    <details style={{ margin: "4px 0 8px" }}>
-      <summary style={{ cursor: "pointer", fontSize: 12 }} className="muted">
-        View who&apos;s signed up ({signups.length})
-      </summary>
-      <ol style={{ margin: "6px 0 0", paddingLeft: 28, fontSize: 13, lineHeight: 1.5 }}>
-        {signups.map((s, i) => (
-          <li key={`${s.displayName}-${i}`}>{s.displayName}</li>
-        ))}
-      </ol>
-    </details>
-  );
-}
 
 function LifecycleActions({
   season,

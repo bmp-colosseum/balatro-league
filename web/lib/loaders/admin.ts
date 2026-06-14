@@ -1110,7 +1110,7 @@ export type AdminSeasonsRound = {
   _count: { signups: number };
   // Active (non-withdrawn) roster, earliest first — so admins can see who's
   // actually in while a round is still open, without opening the build flow.
-  signups: { displayName: string; signedUpAt: Date }[];
+  signups: { displayName: string; discordId: string; signedUpAt: Date }[];
 };
 
 // Signup rounds that exist without a linked Season yet — created via
@@ -1210,7 +1210,7 @@ export async function loadAdminSeasonsIndex(opts: {
           _count: { select: { signups: { where: { withdrawn: false } } } },
           signups: {
             where: { withdrawn: false },
-            select: { displayName: true, signedUpAt: true },
+            select: { displayName: true, discordId: true, signedUpAt: true },
             orderBy: { signedUpAt: "asc" },
           },
         },
