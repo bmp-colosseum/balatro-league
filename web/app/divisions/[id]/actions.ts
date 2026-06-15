@@ -8,6 +8,7 @@ import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { enqueueAnnounceResult } from "@/lib/queue";
 import { reportSetFromWeb, type ReportResultStr } from "@/lib/report";
+import { parseReportForm } from "@/lib/report-form";
 import { recordResult, overrideResult, forfeitResult, recordShowdown, resolveTieWithShowdowns, undoResult, voidGame, voidPlayerInDivision } from "@/lib/match-admin";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
 import { resolveDiscordIdToDisplayName } from "@/lib/add-player";
@@ -21,12 +22,9 @@ export async function reportFromDivisionAction(formData: FormData) {
   const discordId = (session?.user as { discordId?: string } | undefined)?.discordId;
   const divisionId = String(formData.get("divisionId") ?? "");
   if (!discordId) redirect(`/divisions/${divisionId}?reportErr=not-logged-in`);
-  const opponentId = String(formData.get("opponentId") ?? "");
-  const result = String(formData.get("result") ?? "") as ReportResultStr;
-  if (!opponentId || !["2-0", "1-1", "0-2"].includes(result)) {
-    redirect(`/divisions/${divisionId}?reportErr=missing-fields`);
-  }
-  const r = await reportSetFromWeb(discordId!, opponentId, result);
+  const { opponentId, result, deck, stake, lives, valid } = parseReportForm(formData);
+  if (!valid) redirect(`/divisions/${divisionId}?reportErr=missing-fields`);
+  const r = await reportSetFromWeb(discordId!, opponentId, result, { deck, stake }, lives);
   if (!r.ok) redirect(`/divisions/${divisionId}?reportErr=${encodeURIComponent(r.reason)}`);
   revalidatePath(`/divisions/${divisionId}`);
   revalidatePath("/standings");

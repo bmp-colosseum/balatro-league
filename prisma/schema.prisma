@@ -684,8 +684,12 @@ model Game {
   // tiebreaker after head-to-head. Null = not captured (manual /report,
   // admin record-set, forfeit, pre-feature games).
   winnerLives         Int? // 1..N remaining for winnerId; null if not captured
-  deck                String // the picked/played deck
-  stake               String // the picked/played stake
+  // Nullable: the guided ban/pick flow always records the picked deck/stake,
+  // but a manual web report can capture just the winner's lives (for the
+  // tiebreaker) with no per-game deck/stake. Null = not captured. Per-game
+  // deck/stake stats + traits already skip rows that have no GameDeck pool.
+  deck                String? // the picked/played deck (null for lives-only manual reports)
+  stake               String? // the picked/played stake (null for lives-only manual reports)
   dcByPlayerId        String? // set if the game was a disconnect forfeit
   pickedRandomly      Boolean @default(false)
   firstBannedRandomly Boolean @default(false)

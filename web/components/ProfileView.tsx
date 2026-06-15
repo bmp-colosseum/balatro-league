@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { FormSelect } from "@/components/FormSelect";
+import { ReportForm } from "@/components/ReportForm";
+import { CANONICAL_DECKS, CANONICAL_STAKES } from "@/lib/balatro-info";
 import { recordSetForPlayer, recordForfeitForPlayer } from "@/app/admin/players/actions";
 import { reportFromProfileAction, submitProfileDispute } from "@/app/profile/[id]/actions";
 import { resetToDiscordNameAction, setCustomNameAction } from "@/app/me/actions";
@@ -228,33 +230,23 @@ export async function ProfileView({
                 You&apos;ve played everyone in your division.
               </p>
             ) : (
-              <>
-                <form action={reportFromProfileAction} style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
-                  <input type="hidden" name="profileId" value={profile.player.id} />
-                  <span className="muted" style={{ fontSize: 12 }}>vs</span>
-                  <FormSelect
-                    name="opponentId"
-                    required
-                    triggerClassName="flex-1 min-w-[200px]"
-                    placeholder="— pick an opponent —"
-                    options={ownActiveDivision.reportableOpponents.map((o) => ({ value: o.playerId, label: o.displayName }))}
-                  />
-                  <FormSelect
-                    name="result"
-                    required
-                    defaultValue="2-0"
-                    options={[
-                      { value: "2-0", label: "2-0 (I won both)" },
-                      { value: "1-1", label: "1-1 (draw)" },
-                      { value: "0-2", label: "0-2 (I lost both)" },
-                    ]}
-                  />
-                  <Button type="submit">Report</Button>
-                </form>
+              <div style={{ marginTop: 8 }}>
+                <ReportForm
+                  action={reportFromProfileAction}
+                  opponents={ownActiveDivision.reportableOpponents.map((o) => ({
+                    playerId: o.playerId,
+                    displayName: o.displayName,
+                    alreadyPending: false,
+                  }))}
+                  decks={CANONICAL_DECKS.map((d) => d.name)}
+                  stakes={CANONICAL_STAKES.map((s) => s.name)}
+                  selfName={profile.player.displayName}
+                  hiddenFields={{ profileId: profile.player.id }}
+                />
                 <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
                   Recorded right away and posted to <strong>#results</strong>. Your opponent gets a DM to dispute if it&apos;s wrong.
                 </p>
-              </>
+              </div>
             )}
           </div>
         )}
@@ -732,7 +724,11 @@ export async function ProfileView({
                                     <span key={gi} style={{ marginRight: 6 }}>
                                       <span style={{ opacity: 0.6 }}>g{g.num}</span>{" "}
                                       <span
-                                        title={`${g.deck} / ${g.stake}${g.iWon === null ? "" : g.iWon ? " · won" : " · lost"}`}
+                                        title={
+                                          (g.deck && g.stake ? `${g.deck} / ${g.stake}` : "lives only — no deck/stake recorded") +
+                                          (g.lives != null ? ` · winner had ${g.lives} ${g.lives === 1 ? "life" : "lives"} left` : "") +
+                                          (g.iWon === null ? "" : g.iWon ? " · won" : " · lost")
+                                        }
                                         style={{
                                           display: "inline-flex",
                                           alignItems: "center",
@@ -745,11 +741,20 @@ export async function ProfileView({
                                               : undefined,
                                         }}
                                       >
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={deckImage(g.deck)} alt="" width={14} height={14} style={{ borderRadius: 2 }} />
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={stakeImage(g.stake)} alt="" width={14} height={14} style={{ borderRadius: 2 }} />
-                                        {g.deck}/{g.stake}
+                                        {g.deck && g.stake ? (
+                                          <>
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img src={deckImage(g.deck)} alt="" width={14} height={14} style={{ borderRadius: 2 }} />
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img src={stakeImage(g.stake)} alt="" width={14} height={14} style={{ borderRadius: 2 }} />
+                                            {g.deck}/{g.stake}
+                                          </>
+                                        ) : (
+                                          g.lives != null ? `♥${g.lives}` : "—"
+                                        )}
+                                        {g.deck && g.stake && g.lives != null ? (
+                                          <span style={{ opacity: 0.7 }}>&nbsp;♥{g.lives}</span>
+                                        ) : null}
                                       </span>
                                     </span>
                                   ))}

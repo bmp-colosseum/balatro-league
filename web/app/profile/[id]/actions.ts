@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { disputeMatchFromWeb, reportSetFromWeb, type DisputeResultStr, type ReportResultStr } from "@/lib/report";
+import { disputeMatchFromWeb, reportSetFromWeb, type DisputeResultStr } from "@/lib/report";
+import { parseReportForm } from "@/lib/report-form";
 
 // Server action backing the per-match Dispute button on /profile/[id].
 // Only the player themself can dispute their own matches — the action
@@ -47,12 +48,9 @@ export async function reportFromProfileAction(formData: FormData) {
   const discordId = (session?.user as { discordId?: string } | undefined)?.discordId;
   const profileId = String(formData.get("profileId") ?? "");
   if (!discordId) redirect(`/profile/${profileId}?reportErr=not-logged-in`);
-  const opponentId = String(formData.get("opponentId") ?? "");
-  const result = String(formData.get("result") ?? "") as ReportResultStr;
-  if (!opponentId || !["2-0", "1-1", "0-2"].includes(result)) {
-    redirect(`/profile/${profileId}?reportErr=missing-fields`);
-  }
-  const r = await reportSetFromWeb(discordId!, opponentId, result);
+  const { opponentId, result, deck, stake, lives, valid } = parseReportForm(formData);
+  if (!valid) redirect(`/profile/${profileId}?reportErr=missing-fields`);
+  const r = await reportSetFromWeb(discordId!, opponentId, result, { deck, stake }, lives);
   if (!r.ok) redirect(`/profile/${profileId}?reportErr=${encodeURIComponent(r.reason)}`);
   revalidatePath(`/profile/${profileId}`);
   revalidatePath("/standings");

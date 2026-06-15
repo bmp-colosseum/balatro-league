@@ -109,6 +109,11 @@ export async function recordResult(args: {
     },
   });
 
+  // An admin record supplies only the aggregate score — clear any prior
+  // per-game rows (e.g. a web report's lives capture) so they can't contradict
+  // the new result or skew the life-differential tiebreaker.
+  await prisma.game.deleteMany({ where: { matchId: match.id } });
+
   await recordAudit({
     actor,
     action: "match.record",
@@ -152,6 +157,9 @@ export async function overrideResult(args: {
       adminOverrideReason: reason,
     },
   });
+  // Clear stale per-game rows — an override only sets the aggregate, so old
+  // game winners/lives no longer match the corrected result.
+  await prisma.game.deleteMany({ where: { matchId: updated.id } });
   await recordAudit({
     actor,
     action: "match.override",
@@ -217,6 +225,9 @@ export async function forfeitResult(args: {
       forfeitReason: reason,
     },
   });
+  // A DQ/forfeit awards a flat 2-0 — drop any prior per-game rows so a web
+  // report's lives can't linger and contradict it.
+  await prisma.game.deleteMany({ where: { matchId: match.id } });
   await recordAudit({
     actor,
     action: "match.forfeit",
@@ -278,6 +289,9 @@ export async function voidGame(args: {
       adminOverrideReason: overrideReason,
     },
   });
+  // A void is 0-0 with no winner — remove any per-game rows so stale lives
+  // don't feed the tiebreaker for a voided match.
+  await prisma.game.deleteMany({ where: { matchId: match.id } });
   await recordAudit({
     actor,
     action: "match.void",

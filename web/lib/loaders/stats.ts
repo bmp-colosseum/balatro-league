@@ -119,7 +119,11 @@ function buildItemRows(
 
 async function computeStatsPageData(): Promise<StatsPageData> {
   const matchWhere = { status: "CONFIRMED" as const, format: "LEAGUE_BO2" as const };
-  const gameWhere = { dcByPlayerId: null, match: { status: "CONFIRMED" as const } };
+  // deck not null excludes lives-only manual reports (no per-game deck/stake)
+  // from the per-deck/stake/combo aggregates — they'd otherwise form a null
+  // bucket. Manual rows have both deck and stake null, so this one guard covers
+  // all three game-based aggregates below.
+  const gameWhere = { dcByPlayerId: null, deck: { not: null }, match: { status: "CONFIRMED" as const } };
   const poolWhere = { game: { dcByPlayerId: null, match: { status: "CONFIRMED" as const } } };
 
   // ── Everything aggregated at the DB in one parallel batch ───────────
@@ -192,8 +196,10 @@ async function computeStatsPageData(): Promise<StatsPageData> {
   const topByGameWins = topGames.map(toLeaderRow);
 
   // ── Per-deck / per-stake rows (full canonical list) ────────────────
-  const deckGameMap = new Map(deckGameAgg.map((r) => [r.deck, { games: r._count._all, won: r._count.winnerId }]));
-  const stakeGameMap = new Map(stakeGameAgg.map((r) => [r.stake, { games: r._count._all, won: r._count.winnerId }]));
+  // gameWhere filters `deck: { not: null }`, so deck/stake are non-null here
+  // (Prisma's groupBy result type still widens to `string | null`).
+  const deckGameMap = new Map(deckGameAgg.map((r) => [r.deck!, { games: r._count._all, won: r._count.winnerId }]));
+  const stakeGameMap = new Map(stakeGameAgg.map((r) => [r.stake!, { games: r._count._all, won: r._count.winnerId }]));
   const deckBanMap = new Map(deckBanAgg.map((r) => [r.deck, { appearances: r._count._all, bans: r._count.banOrdinal }]));
   const stakeBanMap = new Map(stakeBanAgg.map((r) => [r.stake, { appearances: r._count._all, bans: r._count.banOrdinal }]));
   const pool = await getStandardPool();
@@ -204,8 +210,8 @@ async function computeStatsPageData(): Promise<StatsPageData> {
   const totalComboGames = playedComboAgg.reduce((s, r) => s + r._count._all, 0);
   const mostPlayedCombos: StatsComboRow[] = playedComboAgg
     .map((r) => ({
-      deck: r.deck,
-      stake: r.stake,
+      deck: r.deck!,
+      stake: r.stake!,
       gamesTotal: r._count._all,
       sharePct: totalComboGames === 0 ? 0 : Math.round((r._count._all / totalComboGames) * 100),
       appearancesTotal: 0,

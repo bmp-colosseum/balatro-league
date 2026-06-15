@@ -11,6 +11,13 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { setMatchOutcome } from "@/lib/actions/match-outcome";
 
 export interface PanelMember {
@@ -23,9 +30,6 @@ export interface PanelPair {
   // For finished matches: a short "2-0" / "1-1" / "0-0 void" / "DQ" tag.
   summary?: string;
 }
-
-const selectCls =
-  "rounded border border-border bg-card px-2 py-1.5 text-[13px] text-foreground min-w-[200px]";
 
 function outcomeOptions(p1: string, p2: string, includeUndo: boolean) {
   const opts = [
@@ -72,36 +76,39 @@ function PairForm({
       <input type="hidden" name="returnTo" value={returnTo} />
       <input type="hidden" name="p1" value={p1Id} />
       <input type="hidden" name="p2" value={p2Id} />
-      <select
-        className={selectCls}
+      <Select
         value={pairKey}
-        onChange={(e) => {
-          setPairKey(e.target.value);
+        onValueChange={(v) => {
+          setPairKey(v ?? "");
           setOutcome("");
         }}
       >
-        <option value="">— pick a matchup —</option>
-        {pairs.map((pr) => (
-          <option key={`${pr.p1Id}|${pr.p2Id}`} value={`${pr.p1Id}|${pr.p2Id}`}>
-            {nameOf(pr.p1Id)} vs {nameOf(pr.p2Id)}
-            {pr.summary ? ` — ${pr.summary}` : ""}
-          </option>
-        ))}
-      </select>
+        <SelectTrigger className="min-w-[200px]">
+          <SelectValue placeholder="— pick a matchup —" />
+        </SelectTrigger>
+        <SelectContent>
+          {pairs.map((pr) => (
+            <SelectItem key={`${pr.p1Id}|${pr.p2Id}`} value={`${pr.p1Id}|${pr.p2Id}`}>
+              {nameOf(pr.p1Id)} vs {nameOf(pr.p2Id)}
+              {pr.summary ? ` — ${pr.summary}` : ""}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       {pairKey && (
         <>
-          <select
-            className={selectCls}
-            name="outcome"
-            value={outcome}
-            onChange={(e) => setOutcome(e.target.value)}
-            required
-          >
-            <option value="">— what happened? —</option>
-            {outcomeOptions(nameOf(p1Id!), nameOf(p2Id!), includeUndo).map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+          {/* Radix Select isn't a native <select name>, so mirror the value. */}
+          <input type="hidden" name="outcome" value={outcome} />
+          <Select value={outcome} onValueChange={(v) => setOutcome(v ?? "")}>
+            <SelectTrigger className="min-w-[200px]">
+              <SelectValue placeholder="— what happened? —" />
+            </SelectTrigger>
+            <SelectContent>
+              {outcomeOptions(nameOf(p1Id!), nameOf(p2Id!), includeUndo).map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Input
             type="text"
             name="reason"

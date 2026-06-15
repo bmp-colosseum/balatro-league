@@ -7,8 +7,8 @@ import {
   disputeMatchFromWeb,
   reportSetFromWeb,
   type DisputeResultStr,
-  type ReportResultStr,
 } from "@/lib/report";
+import { parseReportForm } from "@/lib/report-form";
 
 async function currentDiscordId(): Promise<string | null> {
   const session = await auth();
@@ -21,14 +21,9 @@ async function currentDiscordId(): Promise<string | null> {
 export async function submitReportFromReportPage(formData: FormData) {
   const discordId = await currentDiscordId();
   if (!discordId) redirect("/report?err=not-logged-in");
-  const opponentId = String(formData.get("opponentId") ?? "");
-  const result = String(formData.get("result") ?? "") as ReportResultStr;
-  if (!opponentId || !["2-0", "1-1", "0-2"].includes(result)) {
-    redirect("/report?err=missing-fields");
-  }
-  const deck = String(formData.get("deck") ?? "").trim() || null;
-  const stake = String(formData.get("stake") ?? "").trim() || null;
-  const r = await reportSetFromWeb(discordId!, opponentId, result, { deck, stake });
+  const { opponentId, result, deck, stake, lives, valid } = parseReportForm(formData);
+  if (!valid) redirect("/report?err=missing-fields");
+  const r = await reportSetFromWeb(discordId!, opponentId, result, { deck, stake }, lives);
   if (!r.ok) redirect(`/report?err=${encodeURIComponent(r.reason)}`);
   revalidatePath("/report");
   revalidatePath("/me");

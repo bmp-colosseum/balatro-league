@@ -16,6 +16,8 @@ import { DiscordId } from "@/components/DiscordId";
 import { Button } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { MatchActionsPanel } from "@/components/MatchActionsPanel";
+import { ReportForm } from "@/components/ReportForm";
+import { CANONICAL_DECKS, CANONICAL_STAKES } from "@/lib/balatro-info";
 import { FormSelect } from "@/components/FormSelect";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -376,21 +378,16 @@ function UnplayedList({
               <DiscordId value={m.b.discordId} username={m.b.username} />
             </span>
             {viewerIsPlayer && opponent && (
-              <form action={reportFromDivisionAction} style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                <input type="hidden" name="divisionId" value={divisionId} />
-                <input type="hidden" name="opponentId" value={opponent.id} />
-                <FormSelect
-                  name="result"
-                  defaultValue="2-0"
-                  size="sm"
-                  options={[
-                    { value: "2-0", label: "I won 2-0" },
-                    { value: "1-1", label: "Draw 1-1" },
-                    { value: "0-2", label: "I lost 0-2" },
-                  ]}
-                />
-                <Button type="submit" size="sm">Report</Button>
-              </form>
+              <ReportForm
+                action={reportFromDivisionAction}
+                lockedOpponent={{ playerId: opponent.id, displayName: opponent.displayName, alreadyPending: false }}
+                decks={CANONICAL_DECKS.map((d) => d.name)}
+                stakes={CANONICAL_STAKES.map((s) => s.name)}
+                selfName={viewerIsA ? m.a.displayName : m.b.displayName}
+                hiddenFields={{ divisionId }}
+                compact
+                collapsible
+              />
             )}
             {!viewerIsPlayer && isAdmin && (
               <form action={recordFromDivisionAction} style={{ display: "flex", gap: 4, alignItems: "center" }}>

@@ -28,12 +28,15 @@ export interface GamePlayed {
   // 1, 2, or 3 — index into the match's games. Shootouts only have
   // game 1.
   num: 1 | 2 | 3;
-  deck: string;
-  stake: string;
+  // Null for a lives-only manual report (no per-game deck/stake captured).
+  deck: string | null;
+  stake: string | null;
   // True/false from this player's perspective. Null if the game's
   // winnerId wasn't recorded (rare — disputes, custom-combo edge
   // cases). UI hides indeterminate games rather than guessing.
   iWon: boolean | null;
+  // Winner's lives remaining this game, if captured (attrition tiebreaker).
+  lives: number | null;
 }
 
 export interface MatchEntry {
@@ -266,7 +269,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
       playerA: { select: { id: true, displayName: true } },
       playerB: { select: { id: true, displayName: true } },
       games: {
-        select: { num: true, deck: true, stake: true, winnerId: true, dcByPlayerId: true },
+        select: { num: true, deck: true, stake: true, winnerId: true, winnerLives: true, dcByPlayerId: true },
         orderBy: { num: "asc" },
       },
     },
@@ -303,12 +306,16 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
     for (const g of match.games) {
       const iWon = g.winnerId == null ? null : g.winnerId === playerId;
       const num = (g.num === 3 ? 3 : g.num === 2 ? 2 : 1) as 1 | 2 | 3;
-      result.push({ num, deck: g.deck, stake: g.stake, iWon });
+      result.push({ num, deck: g.deck, stake: g.stake, iWon, lives: g.winnerLives });
       if (iWon === null) continue;
       if (g.dcByPlayerId) continue;
-      bumpAgg(deckAgg, g.deck, iWon);
-      bumpAgg(stakeAgg, g.stake, iWon);
-      bumpAgg(comboAgg, `${g.deck} · ${g.stake}`, iWon);
+      // Lives-only manual reports have no deck/stake — skip the per-combo
+      // aggregates for them (they still show in the per-game history above).
+      if (g.deck && g.stake) {
+        bumpAgg(deckAgg, g.deck, iWon);
+        bumpAgg(stakeAgg, g.stake, iWon);
+        bumpAgg(comboAgg, `${g.deck} · ${g.stake}`, iWon);
+      }
     }
     return result;
   }

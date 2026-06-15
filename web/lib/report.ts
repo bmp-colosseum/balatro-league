@@ -44,6 +44,13 @@ function gamesFromResult(r: ReportResultStr): { a: number; b: number } {
   return { a: 1, b: 1 };
 }
 
+// Parse a manual "winner's lives left" input into a non-negative integer.
+// Blank / non-integer / out-of-range → null (not captured).
+function parseLives(v: number | null | undefined): number | null {
+  if (v == null || !Number.isInteger(v) || v < 0 || v > 999) return null;
+  return v;
+}
+
 export type ReportOutcome =
   | { ok: true; pairingId: string; created: boolean }
   | { ok: false; reason: string };
@@ -53,6 +60,7 @@ export async function reportSetFromWeb(
   opponentPlayerId: string,
   result: ReportResultStr,
   combo?: { deck?: string | null; stake?: string | null },
+  lives?: { game1?: number | null; game2?: number | null },
 ): Promise<ReportOutcome> {
   const reporter = await prisma.player.findUnique({ where: { discordId: reporterDiscordId } });
   if (!reporter) return { ok: false, reason: "You don't have a Player record — ask an admin to add you." };
@@ -161,6 +169,32 @@ export async function reportSetFromWeb(
           reportedStake,
         },
       });
+  // Capture the winner's lives per game so the standings life-differential
+  // tiebreaker has data and players don't do the math by hand. Each game's
+  // winner is derived from the result: a 2-0/0-2 has one player winning both;
+  // a 1-1 splits — slot 1 is the reporter's win, slot 2 the opponent's (order
+  // is irrelevant to the differential). A manual report doesn't know the
+  // per-game deck/stake (the headline combo lives on the Match as
+  // reportedDeck/Stake), so those stay null; firstPlayerId is unknown too and
+  // set to A for a stable value (only consumed for games with a GameDeck pool,
+  // which these don't).
+  const livesG1 = parseLives(lives?.game1);
+  const livesG2 = parseLives(lives?.game2);
+  if (livesG1 !== null || livesG2 !== null) {
+    const [w1, w2] =
+      result === "2-0" ? [reporter.id, reporter.id]
+        : result === "0-2" ? [opponentPlayerId, opponentPlayerId]
+        : [reporter.id, opponentPlayerId]; // 1-1: reporter's win, then opponent's
+    // Replace any prior rows so a re-record stays consistent.
+    await prisma.game.deleteMany({ where: { matchId: pairing.id } });
+    await prisma.game.createMany({
+      data: [
+        { matchId: pairing.id, num: 1, firstPlayerId: playerAId, winnerId: w1, winnerLives: livesG1 },
+        { matchId: pairing.id, num: 2, firstPlayerId: playerAId, winnerId: w2, winnerLives: livesG2 },
+      ],
+    });
+  }
+
   recomputeDivisionStandings(division.id).catch((err) =>
     console.warn("[web report] standings recompute failed:", err),
   );
@@ -184,7 +218,7 @@ export async function reportSetFromWeb(
     targetType: "Match",
     targetId: pairing.id,
     summary: `${reporter.displayName} reported ${result} vs ${opponent?.displayName ?? "opponent"} (${division.name})`,
-    metadata: { result, deck: reportedDeck, stake: reportedStake, divisionId: division.id, opponentPlayerId },
+    metadata: { result, deck: reportedDeck, stake: reportedStake, livesG1, livesG2, divisionId: division.id, opponentPlayerId },
   }).catch(() => { /* audit must never block a report */ });
   if (opponent?.discordId) {
     const reporterGames = reporterIsA ? gamesWonA : gamesWonB;
