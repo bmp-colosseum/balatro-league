@@ -35,7 +35,9 @@ export async function SiteNav({ activePath }: { activePath: string }) {
 
   return (
     <header className="flex flex-wrap items-center gap-3 border-b border-border bg-card px-4 py-2.5 md:gap-6 md:px-6 md:py-3">
-      <h1 className="m-0 text-base">🃏 Balatro League</h1>
+      <h1 className="m-0 text-base">
+        <Link href="/" className="text-foreground no-underline hover:opacity-80">🃏 Balatro League</Link>
+      </h1>
       <nav className="pixel flex flex-wrap gap-1 md:gap-2 text-[13px]">
         {links.map((link) => {
           const isActive =
