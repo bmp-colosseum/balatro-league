@@ -16,7 +16,7 @@ export function DiscordId({
   if (!username) return null;
   return (
     <span className="discord-username" title="Discord username">
-      @{username}
+      (@{username})
     </span>
   );
 }
