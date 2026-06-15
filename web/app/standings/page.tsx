@@ -219,7 +219,18 @@ export default async function StandingsPage() {
                 <section key={tier.id} style={{ marginTop: 24 }}>
                   <h3>{tier.name}</h3>
                   <div className="grid grid-2">
-                    {tier.divisions.map((div) => {
+                    {tier.divisions.map((div, divIndex) => {
+                      // Relegation/promotion is a CHAIN across every division
+                      // (incl. between divisions of the same tier): each div's
+                      // bottom drops into the next div, each div's top rises into
+                      // the previous one. The only true ends are the FIRST division
+                      // overall (top tier, first group — nothing above to promote
+                      // to) and the LAST division overall (bottom tier, last group
+                      // — nothing below to relegate to). Gating on the whole
+                      // top/bottom TIER was wrong for multi-division tiers (it hid
+                      // relegation between Common A (1) → Common 2, etc.).
+                      const isFirstDivisionOverall = isTopTier && divIndex === 0;
+                      const isLastDivisionOverall = isBottomTier && divIndex === tier.divisions.length - 1;
                       const droppedIds = new Set(div.droppedMemberIds);
                       const rows = div.rows.map((r) => ({
                         ...r,
@@ -261,8 +272,8 @@ export default async function StandingsPage() {
                       const clinch = computeClinch(
                         rows,
                         activeCount,
-                        isTopTier ? 0 : effective,
-                        isBottomTier ? 0 : effective,
+                        isFirstDivisionOverall ? 0 : effective,
+                        isLastDivisionOverall ? 0 : effective,
                       );
 
                       // Shootout marker is TIER-INDEPENDENT — chains crossing
@@ -275,16 +286,23 @@ export default async function StandingsPage() {
                       for (const chain of chains) {
                         if (chain.length < 2) continue; // not a tie chain
                         if (effective > 0) {
-                          const crossesPromoEdge =
-                            chain.some((i) => i < effective) && chain.some((i) => i >= effective);
-                          if (crossesPromoEdge) {
-                            for (const idx of chain) promoTieRowSet.add(idx);
+                          // No promotion out of the first division overall, no
+                          // relegation out of the last — so a tie at that dead
+                          // edge isn't a showdown (nowhere to move).
+                          if (!isFirstDivisionOverall) {
+                            const crossesPromoEdge =
+                              chain.some((i) => i < effective) && chain.some((i) => i >= effective);
+                            if (crossesPromoEdge) {
+                              for (const idx of chain) promoTieRowSet.add(idx);
+                            }
                           }
-                          const reliEdge = rows.length - effective;
-                          const crossesReliEdge =
-                            chain.some((i) => i < reliEdge) && chain.some((i) => i >= reliEdge);
-                          if (crossesReliEdge) {
-                            for (const idx of chain) relegationTieRowSet.add(idx);
+                          if (!isLastDivisionOverall) {
+                            const reliEdge = rows.length - effective;
+                            const crossesReliEdge =
+                              chain.some((i) => i < reliEdge) && chain.some((i) => i >= reliEdge);
+                            if (crossesReliEdge) {
+                              for (const idx of chain) relegationTieRowSet.add(idx);
+                            }
                           }
                         }
                       }
@@ -294,9 +312,9 @@ export default async function StandingsPage() {
                       const displayRows = rows.map((r, i) => ({
                         r,
                         medal: rankLabel(r, i),
-                        promoting: complete && i < effective && !isTopTier && !promoTieRowSet.has(i),
+                        promoting: complete && i < effective && !isFirstDivisionOverall && !promoTieRowSet.has(i),
                         relegating:
-                          complete && i >= rows.length - effective && !isBottomTier && !relegationTieRowSet.has(i),
+                          complete && i >= rows.length - effective && !isLastDivisionOverall && !relegationTieRowSet.has(i),
                         clinchStatus: complete ? undefined : clinch.get(r.player.id),
                         showdown: complete && (promoTieRowSet.has(i) || relegationTieRowSet.has(i)),
                         mmr: data.mmrByPlayerId.get(r.player.id),
