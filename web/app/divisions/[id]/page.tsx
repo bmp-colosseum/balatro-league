@@ -15,6 +15,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { DiscordId } from "@/components/DiscordId";
 import { Button } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { MatchActionsPanel } from "@/components/MatchActionsPanel";
 import { FormSelect } from "@/components/FormSelect";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -27,14 +28,12 @@ import {
   dropDivisionMember,
   overridePairing,
   reactivateDivisionMember,
-  recordForfeitInDivision,
   recordFromDivisionAction,
   recordSet,
   recordShootout,
   removeDivisionMember,
   reportFromDivisionAction,
   resolveTieAction,
-  voidGameAction,
   voidPlayerAction,
 } from "./actions";
 
@@ -706,71 +705,22 @@ function AdminSection({
         </table>
       </div>
 
-      {/* Record / fix a forfeit (DQ). Works on any pair, played or not — it
-          overwrites an existing result in place, so a wrong DQ is fixed by
-          just re-submitting with the right winner (no delete-first dance). */}
-      <div className="card">
-        <strong>⚖ Record / fix a forfeit (DQ)</strong>
-        <p className="muted" style={{ fontSize: 12, margin: "4px 0 8px" }}>
-          Awards a 2-0 win by DQ (no-show, drop-out, rule break). Works even if the pair already
-          played — it overwrites that result, so to fix a wrong DQ just pick the right winner and
-          submit again. Reason is <strong>admin-only</strong> (players only see &ldquo;by DQ&rdquo;).
-        </p>
-        <form action={recordForfeitInDivision} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          <input type="hidden" name="divisionId" value={divisionId} />
-          <label style={{ fontSize: 12 }}>
-            Winner{" "}
-            <FormSelect
-              name="winnerId"
-              required
-              placeholder="— winner —"
-              options={members.filter((m) => m.status === "ACTIVE").map((m) => ({ value: m.playerId, label: m.player.displayName }))}
-            />
-          </label>
-          <label style={{ fontSize: 12 }}>
-            DQ&apos;d{" "}
-            <FormSelect
-              name="loserId"
-              required
-              placeholder="— loser —"
-              options={members.filter((m) => m.status === "ACTIVE").map((m) => ({ value: m.playerId, label: m.player.displayName }))}
-            />
-          </label>
-          <Input type="text" name="reason" required placeholder="Reason (admin-only)" style={{ flex: "1 1 200px" }} />
-          <Button type="submit">Record DQ</Button>
-        </form>
-      </div>
-
-      {/* Void a single game (records 0-0): finished, no points, not a W/L/D.
-          For a misreport / agreed no-contest. Overwrites an existing result. */}
-      <div className="card">
-        <strong>0⃣ Void a game (0-0)</strong>
-        <p className="muted" style={{ fontSize: 12, margin: "4px 0 8px" }}>
-          Records the game as a <strong>0-0</strong> — counts as <strong>played/finished</strong> (so it
-          won&apos;t show as a remaining match) but awards no points and is neither a win, loss, nor draw.
-          Reason is admin-only.
-        </p>
-        <form action={voidGameAction} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          <input type="hidden" name="divisionId" value={divisionId} />
-          <FormSelect
-            name="p1"
-            required
-            triggerClassName="min-w-[140px]"
-            placeholder="player 1…"
-            options={members.filter((m) => m.status === "ACTIVE").map((m) => ({ value: m.playerId, label: m.player.displayName }))}
-          />
-          <span className="muted">vs</span>
-          <FormSelect
-            name="p2"
-            required
-            triggerClassName="min-w-[140px]"
-            placeholder="player 2…"
-            options={members.filter((m) => m.status === "ACTIVE").map((m) => ({ value: m.playerId, label: m.player.displayName }))}
-          />
-          <Input type="text" name="reason" placeholder="Reason (admin-only)" style={{ flex: "1 1 180px" }} />
-          <Button type="submit" variant="secondary">Void game</Button>
-        </form>
-      </div>
+      {/* Consolidated match actions: pick a matchup → pick what happened.
+          Covers record / override / DQ / void / undo in one flow (replaces the
+          old separate Record-DQ + Void-game cards). */}
+      <MatchActionsPanel
+        divisionId={divisionId}
+        returnTo={`/divisions/${divisionId}`}
+        members={members.filter((m) => m.status === "ACTIVE").map((m) => ({ playerId: m.playerId, displayName: m.player.displayName }))}
+        unplayed={unplayed.map((u) => ({ p1Id: u.a.id, p2Id: u.b.id }))}
+        played={pairings
+          .filter((p) => p.status === "CONFIRMED")
+          .map((p) => ({
+            p1Id: p.playerAId,
+            p2Id: p.playerBId,
+            summary: p.gamesWonA === 0 && p.gamesWonB === 0 ? "0-0 void" : `${p.gamesWonA}-${p.gamesWonB}`,
+          }))}
+      />
 
       {/* DQ / void a whole player: cancel all their games + drop them. No 2-0s
           to opponents, no losses to the player. */}

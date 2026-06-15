@@ -12,12 +12,12 @@ import { AdminNav } from "@/components/AdminNav";
 import { FlashToast } from "@/components/FlashToast";
 import { PlayerSearch } from "@/components/PlayerSearch";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { MatchActionsPanel } from "@/components/MatchActionsPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormSelect } from "@/components/FormSelect";
-import { DistinctMemberSelects } from "@/components/DistinctMemberSelects";
 import { loadResultsPage, type ResultsMember } from "@/lib/loaders/admin-results";
-import { recordResultAction, overrideResultAction, forfeitAction, showdownAction, undoAction } from "./actions";
+import { overrideResultAction, showdownAction, undoAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -85,51 +85,32 @@ export default async function ResultsPage({
           <>
             <h3 style={{ marginTop: 20 }}>{sel.division.tierName} — {sel.division.name}</h3>
 
-            {/* ---- Record a result ---- */}
-            <section className="card">
-              <strong>Record a result</strong>
-              <p className="muted" style={{ fontSize: 12, marginTop: 2 }}>
-                Sets (or overwrites) the best-of-2 between two players. &ldquo;A 2-0&rdquo; means the first player won both.
-              </p>
-              <form action={recordResultAction} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                <input type="hidden" name="divisionId" value={sel.division.id} />
-                <DistinctMemberSelects
+            {/* ---- Match actions: record / DQ / void in one picker ---- */}
+            {(() => {
+              const ids = sel.members.map((m) => m.playerId);
+              const playedKeys = new Set(
+                sel.matches
+                  .filter((m) => m.format === "LEAGUE_BO2")
+                  .map((m) => [m.playerAId, m.playerBId].sort().join("|")),
+              );
+              const unplayed: { p1Id: string; p2Id: string }[] = [];
+              for (let i = 0; i < ids.length; i++) {
+                for (let j = i + 1; j < ids.length; j++) {
+                  const key = [ids[i]!, ids[j]!].sort().join("|");
+                  if (!playedKeys.has(key)) unplayed.push({ p1Id: ids[i]!, p2Id: ids[j]! });
+                }
+              }
+              return (
+                <MatchActionsPanel
+                  divisionId={sel.division.id}
+                  returnTo={`/admin/results?division=${sel.division.id}`}
                   members={sel.members.map((m) => ({ playerId: m.playerId, displayName: m.displayName }))}
-                  nameA="playerAId"
-                  nameB="playerBId"
-                  placeholderA="A…"
-                  placeholderB="B…"
+                  unplayed={unplayed}
+                  played={[]}
+                  showFix={false}
                 />
-                <FormSelect
-                  name="result"
-                  required
-                  defaultValue="2-0"
-                  options={[
-                    { value: "2-0", label: "A wins 2-0" },
-                    { value: "1-1", label: "1-1 draw" },
-                    { value: "0-2", label: "B wins 2-0" },
-                  ]}
-                />
-                <Button type="submit">Record</Button>
-              </form>
-            </section>
-
-            {/* ---- Forfeit / DQ ---- */}
-            <section className="card">
-              <strong>Forfeit / DQ</strong>
-              <p className="muted" style={{ fontSize: 12, marginTop: 2 }}>
-                Awards a 2-0 win by default. Reason is <em>admin-only</em> (players just see &ldquo;by DQ&rdquo;).
-              </p>
-              <form action={forfeitAction} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                <input type="hidden" name="divisionId" value={sel.division.id} />
-                <span className="muted" style={{ fontSize: 12 }}>winner</span>
-                <MemberSelect name="winnerId" members={sel.members} label="winner…" />
-                <span className="muted" style={{ fontSize: 12 }}>loser</span>
-                <MemberSelect name="loserId" members={sel.members} label="forfeited…" />
-                <Input name="reason" required placeholder="Reason (admin-only)" className="flex-1 min-w-[200px]" />
-                <Button type="submit">Record DQ</Button>
-              </form>
-            </section>
+              );
+            })()}
 
             {/* ---- Showdown ---- */}
             <section className="card">
