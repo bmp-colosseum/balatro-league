@@ -475,28 +475,43 @@ export async function runDisplayNameRefresh(): Promise<{ updated: number; checke
     select: { id: true, discordId: true, displayName: true, username: true, hasCustomDisplayName: true },
   });
   let updated = 0;
+  let unresolved = 0; // couldn't be fetched from Discord at all (logged)
   for (const p of players) {
-    if (!isDiscordSnowflake(p.discordId)) continue; // seeded/mock id — skip the API call
-    const member = await guild.members.fetch(p.discordId).catch(() => null);
-    const data: { displayName?: string; username?: string } = {};
-    if (member) {
-      // Current member: sync the league display name (global → nick → @username,
-      // matching guildDisplayName()) plus the @username.
-      const name = member.user.globalName ?? member.nickname ?? member.user.username;
-      if (!p.hasCustomDisplayName && name && name !== p.displayName) data.displayName = name;
-      if (member.user.username !== p.username) data.username = member.user.username;
-    } else {
-      // Left the guild — we can't read a nickname, but the @username is a global
-      // identity, so fetch the User directly so ex-members still get their tag.
-      const user = await client.users.fetch(p.discordId).catch(() => null);
-      if (user && user.username !== p.username) data.username = user.username;
-    }
-    if (Object.keys(data).length > 0) {
-      await prisma.player.update({ where: { id: p.id }, data });
-      updated++;
+    // Each player is isolated in try/catch so one transient fetch/DB error
+    // can't abort the loop and strand every player after it. discord.js's REST
+    // client already queues + retries 429s, so rate limits slow this down but
+    // don't drop anyone — a player only ends up here on a hard, repeated error.
+    try {
+      if (!isDiscordSnowflake(p.discordId)) continue; // seeded/mock id — skip the API call
+      const member = await guild.members.fetch(p.discordId).catch(() => null);
+      const data: { displayName?: string; username?: string } = {};
+      if (member) {
+        // Current member: sync the league display name (global → nick → @username,
+        // matching guildDisplayName()) plus the @username.
+        const name = member.user.globalName ?? member.nickname ?? member.user.username;
+        if (!p.hasCustomDisplayName && name && name !== p.displayName) data.displayName = name;
+        if (member.user.username !== p.username) data.username = member.user.username;
+      } else {
+        // Left the guild — we can't read a nickname, but the @username is a global
+        // identity, so fetch the User directly so ex-members still get their tag.
+        const user = await client.users.fetch(p.discordId).catch(() => null);
+        if (user) {
+          if (user.username !== p.username) data.username = user.username;
+        } else if (!p.username) {
+          unresolved++;
+          console.warn(`[refresh.display-names] couldn't resolve ${p.discordId} (${p.displayName}) — no member + user.fetch failed`);
+        }
+      }
+      if (Object.keys(data).length > 0) {
+        await prisma.player.update({ where: { id: p.id }, data });
+        updated++;
+      }
+    } catch (err) {
+      unresolved++;
+      console.warn(`[refresh.display-names] ${p.discordId} (${p.displayName}) failed: ${(err as Error).message}`);
     }
   }
-  console.log(`[refresh.display-names] updated ${updated}/${players.length}`);
+  console.log(`[refresh.display-names] updated ${updated}/${players.length} (${unresolved} unresolved)`);
   return { updated, checked: players.length };
 }
 
