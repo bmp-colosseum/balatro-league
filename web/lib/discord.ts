@@ -85,6 +85,7 @@ export interface MessageEmbed {
   fields?: { name: string; value: string; inline?: boolean }[];
   footer?: { text: string };
   timestamp?: string;
+  thumbnail?: { url: string };
 }
 
 export interface ComponentButton {

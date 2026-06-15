@@ -142,6 +142,11 @@ export const LeagueConfigKey = {
   // Persisted from /league bootstrap-server; the refresh worker
   // re-edits the pinned message on signup/season events.
   LeagueInfoChannelId: "league_info_channel_id",
+  // Default season length in DAYS — how long players get to play once the
+  // season starts. Used to derive the "play your games" window in the signup
+  // post when the admin hasn't set an explicit season end date (window =
+  // sign-ups close → +N days). Unset = 14 (two weeks).
+  SeasonLengthDays: "season_length_days",
   // Default channel the season signup embed posts to (e.g. #league-signups).
   // The web Open-signups form pre-selects this; /league setup adopts a channel
   // pinned here. The actual posted channel is still stored per-round on

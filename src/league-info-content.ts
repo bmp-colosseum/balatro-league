@@ -16,28 +16,15 @@ import { formatSeasonLabel } from "./format-season.js";
 import { webUrl } from "./web-url.js";
 
 const STATIC_INTRO = [
-  "# 🃏 Welcome to the league",
+  "# 🃏 Balatro League",
   "",
-  "**How it works**",
-  "• Each season splits players into tiers + divisions by rating.",
-  "• Inside a division it's round-robin: you play everyone once, best-of-2 match.",
-  "• Top finishers promote up a tier; bottom finishers drop down.",
+  "Each season you're put in a division by skill. Play everyone in it once, best-of-2. Top of each division moves up next season, bottom moves down.",
   "",
-  "**Scoring**",
-  "• `2-0` win → **3 pts** winner, 0 loser",
-  "• `1-1` draw → **1 pt** each",
-  "• Standings sort: points → wins → draws.",
+  "**Scoring:** `2-0` = 3 pts · `1-1` = 1 pt each · `0-2` = 0.",
   "",
-  "**Slash commands**",
-  "• `/standings` — current division table",
-  "• `/profile` — your match history & ranks",
-  "• `/schedule` — matches you still need to play",
-  "• `/start-match @opponent` — bot walks you and your opponent through ban/pick for each game",
-  "• `/report @opponent result:2-0` — log a played match (auto-confirmed)",
-  "• `/helper [reason]` — call a moderator into the current thread/channel",
-  "• `/help` — full command list",
+  "Play your matches with `/start-match @opponent` in your division channel. Type `/help` for every command.",
   "",
-  `**Website:** <${webUrl()}> — standings, profiles, signup, settings.`,
+  `**Website:** <${webUrl()}> — standings, profiles, sign up.`,
 ].join("\n");
 
 export async function composeLeagueInfoContent(): Promise<string> {

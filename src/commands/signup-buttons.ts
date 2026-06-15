@@ -1,7 +1,15 @@
 import { MessageFlags, type ButtonInteraction } from "discord.js";
 import { prisma } from "../db.js";
-import { signupButtons, signupEmbed } from "../signup.js";
+import { signupButtons, signupEmbed, DEFAULT_SEASON_LENGTH_DAYS } from "../signup.js";
+import { getConfig, LeagueConfigKey } from "../league-config.js";
 import type { ButtonHandler } from "./types.js";
+
+// Configured play-window length (days), defaulting to two weeks.
+async function seasonLengthDays(): Promise<number> {
+  const raw = await getConfig(LeagueConfigKey.SeasonLengthDays);
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_SEASON_LENGTH_DAYS;
+}
 
 // Re-fetch the round + signups, then edit the original message in place so the count and list
 // always match DB state, even if multiple users click at once.
@@ -13,7 +21,7 @@ async function refreshSignupMessage(roundId: string, interaction: ButtonInteract
     orderBy: { signedUpAt: "asc" },
   });
   await interaction.message.edit({
-    embeds: [signupEmbed(round, signups)],
+    embeds: [signupEmbed(round, signups, await seasonLengthDays())],
     components: [signupButtons(round)],
   });
 }

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { refreshSignupPost } from "@/lib/signup-discord";
 
 async function currentDiscordIdOrRedirect(): Promise<string> {
   const session = await auth();
@@ -56,11 +57,9 @@ export async function signupFromJoinAction(formData: FormData) {
     update: { withdrawn: false, displayName },
     create: { roundId, discordId, displayName },
   });
-  // The Discord embed reads count from the DB on every button click,
-  // so it'll pick up the new signup the next time someone interacts.
-  // For immediate refresh we'd need to call refreshSignupMessage from
-  // the bot side, which the web service can't do directly — leaving
-  // the embed slightly stale until the next click is acceptable.
+  // Keep the Discord signup post's count live — a website signup edits the
+  // post in place, same as a Discord button click would.
+  await refreshSignupPost(roundId);
   revalidatePath("/join");
   redirect("/join?ok=signed-up");
 }
@@ -73,6 +72,7 @@ export async function withdrawFromJoinAction(formData: FormData) {
     where: { roundId, discordId },
     data: { withdrawn: true },
   });
+  await refreshSignupPost(roundId);
   revalidatePath("/join");
   redirect("/join?ok=withdrew");
 }

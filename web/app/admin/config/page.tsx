@@ -57,6 +57,10 @@ const COMMUNITY_KEYS = [
   { key: "general_channel_id", label: "General channel ID", help: "League general chat. Optional." },
 ];
 
+const SEASON_KEYS = [
+  { key: "season_length_days", label: "Season length (days)", help: "How long players get to play once the season starts. Sets the 'play your games' window shown in the signup post (sign-ups close → +N days), unless you set explicit season start/end dates on the season. Default 14 (two weeks)." },
+];
+
 const BMP_KEYS = [
   { key: "bmp_current_season", label: "Current BMP season", help: "e.g. 'season6'. Auto-detected from balatromp.com daily — override here if needed." },
   { key: "bmp_capture_previous_season", label: "Capture previous BMP season on refresh", help: "Set to 'true' to backfill the previous BMP season for everyone. Default: unset (only current is captured)." },
@@ -102,6 +106,7 @@ export default async function AdminConfigPage() {
         <ConfigSection title="Categories" keys={CATEGORY_KEYS} valueByKey={valueByKey} />
         <ConfigSection title="Channels & external" keys={CHANNEL_KEYS} valueByKey={valueByKey} />
         <ConfigSection title="Mode" keys={MODE_KEYS} valueByKey={valueByKey} />
+        <ConfigSection title="Season" keys={SEASON_KEYS} valueByKey={valueByKey} />
         <ConfigSection title="Community channels" keys={COMMUNITY_KEYS} valueByKey={valueByKey} />
         <ConfigSection title="Public / join page" keys={SITE_KEYS} valueByKey={valueByKey} />
         <ConfigSection title="BMP / balatromp.com" keys={BMP_KEYS} valueByKey={valueByKey} />

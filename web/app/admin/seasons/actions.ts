@@ -17,6 +17,7 @@ import {
   type MessageEmbed,
 } from "@/lib/discord";
 import { enqueueDm, enqueueLeagueInfoRefresh, enqueueMmrSnapshot } from "@/lib/queue";
+import { buildSignupPayload, buildClosedSignupPayload, getSeasonLengthDays } from "@/lib/signup-discord";
 import { endSeasonCore } from "@/lib/end-season";
 
 interface TierConfig {
@@ -318,7 +319,7 @@ async function postSeasonStartAnnouncement(seasonId: string, seasonLabel: string
   });
   const channelId = row?.value ?? null;
   if (!channelId) return;
-  const content = `🃏 **${seasonLabel}** is now live! Standings, /start-match, and /report are all active. Good luck.`;
+  const content = `🃏 **${seasonLabel}** is live! Use \`/start-match @opponent\` in your division channel to play. Good luck.`;
   await postChannelMessage(channelId, { content });
 }
 
@@ -505,80 +506,6 @@ export async function relabelDivisions(formData: FormData) {
   redirect(`/seasons/${seasonId}?ok=relabeled-${renamed}`);
 }
 
-// "<start> → <end> (2 weeks)" when both ends are known, else null. Mirrors
-// seasonWindowValue() on the bot side (src/signup.ts) so the post the web opens
-// matches what the bot re-renders on each signup.
-function seasonWindowValue(startsAt: Date | null, endsAt: Date | null): string | null {
-  if (!startsAt || !endsAt) return null;
-  const ts = (d: Date, style: "F" | "R") => `<t:${Math.floor(d.getTime() / 1000)}:${style}>`;
-  const days = Math.round((endsAt.getTime() - startsAt.getTime()) / 86_400_000);
-  const length =
-    days > 0 && days % 7 === 0
-      ? `${days / 7} week${days / 7 === 1 ? "" : "s"}`
-      : `${days} day${days === 1 ? "" : "s"}`;
-  return `${ts(startsAt, "F")} → ${ts(endsAt, "F")} (${length})`;
-}
-
-function buildSignupPayload(
-  round: { id: string; name: string; closesAt: Date | null; seasonStartsAt: Date | null; seasonEndsAt: Date | null },
-  signupCount = 0,
-): {
-  embeds: MessageEmbed[];
-  components: ComponentActionRow[];
-} {
-  // Public embed surfaces COUNT only — roster lives behind admin auth
-  // on /admin/signups/[id]/build. See signupEmbed() on the bot side
-  // for the matching live-update format.
-  const closeLine = round.closesAt
-    ? `Sign-ups close <t:${Math.floor(round.closesAt.getTime() / 1000)}:F> (<t:${Math.floor(round.closesAt.getTime() / 1000)}:R>). Withdraw any time before then.`
-    : "Withdraw any time before sign-ups close.";
-  const window = seasonWindowValue(round.seasonStartsAt, round.seasonEndsAt);
-  const fields: NonNullable<MessageEmbed["fields"]> = [
-    { name: "Status", value: `**${signupCount} signed up**`, inline: false },
-  ];
-  if (window) fields.push({ name: "Season", value: window, inline: false });
-  const embed: MessageEmbed = {
-    title: `🃏  ${round.name}`,
-    description: `Click below to register. ${closeLine}`,
-    fields,
-    color: 0x5865f2,
-    footer: { text: `Round ${round.id}` },
-  };
-  const row: ComponentActionRow = {
-    type: 1,
-    components: [
-      { type: 2, custom_id: `signup:join:${round.id}`, style: 3, label: "Sign Up" },
-      { type: 2, custom_id: `signup:withdraw:${round.id}`, style: 2, label: "Withdraw" },
-    ],
-  };
-  return { embeds: [embed], components: [row] };
-}
-
-// Mirrors the bot's signup-embed for the CLOSED state — buttons disabled,
-// status text updated, embed color grey.
-function buildClosedSignupPayload(
-  round: { id: string; name: string },
-  signups: Array<{ discordId: string }>,
-): { embeds: MessageEmbed[]; components: ComponentActionRow[] } {
-  const embed: MessageEmbed = {
-    title: `🃏  ${round.name}`,
-    description: "Sign-ups are closed.",
-    fields: [
-      { name: "Status", value: `**${signups.length} signed up — sign-ups closed**`, inline: false },
-    ],
-    color: 0x99aab5,
-    footer: { text: `Round ${round.id}` },
-  };
-  const row: ComponentActionRow = {
-    type: 1,
-    components: [
-      { type: 2, custom_id: `signup:join:${round.id}`, style: 3, label: "Sign Up", disabled: true },
-      { type: 2, custom_id: `signup:withdraw:${round.id}`, style: 2, label: "Withdraw", disabled: true },
-    ],
-  };
-  return { embeds: [embed], components: [row] };
-}
-
 // Open a signup round bound to a specific season. The round's
 // resultingSeasonId is set immediately so the build step (later) populates
 // THIS season's existing divisions instead of creating a new one.
@@ -637,7 +564,7 @@ export async function openSignupsForSeason(formData: FormData) {
     });
   }
 
-  const messageId = await postChannelMessage(channelId, buildSignupPayload(round, autoPlayers.length));
+  const messageId = await postChannelMessage(channelId, buildSignupPayload(round, autoPlayers.length, await getSeasonLengthDays()));
   if (!messageId) {
     await prisma.signupRound.delete({ where: { id: round.id } });
     redirect("/admin/seasons?err=signup-post-failed");
@@ -686,7 +613,7 @@ export async function updateSignupCloseDate(formData: FormData) {
 
   if (updated.messageId && updated.messageId !== "pending") {
     const signupCount = await prisma.signup.count({ where: { roundId } });
-    await editChannelMessage(updated.channelId, updated.messageId, buildSignupPayload(updated, signupCount)).catch(
+    await editChannelMessage(updated.channelId, updated.messageId, buildSignupPayload(updated, signupCount, await getSeasonLengthDays())).catch(
       (err) => console.warn("[signups.update-close] message edit failed:", err),
     );
   }
@@ -734,7 +661,7 @@ export async function updateSeasonWindow(formData: FormData) {
 
   if (updated.messageId && updated.messageId !== "pending") {
     const signupCount = await prisma.signup.count({ where: { roundId } });
-    await editChannelMessage(updated.channelId, updated.messageId, buildSignupPayload(updated, signupCount)).catch(
+    await editChannelMessage(updated.channelId, updated.messageId, buildSignupPayload(updated, signupCount, await getSeasonLengthDays())).catch(
       (err) => console.warn("[signups.update-window] message edit failed:", err),
     );
   }
@@ -818,8 +745,8 @@ async function notifyNextSeasonSubscribers(seasonName: string, signupChannelId: 
   const invite = await createChannelInvite(signupChannelId, { maxAge: 0, maxUses: 0 });
   const inviteLine = invite ? `\nJoin the server here if you're not already: ${invite}` : "";
   const content =
-    `🃏 **${seasonName}** signups just opened! Head to the signups channel and hit Sign Up to lock your spot.${inviteLine}\n\n` +
-    `_You're getting this because you opted in to next-season notifications. Turn it off on your /me page anytime._`;
+    `🃏 **${seasonName}** signups are open! Hit **Sign Up** in the signups channel to grab your spot.${inviteLine}\n\n` +
+    `_You opted in to these — turn off on your /me page anytime._`;
   await Promise.all(
     subscribers.map((s) =>
       enqueueDm({ discordId: s.discordId, content }).catch((err) =>
@@ -874,11 +801,9 @@ export async function finalizeSignupsForSeason(formData: FormData) {
   if (season) {
     const seasonLabel = formatSeasonLabel(season);
     const content =
-      `🃏 **${seasonLabel}** signups are now closed — you're locked in!\n\n` +
-      `Next up: the league admin will sort everyone into divisions based on rating + signup count. ` +
-      `You'll get a Discord role + a private channel for your division once that's done.\n\n` +
-      `Play each of the other players in your division in best-of-2 matches at your own pace. ` +
-      `_Withdraw later_? Talk to a league helper in your division channel after divisions are built.`;
+      `🃏 **${seasonLabel}** signups are closed — you're in!\n\n` +
+      `You'll get a division (with its own channel) when the season starts. Then play everyone in it best-of-2, via \`/start-match @opponent\` in your division channel.\n\n` +
+      `Need to withdraw? Ask a helper in your division channel.`;
     await Promise.all(
       round.signups.map((s) =>
         enqueueDm({ discordId: s.discordId, content }).catch((err) =>

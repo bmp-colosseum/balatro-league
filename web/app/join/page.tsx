@@ -8,6 +8,7 @@
 // All data flows through loadJoinPageData; mutations live in actions.ts.
 
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/auth";
 import { isAdminUser } from "@/lib/admin";
@@ -113,6 +114,12 @@ export default async function JoinPage({
   const data = await loadJoinPageData();
   const isLoggedIn = !!data.viewerDiscordId;
 
+  // Play-window length for the "how it works" blurb. Default two weeks; admins
+  // can change season_length_days on /admin/config.
+  const lenRow = await prisma.leagueConfig.findUnique({ where: { key: "season_length_days" } });
+  const lenDays = Number(lenRow?.value) > 0 ? Number(lenRow!.value) : 14;
+  const playWindowLabel = lenDays % 7 === 0 ? `${lenDays / 7} week${lenDays / 7 === 1 ? "" : "s"}` : `${lenDays} days`;
+
   return (
     <>
       <SiteNav activePath="/join" />
@@ -164,7 +171,7 @@ export default async function JoinPage({
                 fontWeight: 600,
               }}
             >
-              🃏 Open Discord invite
+              <Image src="/Balatro_League.png" alt="" width={16} height={16} className="mr-1.5 inline-block rounded-[2px] align-[-2px]" /> Open Discord invite
             </a>
           </div>
         )}
@@ -229,7 +236,7 @@ export default async function JoinPage({
                   <form action={signupFromJoinAction}>
                     <input type="hidden" name="roundId" value={data.openRound.id} />
                     <Button type="submit" className="bg-[var(--success)] text-white hover:opacity-90">
-                      🃏 Sign me up
+                      <Image src="/Balatro_League.png" alt="" width={16} height={16} className="mr-1.5 inline-block rounded-[2px] align-[-2px]" /> Sign me up
                     </Button>
                     <p className="muted" style={{ fontSize: 11, marginTop: 6 }}>
                       You can also click the <strong>Sign Up</strong> button on the signup post in Discord.
@@ -271,7 +278,7 @@ export default async function JoinPage({
           <ul style={{ marginTop: 6 }}>
             <li>Sign up and wait for the season to start.</li>
             <li>You&apos;re placed in a division and get a Discord channel for it.</li>
-            <li>Play a best-of-2 against everyone in your division (round-robin).</li>
+            <li>Play a best-of-2 against everyone in your division. You get about {playWindowLabel} to finish.</li>
             <li>Finish near the top to move up a division next season, near the bottom to move down.</li>
           </ul>
         </div>

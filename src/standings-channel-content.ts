@@ -7,6 +7,7 @@ import { EmbedBuilder } from "discord.js";
 import { prisma } from "./db.js";
 import { loadDivisionStandings } from "./standings-cache.js";
 import { formatSeasonLabel } from "./format-season.js";
+import { webUrl } from "./web-url.js";
 
 // Medal for the top 3, otherwise the numeric position.
 function place(i: number): string {
@@ -35,7 +36,7 @@ export async function composeStandingsEmbeds(): Promise<EmbedBuilder[]> {
 
   const header = new EmbedBuilder()
     .setTitle(`🏆 ${formatSeasonLabel(season)} — Live Standings`)
-    .setDescription("Updated automatically as results come in. Full details on the website.")
+    .setDescription(`Auto-updated as results come in. Full standings + history: ${webUrl("standings")}`)
     .setColor(0xf1c40f)
     .setTimestamp(new Date());
 

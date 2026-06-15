@@ -3,11 +3,31 @@
 
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
 import type { Signup, SignupRound } from "@prisma/client";
+import { env } from "./env.js";
+
+const LOGO_URL = `${env.WEB_BASE_URL}/Balatro_League.png`;
+// Default play-window length (days) when the admin hasn't set an explicit end.
+// Overridable via the season_length_days LeagueConfig key, passed in by callers.
+export const DEFAULT_SEASON_LENGTH_DAYS = 14;
 
 // Discord renders <t:unix:STYLE> in each viewer's own timezone. F = full
 // date/time, R = relative ("in 3 days").
 function discordTs(d: Date, style: "F" | "R"): string {
   return `<t:${Math.floor(d.getTime() / 1000)}:${style}>`;
+}
+
+// The window players have to get their games in. If an admin set explicit
+// season start/end on the website, use those; otherwise assume the season
+// starts when sign-ups close and runs two weeks. Null when there's no close
+// time AND no manual start (nothing to anchor on).
+export function playWindow(
+  round: Pick<SignupRound, "closesAt" | "seasonStartsAt" | "seasonEndsAt">,
+  lengthDays: number = DEFAULT_SEASON_LENGTH_DAYS,
+): { start: Date; end: Date } | null {
+  const start = round.seasonStartsAt ?? round.closesAt;
+  if (!start) return null;
+  const end = round.seasonEndsAt ?? new Date(start.getTime() + lengthDays * 86_400_000);
+  return { start, end };
 }
 
 // "<start> → <end> (2 weeks)" when both ends are known, else null. Shown so
@@ -23,7 +43,11 @@ export function seasonWindowValue(startsAt: Date | null, endsAt: Date | null): s
   return `${discordTs(startsAt, "F")} → ${discordTs(endsAt, "F")} (${length})`;
 }
 
-export function signupEmbed(round: SignupRound, signups: Signup[]): EmbedBuilder {
+export function signupEmbed(
+  round: SignupRound,
+  signups: Signup[],
+  lengthDays: number = DEFAULT_SEASON_LENGTH_DAYS,
+): EmbedBuilder {
   const active = signups.filter((s) => !s.withdrawn);
 
   // Public embed only surfaces the COUNT — not the player list. The
@@ -43,24 +67,26 @@ export function signupEmbed(round: SignupRound, signups: Signup[]): EmbedBuilder
   let description: string;
   if (round.status === "OPEN") {
     const closeLine = round.closesAt
-      ? `Sign-ups close ${discordTs(round.closesAt, "F")} (${discordTs(round.closesAt, "R")}). Withdraw any time before then.`
-      : "Withdraw any time before sign-ups close.";
-    description = `Click below to register. ${closeLine}`;
+      ? `Closes ${discordTs(round.closesAt, "F")} (${discordTs(round.closesAt, "R")}). Withdraw anytime before.`
+      : "Withdraw anytime before sign-ups close.";
+    description = `Hit **Sign Up** to join. ${closeLine}`;
   } else if (round.status === "CLOSED") {
     description = "Sign-ups are closed.";
   } else {
-    description = "Season started — to make a change, ask a league helper.";
+    description = "Season's started. Need a change? Ask a helper.";
   }
 
-  const window = seasonWindowValue(round.seasonStartsAt, round.seasonEndsAt);
+  const win = playWindow(round, lengthDays);
+  const windowValue = win ? seasonWindowValue(win.start, win.end) : null;
 
   const embed = new EmbedBuilder()
-    .setTitle(`🃏  ${round.name}`)
+    .setTitle(round.name)
+    .setThumbnail(LOGO_URL)
     .setDescription(description)
     .addFields({ name: "Status", value: status, inline: false })
     .setColor(round.status === "OPEN" ? 0x5865f2 : 0x99aab5)
     .setFooter({ text: `Round ${round.id}` });
-  if (window) embed.addFields({ name: "Season", value: window, inline: false });
+  if (windowValue) embed.addFields({ name: "🎮 Play your games", value: windowValue, inline: false });
   return embed;
 }
 
