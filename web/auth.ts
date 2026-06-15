@@ -3,6 +3,7 @@
 
 import NextAuth from "next-auth";
 import Discord from "next-auth/providers/discord";
+import { fetchGuildMember } from "@/lib/discord";
 
 // Reuse the existing DISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET env vars
 // (same Discord application as the bot uses). Explicit pass-through so we
@@ -54,6 +55,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.discordId = profile.id as string;
         token.username = (profile.username as string) ?? token.name;
         token.avatar = (profile.avatar as string) ?? null;
+        // Privacy gate: remember whether they're a member of OUR server, checked
+        // once at sign-in via the bot token (no extra OAuth scope). Drives whether
+        // they can see other players' @usernames on the site. Re-checked on each
+        // fresh login, so leaving the server clears it within the 7-day session.
+        const guildId = process.env.DISCORD_GUILD_ID;
+        token.inGuild = guildId ? (await fetchGuildMember(guildId, profile.id as string)) !== null : false;
       }
       return token;
     },
@@ -68,6 +75,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (token.avatar !== undefined) {
         (session.user as { avatar?: string | null }).avatar = token.avatar as string | null;
       }
+      (session.user as { inGuild?: boolean }).inGuild = token.inGuild === true;
       return session;
     },
   },

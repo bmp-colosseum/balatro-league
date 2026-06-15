@@ -15,7 +15,6 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { DiscordId } from "@/components/DiscordId";
 
 export interface RatingRow {
   discordId: string;
@@ -277,7 +276,6 @@ export function DraggableRatingTable({
                   ) : (
                     <strong>{r.displayName}</strong>
                   )}
-                  <DiscordId value={r.discordId} />
                 </td>
                 <td>
                   <span

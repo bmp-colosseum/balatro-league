@@ -3,7 +3,6 @@ import { Silkscreen } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { CommandPalette } from "@/components/CommandPalette";
-import { getShowUsernames } from "@/lib/preferences";
 
 // Crisp pixel font for headings + accents — a nod to Balatro's pixel look,
 // without hurting readability of the dense tables (body text stays system).
@@ -22,13 +21,12 @@ export const metadata: Metadata = {
   icons: { icon: "/Balatro_League.png", apple: "/Balatro_League.png" },
 };
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  // Public Discord usernames — everyone, default on (⚙️ toggle). Numeric Discord
-  // IDs are never shown on any page.
-  const showUsernames = await getShowUsernames();
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // @username visibility is decided per-name by the <DiscordId> server
+  // component (members-only), so nothing to gate at the body level here.
   return (
     <html lang="en" className={pixel.variable}>
-      <body className={showUsernames ? "show-usernames" : undefined}>
+      <body>
         {children}
         <CommandPalette />
         <Toaster richColors position="top-center" />

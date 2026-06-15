@@ -8,7 +8,6 @@
 // of: global name, @username, and Discord ID, regardless of toggle state.
 
 import { useMemo, useState } from "react";
-import { DiscordId } from "@/components/DiscordId";
 
 export interface RosterEntry {
   // Discord @username captured at signup.
@@ -73,9 +72,9 @@ export function SignupRoster({ signups }: { signups: RosterEntry[] }) {
               <span style={{ display: "inline-flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
                 <span style={s.inGuild === false ? { opacity: 0.6 } : undefined}>
                   {label(s)}
-                  {/* @username (Signup.displayName) — only when the label is the
-                      global name, else it'd just duplicate the name shown. */}
-                  <DiscordId value={s.discordId} username={s.globalName ? s.displayName : undefined} />
+                  {/* @username — admin-only roster, so always shown; only when the
+                      label is the global name, else it'd duplicate the name. */}
+                  {s.globalName && <span className="discord-username">(@{s.displayName})</span>}
                 </span>
                 {s.inGuild === false && (
                   <span style={{ color: "#e67e22", fontSize: 11 }} title="Signed up but not currently a member of the Discord server">

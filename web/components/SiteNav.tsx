@@ -26,6 +26,8 @@ export async function SiteNav({ activePath }: { activePath: string }) {
   const isAdmin = isLoggedIn ? await isAdminUser() : false;
   const showingBmpMmr = await getShowBmpMmr();
   const showingUsernames = await getShowUsernames();
+  // @username display is members-only — only offer the toggle to verified members.
+  const inGuild = (session?.user as { inGuild?: boolean } | undefined)?.inGuild === true;
 
   const links: { href: string; label: string }[] = [...PUBLIC_LINKS];
   if (isLoggedIn) {
@@ -85,17 +87,19 @@ export async function SiteNav({ activePath }: { activePath: string }) {
                 <span>Show BMP MMR</span>
               </button>
             </form>
-            <form action={toggleShowUsernames}>
-              <input type="hidden" name="next" value={showingUsernames ? "0" : "1"} />
-              <input type="hidden" name="returnTo" value={activePath || "/"} />
-              <button
-                type="submit"
-                className="flex w-full cursor-pointer items-center gap-2 rounded border-none bg-transparent px-1 py-1.5 text-left text-[13px] text-foreground hover:bg-secondary"
-              >
-                <span className="text-sm">{showingUsernames ? "☑" : "☐"}</span>
-                <span>Show Discord usernames</span>
-              </button>
-            </form>
+            {inGuild && (
+              <form action={toggleShowUsernames}>
+                <input type="hidden" name="next" value={showingUsernames ? "0" : "1"} />
+                <input type="hidden" name="returnTo" value={activePath || "/"} />
+                <button
+                  type="submit"
+                  className="flex w-full cursor-pointer items-center gap-2 rounded border-none bg-transparent px-1 py-1.5 text-left text-[13px] text-foreground hover:bg-secondary"
+                >
+                  <span className="text-sm">{showingUsernames ? "☑" : "☐"}</span>
+                  <span>Show Discord usernames</span>
+                </button>
+              </form>
+            )}
           </div>
         </details>
 

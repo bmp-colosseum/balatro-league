@@ -247,24 +247,10 @@ form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 .flash.success { background: rgba(46,204,113,0.15); color: var(--success); border: 1px solid rgba(46,204,113,0.3); }
 .flash.error { background: rgba(231,76,60,0.15); color: var(--danger); border: 1px solid rgba(231,76,60,0.3); }
 
-/* Discord-ID chips next to player names. Hidden by default; revealed app-wide
-   when the viewer flips the ⚙️ "Show Discord IDs" toggle (sets body class). */
-.discord-id { display: none; }
-body.show-discord-ids .discord-id {
-  display: inline;
-  font-size: 0.78em;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: var(--muted);
-  opacity: 0.85;
-  margin-left: 6px;
-  user-select: all;
-}
-
-/* Discord @username chips next to player names. Public — shown by default
-   (the ⚙️ "Show Discord usernames" toggle hides them per-browser). */
-.discord-username { display: none; }
-body.show-usernames .discord-username {
-  display: inline;
+/* Discord @username chip next to a player's name. Visibility is decided
+   server-side (the <DiscordId> component only renders it for verified members
+   with the toggle on), so this is styling only — no display gating. */
+.discord-username {
   font-size: 0.82em;
   color: var(--muted);
   margin-left: 6px;

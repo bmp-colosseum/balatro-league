@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { isAdminUser } from "@/lib/admin";
+import { canSeeUsernames } from "@/lib/usernames";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
@@ -28,10 +29,14 @@ export async function GET() {
   }
 
   const admin = await isAdminUser();
-  const players = await prisma.player.findMany({
-    select: { id: true, displayName: true, discordId: true, username: true },
+  // @usernames only for verified members (with the toggle on) — strip them for
+  // everyone else so a logged-in non-member can't read handles out of the palette.
+  const showUsernames = await canSeeUsernames();
+  const rows = await prisma.player.findMany({
+    select: { id: true, displayName: true, username: true },
     orderBy: { displayName: "asc" },
     take: 1000,
   });
+  const players = rows.map((p) => ({ id: p.id, displayName: p.displayName, username: showUsernames ? p.username : null }));
   return NextResponse.json({ loggedIn, admin, players, divisions });
 }
