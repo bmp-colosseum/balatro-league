@@ -230,8 +230,14 @@ export async function loadEndSeasonPreview(seasonId: string): Promise<EndSeasonP
   const deltasByPlayer = new Map(deltas.map((d) => [d.playerId, d]));
 
   const unfinishedPairings = season.divisions.reduce((sum, d) => {
-    const expected = (d.members.length * (d.members.length - 1)) / 2;
-    return sum + Math.max(0, expected - d.matches.length);
+    // Active players only — a void-dropped player's missing games shouldn't read
+    // as "unfinished". d.matches is CONFIRMED, and a voided game is a CONFIRMED
+    // 0-0, so it correctly counts as finished here too.
+    const active = d.members.filter((m) => m.status === "ACTIVE").length;
+    const expected = (active * (active - 1)) / 2;
+    const activeIds = new Set(d.members.filter((m) => m.status === "ACTIVE").map((m) => m.playerId));
+    const playedActive = d.matches.filter((m) => activeIds.has(m.playerAId) && activeIds.has(m.playerBId)).length;
+    return sum + Math.max(0, expected - playedActive);
   }, 0);
 
   const divisions: EndSeasonDivisionRow[] = season.divisions.map((d, i): EndSeasonDivisionRow => ({

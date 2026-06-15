@@ -93,8 +93,16 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
               name: true,
               groupNumber: true,
               members: { select: { playerId: true, status: true } },
-              // _count is a single SQL count(), cheap.
-              _count: { select: { matches: { where: { status: "CONFIRMED", format: "LEAGUE_BO2" } } } },
+              // Resolved league games (a real result OR a void) — used to tell
+              // whether the round-robin is "complete" for promo/relegation. A
+              // voided game (CONFIRMED 0-0 or CANCELLED) counts as done, so a void
+              // doesn't leave the division permanently "incomplete". We filter to
+              // active-vs-active pairs in JS (a void-PLAYER's cancelled games vs a
+              // dropped player must NOT count — they're not expected anymore).
+              matches: {
+                where: { format: "LEAGUE_BO2", status: { in: ["CONFIRMED", "CANCELLED"] } },
+                select: { playerAId: true, playerBId: true },
+              },
             },
           },
         },
@@ -220,16 +228,24 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
     name: t.name,
     position: t.position,
     promoteRelegateCount: t.promoteRelegateCount,
-    divisions: t.divisions.map((d): StandingsDivisionSummary => ({
-      id: d.id,
-      name: d.name,
-      groupNumber: d.groupNumber,
-      activeMemberIds: d.members.filter((m) => m.status === "ACTIVE").map((m) => m.playerId),
-      droppedMemberIds: d.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId),
-      playedMatches: d._count.matches,
-      rows: standingsByDivisionId.get(d.id) ?? [],
-      shootouts: shootoutsByDivisionId.get(d.id) ?? [],
-    })),
+    divisions: t.divisions.map((d): StandingsDivisionSummary => {
+      const activeSet = new Set(d.members.filter((m) => m.status === "ACTIVE").map((m) => m.playerId));
+      // "Played" for completeness = resolved games between two ACTIVE players
+      // (a void counts; games involving a dropped player don't).
+      const playedMatches = d.matches.filter(
+        (m) => activeSet.has(m.playerAId) && activeSet.has(m.playerBId),
+      ).length;
+      return {
+        id: d.id,
+        name: d.name,
+        groupNumber: d.groupNumber,
+        activeMemberIds: [...activeSet],
+        droppedMemberIds: d.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId),
+        playedMatches,
+        rows: standingsByDivisionId.get(d.id) ?? [],
+        shootouts: shootoutsByDivisionId.get(d.id) ?? [],
+      };
+    }),
   }));
 
   return {
