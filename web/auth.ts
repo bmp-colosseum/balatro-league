@@ -50,17 +50,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 7 }, // 7 days
   callbacks: {
     async jwt({ token, profile }) {
+      const guildId = process.env.DISCORD_GUILD_ID;
       // First time the JWT is created (right after sign-in), enrich with Discord fields
       if (profile) {
         token.discordId = profile.id as string;
         token.username = (profile.username as string) ?? token.name;
         token.avatar = (profile.avatar as string) ?? null;
         // Privacy gate: remember whether they're a member of OUR server, checked
-        // once at sign-in via the bot token (no extra OAuth scope). Drives whether
-        // they can see other players' @usernames on the site. Re-checked on each
-        // fresh login, so leaving the server clears it within the 7-day session.
-        const guildId = process.env.DISCORD_GUILD_ID;
+        // via the bot token (no extra OAuth scope). Drives whether they can see
+        // other players' @usernames on the site.
         token.inGuild = guildId ? (await fetchGuildMember(guildId, profile.id as string)) !== null : false;
+        token.inGuildCheckedAt = Date.now();
+      } else if (token.discordId && guildId) {
+        // Periodic re-verify (~daily) so LEAVING the server revokes @username
+        // access within a day, without forcing a re-login. The TTL guard means
+        // at most one extra Discord lookup per user per day, on the first request
+        // after the window. (A transient API error reads as "not a member" and
+        // could revoke for up to a day — restored on the next successful check.)
+        const DAY = 24 * 60 * 60 * 1000;
+        const last = typeof token.inGuildCheckedAt === "number" ? token.inGuildCheckedAt : 0;
+        if (Date.now() - last > DAY) {
+          token.inGuild = (await fetchGuildMember(guildId, token.discordId as string)) !== null;
+          token.inGuildCheckedAt = Date.now();
+        }
       }
       return token;
     },
