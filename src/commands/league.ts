@@ -4,12 +4,14 @@
 
 import {
   ChannelType,
+  EmbedBuilder,
   MessageFlags,
   PermissionFlagsBits,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
   type TextChannel,
 } from "discord.js";
+import { PLAYER_COMMANDS } from "./help.js";
 import { PermissionTier } from "@prisma/client";
 import { prisma } from "../db.js";
 import { PERM_PRESETS } from "../discord-helpers.js";
@@ -318,6 +320,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     const chatChan = await ensureChannel("league-chat", "General league chat. Match scheduling, banter, etc.", ChannelType.GuildText, LeagueConfigKey.GeneralChannelId);
     const botCmdChan = await ensureChannel("league-bot-commands", "General bot commands: /random, /profile, /standings, etc. Most replies are private (only you see them) so you can run commands from any channel.", ChannelType.GuildText, LeagueConfigKey.BotCommandsChannelId);
     const standingsChan = await ensureChannel("league-standings", "📊 Live standings for the active season — auto-updated by the bot. Read-only.", ChannelType.GuildText, LeagueConfigKey.StandingsChannelId);
+    const helpChan = await ensureChannel("league-help", "📖 All the bot commands. You can also type /help anywhere.", ChannelType.GuildText, LeagueConfigKey.HelpChannelId);
     const announcementsChan = await ensureChannel(
       "league-announcements",
       "League-wide announcements: season starts, recaps, league news. Bot-posted, read-only for members.",
@@ -345,6 +348,11 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       where: { key: "standings_channel_id" },
       create: { key: "standings_channel_id", value: standingsChan.id, updatedBy: interaction.user.id },
       update: { value: standingsChan.id, updatedBy: interaction.user.id },
+    });
+    await prisma.leagueConfig.upsert({
+      where: { key: "help_channel_id" },
+      create: { key: "help_channel_id", value: helpChan.id, updatedBy: interaction.user.id },
+      update: { value: helpChan.id, updatedBy: interaction.user.id },
     });
     await prisma.leagueConfig.upsert({
       where: { key: "announcements_channel_id" },
@@ -468,6 +476,37 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     await lockReadOnly(announcementsChan, "#league-announcements", true);
     await lockReadOnly(signupChan, "#league-signups", false);
     await lockReadOnly(standingsChan, "#league-standings", false);
+    await lockReadOnly(helpChan, "#league-help", false);
+
+    // Post (or refresh) the pinned command list in #league-help. Idempotent —
+    // edits the bot's stored message if it exists, else posts + pins a new one,
+    // so re-running setup keeps the list current without duplicating it.
+    try {
+      const helpEmbed = new EmbedBuilder()
+        .setTitle("📖 League commands")
+        .setColor(0x5865f2)
+        .setDescription(PLAYER_COMMANDS.map((c) => `• \`${c.cmd}\` — ${c.desc}`).join("\n"))
+        .setFooter({ text: "Run any of these, or just type /help anywhere." });
+      const helpContent = `Sign up in <#${signupChan.id}> · Standings + history on the website: <${webUrl()}>`;
+      const helpTextChan = helpChan as TextChannel;
+      const storedId = await getConfig(LeagueConfigKey.HelpMessageId);
+      let edited = false;
+      if (storedId) {
+        const existing = await helpTextChan.messages.fetch(storedId).catch(() => null);
+        if (existing && existing.author.id === interaction.client.user?.id) {
+          await existing.edit({ content: helpContent, embeds: [helpEmbed] });
+          edited = true;
+        }
+      }
+      if (!edited) {
+        const sent = await helpTextChan.send({ content: helpContent, embeds: [helpEmbed] });
+        await sent.pin().catch(() => {});
+        await setConfig(LeagueConfigKey.HelpMessageId, sent.id, interaction.user.id);
+      }
+    } catch (err) {
+      console.warn("[bootstrap] couldn't post #league-help message:", (err as Error).message);
+      reused.push("#league-help (couldn't post the command list — re-run /league setup)");
+    }
     // The members-chat channels: explicitly postable (images/links/reactions)
     // regardless of the server's base @everyone perms.
     await lockPostable(chatChan, "#league-chat");

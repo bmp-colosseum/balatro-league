@@ -77,7 +77,7 @@ export const pool: SlashCommand = {
     }
     contexts.push({
       heading: "🎴 Casual & random rolls",
-      commands: "`/challenge` • `/random` • `/random-deck` • `/random-stake` • `/random-bans`",
+      commands: "`/challenge` • `/random bans` • `/random deck` • `/random stake`",
       preset: casual,
     });
     contexts.push({
@@ -111,7 +111,7 @@ export const pool: SlashCommand = {
       embed.addFields(poolField(g.headings.join("  +  "), g.commands.join("  •  "), g.preset));
     }
     embed.setFooter({
-      text: "/random rolls one combo • /random-bans rolls a 9-combo ban pool",
+      text: "/random combo rolls one • /random bans rolls a 9-combo ban pool",
     });
     await interaction.reply({ embeds: [embed] });
   },

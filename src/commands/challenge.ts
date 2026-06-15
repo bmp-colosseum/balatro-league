@@ -37,14 +37,14 @@ export const challenge: SlashCommand = {
     .addIntegerOption((opt) =>
       opt
         .setName("best-of")
-        .setDescription("Number of games")
+        .setDescription("Number of games (default 1)")
         .setRequired(false)
         .addChoices(...BO_CHOICES),
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
     const opponentUser = interaction.options.getUser("opponent", true);
-    const bestOf = (interaction.options.getInteger("best-of") ?? 2) as 1 | 2 | 3;
+    const bestOf = (interaction.options.getInteger("best-of") ?? 1) as 1 | 2 | 3;
 
     if (opponentUser.id === interaction.user.id) {
       await interaction.reply({ content: "Can't challenge yourself.", flags: MessageFlags.Ephemeral });

@@ -8,7 +8,7 @@ import { league } from "./league.js";
 import { callHelperModal, matchButtons, matchSelectMenus } from "./match-buttons.js";
 import { pool } from "./pool.js";
 import { profile } from "./profile.js";
-import { random, randomBans, randomDeck, randomStake } from "./random.js";
+import { random } from "./random.js";
 import { disputeModal, disputeSelect, report, reportButtons } from "./report.js";
 import { reportShootout } from "./report-shootout.js";
 import { schedule } from "./schedule.js";
@@ -19,7 +19,12 @@ import { support } from "./support.js";
 import { supportButtons } from "./support-buttons.js";
 import type { ButtonHandler, ModalHandler, SelectMenuHandler, SlashCommand } from "./types.js";
 
-export const slashCommands: SlashCommand[] = [help, adminHelp, helper, support, report, reportShootout, standings, schedule, profile, league, startMatch, challenge, admin, random, randomDeck, randomStake, randomBans, pool];
+// NOTE: /report and /report-shootout are intentionally NOT registered as slash
+// commands — reporting now happens through the guided /start-match flow (which
+// also captures lives, decks, etc.) or the website. The report.ts / report-shootout.ts
+// code stays (the report-flow + buttons back /start-match finalize, web reports,
+// and admin tooling), it's just hidden from the player command list.
+export const slashCommands: SlashCommand[] = [help, adminHelp, helper, support, standings, schedule, profile, league, startMatch, challenge, admin, random, pool];
 
 export const buttonHandlers: ButtonHandler[] = [reportButtons, signupHandlers, matchButtons, disputeThreadButtonHandler, supportButtons];
 

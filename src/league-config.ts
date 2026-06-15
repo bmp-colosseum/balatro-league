@@ -157,6 +157,12 @@ export const LeagueConfigKey = {
   // pinned) so a lost/removed pin can't make the worker post duplicates.
   LeagueInfoMessageId: "league_info_message_id",
 
+  // Read-only #league-help channel + the bot's pinned command-list message id.
+  // /league setup creates the channel and posts/edits the pinned message (the
+  // player command list + "type /help anywhere"), so it's rebootstrappable.
+  HelpChannelId: "help_channel_id",
+  HelpMessageId: "help_message_id",
+
   // Channel where the bot maintains a self-updating live standings post for the
   // active season (one embed per division). Read-only for members; the bot
   // re-renders it on a periodic schedule. Unset = the standings feed is off.

@@ -13,18 +13,15 @@ import {
 import type { SlashCommand } from "./types.js";
 import { WEB_HOST } from "../web-url.js";
 
-const PLAYER_COMMANDS = [
+export const PLAYER_COMMANDS = [
   { cmd: "/standings", desc: "Current division standings" },
   { cmd: "/profile [player]", desc: "Match history + ranks (defaults to you)" },
   { cmd: "/schedule", desc: "Matches you still need to play this season" },
-  { cmd: "/start-match @opponent", desc: "Guided best-of-2 match: bot walks you through ban/pick for each game" },
-  { cmd: "/report @opponent result:2-0|1-1|0-2", desc: "Log a played match (auto-confirmed)" },
-  { cmd: "/report-shootout @opponent winner:@p", desc: "Log a 1-game showdown (tiebreaker)" },
-  { cmd: "/challenge @opponent", desc: "Casual match against anyone — not recorded to standings" },
+  { cmd: "/start-match @opponent", desc: "Play a match: the bot runs ban/pick and records the result" },
+  { cmd: "/challenge @opponent", desc: "Casual match against anyone (not recorded to standings)" },
   { cmd: "/helper [reason]", desc: "Call a moderator into the current thread/channel" },
-  { cmd: "/pool", desc: "See which decks + stakes are currently in rotation" },
-  { cmd: "/random", desc: "Roll a random deck + stake (also /random-deck, /random-stake)" },
-  { cmd: "/random-bans", desc: "Roll a full ban pool (9 combos) to ban down yourselves" },
+  { cmd: "/pool", desc: "Which decks + stakes are in rotation" },
+  { cmd: "/random bans", desc: "Roll a ban pool to ban down yourselves (also /random deck, /random stake, /random combo)" },
 ];
 
 const ADMIN_COMMANDS = [
