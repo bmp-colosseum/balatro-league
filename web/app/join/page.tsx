@@ -119,15 +119,13 @@ export default async function JoinPage({
       <main>
         <h2>Join the league</h2>
         <p className="muted">
-          A round-robin Balatro multiplayer league with promotion/relegation
-          divisions. Best-of-2 matches, weekly play, run by humans, all on Discord.
+          A Balatro multiplayer league on Discord. Sign up, get put in a division, and play a
+          best-of-2 against everyone in it. Climb the divisions season to season.
         </p>
 
         {ok === "signed-up" && (
           <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>
-            ✓ You're signed up. Next: when signups close, an admin builds the divisions and you&apos;ll
-            get a Discord role + a private channel for your division. Watch Discord — that&apos;s where
-            matches happen.
+            ✓ You're signed up. You'll get your division when the season starts — keep an eye on Discord.
           </div>
         )}
         {ok === "withdrew" && (
@@ -149,9 +147,7 @@ export default async function JoinPage({
           <div className="card">
             <strong>Step 1 — Join the Discord server</strong>
             <p className="muted" style={{ marginTop: 4 }}>
-              Everything happens in Discord — match scheduling, ban/pick, results.
-              You need to be in the server before signups so the bot can DM you
-              and assign your division role.
+              Matches and results all happen in Discord. Join the server before you sign up.
             </p>
             <a
               href={data.discordInviteUrl}
@@ -189,8 +185,7 @@ export default async function JoinPage({
           <div className="card">
             <strong>Step 2 — Sign in with Discord</strong>
             <p className="muted" style={{ marginTop: 4 }}>
-              We use Discord login so signups + notifications go to the right account.
-              No password to remember.
+              So your signup links to your account. No password needed.
             </p>
             <Link
               href="/auth/signin?callbackUrl=%2Fjoin"
@@ -227,8 +222,7 @@ export default async function JoinPage({
                       </form>
                     </div>
                     <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-                      Nothing more to do right now. When signups close you&apos;ll get a Discord role +
-                      a private division channel. You can withdraw any time before the deadline.
+                      That&apos;s it — you&apos;ll get your division when the season starts. Withdraw any time before signups close.
                     </p>
                   </div>
                 ) : (
@@ -263,8 +257,7 @@ export default async function JoinPage({
                   <form action={subscribeFromJoinAction}>
                     <Button type="submit">🔔 Notify me when next season opens</Button>
                     <p className="muted" style={{ fontSize: 11, marginTop: 6 }}>
-                      The bot DMs you the moment the league admin opens the next signup round.
-                      Manage from your <Link href="/me">profile</Link> any time.
+                      We&apos;ll DM you when signups open. Manage anytime from your <Link href="/me">profile</Link>.
                     </p>
                   </form>
                 )}
@@ -276,10 +269,10 @@ export default async function JoinPage({
         <div className="card muted" style={{ fontSize: 13 }}>
           <strong>How it works</strong>
           <ul style={{ marginTop: 6 }}>
-            <li>Sign up → admin builds divisions → you get a Discord role + channel for your division.</li>
-            <li>Best-of-2 matches against every other player in your division.</li>
-            <li>Top finishers promote, bottom finishers relegate, ties broken by 1-game showdowns.</li>
-            <li>Season ends, ratings recompute, next season opens with the same flow.</li>
+            <li>Sign up and wait for the season to start.</li>
+            <li>You&apos;re placed in a division and get a Discord channel for it.</li>
+            <li>Play a best-of-2 against everyone in your division (round-robin).</li>
+            <li>Finish near the top to move up a division next season, near the bottom to move down.</li>
           </ul>
         </div>
       </main>
