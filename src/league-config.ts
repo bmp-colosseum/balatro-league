@@ -152,6 +152,15 @@ export const LeagueConfigKey = {
   // pinned) so a lost/removed pin can't make the worker post duplicates.
   LeagueInfoMessageId: "league_info_message_id",
 
+  // Channel where the bot maintains a self-updating live standings post for the
+  // active season (one embed per division). Read-only for members; the bot
+  // re-renders it on a periodic schedule. Unset = the standings feed is off.
+  StandingsChannelId: "standings_channel_id",
+  // JSON array of the bot's standings message id(s) — standings can span several
+  // messages (10 division-embeds each), so we remember all of them and edit in
+  // place, posting/deleting only when the division count changes.
+  StandingsMessageIds: "standings_message_ids",
+
   // Discord category IDs the bot creates its channels under. Resolved
   // config-first (so an admin can point the bot at an existing category on
   // a server it didn't create) → find-or-create by name fallback. Bootstrap

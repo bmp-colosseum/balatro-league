@@ -23,6 +23,7 @@ import { spawnDisputeThread } from "./dispute-thread.js";
 import { webUrl } from "./web-url.js";
 import { prisma } from "./db.js";
 import { composeLeagueInfoContent } from "./league-info-content.js";
+import { composeStandingsEmbeds } from "./standings-channel-content.js";
 import { env } from "./env.js";
 import { checkQueueStalls } from "./devops-alarm.js";
 import { postDevopsAlert } from "./devops-alert.js";
@@ -94,6 +95,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("dispute.spawn-thread");
   await boss.createQueue("notify.announce-result");
   await boss.createQueue("league-info.refresh");
+  await boss.createQueue("standings.refresh");
   await boss.createQueue("refresh.display-names");
 
   // One-shot cleanup for retired queues. Their cron schedule rows +
@@ -202,6 +204,20 @@ export async function initQueue(): Promise<void> {
       await refreshLeagueInfoPinned();
     },
   );
+
+  // Worker + schedule: re-render the read-only #league-standings post for the
+  // active season. Periodic (every 15 min) so it stays current without an
+  // edit per result; enqueueStandingsRefresh() also triggers it on demand
+  // (e.g. right after /league setup or a season start).
+  await boss.work(
+    "standings.refresh",
+    { batchSize: 1, pollingIntervalSeconds: 5 },
+    async () => {
+      await refreshStandingsMessages();
+    },
+  );
+  await boss.schedule("standings.refresh", "*/15 * * * *");
+  console.log("[pg-boss] scheduled standings.refresh every 15 min");
 
   // Worker: bootstrap one division's Discord presence. Bounded parallelism
   // (batchSize 2) so a 19-division season doesn't slam Discord all at once
@@ -392,6 +408,13 @@ export async function enqueueLeagueInfoRefresh(): Promise<void> {
   await boss.send("league-info.refresh", {}, { retryLimit: 2 });
 }
 
+// Trigger an immediate re-render of the #league-standings post (on top of the
+// 15-min schedule) — e.g. right after /league setup or a season start.
+export async function enqueueStandingsRefresh(): Promise<void> {
+  if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
+  await boss.send("standings.refresh", {}, { retryLimit: 2 });
+}
+
 export async function enqueueDm(job: DmJob): Promise<void> {
   if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
   await boss.send("notify.dm", job, { retryLimit: 3, retryBackoff: true });
@@ -455,13 +478,19 @@ export async function runDisplayNameRefresh(): Promise<{ updated: number; checke
   for (const p of players) {
     if (!isDiscordSnowflake(p.discordId)) continue; // seeded/mock id — skip the API call
     const member = await guild.members.fetch(p.discordId).catch(() => null);
-    if (!member) continue; // left the guild
-    // Global display name first, then server nickname, then @username — keep
-    // league names tied to the real Discord identity, matching guildDisplayName().
-    const name = member.user.globalName ?? member.nickname ?? member.user.username;
     const data: { displayName?: string; username?: string } = {};
-    if (!p.hasCustomDisplayName && name && name !== p.displayName) data.displayName = name;
-    if (member.user.username !== p.username) data.username = member.user.username;
+    if (member) {
+      // Current member: sync the league display name (global → nick → @username,
+      // matching guildDisplayName()) plus the @username.
+      const name = member.user.globalName ?? member.nickname ?? member.user.username;
+      if (!p.hasCustomDisplayName && name && name !== p.displayName) data.displayName = name;
+      if (member.user.username !== p.username) data.username = member.user.username;
+    } else {
+      // Left the guild — we can't read a nickname, but the @username is a global
+      // identity, so fetch the User directly so ex-members still get their tag.
+      const user = await client.users.fetch(p.discordId).catch(() => null);
+      if (user && user.username !== p.username) data.username = user.username;
+    }
     if (Object.keys(data).length > 0) {
       await prisma.player.update({ where: { id: p.id }, data });
       updated++;
@@ -674,6 +703,74 @@ async function refreshLeagueInfoPinned(): Promise<void> {
     console.log(`[league-info.refresh] posted + pinned new message in ${channelId}`);
   } catch (err) {
     console.warn(`[league-info.refresh] failed: ${(err as Error).message}`);
+  }
+}
+
+// Re-render the read-only #league-standings post. Standings can span several
+// messages (Discord caps embeds at 10/message), so we keep an ordered list of
+// the bot's message ids: edit the i-th in place, post a new one if we grew, and
+// delete any trailing leftovers if the division count shrank. Idempotent —
+// recomputes from current DB state every run.
+async function refreshStandingsMessages(): Promise<void> {
+  const channelId = await getConfig(LeagueConfigKey.StandingsChannelId);
+  if (!channelId) return; // standings feed not configured — nothing to do
+  const client = tryGetDiscordClient();
+  if (!client) {
+    console.warn("[standings.refresh] Discord client not ready — skipping");
+    return;
+  }
+  const channel = await client.channels.fetch(channelId).catch(() => null);
+  if (!channel || !channel.isTextBased() || !("send" in channel)) {
+    console.warn(`[standings.refresh] channel ${channelId} not found or unusable`);
+    return;
+  }
+  const embeds = await composeStandingsEmbeds();
+  // Chunk into messages of <=10 embeds (Discord's per-message limit).
+  const groups: (typeof embeds)[] = [];
+  for (let i = 0; i < embeds.length; i += 10) groups.push(embeds.slice(i, i + 10));
+
+  const botId = client.user?.id;
+  type MiniMsg = {
+    id: string;
+    author: { id: string };
+    edit: (o: { embeds: typeof embeds }) => Promise<unknown>;
+    delete: () => Promise<unknown>;
+  };
+  const ch = channel as {
+    messages: { fetch: (id: string) => Promise<MiniMsg> };
+    send: (o: { embeds: typeof embeds }) => Promise<MiniMsg>;
+  };
+
+  const storedRaw = await getConfig(LeagueConfigKey.StandingsMessageIds);
+  let storedIds: string[] = [];
+  try {
+    storedIds = storedRaw ? JSON.parse(storedRaw) : [];
+  } catch {
+    storedIds = [];
+  }
+
+  try {
+    const newIds: string[] = [];
+    for (let i = 0; i < groups.length; i++) {
+      const existingId = storedIds[i];
+      if (existingId) {
+        const existing = await ch.messages.fetch(existingId).catch(() => null);
+        if (existing && existing.author.id === botId) {
+          await existing.edit({ embeds: groups[i]! });
+          newIds.push(existingId);
+          continue;
+        }
+      }
+      const sent = await ch.send({ embeds: groups[i]! });
+      newIds.push(sent.id);
+    }
+    // Delete trailing messages we no longer need (division count shrank).
+    for (let i = groups.length; i < storedIds.length; i++) {
+      await ch.messages.fetch(storedIds[i]!).then((m) => m.delete()).catch(() => {});
+    }
+    await setConfig(LeagueConfigKey.StandingsMessageIds, JSON.stringify(newIds), "standings.refresh");
+  } catch (err) {
+    console.warn(`[standings.refresh] failed: ${(err as Error).message}`);
   }
 }
 

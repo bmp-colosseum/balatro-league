@@ -16,7 +16,7 @@ import { PERM_PRESETS } from "../discord-helpers.js";
 import { webUrl, WEB_HOST } from "../web-url.js";
 import { clearConfig, getConfig, LeagueConfigKey, setConfig } from "../league-config.js";
 import { requireOwner } from "../permissions.js";
-import { enqueueLeagueInfoRefresh } from "../queue.js";
+import { enqueueLeagueInfoRefresh, enqueueStandingsRefresh } from "../queue.js";
 import type { SlashCommand } from "./types.js";
 
 const WEBHOOK_URL_RE = /^https:\/\/(discord\.com|discordapp\.com)\/api\/(v\d+\/)?webhooks\/\d+\/[\w-]+$/;
@@ -317,6 +317,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     const resultsChan = await ensureChannel("league-results-bot", "Bot-only: match results auto-post here. Players can react + use slash commands but can't post.", ChannelType.GuildText, LeagueConfigKey.ResultsChannelId);
     const chatChan = await ensureChannel("league-chat", "General league chat. Match scheduling, banter, etc.", ChannelType.GuildText, LeagueConfigKey.GeneralChannelId);
     const botCmdChan = await ensureChannel("league-bot-commands", "General bot commands: /random, /profile, /standings, etc. Most replies are private (only you see them) so you can run commands from any channel.", ChannelType.GuildText, LeagueConfigKey.BotCommandsChannelId);
+    const standingsChan = await ensureChannel("league-standings", "📊 Live standings for the active season — auto-updated by the bot. Read-only.", ChannelType.GuildText, LeagueConfigKey.StandingsChannelId);
     const announcementsChan = await ensureChannel(
       "league-announcements",
       "League-wide announcements: season starts, recaps, league news. Bot-posted, read-only for members.",
@@ -339,6 +340,11 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       where: { key: "bot_commands_channel_id" },
       create: { key: "bot_commands_channel_id", value: botCmdChan.id, updatedBy: interaction.user.id },
       update: { value: botCmdChan.id, updatedBy: interaction.user.id },
+    });
+    await prisma.leagueConfig.upsert({
+      where: { key: "standings_channel_id" },
+      create: { key: "standings_channel_id", value: standingsChan.id, updatedBy: interaction.user.id },
+      update: { value: standingsChan.id, updatedBy: interaction.user.id },
     });
     await prisma.leagueConfig.upsert({
       where: { key: "announcements_channel_id" },
@@ -461,6 +467,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     await lockReadOnly(infoChan, "#league-info", false);
     await lockReadOnly(announcementsChan, "#league-announcements", true);
     await lockReadOnly(signupChan, "#league-signups", false);
+    await lockReadOnly(standingsChan, "#league-standings", false);
     // The members-chat channels: explicitly postable (images/links/reactions)
     // regardless of the server's base @everyone perms.
     await lockPostable(chatChan, "#league-chat");
@@ -557,6 +564,10 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     } catch (qErr) {
       console.warn(`[bootstrap] league-info refresh enqueue failed: ${(qErr as Error).message}`);
     }
+    // Populate #league-standings now (also re-renders every 15 min).
+    await enqueueStandingsRefresh().catch((qErr) =>
+      console.warn(`[bootstrap] standings refresh enqueue failed: ${(qErr as Error).message}`),
+    );
     if (!refreshQueued) {
       try {
         const pinned = await infoChan.messages.fetchPinned();
