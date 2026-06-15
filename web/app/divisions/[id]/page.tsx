@@ -14,6 +14,7 @@ import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { DiscordId } from "@/components/DiscordId";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { FormSelect } from "@/components/FormSelect";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,8 @@ import {
   removeDivisionMember,
   reportFromDivisionAction,
   resolveTieAction,
+  voidGameAction,
+  voidPlayerAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -735,6 +738,62 @@ function AdminSection({
           </label>
           <Input type="text" name="reason" required placeholder="Reason (admin-only)" style={{ flex: "1 1 200px" }} />
           <Button type="submit">Record DQ</Button>
+        </form>
+      </div>
+
+      {/* Void a single game (records 0-0): finished, no points, not a W/L/D.
+          For a misreport / agreed no-contest. Overwrites an existing result. */}
+      <div className="card">
+        <strong>0⃣ Void a game (0-0)</strong>
+        <p className="muted" style={{ fontSize: 12, margin: "4px 0 8px" }}>
+          Records the game as a <strong>0-0</strong> — counts as <strong>played/finished</strong> (so it
+          won&apos;t show as a remaining match) but awards no points and is neither a win, loss, nor draw.
+          Reason is admin-only.
+        </p>
+        <form action={voidGameAction} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+          <input type="hidden" name="divisionId" value={divisionId} />
+          <FormSelect
+            name="p1"
+            required
+            triggerClassName="min-w-[140px]"
+            placeholder="player 1…"
+            options={members.filter((m) => m.status === "ACTIVE").map((m) => ({ value: m.playerId, label: m.player.displayName }))}
+          />
+          <span className="muted">vs</span>
+          <FormSelect
+            name="p2"
+            required
+            triggerClassName="min-w-[140px]"
+            placeholder="player 2…"
+            options={members.filter((m) => m.status === "ACTIVE").map((m) => ({ value: m.playerId, label: m.player.displayName }))}
+          />
+          <Input type="text" name="reason" placeholder="Reason (admin-only)" style={{ flex: "1 1 180px" }} />
+          <Button type="submit" variant="secondary">Void game</Button>
+        </form>
+      </div>
+
+      {/* DQ / void a whole player: cancel all their games + drop them. No 2-0s
+          to opponents, no losses to the player. */}
+      <div className="card">
+        <strong>🚫 DQ / void a player</strong>
+        <p className="muted" style={{ fontSize: 12, margin: "4px 0 8px" }}>
+          Erases a player from the season: <strong>cancels all their games</strong> and drops them. Opponents
+          get no 2-0s and the player records no losses — as if they never played. Use for a mid-season
+          DQ. Reason is admin-only.
+        </p>
+        <form action={voidPlayerAction} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+          <input type="hidden" name="divisionId" value={divisionId} />
+          <FormSelect
+            name="playerId"
+            required
+            triggerClassName="min-w-[160px]"
+            placeholder="— player —"
+            options={members.filter((m) => m.status === "ACTIVE").map((m) => ({ value: m.playerId, label: m.player.displayName }))}
+          />
+          <Input type="text" name="reason" placeholder="Reason (admin-only)" style={{ flex: "1 1 180px" }} />
+          <ConfirmButton message="Void this player? All their games are cancelled and they're dropped from the division.">
+            Void player
+          </ConfirmButton>
         </form>
       </div>
 

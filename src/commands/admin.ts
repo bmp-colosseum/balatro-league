@@ -106,7 +106,7 @@ export const admin: SlashCommand = {
     .addSubcommand((sub) =>
       sub
         .setName("void-match")
-        .setDescription("Void ONE game between two players (cancels it — counts for neither). For a misreport / replay.")
+        .setDescription("Void ONE game (records 0-0 — finished, no points, not a W/L/D). For a misreport / no-contest.")
         .addUserOption((opt) => opt.setName("p1").setDescription("Player 1").setRequired(true))
         .addUserOption((opt) => opt.setName("p2").setDescription("Player 2").setRequired(true))
         .addStringOption((opt) =>
@@ -906,10 +906,11 @@ async function voidPlayer(interaction: ChatInputCommandInteraction) {
   );
 }
 
-// Void ONE specific game between two players: flip just that LEAGUE_BO2 match to
-// CANCELLED so it counts for neither side. Use for a misreport / agreed replay,
-// vs /admin void-player which erases a whole player. Both players stay in the
-// division; only this one result is wiped.
+// Void ONE specific game between two players: record it as a CONFIRMED 0-0. The
+// game counts as PLAYED/finished (so it's not flagged as a remaining match) but
+// awards no points and is neither a win, loss, nor draw. Use for a misreport /
+// agreed no-contest, vs /admin void-player which erases a whole player. Both
+// players stay in the division; only this one result is nil-nil.
 async function voidMatch(interaction: ChatInputCommandInteraction) {
   const p1User = interaction.options.getUser("p1", true);
   const p2User = interaction.options.getUser("p2", true);
@@ -929,44 +930,63 @@ async function voidMatch(interaction: ChatInputCommandInteraction) {
 
   const p1 = await getOrCreatePlayer(p1User);
   const p2 = await getOrCreatePlayer(p2User);
-  const [playerAId, playerBId] = p1.id < p2.id ? [p1.id, p2.id] : [p2.id, p1.id];
 
-  // Their LEAGUE_BO2 match this season (matches are keyed by division + pair).
-  const match = await prisma.match.findFirst({
+  // They must share a division this season (matches are keyed by division + pair).
+  const shared = await prisma.divisionMember.findFirst({
+    where: { playerId: p1.id, division: { seasonId: activeSeason.id } },
+    include: { division: { include: { members: { where: { playerId: p2.id } } } } },
+  });
+  if (!shared || shared.division.members.length === 0) {
+    await interaction.editReply(`**${p1.displayName}** and **${p2.displayName}** aren't in the same division this season.`);
+    return;
+  }
+  const division = shared.division;
+  const [playerAId, playerBId] = p1.id < p2.id ? [p1.id, p2.id] : [p2.id, p1.id];
+  const now = new Date();
+
+  const match = await prisma.match.upsert({
     where: {
+      divisionId_playerAId_playerBId_format: { divisionId: division.id, playerAId, playerBId, format: "LEAGUE_BO2" },
+    },
+    create: {
+      divisionId: division.id,
       playerAId,
       playerBId,
       format: "LEAGUE_BO2",
-      division: { seasonId: activeSeason.id },
+      gamesWonA: 0,
+      gamesWonB: 0,
+      winnerId: null,
+      status: "CONFIRMED",
+      reportedAt: now,
+      confirmedAt: now,
+      adminOverrideBy: interaction.user.id,
+      adminOverrideReason: `void 0-0: ${reason}`,
     },
-    include: { division: true },
+    update: {
+      gamesWonA: 0,
+      gamesWonB: 0,
+      winnerId: null,
+      status: "CONFIRMED",
+      confirmedAt: now,
+      forfeit: false,
+      forfeitReason: null,
+      adminOverrideBy: interaction.user.id,
+      adminOverrideReason: `void 0-0: ${reason}`,
+    },
   });
-  if (!match) {
-    await interaction.editReply(`No league match found between **${p1.displayName}** and **${p2.displayName}** this season.`);
-    return;
-  }
-  if (match.status === "CANCELLED") {
-    await interaction.editReply(`That match is already voided.`);
-    return;
-  }
-
-  await prisma.match.update({
-    where: { id: match.id },
-    data: { status: "CANCELLED", adminOverrideBy: interaction.user.id, adminOverrideReason: `void: ${reason}` },
-  });
-  await recomputeDivisionStandings(match.divisionId).catch(() => {});
+  await recomputeDivisionStandings(division.id).catch(() => {});
 
   recordAudit({
     actor: actorFromInteractionUser(interaction.user),
     action: "match.void",
     targetType: "Match",
     targetId: match.id,
-    summary: `Voided ${p1.displayName} vs ${p2.displayName} in ${match.division.name}`,
-    metadata: { matchId: match.id, p1: p1.id, p2: p2.id, divisionId: match.divisionId, seasonId: activeSeason.id, reason },
+    summary: `Voided ${p1.displayName} vs ${p2.displayName} 0-0 in ${division.name}`,
+    metadata: { matchId: match.id, p1: p1.id, p2: p2.id, divisionId: division.id, seasonId: activeSeason.id, reason },
   });
 
   await interaction.editReply(
-    `✅ Voided the game between **${p1.displayName}** and **${p2.displayName}** in **${match.division.name}** — it now counts for neither player.\n` +
+    `✅ Voided the game between **${p1.displayName}** and **${p2.displayName}** in **${division.name}** — recorded **0-0** (finished, no points, not a W/L/D).\n` +
       `Reason (admin-only): _${reason}_`,
   );
 }

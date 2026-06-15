@@ -8,7 +8,7 @@ import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { enqueueAnnounceResult } from "@/lib/queue";
 import { reportSetFromWeb, type ReportResultStr } from "@/lib/report";
-import { recordResult, overrideResult, forfeitResult, recordShowdown, resolveTieWithShowdowns, undoResult } from "@/lib/match-admin";
+import { recordResult, overrideResult, forfeitResult, recordShowdown, resolveTieWithShowdowns, undoResult, voidGame, voidPlayerInDivision } from "@/lib/match-admin";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
 import { resolveDiscordIdToDisplayName } from "@/lib/add-player";
 import { addGuildMemberRole } from "@/lib/discord";
@@ -398,6 +398,32 @@ export async function overridePairing(formData: FormData) {
   if (!pairingId || !["2-0", "1-1", "0-2"].includes(result)) return;
   const r = await overrideResult({ matchId: pairingId, result, actor: actorFromAdminUser(user) });
   if (r.ok) revalidatePath(`/divisions/${r.divisionId}`);
+}
+
+// Void a single game (record 0-0): finished, no points, not a W/L/D.
+export async function voidGameAction(formData: FormData) {
+  const { user } = await requireAdmin();
+  const divisionId = String(formData.get("divisionId") ?? "");
+  const p1Id = String(formData.get("p1") ?? "");
+  const p2Id = String(formData.get("p2") ?? "");
+  const reason = String(formData.get("reason") ?? "");
+  const r = await voidGame({ divisionId, p1Id, p2Id, reason, actor: actorFromAdminUser(user) });
+  if (!r.ok) redirect(`/divisions/${divisionId}?err=${encodeURIComponent(r.reason)}`);
+  revalidatePath(`/divisions/${divisionId}`);
+  redirect(`/divisions/${divisionId}?ok=game-voided`);
+}
+
+// DQ a player by voiding their whole season in this division (cancels all their
+// games + drops them). Mirrors the bot's /admin void-player.
+export async function voidPlayerAction(formData: FormData) {
+  const { user } = await requireAdmin();
+  const divisionId = String(formData.get("divisionId") ?? "");
+  const playerId = String(formData.get("playerId") ?? "");
+  const reason = String(formData.get("reason") ?? "");
+  const r = await voidPlayerInDivision({ divisionId, playerId, reason, actor: actorFromAdminUser(user) });
+  if (!r.ok) redirect(`/divisions/${divisionId}?err=${encodeURIComponent(r.reason)}`);
+  revalidatePath(`/divisions/${divisionId}`);
+  redirect(`/divisions/${divisionId}?ok=player-voided`);
 }
 
 // Record (or overwrite) a shootout result for two members in this

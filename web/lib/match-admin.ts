@@ -229,6 +229,109 @@ export async function forfeitResult(args: {
   return { ok: true, matchId: match.id, divisionId };
 }
 
+// Void a single game: record a CONFIRMED 0-0. Counts as PLAYED/finished (so the
+// pair isn't flagged as a remaining match) but awards no points and is neither a
+// win, loss, nor draw. For a misreport / agreed no-contest. Mirrors the bot's
+// /admin void-match. Doesn't announce (nothing to celebrate).
+export async function voidGame(args: {
+  divisionId: string;
+  p1Id: string;
+  p2Id: string;
+  reason?: string;
+  actor: AuditActor;
+}): Promise<MatchAdminOutcome> {
+  const { divisionId, p1Id, p2Id, actor } = args;
+  const reason = args.reason?.trim() ?? "";
+  if (!divisionId || !p1Id || !p2Id || p1Id === p2Id) {
+    return { ok: false, reason: "Need a division and two distinct players." };
+  }
+  const [canonA, canonB] = canonicalPair(p1Id, p2Id);
+  const now = new Date();
+  const overrideReason = `void 0-0${reason ? `: ${reason}` : ""}`;
+  const match = await prisma.match.upsert({
+    where: {
+      divisionId_playerAId_playerBId_format: { divisionId, playerAId: canonA, playerBId: canonB, format: "LEAGUE_BO2" },
+    },
+    create: {
+      divisionId,
+      playerAId: canonA,
+      playerBId: canonB,
+      format: "LEAGUE_BO2",
+      gamesWonA: 0,
+      gamesWonB: 0,
+      winnerId: null,
+      status: "CONFIRMED",
+      reportedAt: now,
+      confirmedAt: now,
+      adminOverrideBy: actor.discordId,
+      adminOverrideReason: overrideReason,
+    },
+    update: {
+      gamesWonA: 0,
+      gamesWonB: 0,
+      winnerId: null,
+      status: "CONFIRMED",
+      confirmedAt: now,
+      forfeit: false,
+      forfeitReason: null,
+      adminOverrideBy: actor.discordId,
+      adminOverrideReason: overrideReason,
+    },
+  });
+  await recordAudit({
+    actor,
+    action: "match.void",
+    targetType: "Match",
+    targetId: match.id,
+    summary: `Voided game 0-0 between ${p1Id} and ${p2Id}`,
+    metadata: { p1Id, p2Id, divisionId, reason: reason || null },
+  });
+  await afterWrite(match.id, divisionId, false);
+  return { ok: true, matchId: match.id, divisionId };
+}
+
+// DQ a player by VOIDING their division: cancel all their league matches and
+// drop them. No 2-0s to opponents, no losses to the player (standings only
+// count active members' confirmed matches). Mirrors the bot's /admin void-player.
+export async function voidPlayerInDivision(args: {
+  divisionId: string;
+  playerId: string;
+  reason?: string;
+  actor: AuditActor;
+}): Promise<MatchAdminOutcome> {
+  const { divisionId, playerId, actor } = args;
+  const reason = args.reason?.trim() ?? "";
+  if (!divisionId || !playerId) return { ok: false, reason: "Need a division and a player." };
+  const member = await prisma.divisionMember.findFirst({ where: { divisionId, playerId } });
+  if (!member) return { ok: false, reason: "That player isn't in this division." };
+
+  const voided = await prisma.match.updateMany({
+    where: {
+      divisionId,
+      format: "LEAGUE_BO2",
+      status: { in: ["CONFIRMED", "PENDING", "DISPUTED"] },
+      OR: [{ playerAId: playerId }, { playerBId: playerId }],
+    },
+    data: { status: "CANCELLED", adminOverrideBy: actor.discordId, adminOverrideReason: "DQ void" },
+  });
+  await prisma.divisionMember.update({
+    where: { id: member.id },
+    data: { status: "DROPPED", droppedAt: new Date() },
+  });
+  await recordAudit({
+    actor,
+    action: "player.void",
+    targetType: "Player",
+    targetId: playerId,
+    summary: `DQ void: removed player + voided ${voided.count} match(es) in division ${divisionId}`,
+    metadata: { divisionId, playerId, voidedMatches: voided.count, reason: reason || null },
+  });
+  await recomputeDivisionStandings(divisionId).catch((err) =>
+    console.warn("[match-admin] standings recompute failed:", err),
+  );
+  return { ok: true, matchId: "", divisionId };
+}
+
 // Record (or overwrite) a 1-game showdown to break a tied promo/relegation spot.
 export async function recordShowdown(args: {
   divisionId: string;
