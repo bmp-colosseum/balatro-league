@@ -23,7 +23,7 @@ export default async function StatsPage() {
       <SiteNav activePath="/stats" />
       <main>
         <h2>League stats</h2>
-        <p className="muted">Career numbers across every season. Updates a few minutes after matches confirm.</p>
+        <p className="muted">Career numbers, all seasons.</p>
 
         <div className="grid grid-3" style={{ marginTop: 16 }}>
           <LeaderCard title="Top global rank" subtitle="Lower = better" rows={data.topByRating} valueFormat={(v) => `#${v}`} />
@@ -34,12 +34,12 @@ export default async function StatsPage() {
         <h3 style={{ marginTop: 24 }}>Streaks</h3>
         {data.longestActiveStreaks.length === 0 ? (
           <div className="card muted">
-            No streaks of 3+ wins yet. (Streaks only count players currently in the active season.)
+            No streaks of 3+ wins yet.
           </div>
         ) : (
           <div className="card">
             <p className="muted" style={{ fontSize: 11, marginTop: 0 }}>
-              Consecutive match wins ending at the player&apos;s most recent confirmed match. ● = streak still live.
+              Match wins in a row. ● = still live.
             </p>
             <table className="table-dense" style={{ width: "100%" }}>
               <thead>
@@ -70,8 +70,7 @@ export default async function StatsPage() {
 
         <h3 style={{ marginTop: 24 }}>Decks &amp; stakes</h3>
         <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>
-          Every deck and stake in the league&apos;s standard pool, by games played. <strong>Ban rate</strong> = how often it was banned when it
-          appeared in a match&apos;s pick pool. Per-player win rates live on each <Link href="/players">player&apos;s profile</Link>.
+          The standard pool, by games played. <strong>Ban rate</strong> = how often it gets banned when it shows up. Per-player rates on each <Link href="/players">profile</Link>.
         </p>
         <div className="grid grid-2">
           <ItemTable title="Decks" rows={data.decks} imageFor={deckImage} />
@@ -82,13 +81,13 @@ export default async function StatsPage() {
         <div className="grid grid-2">
           <ComboCard
             title="Most-played combos"
-            subtitle="Pick rate — share of all games played on this combo"
+            subtitle="Share of all games played"
             rows={data.mostPlayedCombos}
             valueLabel={(r) => `${r.sharePct}% · ${r.gamesTotal}g`}
           />
           <ComboCard
             title="Most-banned combos"
-            subtitle={`Highest ban rate (min ${8} appearances)`}
+            subtitle={`Top ban rate (min ${8})`}
             rows={data.mostBannedCombos}
             valueLabel={(r) => `${r.banRatePct}%`}
           />

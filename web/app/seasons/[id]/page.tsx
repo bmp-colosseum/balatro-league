@@ -186,7 +186,7 @@ function PublicSummary({
                       <th></th>
                       <th>Player</th>
                       {isEnded && (
-                        <th title="Player&apos;s final league-wide rank at end of season (1 = best). Set by the end-season recompute.">Final rank</th>
+                        <th title="Final league-wide rank (1 = best).">Final rank</th>
                       )}
                       <th>Pts</th>
                       <th>W-D-L</th>

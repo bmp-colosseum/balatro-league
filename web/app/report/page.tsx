@@ -41,7 +41,7 @@ export default async function ReportPage({
 
         {ok && (
           <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>
-            ✓ Reported. The result is recorded and your opponent has been DMed with a dispute link in case it's wrong.
+            ✓ Reported. Your opponent got a DM with a dispute link.
           </div>
         )}
         {err && (
@@ -54,14 +54,12 @@ export default async function ReportPage({
           <div className="card">
             <strong>Not in the league yet</strong>
             <p className="muted">
-              You're logged in but no Player record exists for your Discord ID. Sign up via the Discord
-              bot first.
+              You're logged in but not in the league yet. Sign up in Discord first.
             </p>
           </div>
         ) : !division || !tc ? (
           <div className="card muted">
-            You're not in an active public division right now — when you are, this is where you'll
-            report results from.
+            You're not in an active division right now. Report results here when you are.
           </div>
         ) : (
           <div className="card">
@@ -73,7 +71,7 @@ export default async function ReportPage({
             </div>
 
             {division.reportableOpponents.length === 0 ? (
-              <p className="muted">No opponents left — you've played everyone in your division.</p>
+              <p className="muted">You've played everyone in your division.</p>
             ) : (
               <ReportForm
                 action={submitReportFromReportPage}
@@ -85,9 +83,7 @@ export default async function ReportPage({
             )}
 
             <p className="muted" style={{ fontSize: 11, marginTop: 12 }}>
-              Web reports are recorded immediately and posted to <strong>#results</strong> in Discord. Your
-              opponent gets a DM with a dispute link in case the score is wrong — they can also dispute it
-              inline from their own /report page, or ping a <strong>League Helper</strong> in Discord.
+              Recorded right away and posted to <strong>#results</strong>. Your opponent gets a DM to dispute if the score is wrong.
             </p>
           </div>
         )}
@@ -110,7 +106,6 @@ export default async function ReportPage({
             </summary>
             <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>
               Made a mistake or got an unfair confirm? Click Dispute to flag it for a helper.
-              Tell them what it should have been and they can one-click apply your correction.
             </p>
             <table style={{ marginTop: 8 }}>
               <thead>

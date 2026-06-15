@@ -15,8 +15,7 @@ export default function SignInPage() {
         <h2>Sign in</h2>
         <div className="card">
           <p>
-            Log in with your Discord account to view your profile, report match results, and join
-            signup rounds.
+            Log in with Discord to view your profile, report results, and join signups.
           </p>
           <form action={loginAction}>
             <Button type="submit">Login with Discord</Button>

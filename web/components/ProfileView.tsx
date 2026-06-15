@@ -25,11 +25,11 @@ import type { SeasonHistoryEntry, FavoriteEntry, BanStatEntry } from "@/lib/prof
 // Spells out the rates explicitly so a glance over a player's career
 // can answer "is that win count from a few seasons or one good one".
 function seasonRateTooltip(h: SeasonHistoryEntry): string {
-  if (h.played === 0) return "No confirmed matches yet this season.";
+  if (h.played === 0) return "No matches yet.";
   const win = Math.round((h.wins / h.played) * 100);
   const draw = Math.round((h.draws / h.played) * 100);
   const loss = Math.round((h.losses / h.played) * 100);
-  return `Win ${win}% · Draw ${draw}% · Loss ${loss}% (${h.played} matches)`;
+  return `${win}% W · ${draw}% D · ${loss}% L`;
 }
 
 // One "favourite" row — deck and/or stake thumbnail + name + a count
@@ -225,7 +225,7 @@ export async function ProfileView({
             </div>
             {ownActiveDivision.reportableOpponents.length === 0 ? (
               <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
-                No unplayed opponents — you&apos;ve played everyone in your division.
+                You&apos;ve played everyone in your division.
               </p>
             ) : (
               <>
@@ -252,8 +252,7 @@ export async function ProfileView({
                   <Button type="submit">Report</Button>
                 </form>
                 <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
-                  Web reports are recorded immediately. The result posts to <strong>#results</strong>;
-                  your opponent gets a DM with a dispute link if it&apos;s wrong.
+                  Recorded right away and posted to <strong>#results</strong>. Your opponent gets a DM to dispute if it&apos;s wrong.
                 </p>
               </>
             )}
@@ -269,8 +268,8 @@ export async function ProfileView({
               <strong>Display name</strong>
               <p className="muted" style={{ fontSize: 12 }}>
                 {me.hasCustomDisplayName
-                  ? <>Using your custom name <strong>{profile.player.displayName}</strong>. Reset to auto-sync from your Discord/server name.</>
-                  : <>Auto-synced from your server display name (<strong>{profile.player.displayName}</strong>). Set a custom one below to override.</>}
+                  ? <>Using custom name <strong>{profile.player.displayName}</strong>. Reset to sync from Discord.</>
+                  : <>Synced from your Discord name (<strong>{profile.player.displayName}</strong>). Set a custom one below.</>}
               </p>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <form action={setCustomNameAction} style={{ display: "flex", gap: 6, flex: "1 1 280px" }}>
@@ -296,7 +295,7 @@ export async function ProfileView({
               </span>
             </div>
             <p className="muted" style={{ fontSize: 11, marginTop: 0, marginBottom: 8 }}>
-              Point-in-time snapshots — one per BMP season, captured when we last read the leaderboard.
+              One snapshot per BMP season.
             </p>
             {bmpSeasonSnapshots.length > 0 ? (
               <table className="responsive-table" style={{ fontSize: 12, marginTop: 4, width: "100%" }}>
@@ -466,7 +465,7 @@ export async function ProfileView({
           <div
             className="muted"
             style={{ marginTop: 6, fontSize: 12 }}
-            title="Game-level win rate: gamesWon / (gamesWon + gamesLost). Finer-grained than the match rate."
+            title="Game-level win rate."
           >
             Game win rate: <strong>{t.gameWinRatePct}%</strong> (across {t.totalGames} games)
           </div>
@@ -511,7 +510,7 @@ export async function ProfileView({
             <div className="card">
               <strong>Deck performance</strong>
               <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
-                Games (won / total) per deck. 5-game minimum filter.
+                Per deck. Min 5 games.
               </p>
               <table className="table-dense" style={{ width: "100%", fontSize: 12 }}>
                 <tbody>
@@ -542,7 +541,7 @@ export async function ProfileView({
               <div className="card">
                 <strong>Stake performance</strong>
                 <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
-                  Games (won / total) per stake. 5-game minimum filter.
+                  Per stake. Min 5 games.
                 </p>
                 <table className="table-dense" style={{ width: "100%", fontSize: 12 }}>
                   <tbody>
@@ -579,7 +578,7 @@ export async function ProfileView({
             <div className="card">
               <strong>⭐ Most played</strong>
               <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
-                Top decks, stakes &amp; combos by games played.
+                By games played.
               </p>
               {favBlock("Decks", profile.favorites.mostPlayed.decks, "deck", "played")}
               {favBlock("Stakes", profile.favorites.mostPlayed.stakes, "stake", "played")}
@@ -588,7 +587,7 @@ export async function ProfileView({
             <div className="card">
               <strong>🏆 Most won</strong>
               <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
-                Top decks, stakes &amp; combos by games won.
+                By games won.
               </p>
               {favBlock("Decks", profile.favorites.mostWon.decks, "deck", "won")}
               {favBlock("Stakes", profile.favorites.mostWon.stakes, "stake", "won")}
@@ -604,7 +603,7 @@ export async function ProfileView({
               <div className="card">
                 <strong>🚫 Most-banned decks</strong>
                 <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
-                  How often you ban each deck when it shows up in your pool.
+                  How often you ban each deck when it shows up.
                 </p>
                 <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 12, display: "flex", flexDirection: "column", gap: 2 }}>
                   {banStats.decks.map((r) => banRow(r, "deck"))}
@@ -615,7 +614,7 @@ export async function ProfileView({
               <div className="card">
                 <strong>🚫 Most-banned stakes</strong>
                 <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
-                  How often you ban each stake when it shows up in your pool.
+                  How often you ban each stake when it shows up.
                 </p>
                 <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 12, display: "flex", flexDirection: "column", gap: 2 }}>
                   {banStats.stakes.map((r) => banRow(r, "stake"))}

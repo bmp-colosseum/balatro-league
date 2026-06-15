@@ -28,7 +28,7 @@ function renderMmrCell(entry: StandingsMmrEntry | undefined, currentBmpSeason: s
   }
   return (
     <span
-      title={`From BMP ${formatBmpSeason(entry.bmpSeason)} — player hasn't played the current BMP season (${formatBmpSeason(currentBmpSeason)}). Their MMR may have shifted.`}
+      title={`From BMP ${formatBmpSeason(entry.bmpSeason)}, not the current season. May be stale.`}
       style={{ color: "#f1c40f" }}
     >
       {entry.mmr}
@@ -89,11 +89,11 @@ export const dynamic = "force-dynamic"; // Always fresh — DB writes happen out
 // Tooltips so the raw W-D-L / Games cells double as rate views on hover
 // without bloating the visible column count.
 function standingRateTooltip(r: StandingRow): string {
-  if (r.played === 0) return "No matches played yet.";
+  if (r.played === 0) return "No matches yet.";
   const win = Math.round((r.wins / r.played) * 100);
   const draw = Math.round((r.draws / r.played) * 100);
   const loss = Math.round((r.losses / r.played) * 100);
-  return `Win ${win}% · Draw ${draw}% · Loss ${loss}% (${r.played} matches)`;
+  return `${win}% W · ${draw}% D · ${loss}% L`;
 }
 // Rank + movement/clinch/showdown badges, shared by the desktop table and the
 // mobile cards so the two never drift.
@@ -113,16 +113,16 @@ function RowBadges({
   return (
     <>
       {medal}
-      {promoting && <> <span title="Promotion position" style={{ color: "#2ecc71" }}>↑</span></>}
-      {relegating && <> <span title="Relegation position" style={{ color: "#e74c3c" }}>↓</span></>}
+      {promoting && <> <span title="Promotion spot" style={{ color: "#2ecc71" }}>↑</span></>}
+      {relegating && <> <span title="Relegation spot" style={{ color: "#e74c3c" }}>↓</span></>}
       {clinchStatus === "up" && (
-        <> <span title="Clinched promotion — guaranteed to move up regardless of remaining matches" style={{ color: "#2ecc71" }}>🔒↑</span></>
+        <> <span title="Clinched — guaranteed up" style={{ color: "#2ecc71" }}>🔒↑</span></>
       )}
       {clinchStatus === "down" && (
-        <> <span title="Relegation locked — guaranteed to move down regardless of remaining matches" style={{ color: "#e74c3c" }}>🔒↓</span></>
+        <> <span title="Locked — guaranteed down" style={{ color: "#e74c3c" }}>🔒↓</span></>
       )}
       {showdown && (
-        <span title="Tied for promotion/relegation — play a showdown and /report-shootout" style={{ color: "#f1c40f", marginLeft: 4 }}>⚔</span>
+        <span title="Tied — play a showdown" style={{ color: "#f1c40f", marginLeft: 4 }}>⚔</span>
       )}
     </>
   );
@@ -130,9 +130,9 @@ function RowBadges({
 
 function gameRateTooltip(r: StandingRow): string {
   const total = r.gamesWon + r.gamesLost;
-  if (total === 0) return "No games played yet.";
+  if (total === 0) return "No games yet.";
   const winRate = Math.round((r.gamesWon / total) * 100);
-  return `Game win rate ${winRate}% (${r.gamesWon}/${total})`;
+  return `${winRate}% game win (${r.gamesWon}/${total})`;
 }
 
 export default async function StandingsPage() {
@@ -333,7 +333,7 @@ export default async function StandingsPage() {
                                 fontSize: 11,
                                 marginLeft: "auto",
                               }}
-                              title={complete ? "All matches played" : "Round-robin in progress"}
+                              title={complete ? "All matches played" : "In progress"}
                             >
                               {complete ? "✅" : ""} {playedMatches}/{expectedMatches} matches
                             </span>
@@ -346,11 +346,11 @@ export default async function StandingsPage() {
                                 <th>Player</th>
                                 <th>Pts</th>
                                 <th>W-D-L</th>
-                                <th title="Match win rate: % of confirmed matches won 2-0.">Match W%</th>
-                                <th title="Match draw rate: % of confirmed matches that ended 1-1. Loss% = 100 - Win% - Draw%.">Match D%</th>
+                                <th title="% of matches won 2-0">Match W%</th>
+                                <th title="% of matches drawn 1-1">Match D%</th>
                                 <th>Games</th>
                                 {showBmpMmr && (
-                                  <th title="Each player's current Ranked MMR from balatromp.com — separate from your league ranking. Click a player to see their full BMP history.">BMP MMR</th>
+                                  <th title="Ranked MMR from balatromp.com. Separate from league rank.">BMP MMR</th>
                                 )}
                               </tr>
                             </thead>

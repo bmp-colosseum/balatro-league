@@ -134,7 +134,7 @@ export function ReportForm({
             )}
           </>
         ) : (
-          <span className="muted">Pick an opponent to see exactly what will be recorded.</span>
+          <span className="muted">Pick an opponent to confirm what gets recorded.</span>
         )}
       </div>
 

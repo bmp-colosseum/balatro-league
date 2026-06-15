@@ -22,9 +22,7 @@ export default async function TraitsGuidePage() {
       <main>
         <h2>🎭 Traits</h2>
         <p className="muted">
-          Traits are just-for-fun badges earned automatically from how you play — no effect on
-          standings. They start showing up after you&apos;ve played at least 10 games, so they build
-          up over a few seasons. Visit any player&apos;s profile to see the ones they&apos;ve earned.
+          Fun badges you earn from how you play. No effect on standings. Start showing up after 10 games.
         </p>
 
         <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
