@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { setMatchOutcome } from "@/lib/actions/match-outcome";
+import { resultLabelByName } from "@/lib/result-labels";
 
 export interface PanelMember {
   playerId: string;
@@ -33,9 +34,9 @@ export interface PanelPair {
 
 function outcomeOptions(p1: string, p2: string, includeUndo: boolean) {
   const opts = [
-    { value: "p1-2-0", label: `${p1} wins 2-0` },
-    { value: "draw", label: `1-1 draw` },
-    { value: "p2-2-0", label: `${p2} wins 2-0` },
+    { value: "p1-2-0", label: resultLabelByName("2-0", p1, p2) },
+    { value: "draw", label: resultLabelByName("1-1", p1, p2) },
+    { value: "p2-2-0", label: resultLabelByName("0-2", p1, p2) },
     { value: "void", label: `Void — 0-0 (no points, finished)` },
     { value: "p1-dq", label: `${p1} wins — ${p2} DQ'd` },
     { value: "p2-dq", label: `${p2} wins — ${p1} DQ'd` },

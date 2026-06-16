@@ -13,6 +13,7 @@ import { FlashToast } from "@/components/FlashToast";
 import { PlayerSearch } from "@/components/PlayerSearch";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { MatchActionsPanel } from "@/components/MatchActionsPanel";
+import { resultLabelByName } from "@/lib/result-labels";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormSelect } from "@/components/FormSelect";
@@ -158,9 +159,9 @@ export default async function ResultsPage({
                                 defaultValue={`${m.gamesWonA}-${m.gamesWonB}`}
                                 size="sm"
                                 options={[
-                                  { value: "2-0", label: `${m.aName} 2-0` },
-                                  { value: "1-1", label: "1-1" },
-                                  { value: "0-2", label: `${m.bName} 2-0` },
+                                  { value: "2-0", label: resultLabelByName("2-0", m.aName, m.bName) },
+                                  { value: "1-1", label: resultLabelByName("1-1", m.aName, m.bName) },
+                                  { value: "0-2", label: resultLabelByName("0-2", m.aName, m.bName) },
                                 ]}
                               />
                               <Button type="submit" variant="secondary" size="sm">Set</Button>

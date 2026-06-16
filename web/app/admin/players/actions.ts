@@ -5,13 +5,9 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
-import { enqueueAnnounceResult, enqueueMmrSnapshot } from "@/lib/queue";
+import { enqueueMmrSnapshot } from "@/lib/queue";
 import { placePlayerInDivision } from "@/lib/division-membership";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
-import { actorFromAdminUser } from "@/lib/audit";
-import { recordResult, forfeitResult } from "@/lib/match-admin";
-
-type Result = "2-0" | "1-1" | "0-2";
 
 // Change a player's Discord ID. Useful when a row was imported with a
 // typo or the wrong account ID. Keeps everything else (rating, memberships,
@@ -36,40 +32,9 @@ export async function setPlayerDiscordId(formData: FormData) {
   revalidatePath("/admin/players");
 }
 
-// Admin records a set between two active members of a division. Upserts
-// the Pairing as CONFIRMED with this admin's user id stamped on
-// adminOverrideBy. Mirrors /admin/divisions/[id] recordSet but invocable
-// from the per-player view so admin doesn't have to navigate away.
-export async function recordSetForPlayer(formData: FormData) {
-  const { user } = await requireAdmin();
-  const divisionId = String(formData.get("divisionId") ?? "");
-  const playerId = String(formData.get("playerId") ?? "");
-  const opponentId = String(formData.get("opponentId") ?? "");
-  const result = String(formData.get("result") ?? "") as Result;
-  if (!["2-0", "1-1", "0-2"].includes(result)) return;
-  await recordResult({ divisionId, playerAId: playerId, playerBId: opponentId, result, actor: actorFromAdminUser(user) });
-  revalidatePath("/admin/players");
-  revalidatePath(`/divisions/${divisionId}`);
-}
-
-// Award a 2-0 win by forfeit / DQ between this player and an opponent. Same
-// upsert as recordSetForPlayer, but forces 2-0 to the chosen winner and flags
-// the match as a forfeit. `reason` is admin-only (stored on forfeitReason +
-// audit) — never shown to other players; the public UI only shows "by DQ".
-export async function recordForfeitForPlayer(formData: FormData) {
-  const { user } = await requireAdmin();
-  const divisionId = String(formData.get("divisionId") ?? "");
-  const playerId = String(formData.get("playerId") ?? "");
-  const opponentId = String(formData.get("opponentId") ?? "");
-  const side = String(formData.get("winner") ?? ""); // "self" | "opponent"
-  const reason = String(formData.get("reason") ?? "").trim();
-  if (side !== "self" && side !== "opponent") return;
-  const winnerId = side === "self" ? playerId : opponentId;
-  const loserId = side === "self" ? opponentId : playerId;
-  await forfeitResult({ divisionId, winnerId, loserId, reason, actor: actorFromAdminUser(user) });
-  revalidatePath("/admin/players");
-  revalidatePath(`/divisions/${divisionId}`);
-}
+// Admin match record / override / DQ / void for a player now lives in the
+// shared MatchActionsPanel (rendered on the division-scoped /admin/players
+// view and on each player's profile) — no bespoke per-row record forms here.
 
 const MOCK_PREFIX = "mock-";
 

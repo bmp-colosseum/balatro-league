@@ -11,12 +11,11 @@ import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { DiscordId } from "@/components/DiscordId";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { FormSelect } from "@/components/FormSelect";
 import { ReportForm } from "@/components/ReportForm";
+import { MatchActionsPanel } from "@/components/MatchActionsPanel";
+import { DisputeForm } from "@/components/DisputeForm";
 import { CANONICAL_DECKS, CANONICAL_STAKES } from "@/lib/balatro-info";
-import { recordSetForPlayer, recordForfeitForPlayer } from "@/app/admin/players/actions";
 import { reportFromProfileAction, submitProfileDispute } from "@/app/profile/[id]/actions";
 import { resetToDiscordNameAction, setCustomNameAction } from "@/app/me/actions";
 import { NextSeasonCard } from "@/components/NextSeasonCard";
@@ -240,7 +239,6 @@ export async function ProfileView({
                   }))}
                   decks={CANONICAL_DECKS.map((d) => d.name)}
                   stakes={CANONICAL_STAKES.map((s) => s.name)}
-                  selfName={profile.player.displayName}
                   hiddenFields={{ profileId: profile.player.id }}
                 />
                 <p className="muted" style={{ fontSize: 11, marginTop: 6, marginBottom: 0 }}>
@@ -350,77 +348,19 @@ export async function ProfileView({
           </div>
         )}
 
-        {adminCtx && adminCtx.allOpponents.length > 0 && (
-          <div className="card" style={{ borderColor: "#f1c40f" }}>
-            <strong style={{ color: "#f1c40f" }}>⚙ Admin: record a match for {profile.player.displayName}</strong>
-            {adminCtx.opponents.length > 0 ? (
-              <>
-                <p className="muted" style={{ fontSize: 12 }}>
-                  In <strong>{adminCtx.divisionName}</strong>. Only unplayed opponents shown — to override
-                  an already-recorded set, use the DQ tool below or the division admin page.
-                </p>
-                <form action={recordSetForPlayer} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  <input type="hidden" name="divisionId" value={adminCtx.divisionId} />
-                  <input type="hidden" name="playerId" value={profile.player.id} />
-                  <FormSelect
-                    name="opponentId"
-                    required
-                    triggerClassName="flex-1 min-w-[200px]"
-                    placeholder="— pick opponent —"
-                    options={adminCtx.opponents.map((o) => ({ value: o.playerId, label: o.displayName }))}
-                  />
-                  <FormSelect
-                    name="result"
-                    defaultValue="2-0"
-                    options={[
-                      { value: "2-0", label: `${profile.player.displayName} won 2-0` },
-                      { value: "1-1", label: "1-1 draw" },
-                      { value: "0-2", label: `${profile.player.displayName} lost 0-2` },
-                    ]}
-                  />
-                  <Button type="submit">Record</Button>
-                </form>
-              </>
-            ) : (
-              <p className="muted" style={{ fontSize: 12 }}>
-                In <strong>{adminCtx.divisionName}</strong>. All opponents played — use the DQ tool below
-                to record or fix a forfeit.
-              </p>
-            )}
-
-            {/* Forfeit / DQ — a 2-0 win awarded without playing it out. Lists
-                ALL opponents (played or not) and upserts, so it both records a
-                new DQ and FIXES a wrong one in place. Public UI shows "by DQ";
-                the reason here is admin-only. */}
-            <details style={{ marginTop: 10 }} open={adminCtx.opponents.length === 0}>
-              <summary style={{ cursor: "pointer", fontSize: 13 }}>⚖ Record / fix a forfeit / DQ (2-0)</summary>
-              <p className="muted" style={{ fontSize: 11, marginTop: 6 }}>
-                Awards a 2-0 win by default (no-show, drop-out, rule violation). Works on any opponent —
-                played or not — so to fix a wrong DQ just pick the right winner and submit again. The
-                reason is <strong>admin-only</strong> — other players only see &ldquo;by DQ&rdquo;.
-              </p>
-              <form action={recordForfeitForPlayer} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                <input type="hidden" name="divisionId" value={adminCtx.divisionId} />
-                <input type="hidden" name="playerId" value={profile.player.id} />
-                <FormSelect
-                  name="opponentId"
-                  required
-                  triggerClassName="flex-1 min-w-[180px]"
-                  placeholder="— pick opponent —"
-                  options={adminCtx.allOpponents.map((o) => ({ value: o.playerId, label: o.displayName }))}
-                />
-                <FormSelect
-                  name="winner"
-                  defaultValue="self"
-                  options={[
-                    { value: "self", label: `${profile.player.displayName} wins by DQ` },
-                    { value: "opponent", label: "opponent wins by DQ" },
-                  ]}
-                />
-                <Input type="text" name="reason" required placeholder="Reason (admin-only)" style={{ flex: "1 1 200px" }} />
-                <Button type="submit">Record DQ</Button>
-              </form>
-            </details>
+        {adminCtx && adminCtx.members.length > 1 && (
+          <div style={{ marginTop: 16 }}>
+            <p className="muted" style={{ fontSize: 12, margin: "0 0 6px" }}>
+              <span style={{ color: "#f1c40f" }}>⚙ Admin</span> — {profile.player.displayName}&apos;s matches in{" "}
+              <strong>{adminCtx.divisionName}</strong>. Record, fix, void, or DQ any of them below.
+            </p>
+            <MatchActionsPanel
+              divisionId={adminCtx.divisionId}
+              returnTo={`/profile/${profile.player.id}`}
+              members={adminCtx.members}
+              unplayed={adminCtx.unplayed}
+              played={adminCtx.played}
+            />
           </div>
         )}
         <div className="grid grid-3" style={{ marginTop: 16 }}>
@@ -703,8 +643,11 @@ export async function ProfileView({
                         const date = m.confirmedAt ? m.confirmedAt.toISOString().slice(0, 10) : "—";
                         const isDisputed = m.status === "DISPUTED";
                         const isShootout = m.isShootout === true;
+                        // A 0-0 is a void (finished, no points) — distinct from a 1-1 draw.
+                        const isVoid = m.myGames === 0 && m.opponentGames === 0;
                         const outcomePill =
                           isDisputed ? { bg: "rgba(241,196,15,0.15)", fg: "#f1c40f", label: "DISPUTED" }
+                          : isVoid ? { bg: "rgba(149,165,166,0.18)", fg: "#95a5a6", label: "V" }
                           : m.outcome === "WIN" ? { bg: "rgba(46,204,113,0.15)", fg: "#2ecc71", label: "W" }
                           : m.outcome === "LOSS" ? { bg: "rgba(231,76,60,0.15)", fg: "#e74c3c", label: "L" }
                           : { bg: "rgba(241,196,15,0.15)", fg: "#f1c40f", label: "D" };
@@ -767,36 +710,13 @@ export async function ProfileView({
                             )}
                             {isOwnProfile && h.isActive && !isShootout && (
                               <td>
-                                <details>
-                                  <summary style={{ cursor: "pointer", fontSize: 11, color: "var(--muted-text, #888)" }}>
-                                    {isDisputed ? "Update dispute" : "Dispute"}
-                                  </summary>
-                                  <form action={submitProfileDispute} style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4, minWidth: 200 }}>
-                                    <input type="hidden" name="pairingId" value={m.pairingId} />
-                                    <input type="hidden" name="profileId" value={profile.player.id} />
-                                    <label style={{ fontSize: 11 }} className="muted">What it should be (your POV):</label>
-                                    <FormSelect
-                                      name="proposed"
-                                      defaultValue="unsure"
-                                      options={[
-                                        { value: "unsure", label: "— not sure, let helper decide —" },
-                                        { value: "2-0", label: "2-0 (I won both)" },
-                                        { value: "1-1", label: "1-1 (draw)" },
-                                        { value: "0-2", label: "0-2 (I lost both)" },
-                                      ]}
-                                    />
-                                    <Textarea
-                                      name="reason"
-                                      rows={2}
-                                      placeholder="Optional context for the helper…"
-                                      maxLength={500}
-                                      style={{ fontSize: 12, width: "100%" }}
-                                    />
-                                    <Button type="submit" variant="secondary" size="sm">
-                                      Submit dispute
-                                    </Button>
-                                  </form>
-                                </details>
+                                <DisputeForm
+                                  action={submitProfileDispute}
+                                  pairingId={m.pairingId}
+                                  opponentName={m.opponentDisplayName}
+                                  isDisputed={isDisputed}
+                                  hiddenFields={{ profileId: profile.player.id }}
+                                />
                               </td>
                             )}
                           </tr>

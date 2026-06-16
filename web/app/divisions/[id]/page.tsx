@@ -18,6 +18,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { MatchActionsPanel } from "@/components/MatchActionsPanel";
 import { ReportForm } from "@/components/ReportForm";
 import { CANONICAL_DECKS, CANONICAL_STAKES } from "@/lib/balatro-info";
+import { resultLabelByName } from "@/lib/result-labels";
 import { FormSelect } from "@/components/FormSelect";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -383,7 +384,6 @@ function UnplayedList({
                 lockedOpponent={{ playerId: opponent.id, displayName: opponent.displayName, alreadyPending: false }}
                 decks={CANONICAL_DECKS.map((d) => d.name)}
                 stakes={CANONICAL_STAKES.map((s) => s.name)}
-                selfName={viewerIsA ? m.a.displayName : m.b.displayName}
                 hiddenFields={{ divisionId }}
                 compact
                 collapsible
@@ -400,9 +400,9 @@ function UnplayedList({
                   size="sm"
                   title="Result from playerA's POV"
                   options={[
-                    { value: "2-0", label: `${m.a.displayName} 2-0` },
-                    { value: "1-1", label: "Draw 1-1" },
-                    { value: "0-2", label: `${m.b.displayName} 2-0` },
+                    { value: "2-0", label: resultLabelByName("2-0", m.a.displayName, m.b.displayName) },
+                    { value: "1-1", label: resultLabelByName("1-1", m.a.displayName, m.b.displayName) },
+                    { value: "0-2", label: resultLabelByName("0-2", m.a.displayName, m.b.displayName) },
                   ]}
                 />
                 <Button type="submit" variant="secondary" size="sm">Record</Button>
@@ -471,8 +471,10 @@ function YourPlayedTable({ rows, viewerPlayerId }: { rows: DivisionRecentPairing
           const opponent = isA ? p.playerB : p.playerA;
           const myG = isA ? p.gamesWonA : p.gamesWonB;
           const oppG = isA ? p.gamesWonB : p.gamesWonA;
+          // A 0-0 is a void (finished, no points) — distinct from a 1-1 draw.
           const outcome =
-            myG > oppG ? { bg: "rgba(46,204,113,0.15)", fg: "#2ecc71", label: "W" }
+            myG === 0 && oppG === 0 ? { bg: "rgba(149,165,166,0.18)", fg: "#95a5a6", label: "V" }
+            : myG > oppG ? { bg: "rgba(46,204,113,0.15)", fg: "#2ecc71", label: "W" }
             : myG < oppG ? { bg: "rgba(231,76,60,0.15)", fg: "#e74c3c", label: "L" }
             : { bg: "rgba(241,196,15,0.15)", fg: "#f1c40f", label: "D" };
           return (
@@ -681,9 +683,9 @@ function AdminSection({
                         name="result"
                         defaultValue={`${p.gamesWonA}-${p.gamesWonB}`}
                         options={[
-                          { value: "2-0", label: `${p.playerA.displayName} 2-0` },
-                          { value: "1-1", label: "1-1 draw" },
-                          { value: "0-2", label: `${p.playerB.displayName} 2-0` },
+                          { value: "2-0", label: resultLabelByName("2-0", p.playerA.displayName, p.playerB.displayName) },
+                          { value: "1-1", label: resultLabelByName("1-1", p.playerA.displayName, p.playerB.displayName) },
+                          { value: "0-2", label: resultLabelByName("0-2", p.playerA.displayName, p.playerB.displayName) },
                         ]}
                       />
                       <Button type="submit">Override</Button>

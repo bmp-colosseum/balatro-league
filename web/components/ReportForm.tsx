@@ -27,17 +27,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { resultLabelBySelf, type ResultStr } from "@/lib/result-labels";
 
 export interface ReportOpponent {
   playerId: string;
   displayName: string;
   alreadyPending: boolean;
-}
-
-function confirmationLine(selfName: string, oppName: string, result: string): string {
-  if (result === "2-0") return `${selfName} beat ${oppName} 2–0`;
-  if (result === "0-2") return `${oppName} beat ${selfName} 2–0`;
-  return `${selfName} & ${oppName} drew 1–1`;
 }
 
 // Radix Select disallows empty-string item values, so optional deck/stake use a
@@ -50,7 +45,6 @@ export function ReportForm({
   decks,
   stakes,
   action,
-  selfName,
   compact = false,
   collapsible = false,
   hiddenFields,
@@ -60,13 +54,12 @@ export function ReportForm({
   decks: string[];
   stakes: string[];
   action: (formData: FormData) => void | Promise<void>;
-  selfName: string;
   compact?: boolean;
   collapsible?: boolean;
   hiddenFields?: Record<string, string>;
 }) {
   const [opponentId, setOpponentId] = useState(lockedOpponent?.playerId ?? "");
-  const [result, setResult] = useState("2-0");
+  const [result, setResult] = useState<ResultStr>("2-0");
   const [deck, setDeck] = useState(NONE);
   const [stake, setStake] = useState(NONE);
   // Collapsible forms start closed; everything else starts open.
@@ -89,12 +82,10 @@ export function ReportForm({
     : result === "0-2" ? `${oppName}'s lives · G2`
     : `${oppName}'s lives · their win`;
 
-  const resultLabel = (r: string) =>
-    r === "2-0"
-      ? opponent ? `2-0 — ${selfName} beat ${opponent.displayName}` : "2-0 — won both"
-      : r === "1-1"
-        ? opponent ? `1-1 — ${selfName} & ${opponent.displayName} drew` : "1-1 — draw"
-        : opponent ? `0-2 — ${opponent.displayName} beat ${selfName}` : "0-2 — lost both";
+  const resultLabel = (r: ResultStr) =>
+    opponent
+      ? resultLabelBySelf(r, opponent.displayName)
+      : r === "2-0" ? "You win 2–0" : r === "0-2" ? "You lose 0–2" : "1–1 draw";
 
   // Collapsed trigger — used in dense lists (division rows) so each row stays a
   // single line until the player chooses to report.
@@ -146,7 +137,7 @@ export function ReportForm({
           </>
         )}
 
-        <Select value={result} onValueChange={(v) => setResult(v ?? "2-0")}>
+        <Select value={result} onValueChange={(v) => setResult((v as ResultStr) ?? "2-0")}>
           <SelectTrigger className={resultWidth}>
             <SelectValue />
           </SelectTrigger>
@@ -219,7 +210,7 @@ export function ReportForm({
           {opponent ? (
             <>
               You&apos;re reporting:{" "}
-              <strong className="text-foreground">{confirmationLine(selfName, opponent.displayName, result)}</strong>.
+              <strong className="text-foreground">{resultLabelBySelf(result, opponent.displayName)}</strong>.
               {pending && (
                 <span className="text-[var(--accent)]"> Heads up — a result vs {opponent.displayName} is already pending.</span>
               )}
@@ -232,7 +223,7 @@ export function ReportForm({
 
       <div>
         <Button type="submit" disabled={!opponentId} size={compact ? "sm" : undefined}>
-          Report{opponent ? ` — ${confirmationLine(selfName, opponent.displayName, result)}` : ""}
+          Report{opponent ? ` — ${resultLabelBySelf(result, opponent.displayName)}` : ""}
         </Button>
       </div>
     </form>

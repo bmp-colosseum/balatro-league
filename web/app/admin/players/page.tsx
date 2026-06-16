@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/admin";
 import {
+  loadAdminDivisionDetail,
   loadAdminPlayersDivisionView,
   loadAdminPlayersListView,
   loadPlayersPageNav,
@@ -11,11 +12,12 @@ import { DiscordId } from "@/components/DiscordId";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { MatchActionsPanel } from "@/components/MatchActionsPanel";
 import { Button } from "@/components/ui/button";
 import { FormSelect } from "@/components/FormSelect";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { addFakePlayer, deletePlayer, dropPlayer, recordSetForPlayer, refreshActiveSeasonMmrs, reinstatePlayer, setPlayerDiscordId } from "./actions";
+import { addFakePlayer, deletePlayer, dropPlayer, refreshActiveSeasonMmrs, reinstatePlayer, setPlayerDiscordId } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +33,8 @@ export default async function AdminPlayersPage({
   // Mode A — division scoped
   if (nav.selectedDivision) {
     const view = await loadAdminPlayersDivisionView(nav.selectedDivision.id);
-    if (!view) return null;
+    const detail = await loadAdminDivisionDetail(nav.selectedDivision.id);
+    if (!view || !detail) return null;
     return (
       <>
         <SiteNav activePath="/admin" />
@@ -60,13 +63,12 @@ export default async function AdminPlayersPage({
                   <th>Pts</th>
                   <th>W-D-L</th>
                   <th>Rating</th>
-                  <th>Record/override result</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {view.active.length === 0 ? (
-                  <tr><td colSpan={8} className="muted">No active players in this division.</td></tr>
+                  <tr><td colSpan={7} className="muted">No active players in this division.</td></tr>
                 ) : view.active.map((m) => (
                   <tr key={m.membershipId}>
                     <td style={{ width: 24 }}>{m.rank && m.rank <= 3 ? ["🥇", "🥈", "🥉"][m.rank - 1] : ""}</td>
@@ -80,32 +82,6 @@ export default async function AdminPlayersPage({
                     <td><strong>{m.points}</strong></td>
                     <td>{m.wins}-{m.draws}-{m.losses}</td>
                     <td>{m.rating ?? <span className="muted">unranked</span>}</td>
-                    <td>
-                      <form action={recordSetForPlayer} style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                        <input type="hidden" name="divisionId" value={view.division.id} />
-                        <input type="hidden" name="playerId" value={m.playerId} />
-                        <span className="muted" style={{ fontSize: 11 }}>vs</span>
-                        <FormSelect
-                          name="opponentId"
-                          required
-                          size="sm"
-                          triggerClassName="max-w-[140px]"
-                          placeholder="—"
-                          options={m.unplayedOpponents.map((o) => ({ value: o.playerId, label: o.displayName }))}
-                        />
-                        <FormSelect
-                          name="result"
-                          defaultValue="2-0"
-                          size="sm"
-                          options={[
-                            { value: "2-0", label: "2-0 (won)" },
-                            { value: "1-1", label: "1-1" },
-                            { value: "0-2", label: "0-2 (lost)" },
-                          ]}
-                        />
-                        <Button type="submit" variant="secondary" size="sm">Record</Button>
-                      </form>
-                    </td>
                     <td>
                       <form action={dropPlayer} style={{ display: "inline-block" }}>
                         <input type="hidden" name="playerId" value={m.playerId} />
@@ -123,6 +99,20 @@ export default async function AdminPlayersPage({
               </tbody>
             </table>
           </div>
+
+          <MatchActionsPanel
+            divisionId={detail.division.id}
+            returnTo={`/admin/players?season=${detail.division.seasonId}&division=${detail.division.id}`}
+            members={detail.members.filter((m) => m.status === "ACTIVE").map((m) => ({ playerId: m.playerId, displayName: m.player.displayName }))}
+            unplayed={detail.unplayed.map((u) => ({ p1Id: u.a.id, p2Id: u.b.id }))}
+            played={detail.pairings
+              .filter((p) => p.status === "CONFIRMED")
+              .map((p) => ({
+                p1Id: p.playerAId,
+                p2Id: p.playerBId,
+                summary: p.gamesWonA === 0 && p.gamesWonB === 0 ? "0-0 void" : `${p.gamesWonA}-${p.gamesWonB}`,
+              }))}
+          />
 
           {view.inactive.length > 0 && (
             <details className="card">
@@ -210,7 +200,7 @@ export default async function AdminPlayersPage({
                 <th>Name</th>
                 <th>Rating</th>
                 <th>Division</th>
-                <th>Record match</th>
+                <th>Record / fix</th>
                 <th>Discord</th>
                 <th></th>
               </tr>
@@ -242,31 +232,8 @@ export default async function AdminPlayersPage({
                     )}
                   </td>
                   <td>
-                    {p.membership && !p.membership.dropped && p.membership.unplayedOpponents.length > 0 ? (
-                      <form action={recordSetForPlayer} style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                        <input type="hidden" name="divisionId" value={p.membership.divisionId} />
-                        <input type="hidden" name="playerId" value={p.id} />
-                        <span className="muted" style={{ fontSize: 11 }}>vs</span>
-                        <FormSelect
-                          name="opponentId"
-                          required
-                          size="sm"
-                          triggerClassName="max-w-[140px]"
-                          placeholder="—"
-                          options={p.membership.unplayedOpponents.map((o) => ({ value: o.playerId, label: o.displayName }))}
-                        />
-                        <FormSelect
-                          name="result"
-                          defaultValue="2-0"
-                          size="sm"
-                          options={[
-                            { value: "2-0", label: "2-0" },
-                            { value: "1-1", label: "1-1" },
-                            { value: "0-2", label: "0-2" },
-                          ]}
-                        />
-                        <Button type="submit" variant="secondary" size="sm">Record</Button>
-                      </form>
+                    {p.membership && !p.membership.dropped ? (
+                      <Link href={`/profile/${p.id}`} style={{ fontSize: 12 }}>record / fix →</Link>
                     ) : (
                       <span className="muted" style={{ fontSize: 11 }}>—</span>
                     )}

@@ -11,10 +11,8 @@ import { CANONICAL_DECKS, CANONICAL_STAKES } from "@/lib/balatro-info";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { DiscordId } from "@/components/DiscordId";
-import { Button } from "@/components/ui/button";
-import { FormSelect } from "@/components/FormSelect";
-import { Textarea } from "@/components/ui/textarea";
 import { ReportForm } from "@/components/ReportForm";
+import { DisputeForm } from "@/components/DisputeForm";
 import { submitReportFromReportPage, submitReportPageDispute } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -78,7 +76,6 @@ export default async function ReportPage({
                 opponents={division.reportableOpponents}
                 decks={CANONICAL_DECKS.map((d) => d.name)}
                 stakes={CANONICAL_STAKES.map((s) => s.name)}
-                selfName={player.displayName}
               />
             )}
 
@@ -121,8 +118,11 @@ export default async function ReportPage({
                 {recentMatches.map((m) => {
                   const date = m.date ? m.date.toISOString().slice(0, 10) : "—";
                   const isDisputed = m.status === "DISPUTED";
+                  // A 0-0 is a void (finished, no points) — distinct from a 1-1 draw.
+                  const isVoid = m.myGames === 0 && m.opponentGames === 0;
                   const outcome =
                     isDisputed ? { bg: "rgba(241,196,15,0.15)", fg: "#f1c40f", label: "DISPUTED" }
+                    : isVoid ? { bg: "rgba(149,165,166,0.18)", fg: "#95a5a6", label: "V" }
                     : m.outcome === "WIN" ? { bg: "rgba(46,204,113,0.15)", fg: "#2ecc71", label: "W" }
                     : m.outcome === "LOSS" ? { bg: "rgba(231,76,60,0.15)", fg: "#e74c3c", label: "L" }
                     : { bg: "rgba(241,196,15,0.15)", fg: "#f1c40f", label: "D" };
@@ -136,35 +136,12 @@ export default async function ReportPage({
                       <td><strong>{m.myGames}–{m.opponentGames}</strong></td>
                       <td><span className="pill" style={{ background: outcome.bg, color: outcome.fg, fontSize: isDisputed ? 10 : undefined }}>{outcome.label}</span></td>
                       <td>
-                        <details>
-                          <summary style={{ cursor: "pointer", fontSize: 11 }} className="muted">
-                            {isDisputed ? "Update dispute" : "Dispute"}
-                          </summary>
-                          <form action={submitReportPageDispute} style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4, minWidth: 220 }}>
-                            <input type="hidden" name="pairingId" value={m.pairingId} />
-                            <label style={{ fontSize: 11 }} className="muted">What it should be (your POV):</label>
-                            <FormSelect
-                              name="proposed"
-                              defaultValue="unsure"
-                              options={[
-                                { value: "unsure", label: "— not sure, let helper decide —" },
-                                { value: "2-0", label: "2-0 (I won both)" },
-                                { value: "1-1", label: "1-1 (draw)" },
-                                { value: "0-2", label: "0-2 (I lost both)" },
-                              ]}
-                            />
-                            <Textarea
-                              name="reason"
-                              rows={2}
-                              placeholder="Optional context for the helper…"
-                              maxLength={500}
-                              style={{ fontSize: 12 }}
-                            />
-                            <Button type="submit" variant="secondary" style={{ fontSize: 11 }}>
-                              Submit dispute
-                            </Button>
-                          </form>
-                        </details>
+                        <DisputeForm
+                          action={submitReportPageDispute}
+                          pairingId={m.pairingId}
+                          opponentName={m.opponentDisplayName}
+                          isDisputed={isDisputed}
+                        />
                       </td>
                     </tr>
                   );

@@ -34,11 +34,13 @@ export interface ProfileBmpSnapshot {
 export interface AdminRecordContext {
   divisionId: string;
   divisionName: string;
-  // Unplayed opponents — for the quick "record a set" form.
-  opponents: Array<{ playerId: string; displayName: string }>;
-  // Every active opponent (played or not) — for the DQ tool, which upserts
-  // and so can overwrite an already-recorded result in place.
-  allOpponents: Array<{ playerId: string; displayName: string }>;
+  // Active members of the player's division — for name resolution in the
+  // consolidated MatchActionsPanel.
+  members: Array<{ playerId: string; displayName: string }>;
+  // This player's matchups, split by state, scoped so the panel only offers
+  // matches involving them. unplayed = "resolve a match"; played = "fix".
+  unplayed: Array<{ p1Id: string; p2Id: string }>;
+  played: Array<{ p1Id: string; p2Id: string; summary: string }>;
 }
 
 // Active-season division context for the profile OWNER — drives the
@@ -235,7 +237,7 @@ async function loadAdminRecordContext(playerId: string): Promise<AdminRecordCont
           members: { where: { status: "ACTIVE" }, include: { player: true } },
           matches: {
             where: { status: "CONFIRMED", format: "LEAGUE_BO2" },
-            select: { playerAId: true, playerBId: true },
+            select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
           },
         },
       },
@@ -243,16 +245,21 @@ async function loadAdminRecordContext(playerId: string): Promise<AdminRecordCont
   });
   if (!membership) return null;
   const div = membership.division;
-  const played = new Set(
-    div.matches
-      .filter((p) => p.playerAId === playerId || p.playerBId === playerId)
-      .map((p) => (p.playerAId === playerId ? p.playerBId : p.playerAId)),
+
+  // This player's confirmed matches → "fix" pairs with a score/void summary.
+  const myMatches = div.matches.filter((p) => p.playerAId === playerId || p.playerBId === playerId);
+  const playedOpponents = new Set(
+    myMatches.map((p) => (p.playerAId === playerId ? p.playerBId : p.playerAId)),
   );
-  const opponents = div.members
-    .filter((m) => m.playerId !== playerId && !played.has(m.playerId))
-    .map((m) => ({ playerId: m.playerId, displayName: m.player.displayName }));
-  const allOpponents = div.members
-    .filter((m) => m.playerId !== playerId)
-    .map((m) => ({ playerId: m.playerId, displayName: m.player.displayName }));
-  return { divisionId: div.id, divisionName: div.name, opponents, allOpponents };
+  const played = myMatches.map((p) => ({
+    p1Id: p.playerAId,
+    p2Id: p.playerBId,
+    summary: p.gamesWonA === 0 && p.gamesWonB === 0 ? "0-0 void" : `${p.gamesWonA}-${p.gamesWonB}`,
+  }));
+  // Unplayed matchups for this player → "resolve" pairs (this player first).
+  const unplayed = div.members
+    .filter((m) => m.playerId !== playerId && !playedOpponents.has(m.playerId))
+    .map((m) => ({ p1Id: playerId, p2Id: m.playerId }));
+  const members = div.members.map((m) => ({ playerId: m.playerId, displayName: m.player.displayName }));
+  return { divisionId: div.id, divisionName: div.name, members, unplayed, played };
 }
