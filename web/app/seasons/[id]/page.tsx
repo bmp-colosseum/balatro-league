@@ -5,7 +5,6 @@ import { loadSeasonDetail } from "@/lib/loaders/seasons";
 import { loadAdminSeasonDetail } from "@/lib/loaders/admin";
 import { prisma } from "@/lib/prisma";
 import { SiteNav } from "@/components/SiteNav";
-import { DiscordId } from "@/components/DiscordId";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormSelect } from "@/components/FormSelect";
@@ -14,7 +13,9 @@ import { LocalDateTimeField } from "@/components/LocalDateTimeField";
 import { LocalDateTime } from "@/components/LocalDateTime";
 import { SeasonDeckPresetPicker } from "@/components/SeasonDeckPresetPicker";
 import { tierColors } from "@/lib/tier-colors";
-import { computeStandings, rankLabel } from "@/lib/standings";
+import { DivisionStandingsTable, type StandingsRowExtras } from "@/components/DivisionStandingsTable";
+import { loadMmrForPlayerIds } from "@/lib/loaders/standings";
+import { getShowBmpMmr } from "@/lib/preferences";
 import { listGuildTextChannels } from "@/lib/discord";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { setFinalGlobalRank } from "./actions";
@@ -103,7 +104,7 @@ export default async function SeasonDetailPage({
 
 // ─── Public read-only summary ────────────────────────────────────────
 
-function PublicSummary({
+async function PublicSummary({
   season,
   isAdmin,
   ok,
@@ -118,6 +119,13 @@ function PublicSummary({
   const period = season.endedAt
     ? `${season.startedAt.toISOString().slice(0, 10)} → ${season.endedAt.toISOString().slice(0, 10)}`
     : `Started ${season.startedAt.toISOString().slice(0, 10)}`;
+
+  // BMP MMR for the shared standings table (empty unless the preference is on).
+  const showBmpMmr = await getShowBmpMmr();
+  const { mmrByPlayerId, bmpCurrentSeason } = await loadMmrForPlayerIds(
+    season.tiers.flatMap((t) => t.divisions.flatMap((d) => d.rows.map((r) => r.player.id))),
+    showBmpMmr,
+  );
   return (
     <>
       <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 8 }}>
@@ -174,73 +182,50 @@ function PublicSummary({
             )}
           </h3>
           <div className="grid grid-2">
-            {tier.divisions.map((div) => (
-              <div key={div.id} className="card">
-                <strong className="pixel" style={{ fontSize: 18 }}>
-                  <Link href={`/divisions/${div.id}`} style={{ textDecoration: "none" }}>{div.name}</Link>
-                </strong>
-                <div className="table-scroll" style={{ marginTop: 8 }}>
-                <table className="table-dense">
-                  <thead>
-                    <tr>
-                      <th></th>
-                      <th>Player</th>
-                      {isEnded && (
-                        <th title="Final league-wide rank (1 = best).">Final rank</th>
-                      )}
-                      <th>Pts</th>
-                      <th>W-D-L</th>
-                      <th>Games</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {div.rows.length === 0 ? (
-                      <tr><td colSpan={isEnded ? 6 : 5} className="muted">No matches played.</td></tr>
-                    ) : (
-                      div.rows.map((r, i) => {
-                        const medal = rankLabel(r, i);
-                        const link = (
-                          <Link href={`/profile/${r.player.id}`} style={{ color: "var(--text)" }}>
-                            {r.player.displayName}
-                          </Link>
-                        );
-                        return (
-                          <tr key={r.player.id}>
-                            <td>{medal}</td>
-                            <td>{r.dropped ? <s>{link}</s> : link}<DiscordId value={r.player.discordId} username={r.player.username} /></td>
-                            {isEnded && (
-                              <td>
-                                {isAdmin ? (
-                                  <form action={setFinalGlobalRank} style={{ display: "flex", gap: 4 }}>
-                                    <input type="hidden" name="seasonId" value={season.id} />
-                                    <input type="hidden" name="playerId" value={r.player.id} />
-                                    <Input
-                                      type="number"
-                                      name="rank"
-                                      defaultValue={r.finalGlobalRank ?? ""}
-                                      min={1}
-                                      placeholder="—"
-                                      style={{ width: 60, fontSize: 12, padding: "1px 4px" }}
-                                    />
-                                    <Button type="submit" variant="secondary" size="sm">Save</Button>
-                                  </form>
-                                ) : (
-                                  <span className="muted">{r.finalGlobalRank != null ? `#${r.finalGlobalRank}` : "—"}</span>
-                                )}
-                              </td>
-                            )}
-                            <td><strong>{r.points}</strong></td>
-                            <td>{r.wins}-{r.draws}-{r.losses}</td>
-                            <td>{r.gamesWon}-{r.gamesLost}</td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
+            {tier.divisions.map((div) => {
+              const extras = new Map<string, StandingsRowExtras>(
+                div.rows.map((r) => [r.player.id, { mmr: mmrByPlayerId.get(r.player.id) }]),
+              );
+              const finalRanks = new Map(div.rows.map((r) => [r.player.id, r.finalGlobalRank]));
+              return (
+                <div key={div.id} className="card">
+                  <strong className="pixel" style={{ fontSize: 18 }}>
+                    <Link href={`/divisions/${div.id}`} style={{ textDecoration: "none" }}>{div.name}</Link>
+                  </strong>
+                  <DivisionStandingsTable
+                    rows={div.rows}
+                    extras={extras}
+                    showBmpMmr={showBmpMmr}
+                    bmpCurrentSeason={bmpCurrentSeason}
+                    finalRankHeader={isEnded ? "Final rank" : undefined}
+                    finalRankCell={
+                      isEnded
+                        ? (r) => {
+                            const fr = finalRanks.get(r.player.id) ?? null;
+                            return isAdmin ? (
+                              <form action={setFinalGlobalRank} style={{ display: "flex", gap: 4 }}>
+                                <input type="hidden" name="seasonId" value={season.id} />
+                                <input type="hidden" name="playerId" value={r.player.id} />
+                                <Input
+                                  type="number"
+                                  name="rank"
+                                  defaultValue={fr ?? ""}
+                                  min={1}
+                                  placeholder="—"
+                                  style={{ width: 60, fontSize: 12, padding: "1px 4px" }}
+                                />
+                                <Button type="submit" variant="secondary" size="sm">Save</Button>
+                              </form>
+                            ) : (
+                              <span className="muted">{fr != null ? `#${fr}` : "—"}</span>
+                            );
+                          }
+                        : undefined
+                    }
+                  />
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       ))}

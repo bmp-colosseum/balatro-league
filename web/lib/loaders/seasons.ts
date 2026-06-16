@@ -59,6 +59,7 @@ export interface SeasonDetailStandingRow {
   wins: number;
   draws: number;
   losses: number;
+  played: number;
   gamesWon: number;
   gamesLost: number;
   dropped: boolean;
@@ -151,6 +152,7 @@ export async function loadSeasonDetail(seasonId: string): Promise<SeasonDetailDa
         wins: r.wins,
         draws: r.draws,
         losses: r.losses,
+        played: r.played,
         gamesWon: r.gamesWon,
         gamesLost: r.gamesLost,
         dropped: droppedIds.has(r.player.id),

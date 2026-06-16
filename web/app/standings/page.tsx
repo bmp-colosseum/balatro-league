@@ -1,43 +1,11 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { loadStandingsPageData, type StandingsMmrEntry } from "@/lib/loaders/standings";
+import { loadStandingsPageData } from "@/lib/loaders/standings";
 import { getShowBmpMmr } from "@/lib/preferences";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
-import { DiscordId } from "@/components/DiscordId";
-import { rankLabel, type StandingRow } from "@/lib/standings";
-
-// Pretty-print a BMP season tag like "season6" → "S6". Falls back to
-// raw tag for anything that doesn't match (defensive: shouldn't happen
-// but the field is technically free-form).
-function formatBmpSeason(tag: string | null): string {
-  if (!tag) return "—";
-  const m = /^season(\d+)$/.exec(tag);
-  return m ? `S${m[1]}` : tag;
-}
-
-// Render the MMR cell. When the snapshot is from the current BMP
-// season, just show the number. When it's from an older season (e.g.
-// player hasn't played the current BMP season but we have prior data),
-// annotate inline + add a hover so the reader knows it's stale.
-function renderMmrCell(entry: StandingsMmrEntry | undefined, currentBmpSeason: string | null) {
-  if (!entry) return <span className="muted">—</span>;
-  const isStale = currentBmpSeason != null && entry.bmpSeason !== currentBmpSeason;
-  if (!isStale) {
-    return <span title={`From BMP ${formatBmpSeason(entry.bmpSeason)}`}>{entry.mmr}</span>;
-  }
-  return (
-    <span
-      title={`From BMP ${formatBmpSeason(entry.bmpSeason)}, not the current season. May be stale.`}
-      style={{ color: "#f1c40f" }}
-    >
-      {entry.mmr}
-      <span className="muted" style={{ fontSize: 10, marginLeft: 4 }}>
-        {formatBmpSeason(entry.bmpSeason)}
-      </span>
-    </span>
-  );
-}
+import { DivisionStandingsTable, type StandingsRowExtras } from "@/components/DivisionStandingsTable";
+import { type StandingRow } from "@/lib/standings";
 
 // Clinch predictor: who is mathematically guaranteed to promote ("up") /
 // relegate ("down") regardless of how the remaining matches play out.
@@ -85,55 +53,6 @@ function computeClinch(
 }
 
 export const dynamic = "force-dynamic"; // Always fresh — DB writes happen out-of-band via the bot
-
-// Tooltips so the raw W-D-L / Games cells double as rate views on hover
-// without bloating the visible column count.
-function standingRateTooltip(r: StandingRow): string {
-  if (r.played === 0) return "No matches yet.";
-  const win = Math.round((r.wins / r.played) * 100);
-  const draw = Math.round((r.draws / r.played) * 100);
-  const loss = Math.round((r.losses / r.played) * 100);
-  return `${win}% W · ${draw}% D · ${loss}% L`;
-}
-// Rank + movement/clinch/showdown badges, shared by the desktop table and the
-// mobile cards so the two never drift.
-function RowBadges({
-  medal,
-  promoting,
-  relegating,
-  clinchStatus,
-  showdown,
-}: {
-  medal: string;
-  promoting: boolean;
-  relegating: boolean;
-  clinchStatus?: "up" | "down";
-  showdown: boolean;
-}) {
-  return (
-    <>
-      {medal}
-      {promoting && <> <span title="Promotion spot" style={{ color: "#2ecc71" }}>↑</span></>}
-      {relegating && <> <span title="Relegation spot" style={{ color: "#e74c3c" }}>↓</span></>}
-      {clinchStatus === "up" && (
-        <> <span title="Clinched — guaranteed up" style={{ color: "#2ecc71" }}>🔒↑</span></>
-      )}
-      {clinchStatus === "down" && (
-        <> <span title="Locked — guaranteed down" style={{ color: "#e74c3c" }}>🔒↓</span></>
-      )}
-      {showdown && (
-        <span title="Tied — play a showdown" style={{ color: "#f1c40f", marginLeft: 4 }}>⚔</span>
-      )}
-    </>
-  );
-}
-
-function gameRateTooltip(r: StandingRow): string {
-  const total = r.gamesWon + r.gamesLost;
-  if (total === 0) return "No games yet.";
-  const winRate = Math.round((r.gamesWon / total) * 100);
-  return `${winRate}% game win (${r.gamesWon}/${total})`;
-}
 
 export default async function StandingsPage() {
   const showBmpMmr = await getShowBmpMmr();
@@ -307,18 +226,16 @@ export default async function StandingsPage() {
                         }
                       }
                       void tierColors;
-                      // Compute the per-row display bits once, then render them
-                      // as a table (desktop) and as stacked cards (mobile).
-                      const displayRows = rows.map((r, i) => ({
-                        r,
-                        medal: rankLabel(r, i),
-                        promoting: complete && i < effective && !isFirstDivisionOverall && !promoTieRowSet.has(i),
-                        relegating:
-                          complete && i >= rows.length - effective && !isLastDivisionOverall && !relegationTieRowSet.has(i),
-                        clinchStatus: complete ? undefined : clinch.get(r.player.id),
-                        showdown: complete && (promoTieRowSet.has(i) || relegationTieRowSet.has(i)),
-                        mmr: data.mmrByPlayerId.get(r.player.id),
-                      }));
+                      // Per-row badges/MMR for the shared standings table.
+                      const extras = new Map<string, StandingsRowExtras>(
+                        rows.map((r, i) => [r.player.id, {
+                          promoting: complete && i < effective && !isFirstDivisionOverall && !promoTieRowSet.has(i),
+                          relegating: complete && i >= rows.length - effective && !isLastDivisionOverall && !relegationTieRowSet.has(i),
+                          clinchStatus: complete ? undefined : clinch.get(r.player.id),
+                          showdown: complete && (promoTieRowSet.has(i) || relegationTieRowSet.has(i)),
+                          mmr: data.mmrByPlayerId.get(r.player.id),
+                        }]),
+                      );
                       return (
                         <div key={div.id} className="card">
                           <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
@@ -338,84 +255,12 @@ export default async function StandingsPage() {
                               {complete ? "✅" : ""} {playedMatches}/{expectedMatches} matches
                             </span>
                           </div>
-                          <div className="table-scroll standings-table-wrap" style={{ marginTop: 8 }}>
-                          <table className="table-dense">
-                            <thead>
-                              <tr>
-                                <th></th>
-                                <th>Player</th>
-                                <th>Pts</th>
-                                <th>W-D-L</th>
-                                <th title="% of matches won 2-0">Match W%</th>
-                                <th title="% of matches drawn 1-1">Match D%</th>
-                                <th>Games</th>
-                                {showBmpMmr && (
-                                  <th title="Ranked MMR from balatromp.com. Separate from league rank.">BMP MMR</th>
-                                )}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {rows.length === 0 ? (
-                                <tr>
-                                  <td colSpan={showBmpMmr ? 8 : 7} className="muted">No matches played yet.</td>
-                                </tr>
-                              ) : (
-                                displayRows.map(({ r, medal, promoting, relegating, clinchStatus, showdown, mmr }) => {
-                                  const link = (
-                                    <Link href={`/profile/${r.player.id}`} style={{ color: "var(--text)" }}>
-                                      {r.player.displayName}
-                                    </Link>
-                                  );
-                                  return (
-                                    <tr key={r.player.id}>
-                                      <td><RowBadges medal={medal} promoting={promoting} relegating={relegating} clinchStatus={clinchStatus} showdown={showdown} /></td>
-                                      <td>{r.dropped ? <s>{link}</s> : link}<DiscordId value={r.player.discordId} username={r.player.username} /></td>
-                                      <td><strong>{r.points}</strong></td>
-                                      <td title={standingRateTooltip(r)}>{r.wins}-{r.draws}-{r.losses}</td>
-                                      <td>
-                                        {r.played > 0
-                                          ? `${Math.round((r.wins / r.played) * 100)}%`
-                                          : <span className="muted">—</span>}
-                                      </td>
-                                      <td>
-                                        {r.played > 0
-                                          ? `${Math.round((r.draws / r.played) * 100)}%`
-                                          : <span className="muted">—</span>}
-                                      </td>
-                                      <td title={gameRateTooltip(r)}>{r.gamesWon}-{r.gamesLost}</td>
-                                      {showBmpMmr && (
-                                        <td>{renderMmrCell(mmr, data.bmpCurrentSeason)}</td>
-                                      )}
-                                    </tr>
-                                  );
-                                })
-                              )}
-                            </tbody>
-                          </table>
-                          </div>
-                          {/* Mobile: stacked cards — CSS toggles table vs cards at 640px. */}
-                          <div className="standings-cards">
-                            {rows.length === 0 ? (
-                              <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>No matches played yet.</p>
-                            ) : (
-                              displayRows.map(({ r, medal, promoting, relegating, clinchStatus, showdown, mmr }) => (
-                                <div key={r.player.id} className="standings-card">
-                                  <div className="standings-card-head">
-                                    <span><RowBadges medal={medal} promoting={promoting} relegating={relegating} clinchStatus={clinchStatus} showdown={showdown} /></span>
-                                    <Link href={`/profile/${r.player.id}`} className="standings-card-name" style={{ color: "var(--text)" }}>
-                                      {r.dropped ? <s>{r.player.displayName}</s> : r.player.displayName}
-                                      <DiscordId value={r.player.discordId} username={r.player.username} />
-                                    </Link>
-                                    <strong style={{ whiteSpace: "nowrap" }}>{r.points} pts</strong>
-                                  </div>
-                                  <div className="standings-card-sub muted">
-                                    {r.wins}-{r.draws}-{r.losses} W-D-L · {r.gamesWon}-{r.gamesLost} games · {r.played} played
-                                    {showBmpMmr && mmr ? <> · MMR {renderMmrCell(mmr, data.bmpCurrentSeason)}</> : null}
-                                  </div>
-                                </div>
-                              ))
-                            )}
-                          </div>
+                          <DivisionStandingsTable
+                            rows={rows}
+                            extras={extras}
+                            showBmpMmr={showBmpMmr}
+                            bmpCurrentSeason={data.bmpCurrentSeason}
+                          />
                           {div.shootouts.length > 0 && (
                             <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
                               <strong style={{ color: "#f1c40f" }}>⚔ Showdown{div.shootouts.length === 1 ? "" : "s"}:</strong>{" "}

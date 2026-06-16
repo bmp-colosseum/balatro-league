@@ -6,7 +6,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { hasTier } from "@/lib/admin";
-import { rankLabel } from "@/lib/standings";
+import { DivisionStandingsTable, type StandingsRowExtras } from "@/components/DivisionStandingsTable";
+import { loadMmrForPlayerIds } from "@/lib/loaders/standings";
+import { getShowBmpMmr } from "@/lib/preferences";
 import { loadDivisionPageData, type DivisionRecentPairing, type DivisionUnplayed } from "@/lib/loaders/division";
 import { loadAdminDivisionDetail } from "@/lib/loaders/admin";
 import { prisma } from "@/lib/prisma";
@@ -19,12 +21,9 @@ import { MatchActionsPanel } from "@/components/MatchActionsPanel";
 import { ReportForm } from "@/components/ReportForm";
 import { CANONICAL_DECKS, CANONICAL_STAKES } from "@/lib/balatro-info";
 import { FormSelect } from "@/components/FormSelect";
-import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import {
   addDivisionMemberByDiscordId,
-  bulkAddMembers,
-  bulkRecordPairings,
   deleteShootout,
   dropDivisionMember,
   reactivateDivisionMember,
@@ -43,12 +42,10 @@ export default async function PublicDivisionPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ err?: string; bulk?: string }>;
+  searchParams: Promise<{ err?: string }>;
 }) {
   const { id } = await params;
-  const { err, bulk } = await searchParams;
-  // bulk is a URL-encoded query string like "added=5&skipped=1&failed=123,456" or "recorded=8&errors=..."
-  const bulkSummary = bulk ? new URLSearchParams(decodeURIComponent(bulk)) : null;
+  const { err } = await searchParams;
 
   const data = await loadDivisionPageData(id);
   if (!data) notFound();
@@ -75,6 +72,16 @@ export default async function PublicDivisionPage({
   // path doesn't pay the cost of the extra query.
   const adminData = isAdmin ? await loadAdminDivisionDetail(id) : null;
 
+  // BMP MMR for the shared standings table (empty unless the preference is on).
+  const showBmpMmr = await getShowBmpMmr();
+  const { mmrByPlayerId, bmpCurrentSeason } = await loadMmrForPlayerIds(
+    standings.map((r) => r.player.id),
+    showBmpMmr,
+  );
+  const standingsExtras = new Map<string, StandingsRowExtras>(
+    standings.map((r) => [r.player.id, { mmr: mmrByPlayerId.get(r.player.id) }]),
+  );
+
   return (
     <>
       <SiteNav activePath="/standings" />
@@ -97,69 +104,14 @@ export default async function PublicDivisionPage({
           </div>
         )}
 
-        {isAdmin && bulkSummary && (
-          <div className="card" style={{ borderColor: "#2ecc71" }}>
-            <strong>Bulk import done</strong>
-            <ul className="muted" style={{ marginTop: 4 }}>
-              {bulkSummary.get("added") && <li>{bulkSummary.get("added")} member(s) added</li>}
-              {bulkSummary.get("skipped") && <li>{bulkSummary.get("skipped")} line(s) skipped (no Discord ID found)</li>}
-              {bulkSummary.get("failed") && bulkSummary.get("failed")!.length > 0 && (
-                <li style={{ color: "#e74c3c" }}>failed lookups: {bulkSummary.get("failed")}</li>
-              )}
-              {bulkSummary.get("recorded") && <li>{bulkSummary.get("recorded")} pairing(s) recorded</li>}
-              {bulkSummary.get("errors") && bulkSummary.get("errors")!.length > 0 && (
-                <li style={{ color: "#e74c3c" }}>line errors: {bulkSummary.get("errors")}</li>
-              )}
-              {bulkSummary.get("transferred") && bulkSummary.get("transferred")!.length > 0 && (
-                <li style={{ color: "#f1c40f" }}>
-                  ↪ Transferred from other divisions: {bulkSummary.get("transferred")}
-                </li>
-              )}
-              {bulkSummary.get("from") && (
-                <li style={{ color: "#f1c40f" }}>
-                  ↪ {bulkSummary.get("transferred")} moved here from <strong>{bulkSummary.get("from")}</strong> (one-per-season rule).
-                </li>
-              )}
-            </ul>
-          </div>
-        )}
-
         <div className="card">
           <strong>Standings</strong>
-          <div className="table-scroll" style={{ marginTop: 8 }}>
-          <table className="table-dense responsive-table">
-            <thead>
-              <tr>
-                <th></th>
-                <th>Player</th>
-                <th>Pts</th>
-                <th>W-D-L</th>
-                <th>Games</th>
-              </tr>
-            </thead>
-            <tbody>
-              {standings.length === 0 ? (
-                <tr><td colSpan={5} className="muted">No matches played yet.</td></tr>
-              ) : standings.map((r, i) => {
-                const medal = rankLabel(r, i);
-                const link = (
-                  <Link href={`/profile/${r.player.id}`} style={{ color: "var(--text)" }}>
-                    {r.player.displayName}
-                  </Link>
-                );
-                return (
-                  <tr key={r.player.id}>
-                    <td data-label="Rank">{medal}</td>
-                    <td className="card-header">{r.dropped ? <s>{link}</s> : link}<DiscordId value={r.player.discordId} username={r.player.username} />{r.dropped && <span className="muted"> (dropped)</span>}</td>
-                    <td data-label="Pts"><strong>{r.points}</strong></td>
-                    <td data-label="W-D-L">{r.wins}-{r.draws}-{r.losses}</td>
-                    <td data-label="Games">{r.gamesWon}-{r.gamesLost}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          </div>
+          <DivisionStandingsTable
+            rows={standings}
+            extras={standingsExtras}
+            showBmpMmr={showBmpMmr}
+            bmpCurrentSeason={bmpCurrentSeason}
+          />
         </div>
 
         <MatchesSections
@@ -468,48 +420,9 @@ function AdminSection({
       <div className="card" style={{ borderColor: "#f1c40f" }}>
         <strong style={{ color: "#f1c40f" }}>🔧 Admin tools</strong>
         <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
-          Editing controls only visible to admins. Bulk import, drop/remove, override, shootouts, match progress.
+          Editing controls only visible to admins. Add/drop/remove players, override results, shootouts, match progress.
         </p>
       </div>
-
-      <details className="card">
-        <summary style={{ cursor: "pointer" }}><strong>Bulk import members</strong></summary>
-        <p className="muted" style={{ marginTop: 8 }}>
-          Paste one Discord ID per line. Mentions like <code>&lt;@123456&gt;</code> work too —
-          we just extract the digits. Lines starting with <code>#</code> are skipped.
-        </p>
-        <form action={bulkAddMembers}>
-          <input type="hidden" name="divisionId" value={divisionId} />
-          <Textarea
-            name="lines"
-            rows={8}
-            placeholder={"123456789012345678\n234567890123456789\n# comment lines are ok\n<@345678901234567890>"}
-            style={{ width: "100%", fontFamily: "ui-monospace, monospace", fontSize: 12 }}
-            required
-          />
-          <Button type="submit" className="mt-1.5">Add all to division</Button>
-        </form>
-      </details>
-
-      <details className="card">
-        <summary style={{ cursor: "pointer" }}><strong>Bulk record played pairings</strong></summary>
-        <p className="muted" style={{ marginTop: 8 }}>
-          One line per played set: <code>discordA discordB RESULT</code> where RESULT is{" "}
-          <code>2-0</code>, <code>1-1</code>, or <code>0-2</code> (A&apos;s perspective).
-          Both players must already be members of this division.
-        </p>
-        <form action={bulkRecordPairings}>
-          <input type="hidden" name="divisionId" value={divisionId} />
-          <Textarea
-            name="lines"
-            rows={8}
-            placeholder={"123456789012345678 234567890123456789 2-0\n123456789012345678 345678901234567890 1-1"}
-            style={{ width: "100%", fontFamily: "ui-monospace, monospace", fontSize: 12 }}
-            required
-          />
-          <Button type="submit" className="mt-1.5">Record all pairings</Button>
-        </form>
-      </details>
 
       <div className="card">
         <strong>Add player by Discord ID</strong>
