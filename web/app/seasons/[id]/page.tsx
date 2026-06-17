@@ -38,6 +38,7 @@ import {
   archiveSeasonChannels,
   awardSeasonChampionRoles,
   bootstrapSeasonDiscord,
+  rebuildSeasonSubGroupThreads,
   setSeasonDiscordCategory,
   setSeasonResultsChannel,
   setSeasonResultsWebhook,
@@ -772,6 +773,15 @@ function DiscordBootstrap({
                 : `Create ${threadsMissing} missing thread(s)`}
           </Button>
         </form>
+        {threadsExpected > 0 && (
+          <form action={rebuildSeasonSubGroupThreads}>
+            <input type="hidden" name="id" value={season.id} />
+            <Button type="submit" variant="secondary">↻ Rebuild group threads</Button>
+            <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>
+              delete + recreate from the current grouping (use after a regenerate)
+            </span>
+          </form>
+        )}
       </div>
     </details>
   );

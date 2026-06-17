@@ -50,7 +50,18 @@ const BOT_ALLOW = [
   PermissionFlagsBits.CreatePublicThreads,
 ];
 
-export const PERM_PRESETS = { MEMBER_ALLOW, BOT_ALLOW } as const;
+// Staff (admin/helper) on a division channel. The key bit is ManageThreads:
+// Discord can't grant a ROLE access to a private thread, but anyone with
+// ManageThreads on the parent channel sees EVERY private thread in it — so the
+// per-sub-group threads are visible to all staff (current + future, since it's
+// role-based) with no per-thread member adds and no sync job.
+const STAFF_ALLOW = [
+  ...MEMBER_ALLOW,
+  PermissionFlagsBits.ManageThreads,
+  PermissionFlagsBits.ManageMessages,
+];
+
+export const PERM_PRESETS = { MEMBER_ALLOW, BOT_ALLOW, STAFF_ALLOW } as const;
 import { getDiscordClient } from "./discord.js";
 
 async function getGuild(guildId: string): Promise<Guild> {
@@ -180,6 +191,9 @@ export async function createGuildTextChannel(
     parentId?: string;
     topic?: string;
     visibleToRoleIds?: string[];
+    // Staff roles that get STAFF_ALLOW (incl. ManageThreads) instead of plain
+    // MEMBER_ALLOW — so they can see every private sub-group thread in here.
+    staffRoleIds?: string[];
     // Specific guild members who get view + send. Used for per-match
     // private channels — same effect as visibleToRoleIds but scoped to
     // individual users instead of a role. discord.js infers OverwriteType
@@ -189,9 +203,12 @@ export async function createGuildTextChannel(
 ): Promise<{ id: string } | null> {
   try {
     const guild = await getGuild(guildId);
-    const visibleRoles = opts?.visibleToRoleIds?.filter(Boolean) ?? [];
+    const staffRoles = opts?.staffRoleIds?.filter(Boolean) ?? [];
+    // Plain members get MEMBER_ALLOW; staff (passed separately) get STAFF_ALLOW.
+    // Dedupe so a role passed as both doesn't get two overwrites.
+    const visibleRoles = (opts?.visibleToRoleIds?.filter(Boolean) ?? []).filter((id) => !staffRoles.includes(id));
     const visibleUsers = opts?.visibleToUserIds?.filter(Boolean) ?? [];
-    const hasAnyOverwrite = visibleRoles.length > 0 || visibleUsers.length > 0;
+    const hasAnyOverwrite = visibleRoles.length > 0 || staffRoles.length > 0 || visibleUsers.length > 0;
     // ALWAYS include the bot itself in private channels — otherwise the
     // @everyone deny ViewChannel applies to it too and it can't post
     // the match flow into the channel it just created. Trickled silently
@@ -210,6 +227,13 @@ export async function createGuildTextChannel(
             // attachments etc. work regardless of @everyone server-
             // level defaults.
             allow: [...MEMBER_ALLOW],
+          })),
+          ...staffRoles.map((id) => ({
+            id,
+            type: 0 as const,
+            // STAFF_ALLOW adds ManageThreads so staff see every private
+            // sub-group thread in this channel without being added to each.
+            allow: [...STAFF_ALLOW],
           })),
           ...visibleUsers.map((id) => ({
             id,
@@ -286,5 +310,19 @@ export async function createPrivateThread(
   } catch (err) {
     console.warn(`[bot] createPrivateThread(${name}) failed:`, err);
     return null;
+  }
+}
+
+// Delete a thread by id (best-effort) — used when rebuilding sub-group threads
+// so a regenerate replaces them cleanly instead of leaving stale ones.
+export async function deleteThread(threadId: string): Promise<boolean> {
+  try {
+    const channel = await getDiscordClient().channels.fetch(threadId);
+    if (!channel || !channel.isThread()) return false;
+    await channel.delete();
+    return true;
+  } catch (err) {
+    console.warn(`[bot] deleteThread(${threadId}) failed:`, err);
+    return false;
   }
 }

@@ -52,6 +52,7 @@ import {
   createGuildRole,
   createGuildTextChannel,
   createPrivateThread,
+  deleteThread,
   postChannelMessage,
   removeGuildMemberRole as removeGuildMemberRoleViaBot,
 } from "./discord-helpers.js";
@@ -404,7 +405,11 @@ export async function enqueueDisputeSpawnThread(pairingId: string): Promise<void
 // uses it when admin clicks "Set up divisions"; the bot uses it when
 // the scheduled-start sweep auto-activates a season. Same job shape,
 // same worker (bootstrap.division below).
-export async function enqueueBootstrapDivision(job: { divisionId: string; guildId: string }): Promise<void> {
+export async function enqueueBootstrapDivision(job: {
+  divisionId: string;
+  guildId: string;
+  rebuildThreads?: boolean;
+}): Promise<void> {
   if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
   await boss.send("bootstrap.division", job, { retryLimit: 2 });
 }
@@ -908,6 +913,9 @@ async function awardChampionRole({
 interface BootstrapDivisionJob {
   divisionId: string;
   guildId: string;
+  // Delete + recreate the sub-group threads from the current grouping (used
+  // after a regenerate that reshuffles who's in which group).
+  rebuildThreads?: boolean;
 }
 
 interface MmrSnapshotJob {
@@ -922,7 +930,7 @@ interface MmrSnapshotJob {
 // division. Idempotent — re-runs check what's already done via the IDs
 // persisted back on the Division row, so a partial failure plus retry
 // picks up where it left off rather than duplicating roles/channels.
-async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob): Promise<void> {
+async function bootstrapDivision({ divisionId, guildId, rebuildThreads }: BootstrapDivisionJob): Promise<void> {
   const div = await prisma.division.findUnique({
     where: { id: divisionId },
     include: {
@@ -945,7 +953,7 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
   ].sort((a, b) => a - b);
   const existingThreads: Record<string, string> = (div.subGroupThreadIds as Record<string, string> | null) ?? {};
   const threadsComplete = groupsToThread.every((g) => existingThreads[String(g)]);
-  if (div.discordRoleId && div.discordChannelId && threadsComplete) return; // already done
+  if (!rebuildThreads && div.discordRoleId && div.discordChannelId && threadsComplete) return; // already done
 
   const parentId = div.season.discordCategoryId ?? undefined;
   // OWNER tier is included so a non-Administrator owner role still gets
@@ -978,23 +986,25 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
   let channelId = div.discordChannelId;
   if (!channelId) {
     // Drop the "(1)" display suffix, then sanitize for Discord (lowercase,
-    // non-alphanumeric runs → a single dash) and trim leading/trailing dashes
-    // so "Diamond A (1)" → "diamond-a", not "diamond-a-1-".
+    // alphanumerics only — NO dashes/separators) so "Rare 1" → "rare1".
     const channelName = div.name
       .replace(/\s*\(\d+\)/g, "")
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+      .replace(/[^a-z0-9]+/g, "");
+    // Members get plain access; staff roles get ManageThreads (STAFF_ALLOW) so
+    // they see every private sub-group thread without being added to each one.
     let channel = await createGuildTextChannel(guildId, channelName, {
       parentId,
       topic: `${seasonLabel} — ${div.name}`,
-      visibleToRoleIds: [roleId, ...staffRoleIds],
+      visibleToRoleIds: [roleId],
+      staffRoleIds,
     });
     if (!channel && parentId) {
       console.warn(`[bootstrap.division] ${channelName} couldn't fit under category — falling back to top level`);
       channel = await createGuildTextChannel(guildId, channelName, {
         topic: `${seasonLabel} — ${div.name} (overflow)`,
-        visibleToRoleIds: [roleId, ...staffRoleIds],
+        visibleToRoleIds: [roleId],
+        staffRoleIds,
       });
     }
     if (!channel) throw new Error(`createGuildTextChannel failed for division ${div.id}`);
@@ -1046,6 +1056,15 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
   // or any new groups after a regenerate. Adding members notifies them; match
   // threads from /start-match land in this channel (no thread-in-thread).
   if (channelId && groupsToThread.length > 0) {
+    // Rebuild: delete the recorded threads and clear the map so every group is
+    // recreated fresh (with correct members + intro) below.
+    if (rebuildThreads && Object.keys(existingThreads).length > 0) {
+      for (const id of Object.values(existingThreads)) {
+        await deleteThread(id);
+      }
+      for (const k of Object.keys(existingThreads)) delete existingThreads[k];
+      await prisma.division.update({ where: { id: div.id }, data: { subGroupThreadIds: {} } });
+    }
     const membersByGroup = new Map<number, typeof div.members>();
     for (const m of div.members) {
       if (m.assignmentGroup == null) continue;

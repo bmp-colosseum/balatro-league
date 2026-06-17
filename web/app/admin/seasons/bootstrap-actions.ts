@@ -105,6 +105,28 @@ export async function bootstrapSeasonDiscord(formData: FormData) {
   revalidatePath(`/seasons/${id}`);
 }
 
+// Rebuild the per-sub-group threads: delete the existing "Group N" threads and
+// recreate them from the current grouping. Use after a regenerate that
+// reshuffled who's in which group. Only touches threads — channels/roles stay.
+export async function rebuildSeasonSubGroupThreads(formData: FormData) {
+  const { user } = await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const queued = await runSeasonDiscordBootstrap(id, { rebuildThreads: true });
+  if (queued === null) return;
+  const seasonLabel = await getSeasonLabelOrEmpty(id);
+  console.log(`[bootstrap] queued ${queued} sub-group thread rebuild(s) for season ${seasonLabel}`);
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "season.rebuild-subgroup-threads",
+    targetType: "Season",
+    targetId: id,
+    summary: `Rebuilding sub-group threads for "${seasonLabel}" (${queued} division(s) queued)`,
+    metadata: { queuedCount: queued },
+  });
+  revalidatePath(`/seasons/${id}`);
+}
+
 // Re-home a season's Discord presence to the CURRENT guild (DISCORD_GUILD_ID)
 // — for moving the league to a new server mid-season. Gameplay data is never
 // touched; only the stale guild-specific links are cleared, then the season is

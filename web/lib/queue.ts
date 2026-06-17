@@ -57,6 +57,7 @@ export async function enqueueDm(job: { discordId: string; content: string }): Pr
 export async function enqueueBootstrapDivision(job: {
   divisionId: string;
   guildId: string;
+  rebuildThreads?: boolean;
 }): Promise<void> {
   await ensureStarted();
   // Lower retry count than DMs — a bootstrap failure usually means a

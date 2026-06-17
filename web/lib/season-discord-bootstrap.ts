@@ -16,7 +16,10 @@ import { ensureGuildCategory } from "@/lib/discord";
 import { enqueueBootstrapDivision } from "@/lib/queue";
 import { formatSeasonLabel } from "@/lib/format-season";
 
-export async function runSeasonDiscordBootstrap(seasonId: string): Promise<number | null> {
+export async function runSeasonDiscordBootstrap(
+  seasonId: string,
+  opts: { rebuildThreads?: boolean } = {},
+): Promise<number | null> {
   const guildId = process.env.DISCORD_GUILD_ID;
   if (!guildId) {
     console.warn("DISCORD_GUILD_ID not set; skipping season Discord bootstrap");
@@ -56,8 +59,17 @@ export async function runSeasonDiscordBootstrap(seasonId: string): Promise<numbe
   let queued = 0;
   for (const div of season.divisions) {
     if (div.members.length === 0) continue;
-    // Re-enqueue when role/channel are missing OR any sub-group thread is —
-    // the worker is idempotent and creates only what's absent.
+    const hasGroups = div.members.some((m) => m.assignmentGroup != null);
+    // Rebuild pass: only divisions that already have a channel + sub-groups,
+    // forced (delete + recreate their threads from the current grouping).
+    if (opts.rebuildThreads) {
+      if (!div.discordChannelId || !hasGroups) continue;
+      await enqueueBootstrapDivision({ divisionId: div.id, guildId, rebuildThreads: true });
+      queued++;
+      continue;
+    }
+    // Normal pass: re-enqueue when role/channel are missing OR any sub-group
+    // thread is — the worker is idempotent and creates only what's absent.
     const groups = new Set(div.members.map((m) => m.assignmentGroup).filter((g): g is number => g != null));
     const threads = (div.subGroupThreadIds as Record<string, string> | null) ?? {};
     const threadsComplete = [...groups].every((g) => threads[String(g)]);
