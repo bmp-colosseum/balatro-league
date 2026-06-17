@@ -6,7 +6,9 @@
 import { prisma } from "@/lib/prisma";
 
 const ROUND_NAME_PREFIX = "Seed test signups";
-const SIGNUP_DISCORD_PREFIX = "seed-signup-";
+// No dashes — these ids surface as literal text wherever a fake player's
+// mention can't resolve (Discord mentions, admin ID column).
+const SIGNUP_DISCORD_PREFIX = "seedsignup";
 
 // Small name pool so the build UI looks like real people, not "Player 1..N".
 const NAMES = [

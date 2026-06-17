@@ -36,7 +36,7 @@ export async function setPlayerDiscordId(formData: FormData) {
 // shared MatchActionsPanel (rendered on the division-scoped /admin/players
 // view and on each player's profile) — no bespoke per-row record forms here.
 
-const MOCK_PREFIX = "mock-";
+const MOCK_PREFIX = "mock";
 
 export async function addFakePlayer(formData: FormData) {
   await requireAdmin();
@@ -44,7 +44,7 @@ export async function addFakePlayer(formData: FormData) {
   const divisionId = String(formData.get("divisionId") ?? "").trim();
   if (!name) return;
 
-  const discordId = `${MOCK_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const discordId = `${MOCK_PREFIX}${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
   const player = await prisma.player.create({
     data: { discordId, displayName: name },
   });

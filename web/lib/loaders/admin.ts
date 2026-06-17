@@ -15,7 +15,7 @@ import { computeRatingDeltas, type DivisionForRating } from "@/lib/end-season";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { expectedMatchesFromGroupSizes, groupSizesFromMembers } from "@/lib/sub-grouping";
 
-const MOCK_PREFIXES = ["mock-", "sim-"];
+const MOCK_PREFIXES = ["mock", "sim"]; // dashless; startsWith still matches legacy "mock-"/"sim-"
 function isMockId(id: string) {
   return MOCK_PREFIXES.some((p) => id.startsWith(p));
 }
