@@ -44,6 +44,28 @@ export function balanceSubGroups(seedOrderedMemberIds: string[], groupSize: numb
   return { groups, groupCount };
 }
 
+// Expected league matches in a division = sum of each sub-group's round-robin
+// (C(size,2)). A division that isn't sub-grouped is just one "group" of N.
+// Replaces the old N*(N-1)/2 everywhere, which over-counted once we stopped
+// having everyone play everyone.
+export function expectedMatchesFromGroupSizes(groupSizes: number[]): number {
+  return groupSizes.reduce((sum, n) => sum + (n < 2 ? 0 : (n * (n - 1)) / 2), 0);
+}
+
+// Sub-group sizes from a division's members. If anyone is assigned a sub-group,
+// returns the size of each group (ungrouped stragglers contribute no matches);
+// otherwise [N] — the whole division as one round-robin (legacy behavior).
+export function groupSizesFromMembers(members: { assignmentGroup: number | null }[]): number[] {
+  const subGrouped = members.some((m) => m.assignmentGroup != null);
+  if (!subGrouped) return [members.length];
+  const counts = new Map<number, number>();
+  for (const m of members) {
+    if (m.assignmentGroup == null) continue;
+    counts.set(m.assignmentGroup, (counts.get(m.assignmentGroup) ?? 0) + 1);
+  }
+  return [...counts.values()];
+}
+
 export interface GroupBalance {
   group: number;
   size: number;

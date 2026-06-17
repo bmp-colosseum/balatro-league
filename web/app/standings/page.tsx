@@ -70,8 +70,7 @@ export default async function StandingsPage() {
   let totalExpected = 0;
   for (const t of data.tiers) {
     for (const d of t.divisions) {
-      const ac = d.activeMemberIds.length;
-      totalExpected += ac < 2 ? 0 : (ac * (ac - 1)) / 2;
+      totalExpected += d.expectedMatches;
       totalPlayed += d.playedMatches;
     }
   }
@@ -156,7 +155,7 @@ export default async function StandingsPage() {
                         dropped: droppedIds.has(r.player.id),
                       }));
                       const activeCount = div.activeMemberIds.length;
-                      const expectedMatches = activeCount < 2 ? 0 : (activeCount * (activeCount - 1)) / 2;
+                      const expectedMatches = div.expectedMatches;
                       const playedMatches = div.playedMatches;
                       const complete = expectedMatches > 0 && playedMatches >= expectedMatches;
                       // Group rows into tie chains. A new chain starts at any

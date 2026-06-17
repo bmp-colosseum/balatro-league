@@ -84,6 +84,7 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
         select: {
           playerId: true,
           status: true,
+          assignmentGroup: true,
           player: { select: { id: true, displayName: true, discordId: true, username: true } },
         },
         orderBy: { joinedAt: "asc" },
@@ -139,14 +140,25 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
       forfeit: p.forfeit,
     }));
 
-  // Unplayed matchups across ACTIVE members. O(N^2) but N <= 10ish.
+  // Unplayed matchups across ACTIVE members. When the division is sub-grouped,
+  // you only play within your group — so only intra-group pairs are real
+  // matchups (otherwise every cross-group pair shows as forever-unplayed).
+  const isSubGrouped = activeMembers.some((m) => m.assignmentGroup != null);
   const playedKey = (a: string, b: string) => (a < b ? `${a}-${b}` : `${b}-${a}`);
   const playedSet = new Set(pairings.map((p) => playedKey(p.playerAId, p.playerBId)));
   const unplayed: DivisionUnplayed[] = [];
   for (let i = 0; i < activeMembers.length; i++) {
     for (let j = i + 1; j < activeMembers.length; j++) {
-      const a = activeMembers[i]!.player;
-      const b = activeMembers[j]!.player;
+      const mi = activeMembers[i]!;
+      const mj = activeMembers[j]!;
+      if (
+        isSubGrouped &&
+        (mi.assignmentGroup == null || mj.assignmentGroup == null || mi.assignmentGroup !== mj.assignmentGroup)
+      ) {
+        continue;
+      }
+      const a = mi.player;
+      const b = mj.player;
       if (!playedSet.has(playedKey(a.id, b.id))) {
         unplayed.push({ a, b });
       }
