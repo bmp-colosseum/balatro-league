@@ -7,6 +7,7 @@ import {
 import { activePublicSeason } from "../active-season.js";
 import { prisma } from "../db.js";
 import { computeStandings, formatDivisionField, formatStandingsTable } from "../standings.js";
+import { expectedMatchesFromGroupSizes, groupSizesFromMembers } from "../sub-grouping.js";
 import { tierEmbedColor } from "../tiers.js";
 import { divisionNameAutocomplete } from "./autocomplete.js";
 import { formatSeasonLabel } from "../format-season.js";
@@ -123,9 +124,10 @@ async function renderAllDivisions(
         div.members.map((m) => m.player),
         div.matches,
       ).map((r) => ({ ...r, dropped: droppedIds.has(r.player.id) }));
-      // Compact progress bar: matches played vs expected round-robin total.
-      const activeCount = div.members.filter((m) => m.status === "ACTIVE").length;
-      const expectedMatches = activeCount < 2 ? 0 : (activeCount * (activeCount - 1)) / 2;
+      // Compact progress bar: matches played vs expected. Sub-group-aware —
+      // expected = sum of each sub-group's round-robin, not the whole division.
+      const activeMembers = div.members.filter((m) => m.status === "ACTIVE");
+      const expectedMatches = expectedMatchesFromGroupSizes(groupSizesFromMembers(activeMembers));
       const playedMatches = div.matches.length;
       const barWidth = 12;
       const pct = expectedMatches === 0 ? 0 : playedMatches / expectedMatches;
