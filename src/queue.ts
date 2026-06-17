@@ -587,24 +587,32 @@ async function snapshotPlayerMmr({ discordId, seasonId }: MmrSnapshotJob): Promi
   // Resolve the BMP current-season tag from LeagueConfig. Auto-detected
   // on bot startup + daily refresh; admin can also override manually.
   const currentBmpSeason = await getConfig(LeagueConfigKey.BmpCurrentSeason);
-  // Capture the current state — unless we already grabbed it for this player
-  // recently. A signup-MMR re-click (or overlapping enqueues) shouldn't re-hit
-  // the rate-limited balatromp API; the daily refresh runs 24h apart, well
-  // outside this window, so it still updates.
+  // Capture the current state — unless we resolved it for this player recently.
+  // A signup-MMR re-click (or overlapping enqueues) shouldn't re-hit the
+  // rate-limited balatromp API; the daily refresh runs 24h apart, well outside
+  // this window, so it still updates.
+  //
+  // "Resolved" means a DEFINITIVE answer within the window: a captured MMR OR a
+  // confirmed "no ranked record yet" (NO_RANKED_RECORD). The current season is
+  // live, so "no record" is only temporary — the player could start playing —
+  // so we throttle it to the same window (don't hammer the API every job for
+  // someone with nothing to fetch) but NEVER mark them permanently skipped: the
+  // window reopens and they get rechecked. Transient HTTP/timeout rows are not
+  // "resolved", so those retry promptly.
   const FRESHNESS_MS = 6 * 60 * 60 * 1000; // 6h
-  const recentlyCaptured = currentBmpSeason
+  const recentlyResolved = currentBmpSeason
     ? await prisma.playerMmrSnapshot.findFirst({
         where: {
           discordId,
           bmpSeason: currentBmpSeason,
-          rankedMmr: { not: null },
+          OR: [{ fetchError: null }, { fetchError: NO_RANKED_RECORD }],
           capturedAt: { gte: new Date(Date.now() - FRESHNESS_MS) },
         },
         select: { id: true },
       })
     : null;
-  if (recentlyCaptured) {
-    console.log(`[snapshot.mmr] ${discordId} — fresh current (${currentBmpSeason}) on file, skipping`);
+  if (recentlyResolved) {
+    console.log(`[snapshot.mmr] ${discordId} — current (${currentBmpSeason}) checked <6h ago, skipping`);
   } else {
     await fetchAndStore(discordId, player?.id ?? null, seasonId, currentBmpSeason);
   }
@@ -652,10 +660,15 @@ async function fetchAndStore(
 ): Promise<void> {
   const { stats, rawJson, error } = await fetchPlayerStats(discordId, bmpSeason);
   const label = bmpSeason ?? "current";
-  if (error) {
-    console.warn(`[snapshot.mmr] ${discordId} (${label}) fetch failed: ${error}`);
-  } else {
+  if (!error) {
     console.log(`[snapshot.mmr] ${discordId} (${label}) → mmr=${stats?.rankedMmr ?? "—"} tier=${stats?.rankedTier ?? "—"}`);
+  } else if (error === NO_RANKED_RECORD) {
+    // Not a failure — the player simply has no Ranked row for this query
+    // (hasn't played that season). Still recorded (so the skip checks see a
+    // definitive answer), but logged as info, not an error.
+    console.log(`[snapshot.mmr] ${discordId} (${label}) — no ranked record yet`);
+  } else {
+    console.warn(`[snapshot.mmr] ${discordId} (${label}) fetch failed: ${error}`);
   }
   await prisma.playerMmrSnapshot.create({
     data: {
@@ -672,9 +685,10 @@ async function fetchAndStore(
       losses: stats?.losses ?? null,
       peakStreak: stats?.peakStreak ?? null,
       leaderboardRank: stats?.leaderboardRank ?? null,
-      // Only keep the blob on failures — successful snapshots don't
-      // need a JSON body per player taking up space.
-      rawHtml: error ? rawJson : null,
+      // Only keep the blob on genuine failures (to debug a parse/HTTP issue) —
+      // a success or a benign "no record" doesn't need a JSON body per player
+      // taking up space.
+      rawHtml: error && error !== NO_RANKED_RECORD ? rawJson : null,
       fetchError: error,
     },
   });
