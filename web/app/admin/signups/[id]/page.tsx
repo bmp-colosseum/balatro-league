@@ -9,6 +9,13 @@ import { refreshSignupMmrs } from "./actions";
 
 export const dynamic = "force-dynamic";
 
+// "season6" → "S6"; raw tag otherwise.
+function bmpSeasonLabel(tag: string | null): string {
+  if (!tag) return "—";
+  const m = /^season(\d+)$/.exec(tag);
+  return m ? `S${m[1]}` : tag;
+}
+
 export default async function SignupMmrPage({
   params,
   searchParams,
@@ -22,7 +29,7 @@ export default async function SignupMmrPage({
   const data = await loadSignupMmrOverview(id);
   if (!data) notFound();
 
-  const { round, rows, withData, withoutData, min, max, median, avg, byTier } = data;
+  const { round, rows, withData, withoutData, min, max, median, avg, byTier, bmpCurrentSeason } = data;
   const maxTierCount = Math.max(1, ...byTier.map((t) => t.count));
 
   return (
@@ -111,30 +118,51 @@ export default async function SignupMmrPage({
                   <th>#</th>
                   <th>Player</th>
                   <th>MMR</th>
+                  <th title="Peak ranked MMR">Peak</th>
                   <th>Tier</th>
+                  <th title="BMP season these numbers are from">Season</th>
                   <th>Games</th>
                   <th>Win%</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
-                  <tr><td colSpan={6} className="muted">No signups.</td></tr>
+                  <tr><td colSpan={8} className="muted">No signups.</td></tr>
                 ) : (
-                  rows.map((r, i) => (
-                    <tr key={r.discordId}>
-                      <td className="muted">{r.mmr != null ? i + 1 : ""}</td>
-                      <td>
-                        {r.name}
-                        {r.inGuild === false && (
-                          <span className="muted" style={{ fontSize: 11 }}> · not in server</span>
-                        )}
-                      </td>
-                      <td>{r.mmr != null ? <strong>{r.mmr}</strong> : <span className="muted">—</span>}</td>
-                      <td>{r.tier ?? <span className="muted">—</span>}</td>
-                      <td>{r.totalGames ?? <span className="muted">—</span>}</td>
-                      <td>{r.winRatePct != null ? `${r.winRatePct}%` : <span className="muted">—</span>}</td>
-                    </tr>
-                  ))
+                  rows.map((r, i) => {
+                    const isPrev = r.bmpSeason != null && bmpCurrentSeason != null && r.bmpSeason !== bmpCurrentSeason;
+                    return (
+                      <tr key={r.discordId}>
+                        <td className="muted">{r.mmr != null ? i + 1 : ""}</td>
+                        <td>
+                          <strong>{r.globalName ?? `@${r.username}`}</strong>
+                          {r.globalName && <span className="muted"> @{r.username}</span>}
+                          <div className="muted" style={{ fontSize: 11 }}>
+                            <span style={{ fontFamily: "ui-monospace, monospace" }}>{r.discordId}</span>
+                            {" · "}
+                            <a href={`https://balatromp.com/players/${r.discordId}`} target="_blank" rel="noopener">balatromp ↗</a>
+                            {r.inGuild === false && <span> · not in server</span>}
+                          </div>
+                        </td>
+                        <td>{r.mmr != null ? <strong>{r.mmr}</strong> : <span className="muted">—</span>}</td>
+                        <td>{r.peakMmr != null ? r.peakMmr : <span className="muted">—</span>}</td>
+                        <td>{r.tier ?? <span className="muted">—</span>}</td>
+                        <td>
+                          {r.bmpSeason == null ? (
+                            <span className="muted">—</span>
+                          ) : isPrev ? (
+                            <span style={{ color: "#f1c40f" }} title="Hasn't played the current BMP season — showing their most recent one">
+                              {bmpSeasonLabel(r.bmpSeason)} · prev
+                            </span>
+                          ) : (
+                            bmpSeasonLabel(r.bmpSeason)
+                          )}
+                        </td>
+                        <td>{r.totalGames ?? <span className="muted">—</span>}</td>
+                        <td>{r.winRatePct != null ? `${r.winRatePct}%` : <span className="muted">—</span>}</td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

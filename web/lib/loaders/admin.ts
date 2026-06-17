@@ -893,12 +893,17 @@ export async function loadBuildSeasonPage(roundId: string): Promise<BuildSeasonR
 
 export interface SignupMmrRow {
   discordId: string;
-  name: string;
+  globalName: string | null; // account-level Discord display name
+  username: string; // the @handle captured at signup
   inGuild: boolean | null;
-  mmr: number | null;
+  mmr: number | null; // current ranked MMR
+  peakMmr: number | null;
   tier: string | null;
   totalGames: number | null;
   winRatePct: number | null;
+  // Which BMP season the shown numbers are from. Compare to the overview's
+  // bmpCurrentSeason to flag a fallback ("hasn't played this season").
+  bmpSeason: string | null;
 }
 export interface SignupMmrTier {
   tier: string;
@@ -915,6 +920,7 @@ export interface SignupMmrOverview {
   median: number | null;
   avg: number | null;
   byTier: SignupMmrTier[]; // sorted strongest tier first (by avg mmr)
+  bmpCurrentSeason: string | null;
 }
 
 // Roster of a signup round joined to each signup's best BMP MMR snapshot (by
@@ -933,11 +939,15 @@ export async function loadSignupMmrOverview(roundId: string): Promise<SignupMmrO
   if (!round) return null;
 
   const discordIds = round.signups.map((s) => s.discordId);
-  const snaps = discordIds.length === 0 ? [] : await prisma.playerMmrSnapshot.findMany({
-    where: { discordId: { in: discordIds }, rankedMmr: { not: null } },
-    orderBy: { capturedAt: "desc" },
-    select: { discordId: true, bmpSeason: true, rankedMmr: true, rankedTier: true, totalGames: true, winRatePct: true, capturedAt: true },
-  });
+  const [snaps, bmpSeasonRow] = await Promise.all([
+    discordIds.length === 0 ? Promise.resolve([]) : prisma.playerMmrSnapshot.findMany({
+      where: { discordId: { in: discordIds }, rankedMmr: { not: null } },
+      orderBy: { capturedAt: "desc" },
+      select: { discordId: true, bmpSeason: true, rankedMmr: true, peakMmr: true, rankedTier: true, totalGames: true, winRatePct: true, capturedAt: true },
+    }),
+    prisma.leagueConfig.findUnique({ where: { key: "bmp_current_season" }, select: { value: true } }),
+  ]);
+  const bmpCurrentSeason = bmpSeasonRow?.value ?? null;
   // Best snapshot per discordId: latest tagged BMP season, then newest capture.
   const seasonNum = (tag: string | null): number => {
     if (!tag) return -Infinity;
@@ -966,16 +976,21 @@ export async function loadSignupMmrOverview(roundId: string): Promise<SignupMmrO
       const b = best.get(s.discordId);
       return {
         discordId: s.discordId,
-        name: s.globalName ?? s.displayName,
+        globalName: s.globalName,
+        username: s.displayName,
         inGuild: s.inGuild,
         mmr: b?.rankedMmr ?? null,
+        peakMmr: b?.peakMmr ?? null,
         tier: b?.rankedTier ?? null,
         totalGames: b?.totalGames ?? null,
         winRatePct: b?.winRatePct ?? null,
+        bmpSeason: b?.bmpSeason ?? null,
       };
     })
     .sort((a, b) => {
-      if (a.mmr === null && b.mmr === null) return a.name.localeCompare(b.name);
+      const an = a.globalName ?? a.username;
+      const bn = b.globalName ?? b.username;
+      if (a.mmr === null && b.mmr === null) return an.localeCompare(bn);
       if (a.mmr === null) return 1;
       if (b.mmr === null) return -1;
       return b.mmr - a.mmr;
@@ -1009,6 +1024,7 @@ export async function loadSignupMmrOverview(roundId: string): Promise<SignupMmrO
     median,
     avg: n ? Math.round(mmrs.reduce((s, m) => s + m, 0) / n) : null,
     byTier,
+    bmpCurrentSeason,
   };
 }
 
