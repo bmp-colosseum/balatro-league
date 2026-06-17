@@ -63,21 +63,34 @@ export async function purgeBotAccounts(client: Client, actor: AuditActor): Promi
 
   const result: BotPurgeResult = { scanned: ids.length, unresolved: 0, removed: [] };
 
-  for (const discordId of ids) {
-    let user;
-    try {
-      user = await client.users.fetch(discordId);
-    } catch {
-      // Account deleted / not fetchable — can't confirm bot-or-not, so leave it.
-      result.unresolved++;
-      continue;
+  // DETECT (parallel). The bot lacks the GuildMembers intent, so there's no
+  // bulk member fetch — we hit the REST user endpoint per id. Fan out in small
+  // batches (discord.js's REST layer throttles to the global rate limit
+  // internally, so this stays safe) and prefer the cache. The command defers
+  // first, so the 15-min interaction window comfortably covers a league-sized
+  // roster even before this speedup.
+  const CONCURRENCY = 10;
+  const bots: { discordId: string; username: string }[] = [];
+  for (let i = 0; i < ids.length; i += CONCURRENCY) {
+    const batch = ids.slice(i, i + CONCURRENCY);
+    const resolved = await Promise.all(
+      batch.map(async (discordId) => {
+        const user = client.users.cache.get(discordId) ?? (await client.users.fetch(discordId).catch(() => null));
+        return { discordId, user };
+      }),
+    );
+    for (const { discordId, user } of resolved) {
+      if (!user) result.unresolved++; // deleted / not fetchable — can't confirm, leave it
+      else if (user.bot) bots.push({ discordId, username: user.username });
     }
-    if (!user.bot) continue;
+  }
 
-    const removal = await removeBotAccount(discordId, user.username);
+  // REMOVE (sequential). Usually 0–1 accounts; each is its own transaction.
+  for (const { discordId, username } of bots) {
+    const removal = await removeBotAccount(discordId, username);
     result.removed.push(removal);
     console.log(
-      `[bot-purge] removed bot ${user.username} (${discordId}): ` +
+      `[bot-purge] removed bot ${username} (${discordId}): ` +
         `${removal.removedSignups} signup(s), player=${removal.deletedPlayer}, ${removal.deletedMatches} match(es)`,
     );
     await recordAudit({
@@ -85,7 +98,7 @@ export async function purgeBotAccounts(client: Client, actor: AuditActor): Promi
       action: "league.bot-purge",
       targetType: "DiscordUser",
       targetId: discordId,
-      summary: `Removed bot account ${user.username} from the league`,
+      summary: `Removed bot account ${username} from the league`,
       metadata: { ...removal },
     });
   }
