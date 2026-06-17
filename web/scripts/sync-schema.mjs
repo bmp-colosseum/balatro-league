@@ -22,6 +22,9 @@ const SYNC = [
   { from: ["prisma", "schema.prisma"], to: ["prisma", "schema.prisma"] },
   { from: ["src", "data", "match-defaults.json"], to: ["lib", "match-defaults.json"] },
   { from: ["src", "data", "balatro-info.json"], to: ["lib", "balatro-info.json"] },
+  // Pure sub-grouping engine — one source of truth (src/), used by both the bot
+  // and the web's grouping service.
+  { from: ["src", "sub-grouping.ts"], to: ["lib", "sub-grouping.ts"] },
 ];
 
 for (const { from, to } of SYNC) {
