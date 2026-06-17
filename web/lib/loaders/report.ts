@@ -66,6 +66,7 @@ export async function loadReportPageData(discordId: string): Promise<ReportPageD
       division: { season: { isActive: true } },
     },
     select: {
+      assignmentGroup: true,
       division: {
         select: {
           id: true,
@@ -74,7 +75,7 @@ export async function loadReportPageData(discordId: string): Promise<ReportPageD
           season: { select: { number: true, subtitle: true } },
           members: {
             where: { status: "ACTIVE" },
-            select: { playerId: true, player: { select: { displayName: true } } },
+            select: { playerId: true, assignmentGroup: true, player: { select: { displayName: true } } },
           },
         },
       },
@@ -116,8 +117,16 @@ export async function loadReportPageData(discordId: string): Promise<ReportPageD
     if (p.status === "CONFIRMED") confirmedOpponentIds.add(opp);
     else if (p.status === "PENDING") pendingOpponentIds.add(opp);
   }
+  // Scope to your sub-group: you only play (and report against) your group.
+  // assignmentGroup null = legacy whole-division round-robin.
+  const myGroup = membership.assignmentGroup;
   const reportableOpponents: ReportOpponent[] = div.members
-    .filter((m) => m.playerId !== player.id && !confirmedOpponentIds.has(m.playerId))
+    .filter(
+      (m) =>
+        m.playerId !== player.id &&
+        !confirmedOpponentIds.has(m.playerId) &&
+        (myGroup == null || m.assignmentGroup === myGroup),
+    )
     .map((m) => ({
       playerId: m.playerId,
       displayName: m.player.displayName,

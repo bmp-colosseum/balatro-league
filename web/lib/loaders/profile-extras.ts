@@ -183,6 +183,7 @@ async function loadOwnActiveDivision(playerId: string): Promise<OwnActiveDivisio
       division: { season: { isActive: true } },
     },
     select: {
+      assignmentGroup: true,
       division: {
         select: {
           id: true,
@@ -191,7 +192,7 @@ async function loadOwnActiveDivision(playerId: string): Promise<OwnActiveDivisio
           season: { select: { number: true, subtitle: true } },
           members: {
             where: { status: "ACTIVE" },
-            select: { playerId: true, player: { select: { id: true, displayName: true } } },
+            select: { playerId: true, assignmentGroup: true, player: { select: { id: true, displayName: true } } },
           },
         },
       },
@@ -212,8 +213,15 @@ async function loadOwnActiveDivision(playerId: string): Promise<OwnActiveDivisio
   for (const p of myPairings) {
     played.add(p.playerAId === playerId ? p.playerBId : p.playerAId);
   }
+  // Scope to your sub-group (null = legacy whole-division round-robin).
+  const myGroup = membership.assignmentGroup;
   const reportableOpponents = div.members
-    .filter((m) => m.playerId !== playerId && !played.has(m.playerId))
+    .filter(
+      (m) =>
+        m.playerId !== playerId &&
+        !played.has(m.playerId) &&
+        (myGroup == null || m.assignmentGroup === myGroup),
+    )
     .map((m) => ({ playerId: m.playerId, displayName: m.player.displayName }));
   return {
     divisionId: div.id,

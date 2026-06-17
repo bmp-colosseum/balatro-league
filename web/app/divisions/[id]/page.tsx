@@ -82,6 +82,19 @@ export default async function PublicDivisionPage({
     standings.map((r) => [r.player.id, { mmr: mmrByPlayerId.get(r.player.id) }]),
   );
 
+  // Sub-group context: if this division is sub-grouped and the viewer belongs
+  // to one, we show their group's mini-table above the full division table.
+  // Promotion still runs off the full division — the mini-table is just "how
+  // your own matchups are shaking out."
+  const groupMembers = await prisma.divisionMember.findMany({
+    where: { divisionId: id, status: "ACTIVE", assignmentGroup: { not: null } },
+    select: { playerId: true, assignmentGroup: true },
+  });
+  const groupByPlayer = new Map(groupMembers.map((m) => [m.playerId, m.assignmentGroup!]));
+  const viewerGroup = viewerPlayerId != null ? groupByPlayer.get(viewerPlayerId) ?? null : null;
+  const myGroupRows =
+    viewerGroup != null ? standings.filter((r) => groupByPlayer.get(r.player.id) === viewerGroup) : [];
+
   return (
     <>
       <SiteNav activePath="/standings" />
@@ -104,8 +117,21 @@ export default async function PublicDivisionPage({
           </div>
         )}
 
+        {myGroupRows.length > 0 && (
+          <div className="card">
+            <strong>Your group</strong>{" "}
+            <span className="muted" style={{ fontSize: 12 }}>— your matchups this season. Promotion runs off the full division below.</span>
+            <DivisionStandingsTable
+              rows={myGroupRows}
+              extras={standingsExtras}
+              showBmpMmr={showBmpMmr}
+              bmpCurrentSeason={bmpCurrentSeason}
+            />
+          </div>
+        )}
+
         <div className="card">
-          <strong>Standings</strong>
+          <strong>{myGroupRows.length > 0 ? "Full division" : "Standings"}</strong>
           <DivisionStandingsTable
             rows={standings}
             extras={standingsExtras}
