@@ -18,6 +18,7 @@ import { MatchSessionState } from "@prisma/client";
 import { enqueueAnnounceResult, runDisplayNameRefresh } from "../queue.js";
 import { actorFromInteractionUser, recordAudit } from "../audit.js";
 import { purgeBotAccounts } from "../bot-purge.js";
+import { applySeasonSubGroups } from "../sub-group-service.js";
 import { activeSeasonMemberAutocomplete } from "./autocomplete.js";
 import { prisma } from "../db.js";
 import { requireAdmin, requireHelper } from "../permissions.js";
@@ -169,6 +170,14 @@ export const admin: SlashCommand = {
     )
     .addSubcommand((sub) =>
       sub
+        .setName("subgroups")
+        .setDescription("Preview or apply balanced sub-groups for the active season's divisions.")
+        .addBooleanOption((opt) =>
+          opt.setName("apply").setDescription("Write the assignments (default: preview only).").setRequired(false),
+        ),
+    )
+    .addSubcommand((sub) =>
+      sub
         .setName("cancel-match")
         .setDescription("Force-cancel a wedged match session (any state). Use when players are stuck.")
         .addStringOption((opt) =>
@@ -231,6 +240,7 @@ export const admin: SlashCommand = {
     if (sub === "reload-emojis") return reloadEmojis(interaction);
     if (sub === "sync-names") return syncNames(interaction);
     if (sub === "scan-bots") return scanBots(interaction);
+    if (sub === "subgroups") return subGroups(interaction);
     if (sub === "cancel-match") return cancelMatch(interaction);
   },
 };
@@ -938,6 +948,34 @@ async function scanBots(interaction: ChatInputCommandInteraction) {
   await interaction.editReply(
     `✅ Scanned **${result.scanned}** account(s), removed **${result.removed.length}** bot(s):\n${lines.join("\n")}${unresolvedNote}`,
   );
+}
+
+// Preview or apply balanced sub-groups for the active season's divisions. The
+// division stays the competitive unit (standings/promotion run across it); this
+// just splits each into snake-balanced sub-groups that scope who plays whom.
+async function subGroups(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const apply = interaction.options.getBoolean("apply") ?? false;
+  const season = await prisma.season.findFirst({ where: { isActive: true } });
+  if (!season) {
+    await interaction.editReply("No active season.");
+    return;
+  }
+  const plans = await applySeasonSubGroups(season.id, season.targetGroupSize, { apply });
+  if (plans.length === 0) {
+    await interaction.editReply("No divisions in the active season.");
+    return;
+  }
+  const lines = plans.map((p) => {
+    const bal = p.balance
+      .map((b) => `g${b.group}: ${b.size}p · avg#${b.avgSeed.toFixed(1)} · ${b.matchesPerPlayer} games`)
+      .join("  |  ");
+    return `**${p.divisionName}** — ${p.memberCount} players → ${p.groupCount} group(s)\n  ${bal}`;
+  });
+  const header = apply
+    ? `✅ Applied sub-groups (target size ${season.targetGroupSize}):`
+    : `👁 Preview (target size ${season.targetGroupSize}) — re-run with \`apply:true\` to write:`;
+  await interaction.editReply(`${header}\n${lines.join("\n")}`.slice(0, 1900));
 }
 
 // Void ONE specific game between two players: record it as a CONFIRMED 0-0. The

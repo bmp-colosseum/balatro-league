@@ -47,8 +47,17 @@ export const schedule: SlashCommand = {
     }
 
     const div = membership.division;
+    // Your matches are scoped to your sub-group (a balanced slice of the
+    // division) — you round-robin its members. Standings + promotion still run
+    // across the whole division. assignmentGroup null = legacy full round-robin.
+    const myGroup = membership.assignmentGroup;
     const opponents = div.members
-      .filter((m) => m.playerId !== me.id && m.status === "ACTIVE")
+      .filter(
+        (m) =>
+          m.playerId !== me.id &&
+          m.status === "ACTIVE" &&
+          (myGroup == null || m.assignmentGroup === myGroup),
+      )
       .map((m) => m.player);
 
     // Categorize each opponent. `tz` is only set on opponents you still have to
