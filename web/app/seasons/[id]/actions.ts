@@ -12,6 +12,20 @@ import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { planSeasonSubGroups } from "@/lib/sub-grouping-service";
 
+// Set the sub-group size for a season (the size each division is split into
+// when you generate). Doesn't regenerate — hit Generate after to apply.
+export async function setSubGroupSize(formData: FormData) {
+  await requireAdmin();
+  const seasonId = String(formData.get("seasonId") ?? "").trim();
+  const size = Number.parseInt(String(formData.get("subGroupSize") ?? ""), 10);
+  if (!seasonId) return;
+  if (!Number.isFinite(size) || size < 2) {
+    redirect(`/seasons/${seasonId}?err=${encodeURIComponent("Sub-group size must be 2 or more")}`);
+  }
+  await prisma.season.update({ where: { id: seasonId }, data: { subGroupSize: size } });
+  revalidatePath(`/seasons/${seasonId}`);
+}
+
 // (Re)generate balanced sub-groups for every division in a draft season. Writes
 // DivisionMember.assignmentGroup from the current placement/seed order; safe to
 // re-run after moving players around. Only meaningful pre-activation — it's the

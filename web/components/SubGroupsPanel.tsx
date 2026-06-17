@@ -8,7 +8,8 @@ import "server-only";
 
 import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
-import { generateSubGroups } from "@/app/seasons/[id]/actions";
+import { Input } from "@/components/ui/input";
+import { generateSubGroups, setSubGroupSize } from "@/app/seasons/[id]/actions";
 
 export async function SubGroupsPanel({ seasonId }: { seasonId: string }) {
   const season = await prisma.season.findUnique({
@@ -34,14 +35,29 @@ export async function SubGroupsPanel({ seasonId }: { seasonId: string }) {
 
   return (
     <div className="card" style={{ marginTop: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
         <strong>Sub-groups (match assignment)</strong>
-        <form action={generateSubGroups}>
-          <input type="hidden" name="seasonId" value={seasonId} />
-          <Button type="submit" variant={anyGenerated ? "secondary" : undefined}>
-            {anyGenerated ? "↻ Regenerate sub-groups" : "Generate sub-groups"}
-          </Button>
-        </form>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <form action={setSubGroupSize} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+            <input type="hidden" name="seasonId" value={seasonId} />
+            <label style={{ fontSize: 12 }} className="muted">Group size</label>
+            <Input
+              type="number"
+              name="subGroupSize"
+              defaultValue={groupSize}
+              min={2}
+              max={50}
+              style={{ width: 64 }}
+            />
+            <Button type="submit" variant="secondary">Save</Button>
+          </form>
+          <form action={generateSubGroups}>
+            <input type="hidden" name="seasonId" value={seasonId} />
+            <Button type="submit" variant={anyGenerated ? "secondary" : undefined}>
+              {anyGenerated ? "↻ Regenerate" : "Generate sub-groups"}
+            </Button>
+          </form>
+        </div>
       </div>
       <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
         Splits each division into balanced groups of ~{groupSize} (snake-seeded). You round-robin within your
