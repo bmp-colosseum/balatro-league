@@ -31,7 +31,8 @@ export async function runSeasonDiscordBootstrap(seasonId: string): Promise<numbe
           id: true,
           discordRoleId: true,
           discordChannelId: true,
-          _count: { select: { members: { where: { status: "ACTIVE" } } } },
+          subGroupThreadIds: true,
+          members: { where: { status: "ACTIVE" }, select: { assignmentGroup: true } },
         },
       },
     },
@@ -54,8 +55,13 @@ export async function runSeasonDiscordBootstrap(seasonId: string): Promise<numbe
 
   let queued = 0;
   for (const div of season.divisions) {
-    if (div.discordRoleId && div.discordChannelId) continue;
-    if (div._count.members === 0) continue;
+    if (div.members.length === 0) continue;
+    // Re-enqueue when role/channel are missing OR any sub-group thread is —
+    // the worker is idempotent and creates only what's absent.
+    const groups = new Set(div.members.map((m) => m.assignmentGroup).filter((g): g is number => g != null));
+    const threads = (div.subGroupThreadIds as Record<string, string> | null) ?? {};
+    const threadsComplete = [...groups].every((g) => threads[String(g)]);
+    if (div.discordRoleId && div.discordChannelId && threadsComplete) continue;
     await enqueueBootstrapDivision({ divisionId: div.id, guildId });
     queued++;
   }

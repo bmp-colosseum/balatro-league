@@ -512,6 +512,11 @@ model Division {
   // Optional Discord role + channel IDs the bot manages for this division
   discordRoleId    String?
   discordChannelId String?
+  // Per-sub-group private "Group N" thread ids, as a JSON map of
+  // { "<groupNumber>": "<threadId>" }. Written by the division bootstrap when
+  // it creates each group's thread; lets us count real threads + recreate only
+  // missing ones on a re-run. Null/empty when the division isn't sub-grouped.
+  subGroupThreadIds Json?
   // End-of-season champion role + winner. Set when admin clicks
   // 'Award champion roles' on an ended season. Role persists forever
   // as a bragging-rights badge. championPlayerId is the rank-1

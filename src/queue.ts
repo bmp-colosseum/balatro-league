@@ -935,8 +935,17 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
     console.warn(`[bootstrap.division] ${divisionId} not found, skipping`);
     return;
   }
-  if (div.discordRoleId && div.discordChannelId) return; // already done
   if (div.members.length === 0) return;
+
+  // Sub-group threads: the distinct groups that need a thread, and which already
+  // have one recorded. A re-run creates only the missing ones, so the whole
+  // division is "done" only when role + channel + every group thread exist.
+  const groupsToThread = [
+    ...new Set(div.members.map((m) => m.assignmentGroup).filter((g): g is number => g != null)),
+  ].sort((a, b) => a - b);
+  const existingThreads: Record<string, string> = (div.subGroupThreadIds as Record<string, string> | null) ?? {};
+  const threadsComplete = groupsToThread.every((g) => existingThreads[String(g)]);
+  if (div.discordRoleId && div.discordChannelId && threadsComplete) return; // already done
 
   const parentId = div.season.discordCategoryId ?? undefined;
   // OWNER tier is included so a non-Administrator owner role still gets
@@ -1029,34 +1038,43 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
     // ping fires for the @mentions inside. Bootstrap shouldn't blast everyone
     // — players discover the channel via their sidebar / the role, not a ping.
     await postChannelMessage(channelId, welcome);
+  }
 
-    // Option B: one private "Group N" thread per sub-group on this channel.
-    // Adding members notifies them; match threads from /start-match land in
-    // this same channel (Discord can't nest a thread in a thread). Standings +
-    // promotion still run across the whole division.
-    if (isSubGrouped) {
-      const grouped = new Map<number, typeof div.members>();
-      for (const m of div.members) {
-        if (m.assignmentGroup == null) continue;
-        const arr = grouped.get(m.assignmentGroup) ?? [];
-        arr.push(m);
-        grouped.set(m.assignmentGroup, arr);
-      }
-      for (const [g, ms] of [...grouped.entries()].sort((a, b) => a[0] - b[0])) {
-        const threadId = await createPrivateThread(
-          channelId,
-          `Group ${g}`,
-          ms.map((m) => m.player.discordId),
+  // Option B: one private "Group N" thread per sub-group on this channel.
+  // Runs every bootstrap pass but only creates groups that don't already have a
+  // recorded thread — so a re-run from the building tab fills in any that failed
+  // or any new groups after a regenerate. Adding members notifies them; match
+  // threads from /start-match land in this channel (no thread-in-thread).
+  if (channelId && groupsToThread.length > 0) {
+    const membersByGroup = new Map<number, typeof div.members>();
+    for (const m of div.members) {
+      if (m.assignmentGroup == null) continue;
+      const arr = membersByGroup.get(m.assignmentGroup) ?? [];
+      arr.push(m);
+      membersByGroup.set(m.assignmentGroup, arr);
+    }
+    let threadsChanged = false;
+    for (const g of groupsToThread) {
+      if (existingThreads[String(g)]) continue; // already has a thread
+      const ms = membersByGroup.get(g) ?? [];
+      const threadId = await createPrivateThread(
+        channelId,
+        `Group ${g}`,
+        ms.map((m) => m.player.discordId),
+      );
+      if (threadId) {
+        existingThreads[String(g)] = threadId;
+        threadsChanged = true;
+        const list = ms.map((m) => `<@${m.player.discordId}>`).join(" ");
+        await postChannelMessage(
+          threadId,
+          `**Group ${g}** — you ${ms.length} play each other, best-of-2 (**${ms.length - 1} matches** each). ` +
+            `Schedule here; use \`/start-match @opponent\` for the guided flow.\n${list}`,
         );
-        if (threadId) {
-          const list = ms.map((m) => `<@${m.player.discordId}>`).join(" ");
-          await postChannelMessage(
-            threadId,
-            `**Group ${g}** — you ${ms.length} play each other, best-of-2 (**${ms.length - 1} matches** each). ` +
-              `Schedule here; use \`/start-match @opponent\` for the guided flow.\n${list}`,
-          );
-        }
       }
+    }
+    if (threadsChanged) {
+      await prisma.division.update({ where: { id: div.id }, data: { subGroupThreadIds: existingThreads } });
     }
   }
 

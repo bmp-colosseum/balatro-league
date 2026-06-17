@@ -733,30 +733,43 @@ function DiscordBootstrap({
       discordRoleId: string | null;
       discordChannelId: string | null;
       members: Array<{ assignmentGroup: number | null }>;
+      subGroupThreadIds: unknown;
     }>;
   };
 }) {
   const total = season.divisions.length;
   const ready = season.divisions.filter((d) => d.discordRoleId && d.discordChannelId).length;
-  const remaining = total - ready;
-  // Each sub-grouped division also gets one private "Group N" thread per group,
-  // created at bootstrap — surface the count so the status reflects the real
-  // structure, not just "one channel per division".
-  const threadCount = season.divisions.reduce((sum, d) => {
+  const channelsRemaining = total - ready;
+  // Per-sub-group "Group N" threads: expected = distinct sub-groups, created =
+  // ids actually recorded on the division. Lets the status show real progress
+  // and the button re-run to backfill any missing threads.
+  let threadsExpected = 0;
+  let threadsCreated = 0;
+  for (const d of season.divisions) {
     const groups = new Set(d.members.map((m) => m.assignmentGroup).filter((g): g is number => g != null));
-    return sum + groups.size;
-  }, 0);
+    threadsExpected += groups.size;
+    threadsCreated +=
+      d.subGroupThreadIds && typeof d.subGroupThreadIds === "object"
+        ? Object.keys(d.subGroupThreadIds as Record<string, unknown>).length
+        : 0;
+  }
+  const threadsMissing = Math.max(0, threadsExpected - threadsCreated);
+  const allDone = channelsRemaining === 0 && threadsMissing === 0;
   return (
     <details style={{ marginLeft: 8 }}>
       <summary className="muted" style={{ cursor: "pointer", fontSize: 12 }}>
         🎭 Discord: {ready}/{total} channel{total === 1 ? "" : "s"}
-        {threadCount > 0 ? ` · ${threadCount} group thread${threadCount === 1 ? "" : "s"}` : ""}
+        {threadsExpected > 0 ? ` · ${threadsCreated}/${threadsExpected} group threads` : ""}
       </summary>
       <div style={{ marginTop: 8, padding: 8, background: "var(--surface-2)", borderRadius: 4, display: "grid", gap: 6, minWidth: 320 }}>
         <form action={bootstrapSeasonDiscord}>
           <input type="hidden" name="id" value={season.id} />
-          <Button type="submit" disabled={remaining === 0}>
-            {remaining === 0 ? "All divisions ready" : `Set up ${remaining} remaining division(s)`}
+          <Button type="submit" disabled={allDone}>
+            {allDone
+              ? "All set up"
+              : channelsRemaining > 0
+                ? `Set up ${channelsRemaining} division(s)${threadsMissing > 0 ? ` + ${threadsMissing} thread(s)` : ""}`
+                : `Create ${threadsMissing} missing thread(s)`}
           </Button>
         </form>
       </div>
