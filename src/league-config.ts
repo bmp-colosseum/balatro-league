@@ -34,6 +34,12 @@ export const LeagueConfigKey = {
   // channels. Optional — falls back to interaction.channel when unset,
   // which matches the original /challenge behavior.
   ChallengesChannelId: "challenges_channel_id",
+  // Parent channel for LEAGUE /start-match private threads. Kept separate from
+  // division channels so staff (who have ManageThreads on division channels to
+  // see group threads) do NOT auto-see every match — match threads stay private
+  // to the two players; /helper pulls a moderator in on demand. Auto-created on
+  // first /start-match under the '🎴 Matches' category.
+  LeagueMatchesChannelId: "league_matches_channel_id",
   // Private channel for infra/DevOps alerts (queue stalls, rate-limit
   // floods, anything that needs a tech person not a game admin). Resolved
   // env.DEVOPS_CHANNEL_ID → LeagueConfig.DevopsChannelId → null (alerts

@@ -13,6 +13,7 @@ import { getLeagueSettingsForSeason } from "../league-settings.js";
 import { bootstrapPresetsAndPointers, presetForSeason } from "../match-config.js";
 import { renderMatch } from "../match-render.js";
 import { getOrCreatePlayer, guildDisplayName } from "../players.js";
+import { ensureLeagueMatchesChannel } from "../league-matches-channel.js";
 import type { SlashCommand } from "./types.js";
 
 const MODE_CHOICES = [
@@ -175,21 +176,25 @@ export const startMatch: SlashCommand = {
       },
     });
 
-    // Create a private thread under the division channel (like /challenge)
-    // and put the invite there, instead of posting it in the league channel.
-    // Persisting threadId up front means handleAccept reuses this thread
-    // (no relocation, no league-channel message at all).
+    // Create the match thread in the dedicated #league-matches channel, NOT the
+    // division channel — staff have ManageThreads on division channels (to see
+    // group threads), and that would expose every match. #league-matches has no
+    // staff ManageThreads, so the thread stays private to the two players until
+    // someone runs /helper. Falls back to the current channel if it can't be
+    // resolved (and a thread parent must not itself be a thread).
     let threadId: string | null = null;
     try {
-      // If /start-match is run INSIDE a thread (e.g. a sub-group "Group N"
-      // thread), create the match thread on that thread's PARENT channel —
-      // Discord can't nest a thread in a thread.
-      const ch = interaction.channel;
-      // discord.js types interaction.channel as a non-thread union here, so cast
-      // to read .parent when it IS a thread (sub-group thread → put the match
-      // thread on the parent channel; Discord can't nest a thread in a thread).
-      const threadParent = ch && ch.isThread() ? (ch as unknown as { parent: TextChannel | null }).parent : null;
-      const parent = (threadParent ?? ch) as TextChannel | null;
+      let parent: TextChannel | null = null;
+      const matchesChannelId = await ensureLeagueMatchesChannel();
+      if (matchesChannelId) {
+        const mc = await interaction.client.channels.fetch(matchesChannelId).catch(() => null);
+        if (mc && mc.type === ChannelType.GuildText) parent = mc as TextChannel;
+      }
+      if (!parent) {
+        const ch = interaction.channel;
+        const threadParent = ch && ch.isThread() ? (ch as unknown as { parent: TextChannel | null }).parent : null;
+        parent = (threadParent ?? ch) as TextChannel | null;
+      }
       if (!parent) throw new Error("no parent channel for the match thread");
       const suffix = session.id.slice(-6);
       const thread = await parent.threads.create({

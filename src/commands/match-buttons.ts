@@ -33,6 +33,7 @@ import { announceChallengeResult } from "../announce.js";
 import { SYSTEM_ACTOR, recordAudit } from "../audit.js";
 import { isCanonicalDeck } from "../balatro-info.js";
 import { resolveChallengesChannelId } from "../challenges-channel.js";
+import { ensureLeagueMatchesChannel } from "../league-matches-channel.js";
 import { prisma } from "../db.js";
 import { env } from "../env.js";
 import { getLeagueSettings, getLeagueSettingsForSeason } from "../league-settings.js";
@@ -678,25 +679,24 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
   // /admin join-match when mediation is needed.
   let matchChannelId = session.threadId;
   if (!matchChannelId) {
-    // Casual /challenge threads live under the dedicated #challenges
-    // channel (in the '🎴 Matches' category) when one is configured,
-    // so all casual matches sit together regardless of where the
-    // invite was posted. League /start-match threads stay under the
-    // division channel so division members can browse the thread list.
+    // Casual /challenge threads live under #challenges; league /start-match
+    // threads under #league-matches (both in the '🎴 Matches' category) — kept
+    // off the division channels so staff don't auto-see matches via their
+    // ManageThreads (group-thread) access. Falls back to the current channel.
     let parentChannel = interaction.channel?.type === ChannelType.GuildText
       ? (interaction.channel as TextChannel)
       : null;
-    if (session.isCasual) {
-      const challengesId = await resolveChallengesChannelId();
-      if (challengesId) {
-        try {
-          const fetched = await interaction.client.channels.fetch(challengesId);
-          if (fetched && fetched.type === ChannelType.GuildText) {
-            parentChannel = fetched as TextChannel;
-          }
-        } catch {
-          // fall through to interaction.channel
+    const parentChannelId = session.isCasual
+      ? await resolveChallengesChannelId()
+      : await ensureLeagueMatchesChannel();
+    if (parentChannelId) {
+      try {
+        const fetched = await interaction.client.channels.fetch(parentChannelId);
+        if (fetched && fetched.type === ChannelType.GuildText) {
+          parentChannel = fetched as TextChannel;
         }
+      } catch {
+        // fall through to interaction.channel
       }
     }
     if (parentChannel) {
