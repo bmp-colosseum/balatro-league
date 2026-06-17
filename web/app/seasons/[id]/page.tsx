@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormSelect } from "@/components/FormSelect";
 import { DraggableDivisionsEditor, type EditorMember, type EditorTier } from "@/components/DraggableDivisionsEditor";
+import { SubGroupsPanel } from "@/components/SubGroupsPanel";
 import { LocalDateTimeField } from "@/components/LocalDateTimeField";
 import { LocalDateTime } from "@/components/LocalDateTime";
 import { SeasonDeckPresetPicker } from "@/components/SeasonDeckPresetPicker";
@@ -423,6 +424,10 @@ async function AdminSeasonPanel({
               />
             );
           })()}
+
+          {/* After placement: generate + review the balanced sub-groups that
+              scope who-plays-whom (admin-only; promotion stays division-wide). */}
+          {!season.isActive && !season.endedAt && <SubGroupsPanel seasonId={season.id} />}
 
           {/* Tier/division summary block used to render here for
               active/ended seasons — top-3 + "+ N more" duplicating

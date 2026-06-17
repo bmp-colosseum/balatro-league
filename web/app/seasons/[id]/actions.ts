@@ -10,6 +10,41 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
+import { planSeasonSubGroups } from "@/lib/sub-grouping-service";
+
+// (Re)generate balanced sub-groups for every division in a draft season. Writes
+// DivisionMember.assignmentGroup from the current placement/seed order; safe to
+// re-run after moving players around. Only meaningful pre-activation — it's the
+// "split each division into its match-assignment groups" step before build.
+export async function generateSubGroups(formData: FormData) {
+  const { user } = await requireAdmin();
+  const seasonId = String(formData.get("seasonId") ?? "").trim();
+  if (!seasonId) redirect(`/seasons/${seasonId}?err=missing-fields`);
+
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    select: { targetGroupSize: true },
+  });
+  if (!season) redirect(`/seasons/${seasonId}?err=season-not-found`);
+
+  const plans = await planSeasonSubGroups(seasonId, season!.targetGroupSize, { apply: true });
+
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "season.generate-subgroups",
+    targetType: "Season",
+    targetId: seasonId,
+    summary: `Generated sub-groups for ${plans.length} division(s) (target size ${season!.targetGroupSize})`,
+    metadata: {
+      seasonId,
+      groupSize: season!.targetGroupSize,
+      divisions: plans.map((p) => ({ name: p.divisionName, members: p.memberCount, groups: p.groupCount })),
+    },
+  });
+
+  revalidatePath(`/seasons/${seasonId}`);
+  redirect(`/seasons/${seasonId}?ok=1`);
+}
 
 export async function setFinalGlobalRank(formData: FormData) {
   const { user } = await requireAdmin();
