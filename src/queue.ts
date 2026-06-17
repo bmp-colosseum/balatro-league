@@ -19,6 +19,7 @@
 import { PgBoss, type Job } from "pg-boss";
 import { announceResult } from "./announce.js";
 import { detectCurrentBmpSeason, fetchPlayerStats, NO_RANKED_RECORD } from "./balatromp.js";
+import { groupLetter } from "./sub-grouping.js";
 import { spawnDisputeThread } from "./dispute-thread.js";
 import { webUrl } from "./web-url.js";
 import { prisma } from "./db.js";
@@ -1078,7 +1079,7 @@ async function bootstrapDivision({ divisionId, guildId, rebuildThreads }: Bootst
       const ms = membersByGroup.get(g) ?? [];
       const threadId = await createPrivateThread(
         channelId,
-        `Group ${g}`,
+        `Group ${groupLetter(g)}`,
         ms.map((m) => m.player.discordId),
       );
       if (threadId) {
@@ -1087,7 +1088,7 @@ async function bootstrapDivision({ divisionId, guildId, rebuildThreads }: Bootst
         const list = ms.map((m) => `<@${m.player.discordId}>`).join(" ");
         await postChannelMessage(
           threadId,
-          `**Group ${g}** — you ${ms.length} play each other, best-of-2 (**${ms.length - 1} matches** each). ` +
+          `**Group ${groupLetter(g)}** — you ${ms.length} play each other, best-of-2 (**${ms.length - 1} matches** each). ` +
             `Schedule here; use \`/start-match @opponent\` for the guided flow.\n${list}`,
         );
       }

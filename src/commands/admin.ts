@@ -19,6 +19,7 @@ import { enqueueAnnounceResult, runDisplayNameRefresh } from "../queue.js";
 import { actorFromInteractionUser, recordAudit } from "../audit.js";
 import { purgeBotAccounts } from "../bot-purge.js";
 import { applySeasonSubGroups } from "../sub-group-service.js";
+import { groupLetter } from "../sub-grouping.js";
 import { activeSeasonMemberAutocomplete } from "./autocomplete.js";
 import { prisma } from "../db.js";
 import { requireAdmin, requireHelper } from "../permissions.js";
@@ -968,7 +969,7 @@ async function subGroups(interaction: ChatInputCommandInteraction) {
   }
   const lines = plans.map((p) => {
     const bal = p.balance
-      .map((b) => `g${b.group}: ${b.size}p · avg#${b.avgSeed.toFixed(1)} · ${b.matchesPerPlayer} games`)
+      .map((b) => `${groupLetter(b.group)}: ${b.size}p · avg#${b.avgSeed.toFixed(1)} · ${b.matchesPerPlayer} games`)
       .join("  |  ");
     return `**${p.divisionName}** — ${p.memberCount} players → ${p.groupCount} group(s)\n  ${bal}`;
   });

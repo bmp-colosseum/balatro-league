@@ -42,8 +42,8 @@ function parseConfig(json: string): TierConfig[] {
 
 function defaultDivisionNames(tier: TierConfig): string[] {
   if (tier.divisionCount === 1) return [tier.name];
-  // Card-themed: first (strongest) division is the Ace, then 2, 3, 4, 5…
-  return Array.from({ length: tier.divisionCount }, (_, i) => `${tier.name} ${i === 0 ? "A (1)" : i + 1}`);
+  // Numbered: "<Tier> 1", "<Tier> 2", …
+  return Array.from({ length: tier.divisionCount }, (_, i) => `${tier.name} ${i + 1}`);
 }
 
 export async function createSeason(formData: FormData) {
@@ -129,7 +129,7 @@ export async function addDivisionToTier(formData: FormData) {
       seasonId,
       tierId,
       groupNumber: nextGroup,
-      name: `${tier!.name} ${nextGroup === 1 ? "A (1)" : nextGroup}`,
+      name: `${tier!.name} ${nextGroup}`,
     },
   });
   recordAudit({

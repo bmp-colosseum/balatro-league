@@ -9,6 +9,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { groupLetter } from "@/lib/sub-grouping";
 import { generateSubGroups, setSubGroupSize } from "@/app/seasons/[id]/actions";
 
 export async function SubGroupsPanel({ seasonId }: { seasonId: string }) {
@@ -97,7 +98,7 @@ export async function SubGroupsPanel({ seasonId }: { seasonId: string }) {
                     return (
                       <div key={g} style={{ border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, padding: "8px 10px", minWidth: 150 }}>
                         <div style={{ fontSize: 12, fontWeight: 600 }}>
-                          Group {g}{" "}
+                          Group {groupLetter(g)}{" "}
                           <span className="muted" style={{ fontWeight: 400 }}>· {ms.length}p · {ms.length - 1} games · avg #{avgSeed.toFixed(1)}</span>
                         </div>
                         <ul style={{ margin: "4px 0 0", paddingLeft: 16, fontSize: 12 }}>

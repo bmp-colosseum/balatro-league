@@ -17,10 +17,9 @@ export function formatSeasonLabel(season: SeasonLabelInput): string {
   return season.subtitle ? `${base} — ${season.subtitle}` : base;
 }
 
-// Canonical division label. The strongest (group 1) division in a multi-division
-// tier is the "Ace" — "<Tier> A (1)" — and the rest are "<Tier> 2", "<Tier> 3", …
+// Canonical division label. Numbered: "<Tier> 1", "<Tier> 2", "<Tier> 3", …
 // A tier with a single division is just "<Tier>". Mirrors web/lib/format-season.ts.
 export function formatDivisionName(tierName: string, groupNumber: number, divisionCount: number): string {
   if (divisionCount <= 1) return tierName;
-  return groupNumber === 1 ? `${tierName} A (1)` : `${tierName} ${groupNumber}`;
+  return `${tierName} ${groupNumber}`;
 }

@@ -66,6 +66,12 @@ export function groupSizesFromMembers(members: { assignmentGroup: number | null 
   return [...counts.values()];
 }
 
+// Display label for a sub-group: 1 → "A", 2 → "B", … The stored assignmentGroup
+// stays a number (for sorting/logic); this is just the human label.
+export function groupLetter(groupNumber: number): string {
+  return String.fromCharCode(64 + groupNumber);
+}
+
 export interface GroupBalance {
   group: number;
   size: number;
