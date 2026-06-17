@@ -7,7 +7,14 @@
 // web's sync version. Each helper swallows errors and returns null/false
 // so callers (workers, sweepers) decide whether to retry vs continue.
 
-import { ChannelType, PermissionFlagsBits, type CategoryChannel, type Guild } from "discord.js";
+import {
+  ChannelType,
+  PermissionFlagsBits,
+  ThreadAutoArchiveDuration,
+  type CategoryChannel,
+  type Guild,
+  type TextChannel,
+} from "discord.js";
 import { getConfig, setConfig, type LeagueConfigKey } from "./league-config.js";
 
 // Permission sets used by the bootstrap. Granting these explicitly via
@@ -246,6 +253,38 @@ export async function postChannelMessage(
     return msg.id;
   } catch (err) {
     console.warn(`[bot] postChannelMessage(${channelId}) failed:`, err);
+    return null;
+  }
+}
+
+// Create a PRIVATE thread on a text channel and add the given members — used for
+// per-sub-group "your matchups" threads. Private so only the listed players (+
+// staff with ManageThreads) see it. Adding a member notifies them, so no ping
+// needed. Non-snowflake ids (seeded/test players) are skipped. Best-effort:
+// returns the thread id or null on failure.
+export async function createPrivateThread(
+  channelId: string,
+  name: string,
+  memberIds: string[],
+): Promise<string | null> {
+  try {
+    const channel = await getDiscordClient().channels.fetch(channelId);
+    if (!channel || channel.type !== ChannelType.GuildText) return null;
+    const thread = await (channel as TextChannel).threads.create({
+      name,
+      type: ChannelType.PrivateThread,
+      autoArchiveDuration: ThreadAutoArchiveDuration.OneWeek,
+      invitable: false,
+    });
+    for (const id of memberIds) {
+      if (!isDiscordSnowflake(id)) continue;
+      await thread.members.add(id).catch((err) => {
+        console.warn(`[bot] createPrivateThread(${name}): couldn't add ${id}:`, err);
+      });
+    }
+    return thread.id;
+  } catch (err) {
+    console.warn(`[bot] createPrivateThread(${name}) failed:`, err);
     return null;
   }
 }

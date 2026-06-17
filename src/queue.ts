@@ -51,6 +51,7 @@ import {
   isDiscordSnowflake,
   createGuildRole,
   createGuildTextChannel,
+  createPrivateThread,
   postChannelMessage,
   removeGuildMemberRole as removeGuildMemberRoleViaBot,
 } from "./discord-helpers.js";
@@ -997,8 +998,14 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
       .join("\n");
     // Each player plays (N-1) matches — one against every other member.
     // Total matches in the division is N*(N-1)/2 for context.
+    // Sub-grouped divisions: you only play your group (a balanced slice), so
+    // the "play everyone" instruction would be wrong — point at the group thread.
+    const isSubGrouped = div.members.some((m) => m.assignmentGroup != null);
     const matchesPerPlayer = div.members.length - 1;
     const totalMatchesInDivision = (div.members.length * (div.members.length - 1)) / 2;
+    const playBullet = isSubGrouped
+      ? `• You play the people in **your group** — see your private **Group** thread below (best-of-2). Standings + promotion run across the whole division.`
+      : `• Play **every other person** in this list once — best-of-2 (**${matchesPerPlayer} matches per player**, ${totalMatchesInDivision} total in this division).`;
     const welcome = [
       `# 🃏 Welcome to ${div.name}`,
       `_${seasonLabel} · ${div.name} division_`,
@@ -1009,7 +1016,7 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
       memberList,
       ``,
       `**What to do**`,
-      `• Play **every other person** in this list once — best-of-2 (**${matchesPerPlayer} matches per player**, ${totalMatchesInDivision} total in this division).`,
+      playBullet,
       `• Schedule in this channel. DMs work too.`,
       `• Use \`/start-match @opponent\` for the guided ban/pick flow — bot walks you both through banning and picking decks/stakes for each game. OR just play in Balatro on your own and use \`/report @opponent result:2-0|1-1|0-2\` to log it.`,
       ``,
@@ -1022,6 +1029,35 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
     // ping fires for the @mentions inside. Bootstrap shouldn't blast everyone
     // — players discover the channel via their sidebar / the role, not a ping.
     await postChannelMessage(channelId, welcome);
+
+    // Option B: one private "Group N" thread per sub-group on this channel.
+    // Adding members notifies them; match threads from /start-match land in
+    // this same channel (Discord can't nest a thread in a thread). Standings +
+    // promotion still run across the whole division.
+    if (isSubGrouped) {
+      const grouped = new Map<number, typeof div.members>();
+      for (const m of div.members) {
+        if (m.assignmentGroup == null) continue;
+        const arr = grouped.get(m.assignmentGroup) ?? [];
+        arr.push(m);
+        grouped.set(m.assignmentGroup, arr);
+      }
+      for (const [g, ms] of [...grouped.entries()].sort((a, b) => a[0] - b[0])) {
+        const threadId = await createPrivateThread(
+          channelId,
+          `Group ${g}`,
+          ms.map((m) => m.player.discordId),
+        );
+        if (threadId) {
+          const list = ms.map((m) => `<@${m.player.discordId}>`).join(" ");
+          await postChannelMessage(
+            threadId,
+            `**Group ${g}** — you ${ms.length} play each other, best-of-2 (**${ms.length - 1} matches** each). ` +
+              `Schedule here; use \`/start-match @opponent\` for the guided flow.\n${list}`,
+          );
+        }
+      }
+    }
   }
 
   await prisma.division.update({
