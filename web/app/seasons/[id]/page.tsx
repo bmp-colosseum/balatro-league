@@ -726,15 +726,31 @@ function LifecycleActions({
 function DiscordBootstrap({
   season,
 }: {
-  season: { id: string; discordCategoryId: string | null; divisions: Array<{ discordRoleId: string | null; discordChannelId: string | null }> };
+  season: {
+    id: string;
+    discordCategoryId: string | null;
+    divisions: Array<{
+      discordRoleId: string | null;
+      discordChannelId: string | null;
+      members: Array<{ assignmentGroup: number | null }>;
+    }>;
+  };
 }) {
   const total = season.divisions.length;
   const ready = season.divisions.filter((d) => d.discordRoleId && d.discordChannelId).length;
   const remaining = total - ready;
+  // Each sub-grouped division also gets one private "Group N" thread per group,
+  // created at bootstrap — surface the count so the status reflects the real
+  // structure, not just "one channel per division".
+  const threadCount = season.divisions.reduce((sum, d) => {
+    const groups = new Set(d.members.map((m) => m.assignmentGroup).filter((g): g is number => g != null));
+    return sum + groups.size;
+  }, 0);
   return (
     <details style={{ marginLeft: 8 }}>
       <summary className="muted" style={{ cursor: "pointer", fontSize: 12 }}>
-        🎭 Discord: {ready}/{total}
+        🎭 Discord: {ready}/{total} channel{total === 1 ? "" : "s"}
+        {threadCount > 0 ? ` · ${threadCount} group thread${threadCount === 1 ? "" : "s"}` : ""}
       </summary>
       <div style={{ marginTop: 8, padding: 8, background: "var(--surface-2)", borderRadius: 4, display: "grid", gap: 6, minWidth: 320 }}>
         <form action={bootstrapSeasonDiscord}>
