@@ -10,64 +10,10 @@ import {
   lockChannelForEveryone,
   setChannelParent,
 } from "@/lib/discord";
-import { enqueueAwardChampionRole, enqueueBootstrapDivision, enqueueStripDivisionRole } from "@/lib/queue";
+import { enqueueAwardChampionRole, enqueueStripDivisionRole } from "@/lib/queue";
 import { computeStandings } from "@/lib/standings";
 import { formatSeasonLabel } from "@/lib/format-season";
-
-// Core of the season-bootstrap work, callable from:
-//   - the admin "Set up divisions" button (bootstrapSeasonDiscord)
-//   - the activate flow (performSeasonActivation auto-runs this)
-// Idempotent: divisions already fully set up are skipped, empty
-// divisions are skipped, and the season-category create only fires
-// once.
-//
-// Returns the number of bootstrap jobs queued, or null when the
-// guild/season context is missing (caller logs a warning).
-export async function runSeasonDiscordBootstrap(seasonId: string): Promise<number | null> {
-  const guildId = process.env.DISCORD_GUILD_ID;
-  if (!guildId) {
-    console.warn("DISCORD_GUILD_ID not set; skipping season Discord bootstrap");
-    return null;
-  }
-  const season = await prisma.season.findUnique({
-    where: { id: seasonId },
-    include: {
-      divisions: {
-        orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
-        select: {
-          id: true,
-          discordRoleId: true,
-          discordChannelId: true,
-          _count: { select: { members: { where: { status: "ACTIVE" } } } },
-        },
-      },
-    },
-  });
-  if (!season) return null;
-
-  // If admin didn't set a category id, auto-create '🃏 Season Name' so
-  // each season gets a clean home. Done synchronously so the worker
-  // jobs see the parent id immediately.
-  const seasonLabel = formatSeasonLabel(season);
-  if (!season.discordCategoryId) {
-    const cat = await ensureGuildCategory(guildId, `🃏 ${seasonLabel}`);
-    if (cat) {
-      await prisma.season.update({
-        where: { id: season.id },
-        data: { discordCategoryId: cat.id },
-      });
-    }
-  }
-
-  let queued = 0;
-  for (const div of season.divisions) {
-    if (div.discordRoleId && div.discordChannelId) continue;
-    if (div._count.members === 0) continue;
-    await enqueueBootstrapDivision({ divisionId: div.id, guildId });
-    queued++;
-  }
-  return queued;
-}
+import { runSeasonDiscordBootstrap } from "@/lib/season-discord-bootstrap";
 
 async function getSeasonLabelOrEmpty(id: string): Promise<string> {
   const s = await prisma.season.findUnique({

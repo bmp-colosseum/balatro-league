@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
-import { actorFromAdminUser, recordAudit, type AuditActor } from "@/lib/audit";
-import { runSeasonDiscordBootstrap } from "./bootstrap-actions";
+import { actorFromAdminUser, recordAudit } from "@/lib/audit";
+import { performSeasonActivation } from "@/lib/season-activation";
 import { formatSeasonLabel, formatDivisionName, nextSeasonNumber } from "@/lib/format-season";
 import {
   createChannelInvite,
@@ -13,8 +13,6 @@ import {
   fetchDiscordUser,
   fetchGuildMember,
   postChannelMessage,
-  type ComponentActionRow,
-  type MessageEmbed,
 } from "@/lib/discord";
 import { enqueueDm, enqueueLeagueInfoRefresh, enqueueMmrSnapshot } from "@/lib/queue";
 import { buildSignupPayload, buildClosedSignupPayload, getSeasonLengthDays } from "@/lib/signup-discord";
@@ -232,95 +230,6 @@ export async function activateSeason(formData: FormData) {
   if (!id) return;
   await performSeasonActivation(id, actorFromAdminUser(user), "manual");
   revalidatePath("/admin/seasons");
-}
-
-// Shared core of season activation, callable from:
-//   - activateSeason (admin clicked the button — manual source)
-//   - the match-sweep scheduledStartAt cron (scheduled source)
-// Flips isActive, deactivates any prior active season, clears
-// scheduledStartAt on the target (so the cron doesn't re-fire), posts
-// to the announcements channel if configured, audits the action.
-export async function performSeasonActivation(
-  seasonId: string,
-  actor: AuditActor,
-  source: "manual" | "scheduled",
-  opts: { skipDiscord?: boolean } = {},
-): Promise<void> {
-  const target = await prisma.season.findUnique({ where: { id: seasonId } });
-  if (!target) return;
-  if (target.isActive) return; // idempotent — scheduled cron may race the manual button
-  const prior = await prisma.season.findFirst({
-    where: { isActive: true, NOT: { id: seasonId } },
-  });
-  if (prior) {
-    await prisma.season.update({
-      where: { id: prior.id },
-      data: { isActive: false, endedAt: new Date() },
-    });
-  }
-  await prisma.season.update({
-    where: { id: seasonId },
-    data: { isActive: true, endedAt: null, scheduledStartAt: null },
-  });
-  recordAudit({
-    actor,
-    action: source === "scheduled" ? "season.activate-scheduled" : "season.activate",
-    targetType: "Season",
-    targetId: seasonId,
-    summary: `Activated season "${formatSeasonLabel(target)}"${prior ? ` (deactivated "${formatSeasonLabel(prior)}")` : ""}${source === "scheduled" ? " — auto-triggered by scheduledStartAt" : ""}`,
-    metadata: { previousActiveSeasonId: prior?.id ?? null, source },
-  });
-  // skipDiscord is for automation (seed/e2e) that flips a long chain of
-  // seasons live without wanting to create+announce+tear-down Discord
-  // channels on every one. Real activations always run the bootstrap.
-  if (opts.skipDiscord) return;
-
-  // Division channels can be turned off for a lightweight league: no
-  // per-division channels/roles, matches happen in #bot-commands, results
-  // announce to the central results channel, standings live on the web. When
-  // the flag is set we skip ONLY the channel/role bootstrap — the season-start
-  // announcement + #league-info refresh below still run. Admin can still create
-  // channels later via the season page's "Set up Discord channels & roles".
-  const divChannelsDisabled =
-    (await prisma.leagueConfig.findUnique({
-      where: { key: "division_channels_disabled" },
-      select: { value: true },
-    }))?.value === "true";
-  if (!divChannelsDisabled) {
-    // Auto-bootstrap Discord (per-division roles + channels). Idempotent —
-    // skips divisions that already have role + channel IDs. Best-effort:
-    // if the guild config is missing or the enqueue fails, the activation
-    // still succeeds and admin can re-run via the season detail page.
-    await runSeasonDiscordBootstrap(seasonId).catch((err) =>
-      console.warn("[season.activate] Discord bootstrap enqueue failed:", err),
-    );
-  }
-
-  // Best-effort announcement. Fire even when no channel is configured —
-  // the call short-circuits cleanly without failing activation.
-  await postSeasonStartAnnouncement(target.id, formatSeasonLabel(target)).catch((err) =>
-    console.warn("[season.activate] announcement post failed:", err),
-  );
-
-  // Refresh #league-info so the "Season N is live" block appears.
-  await enqueueLeagueInfoRefresh().catch((err) =>
-    console.warn("[season.activate] league-info refresh enqueue failed:", err),
-  );
-}
-
-// Post a "season is now live" message to the configured announcements
-// channel. No-op when the LeagueConfig key isn't set — the admin can
-// post manually in that case.
-async function postSeasonStartAnnouncement(seasonId: string, seasonLabel: string): Promise<void> {
-  void seasonId;
-  const row = await prisma.leagueConfig.findUnique({
-    where: { key: "announcements_channel_id" },
-    select: { value: true },
-  });
-  const channelId = row?.value ?? null;
-  if (!channelId) return;
-  const content = `🃏 **${seasonLabel}** is live! Use \`/start-match @opponent\` in your division channel to play. Good luck.`;
-  await postChannelMessage(channelId, { content });
 }
 
 // Schedule an automatic activation at the given timestamp. Admin can

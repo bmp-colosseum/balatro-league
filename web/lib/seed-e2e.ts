@@ -14,7 +14,7 @@ import { buildSeasonFromRound } from "@/lib/build-season";
 import { endSeasonCore } from "@/lib/end-season";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
 import { writeMatchGames, type GameStateLike } from "@/lib/match-write";
-import { performSeasonActivation } from "@/app/admin/seasons/actions";
+import { performSeasonActivation } from "@/lib/season-activation";
 import { enqueueAnnounceResult } from "@/lib/queue";
 import defaults from "@/lib/match-defaults.json";
 

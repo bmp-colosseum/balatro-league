@@ -21,7 +21,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AdminTokenError, requireAdminToken } from "@/lib/admin-token";
 import { buildSeasonFromRound } from "@/lib/build-season";
-import { performSeasonActivation } from "@/app/admin/seasons/actions";
+import { performSeasonActivation } from "@/lib/season-activation";
 
 interface RequestBody {
   roundId?: unknown;
