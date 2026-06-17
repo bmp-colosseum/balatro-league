@@ -18,7 +18,7 @@
 
 import { PgBoss, type Job } from "pg-boss";
 import { announceResult } from "./announce.js";
-import { detectCurrentBmpSeason, fetchPlayerStats } from "./balatromp.js";
+import { detectCurrentBmpSeason, fetchPlayerStats, NO_RANKED_RECORD } from "./balatromp.js";
 import { spawnDisputeThread } from "./dispute-thread.js";
 import { webUrl } from "./web-url.js";
 import { prisma } from "./db.js";
@@ -618,16 +618,26 @@ async function snapshotPlayerMmr({ discordId, seasonId }: MmrSnapshotJob): Promi
   // the profile's last-2-seasons trend). We deliberately do NOT backfill ALL of
   // history (season1…current-1) anymore: that turned a single signup-MMR
   // refresh into ~N fetches PER player, which buried the rate-limited
-  // snapshot.mmr queue and tripped the stall alert. Skip when we already have a
-  // good row for it (past seasons are frozen — one capture is forever), unless
-  // the force-recapture flag is set (to overwrite briefly-bad API data).
+  // snapshot.mmr queue and tripped the stall alert.
+  //
+  // A past season is FROZEN, so we only ever need ONE definitive answer per
+  // player: either we captured their ranked row, OR balatromp confirmed they
+  // have no record for it (NO_RANKED_RECORD) — that "no record" is permanent
+  // too, so a player who didn't play last season must NOT be re-fetched every
+  // job forever. We DO retry rows that exist only because the fetch failed
+  // transiently (HTTP/timeout), and the force-recapture flag overrides all of
+  // this to overwrite briefly-bad API data.
   const forceRecapture = (await getConfig(LeagueConfigKey.BmpCapturePreviousSeason)) === "true";
   if (!forceRecapture) {
-    const have = await prisma.playerMmrSnapshot.findFirst({
-      where: { discordId, bmpSeason: prev, rankedMmr: { not: null } },
+    const haveDefinitive = await prisma.playerMmrSnapshot.findFirst({
+      where: {
+        discordId,
+        bmpSeason: prev,
+        OR: [{ fetchError: null }, { fetchError: NO_RANKED_RECORD }],
+      },
       select: { id: true },
     });
-    if (have) return;
+    if (haveDefinitive) return;
   }
   await fetchAndStore(discordId, player?.id ?? null, seasonId, prev);
 }

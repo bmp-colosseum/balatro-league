@@ -35,6 +35,12 @@ export interface FetchResult {
   error: string | null;
 }
 
+// Definitive "this player has no Ranked record for this query" — distinct from
+// a transient HTTP/timeout failure. For a FROZEN past season this answer never
+// changes, so callers can record it once and stop re-fetching. (HTTP/timeout
+// errors, by contrast, are worth retrying.)
+export const NO_RANKED_RECORD = "No Ranked record for this player";
+
 // season: BMP-season tag like "season6" to query historical data. Null/
 // omitted = current state for the active season. Confirmed the tRPC
 // endpoint accepts a `season` field in the input object.
@@ -83,7 +89,7 @@ export function parseRankedResponse(json: string): FetchResult {
   if (record == null) {
     // No ranked record for this discord id — player exists in some other
     // channel, or doesn't exist at all. Same outcome: no MMR to capture.
-    return { stats: null, rawJson: json, error: "No Ranked record for this player" };
+    return { stats: null, rawJson: json, error: NO_RANKED_RECORD };
   }
   if (typeof record.mmr !== "number" || typeof record.totalgames !== "number") {
     return { stats: null, rawJson: json, error: "Response missing expected fields" };
