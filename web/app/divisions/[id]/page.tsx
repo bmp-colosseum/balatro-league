@@ -139,23 +139,19 @@ export default async function PublicDivisionPage({
             <span className="muted" style={{ fontSize: 12 }}>
               — who plays whom. Standings + promotion run off the full division above.
             </span>
-            <div style={{ display: "grid", gap: 12, marginTop: 8 }}>
+            <div style={{ display: "grid", gap: 14, marginTop: 8 }}>
               {subGroups.map(([g, rows]) => (
                 <div key={g}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>
                     Group {groupLetter(g)}
                     {viewerGroup === g ? <span className="muted" style={{ fontWeight: 400 }}> · yours</span> : null}
                   </div>
-                  <ul style={{ margin: "4px 0 0", paddingLeft: 18, fontSize: 13 }}>
-                    {rows.map((r) => (
-                      <li key={r.player.id}>
-                        <Link href={`/profile/${r.player.id}`} style={{ color: "var(--text)" }}>
-                          {r.player.displayName}
-                        </Link>
-                        <span className="muted"> · {r.points} pts</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <DivisionStandingsTable
+                    rows={rows}
+                    extras={standingsExtras}
+                    showBmpMmr={showBmpMmr}
+                    bmpCurrentSeason={bmpCurrentSeason}
+                  />
                 </div>
               ))}
             </div>
