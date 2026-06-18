@@ -8,6 +8,7 @@ import { auth } from "@/auth";
 import { hasTier } from "@/lib/admin";
 import { DivisionStandingsTable, type StandingsRowExtras } from "@/components/DivisionStandingsTable";
 import { loadMmrForPlayerIds } from "@/lib/loaders/standings";
+import { groupLetter } from "@/lib/sub-grouping";
 import { getShowBmpMmr } from "@/lib/preferences";
 import { loadDivisionPageData, type DivisionRecentPairing, type DivisionUnplayed } from "@/lib/loaders/division";
 import { loadAdminDivisionDetail } from "@/lib/loaders/admin";
@@ -27,7 +28,6 @@ import {
   deleteShootout,
   dropDivisionMember,
   reactivateDivisionMember,
-  recordSet,
   recordShootout,
   removeDivisionMember,
   reportFromDivisionAction,
@@ -82,18 +82,24 @@ export default async function PublicDivisionPage({
     standings.map((r) => [r.player.id, { mmr: mmrByPlayerId.get(r.player.id) }]),
   );
 
-  // Sub-group context: if this division is sub-grouped and the viewer belongs
-  // to one, we show their group's mini-table above the full division table.
-  // Promotion still runs off the full division — the mini-table is just "how
-  // your own matchups are shaking out."
+  // Sub-group context: standings + promotion run off the WHOLE division; the
+  // sub-groups (who plays whom) are shown as their own section below the table.
   const groupMembers = await prisma.divisionMember.findMany({
     where: { divisionId: id, status: "ACTIVE", assignmentGroup: { not: null } },
     select: { playerId: true, assignmentGroup: true },
   });
   const groupByPlayer = new Map(groupMembers.map((m) => [m.playerId, m.assignmentGroup!]));
   const viewerGroup = viewerPlayerId != null ? groupByPlayer.get(viewerPlayerId) ?? null : null;
-  const myGroupRows =
-    viewerGroup != null ? standings.filter((r) => groupByPlayer.get(r.player.id) === viewerGroup) : [];
+  // Group the division's standings rows by sub-group, sorted A, B, C…
+  const subGroups = (() => {
+    const byGroup = new Map<number, typeof standings>();
+    for (const r of standings) {
+      const g = groupByPlayer.get(r.player.id);
+      if (g == null) continue;
+      (byGroup.get(g) ?? byGroup.set(g, []).get(g)!).push(r);
+    }
+    return [...byGroup.entries()].sort((a, b) => a[0] - b[0]);
+  })();
 
   return (
     <>
@@ -117,21 +123,8 @@ export default async function PublicDivisionPage({
           </div>
         )}
 
-        {myGroupRows.length > 0 && (
-          <div className="card">
-            <strong>Your group</strong>{" "}
-            <span className="muted" style={{ fontSize: 12 }}>— your matchups this season. Promotion runs off the full division below.</span>
-            <DivisionStandingsTable
-              rows={myGroupRows}
-              extras={standingsExtras}
-              showBmpMmr={showBmpMmr}
-              bmpCurrentSeason={bmpCurrentSeason}
-            />
-          </div>
-        )}
-
         <div className="card">
-          <strong>{myGroupRows.length > 0 ? "Full division" : "Standings"}</strong>
+          <strong>Standings</strong>
           <DivisionStandingsTable
             rows={standings}
             extras={standingsExtras}
@@ -139,6 +132,35 @@ export default async function PublicDivisionPage({
             bmpCurrentSeason={bmpCurrentSeason}
           />
         </div>
+
+        {subGroups.length > 0 && (
+          <div className="card">
+            <strong>Sub-groups</strong>{" "}
+            <span className="muted" style={{ fontSize: 12 }}>
+              — who plays whom. Standings + promotion run off the full division above.
+            </span>
+            <div style={{ display: "grid", gap: 12, marginTop: 8 }}>
+              {subGroups.map(([g, rows]) => (
+                <div key={g}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>
+                    Group {groupLetter(g)}
+                    {viewerGroup === g ? <span className="muted" style={{ fontWeight: 400 }}> · yours</span> : null}
+                  </div>
+                  <ul style={{ margin: "4px 0 0", paddingLeft: 18, fontSize: 13 }}>
+                    {rows.map((r) => (
+                      <li key={r.player.id}>
+                        <Link href={`/profile/${r.player.id}`} style={{ color: "var(--text)" }}>
+                          {r.player.displayName}
+                        </Link>
+                        <span className="muted"> · {r.points} pts</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <MatchesSections
           divisionId={id}
@@ -705,47 +727,6 @@ function AdminSection({
         </form>
       </div>
 
-      {/* Unplayed admin recorder — distinct from the public per-row report
-          form: admin can set any pair to any result without being one of
-          the players. */}
-      <div className="card">
-        <strong>Matches — unplayed ({unplayed.length})</strong>
-        <table>
-          <thead>
-            <tr><th>Matchup</th><th>Record</th></tr>
-          </thead>
-          <tbody>
-            {unplayed.length === 0 ? (
-              <tr><td colSpan={2} className="muted">All round-robin matches recorded.</td></tr>
-            ) : unplayed.map(({ a, b }) => (
-              <tr key={`${a.id}-${b.id}`}>
-                <td>
-                  <Link href={`/profile/${a.id}`} style={{ color: "var(--text)" }}>{a.displayName}</Link>
-                  {" "}<span className="muted">vs</span>{" "}
-                  <Link href={`/profile/${b.id}`} style={{ color: "var(--text)" }}>{b.displayName}</Link>
-                </td>
-                <td>
-                  <form action={recordSet} style={{ display: "flex", gap: 4 }}>
-                    <input type="hidden" name="divisionId" value={division.id} />
-                    <input type="hidden" name="playerAId" value={a.id} />
-                    <input type="hidden" name="playerBId" value={b.id} />
-                    <FormSelect
-                      name="result"
-                      placeholder="— pick result —"
-                      options={[
-                        { value: "2-0", label: `${a.displayName} 2-0` },
-                        { value: "1-1", label: "1-1 draw" },
-                        { value: "0-2", label: `${b.displayName} 2-0` },
-                      ]}
-                    />
-                    <Button type="submit">Record</Button>
-                  </form>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </>
   );
 }
