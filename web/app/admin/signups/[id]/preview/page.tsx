@@ -6,6 +6,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { PlacementSandbox, type SandboxPlayer } from "@/components/PlacementSandbox";
 import { MmrSeedingTable } from "@/components/MmrSeedingTable";
+import { owenLadder } from "@/lib/season-plan";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export default async function PlacementPreviewPage({
   if (result === "NOT_FOUND") notFound();
   if (result === "BUILT_REDIRECT") redirect(`/admin/seasons`);
 
-  const { round, sortedSignups, playerByDiscordId, snapshotByDiscordId, initialTiers } = result;
+  const { round, sortedSignups, playerByDiscordId, snapshotByDiscordId } = result;
 
   const players: SandboxPlayer[] = sortedSignups.map((s) => {
     const p = playerByDiscordId.get(s.discordId);
@@ -52,10 +53,11 @@ export default async function PlacementPreviewPage({
           </Link>
         </div>
         <p className="muted">
-          A sandbox over the <strong>current</strong> signups — change the tier shape and division size
-          and watch where everyone would land. Nothing is saved; signups can still be open. Ratings
-          come from each player&apos;s current league seed (returners) / BMP MMR fill (new), same as
-          setting up the season for real. Use it to tune the structure, or to show people roughly how their season will look.
+          A sandbox over the <strong>current</strong> signups, starting on Owen&apos;s ladder
+          (Legendary · Rare/Uncommon/Common, sized to the signup count). Tweak the structure and watch
+          where everyone lands; flip on <strong>Show schedules</strong> to see each player&apos;s 4
+          opponents + the strength-of-schedule spread. Nothing is saved — use it to sanity-check the
+          format and show people how their season would look.
         </p>
 
         {players.length === 0 ? (
@@ -63,7 +65,7 @@ export default async function PlacementPreviewPage({
         ) : (
           <>
             <MmrSeedingTable players={players} />
-            <PlacementSandbox players={players} initialTiers={initialTiers} initialTargetGroupSize={5} />
+            <PlacementSandbox players={players} initialTiers={owenLadder(players.length)} initialTargetGroupSize={5} />
           </>
         )}
       </main>

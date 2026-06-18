@@ -8,6 +8,19 @@ export interface TierConfig {
   divisionCount: number;
 }
 
+// Owen's fixed ladder: Legendary + Rare/Uncommon/Common, where each rarity has
+// 5 divisions normally, 4 below 96 signups, 3 below 78. Total divisions drive
+// the per-division size (~ceil(signups / #divisions)) via planByRating.
+export function owenLadder(signupCount: number): TierConfig[] {
+  const per = signupCount >= 96 ? 5 : signupCount >= 78 ? 4 : 3;
+  return [
+    { name: "Legendary", divisionCount: 1 },
+    { name: "Rare", divisionCount: per },
+    { name: "Uncommon", divisionCount: per },
+    { name: "Common", divisionCount: per },
+  ];
+}
+
 export function parseTierConfig(json: string): TierConfig[] {
   try {
     const arr = JSON.parse(json);
