@@ -5,6 +5,7 @@ import { loadBuildSeasonPage } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { PlacementSandbox, type SandboxPlayer } from "@/components/PlacementSandbox";
+import { MmrSeedingTable } from "@/components/MmrSeedingTable";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,10 @@ export default async function PlacementPreviewPage({
         {players.length === 0 ? (
           <div className="card">No signups yet — once people join, their projected placement shows here.</div>
         ) : (
-          <PlacementSandbox players={players} initialTiers={initialTiers} initialSubGroupSize={5} />
+          <>
+            <MmrSeedingTable players={players} />
+            <PlacementSandbox players={players} initialTiers={initialTiers} initialSubGroupSize={5} />
+          </>
         )}
       </main>
     </>
