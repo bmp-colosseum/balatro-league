@@ -74,16 +74,6 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
   const returners = round.signups.filter((s) => isReturner(s.discordId));
   const rookies = round.signups.filter((s) => !isReturner(s.discordId));
 
-  // Returner seed MMR on Owen's 2200 scale: rank them by current league rating,
-  // top = 2200, −10 per seed.
-  const orderedReturners = [...returners].sort((a, b) => {
-    const ra = playerByDiscord.get(a.discordId)?.rating ?? Number.POSITIVE_INFINITY;
-    const rb = playerByDiscord.get(b.discordId)?.rating ?? Number.POSITIVE_INFINITY;
-    return ra - rb;
-  });
-  const returnerMmr = new Map<string, number>();
-  orderedReturners.forEach((s, i) => returnerMmr.set(s.discordId, Math.max(0, 2200 - i * 10)));
-
   const divList: ContinuityDivision[] = activeSeason.divisions.map((d) => ({
     tierName: d.tier.name,
     name: d.name,
@@ -91,15 +81,26 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
   }));
   const divIndexById = new Map(activeSeason.divisions.map((d, i) => [d.id, i]));
 
+  // Place returners into their current division.
   for (const s of returners) {
     const p = playerByDiscord.get(s.discordId)!;
     const di = divIndexById.get(divByPlayer.get(p.id)!)!;
-    divList[di]!.members.push({
-      discordId: s.discordId,
-      displayName: s.displayName,
-      mmr: returnerMmr.get(s.discordId) ?? 0,
-      isRookie: false,
-    });
+    divList[di]!.members.push({ discordId: s.discordId, displayName: s.displayName, mmr: 0, isRookie: false });
+  }
+
+  // Seed MMR from LADDER POSITION, not Player.rating (which is null/stale for
+  // some). divisions are already ordered Legendary → Common, so walking them
+  // top-down and handing out 2200, 2190, … guarantees a Legendary player can't
+  // end up with a worse MMR than a Common player. Within a division, order by
+  // league rating (best first) as a secondary signal.
+  const ratingOf = (discordId: string) => playerByDiscord.get(discordId)?.rating ?? Number.POSITIVE_INFINITY;
+  let pos = 0;
+  for (const d of divList) {
+    d.members.sort((a, b) => ratingOf(a.discordId) - ratingOf(b.discordId));
+    for (const m of d.members) {
+      m.mmr = Math.max(0, 2200 - pos * 10);
+      pos++;
+    }
   }
 
   // Rookies: MMR ≈ 1.5× peak BMP. Place in the division whose average (returner)

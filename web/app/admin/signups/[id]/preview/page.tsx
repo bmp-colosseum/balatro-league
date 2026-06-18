@@ -102,15 +102,12 @@ export default async function PlacementPreviewPage({
           ) : continuity === "NO_ROUND" || continuity == null ? (
             <div className="card">Couldn&apos;t load the round.</div>
           ) : (
-            <>
-              <MmrSeedingTable players={players} />
-              <ContinuityPreview
-                divisions={continuity.divisions}
-                returnerCount={continuity.returnerCount}
-                rookieCount={continuity.rookieCount}
-                basedOnSeason={continuity.basedOnSeason}
-              />
-            </>
+            <ContinuityPreview
+              divisions={continuity.divisions}
+              returnerCount={continuity.returnerCount}
+              rookieCount={continuity.rookieCount}
+              basedOnSeason={continuity.basedOnSeason}
+            />
           )
         ) : (
           <>
