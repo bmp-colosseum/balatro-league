@@ -14,6 +14,9 @@ export interface SubGroupMember {
   memberId: string;
   playerName: string;
   group: number;
+  // Current seed within the division (1 = top seed). Drives the snake balance;
+  // shown so officials can eyeball where people land + whether groups are even.
+  seed: number;
 }
 
 export function DraggableSubGroups({
@@ -102,8 +105,9 @@ export function DraggableSubGroups({
       style={{ display: "flex", gap: 10, flexWrap: "wrap" }}
     >
       {groups.map((g) => {
-        const ms = byGroup.get(g) ?? [];
+        const ms = (byGroup.get(g) ?? []).slice().sort((a, b) => a.seed - b.seed);
         const isTarget = hoverGroup === g && dragId !== null;
+        const avgSeed = ms.length ? ms.reduce((s, m) => s + m.seed, 0) / ms.length : 0;
         return (
           <div
             key={g}
@@ -112,13 +116,16 @@ export function DraggableSubGroups({
               border: isTarget ? "2px solid #2ecc71" : "1px solid var(--border)",
               borderRadius: 6,
               padding: 8,
-              minWidth: 150,
+              minWidth: 160,
               background: isTarget ? "rgba(46,204,113,0.05)" : undefined,
               transition: "border-color 100ms, background 100ms",
             }}
           >
             <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>
-              Group {groupLetter(g)} <span className="muted" style={{ fontWeight: 400 }}>· {ms.length}p · {Math.max(0, ms.length - 1)} games</span>
+              Group {groupLetter(g)}{" "}
+              <span className="muted" style={{ fontWeight: 400 }}>
+                · {ms.length}p · {Math.max(0, ms.length - 1)} games{ms.length ? ` · avg #${avgSeed.toFixed(1)}` : ""}
+              </span>
             </div>
             {ms.length === 0 ? (
               <div className="muted" style={{ fontSize: 12, padding: 4 }}>{isTarget ? "Drop here" : "—"}</div>
@@ -141,7 +148,8 @@ export function DraggableSubGroups({
                   }}
                 >
                   <span style={{ color: "#888" }} title="Drag to another group">⋮⋮</span>
-                  {m.playerName}
+                  <span style={{ flex: 1 }}>{m.playerName}</span>
+                  <span className="muted" style={{ fontSize: 11, fontVariantNumeric: "tabular-nums" }} title="Current seed">#{m.seed}</span>
                 </div>
               ))
             )}

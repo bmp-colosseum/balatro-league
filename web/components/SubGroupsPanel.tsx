@@ -73,14 +73,24 @@ export async function SubGroupsPanel({ seasonId }: { seasonId: string }) {
       ) : (
         <div style={{ display: "grid", gap: 14, marginTop: 10 }}>
           {divisions.map((d) => {
+            // Seed = position in draft order (members already ordered by it above).
+            const seedOf = new Map(d.members.map((m, i) => [m.id, i + 1]));
             const grouped = d.members.filter((m) => m.assignmentGroup != null);
             const ungrouped = d.members.filter((m) => m.assignmentGroup == null);
             const groupCount = grouped.reduce((max, m) => Math.max(max, m.assignmentGroup ?? 0), 0);
+            // Warn (don't block) when the division won't split into clean groups.
+            const remainder = d.members.length % groupSize;
             return (
               <div key={d.id}>
                 <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>
                   {d.name} <span className="muted" style={{ fontWeight: 400 }}>— {d.members.length} players · {groupCount} group(s)</span>
                 </div>
+                {remainder !== 0 && (
+                  <div style={{ fontSize: 12, color: "#f1c40f", marginBottom: 4 }}>
+                    ⚠ {d.members.length} players isn&apos;t a clean multiple of {groupSize} — {remainder}{" "}
+                    player{remainder === 1 ? "" : "s"} land in an off-size group ({groupSize - 1} games won&apos;t hold for everyone). Nudge placement or let it ride.
+                  </div>
+                )}
                 <DraggableSubGroups
                   seasonId={seasonId}
                   groupCount={groupCount}
@@ -88,6 +98,7 @@ export async function SubGroupsPanel({ seasonId }: { seasonId: string }) {
                     memberId: m.id,
                     playerName: m.player.displayName,
                     group: m.assignmentGroup!,
+                    seed: seedOf.get(m.id) ?? 0,
                   }))}
                 />
                 {ungrouped.length > 0 && (
