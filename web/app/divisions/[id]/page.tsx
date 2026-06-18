@@ -123,22 +123,26 @@ export default async function PublicDivisionPage({
           </div>
         )}
 
-        <div className="card">
-          <strong>Standings</strong>
-          <DivisionStandingsTable
-            rows={standings}
-            extras={standingsExtras}
-            showBmpMmr={showBmpMmr}
-            bmpCurrentSeason={bmpCurrentSeason}
-          />
-        </div>
+        <details className="card">
+          <summary style={{ cursor: "pointer" }}><strong>Standings</strong></summary>
+          <div style={{ marginTop: 8 }}>
+            <DivisionStandingsTable
+              rows={standings}
+              extras={standingsExtras}
+              showBmpMmr={showBmpMmr}
+              bmpCurrentSeason={bmpCurrentSeason}
+            />
+          </div>
+        </details>
 
         {subGroups.length > 0 && (
-          <div className="card">
-            <strong>Sub-groups</strong>{" "}
-            <span className="muted" style={{ fontSize: 12 }}>
-              — who plays whom. Standings + promotion run off the full division above.
-            </span>
+          <details className="card">
+            <summary style={{ cursor: "pointer" }}>
+              <strong>Sub-groups</strong>{" "}
+              <span className="muted" style={{ fontSize: 12 }}>
+                — who plays whom (promotion runs off the full division)
+              </span>
+            </summary>
             <div style={{ display: "grid", gap: 14, marginTop: 8 }}>
               {subGroups.map(([g, rows]) => (
                 <div key={g}>
@@ -155,7 +159,7 @@ export default async function PublicDivisionPage({
                 </div>
               ))}
             </div>
-          </div>
+          </details>
         )}
 
         <MatchesSections
@@ -167,8 +171,10 @@ export default async function PublicDivisionPage({
         />
 
         {shootouts.length > 0 && (
-          <div className="card">
-            <strong>⚔ Showdowns ({shootouts.length})</strong>
+          <details className="card">
+            <summary style={{ cursor: "pointer" }}>
+              <strong>⚔ Showdowns ({shootouts.length})</strong>
+            </summary>
             <p className="muted" style={{ marginTop: 4, fontSize: 12 }}>
               1-game tiebreakers. Recorded when two players tied on points + drew their head-to-head.
             </p>
@@ -200,7 +206,7 @@ export default async function PublicDivisionPage({
                 })}
               </tbody>
             </table>
-          </div>
+          </details>
         )}
 
         {isAdmin && adminData && (
