@@ -22,7 +22,6 @@ import { formatSeasonLabel } from "@/lib/format-season";
 import { setFinalGlobalRank } from "./actions";
 import {
   activateSeason,
-  addLatePlayerToDivision,
   clearSeasonScheduledStart,
   deleteSeason,
   finalizeSignupsForSeason,
@@ -353,25 +352,20 @@ async function AdminSeasonPanel({
               before starting the league. Active/ended seasons keep the top-3
               standings preview below. */}
           {!season.isActive && !season.endedAt && (
-            <div className="card" style={{ background: justBuilt ? "rgba(46,204,113,0.10)" : "rgba(241,196,15,0.08)", borderColor: justBuilt ? "#2ecc71" : "#f1c40f", marginTop: 12 }}>
-              <strong style={{ color: justBuilt ? "#2ecc71" : "#f1c40f" }}>
-                {justBuilt ? "✓ Season built — review placements below" : "📝 Draft mode"}
-              </strong>
-              <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
-                Drag players between divisions until you're happy with the shape. Changes save
-                immediately. When ready, scroll to the bottom of this page and click{" "}
-                <strong>Start season →</strong> to activate.
+            <>
+              <div className="card" style={{ background: justBuilt ? "rgba(46,204,113,0.10)" : "rgba(241,196,15,0.08)", borderColor: justBuilt ? "#2ecc71" : "#f1c40f", marginTop: 12 }}>
+                <strong style={{ color: justBuilt ? "#2ecc71" : "#f1c40f" }}>
+                  {justBuilt ? "✓ Season built — review below" : "📝 Draft mode"}
+                </strong>{" "}
+                <span className="muted" style={{ fontSize: 12 }}>
+                  Fine-tune the two steps below — changes save instantly — then <strong>Start season →</strong> at the bottom.
+                </span>
+              </div>
+              <h4 style={{ margin: "16px 0 2px" }}>Step 1 · Place players into divisions</h4>
+              <p className="muted" style={{ fontSize: 12, margin: 0 }}>
+                Drag a player between divisions to reseed them, or use a card&apos;s <strong>+ Add player</strong>.
               </p>
-              <details style={{ marginTop: 6 }}>
-                <summary style={{ cursor: "pointer", fontSize: 11, color: "#76c7ff" }}>What can I adjust here?</summary>
-                <ul style={{ marginTop: 4, paddingLeft: 20, fontSize: 12, lineHeight: 1.6 }}>
-                  <li><strong>Move players</strong> between divisions with drag-and-drop or the "Move to…" dropdown.</li>
-                  <li><strong>Add late signups</strong> via <Link href="/admin/players" style={{ color: "#76c7ff" }}>/admin/players</Link> — Add player + assign division.</li>
-                  <li><strong>Rename / delete</strong> the season from the bottom of this page if you need to restart.</li>
-                  <li>Once activated, players can run <code>/start-match</code> and standings start updating.</li>
-                </ul>
-              </details>
-            </div>
+            </>
           )}
 
           {/* In draft mode, use the drag-and-drop editor. It owns
@@ -428,7 +422,12 @@ async function AdminSeasonPanel({
 
           {/* After placement: generate + review the balanced sub-groups that
               scope who-plays-whom (admin-only; promotion stays division-wide). */}
-          {!season.isActive && !season.endedAt && <SubGroupsPanel seasonId={season.id} />}
+          {!season.isActive && !season.endedAt && (
+            <>
+              <h4 style={{ margin: "22px 0 2px" }}>Step 2 · Split each division into groups</h4>
+              <SubGroupsPanel seasonId={season.id} />
+            </>
+          )}
 
           {/* Tier/division summary block used to render here for
               active/ended seasons — top-3 + "+ N more" duplicating

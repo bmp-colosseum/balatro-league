@@ -272,6 +272,14 @@ export function DraggableDivisionsEditor({
       onPointerLeave={finishDrag}
       onPointerCancel={cancelDrag}
     >
+      {/* The per-row move dropdown is a keyboard/SR fallback for the drag.
+          Hide it until the row is hovered or the control is focused so it
+          stops cluttering every row; always show it on touch (no hover). */}
+      <style>{`
+        .dd-move { opacity: 0; transition: opacity 120ms; }
+        .dd-row:hover .dd-move, .dd-move:focus { opacity: 1; }
+        @media (hover: none) { .dd-move { opacity: 1; } }
+      `}</style>
       {tiers.map((tier) => {
         const tierDivs = divisions.filter((d) => d.tierId === tier.id);
         const tierMemberCount = tierDivs.reduce((sum, d) => sum + (byDivision.get(d.id)?.length ?? 0), 0);
@@ -366,6 +374,7 @@ export function DraggableDivisionsEditor({
                           return (
                             <div
                               key={m.id}
+                              className="dd-row"
                               ref={(el) => { rowRefs.current.set(`${d.id}:${m.id}`, el); }}
                               onPointerDown={(e) => onRowPointerDown(e, m.playerId, d.id)}
                               style={{
@@ -392,6 +401,7 @@ export function DraggableDivisionsEditor({
                               </Link>
                               <MemberChips member={m} />
                               <select
+                                className="dd-move"
                                 title="Or pick a target division from the dropdown (accessibility fallback)"
                                 onPointerDown={(e) => e.stopPropagation()}
                                 onChange={async (e) => {
@@ -432,35 +442,9 @@ export function DraggableDivisionsEditor({
                         )}
                       </div>
                     )}
-                    {/* Late-add form lives outside the drag flow */}
-                    <form
-                      action={addLatePlayerToDivision}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      style={{ display: "flex", gap: 4, marginTop: 6, fontSize: 11 }}
-                    >
-                      <input type="hidden" name="divisionId" value={d.id} />
-                      <input
-                        type="text"
-                        name="discordId"
-                        placeholder="+ Discord ID (17-20 digits)"
-                        required
-                        pattern="\d{17,20}"
-                        style={{ flex: 1, fontSize: 11, padding: "1px 4px" }}
-                      />
-                      <button type="submit" className="secondary" style={{ fontSize: 11, padding: "1px 6px" }}>Add</button>
-                    </form>
-                    {/* Or pick an existing player by name (search). */}
-                    {allPlayers.length > 0 && (
-                      <form
-                        action={addExistingPlayerToDivision}
-                        onPointerDown={(e) => e.stopPropagation()}
-                        style={{ display: "flex", gap: 4, marginTop: 4, fontSize: 11 }}
-                      >
-                        <input type="hidden" name="divisionId" value={d.id} />
-                        <PlayerSearch players={allPlayers} name="playerId" placeholder="+ search existing player…" />
-                        <button type="submit" className="secondary" style={{ fontSize: 11, padding: "1px 6px" }}>Add</button>
-                      </form>
-                    )}
+                    {/* Both add-player paths folded behind one toggle so the
+                        card stays quiet until you actually want to add someone. */}
+                    <AddPlayerControls divisionId={d.id} allPlayers={allPlayers} />
                   </div>
                 );
               })}
@@ -468,6 +452,71 @@ export function DraggableDivisionsEditor({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// Per-division "add player" controls, collapsed behind a single "+ Add
+// player" link so each card is clean by default. Expands to both paths:
+// add by Discord ID (late signup) or search an existing player.
+function AddPlayerControls({
+  divisionId,
+  allPlayers,
+}: {
+  divisionId: string;
+  allPlayers: PlayerOption[];
+}) {
+  const [open, setOpen] = useState(false);
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={() => setOpen(true)}
+        style={{ background: "none", border: "none", color: "#76c7ff", cursor: "pointer", fontSize: 11, padding: 0, marginTop: 6 }}
+      >
+        + Add player
+      </button>
+    );
+  }
+  return (
+    <div style={{ marginTop: 6, display: "grid", gap: 4 }}>
+      <form
+        action={addLatePlayerToDivision}
+        onPointerDown={(e) => e.stopPropagation()}
+        style={{ display: "flex", gap: 4, fontSize: 11 }}
+      >
+        <input type="hidden" name="divisionId" value={divisionId} />
+        <input
+          type="text"
+          name="discordId"
+          placeholder="+ Discord ID (17-20 digits)"
+          required
+          pattern="\d{17,20}"
+          style={{ flex: 1, fontSize: 11, padding: "1px 4px" }}
+        />
+        <button type="submit" className="secondary" style={{ fontSize: 11, padding: "1px 6px" }}>Add</button>
+      </form>
+      {allPlayers.length > 0 && (
+        <form
+          action={addExistingPlayerToDivision}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{ display: "flex", gap: 4, fontSize: 11 }}
+        >
+          <input type="hidden" name="divisionId" value={divisionId} />
+          <PlayerSearch players={allPlayers} name="playerId" placeholder="+ search existing player…" />
+          <button type="submit" className="secondary" style={{ fontSize: 11, padding: "1px 6px" }}>Add</button>
+        </form>
+      )}
+      <button
+        type="button"
+        className="muted"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={() => setOpen(false)}
+        style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 10, padding: 0, justifySelf: "start" }}
+      >
+        done
+      </button>
     </div>
   );
 }
