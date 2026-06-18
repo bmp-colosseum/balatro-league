@@ -27,7 +27,7 @@ export async function SubGroupsPanel({ seasonId }: { seasonId: string }) {
       members: {
         where: { status: "ACTIVE" },
         orderBy: [{ draftOrder: "asc" }, { seedRank: "asc" }],
-        include: { player: { select: { displayName: true } } },
+        include: { player: { select: { displayName: true, rating: true } } },
       },
     },
   });
@@ -73,8 +73,6 @@ export async function SubGroupsPanel({ seasonId }: { seasonId: string }) {
       ) : (
         <div style={{ display: "grid", gap: 14, marginTop: 10 }}>
           {divisions.map((d) => {
-            // Seed = position in draft order (members already ordered by it above).
-            const seedOf = new Map(d.members.map((m, i) => [m.id, i + 1]));
             const grouped = d.members.filter((m) => m.assignmentGroup != null);
             const ungrouped = d.members.filter((m) => m.assignmentGroup == null);
             const groupCount = grouped.reduce((max, m) => Math.max(max, m.assignmentGroup ?? 0), 0);
@@ -98,7 +96,7 @@ export async function SubGroupsPanel({ seasonId }: { seasonId: string }) {
                     memberId: m.id,
                     playerName: m.player.displayName,
                     group: m.assignmentGroup!,
-                    seed: seedOf.get(m.id) ?? 0,
+                    seed: m.player.rating,
                   }))}
                 />
                 {ungrouped.length > 0 && (

@@ -14,9 +14,10 @@ export interface SubGroupMember {
   memberId: string;
   playerName: string;
   group: number;
-  // Current seed within the division (1 = top seed). Drives the snake balance;
-  // shown so officials can eyeball where people land + whether groups are even.
-  seed: number;
+  // Real league seed (Player.rating, lower = stronger), same number the
+  // division builder shows as L#. Null = no rating yet. Shown so officials can
+  // see actual strength in each group; null sorts to the bottom.
+  seed: number | null;
 }
 
 export function DraggableSubGroups({
@@ -105,9 +106,8 @@ export function DraggableSubGroups({
       style={{ display: "flex", gap: 10, flexWrap: "nowrap", overflowX: "auto", paddingBottom: 4 }}
     >
       {groups.map((g) => {
-        const ms = (byGroup.get(g) ?? []).slice().sort((a, b) => a.seed - b.seed);
+        const ms = (byGroup.get(g) ?? []).slice().sort((a, b) => (a.seed ?? Infinity) - (b.seed ?? Infinity));
         const isTarget = hoverGroup === g && dragId !== null;
-        const avgSeed = ms.length ? ms.reduce((s, m) => s + m.seed, 0) / ms.length : 0;
         return (
           <div
             key={g}
@@ -125,7 +125,7 @@ export function DraggableSubGroups({
             <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>
               Group {groupLetter(g)}{" "}
               <span className="muted" style={{ fontWeight: 400 }}>
-                · {ms.length}p · {Math.max(0, ms.length - 1)} games{ms.length ? ` · avg #${avgSeed.toFixed(1)}` : ""}
+                · {ms.length}p · {Math.max(0, ms.length - 1)} games
               </span>
             </div>
             {ms.length === 0 ? (
@@ -150,7 +150,13 @@ export function DraggableSubGroups({
                 >
                   <span style={{ color: "#888" }} title="Drag to another group">⋮⋮</span>
                   <span style={{ flex: 1 }}>{m.playerName}</span>
-                  <span className="muted" style={{ fontSize: 11, fontVariantNumeric: "tabular-nums" }} title="Current seed">#{m.seed}</span>
+                  <span
+                    className="muted"
+                    style={{ fontSize: 11, fontVariantNumeric: "tabular-nums", color: m.seed == null ? "#666" : undefined }}
+                    title="Current league seed (rating)"
+                  >
+                    {m.seed == null ? "L —" : `L#${m.seed}`}
+                  </span>
                 </div>
               ))
             )}
