@@ -12,7 +12,7 @@
 // of bootstrap jobs queued, or null when the guild/season context is missing.
 
 import { prisma } from "@/lib/prisma";
-import { ensureGuildCategory } from "@/lib/discord";
+import { ensureGuildCategory, createGuildRole } from "@/lib/discord";
 import { enqueueBootstrapDivision } from "@/lib/queue";
 import { formatSeasonLabel } from "@/lib/format-season";
 
@@ -53,6 +53,17 @@ export async function runSeasonDiscordBootstrap(
         where: { id: season.id },
         data: { discordCategoryId: cat.id },
       });
+    }
+  }
+
+  // Create the per-season "League Player" role once (mentionable, so the start
+  // announcement can @ it). Created here at the season level — not in the
+  // per-division jobs, which run 2-at-a-time and would race to create it. The
+  // division jobs (enqueued below) assign it to their members.
+  if (!season.leaguePlayerRoleId) {
+    const role = await createGuildRole(guildId, `League Player — ${seasonLabel}`, { mentionable: true });
+    if (role) {
+      await prisma.season.update({ where: { id: season.id }, data: { leaguePlayerRoleId: role.id } });
     }
   }
 

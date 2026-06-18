@@ -87,13 +87,23 @@ export async function performSeasonActivation(
 // Post a "season is now live" message to the configured announcements channel.
 // No-op when the LeagueConfig key isn't set — admin can post manually.
 async function postSeasonStartAnnouncement(seasonId: string, seasonLabel: string): Promise<void> {
-  void seasonId;
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    select: { leaguePlayerRoleId: true },
+  });
   const row = await prisma.leagueConfig.findUnique({
     where: { key: "announcements_channel_id" },
     select: { value: true },
   });
   const channelId = row?.value ?? null;
   if (!channelId) return;
-  const content = `🃏 **${seasonLabel}** is live! Use \`/start-match @opponent\` in your division channel to play. Good luck.`;
-  await postChannelMessage(channelId, { content });
+  // The ONE intentional ping: the per-season League Player role (everyone in
+  // the season). Everything else the bot posts is ping-free.
+  const roleId = season?.leaguePlayerRoleId ?? null;
+  const ping = roleId ? `<@&${roleId}> ` : "";
+  const content = `${ping}🃏 **${seasonLabel}** is live! Use \`/start-match @opponent\` to play. Good luck.`;
+  await postChannelMessage(channelId, {
+    content,
+    allowedMentions: roleId ? { roles: [roleId] } : { parse: [] },
+  });
 }

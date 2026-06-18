@@ -977,10 +977,15 @@ async function bootstrapDivision({ divisionId, guildId, rebuildThreads }: Bootst
     await prisma.division.update({ where: { id: div.id }, data: { discordRoleId: roleId } });
   }
 
-  // 2) Assign role to all members. addGuildMemberRole is idempotent on
-  // Discord's side so re-runs are safe.
+  // 2) Assign roles to all members — their division role AND the per-season
+  // "League Player" role (set on the Season at season-level bootstrap). Both
+  // idempotent on Discord's side so re-runs are safe.
+  const leaguePlayerRoleId = div.season.leaguePlayerRoleId;
   for (const m of div.members) {
     await addGuildMemberRole(guildId, m.player.discordId, roleId);
+    if (leaguePlayerRoleId) {
+      await addGuildMemberRole(guildId, m.player.discordId, leaguePlayerRoleId);
+    }
   }
 
   // 3) Channel — falls back to top level if category is full (50-channel cap)
