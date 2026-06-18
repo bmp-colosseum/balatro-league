@@ -6,26 +6,35 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { PlacementSandbox, type SandboxPlayer } from "@/components/PlacementSandbox";
 import { MmrSeedingTable } from "@/components/MmrSeedingTable";
+import { ContinuityPreview } from "@/components/ContinuityPreview";
 import { owenLadder } from "@/lib/season-plan";
+import { loadContinuityPlacement } from "@/lib/loaders/continuity";
 
 export const dynamic = "force-dynamic";
 
 // Dry-run placement sandbox for an OPEN/CLOSED signup round. Runs the current
 // signups through the real build math live in the browser so you can twist the
-// structure and see where everyone lands — writing nothing.
+// structure and see where everyone lands — writing nothing. Two bases:
+// "fresh" (sort everyone into Owen's ladder by MMR) or "current" (returners hold
+// their current-season division, rookies slot in).
 export default async function PlacementPreviewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ basis?: string }>;
 }) {
   await requireAdmin();
   const { id } = await params;
+  const { basis } = await searchParams;
+  const mode = basis === "current" ? "current" : "fresh";
 
   const result = await loadBuildSeasonPage(id);
   if (result === "NOT_FOUND") notFound();
   if (result === "BUILT_REDIRECT") redirect(`/admin/seasons`);
 
   const { round, sortedSignups, playerByDiscordId, snapshotByDiscordId } = result;
+  const continuity = mode === "current" ? await loadContinuityPlacement(round.id) : null;
 
   const players: SandboxPlayer[] = sortedSignups.map((s) => {
     const p = playerByDiscordId.get(s.discordId);
@@ -52,16 +61,57 @@ export default async function PlacementPreviewPage({
             ← Back to round
           </Link>
         </div>
+        {/* Basis toggle */}
+        <div style={{ display: "flex", gap: 8, margin: "8px 0 4px" }}>
+          <Link
+            href={`/admin/signups/${round.id}/preview`}
+            className={mode === "fresh" ? "" : "muted"}
+            style={{ fontSize: 13, fontWeight: mode === "fresh" ? 600 : 400, textDecoration: mode === "fresh" ? "underline" : "none" }}
+          >
+            Fresh sort (Owen&apos;s ladder)
+          </Link>
+          <span className="muted">·</span>
+          <Link
+            href={`/admin/signups/${round.id}/preview?basis=current`}
+            className={mode === "current" ? "" : "muted"}
+            style={{ fontSize: 13, fontWeight: mode === "current" ? 600 : 400, textDecoration: mode === "current" ? "underline" : "none" }}
+          >
+            Based on current season
+          </Link>
+        </div>
         <p className="muted">
-          A sandbox over the <strong>current</strong> signups, starting on Owen&apos;s ladder
-          (Legendary · Rare/Uncommon/Common, sized to the signup count). Tweak the structure and watch
-          where everyone lands; flip on <strong>Show schedules</strong> to see each player&apos;s 4
-          opponents + the strength-of-schedule spread. Nothing is saved — use it to sanity-check the
-          format and show people how their season would look.
+          {mode === "fresh" ? (
+            <>
+              Everyone sorted fresh into Owen&apos;s ladder (Legendary · Rare/Uncommon/Common) by MMR —
+              how a <strong>first</strong> season builds. Tweak the structure; flip on{" "}
+              <strong>Show schedules</strong> for each player&apos;s 4 opponents + SoS spread. Nothing saved.
+            </>
+          ) : (
+            <>
+              How a <strong>returning</strong> season builds: players keep their current-season division,
+              new signups slot in by MMR. Flip on <strong>Show schedules</strong> for opponents + SoS. Nothing saved.
+            </>
+          )}
         </p>
 
         {players.length === 0 ? (
           <div className="card">No signups yet — once people join, their projected placement shows here.</div>
+        ) : mode === "current" ? (
+          continuity === "NO_SEASON" ? (
+            <div className="card">No active season to base this on — use the fresh sort, or activate a season first.</div>
+          ) : continuity === "NO_ROUND" || continuity == null ? (
+            <div className="card">Couldn&apos;t load the round.</div>
+          ) : (
+            <>
+              <MmrSeedingTable players={players} />
+              <ContinuityPreview
+                divisions={continuity.divisions}
+                returnerCount={continuity.returnerCount}
+                rookieCount={continuity.rookieCount}
+                basedOnSeason={continuity.basedOnSeason}
+              />
+            </>
+          )
         ) : (
           <>
             <MmrSeedingTable players={players} />
