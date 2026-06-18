@@ -25,6 +25,9 @@ const SYNC = [
   // Pure "Elowen" hidden-MMR engine (Owen's server formula) — shared by the bot
   // (per-match updates) and the web (seeding + preview).
   { from: ["src", "elowen.ts"], to: ["lib", "elowen.ts"] },
+  // Pure schedule generator (SoS-balanced 4-regular opponent graph) — shared by
+  // the bot and the web (preview + season setup).
+  { from: ["src", "schedule.ts"], to: ["lib", "schedule.ts"] },
 ];
 
 for (const { from, to } of SYNC) {
