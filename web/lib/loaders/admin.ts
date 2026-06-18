@@ -654,6 +654,7 @@ export interface BuildSeasonPlayerRow {
   displayName: string;
   rating: number | null;
   ratingNote: string | null;
+  hiddenMmr: number | null;
 }
 
 export interface BuildSeasonPageData {
@@ -710,7 +711,7 @@ export async function loadBuildSeasonPage(roundId: string): Promise<BuildSeasonR
   const discordIds = round.signups.map((s) => s.discordId);
   const existingPlayers = await prisma.player.findMany({
     where: { discordId: { in: discordIds } },
-    select: { id: true, discordId: true, displayName: true, rating: true, ratingNote: true },
+    select: { id: true, discordId: true, displayName: true, rating: true, ratingNote: true, hiddenMmr: true },
   });
   const playerByDiscordId = new Map(existingPlayers.map((p) => [p.discordId, p]));
 

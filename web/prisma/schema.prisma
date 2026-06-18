@@ -58,6 +58,13 @@ model Player {
   rating               Int?
   // Optional note explaining the rating (e.g. "Balatro MP MMR 540, Glass tier")
   ratingNote           String?
+  // Secret "Elowen" MMR on the league's 2200 scale — the hidden skill rating
+  // used for placement + schedule fairness. Set once at onboarding (seeded from
+  // BMP peak × 1.5, hand-tweakable), then updated per match by the Elowen
+  // formula. Null = not set yet. mmrVolatility is the per-player games-played
+  // counter that decays new players' swings (see src/elowen.ts).
+  hiddenMmr            Int?
+  mmrVolatility        Int      @default(0)
 
   memberships     DivisionMember[]
   // Unified Match model — the source of truth (Pairing/Shootout dropped in 4c).

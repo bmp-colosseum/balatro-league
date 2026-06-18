@@ -14,8 +14,9 @@ import { generateSchedule, summariseSchedule } from "@/lib/schedule";
 export interface SandboxPlayer {
   discordId: string;
   displayName: string;
-  rating: number | null; // league seed (1 = strongest); null = unrated
-  mmr: number | null;
+  rating: number | null; // legacy league rank (1 = strongest); null = unrated
+  mmr: number | null;     // BMP ranked MMR
+  hiddenMmr: number | null; // the secret league MMR (2200 scale); null = unset
 }
 
 export function PlacementSandbox({
@@ -34,24 +35,29 @@ export function PlacementSandbox({
   const [showSchedules, setShowSchedules] = useState(false);
 
   const lookup = useMemo(() => new Map(players.map((p) => [p.discordId, p])), [players]);
-  const ranked = useMemo(
-    () => players.map((p) => ({ id: p.discordId, discordId: p.discordId, displayName: p.displayName, rating: p.rating })),
-    [players],
-  );
 
-  // Seed MMR on Owen's 2200 scale (top seed 2200, −10 per global seed). Feeds
-  // the schedule generator so SoS balance is on real-ish numbers.
+  // Place by the stored secret MMR: rank players by hiddenMmr desc (highest =
+  // top division), unset → last. planByRating sorts by this rank ascending.
+  const ranked = useMemo(() => {
+    const ordered = [...players].sort((a, b) => (b.hiddenMmr ?? -Infinity) - (a.hiddenMmr ?? -Infinity));
+    const rankBy = new Map<string, number | null>();
+    ordered.forEach((p, i) => rankBy.set(p.discordId, p.hiddenMmr == null ? null : i + 1));
+    return players.map((p) => ({
+      id: p.discordId,
+      discordId: p.discordId,
+      displayName: p.displayName,
+      rating: rankBy.get(p.discordId) ?? null,
+    }));
+  }, [players]);
+
+  // The schedule generator uses the real secret MMR directly.
   const seedMmr = useMemo(() => {
-    const ordered = [...players].sort((a, b) => {
-      const ra = a.rating ?? Number.POSITIVE_INFINITY;
-      const rb = b.rating ?? Number.POSITIVE_INFINITY;
-      if (ra !== rb) return ra - rb;
-      return a.displayName.localeCompare(b.displayName);
-    });
     const m = new Map<string, number>();
-    ordered.forEach((p, i) => m.set(p.discordId, Math.max(0, 2200 - i * 10)));
+    for (const p of players) m.set(p.discordId, p.hiddenMmr ?? 0);
     return m;
   }, [players]);
+
+  const unsetMmr = players.filter((p) => p.hiddenMmr == null).length;
 
   const projection = useMemo(() => {
     const plan = planByRating(ranked, tiers, targetGroupSize);
@@ -148,6 +154,11 @@ export function PlacementSandbox({
 
         <div className="muted" style={{ fontSize: 12, marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
           {projection.placed} players · {projection.totalDivs} divisions
+          {unsetMmr > 0 && (
+            <span style={{ color: "#f1c40f" }}>
+              {" "}· ⚠ {unsetMmr} with no secret MMR — set them on <a href="/admin/mmr">/admin/mmr</a> for an accurate preview
+            </span>
+          )}
         </div>
         <p className="muted" style={{ fontSize: 11, margin: "6px 0 0" }}>
           Dry-run only — nothing here is saved. With schedules on, each player gets a balanced set of 4
@@ -237,10 +248,10 @@ export function PlacementSandbox({
                           </span>
                           <span
                             className="muted"
-                            style={{ fontSize: 11, fontVariantNumeric: "tabular-nums", color: p?.rating == null ? "#666" : undefined }}
-                            title="League seed (rating)"
+                            style={{ fontSize: 11, fontVariantNumeric: "tabular-nums", color: p?.hiddenMmr == null ? "#f1c40f" : undefined }}
+                            title="Secret MMR"
                           >
-                            {p?.rating == null ? "L —" : `L#${p.rating}`}
+                            {p?.hiddenMmr == null ? "no MMR" : p.hiddenMmr}
                           </span>
                         </div>
                       );

@@ -44,6 +44,7 @@ export default async function PlacementPreviewPage({
       displayName: s.displayName,
       rating: p?.rating ?? null,
       mmr: snap?.rankedMmr ?? null,
+      hiddenMmr: p?.hiddenMmr ?? null,
     };
   });
 

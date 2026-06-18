@@ -54,7 +54,7 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
   const discordIds = round.signups.map((s) => s.discordId);
   const players = await prisma.player.findMany({
     where: { discordId: { in: discordIds } },
-    select: { id: true, discordId: true, rating: true },
+    select: { id: true, discordId: true, rating: true, hiddenMmr: true },
   });
   const playerByDiscord = new Map(players.map((p) => [p.discordId, p]));
   const snaps = discordIds.length
@@ -88,17 +88,16 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
     divList[di]!.members.push({ discordId: s.discordId, displayName: s.displayName, mmr: 0, isRookie: false });
   }
 
-  // Seed MMR from LADDER POSITION, not Player.rating (which is null/stale for
-  // some). divisions are already ordered Legendary → Common, so walking them
-  // top-down and handing out 2200, 2190, … guarantees a Legendary player can't
-  // end up with a worse MMR than a Common player. Within a division, order by
-  // league rating (best first) as a secondary signal.
-  const ratingOf = (discordId: string) => playerByDiscord.get(discordId)?.rating ?? Number.POSITIVE_INFINITY;
+  // Use the stored secret MMR. For anyone not seeded yet, fall back to ladder
+  // position (Legendary → Common, 2200, 2190 …) so the view stays coherent
+  // until they're set on /admin/mmr. Within a division, order by MMR desc.
+  const mmrOf = (discordId: string) => playerByDiscord.get(discordId)?.hiddenMmr ?? null;
   let pos = 0;
   for (const d of divList) {
-    d.members.sort((a, b) => ratingOf(a.discordId) - ratingOf(b.discordId));
+    d.members.sort((a, b) => (mmrOf(b.discordId) ?? -Infinity) - (mmrOf(a.discordId) ?? -Infinity));
     for (const m of d.members) {
-      m.mmr = Math.max(0, 2200 - pos * 10);
+      const stored = mmrOf(m.discordId);
+      m.mmr = stored != null ? stored : Math.max(0, 2200 - pos * 10);
       pos++;
     }
   }
