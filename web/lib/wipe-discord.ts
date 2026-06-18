@@ -40,7 +40,9 @@ import { recordAudit, type AuditActor } from "@/lib/audit";
 // champion/tier roles). Division roles + bound roles are deleted by id; these
 // are the name-only stragglers. Patterns are specific enough to be safe.
 const ROLE_NAME_PATTERNS: RegExp[] = [
-  /^League (Player|Admin|Helper|DevOps)$/i,
+  // \b after the word so "League Player — Season 2" matches too (the per-season
+  // roster role), not just bare "League Player".
+  /^League (Player|Admin|Helper|DevOps)\b/i,
   // Division roles "Season N: <div>" and champion roles "🏆 Season N <div>
   // Champion". (Older "Season N · …" with a middot still matches the [: ·].)
   /^Season \d+[: ·]/i,
@@ -61,6 +63,7 @@ const CONFIG_CHANNEL_KEYS = [
   "backup_channel_id",
   "devops_channel_id",
   "challenges_channel_id",
+  "league_matches_channel_id",
 ];
 // LeagueConfig keys that hold a CATEGORY id.
 const CONFIG_CATEGORY_KEYS = ["league_category_id", "matches_category_id"];
@@ -122,12 +125,14 @@ export async function wipeDiscordLeagueState(
   }
 
   // Season categories are always bot-created — wipe them + their children.
+  // Also the per-season "League Player" role.
   const seasonCats = await prisma.season.findMany({
-    where: { discordCategoryId: { not: null } },
-    select: { discordCategoryId: true },
+    where: { OR: [{ discordCategoryId: { not: null } }, { leaguePlayerRoleId: { not: null } }] },
+    select: { discordCategoryId: true, leaguePlayerRoleId: true },
   });
   for (const s of seasonCats) {
     if (s.discordCategoryId) knownCategoryIds.add(s.discordCategoryId);
+    if (s.leaguePlayerRoleId) knownRoleIds.add(s.leaguePlayerRoleId);
   }
 
   const boundRoles = await prisma.roleBinding.findMany({ select: { discordRoleId: true } });
