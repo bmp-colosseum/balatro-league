@@ -102,7 +102,7 @@ export function DraggableSubGroups({
       onPointerUp={finishDrag}
       onPointerLeave={finishDrag}
       onPointerCancel={cancel}
-      style={{ display: "flex", gap: 10, flexWrap: "wrap" }}
+      style={{ display: "flex", gap: 10, flexWrap: "nowrap", overflowX: "auto", paddingBottom: 4 }}
     >
       {groups.map((g) => {
         const ms = (byGroup.get(g) ?? []).slice().sort((a, b) => a.seed - b.seed);
@@ -116,7 +116,8 @@ export function DraggableSubGroups({
               border: isTarget ? "2px solid #2ecc71" : "1px solid var(--border)",
               borderRadius: 6,
               padding: 8,
-              minWidth: 160,
+              width: 200,
+              flex: "0 0 auto",
               background: isTarget ? "rgba(46,204,113,0.05)" : undefined,
               transition: "border-color 100ms, background 100ms",
             }}
@@ -130,7 +131,7 @@ export function DraggableSubGroups({
             {ms.length === 0 ? (
               <div className="muted" style={{ fontSize: 12, padding: 4 }}>{isTarget ? "Drop here" : "—"}</div>
             ) : (
-              ms.map((m) => (
+              ms.map((m, i) => (
                 <div
                   key={m.memberId}
                   onPointerDown={(e) => onPointerDown(e, m.memberId)}
@@ -138,13 +139,13 @@ export function DraggableSubGroups({
                     display: "flex",
                     alignItems: "center",
                     gap: 5,
-                    padding: "2px 4px",
+                    padding: "3px 4px",
                     cursor: dragId === m.memberId ? "grabbing" : "grab",
                     opacity: dragId === m.memberId ? 0.4 : 1,
                     touchAction: "none",
                     userSelect: "none",
                     fontSize: 13,
-                    borderRadius: 3,
+                    borderTop: i === 0 ? undefined : "1px solid rgba(255,255,255,0.06)",
                   }}
                 >
                   <span style={{ color: "#888" }} title="Drag to another group">⋮⋮</span>
