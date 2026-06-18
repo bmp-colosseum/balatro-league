@@ -39,12 +39,16 @@ export default async function PlacementPreviewPage({
   const players: SandboxPlayer[] = sortedSignups.map((s) => {
     const p = playerByDiscordId.get(s.discordId);
     const snap = snapshotByDiscordId.get(s.discordId);
+    // Automatic build: use the stored secret MMR, else auto-derive from BMP
+    // peak ×1.5 so the preview is always complete without a manual seeding step.
+    const peak = snap?.peakMmr ?? snap?.rankedMmr ?? null;
+    const effectiveMmr = p?.hiddenMmr ?? (peak != null ? Math.round(peak * 1.5) : null);
     return {
       discordId: s.discordId,
       displayName: s.displayName,
       rating: p?.rating ?? null,
       mmr: snap?.rankedMmr ?? null,
-      hiddenMmr: p?.hiddenMmr ?? null,
+      hiddenMmr: effectiveMmr,
     };
   });
 
