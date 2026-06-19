@@ -392,6 +392,7 @@ async function AdminSeasonPanel({
                   divisionId: d.id,
                   draftOrder: m.draftOrder,
                   leagueRating: ctx?.leagueRating ?? m.player.rating,
+                  hiddenMmr: m.player.hiddenMmr ?? null,
                   bmpMmr: ctx?.bmpMmr ?? null,
                   bmpTier: ctx?.bmpTier ?? null,
                   priorFinalGlobalRank: ctx?.priorFinalGlobalRank ?? null,

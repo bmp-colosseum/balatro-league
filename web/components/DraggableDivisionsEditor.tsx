@@ -36,6 +36,7 @@ export interface EditorMember {
   // component renders muted placeholders for nulls rather than
   // omitting the chip entirely, so column widths stay stable.
   leagueRating: number | null;
+  hiddenMmr: number | null; // the secret league MMR — unchanged by moves
   bmpMmr: number | null;
   bmpTier: string | null;
   priorFinalGlobalRank: number | null;
@@ -538,6 +539,16 @@ function MemberChips({ member }: { member: EditorMember }) {
         whiteSpace: "nowrap",
       }}
     >
+      <span
+        title="Hidden league MMR — unchanged when you move a player"
+        style={{
+          color: member.hiddenMmr == null ? "#666" : "#2ecc71",
+          fontVariantNumeric: "tabular-nums",
+          fontWeight: 600,
+        }}
+      >
+        {member.hiddenMmr == null ? "MMR —" : `MMR ${member.hiddenMmr}`}
+      </span>
       <span
         title="Current league rank (Player.rating)"
         style={{
