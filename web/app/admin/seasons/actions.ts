@@ -1141,3 +1141,16 @@ export async function setTierPromoteRelegateCount(formData: FormData) {
   revalidatePath(`/seasons/${tier.seasonId}`);
   revalidatePath("/standings");
 }
+
+// Set a player's hidden league MMR directly from the divisions editor, so an
+// arranger can fix it in place without going to /admin/mmr. Blank clears it.
+export async function setPlayerHiddenMmr(formData: FormData) {
+  await requireAdmin();
+  const playerId = String(formData.get("playerId") ?? "");
+  if (!playerId) return;
+  const raw = String(formData.get("mmr") ?? "").trim();
+  const value = raw === "" ? null : Math.max(0, Math.floor(Number(raw)));
+  if (raw !== "" && !Number.isFinite(value)) return;
+  await prisma.player.update({ where: { id: playerId }, data: { hiddenMmr: value } });
+  revalidatePath("/admin/mmr");
+}

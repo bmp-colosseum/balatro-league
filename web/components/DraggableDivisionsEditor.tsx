@@ -20,7 +20,7 @@
 
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
-import { moveDivisionMember, moveDivisionMemberToPosition } from "@/app/admin/seasons/actions";
+import { moveDivisionMember, moveDivisionMemberToPosition, setPlayerHiddenMmr } from "@/app/admin/seasons/actions";
 import { addExistingPlayerToDivision, addLatePlayerToDivision, deleteDivision } from "@/app/admin/seasons/actions";
 import { PlayerSearch, type PlayerOption } from "@/components/PlayerSearch";
 import { addDivisionToTier } from "@/app/admin/seasons/actions";
@@ -266,6 +266,24 @@ export function DraggableDivisionsEditor({
     pending.current = null;
   };
 
+  // Inline hidden-MMR edit: optimistic local update + persist. Blank clears it.
+  const saveMmr = (playerId: string, raw: string) => {
+    const trimmed = raw.trim();
+    const value = trimmed === "" ? null : Math.max(0, Math.floor(Number(trimmed)));
+    if (trimmed !== "" && !Number.isFinite(value as number)) return;
+    setMembers((prev) => prev.map((mm) => (mm.playerId === playerId ? { ...mm, hiddenMmr: value } : mm)));
+    startTransition(async () => {
+      try {
+        const fd = new FormData();
+        fd.append("playerId", playerId);
+        fd.append("mmr", value == null ? "" : String(value));
+        await setPlayerHiddenMmr(fd);
+      } catch (err) {
+        console.warn("[draggable-divisions] MMR save failed:", err);
+      }
+    });
+  };
+
   // Bucket members by division for rendering. Within a division
   // they're sorted by draftOrder so optimistic reorders surface
   // immediately without waiting for the server response.
@@ -415,6 +433,39 @@ export function DraggableDivisionsEditor({
                               >
                                 {m.playerName}
                               </Link>
+                              <label
+                                title="Hidden league MMR — edit to set (moving a player never changes it)"
+                                style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: 10, color: "#2ecc71" }}
+                                onPointerDown={(e) => e.stopPropagation()}
+                              >
+                                MMR
+                                <input
+                                  type="number"
+                                  value={m.hiddenMmr ?? ""}
+                                  onPointerDown={(e) => e.stopPropagation()}
+                                  onChange={(e) =>
+                                    setMembers((prev) =>
+                                      prev.map((mm) =>
+                                        mm.playerId === m.playerId
+                                          ? { ...mm, hiddenMmr: e.target.value === "" ? null : Number(e.target.value) }
+                                          : mm,
+                                      ),
+                                    )
+                                  }
+                                  onBlur={(e) => saveMmr(m.playerId, e.target.value)}
+                                  style={{
+                                    width: 48,
+                                    fontSize: 11,
+                                    padding: "0 2px",
+                                    textAlign: "right",
+                                    color: "#2ecc71",
+                                    fontWeight: 600,
+                                    background: "transparent",
+                                    border: "1px solid rgba(46,204,113,0.3)",
+                                    borderRadius: 3,
+                                  }}
+                                />
+                              </label>
                               <MemberChips member={m} />
                               <select
                                 className="dd-move"
@@ -601,16 +652,6 @@ function MemberChips({ member }: { member: EditorMember }) {
         whiteSpace: "nowrap",
       }}
     >
-      <span
-        title="Hidden league MMR — unchanged when you move a player"
-        style={{
-          color: member.hiddenMmr == null ? "#666" : "#2ecc71",
-          fontVariantNumeric: "tabular-nums",
-          fontWeight: 600,
-        }}
-      >
-        {member.hiddenMmr == null ? "MMR —" : `MMR ${member.hiddenMmr}`}
-      </span>
       <span
         title="Current league rank (Player.rating)"
         style={{
