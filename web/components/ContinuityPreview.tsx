@@ -156,21 +156,21 @@ export function ContinuityPreview({
         <form action={onBuild} className="card" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", borderColor: "#2ecc71" }}>
           <input type="hidden" name="roundId" value={roundId} />
           <input type="hidden" name="moves" value="{}" />
-          <strong style={{ color: "#2ecc71" }}>Build this as the next season</strong>
+          <strong style={{ color: "#2ecc71" }}>Open this to drag &amp; edit</strong>
           <input
             name="subtitle"
             placeholder="Subtitle (optional)"
             style={{ padding: "3px 8px", fontSize: 13, flex: "0 1 220px" }}
           />
           <ConfirmButton
-            message="Build the next season from this projection? Creates a DRAFT season — you then drag players between divisions and activate it, same as always."
+            message="Open the editable arrangement? This creates next season as a DRAFT (not live) so you can drag players between divisions. Nothing goes live until you activate."
             style={{ marginLeft: "auto", padding: "5px 14px", fontWeight: 600 }}
           >
-            Build season →
+            ✏️ Edit these groupings →
           </ConfirmButton>
           <span className="muted" style={{ fontSize: 11, flexBasis: "100%" }}>
-            Creates a draft (not live) on Owen&apos;s ladder. On the season page you drag players between
-            divisions (the shared editor), then activate.
+            Opens one editable page: drag players between divisions (saves automatically), then activate.
+            Share that page with whoever&apos;s arranging — it&apos;s the only thing they touch.
           </span>
         </form>
       )}

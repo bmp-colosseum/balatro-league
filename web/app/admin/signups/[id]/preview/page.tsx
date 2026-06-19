@@ -32,7 +32,8 @@ export default async function PlacementPreviewPage({
 
   const result = await loadBuildSeasonPage(id);
   if (result === "NOT_FOUND") notFound();
-  if (result === "BUILT_REDIRECT") redirect(`/admin/seasons`);
+  // Already built → the draft exists; go straight to the editable arrange page.
+  if (result === "BUILT_REDIRECT") redirect(`/admin/signups/${id}/arrange`);
 
   const { round, sortedSignups, playerByDiscordId, snapshotByDiscordId } = result;
   const continuity = mode === "current" ? await loadContinuityPlacement(round.id) : null;

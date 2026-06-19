@@ -44,5 +44,6 @@ export async function buildContinuitySeason(formData: FormData) {
 
   revalidatePath("/admin/signups");
   revalidatePath("/admin/seasons");
-  redirect(`/seasons/${(result as { seasonId: string }).seasonId}?just-built=1`);
+  // Land straight on the editable arrange page — drag players, autosave, activate.
+  redirect(`/admin/signups/${roundId}/arrange`);
 }
