@@ -15,6 +15,7 @@ import { formatSeasonLabel } from "@/lib/format-season";
 import { postChannelMessage } from "@/lib/discord";
 import { enqueueLeagueInfoRefresh } from "@/lib/queue";
 import { runSeasonDiscordBootstrap } from "@/lib/season-discord-bootstrap";
+import { lockDivisionSchedules } from "@/lib/lock-schedule";
 
 // Shared core of season activation. Flips isActive, deactivates any prior
 // active season, clears scheduledStartAt on the target (so the cron doesn't
@@ -53,6 +54,12 @@ export async function performSeasonActivation(
   // live without wanting to create+announce+tear-down Discord channels on every
   // one. Real activations always run the bootstrap.
   if (opts.skipDiscord) return;
+
+  // Lock in each division's assigned-opponent schedule (pre-create the PENDING
+  // match rows). Best-effort — activation still succeeds if it fails.
+  await lockDivisionSchedules(seasonId).catch((err) =>
+    console.warn("[season.activate] schedule lock failed:", err),
+  );
 
   // Division channels can be turned off for a lightweight league: no
   // per-division channels/roles, matches happen in #bot-commands, results
