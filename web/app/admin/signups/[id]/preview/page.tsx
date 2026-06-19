@@ -62,7 +62,7 @@ export default async function PlacementPreviewPage({
         editing draft
       </span>
     );
-    body = <DraftArranger seasonId={editableDraftSeasonId} />;
+    body = <DraftArranger seasonId={editableDraftSeasonId} roundId={round.id} />;
   } else {
     const result = await loadBuildSeasonPage(id);
     if (result === "NOT_FOUND") notFound();

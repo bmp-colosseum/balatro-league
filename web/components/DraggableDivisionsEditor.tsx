@@ -40,12 +40,20 @@ export interface EditorMember {
   bmpMmr: number | null;
   bmpTier: string | null;
   priorFinalGlobalRank: number | null;
+  // Last season's division as a ladder index (0 = top), for the promotion /
+  // relegation marker. null = new this season; undefined = no continuity data
+  // (e.g. the plain season page, which doesn't compute it).
+  priorDivisionGlobalIndex?: number | null;
+  priorDivisionName?: string | null;
+  priorStanding?: string | null; // e.g. "#3 · 3-1-0"
 }
 
 export interface EditorDivision {
   id: string;
   name: string;
   tierId: string;
+  // Position in the ladder (0 = top). Set where we want live ↑/↓ markers.
+  globalIndex?: number;
 }
 
 export interface EditorTier {
@@ -393,6 +401,7 @@ export function DraggableDivisionsEditor({
                               }}
                             >
                               <span style={{ color: "#888" }} title="Drag to move">⋮⋮</span>
+                              <MovementMark member={m} currentGlobalIndex={d.globalIndex} />
                               <Link
                                 href={`/profile/${m.playerId}`}
                                 style={{ color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
@@ -526,6 +535,35 @@ function AddPlayerControls({
 // (for returners only) prior-season finishing global rank. Compact
 // styling — 11px chips, neutral palette — so they fit on a 280px
 // division card without breaking the layout.
+// Live promotion/relegation marker: compares the player's CURRENT division
+// (where they are right now, updates as you drag) to their last-season division.
+// ↑ promoted (green), ↓ relegated (red), = same level, NEW (blue). Renders
+// nothing when there's no continuity data (priorDivisionGlobalIndex undefined).
+function MovementMark({ member, currentGlobalIndex }: { member: EditorMember; currentGlobalIndex?: number }) {
+  if (member.priorDivisionGlobalIndex === undefined) return null;
+  if (member.priorDivisionGlobalIndex === null) {
+    return (
+      <span title="New this season" style={{ color: "#76c7ff", fontSize: 9, fontWeight: 700, width: 12, textAlign: "center" }}>
+        NEW
+      </span>
+    );
+  }
+  if (currentGlobalIndex === undefined) return null;
+  const prior = member.priorDivisionGlobalIndex;
+  const dir = currentGlobalIndex < prior ? "up" : currentGlobalIndex > prior ? "down" : "same";
+  const sym = dir === "up" ? "↑" : dir === "down" ? "↓" : "=";
+  const color = dir === "up" ? "#2ecc71" : dir === "down" ? "#e74c3c" : "#666";
+  const title =
+    `Last season: ${member.priorDivisionName ?? "—"}` +
+    (member.priorStanding ? ` (${member.priorStanding})` : "") +
+    (dir === "up" ? " — promoted" : dir === "down" ? " — relegated" : " — same level");
+  return (
+    <span title={title} style={{ color, fontWeight: 700, width: 12, textAlign: "center" }}>
+      {sym}
+    </span>
+  );
+}
+
 function MemberChips({ member }: { member: EditorMember }) {
   const tierColor = bmpTierColor(member.bmpTier);
   return (

@@ -10,11 +10,12 @@ import { prisma } from "@/lib/prisma";
 import { DraggableDivisionsEditor, type EditorMember, type EditorTier } from "@/components/DraggableDivisionsEditor";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { loadAdminSeasonDetail } from "@/lib/loaders/admin";
+import { loadContinuityPlacement } from "@/lib/loaders/continuity";
 import { tierColors } from "@/lib/tier-colors";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { activateSeason } from "@/app/admin/seasons/actions";
 
-export async function DraftArranger({ seasonId }: { seasonId: string }) {
+export async function DraftArranger({ seasonId, roundId }: { seasonId: string; roundId?: string }) {
   const adminData = await loadAdminSeasonDetail(seasonId, {
     listGuildTextChannels: async () => [],
     guildId: undefined,
@@ -36,16 +37,38 @@ export async function DraftArranger({ seasonId }: { seasonId: string }) {
     orderBy: { displayName: "asc" },
   });
 
+  // Reuse the continuity library for the promotion/relegation context: each
+  // signup's LAST-season division (as a ladder index) + standing. Keyed by
+  // discordId. Rookies come back with fromIndex null → shown as NEW.
+  const priorByDiscord = new Map<string, { idx: number | null; name: string | null; standing: string | null }>();
+  if (roundId) {
+    const cont = await loadContinuityPlacement(roundId);
+    if (cont && cont !== "NO_ROUND" && cont !== "NO_SEASON") {
+      for (const dv of cont.divisions) {
+        for (const mm of dv.members) {
+          priorByDiscord.set(mm.discordId, {
+            idx: mm.fromIndex,
+            name: mm.fromIndex != null ? cont.divisions[mm.fromIndex]?.name ?? null : null,
+            standing: mm.standing ? `#${mm.standing.rank} · ${mm.standing.record}` : null,
+          });
+        }
+      }
+    }
+  }
+
   const editorTiers: EditorTier[] = season.tiers.map((t) => ({
     id: t.id,
     name: t.name,
     position: t.position,
     color: tierColors(t.position),
   }));
-  const editorDivisions = season.divisions.map((d) => ({ id: d.id, name: d.name, tierId: d.tierId }));
+  // globalIndex = position in the draft ladder (divisions come back ordered by
+  // tier position then group number), so it matches the continuity fromIndex.
+  const editorDivisions = season.divisions.map((d, i) => ({ id: d.id, name: d.name, tierId: d.tierId, globalIndex: i }));
   const editorMembers: EditorMember[] = season.divisions.flatMap((d) =>
     d.members.map((m) => {
       const ctx = memberContext.get(m.player.id);
+      const prior = roundId ? priorByDiscord.get(m.player.discordId) : undefined;
       return {
         id: m.id,
         playerId: m.player.id,
@@ -57,6 +80,10 @@ export async function DraftArranger({ seasonId }: { seasonId: string }) {
         bmpMmr: ctx?.bmpMmr ?? null,
         bmpTier: ctx?.bmpTier ?? null,
         priorFinalGlobalRank: ctx?.priorFinalGlobalRank ?? null,
+        // undefined (no roundId) → no marker; null → NEW; number → ↑/↓/=.
+        priorDivisionGlobalIndex: roundId ? prior?.idx ?? null : undefined,
+        priorDivisionName: prior?.name ?? null,
+        priorStanding: prior?.standing ?? null,
       };
     }),
   );
