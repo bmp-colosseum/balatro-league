@@ -33,6 +33,29 @@ export async function recomputeMmr() {
   revalidatePath("/admin/mmr");
 }
 
+// Apply the ladder order as evenly-spaced MMR: hiddenMmr = (N − index) × 10, so
+// #1 is the highest and everyone is exactly 10 apart — the clean cold-start
+// ladder. Order is a JSON array of playerIds, top → bottom. (Recompute is the
+// other path: results-based spread instead of even spacing.)
+export async function applyMmrLadder(formData: FormData) {
+  await requireAdmin();
+  let order: string[] = [];
+  try {
+    const parsed = JSON.parse(String(formData.get("order") ?? "[]"));
+    if (Array.isArray(parsed)) order = parsed.filter((x): x is string => typeof x === "string");
+  } catch {
+    return;
+  }
+  if (order.length === 0) return;
+  const n = order.length;
+  await prisma.$transaction(
+    order.map((playerId, i) =>
+      prisma.player.update({ where: { id: playerId }, data: { hiddenMmr: (n - i) * 10 } }),
+    ),
+  );
+  revalidatePath("/admin/mmr");
+}
+
 // Bulk-save: the form submits one `mmr:<playerId>` field per row. Blank clears
 // it (back to unset); a number sets it. Only writes rows that actually changed
 // is overkill here — just upsert each provided value.

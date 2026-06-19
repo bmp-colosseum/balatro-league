@@ -2,11 +2,11 @@ import { requireAdmin } from "@/lib/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { loadMmrAdmin } from "@/lib/mmr-admin";
 import { prisma } from "@/lib/prisma";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { fillMissingMmr, recomputeMmr, saveMmrs, setLiveMmr } from "./actions";
+import { MmrLadder, type MmrLadderRow } from "@/components/MmrLadder";
+import { applyMmrLadder, fillMissingMmr, recomputeMmr, setLiveMmr } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +18,26 @@ export default async function MmrAdminPage() {
   const rows = await loadMmrAdmin();
   const set = rows.filter((r) => r.hiddenMmr != null).length;
   const unset = rows.length - set;
+
+  // Initial ladder order: by stored MMR desc, then BMP peak desc, then name.
+  // Unset players fall to a sensible spot by their BMP, ready to drag.
+  const ladderRows: MmrLadderRow[] = [...rows]
+    .sort((a, b) => {
+      const am = a.hiddenMmr ?? -1;
+      const bm = b.hiddenMmr ?? -1;
+      if (am !== bm) return bm - am;
+      const ap = a.bmpPeak ?? -1;
+      const bp = b.bmpPeak ?? -1;
+      if (ap !== bp) return bp - ap;
+      return a.displayName.localeCompare(b.displayName);
+    })
+    .map((r) => ({
+      playerId: r.id,
+      displayName: r.displayName,
+      hiddenMmr: r.hiddenMmr,
+      bmpPeak: r.bmpPeak,
+      bmpTier: r.bmpTier,
+    }));
   const liveMmr =
     (await prisma.leagueConfig.findUnique({ where: { key: "live_mmr_enabled" } }))?.value === "true";
 
@@ -33,9 +53,10 @@ export default async function MmrAdminPage() {
           </span>
         </div>
         <p className="muted">
-          Each player&apos;s hidden league MMR (BMP peak ×1.5 scale — not pinned to any fixed top). Placement + schedule previews read from
-          this. Seed everyone from BMP (peak × 1.5), then hand-fix the ones it gets wrong. You only need
-          to do this once — after that it updates per match.
+          Each player&apos;s hidden league MMR. Two ways to set it: the <strong>ladder</strong> below — drag
+          everyone into rank order and they&apos;re spaced exactly 10 apart (the clean cold-start, no lumpy
+          BMP gaps) — or <strong>Recompute</strong>, which replays match results for a results-based spread.
+          Placement + schedule previews read from this; after launch it updates per match.
         </p>
 
         <div className="card" style={{ borderColor: liveMmr ? "#2ecc71" : "#f1c40f", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -75,51 +96,9 @@ export default async function MmrAdminPage() {
           </div>
         </div>
 
-        <form action={saveMmrs} className="card">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-            <strong>{rows.length} players</strong>
-            <Button type="submit">Save all</Button>
-          </div>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead>
-              <tr style={{ textAlign: "left", borderBottom: "1px solid var(--border)" }}>
-                <th style={{ padding: "4px 8px" }}>Player</th>
-                <th style={{ padding: "4px 8px", textAlign: "right" }}>Secret MMR</th>
-                <th style={{ padding: "4px 8px", textAlign: "right" }} className="muted">BMP peak</th>
-                <th style={{ padding: "4px 8px" }} className="muted">Tier</th>
-                <th style={{ padding: "4px 8px", textAlign: "right" }} className="muted">Suggested (×1.5)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                  <td style={{ padding: "3px 8px" }}>{r.displayName}</td>
-                  <td style={{ padding: "3px 8px", textAlign: "right" }}>
-                    <Input
-                      type="number"
-                      name={`mmr:${r.id}`}
-                      defaultValue={r.hiddenMmr ?? ""}
-                      placeholder={r.suggested != null ? String(r.suggested) : "—"}
-                      min={0}
-                      max={9999}
-                      style={{ width: 80, fontSize: 13, padding: "1px 4px", textAlign: "right" }}
-                    />
-                  </td>
-                  <td style={{ padding: "3px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} className="muted">
-                    {r.bmpPeak ?? "—"}
-                  </td>
-                  <td style={{ padding: "3px 8px" }} className="muted">{r.bmpTier ?? "—"}</td>
-                  <td style={{ padding: "3px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} className="muted">
-                    {r.suggested ?? "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div style={{ marginTop: 10 }}>
-            <Button type="submit">Save all</Button>
-          </div>
-        </form>
+        <div className="card">
+          <MmrLadder initial={ladderRows} applyOrder={applyMmrLadder} />
+        </div>
       </main>
     </>
   );
