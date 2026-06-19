@@ -188,6 +188,10 @@ export const LeagueConfigKey = {
   //   MatchesCategoryId — the "🎴 Matches" category that holds #challenges.
   LeagueCategoryId: "league_category_id",
   MatchesCategoryId: "matches_category_id",
+  // "true" = the match-sweep applies Elowen to confirmed matches automatically
+  // (hands-off live MMR). Default unset/"false" so MMR stays preview-only — you
+  // recompute manually on /admin/mmr until you flip this on to go live.
+  LiveMmrEnabled: "live_mmr_enabled",
 } as const;
 
 export type LeagueConfigKey = (typeof LeagueConfigKey)[keyof typeof LeagueConfigKey];

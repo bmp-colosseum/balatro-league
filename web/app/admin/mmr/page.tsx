@@ -4,8 +4,9 @@ import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { loadMmrAdmin } from "@/lib/mmr-admin";
+import { prisma } from "@/lib/prisma";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { fillMissingMmr, recomputeMmr, saveMmrs } from "./actions";
+import { fillMissingMmr, recomputeMmr, saveMmrs, setLiveMmr } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,8 @@ export default async function MmrAdminPage() {
   const rows = await loadMmrAdmin();
   const set = rows.filter((r) => r.hiddenMmr != null).length;
   const unset = rows.length - set;
+  const liveMmr =
+    (await prisma.leagueConfig.findUnique({ where: { key: "live_mmr_enabled" } }))?.value === "true";
 
   return (
     <>
@@ -34,6 +37,21 @@ export default async function MmrAdminPage() {
           this. Seed everyone from BMP (peak × 1.5), then hand-fix the ones it gets wrong. You only need
           to do this once — after that it updates per match.
         </p>
+
+        <div className="card" style={{ borderColor: liveMmr ? "#2ecc71" : "#f1c40f", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <strong style={{ color: liveMmr ? "#2ecc71" : "#f1c40f" }}>
+            Live MMR: {liveMmr ? "ON — hands-off" : "OFF — preview only"}
+          </strong>
+          <form action={setLiveMmr}>
+            <input type="hidden" name="enable" value={liveMmr ? "false" : "true"} />
+            <Button type="submit" variant="secondary">{liveMmr ? "Turn OFF" : "Turn ON (go live)"}</Button>
+          </form>
+          <span className="muted" style={{ fontSize: 12 }}>
+            {liveMmr
+              ? "Every confirmed match auto-updates MMR via the sweep."
+              : "Nothing auto-updates — preview freely. Flip on when you're ready to enact it."}
+          </span>
+        </div>
 
         <div className="card" style={{ display: "grid", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>

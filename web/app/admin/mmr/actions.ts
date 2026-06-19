@@ -2,8 +2,22 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
+import { prisma } from "@/lib/prisma";
 import { seedMissingMmrFromBmp, setPlayerMmr } from "@/lib/mmr-admin";
 import { applyRecomputedMmr } from "@/lib/mmr-recompute";
+
+// Flip live MMR on/off. Off = preview-only (the sweep won't auto-apply matches);
+// on = hands-off (every confirmed match updates MMR via the sweep).
+export async function setLiveMmr(formData: FormData) {
+  const { user } = await requireAdmin();
+  const enable = String(formData.get("enable")) === "true";
+  await prisma.leagueConfig.upsert({
+    where: { key: "live_mmr_enabled" },
+    create: { key: "live_mmr_enabled", value: enable ? "true" : "false", updatedBy: user.discordId },
+    update: { value: enable ? "true" : "false", updatedBy: user.discordId },
+  });
+  revalidatePath("/admin/mmr");
+}
 
 export async function fillMissingMmr() {
   await requireAdmin();

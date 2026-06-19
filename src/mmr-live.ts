@@ -7,10 +7,14 @@
 
 import { prisma } from "./db.js";
 import { elowen1v1 } from "./elowen.js";
+import { getConfig, LeagueConfigKey } from "./league-config.js";
 
 const DEFAULT_SEED = 1000;
 
 export async function applyPendingMatchMmr(): Promise<number> {
+  // Off by default — MMR stays preview-only until live MMR is explicitly enabled.
+  if ((await getConfig(LeagueConfigKey.LiveMmrEnabled)) !== "true") return 0;
+
   const pending = await prisma.match.findMany({
     where: { status: "CONFIRMED", format: "LEAGUE_BO2", mmrApplied: false },
     orderBy: { confirmedAt: "asc" },
