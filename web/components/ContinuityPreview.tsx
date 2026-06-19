@@ -51,9 +51,9 @@ export function ContinuityPreview({
       } | null = null;
       if (showSchedules && members.length >= 2) {
         const sp = members.map((m) => ({ id: m.discordId, mmr: m.mmr }));
-        // Legendary (top division) is a full round-robin; lower divisions use the
-        // balanced 4-opponent graph.
-        const degree = divIdx === 0 ? members.length - 1 : 4;
+        // Legendary + Rare 1 (the top two) play a full round-robin; lower
+        // divisions use the balanced 4-opponent graph.
+        const degree = divIdx <= 1 ? members.length - 1 : 4;
         const r = generateSchedule(sp, { degree, seed: 1 });
         schedule = { opponents: r.opponents, sos: r.sos, summary: summariseSchedule(r, sp, degree) };
       }
@@ -92,10 +92,10 @@ export function ContinuityPreview({
             {d.name}{" "}
             <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>
               — {d.members.length} players ({d.backCount} back · {d.newCount} new) · avg MMR {d.avgMmr}
-              {d.divIdx === 0 ? " · round-robin" : ""}
+              {d.divIdx <= 1 ? " · round-robin" : ""}
               {d.schedule ? ` · SoS ${d.schedule.summary.minSos}–${d.schedule.summary.maxSos} (spread ${d.schedule.summary.spread})` : ""}
             </span>
-            {d.divIdx !== 0 && d.members.length < 5 && (
+            {d.divIdx > 1 && d.members.length < 5 && (
               <span style={{ fontWeight: 400, marginLeft: 8, color: "#f1c40f", fontSize: 12 }}>
                 ⚠ thin (&lt;5)
               </span>

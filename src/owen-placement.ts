@@ -78,12 +78,58 @@ export function buildOwenPlacement(
   const n = divisions.length;
   const divs: PlacementDivision[] = divisions.map((d) => ({ tierName: d.tierName, name: d.name, members: [] }));
 
-  // 1. Returners: hold division, apply promotion/relegation.
+  // 1. Returners start in their finish division, then PAIRWISE boundary
+  //    promotion/relegation (Owen's rule):
+  //    - Count-based boundaries (Rare 3↔Rare 4 and below): swap K, where K = 2
+  //      when BOTH divisions have ≥ 8 finishers, else 1 (symmetric).
+  //    - Top boundaries tighten the elite: Legendary↔Rare 1 = 1 up / 1 down;
+  //      Rare 1↔Rare 2 and Rare 2↔Rare 3 = 1 up / 2 down.
+  //    Promotions = the top of the LOWER division by finish; relegations = the
+  //    bottom of the UPPER division by finish. Selection uses original finish
+  //    membership, so no cascades.
+  const finishers: ReturnerInput[][] = Array.from({ length: n }, () => []);
   for (const r of returners) {
-    const k = r.divSize >= 8 ? 2 : 1;
-    let target = r.divIndex;
-    if (r.standingRank <= k) target = Math.max(0, target - 1); // promote up
-    else if (r.standingRank > r.divSize - k) target = Math.min(n - 1, target + 1); // relegate down
+    const di = Math.max(0, Math.min(n - 1, r.divIndex));
+    finishers[di]!.push(r);
+  }
+  for (const arr of finishers) arr.sort((a, b) => a.standingRank - b.standingRank); // best (rank 1) first
+  const counts = finishers.map((a) => a.length);
+
+  // tier + group (1-based) per division index, e.g. {Legendary,1}, {Rare,1}, …
+  const groupOf: { tier: string; group: number }[] = [];
+  {
+    const seen: Record<string, number> = {};
+    for (const d of divisions) {
+      seen[d.tierName] = (seen[d.tierName] ?? 0) + 1;
+      groupOf.push({ tier: d.tierName, group: seen[d.tierName]! });
+    }
+  }
+  // (up = promoted lower→upper, down = relegated upper→lower) for the boundary
+  // between upper index i and lower index i+1.
+  const boundaryK = (i: number): { up: number; down: number } => {
+    const upper = groupOf[i]!;
+    if (upper.tier === "Legendary") return { up: 1, down: 1 };
+    if (upper.tier === "Rare" && (upper.group === 1 || upper.group === 2)) return { up: 1, down: 2 };
+    const k = counts[i]! >= 8 && counts[i + 1]! >= 8 ? 2 : 1;
+    return { up: k, down: k };
+  };
+
+  // Each division's top `up` promote (via the boundary above), bottom `down`
+  // relegate (via the boundary below); capped so the same finisher isn't both.
+  const targetOf = new Map<string, number>();
+  for (let i = 0; i < n; i++) {
+    const arr = finishers[i]!;
+    const size = arr.length;
+    const up = Math.min(size, i >= 1 ? boundaryK(i - 1).up : 0);
+    let down = i <= n - 2 ? boundaryK(i).down : 0;
+    if (up + down > size) down = Math.max(0, size - up);
+    arr.forEach((r) => targetOf.set(r.discordId, i)); // default: hold finish
+    for (let k = 0; k < up; k++) targetOf.set(arr[k]!.discordId, i - 1); // promote
+    for (let k = 0; k < down; k++) targetOf.set(arr[size - 1 - k]!.discordId, i + 1); // relegate
+  }
+
+  for (const r of returners) {
+    const target = targetOf.get(r.discordId) ?? Math.max(0, Math.min(n - 1, r.divIndex));
     divs[target]!.members.push({
       discordId: r.discordId,
       displayName: r.displayName,
@@ -96,13 +142,17 @@ export function buildOwenPlacement(
   }
 
   // 2. Rookies: greatest-lower-bound on the returner averages (fixed snapshot).
-  const returnerAvg = divs.map((d) => (d.members.length ? d.members.reduce((a, m) => a + m.mmr, 0) / d.members.length : 0));
+  //    EMPTY divisions are null (skipped) — otherwise their avg-of-0 would suck
+  //    weak rookies up into an empty top division. A rookie below every populated
+  //    division's average falls to the bottom.
+  const returnerAvg = divs.map((d) => (d.members.length ? d.members.reduce((a, m) => a + m.mmr, 0) / d.members.length : null));
   for (const rk of rookies) {
     let bestIdx = n - 1;
     let bestAvg = -Infinity;
     for (let i = 0; i < n; i++) {
-      if (returnerAvg[i]! <= rk.mmr && returnerAvg[i]! > bestAvg) {
-        bestAvg = returnerAvg[i]!;
+      const avg = returnerAvg[i];
+      if (avg != null && avg <= rk.mmr && avg > bestAvg) {
+        bestAvg = avg;
         bestIdx = i;
       }
     }
