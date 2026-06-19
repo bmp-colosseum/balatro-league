@@ -111,7 +111,10 @@ export function DraggableDivisionsEditor({
   // dragged row would land if dropped right now. Null = no valid
   // hover yet.
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const [, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
+  // Save-status confirmation so an arranger can see their drags + MMR edits stuck.
+  const [everSaved, setEverSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const divRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
   // Row refs keyed by `${divisionId}:${memberId}` so we can recover
   // both the per-row rect AND its position within the division
@@ -252,8 +255,11 @@ export function DraggableDivisionsEditor({
         fd.append("targetDivisionId", targetDivId);
         fd.append("targetIndex", String(insertAt));
         await moveDivisionMemberToPosition(fd);
+        setSaveError(null);
+        setEverSaved(true);
       } catch (err) {
         console.warn("[draggable-divisions] move failed, reverting:", err);
+        setSaveError("move didn't save");
         setMembers(prevMembers);
       }
     });
@@ -278,8 +284,11 @@ export function DraggableDivisionsEditor({
         fd.append("playerId", playerId);
         fd.append("mmr", value == null ? "" : String(value));
         await setPlayerHiddenMmr(fd);
+        setSaveError(null);
+        setEverSaved(true);
       } catch (err) {
         console.warn("[draggable-divisions] MMR save failed:", err);
+        setSaveError("MMR didn't save");
       }
     });
   };
@@ -312,6 +321,31 @@ export function DraggableDivisionsEditor({
         .dd-row:hover .dd-move, .dd-move:focus { opacity: 1; }
         @media (hover: none) { .dd-move { opacity: 1; } }
       `}</style>
+      {/* Save-status confirmation — drags + MMR edits persist automatically;
+          this is the proof they stuck. */}
+      <div
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 5,
+          display: "flex",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          fontSize: 12,
+          height: 20,
+          marginBottom: 4,
+        }}
+      >
+        {saveError ? (
+          <span style={{ color: "#e74c3c" }}>⚠ {saveError} — refresh and retry</span>
+        ) : isPending ? (
+          <span className="muted">Saving…</span>
+        ) : everSaved ? (
+          <span style={{ color: "#2ecc71" }}>✓ Saved</span>
+        ) : (
+          <span className="muted" style={{ fontSize: 11 }}>Changes save automatically</span>
+        )}
+      </div>
       {tiers.map((tier) => {
         const tierDivs = divisions.filter((d) => d.tierId === tier.id);
         const tierMemberCount = tierDivs.reduce((sum, d) => sum + (byDivision.get(d.id)?.length ?? 0), 0);
@@ -483,7 +517,10 @@ export function DraggableDivisionsEditor({
                                       fd.append("playerId", m.playerId);
                                       fd.append("targetDivisionId", targetDivisionId);
                                       await moveDivisionMember(fd);
+                                      setSaveError(null);
+                                      setEverSaved(true);
                                     } catch {
+                                      setSaveError("move didn't save");
                                       setMembers(prev);
                                     }
                                   });
