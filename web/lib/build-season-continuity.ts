@@ -33,6 +33,82 @@ export interface BuildContinuityResult {
   mode: "create" | "populate";
 }
 
+// Keep the draft in sync with the live sign-up list: pull in anyone who signed
+// up after the draft was created (placed where the continuity algorithm puts
+// them), and drop anyone who withdrew. Existing placements (your hand-moves) are
+// never touched — we only ADD missing players and REMOVE withdrawn ones. Safe to
+// call on every load of the arranger. Never throws on the happy path.
+export async function absorbSignupsIntoDraft(
+  roundId: string,
+  seasonId: string,
+): Promise<{ added: number; removed: number }> {
+  const round = await prisma.signupRound.findUnique({ where: { id: roundId }, include: { signups: true } });
+  if (!round) return { added: 0, removed: 0 };
+  const active = round.signups.filter((s) => !s.withdrawn);
+  const withdrawnDiscord = new Set(round.signups.filter((s) => s.withdrawn).map((s) => s.discordId));
+
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    select: {
+      isActive: true,
+      endedAt: true,
+      divisions: {
+        orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
+        select: { id: true, members: { select: { id: true, player: { select: { discordId: true } } } } },
+      },
+    },
+  });
+  if (!season || season.isActive || season.endedAt) return { added: 0, removed: 0 }; // never touch a live/ended season
+  const draftDivIds = season.divisions.map((d) => d.id);
+  if (draftDivIds.length === 0) return { added: 0, removed: 0 };
+
+  const present = new Set<string>();
+  let removed = 0;
+  for (const d of season.divisions) {
+    for (const m of d.members) {
+      present.add(m.player.discordId);
+      if (withdrawnDiscord.has(m.player.discordId)) {
+        await prisma.divisionMember.delete({ where: { id: m.id } }).catch(() => {});
+        removed++;
+        present.delete(m.player.discordId);
+      }
+    }
+  }
+
+  const missing = active.filter((s) => !present.has(s.discordId));
+  if (missing.length === 0) return { added: 0, removed };
+
+  // Ensure Player rows + figure out where each newcomer lands (continuity).
+  const players = await Promise.all(
+    missing.map((s) =>
+      prisma.player.upsert({
+        where: { discordId: s.discordId },
+        create: { discordId: s.discordId, displayName: s.displayName },
+        update: { displayName: s.displayName },
+      }),
+    ),
+  );
+  const playerByDiscord = new Map(players.map((p) => [p.discordId, p]));
+
+  const cont = await loadContinuityPlacement(roundId);
+  const idxByDiscord = new Map<string, number>();
+  if (cont && cont !== "NO_ROUND" && cont !== "NO_SEASON") {
+    cont.divisions.forEach((dv, i) => dv.members.forEach((m) => idxByDiscord.set(m.discordId, i)));
+  }
+
+  let added = 0;
+  for (const s of missing) {
+    const player = playerByDiscord.get(s.discordId);
+    if (!player) continue;
+    const idx = Math.min(idxByDiscord.get(s.discordId) ?? draftDivIds.length - 1, draftDivIds.length - 1);
+    const divId = draftDivIds[idx];
+    if (!divId) continue;
+    await placePlayerInDivision(divId, player.id);
+    added++;
+  }
+  return { added, removed };
+}
+
 export async function buildSeasonFromContinuity(
   input: BuildContinuityInput,
 ): Promise<BuildContinuityResult | null | "NO_SEASON" | "ALREADY_BUILT"> {

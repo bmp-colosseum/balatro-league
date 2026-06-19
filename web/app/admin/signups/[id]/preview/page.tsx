@@ -12,6 +12,7 @@ import { ContinuityPreview } from "@/components/ContinuityPreview";
 import { DraftArranger } from "@/components/DraftArranger";
 import { owenLadder } from "@/lib/season-plan";
 import { loadContinuityPlacement } from "@/lib/loaders/continuity";
+import { absorbSignupsIntoDraft } from "@/lib/build-season-continuity";
 import { buildContinuitySeason, reopenSignupRound } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +57,13 @@ export default async function PlacementPreviewPage({
   let pill: ReactNode;
 
   if (mode === "current" && editableDraftSeasonId) {
-    // The page IS the editor now.
+    // The page IS the editor now. First absorb any new sign-ups / drop withdrawn
+    // ones so the draft always reflects the live roster (your placements stay).
+    try {
+      await absorbSignupsIntoDraft(round.id, editableDraftSeasonId);
+    } catch (err) {
+      console.warn("[preview] absorb sign-ups failed:", err);
+    }
     pill = (
       <span className="pill" style={{ background: "rgba(46,204,113,0.18)", color: "#2ecc71" }}>
         editing draft
