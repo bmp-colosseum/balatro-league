@@ -45,7 +45,8 @@ export interface EditorMember {
   // (e.g. the plain season page, which doesn't compute it).
   priorDivisionGlobalIndex?: number | null;
   priorDivisionName?: string | null;
-  priorStanding?: string | null; // e.g. "#3 · 3-1-0"
+  priorStanding?: string | null; // last-season W-L-D record, e.g. "3-1-0"
+  priorRank?: number | null; // finish place in their last-season division (5 = 5th)
   // The WORST division (highest ladder index) the player is entitled to — their
   // last-season division, or one below if relegated. Dropping them below this
   // means dropping someone who wasn't relegated. null = no floor (rookie).
@@ -448,7 +449,7 @@ export function DraggableDivisionsEditor({
                           <span style={{ textAlign: "right" }} title="Hidden league MMR">MMR</span>
                           <span>Last season</span>
                           <span title="balatromp ranked MMR">BMP</span>
-                          <span style={{ textAlign: "right" }} title="League rank (1 = top) — from last season's finish">Rank</span>
+                          <span style={{ textAlign: "right" }} title="Last-season finish — place in their division (e.g. 5th in Legendary)">Finish</span>
                           <span>Move</span>
                         </div>
                         {divMembers.map((m, idx) => {
@@ -527,8 +528,8 @@ export function DraggableDivisionsEditor({
                               >
                                 {m.bmpMmr != null ? `${m.bmpMmr}${m.bmpTier ? ` ${m.bmpTier}` : ""}` : "—"}
                               </span>
-                              <span title="League rank (1 = top) — from last season's finish" style={{ fontSize: 11, textAlign: "right", color: m.leagueRating == null ? "#666" : "var(--text)" }}>
-                                {m.leagueRating == null ? "—" : `#${m.leagueRating}`}
+                              <span title="Last-season finish — place in their division" style={{ fontSize: 11, textAlign: "right", color: m.priorRank == null ? "#666" : "var(--text)" }}>
+                                {m.priorRank == null ? "—" : `#${m.priorRank}`}
                               </span>
                               <select
                                 title="Move to another division"

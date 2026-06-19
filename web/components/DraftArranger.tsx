@@ -42,7 +42,7 @@ export async function DraftArranger({ seasonId, roundId }: { seasonId: string; r
   // discordId. Rookies come back with fromIndex null → shown as NEW.
   const priorByDiscord = new Map<
     string,
-    { idx: number | null; name: string | null; standing: string | null; floor: number | null; floorName: string | null }
+    { idx: number | null; name: string | null; record: string | null; rank: number | null; floor: number | null; floorName: string | null }
   >();
   if (roundId) {
     const cont = await loadContinuityPlacement(roundId);
@@ -56,7 +56,8 @@ export async function DraftArranger({ seasonId, roundId }: { seasonId: string; r
           priorByDiscord.set(mm.discordId, {
             idx: mm.fromIndex,
             name: mm.fromIndex != null ? cont.divisions[mm.fromIndex]?.name ?? null : null,
-            standing: mm.standing ? `#${mm.standing.rank} · ${mm.standing.record}` : null,
+            record: mm.standing ? mm.standing.record : null, // W-L-D
+            rank: mm.standing?.rank ?? null, // finish place in their division (e.g. 5th in Legendary)
             floor,
             floorName: floor != null ? cont.divisions[floor]?.name ?? null : null,
           });
@@ -92,7 +93,8 @@ export async function DraftArranger({ seasonId, roundId }: { seasonId: string; r
         // undefined (no roundId) → no marker; null → NEW; number → ↑/↓/=.
         priorDivisionGlobalIndex: roundId ? prior?.idx ?? null : undefined,
         priorDivisionName: prior?.name ?? null,
-        priorStanding: prior?.standing ?? null,
+        priorStanding: prior?.record ?? null,
+        priorRank: prior?.rank ?? null,
         floorGlobalIndex: prior?.floor ?? null,
         floorDivisionName: prior?.floorName ?? null,
       };
