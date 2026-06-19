@@ -26,25 +26,32 @@ export async function loadMmrAdmin(): Promise<MmrAdminRow[]> {
     select: { id: true, displayName: true, discordId: true, hiddenMmr: true },
   });
   const discordIds = players.map((p) => p.discordId);
-  const snaps = discordIds.length
+  // ALL snapshots (every BMP season) — peak is per-season, so all-time peak =
+  // max peakMmr across them. Latest snapshot gives the current tier.
+  const allSnaps = discordIds.length
     ? await prisma.playerMmrSnapshot.findMany({
         where: { discordId: { in: discordIds }, rankedMmr: { not: null } },
         orderBy: { capturedAt: "desc" },
-        distinct: ["discordId"],
         select: { discordId: true, peakMmr: true, rankedMmr: true, rankedTier: true },
       })
     : [];
-  const snapByDiscord = new Map(snaps.map((s) => [s.discordId, s]));
+  const latestTier = new Map<string, string | null>();
+  const peakByDiscord = new Map<string, number>();
+  for (const s of allSnaps) {
+    if (!latestTier.has(s.discordId)) latestTier.set(s.discordId, s.rankedTier ?? null);
+    const prev = peakByDiscord.get(s.discordId) ?? 0;
+    const cand = Math.max(s.peakMmr ?? 0, s.rankedMmr ?? 0);
+    if (cand > prev) peakByDiscord.set(s.discordId, cand);
+  }
 
   const rows: MmrAdminRow[] = players.map((p) => {
-    const snap = snapByDiscord.get(p.discordId);
-    const peak = snap?.peakMmr ?? snap?.rankedMmr ?? null;
+    const peak = peakByDiscord.get(p.discordId) ?? null;
     return {
       id: p.id,
       displayName: p.displayName,
       hiddenMmr: p.hiddenMmr,
       bmpPeak: peak,
-      bmpTier: snap?.rankedTier ?? null,
+      bmpTier: latestTier.get(p.discordId) ?? null,
       suggested: peak != null ? bmpToLeagueMmr(peak) : null,
     };
   });

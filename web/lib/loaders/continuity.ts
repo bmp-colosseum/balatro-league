@@ -106,17 +106,27 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
     select: { id: true, discordId: true, hiddenMmr: true },
   });
   const playerByDiscord = new Map(players.map((p) => [p.discordId, p]));
-  const snaps = discordIds.length
+  // ALL snapshots (every BMP season), not just the latest — peak is per-season,
+  // so the all-time peak = max peakMmr across all of them.
+  const allSnaps = discordIds.length
     ? await prisma.playerMmrSnapshot.findMany({
         where: { discordId: { in: discordIds }, rankedMmr: { not: null } },
         orderBy: { capturedAt: "desc" },
-        distinct: ["discordId"],
         select: { discordId: true, rankedMmr: true, peakMmr: true },
       })
     : [];
-  const peakByDiscord = new Map(snaps.map((s) => [s.discordId, s.peakMmr ?? s.rankedMmr ?? 0]));
-  // BMP ranked MMR, shown alongside the internal MMR for sanity-checking.
-  const bmpByDiscord = new Map(snaps.map((s) => [s.discordId, s.rankedMmr ?? s.peakMmr ?? null]));
+  // Per player: current ranked MMR (latest snapshot) + all-time peak (max across seasons).
+  const peakByDiscord = new Map<string, number>();
+  const bmpByDiscord = new Map<string, number | null>();
+  for (const s of allSnaps) {
+    if (!bmpByDiscord.has(s.discordId)) {
+      // First seen = latest (ordered desc) → current ranked MMR.
+      bmpByDiscord.set(s.discordId, s.rankedMmr ?? s.peakMmr ?? null);
+    }
+    const prev = peakByDiscord.get(s.discordId) ?? 0;
+    const cand = Math.max(s.peakMmr ?? 0, s.rankedMmr ?? 0);
+    if (cand > prev) peakByDiscord.set(s.discordId, cand);
+  }
 
   // One consistent MMR scale: stored secret MMR, else BMP peak ×1.5.
   // Stored MMR, else BMP peak ×1.5, else the base seed (BMP base 200 × 1.5 = 300).
