@@ -1089,6 +1089,7 @@ async function fetchAdminSeasonDetail(id: string) {
 export interface AdminSeasonMemberContext {
   leagueRating: number | null;
   bmpMmr: number | null;
+  bmpPeak: number | null; // all-time peak BMP MMR across snapshots
   bmpTier: string | null;
   priorFinalGlobalRank: number | null;
 }
@@ -1182,7 +1183,7 @@ async function buildAdminSeasonMemberContext(season: {
   // capturedAt DESC.
   const snapshots = await prisma.playerMmrSnapshot.findMany({
     where: { discordId: { in: discordIds }, rankedMmr: { not: null } },
-    select: { discordId: true, bmpSeason: true, rankedMmr: true, rankedTier: true, capturedAt: true },
+    select: { discordId: true, bmpSeason: true, rankedMmr: true, peakMmr: true, rankedTier: true, capturedAt: true },
   });
   const seasonNum = (tag: string | null): number => {
     if (!tag) return -Infinity;
@@ -1240,10 +1241,15 @@ async function buildAdminSeasonMemberContext(season: {
   const result = new Map<string, AdminSeasonMemberContext>();
   for (const d of season.divisions) {
     for (const m of d.members) {
-      const snap = snapsByDiscord.get(m.player.discordId)?.[0];
+      const snaps = snapsByDiscord.get(m.player.discordId) ?? [];
+      const snap = snaps[0];
+      // All-time peak = max peakMmr across all this player's snapshots.
+      const peaks = snaps.map((s) => s.peakMmr).filter((p): p is number => p != null);
+      const bmpPeak = peaks.length ? Math.max(...peaks) : null;
       result.set(m.playerId, {
         leagueRating: m.player.rating,
         bmpMmr: snap?.rankedMmr ?? null,
+        bmpPeak,
         bmpTier: snap?.rankedTier ?? null,
         priorFinalGlobalRank: priorByPlayerId.get(m.playerId)?.finalGlobalRank ?? null,
       });

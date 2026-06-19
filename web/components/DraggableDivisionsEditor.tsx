@@ -38,6 +38,7 @@ export interface EditorMember {
   leagueRating: number | null;
   hiddenMmr: number | null; // the secret league MMR — unchanged by moves
   bmpMmr: number | null;
+  bmpPeak: number | null; // all-time peak BMP MMR
   bmpTier: string | null;
   priorFinalGlobalRank: number | null;
   // Last season's division as a ladder index (0 = top), for the promotion /
@@ -93,8 +94,8 @@ function bmpTierColor(tier: string | null): string {
 }
 
 // Shared column template for the member header + rows so they line up.
-// handle | Player | MMR | Last season | BMP | Rank | Move
-const COLS = "14px minmax(96px, 1.5fr) 56px minmax(135px, 1.7fr) minmax(68px, 0.9fr) 46px 92px";
+// handle | Player | MMR | Last season | BMP·peak | Finish | Move
+const COLS = "14px minmax(88px, 1.3fr) 54px minmax(120px, 1.5fr) minmax(112px, 1.2fr) 44px 88px";
 
 export function DraggableDivisionsEditor({
   seasonId,
@@ -448,7 +449,7 @@ export function DraggableDivisionsEditor({
                           <span>Player</span>
                           <span style={{ textAlign: "right" }} title="Hidden league MMR">MMR</span>
                           <span>Last season</span>
-                          <span title="balatromp ranked MMR">BMP</span>
+                          <span title="balatromp ranked MMR (current) · all-time peak">BMP · peak</span>
                           <span style={{ textAlign: "right" }} title="Overall finish last season (1 = top across all divisions)">Finish</span>
                           <span>Move</span>
                         </div>
@@ -523,10 +524,11 @@ export function DraggableDivisionsEditor({
                                 <FloorWarn member={m} currentGlobalIndex={d.globalIndex} />
                               </span>
                               <span
-                                title={`BMP MMR${m.bmpTier ? ` (${m.bmpTier})` : ""}`}
-                                style={{ fontSize: 11, color: bmpTierColor(m.bmpTier), whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                                title={`BMP ranked MMR (current)${m.bmpTier ? ` ${m.bmpTier}` : ""} · all-time peak ${m.bmpPeak ?? "—"}`}
+                                style={{ fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                               >
-                                {m.bmpMmr != null ? `${m.bmpMmr}${m.bmpTier ? ` ${m.bmpTier}` : ""}` : "—"}
+                                <span style={{ color: bmpTierColor(m.bmpTier) }}>{m.bmpMmr ?? "—"}</span>
+                                {m.bmpPeak != null && <span className="muted"> · pk {m.bmpPeak}</span>}
                               </span>
                               <span title="Overall finish last season (across all divisions)" style={{ fontSize: 11, textAlign: "right", color: m.priorRank == null ? "#666" : "var(--text)" }}>
                                 {m.priorRank == null ? "—" : `#${m.priorRank}`}
