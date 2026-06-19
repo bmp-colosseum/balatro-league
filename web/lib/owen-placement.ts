@@ -71,6 +71,9 @@ export function buildOwenPlacement(
   returners: ReturnerInput[],
   rookies: RookieInput[],
   targetSize: number,
+  // The top division (Legendary) is a fixed size — an elite round-robin of this
+  // many. When set, overflow keeps division 0 at this cap instead of targetSize.
+  topTarget?: number,
 ): PlacementDivision[] {
   const n = divisions.length;
   const divs: PlacementDivision[] = divisions.map((d) => ({ tierName: d.tierName, name: d.name, members: [] }));
@@ -117,13 +120,17 @@ export function buildOwenPlacement(
   // 3. Overflow: balance sizes by moving ONLY ROOKIES into open neighbours
   //    (strongest up, weakest down). Returners stay put — a division over-full
   //    with only returners is left bigger rather than shuffling earned spots.
-  const hasSpace = (i: number) => i >= 0 && i < n && divs[i]!.members.length < targetSize;
-  const spaceBelowSomewhere = (i: number) => divs.slice(i + 1).some((d) => d.members.length < targetSize);
+  const targetAt = (i: number) => (i === 0 && topTarget != null ? topTarget : targetSize);
+  const hasSpace = (i: number) => i >= 0 && i < n && divs[i]!.members.length < targetAt(i);
+  const spaceBelowSomewhere = (i: number) => {
+    for (let j = i + 1; j < n; j++) if (divs[j]!.members.length < targetAt(j)) return true;
+    return false;
+  };
   let guard = 0;
   while (guard++ < 10000) {
     let moved = false;
     for (let i = 0; i < n; i++) {
-      if (divs[i]!.members.length <= targetSize) continue;
+      if (divs[i]!.members.length <= targetAt(i)) continue;
       if (!divs[i]!.members.some((m) => m.isRookie)) continue; // only returners → leave it
       let m: PlacementMember | null = null;
       if (hasSpace(i - 1)) m = popRookie(divs[i]!.members, true); // strongest rookie up

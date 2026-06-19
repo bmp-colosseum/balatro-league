@@ -41,8 +41,11 @@ export function ContinuityPreview({
       } | null = null;
       if (showSchedules && members.length >= 2) {
         const sp = members.map((m) => ({ id: m.discordId, mmr: m.mmr }));
-        const r = generateSchedule(sp, { degree: 4, seed: 1 });
-        schedule = { opponents: r.opponents, sos: r.sos, summary: summariseSchedule(r, sp, 4) };
+        // Legendary (top division) is a full round-robin — everyone plays everyone.
+        // Every other division is the balanced 4-opponent graph.
+        const degree = divIdx === 0 ? members.length - 1 : 4;
+        const r = generateSchedule(sp, { degree, seed: 1 });
+        schedule = { opponents: r.opponents, sos: r.sos, summary: summariseSchedule(r, sp, degree) };
       }
       const nameOf = new Map(members.map((m) => [m.discordId, m.displayName]));
       return { name: d.name, divIdx, members, backCount, newCount, avgMmr, schedule, nameOf };
@@ -78,9 +81,10 @@ export function ContinuityPreview({
             {d.name}{" "}
             <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>
               — {d.members.length} players ({d.backCount} back · {d.newCount} new) · avg MMR {d.avgMmr}
+              {d.divIdx === 0 ? " · round-robin" : ""}
               {d.schedule ? ` · SoS ${d.schedule.summary.minSos}–${d.schedule.summary.maxSos} (spread ${d.schedule.summary.spread})` : ""}
             </span>
-            {d.members.length < 5 && (
+            {d.divIdx !== 0 && d.members.length < 5 && (
               <span style={{ fontWeight: 400, marginLeft: 8, color: "#f1c40f", fontSize: 12 }}>
                 ⚠ thin (&lt;5)
               </span>

@@ -103,3 +103,17 @@ describe("buildOwenPlacement — overflow balances rookies, locks returners", ()
     expect(out[2]!.members).toHaveLength(5);
   });
 });
+
+describe("buildOwenPlacement — fixed top division (Legendary)", () => {
+  it("caps the top division at topTarget, overflowing rookies down", () => {
+    // 2 returners hold Legendary; 5 high-MMR rookies all GLB into Legendary
+    // (avg 1950 ≤ 2100). topTarget 3 → Legendary keeps 2 returners + 1 rookie;
+    // the other 4 rookies overflow down.
+    const returners = [returner("leg1", 0, 5, 10, 2000), returner("leg2", 0, 6, 10, 1900)];
+    const rookies: RookieInput[] = Array.from({ length: 5 }, (_, i) => ({ discordId: `k${i}`, displayName: `k${i}`, mmr: 2100 }));
+    const out = buildOwenPlacement(DIVS, returners, rookies, 3, 3);
+    expect(out[0]!.members.length).toBeLessThanOrEqual(3);
+    // Both returners keep Legendary (locked).
+    expect(out[0]!.members.filter((m) => !m.isRookie).map((m) => m.discordId).sort()).toEqual(["leg1", "leg2"]);
+  });
+});

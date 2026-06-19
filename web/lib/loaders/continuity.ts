@@ -149,8 +149,11 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
     }
   }
 
-  const targetSize = Math.max(1, Math.ceil(round.signups.length / owenDivs.length));
-  const placed = buildOwenPlacement(owenDivs, returners, rookies, targetSize);
+  // Legendary is a fixed top of 6 (elite round-robin); the rest split evenly.
+  const TOP_TARGET = 6;
+  const restDivs = Math.max(1, owenDivs.length - 1);
+  const targetSize = Math.max(1, Math.ceil(Math.max(0, round.signups.length - TOP_TARGET) / restDivs));
+  const placed = buildOwenPlacement(owenDivs, returners, rookies, targetSize, TOP_TARGET);
 
   return {
     divisions: placed,
