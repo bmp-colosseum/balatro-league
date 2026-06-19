@@ -52,9 +52,10 @@ export function ContinuityPreview({
           </label>
         </div>
         <p className="muted" style={{ fontSize: 11, margin: "6px 0 0" }}>
-          Returners hold their current division; newcomers drop into the division whose average MMR is
-          just below theirs. Promotion/relegation isn&apos;t applied (the season isn&apos;t over) —
-          this is &ldquo;where everyone sits now + where new signups land.&rdquo; Nothing is saved.
+          Owen&apos;s build: returners hold their division with <strong>promotion/relegation applied</strong>
+          (top/bottom finishers move a tier), newcomers slot in by MMR, and divisions overflow-balance —
+          extra <em>newcomers</em> shuffle to neighbouring divisions so nobody piles up (real finishers
+          aren&apos;t bumped). Nothing is saved.
         </p>
       </div>
 

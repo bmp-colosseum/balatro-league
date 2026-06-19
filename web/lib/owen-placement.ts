@@ -8,8 +8,9 @@
 //      the greatest value ≤ their MMR (greatest-lower-bound); if none qualify,
 //      the lowest division.
 //   3. Overflow: no division may exceed the target size (ceil(total / #divs)).
-//      An over-full division sheds its highest-MMR player upward if there's room
-//      above, else its lowest-MMR player downward — cascading until balanced.
+//      An over-full division sheds a player toward open space — ROOKIES first
+//      (strongest up / weakest down), and only a returner (by standing) if no
+//      rookie is left to move — cascading until balanced.
 //
 // Crucially, returner PLACEMENT is by division + standing, NOT by raw MMR — so a
 // strong league player with a weak BMP number keeps their spot. MMR is only used
@@ -43,14 +44,26 @@ export interface RookieInput {
   mmr: number;
 }
 
-function popBy(members: PlacementMember[], pick: (a: PlacementMember, b: PlacementMember) => PlacementMember): PlacementMember {
+// Pick who leaves an over-full division. ROOKIES move before returners — a
+// newcomer has no earned claim to the division, so overflow shouldn't bump a
+// real finisher. `preferHigh` = sending someone UP (take the strongest), else
+// DOWN (take the weakest). Among rookies, "strength" is MMR; among returners
+// (only moved if no rookies are left to spare) it's league STANDING, never the
+// unreliable BMP-ish MMR — so a decent finisher isn't shoved down for a low BMP.
+function popMovable(members: PlacementMember[], preferHigh: boolean): PlacementMember {
+  const rookies = members.filter((m) => m.isRookie);
+  if (rookies.length) {
+    let best = rookies[0]!;
+    for (const m of rookies) if (preferHigh ? m.mmr > best.mmr : m.mmr < best.mmr) best = m;
+    members.splice(members.indexOf(best), 1);
+    return best;
+  }
+  const rank = (m: PlacementMember) => m.standing?.rank ?? Number.POSITIVE_INFINITY; // no games → treated as bottom
   let best = members[0]!;
-  for (const m of members) best = pick(best, m);
+  for (const m of members) if (preferHigh ? rank(m) < rank(best) : rank(m) > rank(best)) best = m;
   members.splice(members.indexOf(best), 1);
   return best;
 }
-const popHighest = (m: PlacementMember[]) => popBy(m, (a, b) => (b.mmr > a.mmr ? b : a));
-const popLowest = (m: PlacementMember[]) => popBy(m, (a, b) => (b.mmr < a.mmr ? b : a));
 
 export function buildOwenPlacement(
   divisions: { tierName: string; name: string }[],
@@ -105,16 +118,17 @@ export function buildOwenPlacement(
     const i = divs.findIndex((d) => d.members.length > targetSize);
     if (i < 0) break;
     // Prefer the immediately-open neighbour; the strongest goes up, weakest down.
+    // popMovable sends rookies before returners.
     if (hasSpace(i - 1)) {
-      divs[i - 1]!.members.push(popHighest(divs[i]!.members));
+      divs[i - 1]!.members.push(popMovable(divs[i]!.members, true));
     } else if (hasSpace(i + 1)) {
-      divs[i + 1]!.members.push(popLowest(divs[i]!.members));
+      divs[i + 1]!.members.push(popMovable(divs[i]!.members, false));
     } else if (i < n - 1 && spaceBelowSomewhere(i)) {
       // route excess downward to reach space lower on the ladder
-      divs[i + 1]!.members.push(popLowest(divs[i]!.members));
+      divs[i + 1]!.members.push(popMovable(divs[i]!.members, false));
     } else if (i > 0) {
       // otherwise push the strongest upward
-      divs[i - 1]!.members.push(popHighest(divs[i]!.members));
+      divs[i - 1]!.members.push(popMovable(divs[i]!.members, true));
     } else {
       break;
     }
