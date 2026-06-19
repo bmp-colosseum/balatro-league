@@ -47,25 +47,28 @@ export function signupEmbed(
   round: SignupRound,
   signups: Signup[],
   lengthDays: number = DEFAULT_SEASON_LENGTH_DAYS,
+  // True when sign-ups are still being taken even though status != OPEN — i.e.
+  // a draft season was built but hasn't gone live yet. Defaults to the OPEN check.
+  accepting?: boolean,
 ): EmbedBuilder {
   const active = signups.filter((s) => !s.withdrawn);
+  const isOpen = accepting ?? round.status === "OPEN";
 
   // Public embed only surfaces the COUNT — not the player list. The
   // roster is admin/helper-only via /admin/signups/[id]/build. Hiding
   // individual names lets people sign up without worrying about who
   // else has committed.
-  const status =
-    round.status === "OPEN"
-      ? `**${active.length} signed up**`
-      : round.status === "CLOSED"
-        ? `**${active.length} signed up — sign-ups closed**`
-        : `**${active.length} signed up — season started**`;
+  const status = isOpen
+    ? `**${active.length} signed up**`
+    : round.status === "CLOSED"
+      ? `**${active.length} signed up — sign-ups closed**`
+      : `**${active.length} signed up — season started**`;
 
   // Description tracks the round's lifecycle. While OPEN we show the close
   // time (the withdraw deadline) as a Discord timestamp. Once the season has
   // started, self-serve withdrawal is gone — point them at a helper.
   let description: string;
-  if (round.status === "OPEN") {
+  if (isOpen) {
     const closeLine = round.closesAt
       ? `Closes ${discordTs(round.closesAt, "F")} (${discordTs(round.closesAt, "R")}). Withdraw anytime before.`
       : "Withdraw anytime before sign-ups close.";
@@ -84,16 +87,17 @@ export function signupEmbed(
     .setThumbnail(LOGO_URL)
     .setDescription(description)
     .addFields({ name: "Status", value: status, inline: false })
-    .setColor(round.status === "OPEN" ? 0x5865f2 : 0x99aab5)
+    .setColor(isOpen ? 0x5865f2 : 0x99aab5)
     .setFooter({ text: `Round ${round.id}` });
   if (windowValue) embed.addFields({ name: "🎮 Play your games", value: windowValue, inline: false });
   return embed;
 }
 
-export function signupButtons(round: SignupRound): ActionRowBuilder<ButtonBuilder> {
+export function signupButtons(round: SignupRound, accepting?: boolean): ActionRowBuilder<ButtonBuilder> {
   // Disabled once the round isn't OPEN, or once the announced close time has
-  // passed (takes effect on the next re-render).
-  const open = round.status === "OPEN" && !(round.closesAt && Date.now() > round.closesAt.getTime());
+  // passed (takes effect on the next re-render). `accepting` overrides this for
+  // a built-but-not-live draft (still taking sign-ups).
+  const open = accepting ?? (round.status === "OPEN" && !(round.closesAt && Date.now() > round.closesAt.getTime()));
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`signup:join:${round.id}`)

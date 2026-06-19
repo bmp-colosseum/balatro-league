@@ -13,6 +13,22 @@ async function seasonLengthDays(): Promise<number> {
 
 // Re-fetch the round + signups, then edit the original message in place so the count and list
 // always match DB state, even if multiple users click at once.
+// Sign-ups are accepted while the round is OPEN (and before its close time), OR
+// while a draft season has been BUILT but not yet activated — building a draft to
+// arrange it must NOT close sign-ups. Only an explicit CLOSE, or the season going
+// live/ended, stops them.
+async function isAcceptingSignups(round: { status: string; closesAt: Date | null; resultingSeasonId: string | null }): Promise<boolean> {
+  if (round.status === "OPEN") return !(round.closesAt && Date.now() > round.closesAt.getTime());
+  if (round.status === "BUILT" && round.resultingSeasonId) {
+    const season = await prisma.season.findUnique({
+      where: { id: round.resultingSeasonId },
+      select: { isActive: true, endedAt: true },
+    });
+    return !!season && !season.isActive && !season.endedAt;
+  }
+  return false;
+}
+
 async function refreshSignupMessage(roundId: string, interaction: ButtonInteraction) {
   const round = await prisma.signupRound.findUnique({ where: { id: roundId } });
   if (!round) return;
@@ -20,9 +36,10 @@ async function refreshSignupMessage(roundId: string, interaction: ButtonInteract
     where: { roundId },
     orderBy: { signedUpAt: "asc" },
   });
+  const accepting = await isAcceptingSignups(round);
   await interaction.message.edit({
-    embeds: [signupEmbed(round, signups, await seasonLengthDays())],
-    components: [signupButtons(round)],
+    embeds: [signupEmbed(round, signups, await seasonLengthDays(), accepting)],
+    components: [signupButtons(round, accepting)],
   });
 }
 
@@ -42,16 +59,17 @@ export const signupHandlers: ButtonHandler = {
       await interaction.reply({ content: "Signup round not found.", flags: MessageFlags.Ephemeral });
       return;
     }
-    if (round.status !== "OPEN") {
+    if (!(await isAcceptingSignups(round))) {
+      const why = round.status === "CLOSED" ? "closed" : "closed — the season is live";
       await interaction.reply({
-        content: `Sign-ups for **${round.name}** are ${round.status.toLowerCase()}.`,
+        content: `Sign-ups for **${round.name}** are ${why}.`,
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
     // Past the announced close time → the withdraw/sign-up window is over even
     // if the round hasn't been finalized yet. Point them at a helper.
-    if (round.closesAt && Date.now() > round.closesAt.getTime()) {
+    if (round.status === "OPEN" && round.closesAt && Date.now() > round.closesAt.getTime()) {
       await interaction.reply({
         content: `Sign-ups for **${round.name}** have closed. If you need to change anything, ask a league helper.`,
         flags: MessageFlags.Ephemeral,
