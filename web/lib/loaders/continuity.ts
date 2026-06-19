@@ -107,6 +107,8 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
       })
     : [];
   const peakByDiscord = new Map(snaps.map((s) => [s.discordId, s.peakMmr ?? s.rankedMmr ?? 0]));
+  // BMP ranked MMR, shown alongside the internal MMR for sanity-checking.
+  const bmpByDiscord = new Map(snaps.map((s) => [s.discordId, s.rankedMmr ?? s.peakMmr ?? null]));
 
   // One consistent MMR scale: stored secret MMR, else BMP peak ×1.5.
   // Stored MMR, else BMP peak ×1.5, else the base seed (BMP base 200 × 1.5 = 300).
@@ -135,9 +137,15 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
         standingRank: standing?.rank ?? Math.max(2, Math.ceil(divSize / 2)),
         divSize,
         standing,
+        bmp: bmpByDiscord.get(s.discordId) ?? null,
       });
     } else {
-      rookies.push({ discordId: s.discordId, displayName: s.displayName, mmr: mmrOf(s.discordId) });
+      rookies.push({
+        discordId: s.discordId,
+        displayName: s.displayName,
+        mmr: mmrOf(s.discordId),
+        bmp: bmpByDiscord.get(s.discordId) ?? null,
+      });
     }
   }
 

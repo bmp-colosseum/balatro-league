@@ -26,6 +26,9 @@ export interface PlacementMember {
   // Returner's ORIGINAL division index (on this ladder) before promotion/
   // relegation/overflow — lets the UI show "↑ from Rare 1". Null for rookies.
   fromIndex: number | null;
+  // BMP ranked MMR, carried purely for display/sanity-check (not used by the
+  // algorithm). Null if no BMP data.
+  bmp: number | null;
 }
 export interface PlacementDivision {
   tierName: string;
@@ -41,11 +44,13 @@ export interface ReturnerInput {
   standingRank: number; // 1 = top of their current division
   divSize: number; // how many are in their current division
   standing: { rank: number; record: string } | null;
+  bmp?: number | null;
 }
 export interface RookieInput {
   discordId: string;
   displayName: string;
   mmr: number;
+  bmp?: number | null;
 }
 
 // Overflow moves ONLY rookies — returners are locked to their finish division
@@ -83,6 +88,7 @@ export function buildOwenPlacement(
       isRookie: false,
       standing: r.standing,
       fromIndex: r.divIndex,
+      bmp: r.bmp ?? null,
     });
   }
 
@@ -104,6 +110,7 @@ export function buildOwenPlacement(
       isRookie: true,
       standing: null,
       fromIndex: null,
+      bmp: rk.bmp ?? null,
     });
   }
 

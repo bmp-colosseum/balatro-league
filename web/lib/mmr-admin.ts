@@ -1,7 +1,7 @@
 import "server-only";
 
 // Secret-MMR onboarding: seed each player's hiddenMmr from their BMP peak (×1.5,
-// landing on the league's 2200 scale) and let admin hand-tweak. Owen's "go
+// landing on the league scale, BMP peak ×1.5) and let admin hand-tweak. Owen's "go
 // through and give out MMRs once" step. The loader + the two mutations the
 // /admin/mmr screen drives.
 

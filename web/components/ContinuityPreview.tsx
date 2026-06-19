@@ -65,8 +65,9 @@ export function ContinuityPreview({
         </div>
         <p className="muted" style={{ fontSize: 11, margin: "6px 0 0" }}>
           Returners hold their finish division (with promotion ↑ / relegation ↓); only newcomers fill gaps,
-          by MMR. <strong>Finishers are never shuffled by size-balancing.</strong> MMR comes from season
-          results once you recompute on /admin/mmr. Nothing is saved.
+          by MMR. <strong>Finishers are never shuffled by size-balancing.</strong> Each row shows movement,
+          last-season standing, <strong>BMP</strong> (balatromp ranked) and our <strong>internal MMR</strong>
+          (right). Internal MMR comes from season results once you recompute on /admin/mmr. Nothing is saved.
         </p>
       </div>
 
@@ -122,7 +123,10 @@ export function ContinuityPreview({
                       <span className="muted" style={{ fontSize: 11, minWidth: 64, textAlign: "right" }}>SoS {d.schedule.sos.get(m.discordId)}</span>
                     </>
                   ) : null}
-                  <span style={{ fontSize: 12, fontVariantNumeric: "tabular-nums", minWidth: 48, textAlign: "right", fontWeight: 600 }} title="Secret MMR">
+                  <span className="muted" style={{ fontSize: 11, fontVariantNumeric: "tabular-nums", minWidth: 64, textAlign: "right" }} title="BMP ranked MMR">
+                    {m.bmp != null ? `BMP ${m.bmp}` : "BMP —"}
+                  </span>
+                  <span style={{ fontSize: 12, fontVariantNumeric: "tabular-nums", minWidth: 48, textAlign: "right", fontWeight: 600 }} title="Internal (secret) MMR">
                     {m.mmr}
                   </span>
                 </div>

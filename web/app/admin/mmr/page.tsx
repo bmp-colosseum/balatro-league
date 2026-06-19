@@ -33,7 +33,7 @@ export default async function MmrAdminPage() {
           </span>
         </div>
         <p className="muted">
-          Each player&apos;s hidden league MMR (the 2200 scale). Placement + schedule previews read from
+          Each player&apos;s hidden league MMR (BMP peak ×1.5 scale — not pinned to any fixed top). Placement + schedule previews read from
           this. Seed everyone from BMP (peak × 1.5), then hand-fix the ones it gets wrong. You only need
           to do this once — after that it updates per match.
         </p>

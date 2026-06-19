@@ -16,7 +16,7 @@ export interface SandboxPlayer {
   displayName: string;
   rating: number | null; // legacy league rank (1 = strongest); null = unrated
   mmr: number | null;     // BMP ranked MMR
-  hiddenMmr: number | null; // the secret league MMR (2200 scale); null = unset
+  hiddenMmr: number | null; // the secret league MMR (BMP ×1.5 scale); null = unset
 }
 
 export function PlacementSandbox({
