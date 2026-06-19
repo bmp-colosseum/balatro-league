@@ -1,32 +1,25 @@
 import "server-only";
 
-// "Based on the current season" placement projection for the preview. Returners
-// (signups already in the active season) stay in their current division — Owen's
-// continuity rule — and rookies (everyone else) slot into the division whose
-// average MMR is the greatest value ≤ their MMR (greatest-lower-bound). Pure
-// projection; nothing is written. Promotion/relegation is NOT applied here yet
-// (the active season isn't over), so it's "where everyone sits right now + where
-// newcomers would land". Also surfaces each returner's current league standing.
+// "Based on the current season" placement projection — now Owen's real
+// algorithm. Returners hold their division with promotion/relegation applied,
+// rookies slot in by greatest-lower-bound MMR, and divisions overflow-balance to
+// ~ceil(total / #divisions). Every player is on ONE MMR scale (stored secret MMR
+// else BMP peak ×1.5) so nobody gets dumped. Pure projection; nothing is written.
 
 import type { Player } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { computeStandings } from "@/lib/standings";
+import {
+  buildOwenPlacement,
+  type ReturnerInput,
+  type RookieInput,
+  type PlacementDivision,
+  type PlacementMember,
+} from "@/lib/owen-placement";
 
-export interface ContinuityMember {
-  discordId: string;
-  displayName: string;
-  mmr: number;
-  isRookie: boolean;
-  // Current standing in their active-season division: rank (#) + W-D-L. Null for
-  // rookies and for anyone who hasn't played a game yet.
-  standing: { rank: number; record: string } | null;
-}
-export interface ContinuityDivision {
-  tierName: string;
-  name: string;
-  members: ContinuityMember[];
-}
+export type ContinuityMember = PlacementMember;
+export type ContinuityDivision = PlacementDivision;
 export interface ContinuityResult {
   divisions: ContinuityDivision[];
   returnerCount: number;
@@ -59,9 +52,10 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
   });
   if (!activeSeason) return "NO_SEASON";
 
-  // playerId -> their active-season division id.
-  const divByPlayer = new Map<string, string>();
-  for (const d of activeSeason.divisions) for (const m of d.members) divByPlayer.set(m.playerId, d.id);
+  // playerId -> active-season division index (0 = top).
+  const divIndexByPlayer = new Map<string, number>();
+  activeSeason.divisions.forEach((d, i) => d.members.forEach((m) => divIndexByPlayer.set(m.playerId, i)));
+  const divSizeByIndex = activeSeason.divisions.map((d) => d.members.length);
 
   // Current standing per player (rank + record) from confirmed matches.
   const standingByPlayer = new Map<string, { rank: number; record: string }>();
@@ -69,16 +63,14 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
     const divPlayers = d.members.map((m) => m.player) as unknown as Player[];
     const rows = computeStandings(divPlayers, d.matches);
     for (const r of rows) {
-      if (r.played > 0) {
-        standingByPlayer.set(r.player.id, { rank: r.rank ?? 0, record: `${r.wins}-${r.draws}-${r.losses}` });
-      }
+      if (r.played > 0) standingByPlayer.set(r.player.id, { rank: r.rank ?? 0, record: `${r.wins}-${r.draws}-${r.losses}` });
     }
   }
 
   const discordIds = round.signups.map((s) => s.discordId);
   const players = await prisma.player.findMany({
     where: { discordId: { in: discordIds } },
-    select: { id: true, discordId: true, rating: true, hiddenMmr: true },
+    select: { id: true, discordId: true, hiddenMmr: true },
   });
   const playerByDiscord = new Map(players.map((p) => [p.discordId, p]));
   const snaps = discordIds.length
@@ -91,82 +83,47 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
     : [];
   const peakByDiscord = new Map(snaps.map((s) => [s.discordId, s.peakMmr ?? s.rankedMmr ?? 0]));
 
-  const playerIdOf = (discordId: string) => playerByDiscord.get(discordId)?.id ?? null;
-  const standingOf = (discordId: string) => {
-    const pid = playerIdOf(discordId);
-    return pid ? standingByPlayer.get(pid) ?? null : null;
+  // One consistent MMR scale: stored secret MMR, else BMP peak ×1.5.
+  const mmrOf = (discordId: string) => {
+    const stored = playerByDiscord.get(discordId)?.hiddenMmr;
+    if (stored != null) return stored;
+    const peak = peakByDiscord.get(discordId);
+    return peak ? Math.round(peak * 1.5) : 0;
   };
 
-  const isReturner = (discordId: string) => {
-    const p = playerByDiscord.get(discordId);
-    return !!p && divByPlayer.has(p.id);
-  };
-  const returners = round.signups.filter((s) => isReturner(s.discordId));
-  const rookies = round.signups.filter((s) => !isReturner(s.discordId));
-
-  const divList: ContinuityDivision[] = activeSeason.divisions.map((d) => ({
-    tierName: d.tier.name,
-    name: d.name,
-    members: [],
-  }));
-  const divIndexById = new Map(activeSeason.divisions.map((d, i) => [d.id, i]));
-
-  // Place returners into their current division, with their standing.
-  for (const s of returners) {
-    const p = playerByDiscord.get(s.discordId)!;
-    const di = divIndexById.get(divByPlayer.get(p.id)!)!;
-    divList[di]!.members.push({
-      discordId: s.discordId,
-      displayName: s.displayName,
-      mmr: 0,
-      isRookie: false,
-      standing: standingOf(s.discordId),
-    });
-  }
-
-  // Order each division by current standing (top finisher first), then stored
-  // MMR, then name — and assign MMR by ladder position (Legendary high → Common
-  // low). So the division leader gets the top MMR, never BMP. Stored secret MMR
-  // wins if set.
-  const storedOf = (discordId: string) => playerByDiscord.get(discordId)?.hiddenMmr ?? null;
-  let pos = 0;
-  for (const d of divList) {
-    d.members.sort((a, b) => {
-      const ra = a.standing?.rank ?? Number.POSITIVE_INFINITY;
-      const rb = b.standing?.rank ?? Number.POSITIVE_INFINITY;
-      if (ra !== rb) return ra - rb;
-      return (storedOf(b.discordId) ?? -Infinity) - (storedOf(a.discordId) ?? -Infinity);
-    });
-    for (const m of d.members) {
-      m.mmr = storedOf(m.discordId) ?? Math.max(0, 2200 - pos * 10);
-      pos++;
+  const returners: ReturnerInput[] = [];
+  const rookies: RookieInput[] = [];
+  for (const s of round.signups) {
+    const p = playerByDiscord.get(s.discordId);
+    const divIndex = p ? divIndexByPlayer.get(p.id) : undefined;
+    if (p && divIndex != null) {
+      const standing = standingByPlayer.get(p.id) ?? null;
+      const divSize = divSizeByIndex[divIndex] ?? 1;
+      returners.push({
+        discordId: s.discordId,
+        displayName: s.displayName,
+        mmr: mmrOf(s.discordId),
+        divIndex,
+        // No standing (no games) → middle rank so they don't promote/relegate.
+        standingRank: standing?.rank ?? Math.max(2, Math.ceil(divSize / 2)),
+        divSize,
+        standing,
+      });
+    } else {
+      rookies.push({ discordId: s.discordId, displayName: s.displayName, mmr: mmrOf(s.discordId) });
     }
   }
 
-  // Rookies: MMR ≈ 1.5× peak BMP. Place in the division whose average (returner)
-  // MMR is the greatest value ≤ the rookie's MMR; if none qualify, the lowest.
-  const divAvg = divList.map((d) => (d.members.length ? d.members.reduce((a, m) => a + m.mmr, 0) / d.members.length : 0));
-  for (const s of rookies) {
-    const rookieMmr = Math.round((peakByDiscord.get(s.discordId) ?? 0) * 1.5);
-    let bestIdx = divList.length - 1;
-    let bestAvg = -Infinity;
-    for (let i = 0; i < divList.length; i++) {
-      if (divAvg[i]! <= rookieMmr && divAvg[i]! > bestAvg) {
-        bestAvg = divAvg[i]!;
-        bestIdx = i;
-      }
-    }
-    divList[bestIdx]!.members.push({
-      discordId: s.discordId,
-      displayName: s.displayName,
-      mmr: rookieMmr,
-      isRookie: true,
-      standing: null,
-    });
-  }
+  const targetSize = Math.max(1, Math.ceil(round.signups.length / activeSeason.divisions.length));
+  const placed = buildOwenPlacement(
+    activeSeason.divisions.map((d) => ({ tierName: d.tier.name, name: d.name })),
+    returners,
+    rookies,
+    targetSize,
+  );
 
   return {
-    divisions: divList,
+    divisions: placed,
     returnerCount: returners.length,
     rookieCount: rookies.length,
     basedOnSeason: formatSeasonLabel(activeSeason),

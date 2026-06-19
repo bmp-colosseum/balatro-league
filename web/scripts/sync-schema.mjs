@@ -28,6 +28,9 @@ const SYNC = [
   // Pure schedule generator (SoS-balanced 4-regular opponent graph) — shared by
   // the bot and the web (preview + season setup).
   { from: ["src", "schedule.ts"], to: ["lib", "schedule.ts"] },
+  // Pure season-build placement (Owen's promotion/relegation + rookie GLB +
+  // overflow). Shared by the bot and the web (preview + real build).
+  { from: ["src", "owen-placement.ts"], to: ["lib", "owen-placement.ts"] },
 ];
 
 for (const { from, to } of SYNC) {
