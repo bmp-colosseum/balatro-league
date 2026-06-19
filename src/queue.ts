@@ -1084,19 +1084,80 @@ async function announceSeasonStartIfComplete(seasonId: string): Promise<void> {
   });
   if (claim.count === 0) return;
 
+  // Per-player onboarding DMs (welcome + their matchups) instead of pinging
+  // everyone to "go play". Each DM trickles out rate-limited; DMs-off players are
+  // skipped silently (they'll see it via /standings).
+  await queueSeasonOnboardingDms(seasonId).catch((err) =>
+    console.warn(`[season.announce] onboarding DMs failed for ${seasonId}:`, err),
+  );
+
   const channelId = await getConfig(LeagueConfigKey.AnnouncementsChannelId);
   if (!channelId) return;
   const client = tryGetDiscordClient();
   if (!client) return;
-  const roleId = season.leaguePlayerRoleId;
-  const ping = roleId ? `<@&${roleId}> ` : "";
-  const content = `${ping}🃏 **${formatSeasonLabel(season)}** is live! Use \`/start-match @opponent\` to play. Good luck.`;
+  // Ping-free: no more @everyone-go-play. The matchups went out as DMs.
+  const content = `🃏 **${formatSeasonLabel(season)}** is live! Check your **DMs** for your matchups, or run \`/standings\` anytime. Good luck.`;
   try {
     const channel = await client.channels.fetch(channelId);
     if (channel && channel.isTextBased() && "send" in channel) {
-      await channel.send({ content, allowedMentions: roleId ? { roles: [roleId] } : { parse: [] } });
+      await channel.send({ content, allowedMentions: { parse: [] } });
     }
   } catch (err) {
     console.warn(`[season.announce] post failed for ${seasonId}:`, err);
+  }
+}
+
+// Queue a welcome DM to every active member with their division + assigned
+// opponents (read from the pre-created schedule matches). One enqueueDm per
+// player; the worker rate-limits and silently skips anyone with DMs off.
+async function queueSeasonOnboardingDms(seasonId: string): Promise<void> {
+  const season = await prisma.season.findUnique({
+    where: { id: seasonId },
+    select: {
+      number: true,
+      subtitle: true,
+      divisions: {
+        select: {
+          name: true,
+          members: { where: { status: "ACTIVE" }, select: { player: { select: { id: true, discordId: true, displayName: true } } } },
+          matches: { where: { format: "LEAGUE_BO2" }, select: { playerAId: true, playerBId: true } },
+        },
+      },
+    },
+  });
+  if (!season) return;
+  const label = formatSeasonLabel(season);
+
+  for (const div of season.divisions) {
+    const nameById = new Map(div.members.map((m) => [m.player.id, m.player.displayName]));
+    const oppsById = new Map<string, string[]>();
+    const add = (pid: string, name: string) => {
+      const arr = oppsById.get(pid) ?? [];
+      arr.push(name);
+      oppsById.set(pid, arr);
+    };
+    for (const mt of div.matches) {
+      const aN = nameById.get(mt.playerAId);
+      const bN = nameById.get(mt.playerBId);
+      if (aN && bN) {
+        add(mt.playerAId, bN);
+        add(mt.playerBId, aN);
+      }
+    }
+    for (const m of div.members) {
+      const opps = oppsById.get(m.player.id) ?? [];
+      const oppLine = opps.length
+        ? opps.map((o) => `• ${o}`).join("\n")
+        : "_(your matchups will show with_ `/standings`_)_";
+      const content =
+        `🎴 **Welcome to ${label}!**\n` +
+        `You're in **${div.name}**.\n\n` +
+        `**Your matchups this season:**\n${oppLine}\n\n` +
+        `Play each a **best-of-2** — \`/start-match @opponent\` (guided) or \`/report @opponent result:2-0\`. ` +
+        `Track your progress anytime with \`/standings\`. Good luck!`;
+      await enqueueDm({ discordId: m.player.discordId, content }).catch((err) =>
+        console.warn(`[season.onboard] enqueue DM failed for ${m.player.discordId}:`, err),
+      );
+    }
   }
 }
