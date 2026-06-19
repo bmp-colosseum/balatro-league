@@ -35,18 +35,74 @@ export const standings: SlashCommand = {
       return;
     }
 
+    const mySchedule = await buildMyScheduleEmbed(activeSeason.id, interaction.user.id);
+
     const divisionArg = interaction.options.getString("division");
     if (divisionArg) {
-      return renderSingleDivision(interaction, activeSeason.id, divisionArg);
+      return renderSingleDivision(interaction, activeSeason.id, divisionArg, mySchedule);
     }
-    return renderAllDivisions(interaction, activeSeason.id, formatSeasonLabel(activeSeason), activeSeason.targetGroupSize);
+    return renderAllDivisions(interaction, activeSeason.id, formatSeasonLabel(activeSeason), activeSeason.targetGroupSize, mySchedule);
   },
 };
+
+// The caller's own schedule: their assigned opponents in their division + the
+// status of each (not played / reported / won-lost). Null if they're not in the
+// active season or have no matches yet.
+async function buildMyScheduleEmbed(seasonId: string, discordId: string): Promise<EmbedBuilder | null> {
+  const player = await prisma.player.findUnique({ where: { discordId }, select: { id: true } });
+  if (!player) return null;
+  const membership = await prisma.divisionMember.findFirst({
+    where: { playerId: player.id, status: "ACTIVE", division: { seasonId } },
+    include: { division: { select: { id: true, name: true } } },
+  });
+  if (!membership) return null;
+  const matches = await prisma.match.findMany({
+    where: {
+      divisionId: membership.division.id,
+      format: "LEAGUE_BO2",
+      OR: [{ playerAId: player.id }, { playerBId: player.id }],
+    },
+    select: {
+      playerAId: true,
+      gamesWonA: true,
+      gamesWonB: true,
+      status: true,
+      playerA: { select: { displayName: true } },
+      playerB: { select: { displayName: true } },
+    },
+  });
+  if (matches.length === 0) return null;
+
+  const lines = matches.map((m) => {
+    const isA = m.playerAId === player.id;
+    const oppName = isA ? m.playerB.displayName : m.playerA.displayName;
+    const my = isA ? m.gamesWonA : m.gamesWonB;
+    const opp = isA ? m.gamesWonB : m.gamesWonA;
+    let status: string;
+    if (m.status === "CONFIRMED") {
+      status = my > opp ? `✅ won ${my}–${opp}` : my < opp ? `❌ lost ${my}–${opp}` : `🤝 drew ${my}–${opp}`;
+    } else if (m.status === "PENDING" && (my > 0 || opp > 0)) {
+      status = `⏳ reported ${my}–${opp} (awaiting confirm)`;
+    } else if (m.status === "DISPUTED") {
+      status = "⚠ disputed";
+    } else {
+      status = "▫️ not played";
+    }
+    return `**${oppName}** — ${status}`;
+  });
+  const played = matches.filter((m) => m.status === "CONFIRMED").length;
+  return new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle(`🗓️ Your schedule — ${membership.division.name}`)
+    .setDescription(lines.join("\n"))
+    .setFooter({ text: `${played}/${matches.length} played · use /start-match @opponent to play` });
+}
 
 async function renderSingleDivision(
   interaction: ChatInputCommandInteraction,
   seasonId: string,
   divisionName: string,
+  mySchedule: EmbedBuilder | null,
 ) {
   const division = await prisma.division.findFirst({
     where: { seasonId, name: divisionName },
@@ -72,7 +128,10 @@ async function renderSingleDivision(
     ...r,
     dropped: droppedIds.has(r.player.id),
   }));
-  await interaction.editReply(formatStandingsTable(division.name, rows));
+  await interaction.editReply({
+    content: formatStandingsTable(division.name, rows),
+    embeds: mySchedule ? [mySchedule] : [],
+  });
 }
 
 async function renderAllDivisions(
@@ -80,6 +139,7 @@ async function renderAllDivisions(
   seasonId: string,
   seasonName: string,
   targetGroupSize: number,
+  mySchedule: EmbedBuilder | null,
 ) {
   // Load tiers (top → bottom) with their divisions and per-division members/pairings.
   const tiers = await prisma.tier.findMany({
@@ -106,6 +166,7 @@ async function renderAllDivisions(
   }
 
   const embeds: EmbedBuilder[] = [];
+  if (mySchedule) embeds.push(mySchedule); // caller's own schedule first
   let isFirst = true;
   for (const tier of tiers) {
     if (tier.divisions.length === 0) continue;
