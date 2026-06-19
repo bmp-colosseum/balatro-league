@@ -33,26 +33,27 @@ export async function recomputeMmr() {
   revalidatePath("/admin/mmr");
 }
 
-// Apply the ladder order as evenly-spaced MMR: hiddenMmr = top − index × 10, so
-// #1 sits at `top` and everyone below is exactly 10 lower (2200, 2190, 2180, …).
-// The clean cold-start ladder. Order is a JSON array of playerIds, top → bottom;
-// `top` defaults to 2200. (Recompute is the other path: results-based spread.)
+// Apply the ladder: write each player's hidden MMR from a precomputed map. The
+// client decides the values — SEEDED players (those with a BMP basis) get the
+// even −10 spacing by rank; UNSEEDED players all get null (no MMR), so they're
+// tied at the base instead of being fake-ranked alphabetically. null clears.
 export async function applyMmrLadder(formData: FormData) {
   await requireAdmin();
-  let order: string[] = [];
+  let values: Record<string, unknown> = {};
   try {
-    const parsed = JSON.parse(String(formData.get("order") ?? "[]"));
-    if (Array.isArray(parsed)) order = parsed.filter((x): x is string => typeof x === "string");
+    const parsed = JSON.parse(String(formData.get("values") ?? "{}"));
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) values = parsed as Record<string, unknown>;
   } catch {
     return;
   }
-  if (order.length === 0) return;
-  const topRaw = Number.parseInt(String(formData.get("top") ?? ""), 10);
-  const top = Number.isFinite(topRaw) ? topRaw : 2200;
+  const entries = Object.entries(values);
+  if (entries.length === 0) return;
   await prisma.$transaction(
-    order.map((playerId, i) =>
-      prisma.player.update({ where: { id: playerId }, data: { hiddenMmr: Math.max(0, top - i * 10) } }),
-    ),
+    entries.map(([playerId, raw]) => {
+      const n = raw == null ? null : Math.max(0, Math.floor(Number(raw)));
+      const mmr = n != null && Number.isFinite(n) ? n : null;
+      return prisma.player.update({ where: { id: playerId }, data: { hiddenMmr: mmr } });
+    }),
   );
   revalidatePath("/admin/mmr");
 }

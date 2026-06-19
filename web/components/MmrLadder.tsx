@@ -37,7 +37,23 @@ export function MmrLadder({
   const pendingStart = useRef<{ x: number; y: number } | null>(null);
 
   const N = rows.length;
-  const mmrFor = (index: number) => Math.max(0, top - index * 10);
+  // SEEDED = has a BMP basis to rank by. Seeded players get the even −10 ladder
+  // (by their order). UNSEEDED (no BMP) all get null → tied at the base, never
+  // fake-ranked by alphabetical position. Ties are fine.
+  const assignments = useMemo(() => {
+    const m = new Map<string, number | null>();
+    let rank = 0;
+    for (const r of rows) {
+      if (r.bmpPeak != null) {
+        m.set(r.playerId, Math.max(0, top - rank * 10));
+        rank++;
+      } else {
+        m.set(r.playerId, null);
+      }
+    }
+    return m;
+  }, [rows, top]);
+  const seededCount = useMemo(() => rows.filter((r) => r.bmpPeak != null).length, [rows]);
 
   const onRowPointerDown = (e: React.PointerEvent<HTMLTableRowElement>, idx: number) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -101,11 +117,12 @@ export function MmrLadder({
   const commit = () => {
     setSaveError(null);
     const key = JSON.stringify({ order, top });
+    const values: Record<string, number | null> = {};
+    for (const r of rows) values[r.playerId] = assignments.get(r.playerId) ?? null;
     startTransition(async () => {
       try {
         const fd = new FormData();
-        fd.append("order", JSON.stringify(order));
-        fd.append("top", String(top));
+        fd.append("values", JSON.stringify(values));
         await applyOrder(fd);
         setSavedHash(key);
       } catch (err) {
@@ -115,10 +132,11 @@ export function MmrLadder({
   };
 
   const dirty = stateKey !== savedHash;
+  const unseededCount = N - seededCount;
   const applyWithConfirm = () => {
     if (
       window.confirm(
-        `Overwrite EVERY player's hidden MMR with even 10-apart spacing by this order?\n\n#1 = ${top}, then −10 each (#${N} = ${mmrFor(N - 1)}). This replaces any MMRs set by hand (e.g. on the arranger) or by Recompute.`,
+        `Apply the ladder?\n\n${seededCount} seeded player(s) get even 10-apart MMR (#1 = ${top}, then −10 each).\n${unseededCount} unseeded player(s) (no BMP) get NO MMR — tied at the base, not ranked.\n\nThis overwrites any MMRs set by hand (e.g. on the arranger) or by Recompute.`,
       )
     ) {
       commit();
@@ -136,7 +154,7 @@ export function MmrLadder({
           <input
             type="number"
             value={top}
-            min={N * 10}
+            min={seededCount * 10}
             step={10}
             onChange={(e) => setTop(Math.max(0, Number(e.target.value) || 0))}
             style={{ width: 64, padding: "2px 4px", fontSize: 12 }}
@@ -152,8 +170,8 @@ export function MmrLadder({
           Apply: space everyone 10 apart →
         </button>
         <span className="muted" style={{ fontSize: 11 }}>
-          Drag to reorder / set the top — #1 = {top}, each step −10, #{N} = {mmrFor(N - 1)}. Nothing is written
-          until you hit Apply (and confirm).
+          {seededCount} seeded get −10 spacing from {top}; {N - seededCount} unseeded (no BMP) are tied at the
+          base. Drag to reorder the seeded; nothing is written until you Apply (and confirm).
         </span>
         <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
           {saveError ? (
@@ -179,7 +197,7 @@ export function MmrLadder({
             <th style={{ width: 28 }}></th>
             <th style={{ width: 28 }}>#</th>
             <th style={{ padding: "4px 8px" }}>Player</th>
-            <th style={{ padding: "4px 8px", textAlign: "right" }}>MMR (10 apart)</th>
+            <th style={{ padding: "4px 8px", textAlign: "right" }}>MMR on Apply</th>
             <th style={{ padding: "4px 8px", textAlign: "right" }} className="muted">stored</th>
             <th style={{ padding: "4px 8px", textAlign: "right" }} className="muted">BMP peak</th>
             <th style={{ padding: "4px 8px" }} className="muted">Tier</th>
@@ -189,8 +207,8 @@ export function MmrLadder({
           {rows.map((r, i) => {
             const isDragged = dragIdx === i;
             const isHovered = hoverIdx === i && dragIdx !== null && dragIdx !== i;
-            const next = mmrFor(i);
-            const drifted = r.hiddenMmr != null && r.hiddenMmr !== next;
+            const next = assignments.get(r.playerId) ?? null; // null = unseeded
+            const drifted = (r.hiddenMmr ?? null) !== next;
             return (
               <tr
                 key={r.playerId}
@@ -213,10 +231,10 @@ export function MmrLadder({
                     {r.displayName}
                   </Link>
                 </td>
-                <td style={{ padding: "3px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
-                  {next}
+                <td style={{ padding: "3px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: next == null ? "#888" : undefined }}>
+                  {next == null ? <span style={{ fontWeight: 400, fontSize: 11 }} title="No BMP basis — tied at the base until seeded by hand or by results">unseeded</span> : next}
                 </td>
-                <td style={{ padding: "3px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: drifted ? "#f1c40f" : "#888" }} title={drifted ? "Stored MMR differs from the even spacing — drag or hit 'Space everyone 10 apart' to apply." : undefined}>
+                <td style={{ padding: "3px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: drifted ? "#f1c40f" : "#888" }} title={drifted ? "Stored MMR differs from what Apply would write." : undefined}>
                   {r.hiddenMmr ?? "—"}
                 </td>
                 <td style={{ padding: "3px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} className="muted">
