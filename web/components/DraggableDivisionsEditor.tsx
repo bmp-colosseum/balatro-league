@@ -46,6 +46,11 @@ export interface EditorMember {
   priorDivisionGlobalIndex?: number | null;
   priorDivisionName?: string | null;
   priorStanding?: string | null; // e.g. "#3 · 3-1-0"
+  // The WORST division (highest ladder index) the player is entitled to — their
+  // last-season division, or one below if relegated. Dropping them below this
+  // means dropping someone who wasn't relegated. null = no floor (rookie).
+  floorGlobalIndex?: number | null;
+  floorDivisionName?: string | null;
 }
 
 export interface EditorDivision {
@@ -402,6 +407,7 @@ export function DraggableDivisionsEditor({
                             >
                               <span style={{ color: "#888" }} title="Drag to move">⋮⋮</span>
                               <MovementMark member={m} currentGlobalIndex={d.globalIndex} />
+                              <FloorWarn member={m} currentGlobalIndex={d.globalIndex} />
                               <Link
                                 href={`/profile/${m.playerId}`}
                                 style={{ color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
@@ -556,10 +562,28 @@ function MovementMark({ member, currentGlobalIndex }: { member: EditorMember; cu
   const title =
     `Last season: ${member.priorDivisionName ?? "—"}` +
     (member.priorStanding ? ` (${member.priorStanding})` : "") +
-    (dir === "up" ? " — promoted" : dir === "down" ? " — relegated" : " — same level");
+    (dir === "up" ? " — promoted" : dir === "down" ? " — relegated" : " — same level") +
+    (member.floorDivisionName ? ` · floor: ${member.floorDivisionName}` : "");
   return (
     <span title={title} style={{ color, fontWeight: 700, width: 12, textAlign: "center" }}>
       {sym}
+    </span>
+  );
+}
+
+// Floor warning: a player below the WORST division they're entitled to (their
+// last-season division, or one lower if relegated) gets a red ⚠ — they're being
+// dropped without having been relegated.
+function FloorWarn({ member, currentGlobalIndex }: { member: EditorMember; currentGlobalIndex?: number }) {
+  const floor = member.floorGlobalIndex;
+  if (floor == null || currentGlobalIndex === undefined) return null;
+  if (currentGlobalIndex <= floor) return null; // at or above their floor — fine
+  return (
+    <span
+      title={`Below their floor — entitled to at least ${member.floorDivisionName ?? "their earned division"} (they weren't relegated).`}
+      style={{ color: "#e74c3c", fontWeight: 700 }}
+    >
+      ⚠
     </span>
   );
 }

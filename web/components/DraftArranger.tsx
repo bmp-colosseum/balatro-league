@@ -40,19 +40,28 @@ export async function DraftArranger({ seasonId, roundId }: { seasonId: string; r
   // Reuse the continuity library for the promotion/relegation context: each
   // signup's LAST-season division (as a ladder index) + standing. Keyed by
   // discordId. Rookies come back with fromIndex null → shown as NEW.
-  const priorByDiscord = new Map<string, { idx: number | null; name: string | null; standing: string | null }>();
+  const priorByDiscord = new Map<
+    string,
+    { idx: number | null; name: string | null; standing: string | null; floor: number | null; floorName: string | null }
+  >();
   if (roundId) {
     const cont = await loadContinuityPlacement(roundId);
     if (cont && cont !== "NO_ROUND" && cont !== "NO_SEASON") {
-      for (const dv of cont.divisions) {
+      cont.divisions.forEach((dv, placedIdx) => {
         for (const mm of dv.members) {
+          // Floor = worst division they're entitled to: their last-season
+          // division, or the relegated spot (placedIdx) if that's lower. null
+          // for rookies (no earned division).
+          const floor = mm.fromIndex != null ? Math.max(placedIdx, mm.fromIndex) : null;
           priorByDiscord.set(mm.discordId, {
             idx: mm.fromIndex,
             name: mm.fromIndex != null ? cont.divisions[mm.fromIndex]?.name ?? null : null,
             standing: mm.standing ? `#${mm.standing.rank} · ${mm.standing.record}` : null,
+            floor,
+            floorName: floor != null ? cont.divisions[floor]?.name ?? null : null,
           });
         }
-      }
+      });
     }
   }
 
@@ -84,6 +93,8 @@ export async function DraftArranger({ seasonId, roundId }: { seasonId: string; r
         priorDivisionGlobalIndex: roundId ? prior?.idx ?? null : undefined,
         priorDivisionName: prior?.name ?? null,
         priorStanding: prior?.standing ?? null,
+        floorGlobalIndex: prior?.floor ?? null,
+        floorDivisionName: prior?.floorName ?? null,
       };
     }),
   );
