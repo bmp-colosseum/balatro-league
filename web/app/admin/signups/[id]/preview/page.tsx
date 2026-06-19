@@ -39,95 +39,100 @@ export default async function PlacementPreviewPage({
   });
   if (!round) notFound();
 
-  // Is there an editable, populated DRAFT for this round? If so, the current
-  // basis shows the standard editor on it.
-  let editableDraftSeasonId: string | null = null;
+  // Resolve the round's resulting season: a DRAFT we can edit, or LIVE/ended.
+  let draftSeasonId: string | null = null;
+  let seasonLive = false;
   if (round.resultingSeasonId) {
     const s = await prisma.season.findUnique({
       where: { id: round.resultingSeasonId },
-      select: { id: true, isActive: true, endedAt: true },
+      select: { isActive: true, endedAt: true },
     });
-    if (s && !s.isActive && !s.endedAt) {
-      const memberCount = await prisma.divisionMember.count({ where: { seasonId: s.id } });
-      if (memberCount > 0) editableDraftSeasonId = s.id;
+    if (s && (s.isActive || s.endedAt)) seasonLive = true;
+    else if (s) draftSeasonId = round.resultingSeasonId;
+  }
+  // Only a genuinely LIVE/ended season sends you away — a built DRAFT stays
+  // editable here (BUILT no longer means "done").
+  if (seasonLive && round.resultingSeasonId) redirect(`/seasons/${round.resultingSeasonId}`);
+
+  // Current basis + a populated draft → the editor (absorb new sign-ups first).
+  let editorSeasonId: string | null = null;
+  if (mode === "current" && draftSeasonId) {
+    try {
+      await absorbSignupsIntoDraft(round.id, draftSeasonId);
+    } catch (e) {
+      console.warn("[preview] absorb sign-ups failed:", e);
     }
+    const memberCount = await prisma.divisionMember.count({ where: { seasonId: draftSeasonId } });
+    if (memberCount > 0) editorSeasonId = draftSeasonId;
   }
 
   let body: ReactNode;
   let pill: ReactNode;
 
-  if (mode === "current" && editableDraftSeasonId) {
-    // The page IS the editor now. First absorb any new sign-ups / drop withdrawn
-    // ones so the draft always reflects the live roster (your placements stay).
-    try {
-      await absorbSignupsIntoDraft(round.id, editableDraftSeasonId);
-    } catch (err) {
-      console.warn("[preview] absorb sign-ups failed:", err);
-    }
-    pill = (
-      <span className="pill" style={{ background: "rgba(46,204,113,0.18)", color: "#2ecc71" }}>
-        editing draft
-      </span>
-    );
-    body = <DraftArranger seasonId={editableDraftSeasonId} roundId={round.id} />;
+  if (editorSeasonId) {
+    pill = <span className="pill" style={{ background: "rgba(46,204,113,0.18)", color: "#2ecc71" }}>editing draft</span>;
+    body = <DraftArranger seasonId={editorSeasonId} roundId={round.id} />;
+  } else if (mode === "current") {
+    // Read-only continuity projection (no draft yet / empty). Doesn't touch loadBuildSeasonPage.
+    const continuity = await loadContinuityPlacement(round.id);
+    const ok = continuity !== "NO_ROUND" && continuity !== "NO_SEASON" && continuity != null;
+    const count = ok ? continuity.returnerCount + continuity.rookieCount : 0;
+    pill = <span className="pill" style={{ background: "rgba(118,199,255,0.2)", color: "#76c7ff" }}>{count} signups · dry run</span>;
+    body =
+      continuity === "NO_SEASON" ? (
+        <div className="card">No active season to base this on — use the fresh sort, or activate a season first.</div>
+      ) : !ok ? (
+        <div className="card">Couldn&apos;t load the round.</div>
+      ) : count === 0 ? (
+        <div className="card">No signups yet — once people join, their projected placement shows here.</div>
+      ) : (
+        <>
+          {err && (
+            <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c", fontSize: 13 }}>
+              {err === "no-season" ? "No active season to base this on." : "Couldn't build the season — try again."}
+            </div>
+          )}
+          <ContinuityPreview
+            divisions={continuity.divisions}
+            returnerCount={continuity.returnerCount}
+            rookieCount={continuity.rookieCount}
+            basedOnSeason={continuity.basedOnSeason}
+            roundId={round.id}
+            onBuild={buildContinuitySeason}
+          />
+        </>
+      );
   } else {
+    // Fresh basis — needs the player list.
     const result = await loadBuildSeasonPage(id);
     if (result === "NOT_FOUND") notFound();
     if (result === "BUILT_REDIRECT") {
-      redirect(round.resultingSeasonId ? `/seasons/${round.resultingSeasonId}` : "/admin/seasons");
-    }
-    const { sortedSignups, playerByDiscordId, snapshotByDiscordId } = result;
-    const players: SandboxPlayer[] = sortedSignups.map((s) => {
-      const p = playerByDiscordId.get(s.discordId);
-      const snap = snapshotByDiscordId.get(s.discordId);
-      const peak = snap?.peakMmr ?? snap?.rankedMmr ?? null;
-      const effectiveMmr = p?.hiddenMmr ?? (peak != null ? Math.round(peak * 1.5) : null);
-      return {
-        discordId: s.discordId,
-        displayName: s.displayName,
-        rating: p?.rating ?? null,
-        mmr: snap?.rankedMmr ?? null,
-        hiddenMmr: effectiveMmr,
-      };
-    });
-    pill = (
-      <span className="pill" style={{ background: "rgba(118,199,255,0.2)", color: "#76c7ff" }}>
-        {players.length} signups · dry run
-      </span>
-    );
-    const continuity = mode === "current" ? await loadContinuityPlacement(round.id) : null;
-    if (players.length === 0) {
-      body = <div className="card">No signups yet — once people join, their projected placement shows here.</div>;
-    } else if (mode === "current") {
+      pill = <span className="pill" style={{ background: "rgba(118,199,255,0.2)", color: "#76c7ff" }}>draft exists</span>;
+      body = (
+        <div className="card">
+          This round already has a draft — switch to{" "}
+          <Link href={`/admin/signups/${round.id}/preview?basis=current`}>Based on current season</Link> to edit it.
+        </div>
+      );
+    } else {
+      const { sortedSignups, playerByDiscordId, snapshotByDiscordId } = result;
+      const players: SandboxPlayer[] = sortedSignups.map((s) => {
+        const p = playerByDiscordId.get(s.discordId);
+        const snap = snapshotByDiscordId.get(s.discordId);
+        const peak = snap?.peakMmr ?? snap?.rankedMmr ?? null;
+        const effectiveMmr = p?.hiddenMmr ?? (peak != null ? Math.round(peak * 1.5) : null);
+        return { discordId: s.discordId, displayName: s.displayName, rating: p?.rating ?? null, mmr: snap?.rankedMmr ?? null, hiddenMmr: effectiveMmr };
+      });
+      pill = <span className="pill" style={{ background: "rgba(118,199,255,0.2)", color: "#76c7ff" }}>{players.length} signups · dry run</span>;
       body =
-        continuity === "NO_SEASON" ? (
-          <div className="card">No active season to base this on — use the fresh sort, or activate a season first.</div>
-        ) : continuity === "NO_ROUND" || continuity == null ? (
-          <div className="card">Couldn&apos;t load the round.</div>
+        players.length === 0 ? (
+          <div className="card">No signups yet — once people join, their projected placement shows here.</div>
         ) : (
           <>
-            {err && (
-              <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c", fontSize: 13 }}>
-                {err === "no-season" ? "No active season to base this on." : "Couldn't build the season — try again."}
-              </div>
-            )}
-            <ContinuityPreview
-              divisions={continuity.divisions}
-              returnerCount={continuity.returnerCount}
-              rookieCount={continuity.rookieCount}
-              basedOnSeason={continuity.basedOnSeason}
-              roundId={round.id}
-              onBuild={buildContinuitySeason}
-            />
+            <MmrSeedingTable players={players} />
+            <PlacementSandbox players={players} initialTiers={owenLadder(players.length)} initialTargetGroupSize={5} />
           </>
         );
-    } else {
-      body = (
-        <>
-          <MmrSeedingTable players={players} />
-          <PlacementSandbox players={players} initialTiers={owenLadder(players.length)} initialTargetGroupSize={5} />
-        </>
-      );
     }
   }
 
@@ -143,11 +148,11 @@ export default async function PlacementPreviewPage({
             ← Back to round
           </Link>
         </div>
-        {round.status !== "OPEN" && (
+        {round.status === "CLOSED" && (
           <div className="card" style={{ borderColor: "#f1c40f", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <span style={{ color: "#f1c40f", fontSize: 13 }}>
-              ⚠ Sign-ups for this round are <strong>{round.status}</strong> — the Discord Sign Up button is
-              disabled. Arranging a draft no longer closes sign-ups; re-open if this was a mistake.
+              ⚠ Sign-ups are <strong>closed</strong> for this round — the Discord Sign Up button is off. Re-open to let
+              people join again. (A built draft still takes sign-ups; only an explicit close stops them.)
             </span>
             <form action={reopenSignupRound} style={{ marginLeft: "auto" }}>
               <input type="hidden" name="roundId" value={round.id} />
@@ -176,7 +181,7 @@ export default async function PlacementPreviewPage({
           </Link>
         </div>
         <p className="muted">
-          {mode === "current" && editableDraftSeasonId ? (
+          {mode === "current" && editorSeasonId ? (
             <>
               This is the draft for next season — <strong>drag players between divisions, it saves automatically</strong>.
               Share this page with whoever&apos;s arranging. Nothing is live until you activate.
