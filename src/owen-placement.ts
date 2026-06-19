@@ -143,5 +143,31 @@ export function buildOwenPlacement(
     if (!moved) break;
   }
 
+  // 4. Hard-cap the top division (Legendary) at topTarget. It's a fixed elite
+  //    size, so finishing outside the top `topTarget` means relegation to
+  //    division 1 — the same boundary every division has, applied to the cap.
+  //    Relegate the WEAKEST first: rookies (no finish) → players who came from a
+  //    LOWER division (promotees before holders) → worse finish → lower MMR.
+  if (topTarget != null && n > 1) {
+    const weaker = (a: PlacementMember, b: PlacementMember): boolean => {
+      if (a.isRookie !== b.isRookie) return a.isRookie; // rookies are weakest
+      if (a.isRookie && b.isRookie) return a.mmr < b.mmr;
+      const af = a.fromIndex ?? 0;
+      const bf = b.fromIndex ?? 0;
+      if (af !== bf) return af > bf; // came from a lower division → weaker
+      const ar = a.standing?.rank ?? Infinity;
+      const br = b.standing?.rank ?? Infinity;
+      if (ar !== br) return ar > br; // worse finish → weaker
+      return a.mmr < b.mmr;
+    };
+    while (divs[0]!.members.length > topTarget) {
+      const m = divs[0]!.members;
+      let worst = 0;
+      for (let i = 1; i < m.length; i++) if (weaker(m[i]!, m[worst]!)) worst = i;
+      const [moved] = m.splice(worst, 1);
+      divs[1]!.members.push(moved!);
+    }
+  }
+
   return divs;
 }

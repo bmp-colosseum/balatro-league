@@ -46,8 +46,12 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
           tier: true,
           members: { where: { status: "ACTIVE" }, include: { player: { select: { id: true, displayName: true } } } },
           matches: {
-            where: { status: "CONFIRMED", format: "LEAGUE_BO2" },
-            select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
+            // Both BO2 league matches AND the BO1 showdown/shootout tiebreakers,
+            // so standings reflect who actually won the tiebreaker (e.g. Toying
+            // beating Piton in the showdown promotes Toying, not the alphabetical
+            // fallback). Split by format below.
+            where: { status: "CONFIRMED", format: { in: ["LEAGUE_BO2", "SHOOTOUT_BO1"] } },
+            select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true, winnerId: true, format: true },
           },
         },
       },
@@ -86,7 +90,11 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
   const standingByPlayer = new Map<string, { rank: number; record: string }>();
   for (const d of activeSeason.divisions) {
     const divPlayers = d.members.map((m) => m.player) as unknown as Player[];
-    const rows = computeStandings(divPlayers, d.matches);
+    const bo2 = d.matches.filter((m) => m.format === "LEAGUE_BO2");
+    const shootouts = d.matches
+      .filter((m) => m.format === "SHOOTOUT_BO1" && m.winnerId)
+      .map((m) => ({ playerAId: m.playerAId, playerBId: m.playerBId, winnerId: m.winnerId! }));
+    const rows = computeStandings(divPlayers, bo2, shootouts);
     for (const r of rows) {
       if (r.played > 0) standingByPlayer.set(r.player.id, { rank: r.rank ?? 0, record: `${r.wins}-${r.draws}-${r.losses}` });
     }

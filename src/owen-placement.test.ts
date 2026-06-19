@@ -105,6 +105,19 @@ describe("buildOwenPlacement — overflow balances rookies, locks returners", ()
 });
 
 describe("buildOwenPlacement — fixed top division (Legendary)", () => {
+  it("hard-caps the top division, relegating the weakest finishers", () => {
+    // 8 returners hold Legendary at mid-ranks (5–12 of a 20-player division →
+    // no promotion/relegation), so all 8 land in Legendary. topTarget 6 → the
+    // two worst finishers (ranks 11, 12) relegate to division 1.
+    const returners = Array.from({ length: 8 }, (_, i) => returner(`leg-${i}`, 0, i + 5, 20, 2000 - i * 10));
+    const out = buildOwenPlacement(DIVS, returners, [], 100, 6);
+    expect(out[0]!.members).toHaveLength(6);
+    const leg = out[0]!.members.map((m) => m.discordId);
+    expect(leg).not.toContain("leg-6"); // rank 11
+    expect(leg).not.toContain("leg-7"); // rank 12
+    expect(out[1]!.members.map((m) => m.discordId)).toEqual(expect.arrayContaining(["leg-6", "leg-7"]));
+  });
+
   it("caps the top division at topTarget, overflowing rookies down", () => {
     // 2 returners hold Legendary; 5 high-MMR rookies all GLB into Legendary
     // (avg 1950 ≤ 2100). topTarget 3 → Legendary keeps 2 returners + 1 rookie;
