@@ -33,6 +33,20 @@ export async function recomputeMmr() {
   revalidatePath("/admin/mmr");
 }
 
+// Mark every currently-confirmed match as already settled (mmrApplied=true)
+// WITHOUT running Elowen. Use this before turning live MMR on so the existing
+// backlog (e.g. all of Season 1) is skipped and Elowen only moves on NEW matches
+// — i.e. "start the Elo fresh from here, on top of the seeded MMRs."
+export async function markMatchesSettled() {
+  await requireAdmin();
+  const res = await prisma.match.updateMany({
+    where: { status: "CONFIRMED", format: "LEAGUE_BO2", mmrApplied: false },
+    data: { mmrApplied: true },
+  });
+  console.log(`[mmr] marked ${res.count} backlog matches settled (skipped, not applied)`);
+  revalidatePath("/admin/mmr");
+}
+
 // Apply the ladder: write each player's hidden MMR from a precomputed map. The
 // client decides the values — SEEDED players (those with a BMP basis) get the
 // even −10 spacing by rank; UNSEEDED players all get null (no MMR), so they're

@@ -6,7 +6,7 @@ import { loadMmrAdmin } from "@/lib/mmr-admin";
 import { prisma } from "@/lib/prisma";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { MmrLadder, type MmrLadderRow } from "@/components/MmrLadder";
-import { applyMmrLadder, fillMissingMmr, recomputeMmr, setLiveMmr } from "./actions";
+import { applyMmrLadder, fillMissingMmr, markMatchesSettled, recomputeMmr, setLiveMmr } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +72,17 @@ export default async function MmrAdminPage() {
               ? "Every confirmed match auto-updates MMR via the sweep."
               : "Nothing auto-updates — preview freely. Flip on when you're ready to enact it."}
           </span>
+          <div style={{ flexBasis: "100%", borderTop: "1px solid var(--border)", paddingTop: 8, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <form action={markMatchesSettled}>
+              <ConfirmButton message="Mark all current confirmed matches as settled WITHOUT applying them? Use this before turning live MMR on so the Season 1 backlog is skipped and Elowen only moves on NEW matches. Does not change anyone's MMR.">
+                Mark past matches settled (start Elo fresh)
+              </ConfirmButton>
+            </form>
+            <span className="muted" style={{ fontSize: 12 }}>
+              ⚠ Do this BEFORE turning live MMR on, or it&apos;ll replay the whole Season 1 backlog. This skips
+              the backlog so Elowen starts moving on Season 2 matches, on top of your seeded MMRs.
+            </span>
+          </div>
         </div>
 
         <div className="card" style={{ display: "grid", gap: 10 }}>
