@@ -59,6 +59,28 @@ describe("buildOwenPlacement — rookies + scale", () => {
   });
 });
 
+describe("buildOwenPlacement — the floor (minimal rank)", () => {
+  it("overflow drops a rookie, never relegates a returner", () => {
+    // Rare 2 (index 2): 4 mid-standing returners (no promotion) + 1 rookie that
+    // lands here by MMR. target 4 → must shed one. The ROOKIE drops to Common;
+    // every returner keeps their division.
+    const returners = [
+      returner("ret1", 2, 4, 10, 1000),
+      returner("ret2", 2, 5, 10, 900),
+      returner("ret3", 2, 6, 10, 800),
+      returner("ret4", 2, 7, 10, 700),
+    ];
+    const rookies: RookieInput[] = [{ discordId: "rook", displayName: "rook", mmr: 850 }];
+    const out = buildOwenPlacement(DIVS, returners, rookies, 4);
+    const rare2 = out[2]!.members;
+    // Floor: all four returners keep their division; the rookie is the one that
+    // moved (wherever the open space was).
+    expect(rare2.map((m) => m.discordId).sort()).toEqual(["ret1", "ret2", "ret3", "ret4"]);
+    expect(rare2.filter((m) => m.isRookie)).toHaveLength(0);
+    expect(out.flatMap((d) => d.members.map((m) => m.discordId))).toContain("rook");
+  });
+});
+
 describe("buildOwenPlacement — overflow", () => {
   it("rebalances so no division exceeds the target size", () => {
     const returners = Array.from({ length: 12 }, (_, i) => returner(`c-${i}`, 3, i + 1, 12, 2000 - i * 10));

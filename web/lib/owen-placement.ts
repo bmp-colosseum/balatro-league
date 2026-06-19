@@ -8,9 +8,10 @@
 //      the greatest value ≤ their MMR (greatest-lower-bound); if none qualify,
 //      the lowest division.
 //   3. Overflow: no division may exceed the target size (ceil(total / #divs)).
-//      An over-full division sheds a player toward open space — ROOKIES first
-//      (strongest up / weakest down), and only a returner (by standing) if no
-//      rookie is left to move — cascading until balanced.
+//      An over-full division sheds toward open space, cascading until balanced.
+//      THE FLOOR (Owen's "minimal rank"): downward overflow can only move
+//      ROOKIES — a returner is never dropped below their division by the
+//      balancer, only by relegation. Upward overflow can move anyone.
 //
 // Crucially, returner PLACEMENT is by division + standing, NOT by raw MMR — so a
 // strong league player with a weak BMP number keeps their spot. MMR is only used
@@ -44,23 +45,33 @@ export interface RookieInput {
   mmr: number;
 }
 
-// Pick who leaves an over-full division. ROOKIES move before returners — a
-// newcomer has no earned claim to the division, so overflow shouldn't bump a
-// real finisher. `preferHigh` = sending someone UP (take the strongest), else
-// DOWN (take the weakest). Among rookies, "strength" is MMR; among returners
-// (only moved if no rookies are left to spare) it's league STANDING, never the
-// unreliable BMP-ish MMR — so a decent finisher isn't shoved down for a low BMP.
-function popMovable(members: PlacementMember[], preferHigh: boolean): PlacementMember {
+// UP-moves can take anyone — overflow may push the strongest up (Owen allows it;
+// it doesn't lower anyone's floor). Prefer a rookie; else the best-standing
+// returner.
+function popUp(members: PlacementMember[]): PlacementMember {
   const rookies = members.filter((m) => m.isRookie);
   if (rookies.length) {
     let best = rookies[0]!;
-    for (const m of rookies) if (preferHigh ? m.mmr > best.mmr : m.mmr < best.mmr) best = m;
+    for (const m of rookies) if (m.mmr > best.mmr) best = m;
     members.splice(members.indexOf(best), 1);
     return best;
   }
-  const rank = (m: PlacementMember) => m.standing?.rank ?? Number.POSITIVE_INFINITY; // no games → treated as bottom
+  const rank = (m: PlacementMember) => m.standing?.rank ?? Number.POSITIVE_INFINITY;
   let best = members[0]!;
-  for (const m of members) if (preferHigh ? rank(m) < rank(best) : rank(m) > rank(best)) best = m;
+  for (const m of members) if (rank(m) < rank(best)) best = m;
+  members.splice(members.indexOf(best), 1);
+  return best;
+}
+
+// DOWN-moves can ONLY take rookies — THE FLOOR (Owen's "minimal rank"): a
+// returner cannot be dropped below their division except by relegation, never by
+// the overflow balancer. Returns null when there's no rookie to spare (then the
+// caller pushes someone up instead, which the floor permits).
+function popDown(members: PlacementMember[]): PlacementMember | null {
+  const rookies = members.filter((m) => m.isRookie);
+  if (!rookies.length) return null;
+  let best = rookies[0]!;
+  for (const m of rookies) if (m.mmr < best.mmr) best = m;
   members.splice(members.indexOf(best), 1);
   return best;
 }
@@ -117,18 +128,18 @@ export function buildOwenPlacement(
   while (guard++ < 10000) {
     const i = divs.findIndex((d) => d.members.length > targetSize);
     if (i < 0) break;
-    // Prefer the immediately-open neighbour; the strongest goes up, weakest down.
-    // popMovable sends rookies before returners.
+    // Prefer the immediately-open neighbour. Up takes anyone; DOWN only a rookie
+    // (the floor). If down is needed but only returners remain, push someone up
+    // instead — the floor forbids dropping them, and up-room frees this division.
     if (hasSpace(i - 1)) {
-      divs[i - 1]!.members.push(popMovable(divs[i]!.members, true));
-    } else if (hasSpace(i + 1)) {
-      divs[i + 1]!.members.push(popMovable(divs[i]!.members, false));
-    } else if (i < n - 1 && spaceBelowSomewhere(i)) {
-      // route excess downward to reach space lower on the ladder
-      divs[i + 1]!.members.push(popMovable(divs[i]!.members, false));
+      divs[i - 1]!.members.push(popUp(divs[i]!.members));
+    } else if (hasSpace(i + 1) || (i < n - 1 && spaceBelowSomewhere(i))) {
+      const m = popDown(divs[i]!.members);
+      if (m) divs[i + 1]!.members.push(m);
+      else if (i > 0) divs[i - 1]!.members.push(popUp(divs[i]!.members));
+      else break;
     } else if (i > 0) {
-      // otherwise push the strongest upward
-      divs[i - 1]!.members.push(popMovable(divs[i]!.members, true));
+      divs[i - 1]!.members.push(popUp(divs[i]!.members));
     } else {
       break;
     }
