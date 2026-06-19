@@ -147,9 +147,13 @@ export async function buildSeasonFromContinuity(
     placed++;
   }
 
+  // Link the draft to the round, but DON'T mark it BUILT — creating/refreshing
+  // an editable draft to arrange it must NOT close Discord sign-ups (the Sign Up
+  // button disables the moment status != OPEN). Sign-ups close when the admin
+  // closes them / at activation, not when you open the arranger.
   await prisma.signupRound.update({
     where: { id: roundId },
-    data: { status: "BUILT", resultingSeasonId: targetSeasonId },
+    data: { resultingSeasonId: targetSeasonId },
   });
 
   recordAudit({

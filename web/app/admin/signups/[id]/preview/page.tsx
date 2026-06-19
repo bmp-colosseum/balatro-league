@@ -12,7 +12,7 @@ import { ContinuityPreview } from "@/components/ContinuityPreview";
 import { DraftArranger } from "@/components/DraftArranger";
 import { owenLadder } from "@/lib/season-plan";
 import { loadContinuityPlacement } from "@/lib/loaders/continuity";
-import { buildContinuitySeason } from "./actions";
+import { buildContinuitySeason, reopenSignupRound } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +34,7 @@ export default async function PlacementPreviewPage({
 
   const round = await prisma.signupRound.findUnique({
     where: { id },
-    select: { id: true, name: true, resultingSeasonId: true },
+    select: { id: true, name: true, resultingSeasonId: true, status: true },
   });
   if (!round) notFound();
 
@@ -136,6 +136,20 @@ export default async function PlacementPreviewPage({
             ← Back to round
           </Link>
         </div>
+        {round.status !== "OPEN" && (
+          <div className="card" style={{ borderColor: "#f1c40f", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <span style={{ color: "#f1c40f", fontSize: 13 }}>
+              ⚠ Sign-ups for this round are <strong>{round.status}</strong> — the Discord Sign Up button is
+              disabled. Arranging a draft no longer closes sign-ups; re-open if this was a mistake.
+            </span>
+            <form action={reopenSignupRound} style={{ marginLeft: "auto" }}>
+              <input type="hidden" name="roundId" value={round.id} />
+              <button type="submit" style={{ fontSize: 12, padding: "4px 12px", fontWeight: 600 }}>
+                Re-open sign-ups
+              </button>
+            </form>
+          </div>
+        )}
         {/* Basis toggle */}
         <div style={{ display: "flex", gap: 8, margin: "8px 0 4px" }}>
           <Link
