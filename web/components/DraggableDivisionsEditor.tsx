@@ -373,7 +373,7 @@ export function DraggableDivisionsEditor({
                 </button>
               </form>
             </h4>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: 8 }}>
               {tierDivs.map((d) => {
                 const divMembers = byDivision.get(d.id) ?? [];
                 const isDropTarget = hoverDivId === d.id && dragPlayerId !== null;
@@ -462,7 +462,7 @@ export function DraggableDivisionsEditor({
                               <FloorWarn member={m} currentGlobalIndex={d.globalIndex} />
                               <Link
                                 href={`/profile/${m.playerId}`}
-                                style={{ color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                                style={{ color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: "1 1 auto", minWidth: 110 }}
                                 onPointerDown={(e) => e.stopPropagation()}
                               >
                                 {m.playerName}
