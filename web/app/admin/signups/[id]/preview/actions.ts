@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { actorFromAdminUser } from "@/lib/audit";
 import { buildSeasonFromContinuity } from "@/lib/build-season-continuity";
@@ -39,11 +40,15 @@ export async function buildContinuitySeason(formData: FormData) {
   });
 
   if (result === "NO_SEASON") redirect(`/admin/signups/${roundId}/preview?basis=current&err=no-season`);
-  if (result === "ALREADY_BUILT") redirect(`/admin/signups/${roundId}/preview?basis=current&err=already-built`);
+  if (result === "ALREADY_BUILT") {
+    // The target season is already live/finished — go view it.
+    const round = await prisma.signupRound.findUnique({ where: { id: roundId }, select: { resultingSeasonId: true } });
+    redirect(round?.resultingSeasonId ? `/seasons/${round.resultingSeasonId}` : `/admin/seasons`);
+  }
   if (!result) redirect(`/admin/signups/${roundId}/preview?basis=current&err=build-failed`);
 
   revalidatePath("/admin/signups");
   revalidatePath("/admin/seasons");
-  // Land straight on the editable arrange page — drag players, autosave, activate.
-  redirect(`/admin/signups/${roundId}/arrange`);
+  // Back to the preview — now populated, so it renders the editor inline.
+  redirect(`/admin/signups/${roundId}/preview?basis=current`);
 }

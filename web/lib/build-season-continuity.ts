@@ -1,14 +1,15 @@
 import "server-only";
 
-// Build a real season from the "Based on current season" continuity preview,
-// including any hand-moves an admin made in the editable view.
+// Build (or populate) a real season from the "Based on current season"
+// continuity projection, including any hand-moves. The client sends only the
+// MOVES; the server re-runs the canonical placement, applies them, and writes a
+// DRAFT season on Owen's ladder. Leaves isActive:false — activation is separate.
 //
-// The client sends only the MOVES (discordId -> chosen division index) — the
-// diff. The server re-runs the canonical placement (loadContinuityPlacement),
-// applies the moves on top, then CREATEs a draft season on Owen's ladder
-// (Legendary + Rare/Unc/Common) and places everyone. Leaves isActive:false —
-// activation is the separate, existing step. This mirrors buildSeasonFromRound
-// but takes the arrangement from the preview instead of planByRating.
+// Two modes, auto-detected (mirrors buildSeasonFromRound):
+//   - CREATE: the round has no resultingSeasonId yet → make a new draft season.
+//   - POPULATE: the round was opened from a season (resultingSeasonId pre-set)
+//     and that season is still a DRAFT → wipe its structure and rebuild it from
+//     the projection. A LIVE/ended season is never touched (returns ALREADY_BUILT).
 
 import { prisma } from "@/lib/prisma";
 import { placePlayerInDivision } from "@/lib/division-membership";
@@ -18,9 +19,6 @@ import { loadContinuityPlacement } from "@/lib/loaders/continuity";
 
 export interface BuildContinuityInput {
   roundId: string;
-  // discordId -> hand-assigned division index (0 = top). Overrides the
-  // algorithm's placement for that player. Anyone absent keeps their computed
-  // division.
   moves: Record<string, number>;
   subtitle?: string | null;
   actor: AuditActor;
@@ -32,6 +30,7 @@ export interface BuildContinuityResult {
   divisionCount: number;
   playersPlaced: number;
   handMoved: number;
+  mode: "create" | "populate";
 }
 
 export async function buildSeasonFromContinuity(
@@ -49,9 +48,8 @@ export async function buildSeasonFromContinuity(
     include: { signups: { where: { withdrawn: false } } },
   });
   if (!round) return null;
-  if (round.resultingSeasonId) return "ALREADY_BUILT";
 
-  // Upsert a Player for every signup (same as the rating-based build).
+  // Upsert a Player for every signup.
   const players = await Promise.all(
     round.signups.map((s) =>
       prisma.player.upsert({
@@ -65,8 +63,6 @@ export async function buildSeasonFromContinuity(
 
   const divs = placement.divisions; // ordered top-down (0 = Legendary)
   const n = divs.length;
-
-  // Computed division index per player, then apply hand-moves (clamped to range).
   const computedByDiscord = new Map<string, number>();
   divs.forEach((d, idx) => d.members.forEach((m) => computedByDiscord.set(m.discordId, idx)));
   const effectiveIdx = (discordId: string) => {
@@ -78,19 +74,54 @@ export async function buildSeasonFromContinuity(
     (id) => effectiveIdx(id) !== computedByDiscord.get(id),
   ).length;
 
-  // Tiers in ladder order (Legendary, Rare, Uncommon, Common).
+  // Resolve the target season: create new, or populate an existing DRAFT.
+  let targetSeasonId: string;
+  let number: number;
+  let mode: "create" | "populate";
+
+  if (round.resultingSeasonId) {
+    const existing = await prisma.season.findUnique({
+      where: { id: round.resultingSeasonId },
+      select: { id: true, number: true, isActive: true, endedAt: true },
+    });
+    if (existing && (existing.isActive || existing.endedAt)) {
+      return "ALREADY_BUILT"; // never rebuild a live/finished season
+    }
+    if (existing) {
+      // Existing DRAFT → wipe its structure and repopulate (children first).
+      mode = "populate";
+      targetSeasonId = existing.id;
+      number = existing.number;
+      await prisma.divisionMember.deleteMany({ where: { seasonId: targetSeasonId } });
+      await prisma.division.deleteMany({ where: { seasonId: targetSeasonId } });
+      await prisma.tier.deleteMany({ where: { seasonId: targetSeasonId } });
+      if (input.subtitle !== undefined) {
+        await prisma.season.update({ where: { id: targetSeasonId }, data: { subtitle: input.subtitle ?? null } });
+      }
+    } else {
+      // Dangling pointer → make a fresh season.
+      mode = "create";
+      number = await nextSeasonNumber(prisma);
+      const season = await prisma.season.create({
+        data: { number, subtitle: input.subtitle ?? null, isActive: false, targetGroupSize: 5, minGroupSize: 3 },
+      });
+      targetSeasonId = season.id;
+    }
+  } else {
+    mode = "create";
+    number = await nextSeasonNumber(prisma);
+    const season = await prisma.season.create({
+      data: { number, subtitle: input.subtitle ?? null, isActive: false, targetGroupSize: 5, minGroupSize: 3 },
+    });
+    targetSeasonId = season.id;
+  }
+
+  // Owen-ladder tiers (in order) + divisions on the target season.
   const tierOrder: string[] = [];
   for (const d of divs) if (!tierOrder.includes(d.tierName)) tierOrder.push(d.tierName);
-
-  // CREATE a draft season (activation is separate, as in the normal build).
-  const number = await nextSeasonNumber(prisma);
-  const season = await prisma.season.create({
-    data: { number, subtitle: input.subtitle ?? null, isActive: false, targetGroupSize: 5, minGroupSize: 3 },
-  });
-
   const tierIdByName = new Map<string, string>();
   for (let i = 0; i < tierOrder.length; i++) {
-    const t = await prisma.tier.create({ data: { seasonId: season.id, position: i + 1, name: tierOrder[i]! } });
+    const t = await prisma.tier.create({ data: { seasonId: targetSeasonId, position: i + 1, name: tierOrder[i]! } });
     tierIdByName.set(tierOrder[i]!, t.id);
   }
   const divisionIdByIndex = new Map<number, string>();
@@ -100,12 +131,12 @@ export async function buildSeasonFromContinuity(
     const g = (groupCounter.get(d.tierName) ?? 0) + 1;
     groupCounter.set(d.tierName, g);
     const division = await prisma.division.create({
-      data: { seasonId: season.id, tierId: tierIdByName.get(d.tierName)!, groupNumber: g, name: d.name },
+      data: { seasonId: targetSeasonId, tierId: tierIdByName.get(d.tierName)!, groupNumber: g, name: d.name },
     });
     divisionIdByIndex.set(idx, division.id);
   }
 
-  // Place every placed player into their effective (possibly hand-moved) division.
+  // Place every player into their effective (possibly hand-moved) division.
   let placed = 0;
   for (const discordId of computedByDiscord.keys()) {
     const player = playerByDiscordId.get(discordId);
@@ -118,17 +149,17 @@ export async function buildSeasonFromContinuity(
 
   await prisma.signupRound.update({
     where: { id: roundId },
-    data: { status: "BUILT", resultingSeasonId: season.id },
+    data: { status: "BUILT", resultingSeasonId: targetSeasonId },
   });
 
   recordAudit({
     actor,
     action: "season.build",
     targetType: "Season",
-    targetId: season.id,
-    summary: `Built ${formatSeasonLabel({ number, subtitle: input.subtitle ?? null })} from the continuity preview (${n} divisions, ${placed} placed, ${handMoved} hand-moved)`,
-    metadata: { roundId, signupCount: players.length, handMoved, source: "continuity" },
+    targetId: targetSeasonId,
+    summary: `${mode === "populate" ? "Populated" : "Built"} ${formatSeasonLabel({ number, subtitle: input.subtitle ?? null })} from the continuity preview (${n} divisions, ${placed} placed, ${handMoved} hand-moved)`,
+    metadata: { roundId, signupCount: players.length, handMoved, mode, source: "continuity" },
   });
 
-  return { seasonId: season.id, seasonNumber: number, divisionCount: n, playersPlaced: placed, handMoved };
+  return { seasonId: targetSeasonId, seasonNumber: number, divisionCount: n, playersPlaced: placed, handMoved, mode };
 }
