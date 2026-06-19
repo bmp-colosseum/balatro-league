@@ -4,7 +4,8 @@ import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { loadMmrAdmin } from "@/lib/mmr-admin";
-import { fillMissingMmr, saveMmrs } from "./actions";
+import { ConfirmButton } from "@/components/ConfirmButton";
+import { fillMissingMmr, recomputeMmr, saveMmrs } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -34,13 +35,26 @@ export default async function MmrAdminPage() {
           to do this once — after that it updates per match.
         </p>
 
-        <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <form action={fillMissingMmr}>
-            <Button type="submit" variant="secondary">Fill missing from BMP (×1.5)</Button>
-          </form>
-          <span className="muted" style={{ fontSize: 12 }}>
-            Only fills the {unset} unset player{unset === 1 ? "" : "s"} — never overwrites a value you typed.
-          </span>
+        <div className="card" style={{ display: "grid", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <form action={fillMissingMmr}>
+              <Button type="submit" variant="secondary">Fill missing from BMP (×1.5)</Button>
+            </form>
+            <span className="muted" style={{ fontSize: 12 }}>
+              Only fills the {unset} unset player{unset === 1 ? "" : "s"} — never overwrites a value you typed.
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <form action={recomputeMmr}>
+              <ConfirmButton message="Recompute every player's MMR from match history? This overwrites ALL current MMRs (including hand-set ones).">
+                ↻ Recompute all from match history (Elowen)
+              </ConfirmButton>
+            </form>
+            <span className="muted" style={{ fontSize: 12 }}>
+              Replays every confirmed match from a BMP seed — sets MMR from real results (a strong player
+              with weak BMP climbs off their wins). Overwrites everything.
+            </span>
+          </div>
         </div>
 
         <form action={saveMmrs} className="card">

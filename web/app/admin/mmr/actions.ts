@@ -3,10 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
 import { seedMissingMmrFromBmp, setPlayerMmr } from "@/lib/mmr-admin";
+import { applyRecomputedMmr } from "@/lib/mmr-recompute";
 
 export async function fillMissingMmr() {
   await requireAdmin();
   await seedMissingMmrFromBmp();
+  revalidatePath("/admin/mmr");
+}
+
+// Replay every confirmed match through Elowen from a BMP seed — sets everyone's
+// MMR from their actual results. Overwrites all hidden MMRs (data-driven).
+export async function recomputeMmr() {
+  await requireAdmin();
+  await applyRecomputedMmr();
   revalidatePath("/admin/mmr");
 }
 
