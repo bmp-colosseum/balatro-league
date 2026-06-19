@@ -81,21 +81,29 @@ const tierHeuristic = (avg: number): { color: string; text: string } | null => {
 
 // Colors for the BMP tier chip — mirror balatromp.com's tier names.
 // Fall back to a neutral grey for unknown / null tiers.
+// BMP tiers (Owen's thresholds, mirrors src/balatromp.ts): Stone < 250, Steel <
+// 320, Gold < 460, Lucky < 620, Glass ≥ 620.
+function bmpMmrToTier(mmr: number): string {
+  if (mmr < 250) return "Stone";
+  if (mmr < 320) return "Steel";
+  if (mmr < 460) return "Gold";
+  if (mmr < 620) return "Lucky";
+  return "Glass";
+}
 function bmpTierColor(tier: string | null): string {
   if (!tier) return "#888";
   const t = tier.toLowerCase();
-  if (t.includes("diamond")) return "#76c7ff";
-  if (t.includes("platinum")) return "#c0c8cb";
-  if (t.includes("gold")) return "#f1c40f";
-  if (t.includes("silver")) return "#bdc3c7";
-  if (t.includes("bronze")) return "#cd7f32";
   if (t.includes("glass")) return "#9bdcff";
+  if (t.includes("lucky")) return "#2ecc71";
+  if (t.includes("gold")) return "#f1c40f";
+  if (t.includes("steel")) return "#c0c8cb";
+  if (t.includes("stone")) return "#9aa0a6";
   return "#888";
 }
 
 // Shared column template for the member header + rows so they line up.
-// handle | Player | MMR | Last season | BMP·peak | Finish | Move
-const COLS = "14px minmax(88px, 1.3fr) 54px minmax(120px, 1.5fr) minmax(112px, 1.2fr) 44px 88px";
+// handle | Player | MMR | Last season | BMP·peak (cur tier · peak tier) | Finish | Move
+const COLS = "14px minmax(80px, 1.1fr) 52px minmax(108px, 1.3fr) minmax(168px, 1.9fr) 42px 84px";
 
 export function DraggableDivisionsEditor({
   seasonId,
@@ -379,7 +387,7 @@ export function DraggableDivisionsEditor({
                 </button>
               </form>
             </h4>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(540px, 1fr))", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(580px, 1fr))", gap: 8 }}>
               {tierDivs.map((d) => {
                 const divMembers = byDivision.get(d.id) ?? [];
                 const isDropTarget = hoverDivId === d.id && dragPlayerId !== null;
@@ -524,11 +532,19 @@ export function DraggableDivisionsEditor({
                                 <FloorWarn member={m} currentGlobalIndex={d.globalIndex} />
                               </span>
                               <span
-                                title={`BMP ranked MMR (current)${m.bmpTier ? ` ${m.bmpTier}` : ""} · all-time peak ${m.bmpPeak ?? "—"}`}
+                                title={`BMP ranked MMR (current)${m.bmpTier ? ` ${m.bmpTier}` : ""} · all-time peak ${m.bmpPeak != null ? `${m.bmpPeak} ${bmpMmrToTier(m.bmpPeak)}` : "—"}`}
                                 style={{ fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                               >
-                                <span style={{ color: bmpTierColor(m.bmpTier) }}>{m.bmpMmr ?? "—"}</span>
-                                {m.bmpPeak != null && <span className="muted"> · pk {m.bmpPeak}</span>}
+                                <span style={{ color: bmpTierColor(m.bmpTier) }}>
+                                  {m.bmpMmr ?? "—"}
+                                  {m.bmpTier ? ` ${m.bmpTier}` : ""}
+                                </span>
+                                {m.bmpPeak != null && (
+                                  <span style={{ color: bmpTierColor(bmpMmrToTier(m.bmpPeak)) }}>
+                                    {" · pk "}
+                                    {m.bmpPeak} {bmpMmrToTier(m.bmpPeak)}
+                                  </span>
+                                )}
                               </span>
                               <span title="Overall finish last season (across all divisions)" style={{ fontSize: 11, textAlign: "right", color: m.priorRank == null ? "#666" : "var(--text)" }}>
                                 {m.priorRank == null ? "—" : `#${m.priorRank}`}
