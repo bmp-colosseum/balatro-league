@@ -39,6 +39,7 @@ export interface EditorMember {
   hiddenMmr: number | null; // the secret league MMR — unchanged by moves
   bmpMmr: number | null;
   bmpPeak: number | null; // all-time peak BMP MMR
+  bmpPeakSeason: string | null; // BMP season of that peak
   bmpTier: string | null;
   priorFinalGlobalRank: number | null;
   // Last season's division as a ladder index (0 = top), for the promotion /
@@ -89,6 +90,12 @@ function bmpMmrToTier(mmr: number): string {
   if (mmr < 460) return "Gold";
   if (mmr < 620) return "Lucky";
   return "Glass";
+}
+// "season3" → "S3"; passthrough anything that doesn't match.
+function shortBmpSeason(s: string | null): string {
+  if (!s) return "";
+  const m = /season\s*(\d+)/i.exec(s);
+  return m ? `S${m[1]}` : s;
 }
 function bmpTierColor(tier: string | null): string {
   if (!tier) return "#888";
@@ -532,7 +539,7 @@ export function DraggableDivisionsEditor({
                                 <FloorWarn member={m} currentGlobalIndex={d.globalIndex} />
                               </span>
                               <span
-                                title={`BMP ranked MMR (current)${m.bmpTier ? ` ${m.bmpTier}` : ""} · all-time peak ${m.bmpPeak != null ? `${m.bmpPeak} ${bmpMmrToTier(m.bmpPeak)}` : "—"}`}
+                                title={`BMP ranked MMR (current)${m.bmpTier ? ` ${m.bmpTier}` : ""} · all-time peak ${m.bmpPeak != null ? `${m.bmpPeak} ${bmpMmrToTier(m.bmpPeak)}${m.bmpPeakSeason ? ` (BMP ${m.bmpPeakSeason})` : ""}` : "—"}`}
                                 style={{ fontSize: 11, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                               >
                                 <span style={{ color: bmpTierColor(m.bmpTier) }}>
@@ -543,6 +550,7 @@ export function DraggableDivisionsEditor({
                                   <span style={{ color: bmpTierColor(bmpMmrToTier(m.bmpPeak)) }}>
                                     {" · pk "}
                                     {m.bmpPeak} {bmpMmrToTier(m.bmpPeak)}
+                                    {m.bmpPeakSeason && <span className="muted"> {shortBmpSeason(m.bmpPeakSeason)}</span>}
                                   </span>
                                 )}
                               </span>

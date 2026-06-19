@@ -395,6 +395,7 @@ async function AdminSeasonPanel({
                   hiddenMmr: m.player.hiddenMmr ?? null,
                   bmpMmr: ctx?.bmpMmr ?? null,
                   bmpPeak: ctx?.bmpPeak ?? null,
+                  bmpPeakSeason: ctx?.bmpPeakSeason ?? null,
                   bmpTier: ctx?.bmpTier ?? null,
                   priorFinalGlobalRank: ctx?.priorFinalGlobalRank ?? null,
                 };

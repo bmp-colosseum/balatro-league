@@ -1090,6 +1090,7 @@ export interface AdminSeasonMemberContext {
   leagueRating: number | null;
   bmpMmr: number | null;
   bmpPeak: number | null; // all-time peak BMP MMR across snapshots
+  bmpPeakSeason: string | null; // the BMP season they hit that peak in
   bmpTier: string | null;
   priorFinalGlobalRank: number | null;
 }
@@ -1243,13 +1244,21 @@ async function buildAdminSeasonMemberContext(season: {
     for (const m of d.members) {
       const snaps = snapsByDiscord.get(m.player.discordId) ?? [];
       const snap = snaps[0];
-      // All-time peak = max peakMmr across all this player's snapshots.
-      const peaks = snaps.map((s) => s.peakMmr).filter((p): p is number => p != null);
-      const bmpPeak = peaks.length ? Math.max(...peaks) : null;
+      // All-time peak = max peakMmr across all this player's snapshots; remember
+      // which BMP season that peak was from.
+      let bmpPeak: number | null = null;
+      let bmpPeakSeason: string | null = null;
+      for (const s of snaps) {
+        if (s.peakMmr != null && (bmpPeak == null || s.peakMmr > bmpPeak)) {
+          bmpPeak = s.peakMmr;
+          bmpPeakSeason = s.bmpSeason;
+        }
+      }
       result.set(m.playerId, {
         leagueRating: m.player.rating,
         bmpMmr: snap?.rankedMmr ?? null,
         bmpPeak,
+        bmpPeakSeason,
         bmpTier: snap?.rankedTier ?? null,
         priorFinalGlobalRank: priorByPlayerId.get(m.playerId)?.finalGlobalRank ?? null,
       });

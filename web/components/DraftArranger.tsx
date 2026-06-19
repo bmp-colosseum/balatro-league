@@ -105,6 +105,7 @@ export async function DraftArranger({ seasonId, roundId }: { seasonId: string; r
         hiddenMmr: m.player.hiddenMmr ?? null,
         bmpMmr: ctx?.bmpMmr ?? null,
         bmpPeak: ctx?.bmpPeak ?? null,
+        bmpPeakSeason: ctx?.bmpPeakSeason ?? null,
         bmpTier: ctx?.bmpTier ?? null,
         priorFinalGlobalRank: ctx?.priorFinalGlobalRank ?? null,
         // undefined (no roundId) → no marker; null → NEW; number → ↑/↓/=.
