@@ -1,14 +1,17 @@
 import "server-only";
 
-// "Based on the current season" placement projection — now Owen's real
-// algorithm. Returners hold their division with promotion/relegation applied,
-// rookies slot in by greatest-lower-bound MMR, and divisions overflow-balance to
-// ~ceil(total / #divisions). Every player is on ONE MMR scale (stored secret MMR
-// else BMP peak ×1.5) so nobody gets dumped. Pure projection; nothing is written.
+// "Based on the current season" placement projection — Owen's real algorithm,
+// built onto his FIXED ladder (Legendary + Rare/Unc/Common, sized to the signup
+// count), not the current season's shape. Each returner's current division maps
+// onto the ladder (promotion/relegation applied), rookies slot in by
+// greatest-lower-bound MMR, divisions overflow-balance to ~ceil(total/#divs), and
+// the floor protects returners from being dropped. One MMR scale (stored secret
+// MMR else BMP peak ×1.5). Pure projection; nothing is written.
 
 import type { Player } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { formatSeasonLabel } from "@/lib/format-season";
+import { formatSeasonLabel, formatDivisionName } from "@/lib/format-season";
+import { owenLadder } from "@/lib/season-plan";
 import { computeStandings } from "@/lib/standings";
 import {
   buildOwenPlacement,
@@ -57,6 +60,28 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
   activeSeason.divisions.forEach((d, i) => d.members.forEach((m) => divIndexByPlayer.set(m.playerId, i)));
   const divSizeByIndex = activeSeason.divisions.map((d) => d.members.length);
 
+  // Build the NEXT season on Owen's fixed ladder (Legendary + Rare/Unc/Common,
+  // sized to the signup count) — not the current season's shape. Map each active
+  // division onto the ladder by tier + position, clamping extra divisions onto
+  // the tier's last slot (e.g. an old Rare 6 → Owen Rare 5). This consolidates a
+  // mismatched current structure into the clean ladder.
+  const ladder = owenLadder(round.signups.length);
+  const owenDivs: { tierName: string; name: string }[] = [];
+  const owenIndexByTierPos = new Map<string, number>();
+  const owenTierCount = new Map<string, number>();
+  for (const t of ladder) {
+    owenTierCount.set(t.name, t.divisionCount);
+    for (let g = 1; g <= t.divisionCount; g++) {
+      owenIndexByTierPos.set(`${t.name}:${g}`, owenDivs.length);
+      owenDivs.push({ tierName: t.name, name: formatDivisionName(t.name, g, t.divisionCount) });
+    }
+  }
+  const owenIndexForActive = activeSeason.divisions.map((d) => {
+    const cnt = owenTierCount.get(d.tier.name);
+    if (cnt == null) return owenDivs.length - 1; // tier not on the ladder → bottom
+    return owenIndexByTierPos.get(`${d.tier.name}:${Math.min(d.groupNumber, cnt)}`) ?? owenDivs.length - 1;
+  });
+
   // Current standing per player (rank + record) from confirmed matches.
   const standingByPlayer = new Map<string, { rank: number; record: string }>();
   for (const d of activeSeason.divisions) {
@@ -95,15 +120,16 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
   const rookies: RookieInput[] = [];
   for (const s of round.signups) {
     const p = playerByDiscord.get(s.discordId);
-    const divIndex = p ? divIndexByPlayer.get(p.id) : undefined;
-    if (p && divIndex != null) {
+    const activeIndex = p ? divIndexByPlayer.get(p.id) : undefined;
+    if (p && activeIndex != null) {
       const standing = standingByPlayer.get(p.id) ?? null;
-      const divSize = divSizeByIndex[divIndex] ?? 1;
+      const divSize = divSizeByIndex[activeIndex] ?? 1;
       returners.push({
         discordId: s.discordId,
         displayName: s.displayName,
         mmr: mmrOf(s.discordId),
-        divIndex,
+        // Their current division mapped onto Owen's ladder.
+        divIndex: owenIndexForActive[activeIndex] ?? owenDivs.length - 1,
         // No standing (no games) → middle rank so they don't promote/relegate.
         standingRank: standing?.rank ?? Math.max(2, Math.ceil(divSize / 2)),
         divSize,
@@ -114,13 +140,8 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
     }
   }
 
-  const targetSize = Math.max(1, Math.ceil(round.signups.length / activeSeason.divisions.length));
-  const placed = buildOwenPlacement(
-    activeSeason.divisions.map((d) => ({ tierName: d.tier.name, name: d.name })),
-    returners,
-    rookies,
-    targetSize,
-  );
+  const targetSize = Math.max(1, Math.ceil(round.signups.length / owenDivs.length));
+  const placed = buildOwenPlacement(owenDivs, returners, rookies, targetSize);
 
   return {
     divisions: placed,

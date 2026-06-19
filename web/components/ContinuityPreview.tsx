@@ -52,10 +52,10 @@ export function ContinuityPreview({
           </label>
         </div>
         <p className="muted" style={{ fontSize: 11, margin: "6px 0 0" }}>
-          Owen&apos;s build: returners hold their division with <strong>promotion/relegation applied</strong>
-          (top/bottom finishers move a tier), newcomers slot in by MMR, and divisions overflow-balance —
-          extra <em>newcomers</em> shuffle to neighbouring divisions so nobody piles up (real finishers
-          aren&apos;t bumped). Nothing is saved.
+          Owen&apos;s build on his <strong>fixed ladder</strong> (Legendary · Rare/Uncommon/Common,
+          sized to the headcount): returners carry their current division onto the ladder with
+          <strong> promotion/relegation</strong>, newcomers slot in by MMR, divisions overflow-balance,
+          and the <strong>floor</strong> means a returner is never dropped except by relegation. Nothing is saved.
         </p>
       </div>
 
