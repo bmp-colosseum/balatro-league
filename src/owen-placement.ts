@@ -23,6 +23,9 @@ export interface PlacementMember {
   mmr: number;
   isRookie: boolean;
   standing: { rank: number; record: string } | null;
+  // Returner's ORIGINAL division index (on this ladder) before promotion/
+  // relegation/overflow — lets the UI show "↑ from Rare 1". Null for rookies.
+  fromIndex: number | null;
 }
 export interface PlacementDivision {
   tierName: string;
@@ -45,33 +48,15 @@ export interface RookieInput {
   mmr: number;
 }
 
-// UP-moves can take anyone — overflow may push the strongest up (Owen allows it;
-// it doesn't lower anyone's floor). Prefer a rookie; else the best-standing
-// returner.
-function popUp(members: PlacementMember[]): PlacementMember {
-  const rookies = members.filter((m) => m.isRookie);
-  if (rookies.length) {
-    let best = rookies[0]!;
-    for (const m of rookies) if (m.mmr > best.mmr) best = m;
-    members.splice(members.indexOf(best), 1);
-    return best;
-  }
-  const rank = (m: PlacementMember) => m.standing?.rank ?? Number.POSITIVE_INFINITY;
-  let best = members[0]!;
-  for (const m of members) if (rank(m) < rank(best)) best = m;
-  members.splice(members.indexOf(best), 1);
-  return best;
-}
-
-// DOWN-moves can ONLY take rookies — THE FLOOR (Owen's "minimal rank"): a
-// returner cannot be dropped below their division except by relegation, never by
-// the overflow balancer. Returns null when there's no rookie to spare (then the
-// caller pushes someone up instead, which the floor permits).
-function popDown(members: PlacementMember[]): PlacementMember | null {
+// Overflow moves ONLY rookies — returners are locked to their finish division
+// (+ promotion/relegation), never shuffled by the size-balancer. `preferHigh` =
+// moving up (take the strongest rookie) vs down (the weakest). Null if the
+// division has no rookie to spare.
+function popRookie(members: PlacementMember[], preferHigh: boolean): PlacementMember | null {
   const rookies = members.filter((m) => m.isRookie);
   if (!rookies.length) return null;
   let best = rookies[0]!;
-  for (const m of rookies) if (m.mmr < best.mmr) best = m;
+  for (const m of rookies) if (preferHigh ? m.mmr > best.mmr : m.mmr < best.mmr) best = m;
   members.splice(members.indexOf(best), 1);
   return best;
 }
@@ -97,6 +82,7 @@ export function buildOwenPlacement(
       mmr: r.mmr,
       isRookie: false,
       standing: r.standing,
+      fromIndex: r.divIndex,
     });
   }
 
@@ -117,32 +103,30 @@ export function buildOwenPlacement(
       mmr: rk.mmr,
       isRookie: true,
       standing: null,
+      fromIndex: null,
     });
   }
 
-  // 3. Overflow: shed over-full divisions toward available space. target =
-  //    ceil(total / n) guarantees capacity ≥ total, so this converges.
+  // 3. Overflow: balance sizes by moving ONLY ROOKIES into open neighbours
+  //    (strongest up, weakest down). Returners stay put — a division over-full
+  //    with only returners is left bigger rather than shuffling earned spots.
   const hasSpace = (i: number) => i >= 0 && i < n && divs[i]!.members.length < targetSize;
   const spaceBelowSomewhere = (i: number) => divs.slice(i + 1).some((d) => d.members.length < targetSize);
   let guard = 0;
   while (guard++ < 10000) {
-    const i = divs.findIndex((d) => d.members.length > targetSize);
-    if (i < 0) break;
-    // Prefer the immediately-open neighbour. Up takes anyone; DOWN only a rookie
-    // (the floor). If down is needed but only returners remain, push someone up
-    // instead — the floor forbids dropping them, and up-room frees this division.
-    if (hasSpace(i - 1)) {
-      divs[i - 1]!.members.push(popUp(divs[i]!.members));
-    } else if (hasSpace(i + 1) || (i < n - 1 && spaceBelowSomewhere(i))) {
-      const m = popDown(divs[i]!.members);
-      if (m) divs[i + 1]!.members.push(m);
-      else if (i > 0) divs[i - 1]!.members.push(popUp(divs[i]!.members));
-      else break;
-    } else if (i > 0) {
-      divs[i - 1]!.members.push(popUp(divs[i]!.members));
-    } else {
-      break;
+    let moved = false;
+    for (let i = 0; i < n; i++) {
+      if (divs[i]!.members.length <= targetSize) continue;
+      if (!divs[i]!.members.some((m) => m.isRookie)) continue; // only returners → leave it
+      let m: PlacementMember | null = null;
+      if (hasSpace(i - 1)) m = popRookie(divs[i]!.members, true); // strongest rookie up
+      else if ((hasSpace(i + 1) || spaceBelowSomewhere(i)) && i < n - 1) {
+        const r = popRookie(divs[i]!.members, false); // weakest rookie down
+        if (r) { divs[i + 1]!.members.push(r); moved = true; break; }
+      } else if (i > 0) m = popRookie(divs[i]!.members, true);
+      if (m) { divs[i - 1]!.members.push(m); moved = true; break; }
     }
+    if (!moved) break;
   }
 
   return divs;

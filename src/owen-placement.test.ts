@@ -81,11 +81,25 @@ describe("buildOwenPlacement — the floor (minimal rank)", () => {
   });
 });
 
-describe("buildOwenPlacement — overflow", () => {
-  it("rebalances so no division exceeds the target size", () => {
-    const returners = Array.from({ length: 12 }, (_, i) => returner(`c-${i}`, 3, i + 1, 12, 2000 - i * 10));
-    const out = buildOwenPlacement(DIVS, returners, [], 3);
-    for (const d of out) expect(d.members.length).toBeLessThanOrEqual(3);
-    expect(out.reduce((a, d) => a + d.members.length, 0)).toBe(12);
+describe("buildOwenPlacement — overflow balances rookies, locks returners", () => {
+  it("moves only rookies; returners keep their division", () => {
+    const returners = [
+      returner("ret1", 1, 4, 8, 1500),
+      returner("ret2", 1, 5, 8, 1400),
+      returner("ret3", 1, 6, 8, 1300),
+    ];
+    const rookies: RookieInput[] = Array.from({ length: 6 }, (_, i) => ({ discordId: `k${i}`, displayName: `k${i}`, mmr: 1400 }));
+    const out = buildOwenPlacement(DIVS, returners, rookies, 3);
+    expect(out[1]!.members.filter((m) => !m.isRookie).map((m) => m.discordId).sort()).toEqual(["ret1", "ret2", "ret3"]);
+    expect(out[1]!.members.filter((m) => m.isRookie)).toHaveLength(0);
+    expect(out.reduce((a, d) => a + d.members.length, 0)).toBe(9);
+  });
+
+  it("leaves a returner-only division over target rather than moving a finisher", () => {
+    // Mid-ranks in a size-10 division → no promotion/relegation. With no rookies
+    // and target 2, the balancer leaves all 5 put rather than bumping a finisher.
+    const returners = Array.from({ length: 5 }, (_, i) => returner(`r-${i}`, 2, i + 3, 10));
+    const out = buildOwenPlacement(DIVS, returners, [], 2);
+    expect(out[2]!.members).toHaveLength(5);
   });
 });
