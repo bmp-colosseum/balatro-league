@@ -14,6 +14,7 @@
 
 import { useMemo, useState } from "react";
 import { generateSchedule, summariseSchedule } from "@/lib/schedule";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import type { ContinuityDivision } from "@/lib/loaders/continuity";
 
 export function ContinuityPreview({
@@ -21,11 +22,16 @@ export function ContinuityPreview({
   returnerCount,
   rookieCount,
   basedOnSeason,
+  roundId,
+  onBuild,
 }: {
   divisions: ContinuityDivision[];
   returnerCount: number;
   rookieCount: number;
   basedOnSeason: string;
+  roundId?: string;
+  // Server action: commit this arrangement (+ hand-moves) as a draft season.
+  onBuild?: (formData: FormData) => void | Promise<void>;
 }) {
   const [showSchedules, setShowSchedules] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -214,6 +220,30 @@ export function ContinuityPreview({
           </div>
         </div>
       ))}
+
+      {/* Commit: turn this arrangement into a real draft season. */}
+      {onBuild && roundId && (
+        <form action={onBuild} className="card" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", borderColor: "#2ecc71" }}>
+          <input type="hidden" name="roundId" value={roundId} />
+          <input type="hidden" name="moves" value={JSON.stringify(moves)} />
+          <strong style={{ color: "#2ecc71" }}>Build this as the next season</strong>
+          <input
+            name="subtitle"
+            placeholder="Subtitle (optional)"
+            style={{ padding: "3px 8px", fontSize: 13, flex: "0 1 220px" }}
+          />
+          <ConfirmButton
+            message={`Build the next season from this exact arrangement${movedCount ? ` (${movedCount} hand-moved)` : ""}? Creates a DRAFT season — you review divisions and activate it next, same as always.`}
+            style={{ marginLeft: "auto", padding: "5px 14px", fontWeight: 600 }}
+          >
+            Build season →
+          </ConfirmButton>
+          <span className="muted" style={{ fontSize: 11, flexBasis: "100%" }}>
+            Creates a draft season (not live) on Owen&apos;s ladder with everyone placed exactly as shown above —
+            including your hand-moves. Then you activate it from the season page.
+          </span>
+        </form>
+      )}
     </div>
   );
 }

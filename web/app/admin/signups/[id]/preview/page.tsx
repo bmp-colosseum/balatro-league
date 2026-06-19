@@ -9,6 +9,7 @@ import { MmrSeedingTable } from "@/components/MmrSeedingTable";
 import { ContinuityPreview } from "@/components/ContinuityPreview";
 import { owenLadder } from "@/lib/season-plan";
 import { loadContinuityPlacement } from "@/lib/loaders/continuity";
+import { buildContinuitySeason } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +23,11 @@ export default async function PlacementPreviewPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ basis?: string }>;
+  searchParams: Promise<{ basis?: string; err?: string }>;
 }) {
   await requireAdmin();
   const { id } = await params;
-  const { basis } = await searchParams;
+  const { basis, err } = await searchParams;
   const mode = basis === "current" ? "current" : "fresh";
 
   const result = await loadBuildSeasonPage(id);
@@ -107,12 +108,25 @@ export default async function PlacementPreviewPage({
           ) : continuity === "NO_ROUND" || continuity == null ? (
             <div className="card">Couldn&apos;t load the round.</div>
           ) : (
-            <ContinuityPreview
-              divisions={continuity.divisions}
-              returnerCount={continuity.returnerCount}
-              rookieCount={continuity.rookieCount}
-              basedOnSeason={continuity.basedOnSeason}
-            />
+            <>
+              {err && (
+                <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c", fontSize: 13 }}>
+                  {err === "already-built"
+                    ? "This round was already built into a season."
+                    : err === "no-season"
+                      ? "No active season to base this on."
+                      : "Couldn't build the season — try again."}
+                </div>
+              )}
+              <ContinuityPreview
+                divisions={continuity.divisions}
+                returnerCount={continuity.returnerCount}
+                rookieCount={continuity.rookieCount}
+                basedOnSeason={continuity.basedOnSeason}
+                roundId={round.id}
+                onBuild={buildContinuitySeason}
+              />
+            </>
           )
         ) : (
           <>
