@@ -11,7 +11,7 @@
 // mechanics as the build-page rating table.
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 
 export interface MmrLadderRow {
   playerId: string;
@@ -114,11 +114,16 @@ export function MmrLadder({
     });
   };
 
-  useEffect(() => {
-    if (stateKey === savedHash) return;
-    commit();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stateKey]);
+  const dirty = stateKey !== savedHash;
+  const applyWithConfirm = () => {
+    if (
+      window.confirm(
+        `Overwrite EVERY player's hidden MMR with even 10-apart spacing by this order?\n\n#1 = ${top}, then −10 each (#${N} = ${mmrFor(N - 1)}). This replaces any MMRs set by hand (e.g. on the arranger) or by Recompute.`,
+      )
+    ) {
+      commit();
+    }
+  };
 
   if (rows.length === 0) return <p className="muted">No players yet.</p>;
 
@@ -140,18 +145,26 @@ export function MmrLadder({
         </label>
         <button
           type="button"
-          className="secondary"
-          style={{ fontSize: 12, padding: "3px 10px" }}
-          onClick={commit}
+          style={{ fontSize: 12, padding: "3px 10px", fontWeight: 600, opacity: dirty ? 1 : 0.7 }}
+          onClick={applyWithConfirm}
           disabled={isPending}
         >
-          Space everyone 10 apart now
+          Apply: space everyone 10 apart →
         </button>
         <span className="muted" style={{ fontSize: 11 }}>
-          Drag to reorder — #1 = {top}, each step −10, #{N} = {mmrFor(N - 1)}. Saves automatically.
+          Drag to reorder / set the top — #1 = {top}, each step −10, #{N} = {mmrFor(N - 1)}. Nothing is written
+          until you hit Apply (and confirm).
         </span>
         <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
-          {saveError ? <span style={{ color: "#e74c3c" }}>⚠ {saveError}</span> : isPending ? "Saving…" : "✓ Saved"}
+          {saveError ? (
+            <span style={{ color: "#e74c3c" }}>⚠ {saveError}</span>
+          ) : isPending ? (
+            "Applying…"
+          ) : dirty ? (
+            <span style={{ color: "#f1c40f" }}>● unsaved — click Apply</span>
+          ) : (
+            <span style={{ color: "#2ecc71" }}>✓ Applied</span>
+          )}
         </span>
       </div>
       <table
