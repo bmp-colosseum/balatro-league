@@ -930,8 +930,12 @@ interface MmrSnapshotJob {
 export async function renderDivisionWelcome(
   div: { id: string; name: string; members: { player: { discordId: string } }[] },
   seasonLabel: string,
+  roleId: string | null,
 ): Promise<string> {
-  const mentions = div.members.map((m) => `<@${m.player.discordId}>`).join(" ");
+  // One @role for the division (pings everyone in it) instead of a blob of
+  // individual @mentions — the names are already in the list below. Falls back to
+  // individual mentions only if the role somehow isn't set.
+  const groupTag = roleId ? `<@&${roleId}>` : div.members.map((m) => `<@${m.player.discordId}>`).join(" ");
   const memberList = div.members.map((m, i) => `${i + 1}. <@${m.player.discordId}>`).join("\n");
   const N = div.members.length;
   const rrTotal = (N * (N - 1)) / 2;
@@ -944,7 +948,7 @@ export async function renderDivisionWelcome(
     `# 🃏 Welcome to ${div.name}`,
     `_${seasonLabel} · ${div.name} division_`,
     ``,
-    mentions,
+    groupTag,
     ``,
     `**Your division (${div.members.length} players):**`,
     memberList,
@@ -1049,7 +1053,7 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
     // WITH a ping (pingUsers) so members get pulled into their channel at kickoff;
     // roles are already assigned (step 2) so everyone can see it. Remember the
     // message id so /league refresh-welcome can edit it later (ping-free).
-    const welcome = await renderDivisionWelcome(div, seasonLabel);
+    const welcome = await renderDivisionWelcome(div, seasonLabel, roleId);
     welcomeMessageId = await postChannelMessage(channelId, welcome, true);
   }
 

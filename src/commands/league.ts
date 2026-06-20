@@ -162,6 +162,7 @@ async function refreshWelcome(interaction: ChatInputCommandInteraction) {
       id: true,
       name: true,
       discordChannelId: true,
+      discordRoleId: true,
       welcomeMessageId: true,
       members: { where: { status: "ACTIVE" }, select: { player: { select: { discordId: true } } } },
     },
@@ -172,7 +173,7 @@ async function refreshWelcome(interaction: ChatInputCommandInteraction) {
   let failed = 0;
   for (const div of divisions) {
     if (!div.discordChannelId || div.members.length === 0) continue;
-    const content = await renderDivisionWelcome(div, label);
+    const content = await renderDivisionWelcome(div, label, div.discordRoleId);
     const existingId = div.welcomeMessageId ?? (await findWelcomeMessageId(div.discordChannelId));
 
     if (ping) {

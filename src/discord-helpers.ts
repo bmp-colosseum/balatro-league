@@ -260,18 +260,18 @@ export async function createGuildTextChannel(
 export async function postChannelMessage(
   channelId: string,
   content: string,
-  // Default never pings — a stray @everyone / role mention (e.g. via a user-set
-  // display name) renders as inert text. Pass pingUsers=true to notify the USER
-  // @mentions in the content (and only users — never @everyone/here/roles), e.g.
-  // the division welcome at season kickoff.
-  pingUsers = false,
+  // Default never pings — a stray @everyone / user mention (e.g. via a user-set
+  // display name) renders as inert text. Pass pingRole=true to notify the ROLE
+  // @mention in the content (only roles — never @everyone/here/users), e.g. the
+  // division welcome at season kickoff pings one @division role, not each member.
+  pingRole = false,
 ): Promise<string | null> {
   try {
     const channel = await getDiscordClient().channels.fetch(channelId);
     if (!channel || !channel.isTextBased() || !("send" in channel)) return null;
     const msg = await channel.send({
       content,
-      allowedMentions: { parse: pingUsers ? ["users"] : [] },
+      allowedMentions: { parse: pingRole ? ["roles"] : [] },
     });
     return msg.id;
   } catch (err) {
