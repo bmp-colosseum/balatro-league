@@ -6,7 +6,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { relabelDivisions, resyncSchedules, regenerateSchedules, setRoundRobinTopDivisions } from "@/app/admin/seasons/actions";
+import { relabelDivisions, resyncSchedules, regenerateSchedules, regenerateDivisionSchedule, setRoundRobinTopDivisions } from "@/app/admin/seasons/actions";
 import { getPlacementRules } from "@/lib/placement-rules";
 
 export const dynamic = "force-dynamic";
@@ -148,27 +148,39 @@ export default async function AdminDivisionsPage({
                         ? 0
                         : Math.round((d.confirmedPairingCount / d.expectedPairingCount) * 100);
                       return (
-                        <Link
-                          key={d.id}
-                          href={`/divisions/${d.id}`}
-                          style={{
-                            display: "block",
-                            padding: 14,
-                            background: "var(--surface)",
-                            border: "1px solid var(--border)",
-                            borderRadius: 8,
-                            color: "var(--text)",
-                            textDecoration: "none",
-                          }}
-                        >
-                          <strong>{d.name}</strong>
-                          <div className="muted" style={{ marginTop: 8 }}>
-                            {d.memberCount} player{d.memberCount === 1 ? "" : "s"} · {d.confirmedPairingCount}/{d.expectedPairingCount} matches
-                          </div>
-                          <div style={{ background: "var(--surface-2)", borderRadius: 99, height: 6, overflow: "hidden", marginTop: 6 }}>
-                            <div style={{ background: "var(--accent-2)", height: "100%", width: `${pct}%` }} />
-                          </div>
-                        </Link>
+                        <div key={d.id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          <Link
+                            href={`/divisions/${d.id}`}
+                            style={{
+                              display: "block",
+                              padding: 14,
+                              background: "var(--surface)",
+                              border: "1px solid var(--border)",
+                              borderRadius: 8,
+                              color: "var(--text)",
+                              textDecoration: "none",
+                            }}
+                          >
+                            <strong>{d.name}</strong>
+                            <div className="muted" style={{ marginTop: 8 }}>
+                              {d.memberCount} player{d.memberCount === 1 ? "" : "s"} · {d.confirmedPairingCount}/{d.expectedPairingCount} matches
+                            </div>
+                            <div style={{ background: "var(--surface-2)", borderRadius: 99, height: 6, overflow: "hidden", marginTop: 6 }}>
+                              <div style={{ background: "var(--accent-2)", height: "100%", width: `${pct}%` }} />
+                            </div>
+                          </Link>
+                          {season.scheduleLocked && (
+                            <form action={regenerateDivisionSchedule}>
+                              <input type="hidden" name="divisionId" value={d.id} />
+                              <ConfirmButton
+                                message={`Regenerate ONLY ${d.name}'s schedule from the current rules + roster? Every other division is left untouched. Only works before any games are played in this division.`}
+                                style={{ width: "100%", fontSize: 11, padding: "4px 8px", border: "1px solid var(--border, rgba(255,255,255,0.12))", borderRadius: 6, background: "var(--surface-2, rgba(255,255,255,0.05))", color: "var(--text)", cursor: "pointer" }}
+                              >
+                                ♻️ Regenerate just this division
+                              </ConfirmButton>
+                            </form>
+                          )}
+                        </div>
                       );
                     })}
                   </div>

@@ -7,7 +7,7 @@ import { requireAdmin } from "@/lib/admin";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { performSeasonActivation } from "@/lib/season-activation";
 import { resyncSeasonSchedules } from "@/lib/schedule-sync";
-import { lockDivisionSchedules } from "@/lib/lock-schedule";
+import { lockDivisionSchedules, lockOneDivision } from "@/lib/lock-schedule";
 import { getPlacementRules, setPlacementRules } from "@/lib/placement-rules";
 import { formatSeasonLabel, formatDivisionName, nextSeasonNumber } from "@/lib/format-season";
 import {
@@ -474,6 +474,40 @@ export async function regenerateSchedules(formData: FormData) {
     targetId: seasonId,
     summary: `Regenerated schedules: cleared ${deleted.count}, created ${created} match(es) across ${divisions} division(s)`,
     metadata: { seasonId, cleared: deleted.count, created, divisions },
+  });
+
+  revalidatePath("/admin/divisions");
+  redirect(`/admin/divisions?ok=regenerated-${created}`);
+}
+
+// Regenerate ONE division's schedule with the current rules + roster, leaving
+// every other division untouched. Same no-games guard, scoped to this division.
+export async function regenerateDivisionSchedule(formData: FormData) {
+  const { user } = await requireAdmin();
+  const divisionId = String(formData.get("divisionId") ?? "");
+  if (!divisionId) redirect("/admin/divisions?err=missing-fields");
+
+  const touched = await prisma.match.count({
+    where: {
+      divisionId,
+      format: "LEAGUE_BO2",
+      OR: [{ status: { not: "PENDING" } }, { gamesWonA: { gt: 0 } }, { gamesWonB: { gt: 0 } }],
+    },
+  });
+  if (touched > 0) {
+    redirect("/admin/divisions?err=games-already-played");
+  }
+
+  const deleted = await prisma.match.deleteMany({ where: { divisionId, format: "LEAGUE_BO2" } });
+  const created = await lockOneDivision(divisionId);
+
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "division.regenerate-schedule",
+    targetType: "Division",
+    targetId: divisionId,
+    summary: `Regenerated one division's schedule: cleared ${deleted.count}, created ${created} match(es)`,
+    metadata: { divisionId, cleared: deleted.count, created },
   });
 
   revalidatePath("/admin/divisions");

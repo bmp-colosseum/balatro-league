@@ -82,3 +82,58 @@ export async function lockDivisionSchedules(seasonId: string): Promise<{ created
 
   return { created, divisions: divisionsWithSchedule };
 }
+
+// Regenerate ONE division's schedule (round-robin or 4-opponent graph per the
+// current rules + the division's ladder position). Lets a rule/MMR change be
+// applied to a single division without rebuilding the rest of the season. The
+// caller deletes that division's pre-created matches first.
+export async function lockOneDivision(divisionId: string): Promise<number> {
+  const rules = await getPlacementRules();
+  const division = await prisma.division.findUnique({
+    where: { id: divisionId },
+    select: {
+      seasonId: true,
+      members: { where: { status: "ACTIVE" }, select: { player: { select: { id: true, hiddenMmr: true } } } },
+    },
+  });
+  if (!division) return 0;
+  const members = division.members.map((m) => m.player);
+  if (members.length < 2) return 0;
+
+  // Ladder index = this division's position among the season's divisions (tier
+  // position, then group) — drives round-robin (top N) vs 4-opponent graph.
+  const ladder = await prisma.division.findMany({
+    where: { seasonId: division.seasonId },
+    orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
+    select: { id: true },
+  });
+  const idx = ladder.findIndex((d) => d.id === divisionId);
+
+  const seeded = members.map((m) => m.hiddenMmr).filter((x): x is number => x != null);
+  const avg = seeded.length ? Math.round(seeded.reduce((a, b) => a + b, 0) / seeded.length) : 1000;
+  const sp = members.map((m) => ({ id: m.id, mmr: m.hiddenMmr ?? avg }));
+  const degree = idx >= 0 && idx < rules.roundRobinTopDivisions ? members.length - 1 : 4;
+  const { opponents } = generateSchedule(sp, { degree, seed: 1 });
+
+  const pairs = new Set<string>();
+  for (const [pid, opps] of opponents) {
+    for (const opp of opps) {
+      const [a, b] = pid < opp ? [pid, opp] : [opp, pid];
+      pairs.add(`${a}|${b}`);
+    }
+  }
+  let created = 0;
+  for (const key of pairs) {
+    const [a, b] = key.split("|") as [string, string];
+    const existing = await prisma.match.findFirst({
+      where: { divisionId, playerAId: a, playerBId: b, format: "LEAGUE_BO2" },
+      select: { id: true },
+    });
+    if (existing) continue;
+    await prisma.match.create({
+      data: { divisionId, playerAId: a, playerBId: b, format: "LEAGUE_BO2", status: "PENDING", gamesWonA: 0, gamesWonB: 0 },
+    });
+    created++;
+  }
+  return created;
+}
