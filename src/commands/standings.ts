@@ -28,20 +28,27 @@ export const standings: SlashCommand = {
 
   async execute(interaction: ChatInputCommandInteraction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    try {
+      const activeSeason = await activePublicSeason();
+      if (!activeSeason) {
+        await interaction.editReply("No active season right now.");
+        return;
+      }
 
-    const activeSeason = await activePublicSeason();
-    if (!activeSeason) {
-      await interaction.editReply("No active season right now.");
-      return;
+      const mySchedule = await buildMyScheduleEmbed(activeSeason.id, interaction.user.id);
+
+      const divisionArg = interaction.options.getString("division");
+      if (divisionArg) {
+        await renderSingleDivision(interaction, activeSeason.id, divisionArg, mySchedule);
+        return;
+      }
+      await renderAllDivisions(interaction, activeSeason.id, formatSeasonLabel(activeSeason), activeSeason.targetGroupSize, mySchedule);
+    } catch (err) {
+      console.error("[/standings] failed:", err);
+      await interaction
+        .editReply("⚠️ Couldn't load standings right now. It's been logged — try again shortly, or run `/schedule` to see your matchups.")
+        .catch(() => {});
     }
-
-    const mySchedule = await buildMyScheduleEmbed(activeSeason.id, interaction.user.id);
-
-    const divisionArg = interaction.options.getString("division");
-    if (divisionArg) {
-      return renderSingleDivision(interaction, activeSeason.id, divisionArg, mySchedule);
-    }
-    return renderAllDivisions(interaction, activeSeason.id, formatSeasonLabel(activeSeason), activeSeason.targetGroupSize, mySchedule);
   },
 };
 
@@ -199,12 +206,20 @@ async function renderAllDivisions(
       const playedMatches = confirmed.length;
       const barWidth = 12;
       const pct = expectedMatches === 0 ? 0 : playedMatches / expectedMatches;
-      const filled = Math.round(pct * barWidth);
+      // Clamp so a division whose confirmed count exceeds `expected` (e.g. games
+      // involving since-dropped players) can't push the repeat() count negative.
+      const filled = Math.max(0, Math.min(barWidth, Math.round(pct * barWidth)));
       const bar = "█".repeat(filled) + "░".repeat(barWidth - filled);
       const progressLine = `\`${bar}\` ${playedMatches}/${expectedMatches}\n`;
+      const fieldValue = progressLine + formatDivisionField(rows, targetGroupSize);
       embed.addFields({
         name: div.name,
-        value: progressLine + formatDivisionField(rows, targetGroupSize),
+        // Discord caps a field value at 1024 chars — a big division would 400 the
+        // whole reply. Truncate with a pointer to the single-division view.
+        value:
+          fieldValue.length > 1024
+            ? fieldValue.slice(0, 980).replace(/\n[^\n]*$/, "") + `\n…\n_/standings division:${div.name} for the full table_`
+            : fieldValue,
         inline: false,
       });
     }

@@ -1162,7 +1162,7 @@ async function queueSeasonOnboardingDms(seasonId: string): Promise<void> {
         `You're in **${div.name}**.\n\n` +
         `**Your matchups this season:**\n${oppLine}\n\n` +
         `Play each **2 games** — \`/start-match @opponent\` (guided) or \`/report @opponent result:2-0\`. ` +
-        `Track your progress anytime with \`/standings\`. Good luck!`;
+        `Track your progress with \`/standings\`, and run \`/league\` anytime for how it all works. Good luck!`;
       await enqueueDm({ discordId: m.player.discordId, content }).catch((err) =>
         console.warn(`[season.onboard] enqueue DM failed for ${m.player.discordId}:`, err),
       );
