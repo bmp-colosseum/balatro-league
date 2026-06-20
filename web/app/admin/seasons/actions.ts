@@ -514,6 +514,32 @@ export async function regenerateDivisionSchedule(formData: FormData) {
   redirect(`/admin/divisions?ok=regenerated-${created}`);
 }
 
+// Set ONE division's schedule format directly: round-robin (play everyone),
+// 4-opponent graph, or default (fall back to the season's top-N rule). Pair with
+// the per-division Regenerate to apply.
+export async function setDivisionFormat(formData: FormData) {
+  const { user } = await requireAdmin();
+  const divisionId = String(formData.get("divisionId") ?? "");
+  const value = String(formData.get("roundRobin") ?? "");
+  if (!divisionId) redirect("/admin/divisions?err=missing-fields");
+  const roundRobin = value === "rr" ? true : value === "graph" ? false : null;
+
+  const div = await prisma.division.findUnique({ where: { id: divisionId }, select: { name: true } });
+  await prisma.division.update({ where: { id: divisionId }, data: { roundRobin } });
+
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "division.set-format",
+    targetType: "Division",
+    targetId: divisionId,
+    summary: `Set ${div?.name ?? divisionId} format: ${roundRobin === null ? "default" : roundRobin ? "round-robin" : "4-opponent graph"}`,
+    metadata: { divisionId, roundRobin },
+  });
+
+  revalidatePath("/admin/divisions");
+  redirect("/admin/divisions?ok=format-saved");
+}
+
 // Set how many TOP divisions play a full round-robin (e.g. 1 = only Legendary;
 // Rare 1 and below become 4-opponent graphs). Editable from /admin/divisions so
 // it can be changed for a live (pre-kickoff) season; pair it with Regenerate.

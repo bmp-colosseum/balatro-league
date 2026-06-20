@@ -103,6 +103,7 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
               id: true,
               name: true,
               groupNumber: true,
+              roundRobin: true,
               members: { select: { playerId: true, status: true } },
               // Resolved league games (a real result OR a void) — used to tell
               // whether the round-robin is "complete" for promo/relegation. A
@@ -202,6 +203,7 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
       id: d.id,
       tierName: t.name,
       size: d.members.filter((m) => m.status === "ACTIVE").length,
+      roundRobin: d.roundRobin,
     })),
   );
   const movement = divisionMovement(ladder.map((l) => ({ tierName: l.tierName })), ladder.map((l) => l.size), rules);
@@ -211,7 +213,8 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
       {
         promote: movement[i]!.promote,
         relegate: movement[i]!.relegate,
-        format: (i < rules.roundRobinTopDivisions ? "round-robin" : "graph") as "round-robin" | "graph",
+        // Per-division format override, else the season default (top-N rule).
+        format: ((l.roundRobin ?? i < rules.roundRobinTopDivisions) ? "round-robin" : "graph") as "round-robin" | "graph",
       },
     ]),
   );

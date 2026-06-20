@@ -6,7 +6,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { relabelDivisions, resyncSchedules, regenerateSchedules, regenerateDivisionSchedule, setRoundRobinTopDivisions } from "@/app/admin/seasons/actions";
+import { relabelDivisions, resyncSchedules, regenerateSchedules, regenerateDivisionSchedule, setRoundRobinTopDivisions, setDivisionFormat } from "@/app/admin/seasons/actions";
 import { getPlacementRules } from "@/lib/placement-rules";
 
 export const dynamic = "force-dynamic";
@@ -170,10 +170,25 @@ export default async function AdminDivisionsPage({
                             </div>
                           </Link>
                           {season.scheduleLocked && (
+                            <form action={setDivisionFormat} style={{ display: "flex", gap: 4 }}>
+                              <input type="hidden" name="divisionId" value={d.id} />
+                              <select
+                                name="roundRobin"
+                                defaultValue={d.roundRobin === true ? "rr" : d.roundRobin === false ? "graph" : ""}
+                                style={{ flex: 1, fontSize: 11, padding: "4px 6px", borderRadius: 6, border: "1px solid var(--border, rgba(255,255,255,0.12))", background: "var(--surface-2, rgba(255,255,255,0.05))", color: "var(--text)" }}
+                              >
+                                <option value="">Format: default</option>
+                                <option value="rr">🔁 Round robin (everyone)</option>
+                                <option value="graph">🎯 4 opponents</option>
+                              </select>
+                              <Button type="submit" variant="secondary" size="sm">Set</Button>
+                            </form>
+                          )}
+                          {season.scheduleLocked && (
                             <form action={regenerateDivisionSchedule}>
                               <input type="hidden" name="divisionId" value={d.id} />
                               <ConfirmButton
-                                message={`Regenerate ONLY ${d.name}'s schedule from the current rules + roster? Every other division is left untouched. Only works before any games are played in this division.`}
+                                message={`Regenerate ONLY ${d.name}'s schedule from its format + roster? Every other division is left untouched. Only works before any games are played in this division.`}
                                 style={{ width: "100%", fontSize: 11, padding: "4px 8px", border: "1px solid var(--border, rgba(255,255,255,0.12))", borderRadius: 6, background: "var(--surface-2, rgba(255,255,255,0.05))", color: "var(--text)", cursor: "pointer" }}
                               >
                                 ♻️ Regenerate just this division

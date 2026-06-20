@@ -45,9 +45,11 @@ export async function lockDivisionSchedules(seasonId: string): Promise<{ created
     const avg = seeded.length ? Math.round(seeded.reduce((a, b) => a + b, 0) / seeded.length) : 1000;
     const sp = members.map((m) => ({ id: m.id, mmr: m.hiddenMmr ?? avg }));
 
-    // Top N divisions play a full round-robin; everyone else gets a balanced
-    // 4-opponent graph (or round-robin if the division is ≤ 5).
-    const degree = idx < rules.roundRobinTopDivisions ? members.length - 1 : 4;
+    // Format: the division's own setting if it has one, else the season default
+    // (top N divisions are round-robin). Round-robin = play everyone; else a
+    // balanced 4-opponent graph (collapses to round-robin if the division is ≤ 5).
+    const roundRobin = d.roundRobin ?? idx < rules.roundRobinTopDivisions;
+    const degree = roundRobin ? members.length - 1 : 4;
     const { opponents } = generateSchedule(sp, { degree, seed: 1 });
 
     // Dedupe to canonical pairs (A.id < B.id, matching the Match convention).
@@ -93,6 +95,7 @@ export async function lockOneDivision(divisionId: string): Promise<number> {
     where: { id: divisionId },
     select: {
       seasonId: true,
+      roundRobin: true,
       members: { where: { status: "ACTIVE" }, select: { player: { select: { id: true, hiddenMmr: true } } } },
     },
   });
@@ -112,7 +115,8 @@ export async function lockOneDivision(divisionId: string): Promise<number> {
   const seeded = members.map((m) => m.hiddenMmr).filter((x): x is number => x != null);
   const avg = seeded.length ? Math.round(seeded.reduce((a, b) => a + b, 0) / seeded.length) : 1000;
   const sp = members.map((m) => ({ id: m.id, mmr: m.hiddenMmr ?? avg }));
-  const degree = idx >= 0 && idx < rules.roundRobinTopDivisions ? members.length - 1 : 4;
+  const roundRobin = division.roundRobin ?? (idx >= 0 && idx < rules.roundRobinTopDivisions);
+  const degree = roundRobin ? members.length - 1 : 4;
   const { opponents } = generateSchedule(sp, { degree, seed: 1 });
 
   const pairs = new Set<string>();

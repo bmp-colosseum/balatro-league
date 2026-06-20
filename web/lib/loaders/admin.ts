@@ -137,6 +137,7 @@ export interface AdminDivisionsTier {
     targetSize: number;
     confirmedPairingCount: number;
     expectedPairingCount: number;
+    roundRobin: boolean | null; // null = use the season default (top-N rule)
   }>;
 }
 
@@ -1730,6 +1731,7 @@ export async function loadAdminDivisionsIndex(): Promise<AdminDivisionsPageData>
               id: true,
               name: true,
               targetSize: true,
+              roundRobin: true,
               members: { select: { status: true, playerId: true } },
               matches: { where: { status: "CONFIRMED", format: "LEAGUE_BO2" }, select: { id: true } },
             },
@@ -1761,6 +1763,7 @@ export async function loadAdminDivisionsIndex(): Promise<AdminDivisionsPageData>
         targetSize: d.targetSize ?? season.targetGroupSize,
         confirmedPairingCount: d.matches.length,
         expectedPairingCount: expectedByDivision.get(d.id) ?? 0,
+        roundRobin: d.roundRobin,
       };
     }),
   }));

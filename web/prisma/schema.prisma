@@ -530,6 +530,11 @@ model Division {
   // division be intentionally larger or smaller than the season default
   // without affecting other divisions.
   targetSize       Int?
+  // Per-division schedule format: true = full round-robin (play everyone), false =
+  // 4-opponent graph. NULL = fall back to the season's roundRobinTopDivisions rule
+  // (the legacy "top N divisions are round-robin" default). Set explicitly to
+  // configure a single division's format directly.
+  roundRobin       Boolean?
   // Optional Discord role + channel IDs the bot manages for this division
   discordRoleId    String?
   discordChannelId String?
