@@ -30,15 +30,12 @@ async function expectedMatchesBySeason(
   scheduleLocked: boolean,
 ): Promise<Map<string, number>> {
   const expected = new Map<string, number>();
-  if (!scheduleLocked) {
-    for (const [divisionId, activeIds] of activeByDivision) {
-      expected.set(divisionId, expectedMatchesForDivision(activeIds.size));
-    }
-    return expected;
-  }
+  // Always load the pre-created schedule. A division is locked if the season flag
+  // is set OR it has a 0-0 PENDING match (robust to a stale flag) — then expected =
+  // its pre-created matchups; otherwise a full round-robin.
   const matches = await prisma.match.findMany({
     where: { format: "LEAGUE_BO2", division: { seasonId } },
-    select: { divisionId: true, playerAId: true, playerBId: true },
+    select: { divisionId: true, playerAId: true, playerBId: true, status: true, gamesWonA: true, gamesWonB: true },
   });
   const byDiv = new Map<string, typeof matches>();
   for (const m of matches) {
@@ -48,8 +45,13 @@ async function expectedMatchesBySeason(
   }
   for (const [divisionId, activeIds] of activeByDivision) {
     const list = byDiv.get(divisionId) ?? [];
-    const between = list.filter((m) => activeIds.has(m.playerAId) && activeIds.has(m.playerBId)).length;
-    expected.set(divisionId, between);
+    const divLocked = scheduleLocked || list.some((m) => m.status === "PENDING" && m.gamesWonA === 0 && m.gamesWonB === 0);
+    expected.set(
+      divisionId,
+      divLocked
+        ? list.filter((m) => activeIds.has(m.playerAId) && activeIds.has(m.playerBId)).length
+        : expectedMatchesForDivision(activeIds.size),
+    );
   }
   return expected;
 }
@@ -505,7 +507,11 @@ export async function loadAdminPlayersDivisionView(
     const oppOf = (p: (typeof mine)[number]) => (p.playerAId === m.playerId ? p.playerBId : p.playerAId);
     const playedThisPlayer = new Set(mine.filter((p) => p.status === "CONFIRMED").map(oppOf));
     const assignedThisPlayer = new Set(mine.map(oppOf)); // any status = on their schedule
-    const locked = division.season.scheduleLocked;
+    // Flag OR the ground truth (a pre-created 0-0 PENDING match exists) — so a
+    // stale/false flag can't fall this back to a full round-robin.
+    const locked =
+      division.season.scheduleLocked ||
+      division.matches.some((p) => p.status === "PENDING" && p.gamesWonA === 0 && p.gamesWonB === 0);
     const unplayed = active
       .filter(
         (o) =>
@@ -620,13 +626,16 @@ export async function loadAdminPlayersListView(opts: {
     }
     const pairings = await prisma.match.findMany({
       where: { format: "LEAGUE_BO2", division: { seasonId: selectedSeason.id } },
-      select: { divisionId: true, playerAId: true, playerBId: true, status: true },
+      select: { divisionId: true, playerAId: true, playerBId: true, status: true, gamesWonA: true, gamesWonB: true },
     });
     const pairKey = (divisionId: string, a: string, b: string) =>
       `${divisionId}|${a < b ? `${a}-${b}` : `${b}-${a}`}`;
     const playedSet = new Set<string>(); // CONFIRMED pairs
     const assignedSet = new Set<string>(); // any-status pairs = on the schedule
-    const locked = selectedSeason.scheduleLocked;
+    // Flag OR the ground truth (a pre-created 0-0 PENDING match exists).
+    const locked =
+      selectedSeason.scheduleLocked ||
+      pairings.some((p) => p.status === "PENDING" && p.gamesWonA === 0 && p.gamesWonB === 0);
     for (const p of pairings) {
       const k = pairKey(p.divisionId, p.playerAId, p.playerBId);
       assignedSet.add(k);

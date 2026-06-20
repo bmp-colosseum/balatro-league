@@ -950,7 +950,7 @@ interface MmrSnapshotJob {
 // ASSIGNED subset of opponents (the graph); a full round-robin (top divisions) or
 // no locked schedule (legacy) = play everyone.
 export async function renderDivisionWelcome(
-  div: { id: string; name: string; members: { player: { discordId: string } }[] },
+  div: { id: string; name: string; roundRobin?: boolean | null; members: { player: { discordId: string } }[] },
   seasonLabel: string,
   roleId: string | null,
 ): Promise<string> {
@@ -962,7 +962,11 @@ export async function renderDivisionWelcome(
   const N = div.members.length;
   const rrTotal = (N * (N - 1)) / 2;
   const lockedCount = await prisma.match.count({ where: { divisionId: div.id, format: "LEAGUE_BO2" } });
-  const assignedSubset = lockedCount > 0 && lockedCount < rrTotal;
+  // Format: the division's EXPLICIT setting if it has one (same source as the
+  // standings + the schedule generator, so they always agree) — else inferred
+  // from the match count. roundRobin === false means the 4-opponent graph.
+  const assignedSubset =
+    div.roundRobin != null ? div.roundRobin === false : lockedCount > 0 && lockedCount < rrTotal;
   const playBullet = assignedSubset
     ? `• Play **4 other people** (2 games each) — run \`/schedule\` to see exactly who you play.`
     : `• Play **every other person** in this list once — 2 games each (**${N - 1} matchups**, ${rrTotal} total in this division).`;
@@ -1005,6 +1009,7 @@ export async function refreshDivisionWelcomes(
     select: {
       id: true,
       name: true,
+      roundRobin: true,
       discordChannelId: true,
       discordRoleId: true,
       welcomeMessageId: true,

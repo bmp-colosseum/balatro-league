@@ -112,7 +112,10 @@ export async function loadReportPageData(discordId: string): Promise<ReportPageD
   const confirmedOpponentIds = new Set<string>();
   const pendingOpponentIds = new Set<string>();
   const assignedOpponentIds = new Set<string>(); // any status = on your schedule
-  const scheduleLocked = div.season.scheduleLocked;
+  // Flag OR a pre-created 0-0 PENDING match (robust against a stale flag).
+  const scheduleLocked =
+    div.season.scheduleLocked ||
+    myPairings.some((p) => p.status === "PENDING" && p.gamesWonA === 0 && p.gamesWonB === 0);
   for (const p of myPairings) {
     const opp = p.playerAId === player.id ? p.playerBId : p.playerAId;
     assignedOpponentIds.add(opp);

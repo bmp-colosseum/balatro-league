@@ -144,14 +144,15 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
   // locked schedule it's a full round-robin (every not-yet-played pair).
   const playedKey = (a: string, b: string) => (a < b ? `${a}-${b}` : `${b}-${a}`);
   const playedSet = new Set(pairings.map((p) => playedKey(p.playerAId, p.playerBId)));
-  const scheduleLocked = division.season.scheduleLocked;
-  // The assigned pairs (only needed to filter the unplayed list when locked).
-  const scheduleMatches = scheduleLocked
-    ? await prisma.match.findMany({
-        where: { divisionId, format: "LEAGUE_BO2" },
-        select: { playerAId: true, playerBId: true },
-      })
-    : [];
+  // Load the pre-created schedule and treat the division as locked if it has any
+  // 0-0 PENDING match — robust against a stale/false season.scheduleLocked flag.
+  const scheduleMatches = await prisma.match.findMany({
+    where: { divisionId, format: "LEAGUE_BO2" },
+    select: { playerAId: true, playerBId: true, status: true, gamesWonA: true, gamesWonB: true },
+  });
+  const scheduleLocked =
+    division.season.scheduleLocked ||
+    scheduleMatches.some((m) => m.status === "PENDING" && m.gamesWonA === 0 && m.gamesWonB === 0);
   const assignedSet = new Set(scheduleMatches.map((p) => playedKey(p.playerAId, p.playerBId)));
   const unplayed: DivisionUnplayed[] = [];
   for (let i = 0; i < activeMembers.length; i++) {

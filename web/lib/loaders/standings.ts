@@ -234,9 +234,13 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
       const playedMatches = d.matches.filter(
         (m) => (m.status === "CONFIRMED" || m.status === "CANCELLED") && betweenActive(m),
       ).length;
-      // Expected = the locked schedule's matches (graph or pre-created round-robin)
-      // when this season is schedule-locked; otherwise a full round-robin.
-      const expectedMatches = season.scheduleLocked
+      // Expected = the locked schedule's matches when this division has a
+      // pre-created schedule (the flag OR a 0-0 PENDING match, robust to a stale
+      // flag); otherwise a full round-robin.
+      const divLocked =
+        season.scheduleLocked ||
+        d.matches.some((m) => m.status === "PENDING" && m.gamesWonA === 0 && m.gamesWonB === 0);
+      const expectedMatches = divLocked
         ? d.matches.filter(betweenActive).length
         : (activeMembers.length * (activeMembers.length - 1)) / 2;
       return {

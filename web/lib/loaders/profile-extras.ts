@@ -208,7 +208,7 @@ async function loadOwnActiveDivision(playerId: string): Promise<OwnActiveDivisio
       format: "LEAGUE_BO2",
       OR: [{ playerAId: playerId }, { playerBId: playerId }],
     },
-    select: { playerAId: true, playerBId: true, status: true },
+    select: { playerAId: true, playerBId: true, status: true, gamesWonA: true, gamesWonB: true },
   });
   const played = new Set<string>(); // CONFIRMED
   const assigned = new Set<string>(); // any status = on your schedule
@@ -217,10 +217,10 @@ async function loadOwnActiveDivision(playerId: string): Promise<OwnActiveDivisio
     assigned.add(opp);
     if (p.status === "CONFIRMED") played.add(opp);
   }
-  // With a locked schedule, reportable = your ASSIGNED, not-yet-confirmed
-  // opponents; with no locked schedule (legacy on-demand round-robin) it's every
-  // other member you haven't played.
-  const scheduleLocked = div.season.scheduleLocked;
+  // Locked = the flag OR a pre-created 0-0 PENDING match (robust to a stale flag).
+  const scheduleLocked =
+    div.season.scheduleLocked ||
+    myPairings.some((p) => p.status === "PENDING" && p.gamesWonA === 0 && p.gamesWonB === 0);
   const reportableOpponents = div.members
     .filter(
       (m) =>
@@ -267,7 +267,11 @@ async function loadAdminRecordContext(playerId: string): Promise<AdminRecordCont
   // CONFIRMED matches → "fix" pairs with a score/void summary.
   const playedOpponents = new Set(myMatches.filter((p) => p.status === "CONFIRMED").map(oppOf));
   const assignedOpponents = new Set(myMatches.map(oppOf)); // any status = on the schedule
-  const scheduleLocked = div.season.scheduleLocked;
+  // Locked = the flag OR (ground truth) the division has a pre-created 0-0 PENDING
+  // match — so a stale/false flag can't make this fall back to a full round-robin.
+  const scheduleLocked =
+    div.season.scheduleLocked ||
+    div.matches.some((m) => m.status === "PENDING" && m.gamesWonA === 0 && m.gamesWonB === 0);
   const played = myMatches
     .filter((p) => p.status === "CONFIRMED")
     .map((p) => ({
