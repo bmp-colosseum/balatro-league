@@ -11,6 +11,7 @@ import { DraggableDivisionsEditor, type EditorMember, type EditorTier } from "@/
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { loadAdminSeasonDetail } from "@/lib/loaders/admin";
 import { loadContinuityPlacement } from "@/lib/loaders/continuity";
+import { getPlacementRules } from "@/lib/placement-rules";
 import { tierColors } from "@/lib/tier-colors";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { activateSeason } from "@/app/admin/seasons/actions";
@@ -22,6 +23,7 @@ export async function DraftArranger({ seasonId, roundId }: { seasonId: string; r
   });
   if (!adminData) return <div className="card">Couldn&apos;t load the draft season.</div>;
   const { season, memberContext } = adminData;
+  const rules = await getPlacementRules();
   const activated = season.isActive || season.endedAt != null;
 
   if (activated) {
@@ -144,6 +146,7 @@ export async function DraftArranger({ seasonId, roundId }: { seasonId: string; r
         divisions={editorDivisions}
         initialMembers={editorMembers}
         allPlayers={allPlayers}
+        roundRobinTop={rules.roundRobinTopDivisions}
       />
     </div>
   );

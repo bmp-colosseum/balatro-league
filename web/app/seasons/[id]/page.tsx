@@ -377,10 +377,11 @@ async function AdminSeasonPanel({
               position: t.position,
               color: tierColors(t.position),
             }));
-            const editorDivisions = season.divisions.map((d) => ({
+            const editorDivisions = season.divisions.map((d, i) => ({
               id: d.id,
               name: d.name,
               tierId: d.tierId,
+              globalIndex: i,
             }));
             const editorMembers: EditorMember[] = season.divisions.flatMap((d) =>
               d.members.map((m) => {

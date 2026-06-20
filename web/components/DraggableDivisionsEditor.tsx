@@ -19,7 +19,8 @@
 // the last row maps to index = members.length (append).
 
 import Link from "next/link";
-import { useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
+import { generateSchedule } from "@/lib/schedule";
 import { moveDivisionMember, moveDivisionMemberToPosition, setPlayerHiddenMmr } from "@/app/admin/seasons/actions";
 import { addExistingPlayerToDivision, addLatePlayerToDivision, deleteDivision } from "@/app/admin/seasons/actions";
 import { PlayerSearch, type PlayerOption } from "@/components/PlayerSearch";
@@ -118,14 +119,17 @@ export function DraggableDivisionsEditor({
   divisions,
   initialMembers,
   allPlayers = [],
+  roundRobinTop = 2,
 }: {
   seasonId: string;
   tiers: EditorTier[];
   divisions: EditorDivision[];
   initialMembers: EditorMember[];
   allPlayers?: PlayerOption[];
+  roundRobinTop?: number; // top N divisions are round-robin (for the schedule view)
 }) {
   const [members, setMembers] = useState<EditorMember[]>(initialMembers);
+  const [showSchedules, setShowSchedules] = useState(false);
   const [dragPlayerId, setDragPlayerId] = useState<string | null>(null);
   const [hoverDivId, setHoverDivId] = useState<string | null>(null);
   // Index within the hovered division's member list where the
@@ -327,6 +331,28 @@ export function DraggableDivisionsEditor({
     arr.sort((a, b) => a.draftOrder - b.draftOrder);
   }
 
+  const nameById = useMemo(() => new Map(members.map((m) => [m.playerId, m.playerName])), [members]);
+  // Projected schedule per division for the CURRENT arrangement (recomputed live
+  // as you drag): top `roundRobinTop` divisions are round-robin, the rest a
+  // balanced 4-opponent graph. Unseeded MMRs fall back to the division average.
+  const scheduleByDiv = useMemo(() => {
+    const out = new Map<string, { opponents: Map<string, string[]>; sos: Map<string, number> }>();
+    if (!showSchedules) return out;
+    const byDiv = new Map<string, EditorMember[]>();
+    for (const m of members) (byDiv.get(m.divisionId) ?? byDiv.set(m.divisionId, []).get(m.divisionId)!).push(m);
+    for (const d of divisions) {
+      const mems = byDiv.get(d.id) ?? [];
+      if (mems.length < 2) continue;
+      const seeded = mems.map((m) => m.hiddenMmr).filter((x): x is number => x != null);
+      const avg = seeded.length ? Math.round(seeded.reduce((a, b) => a + b, 0) / seeded.length) : 1000;
+      const sp = mems.map((m) => ({ id: m.playerId, mmr: m.hiddenMmr ?? avg }));
+      const degree = d.globalIndex != null && d.globalIndex < roundRobinTop ? mems.length - 1 : 4;
+      const r = generateSchedule(sp, { degree, seed: 1 });
+      out.set(d.id, { opponents: r.opponents, sos: r.sos });
+    }
+    return out;
+  }, [members, divisions, showSchedules, roundRobinTop]);
+
   return (
     <div
       onPointerMove={onWrapperPointerMove}
@@ -352,11 +378,16 @@ export function DraggableDivisionsEditor({
           display: "flex",
           justifyContent: "flex-end",
           alignItems: "center",
+          gap: 12,
           fontSize: 12,
           height: 20,
           marginBottom: 4,
         }}
       >
+        <label style={{ display: "flex", alignItems: "center", gap: 5, marginRight: "auto" }}>
+          <input type="checkbox" checked={showSchedules} onChange={(e) => setShowSchedules(e.target.checked)} />
+          📅 Show schedules
+        </label>
         {saveError ? (
           <span style={{ color: "#e74c3c" }}>⚠ {saveError} — refresh and retry</span>
         ) : isPending ? (
@@ -472,8 +503,8 @@ export function DraggableDivisionsEditor({
                           const isDragged = dragPlayerId === m.playerId;
                           const showLineAbove = activeIndex === idx;
                           return (
+                            <div key={m.id}>
                             <div
-                              key={m.id}
                               className="dd-row"
                               ref={(el) => { rowRefs.current.set(`${d.id}:${m.id}`, el); }}
                               onPointerDown={(e) => onRowPointerDown(e, m.playerId, d.id)}
@@ -589,6 +620,13 @@ export function DraggableDivisionsEditor({
                                   <option key={other.id} value={other.id}>{other.name}</option>
                                 ))}
                               </select>
+                            </div>
+                            {showSchedules && scheduleByDiv.get(d.id) && (
+                              <div style={{ fontSize: 10, color: "#888", padding: "0 4px 4px 24px", lineHeight: 1.3 }}>
+                                vs {(scheduleByDiv.get(d.id)!.opponents.get(m.playerId) ?? []).map((id) => nameById.get(id) ?? id).join(", ") || "—"}
+                                <span style={{ marginLeft: 6 }}>· SoS {scheduleByDiv.get(d.id)!.sos.get(m.playerId) ?? "—"}</span>
+                              </div>
+                            )}
                             </div>
                           );
                         })}
