@@ -13,13 +13,14 @@
 // role of their current division.
 
 import { prisma } from "@/lib/prisma";
-import { removeGuildMemberRole } from "@/lib/discord";
+import { addGuildMemberRole, removeGuildMemberRole } from "@/lib/discord";
 import { resyncSeasonSchedules } from "@/lib/schedule-sync";
 
 export interface PlaceResult {
   transferred: boolean;            // true if we removed an existing membership in another division
   previousDivisionName?: string;   // if transferred, the division they came from
   previousRoleRemoved?: boolean;   // true if we also stripped the previous division's Discord role
+  roleAssigned?: boolean;          // true if we added the new division's Discord role (live add)
 }
 
 export async function placePlayerInDivision(
@@ -28,9 +29,10 @@ export async function placePlayerInDivision(
 ): Promise<PlaceResult> {
   const division = await prisma.division.findUnique({
     where: { id: divisionId },
-    select: { id: true, seasonId: true },
+    select: { id: true, seasonId: true, discordRoleId: true, season: { select: { leaguePlayerRoleId: true } } },
   });
   if (!division) throw new Error(`Division ${divisionId} not found`);
+  const guildId = process.env.DISCORD_GUILD_ID;
 
   // Find any OTHER division in the same season the player already belongs to
   const existing = await prisma.divisionMember.findFirst({
@@ -49,7 +51,6 @@ export async function placePlayerInDivision(
   if (existing) {
     await prisma.divisionMember.delete({ where: { id: existing.id } });
     let previousRoleRemoved = false;
-    const guildId = process.env.DISCORD_GUILD_ID;
     if (guildId && existing.division.discordRoleId) {
       previousRoleRemoved = await removeGuildMemberRole(
         guildId,
@@ -84,7 +85,7 @@ export async function placePlayerInDivision(
   // (brand-new signups that haven't been ranked yet).
   const player = await prisma.player.findUnique({
     where: { id: playerId },
-    select: { rating: true },
+    select: { rating: true, discordId: true },
   });
 
   await prisma.divisionMember.upsert({
@@ -99,6 +100,17 @@ export async function placePlayerInDivision(
     },
     update: { status: "ACTIVE", droppedAt: null, dropoutReason: null },
   });
+
+  // On a LIVE division (one with a Discord role/channel), give the player the
+  // division role + the season's League Player role so they can actually see the
+  // channel. Bootstrap does this at activation; mid-season adds need it here too.
+  // No-op on a draft season (the division has no role yet).
+  if (guildId && division.discordRoleId && player?.discordId) {
+    result.roleAssigned = await addGuildMemberRole(guildId, player.discordId, division.discordRoleId);
+    if (division.season.leaguePlayerRoleId) {
+      await addGuildMemberRole(guildId, player.discordId, division.season.leaguePlayerRoleId);
+    }
+  }
 
   // Keep the pre-created schedule consistent: on a locked season this prunes any
   // matches the player orphaned by leaving their old division and assigns them

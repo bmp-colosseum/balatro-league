@@ -164,7 +164,11 @@ export function MatchActionsPanel({
           members={members}
           includeUndo={false}
           submitLabel="Apply"
-          emptyNote="Every matchup already has a result."
+          emptyNote={
+            played.length === 0
+              ? "No matchups scheduled for this player yet — (re)generate this division's schedule on /admin/divisions."
+              : "Every assigned matchup already has a result."
+          }
         />
       </div>
 
