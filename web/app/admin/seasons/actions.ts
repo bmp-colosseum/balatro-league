@@ -699,14 +699,18 @@ export async function finalizeSignupsForSeason(formData: FormData) {
   const { user } = await requireAdmin();
   const seasonId = String(formData.get("seasonId") ?? "");
   if (!seasonId) return;
+  // Close signups for whichever round is still accepting them — OPEN, or BUILT
+  // (we deliberately keep accepting after a build). closedAt is the close signal;
+  // we only flip status to CLOSED for an as-yet-unbuilt round so a BUILT season
+  // keeps its build state.
   const round = await prisma.signupRound.findFirst({
-    where: { resultingSeasonId: seasonId, status: "OPEN" },
+    where: { resultingSeasonId: seasonId, closedAt: null, status: { in: ["OPEN", "BUILT"] } },
     include: { signups: { where: { withdrawn: false }, orderBy: { signedUpAt: "asc" } } },
   });
   if (!round) return;
   await prisma.signupRound.update({
     where: { id: round.id },
-    data: { status: "CLOSED", closedAt: new Date() },
+    data: { closedAt: new Date(), ...(round.status === "OPEN" ? { status: "CLOSED" as const } : {}) },
   });
   // Update the Discord message in place
   if (round.messageId && round.messageId !== "pending") {
@@ -742,6 +746,42 @@ export async function finalizeSignupsForSeason(formData: FormData) {
 
   revalidatePath("/admin/seasons");
   revalidatePath("/admin/signups");
+}
+
+// Re-open signups closed via finalizeSignupsForSeason. Clears closedAt; only
+// flips an unbuilt CLOSED round back to OPEN (a BUILT round keeps its build state
+// — we just resume accepting signups).
+export async function reopenSignupsForSeason(formData: FormData) {
+  const { user } = await requireAdmin();
+  const seasonId = String(formData.get("seasonId") ?? "");
+  if (!seasonId) return;
+  const round = await prisma.signupRound.findFirst({
+    where: { resultingSeasonId: seasonId, closedAt: { not: null } },
+    include: { signups: { where: { withdrawn: false } } },
+  });
+  if (!round) return;
+  await prisma.signupRound.update({
+    where: { id: round.id },
+    data: { closedAt: null, ...(round.status === "CLOSED" ? { status: "OPEN" as const } : {}) },
+  });
+  if (round.messageId && round.messageId !== "pending") {
+    await editChannelMessage(round.channelId, round.messageId, buildSignupPayload(round, round.signups.length, await getSeasonLengthDays())).catch(
+      (err) => console.warn("[signups.reopen] Discord re-render failed:", err),
+    );
+  }
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "signup-round.reopen",
+    targetType: "SignupRound",
+    targetId: round.id,
+    summary: `Reopened signups for season (${round.signups.length} signed up)`,
+    metadata: { seasonId },
+  });
+  await enqueueLeagueInfoRefresh().catch((err) =>
+    console.warn("[signups.reopen] league-info refresh enqueue failed:", err),
+  );
+  revalidatePath("/admin/seasons");
+  revalidatePath(`/seasons/${seasonId}`);
 }
 
 export async function archiveSeason(formData: FormData) {

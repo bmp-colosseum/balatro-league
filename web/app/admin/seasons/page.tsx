@@ -13,6 +13,7 @@ import {
   createSeason,
   deleteSeason,
   finalizeSignupsForSeason,
+  reopenSignupsForSeason,
   openSignupsForSeason,
   updateSignupCloseDate,
   updateSeasonWindow,
@@ -355,6 +356,7 @@ interface LifecycleSeason {
 interface LifecycleRound {
   id: string;
   status: "OPEN" | "CLOSED" | "BUILT";
+  closedAt: Date | null;
   channelId: string;
   _count: { signups: number };
   signups: { displayName: string; globalName: string | null; discordId: string; inGuild: boolean | null; signedUpAt: Date }[];
@@ -436,10 +438,31 @@ function LifecycleActions({
     );
   }
 
-  // Step 4: divisions populated → start (activate)
+  // Step 4: divisions populated → start (activate). Building doesn't close
+  // signups, so offer that here too (closedAt is the close signal).
   if (playerCount > 0) {
+    const accepting = !!round && !round.closedAt && (round.status === "OPEN" || round.status === "BUILT");
     return (
       <div style={{ marginTop: 8 }}>
+        {accepting ? (
+          <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid var(--border, rgba(255,255,255,0.08))" }}>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+              🟢 Signups still open — {round!._count.signups} joined. Close them before starting so no one joins after your arrangement.
+            </div>
+            <form action={finalizeSignupsForSeason}>
+              <input type="hidden" name="seasonId" value={season.id} />
+              <Button type="submit" variant="secondary" size="sm">Close signups →</Button>
+            </form>
+          </div>
+        ) : round?.closedAt ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <span className="muted" style={{ fontSize: 11 }}>✓ Signups closed.</span>
+            <form action={reopenSignupsForSeason}>
+              <input type="hidden" name="seasonId" value={season.id} />
+              <Button type="submit" variant="secondary" size="sm" className="text-[11px]">Reopen</Button>
+            </form>
+          </div>
+        ) : null}
         <form action={activateSeason}>
           <input type="hidden" name="id" value={season.id} />
           <Button type="submit"><strong>Start season →</strong></Button>

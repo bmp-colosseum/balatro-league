@@ -24,6 +24,7 @@ import {
   clearSeasonScheduledStart,
   deleteSeason,
   finalizeSignupsForSeason,
+  reopenSignupsForSeason,
   moveDivisionMember,
   openSignupsForSeason,
   renameSeason,
@@ -603,7 +604,7 @@ interface LifecycleSeason {
   endedAt: Date | null;
   scheduledStartAt: Date | null;
 }
-interface LifecycleRound { id: string; status: string; channelId: string; _count: { signups: number } }
+interface LifecycleRound { id: string; status: string; closedAt: Date | null; channelId: string; _count: { signups: number } }
 interface LifecycleChannel { id: string; name: string }
 
 function LifecycleActions({
@@ -612,6 +613,10 @@ function LifecycleActions({
   season: LifecycleSeason; round: LifecycleRound | null; channels: LifecycleChannel[]; playerCount: number;
 }) {
   if (season.endedAt) return null; // header pill covers this
+  // Signups are accepted while OPEN, or BUILT-but-still-draft (building doesn't
+  // close them). closedAt is the authoritative close signal, independent of build
+  // state — so we can offer "close signups" even after the season is built.
+  const acceptingSignups = !!round && !round.closedAt && (round.status === "OPEN" || round.status === "BUILT");
   if (season.isActive) {
     return (
       <div className="card">
@@ -624,6 +629,25 @@ function LifecycleActions({
   if (playerCount > 0) {
     return (
       <div className="card">
+        {acceptingSignups ? (
+          <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid var(--border, rgba(255,255,255,0.08))" }}>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+              🟢 Signups are still open — {round!._count.signups} joined. Anyone who joins now won&apos;t be in your divisions until you re-open the arranger, so close them before you start.
+            </div>
+            <form action={finalizeSignupsForSeason}>
+              <input type="hidden" name="seasonId" value={season.id} />
+              <Button type="submit" variant="secondary" size="sm">Close signups →</Button>
+            </form>
+          </div>
+        ) : round?.closedAt ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <span className="muted" style={{ fontSize: 11 }}>✓ Signups closed.</span>
+            <form action={reopenSignupsForSeason}>
+              <input type="hidden" name="seasonId" value={season.id} />
+              <Button type="submit" variant="secondary" size="sm" className="text-[11px]">Reopen</Button>
+            </form>
+          </div>
+        ) : null}
         <form action={activateSeason} style={{ display: "inline-flex" }}>
           <input type="hidden" name="id" value={season.id} />
           <Button type="submit"><strong>Start season →</strong></Button>

@@ -1097,6 +1097,7 @@ export interface AdminSeasonDetailData {
   signupRound: {
     id: string;
     status: "OPEN" | "CLOSED" | "BUILT";
+    closedAt: Date | null;
     channelId: string;
     _count: { signups: number };
   } | null;
@@ -1175,6 +1176,7 @@ export async function loadAdminSeasonDetail(
       select: {
         id: true,
         status: true,
+        closedAt: true,
         channelId: true,
         _count: { select: { signups: true } },
       },
@@ -1333,6 +1335,7 @@ async function buildAdminSeasonMemberContext(season: {
 export type AdminSeasonsRound = {
   id: string;
   status: "OPEN" | "CLOSED" | "BUILT";
+  closedAt: Date | null;
   channelId: string;
   resultingSeasonId: string | null;
   _count: { signups: number };
@@ -1431,6 +1434,7 @@ export async function loadAdminSeasonsIndex(opts: {
         select: {
           id: true,
           status: true,
+          closedAt: true,
           channelId: true,
           resultingSeasonId: true,
           // Active (non-withdrawn) only, matching the public embed's count and

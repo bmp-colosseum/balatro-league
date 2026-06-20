@@ -17,7 +17,10 @@ async function seasonLengthDays(): Promise<number> {
 // while a draft season has been BUILT but not yet activated — building a draft to
 // arrange it must NOT close sign-ups. Only an explicit CLOSE, or the season going
 // live/ended, stops them.
-async function isAcceptingSignups(round: { status: string; closesAt: Date | null; resultingSeasonId: string | null }): Promise<boolean> {
+async function isAcceptingSignups(round: { status: string; closedAt: Date | null; closesAt: Date | null; resultingSeasonId: string | null }): Promise<boolean> {
+  // closedAt is the authoritative "signups closed" signal — independent of build
+  // state. An admin can close signups whether or not the season has been built.
+  if (round.closedAt) return false;
   if (round.status === "OPEN") return !(round.closesAt && Date.now() > round.closesAt.getTime());
   if (round.status === "BUILT" && round.resultingSeasonId) {
     const season = await prisma.season.findUnique({
@@ -60,7 +63,7 @@ export const signupHandlers: ButtonHandler = {
       return;
     }
     if (!(await isAcceptingSignups(round))) {
-      const why = round.status === "CLOSED" ? "closed" : "closed — the season is live";
+      const why = round.status === "CLOSED" || round.closedAt ? "closed" : "closed — the season is live";
       await interaction.reply({
         content: `Sign-ups for **${round.name}** are ${why}.`,
         flags: MessageFlags.Ephemeral,
