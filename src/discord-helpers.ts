@@ -279,3 +279,23 @@ export async function postChannelMessage(
   }
 }
 
+// Edit an existing message in place — ping-free, like postChannelMessage. Returns
+// false if the channel/message is gone (caller can re-post). Used to refresh a
+// division's welcome content without re-posting (so nobody gets re-pinged).
+export async function editChannelMessage(
+  channelId: string,
+  messageId: string,
+  content: string,
+): Promise<boolean> {
+  try {
+    const channel = await getDiscordClient().channels.fetch(channelId);
+    if (!channel || !channel.isTextBased() || !("messages" in channel)) return false;
+    const msg = await channel.messages.fetch(messageId);
+    await msg.edit({ content, allowedMentions: { parse: [] } });
+    return true;
+  } catch (err) {
+    console.warn(`[bot] editChannelMessage(${channelId}/${messageId}) failed:`, err);
+    return false;
+  }
+}
+

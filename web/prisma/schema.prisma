@@ -529,6 +529,9 @@ model Division {
   // Optional Discord role + channel IDs the bot manages for this division
   discordRoleId    String?
   discordChannelId String?
+  // The pinned welcome/onboarding message in the division channel — remembered so
+  // an admin can refresh its content in place (no re-post, no re-ping).
+  welcomeMessageId String?
   // End-of-season champion role + winner. Set when admin clicks
   // 'Award champion roles' on an ended season. Role persists forever
   // as a bragging-rights badge. championPlayerId is the rank-1

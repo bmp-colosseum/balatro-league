@@ -14,11 +14,13 @@ import {
 import { PLAYER_COMMANDS } from "./help.js";
 import { PermissionTier } from "@prisma/client";
 import { prisma } from "../db.js";
-import { PERM_PRESETS } from "../discord-helpers.js";
+import { PERM_PRESETS, editChannelMessage, postChannelMessage } from "../discord-helpers.js";
 import { webUrl, WEB_HOST } from "../web-url.js";
 import { clearConfig, getConfig, LeagueConfigKey, setConfig } from "../league-config.js";
 import { requireOwner } from "../permissions.js";
-import { enqueueLeagueInfoRefresh, enqueueStandingsRefresh } from "../queue.js";
+import { enqueueLeagueInfoRefresh, enqueueStandingsRefresh, renderDivisionWelcome } from "../queue.js";
+import { activePublicSeason } from "../active-season.js";
+import { formatSeasonLabel } from "../format-season.js";
 import type { SlashCommand } from "./types.js";
 
 const WEBHOOK_URL_RE = /^https:\/\/(discord\.com|discordapp\.com)\/api\/(v\d+\/)?webhooks\/\d+\/[\w-]+$/;
@@ -114,6 +116,11 @@ export const league: SlashCommand = {
       sub
         .setName("check-setup")
         .setDescription("Diagnose what's configured vs missing: channels, webhook, role bindings, presets."),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("refresh-welcome")
+        .setDescription("Re-render each division's welcome message in place (no re-post, no re-ping)."),
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
@@ -129,8 +136,60 @@ export const league: SlashCommand = {
     if (sub === "set-results-webhook") return setResultsWebhook(interaction);
     if (sub === "unset-results-webhook") return unsetResultsWebhook(interaction);
     if (sub === "reset-discord-state") return resetDiscordState(interaction);
+    if (sub === "refresh-welcome") return refreshWelcome(interaction);
   },
 };
+
+// Re-render each active-season division's welcome message in place. Edits the
+// stored message (ping-free) so updated wording/rosters reach players without a
+// new post or a re-ping. Re-posts only if the original message is gone.
+async function refreshWelcome(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const season = await activePublicSeason();
+  if (!season) {
+    await interaction.editReply("No active season right now.");
+    return;
+  }
+  const divisions = await prisma.division.findMany({
+    where: { seasonId: season.id, discordChannelId: { not: null } },
+    select: {
+      id: true,
+      name: true,
+      discordChannelId: true,
+      welcomeMessageId: true,
+      members: { where: { status: "ACTIVE" }, select: { player: { select: { discordId: true } } } },
+    },
+  });
+  const label = formatSeasonLabel(season);
+  let edited = 0;
+  let reposted = 0;
+  let failed = 0;
+  for (const div of divisions) {
+    if (!div.discordChannelId || div.members.length === 0) continue;
+    const content = await renderDivisionWelcome(div, label);
+    let ok = false;
+    if (div.welcomeMessageId) {
+      ok = await editChannelMessage(div.discordChannelId, div.welcomeMessageId, content);
+      if (ok) edited++;
+    }
+    if (!ok) {
+      // No stored id, or the old message was deleted → post a fresh (ping-free) one.
+      const newId = await postChannelMessage(div.discordChannelId, content);
+      if (newId) {
+        await prisma.division.update({ where: { id: div.id }, data: { welcomeMessageId: newId } });
+        reposted++;
+      } else {
+        failed++;
+      }
+    }
+  }
+  await interaction.editReply(
+    `🔄 Welcome messages refreshed — **${edited}** edited in place` +
+      (reposted ? `, **${reposted}** re-posted (original missing)` : "") +
+      (failed ? `, **${failed}** failed` : "") +
+      `. No pings sent.`,
+  );
+}
 
 async function bootstrapServer(interaction: ChatInputCommandInteraction) {
   if (!interaction.guild) {

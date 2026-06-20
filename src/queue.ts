@@ -922,6 +922,44 @@ interface MmrSnapshotJob {
   seasonId: string | null;
 }
 
+// The division channel's welcome/onboarding message. Shared by the bootstrap
+// (initial post) and /league refresh-welcome (edit in place). Format-aware: a
+// pre-created schedule that ISN'T a full round-robin means each player has an
+// ASSIGNED subset of opponents (the graph); a full round-robin (top divisions) or
+// no locked schedule (legacy) = play everyone.
+export async function renderDivisionWelcome(
+  div: { id: string; name: string; members: { player: { discordId: string } }[] },
+  seasonLabel: string,
+): Promise<string> {
+  const mentions = div.members.map((m) => `<@${m.player.discordId}>`).join(" ");
+  const memberList = div.members.map((m, i) => `${i + 1}. <@${m.player.discordId}>`).join("\n");
+  const N = div.members.length;
+  const rrTotal = (N * (N - 1)) / 2;
+  const lockedCount = await prisma.match.count({ where: { divisionId: div.id, format: "LEAGUE_BO2" } });
+  const assignedSubset = lockedCount > 0 && lockedCount < rrTotal;
+  const playBullet = assignedSubset
+    ? `• Play **4 other people** (2 games each) — run \`/schedule\` to see exactly who you play.`
+    : `• Play **every other person** in this list once — 2 games each (**${N - 1} matchups**, ${rrTotal} total in this division).`;
+  return [
+    `# 🃏 Welcome to ${div.name}`,
+    `_${seasonLabel} · ${div.name} division_`,
+    ``,
+    mentions,
+    ``,
+    `**Your division (${div.members.length} players):**`,
+    memberList,
+    ``,
+    `**What to do**`,
+    playBullet,
+    `• Schedule in this channel. DMs work too.`,
+    `• Use \`/start-match @opponent\` for the guided flow — you'll both be walked through banning and picking decks/stakes for each game. OR just play in Balatro on your own and use \`/report @opponent result:2-0|1-1|0-2\` to log it.`,
+    ``,
+    `**Standings + your schedule:** <${webUrl(`divisions/${div.id}`)}>`,
+    ``,
+    `Good luck. 🎴`,
+  ].join("\n");
+}
+
 // Set up role + member-roles + private channel + welcome post for one
 // division. Idempotent — re-runs check what's already done via the IDs
 // persisted back on the Division row, so a partial failure plus retry
@@ -979,6 +1017,7 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
 
   // 3) Channel — falls back to top level if category is full (50-channel cap)
   let channelId = div.discordChannelId;
+  let welcomeMessageId = div.welcomeMessageId;
   if (!channelId) {
     // Drop the "(1)" display suffix, then sanitize for Discord (lowercase,
     // alphanumerics only — NO dashes/separators) so "Rare 1" → "rare1".
@@ -1005,50 +1044,17 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
     if (!channel) throw new Error(`createGuildTextChannel failed for division ${div.id}`);
     channelId = channel.id;
 
-    // 4) Welcome message — full onboarding for everyone in this division
-    const mentions = div.members.map((m) => `<@${m.player.discordId}>`).join(" ");
-    const memberList = div.members
-      .map((m, i) => `${i + 1}. <@${m.player.discordId}>`)
-      .join("\n");
-    // Format-aware: a pre-created schedule that ISN'T a full round-robin means
-    // each player has an ASSIGNED subset of opponents (the graph). A full
-    // round-robin (top divisions) or no locked schedule (legacy on-demand) =
-    // play everyone.
-    const N = div.members.length;
-    const rrTotal = (N * (N - 1)) / 2;
-    const lockedCount = await prisma.match.count({ where: { divisionId: div.id, format: "LEAGUE_BO2" } });
-    const assignedSubset = lockedCount > 0 && lockedCount < rrTotal;
-    const playBullet = assignedSubset
-      ? `• Play **4 other people** (2 games each) — run \`/schedule\` to see exactly who you play.`
-      : `• Play **every other person** in this list once — 2 games each (**${N - 1} matchups**, ${rrTotal} total in this division).`;
-    const welcome = [
-      `# 🃏 Welcome to ${div.name}`,
-      `_${seasonLabel} · ${div.name} division_`,
-      ``,
-      mentions,
-      ``,
-      `**Your division (${div.members.length} players):**`,
-      memberList,
-      ``,
-      `**What to do**`,
-      playBullet,
-      `• Schedule in this channel. DMs work too.`,
-      `• Use \`/start-match @opponent\` for the guided flow — you'll both be walked through banning and picking decks/stakes for each game. OR just play in Balatro on your own and use \`/report @opponent result:2-0|1-1|0-2\` to log it.`,
-      ``,
-      `**Standings + your schedule:** <${webUrl(`divisions/${div.id}`)}>`,
-      ``,
-      `Good luck. 🎴`,
-    ].join("\n");
-    // silent=true: members still see the channel show up (they got the role)
-    // and the welcome message is there for reference when they visit, but no
-    // ping fires for the @mentions inside. Bootstrap shouldn't blast everyone
-    // — players discover the channel via their sidebar / the role, not a ping.
-    await postChannelMessage(channelId, welcome);
+    // 4) Welcome message — full onboarding for everyone in this division.
+    // Posted ping-free (postChannelMessage suppresses the @mentions): members
+    // already got the role, so they discover the channel via their sidebar, not a
+    // ping. Remember the message id so /league refresh-welcome can edit it later.
+    const welcome = await renderDivisionWelcome(div, seasonLabel);
+    welcomeMessageId = await postChannelMessage(channelId, welcome);
   }
 
   await prisma.division.update({
     where: { id: div.id },
-    data: { discordRoleId: roleId, discordChannelId: channelId },
+    data: { discordRoleId: roleId, discordChannelId: channelId, welcomeMessageId: welcomeMessageId ?? undefined },
   });
 
   // If this was the last division to finish, fire the season-start announcement —
