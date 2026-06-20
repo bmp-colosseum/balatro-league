@@ -385,6 +385,9 @@ export async function loadDeckBansPage(selectedIdParam: string | undefined): Pro
 export interface PlayersPageNav {
   seasons: Array<{ id: string; name: string; isActive: boolean }>;
   divisionsInSelectedSeason: Array<{ id: string; name: string; tierPosition: number; tierName: string }>;
+  // The ACTIVE season's divisions, always populated — so a player who isn't in the
+  // selected/active season (never signed up) can still be assigned to a division.
+  activeSeasonDivisions: Array<{ id: string; name: string }>;
   selectedDivision: { id: string; name: string; tierPosition: number; tierName: string } | null;
 }
 
@@ -426,9 +429,14 @@ export async function loadPlayersPageNav(opts: {
   const selectedDivision = opts.divisionId
     ? divisionsInSelectedSeason.find((d) => d.id === opts.divisionId) ?? null
     : null;
+  const activeSeason = seasons.find((s) => s.isActive) ?? null;
+  const activeSeasonDivisions = activeSeason
+    ? activeSeason.tiers.flatMap((t) => t.divisions.map((d) => ({ id: d.id, name: d.name })))
+    : [];
   return {
     seasons: seasons.map((s) => ({ id: s.id, name: formatSeasonLabel(s), isActive: s.isActive })),
     divisionsInSelectedSeason,
+    activeSeasonDivisions,
     selectedDivision,
   };
 }

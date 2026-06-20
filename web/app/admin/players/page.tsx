@@ -29,6 +29,10 @@ export default async function AdminPlayersPage({
   await requireAdmin();
   const { season: seasonId, division: divisionId, sort = "name" } = await searchParams;
   const nav = await loadPlayersPageNav({ seasonId, divisionId });
+  // Divisions to offer in the per-row "set division" dropdown: the selected
+  // season's if one's picked, otherwise the active season's — so a player who
+  // never signed up can still be assigned (they only show in the no-season view).
+  const divisionOptions = nav.divisionsInSelectedSeason.length > 0 ? nav.divisionsInSelectedSeason : nav.activeSeasonDivisions;
 
   // Mode A — division scoped
   if (nav.selectedDivision) {
@@ -218,7 +222,7 @@ export default async function AdminPlayersPage({
                   </td>
                   <td>{p.rating ?? <span className="muted">unranked</span>}</td>
                   <td>
-                    {nav.divisionsInSelectedSeason.length > 0 ? (
+                    {divisionOptions.length > 0 ? (
                       <form action={movePlayer} style={{ display: "flex", gap: 4, alignItems: "center" }}>
                         <input type="hidden" name="playerId" value={p.id} />
                         <FormSelect
@@ -226,7 +230,7 @@ export default async function AdminPlayersPage({
                           defaultValue={p.membership?.divisionId ?? ""}
                           options={[
                             { value: "", label: "— none —" },
-                            ...nav.divisionsInSelectedSeason.map((d) => ({ value: d.id, label: d.name })),
+                            ...divisionOptions.map((d) => ({ value: d.id, label: d.name })),
                           ]}
                         />
                         <Button type="submit" variant="secondary" size="sm">Set</Button>
