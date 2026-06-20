@@ -99,6 +99,13 @@ export async function enqueueLeagueInfoRefresh(): Promise<void> {
   await getBoss().send("league-info.refresh", {}, { retryLimit: 2 });
 }
 
+// Silently refresh the division welcome messages for a season (roster/format
+// updated, no ping). The bot's welcome.refresh worker does the Discord edits.
+export async function enqueueWelcomeRefresh(seasonId: string): Promise<void> {
+  await ensureStarted();
+  await getBoss().send("welcome.refresh", { seasonId }, { retryLimit: 2 });
+}
+
 // Enqueue an announce. Caller returns immediately — pg-boss worker on
 // the bot side picks it up and runs announceResult() at the queue's
 // natural rate (1/sec polling, batchSize 1). Far better than calling

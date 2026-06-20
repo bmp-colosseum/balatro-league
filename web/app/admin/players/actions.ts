@@ -5,7 +5,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
-import { enqueueMmrSnapshot } from "@/lib/queue";
+import { enqueueMmrSnapshot, enqueueWelcomeRefresh } from "@/lib/queue";
 import { placePlayerInDivision } from "@/lib/division-membership";
 import { resyncSeasonSchedules } from "@/lib/schedule-sync";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
@@ -77,6 +77,8 @@ export async function movePlayer(formData: FormData) {
     const div = await prisma.division.findUnique({ where: { id: divisionId } });
     if (!div) return;
     await placePlayerInDivision(div.id, playerId);
+    // Roster changed → refresh the welcome message rosters (silent).
+    await enqueueWelcomeRefresh(div.seasonId).catch(() => {});
   } else {
     // Empty divisionId = remove from active season (preserves old behavior for the "— remove —" option)
     const active = await prisma.season.findFirst({ where: { isActive: true } });
@@ -86,6 +88,7 @@ export async function movePlayer(formData: FormData) {
       });
       // Prune the matches they just orphaned + refill their ex-opponents.
       await resyncSeasonSchedules(active.id);
+      await enqueueWelcomeRefresh(active.id).catch(() => {});
     }
   }
   revalidatePath("/admin/players");

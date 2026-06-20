@@ -14,11 +14,11 @@ import {
 import { PLAYER_COMMANDS } from "./help.js";
 import { PermissionTier } from "@prisma/client";
 import { prisma } from "../db.js";
-import { PERM_PRESETS, editChannelMessage, postChannelMessage, findWelcomeMessageId, deleteChannelMessage } from "../discord-helpers.js";
+import { PERM_PRESETS } from "../discord-helpers.js";
 import { webUrl, WEB_HOST } from "../web-url.js";
 import { clearConfig, getConfig, LeagueConfigKey, setConfig } from "../league-config.js";
 import { requireOwner } from "../permissions.js";
-import { enqueueLeagueInfoRefresh, enqueueStandingsRefresh, renderDivisionWelcome } from "../queue.js";
+import { enqueueLeagueInfoRefresh, enqueueStandingsRefresh, refreshDivisionWelcomes } from "../queue.js";
 import { activePublicSeason } from "../active-season.js";
 import { formatSeasonLabel } from "../format-season.js";
 import type { SlashCommand } from "./types.js";
@@ -156,54 +156,7 @@ async function refreshWelcome(interaction: ChatInputCommandInteraction) {
     await interaction.editReply("No active season right now.");
     return;
   }
-  const divisions = await prisma.division.findMany({
-    where: { seasonId: season.id, discordChannelId: { not: null } },
-    select: {
-      id: true,
-      name: true,
-      discordChannelId: true,
-      discordRoleId: true,
-      welcomeMessageId: true,
-      members: { where: { status: "ACTIVE" }, select: { player: { select: { discordId: true } } } },
-    },
-  });
-  const label = formatSeasonLabel(season);
-  let edited = 0;
-  let reposted = 0;
-  let failed = 0;
-  for (const div of divisions) {
-    if (!div.discordChannelId || div.members.length === 0) continue;
-    const content = await renderDivisionWelcome(div, label, div.discordRoleId);
-    const existingId = div.welcomeMessageId ?? (await findWelcomeMessageId(div.discordChannelId));
-
-    if (ping) {
-      // Kickoff notification: delete the old (silent) welcome and post a fresh one
-      // that pings the division — names included. So everyone gets pulled in.
-      if (existingId) await deleteChannelMessage(div.discordChannelId, existingId);
-      const newId = await postChannelMessage(div.discordChannelId, content, true);
-      if (newId) {
-        await prisma.division.update({ where: { id: div.id }, data: { welcomeMessageId: newId } });
-        reposted++;
-      } else {
-        failed++;
-      }
-      continue;
-    }
-
-    // Default: edit the existing message in place — silent, no re-ping.
-    let msgId = existingId;
-    const ok = msgId ? await editChannelMessage(div.discordChannelId, msgId, content) : false;
-    if (ok) {
-      edited++;
-    } else {
-      msgId = await postChannelMessage(div.discordChannelId, content);
-      if (msgId) reposted++;
-      else { failed++; continue; }
-    }
-    if (msgId !== div.welcomeMessageId) {
-      await prisma.division.update({ where: { id: div.id }, data: { welcomeMessageId: msgId } });
-    }
-  }
+  const { edited, reposted, failed } = await refreshDivisionWelcomes(season.id, { ping });
   await interaction.editReply(
     ping
       ? `📣 Re-posted **${reposted}** welcome message(s) and pinged each division.` + (failed ? ` **${failed}** failed.` : "")

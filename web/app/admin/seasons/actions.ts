@@ -17,7 +17,7 @@ import {
   fetchGuildMember,
   postChannelMessage,
 } from "@/lib/discord";
-import { enqueueDm, enqueueLeagueInfoRefresh, enqueueMmrSnapshot } from "@/lib/queue";
+import { enqueueDm, enqueueLeagueInfoRefresh, enqueueMmrSnapshot, enqueueWelcomeRefresh } from "@/lib/queue";
 import { buildSignupPayload, buildClosedSignupPayload, getSeasonLengthDays } from "@/lib/signup-discord";
 import { endSeasonCore } from "@/lib/end-season";
 
@@ -466,6 +466,8 @@ export async function regenerateSchedules(formData: FormData) {
 
   const deleted = await prisma.match.deleteMany({ where: { division: { seasonId }, format: "LEAGUE_BO2" } });
   const { created, divisions } = await lockDivisionSchedules(seasonId);
+  // Refresh the division welcome messages (rosters/formats updated) — silent.
+  await enqueueWelcomeRefresh(seasonId).catch(() => {});
 
   recordAudit({
     actor: actorFromAdminUser(user),
@@ -500,6 +502,9 @@ export async function regenerateDivisionSchedule(formData: FormData) {
 
   const deleted = await prisma.match.deleteMany({ where: { divisionId, format: "LEAGUE_BO2" } });
   const created = await lockOneDivision(divisionId);
+  // Refresh the division welcome messages (rosters/formats updated) — silent.
+  const div = await prisma.division.findUnique({ where: { id: divisionId }, select: { seasonId: true } });
+  if (div) await enqueueWelcomeRefresh(div.seasonId).catch(() => {});
 
   recordAudit({
     actor: actorFromAdminUser(user),

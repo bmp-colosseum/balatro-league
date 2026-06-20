@@ -52,6 +52,9 @@ import {
   createGuildRole,
   createGuildTextChannel,
   postChannelMessage,
+  editChannelMessage,
+  deleteChannelMessage,
+  findWelcomeMessageId,
   removeGuildMemberRole as removeGuildMemberRoleViaBot,
 } from "./discord-helpers.js";
 import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
@@ -95,6 +98,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("dispute.spawn-thread");
   await boss.createQueue("notify.announce-result");
   await boss.createQueue("league-info.refresh");
+  await boss.createQueue("welcome.refresh");
   await boss.createQueue("standings.refresh");
   await boss.createQueue("refresh.display-names");
 
@@ -204,6 +208,20 @@ export async function initQueue(): Promise<void> {
     { batchSize: 1, pollingIntervalSeconds: 2 },
     async () => {
       await refreshLeagueInfoPinned();
+    },
+  );
+
+  // Worker: silently refresh division welcome messages (roster/format updated).
+  // Enqueued from the web when a schedule is regenerated, so the message stays
+  // current without an admin running /league refresh-welcome. Never pings.
+  await boss.work<WelcomeRefreshJob>(
+    "welcome.refresh",
+    { batchSize: 1, pollingIntervalSeconds: 3 },
+    async (jobs: Job<WelcomeRefreshJob>[]) => {
+      for (const job of jobs) {
+        const r = await refreshDivisionWelcomes(job.data.seasonId, { ping: false });
+        console.log(`[welcome.refresh] ${job.data.seasonId} → edited ${r.edited}, reposted ${r.reposted}, failed ${r.failed}`);
+      }
     },
   );
 
@@ -914,6 +932,10 @@ interface BootstrapDivisionJob {
   guildId: string;
 }
 
+interface WelcomeRefreshJob {
+  seasonId: string;
+}
+
 interface MmrSnapshotJob {
   // Canonical key — works even when no Player row exists yet (new signups
   // captured at signup-close, before build-season materializes Players).
@@ -963,6 +985,64 @@ export async function renderDivisionWelcome(
     ``,
     `Good luck. 🎴`,
   ].join("\n");
+}
+
+// Refresh every active-season division's welcome message. Default: edit in place
+// (silent — the roster/format in the message updates without re-pinging). With
+// ping: re-post a fresh welcome that pings the @division. Shared by /league
+// refresh-welcome AND the welcome.refresh job (enqueued from the web when a
+// schedule is regenerated), so the message never goes stale.
+export async function refreshDivisionWelcomes(
+  seasonId: string,
+  opts: { ping?: boolean } = {},
+): Promise<{ edited: number; reposted: number; failed: number }> {
+  const ping = opts.ping ?? false;
+  const season = await prisma.season.findUnique({ where: { id: seasonId }, select: { number: true, subtitle: true } });
+  if (!season) return { edited: 0, reposted: 0, failed: 0 };
+  const label = formatSeasonLabel(season);
+  const divisions = await prisma.division.findMany({
+    where: { seasonId, discordChannelId: { not: null } },
+    select: {
+      id: true,
+      name: true,
+      discordChannelId: true,
+      discordRoleId: true,
+      welcomeMessageId: true,
+      members: { where: { status: "ACTIVE" }, select: { player: { select: { discordId: true } } } },
+    },
+  });
+  let edited = 0;
+  let reposted = 0;
+  let failed = 0;
+  for (const div of divisions) {
+    if (!div.discordChannelId || div.members.length === 0) continue;
+    const content = await renderDivisionWelcome(div, label, div.discordRoleId);
+    const existingId = div.welcomeMessageId ?? (await findWelcomeMessageId(div.discordChannelId));
+    if (ping) {
+      if (existingId) await deleteChannelMessage(div.discordChannelId, existingId);
+      const newId = await postChannelMessage(div.discordChannelId, content, true);
+      if (newId) {
+        await prisma.division.update({ where: { id: div.id }, data: { welcomeMessageId: newId } });
+        reposted++;
+      } else {
+        failed++;
+      }
+      continue;
+    }
+    let msgId = existingId;
+    const ok = msgId ? await editChannelMessage(div.discordChannelId, msgId, content) : false;
+    if (ok) {
+      edited++;
+    } else {
+      msgId = await postChannelMessage(div.discordChannelId, content);
+      if (msgId) reposted++;
+      else { failed++; continue; }
+    }
+    if (msgId !== div.welcomeMessageId) {
+      await prisma.division.update({ where: { id: div.id }, data: { welcomeMessageId: msgId } });
+    }
+  }
+  return { edited, reposted, failed };
 }
 
 // Set up role + member-roles + private channel + welcome post for one
