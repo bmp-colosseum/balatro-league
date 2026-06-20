@@ -279,6 +279,27 @@ export async function postChannelMessage(
   }
 }
 
+// Find the bot's existing welcome post in a channel (by author + the "# 🃏 Welcome
+// to" header) so we can adopt its id and edit in place — for channels bootstrapped
+// before we started storing the message id. Returns the oldest match (the welcome
+// is the first thing posted). Null if none.
+export async function findWelcomeMessageId(channelId: string): Promise<string | null> {
+  try {
+    const client = getDiscordClient();
+    const channel = await client.channels.fetch(channelId);
+    if (!channel || !channel.isTextBased() || !("messages" in channel)) return null;
+    const botId = client.user?.id;
+    const msgs = await channel.messages.fetch({ limit: 50 });
+    const welcome = [...msgs.values()]
+      .filter((m) => m.author.id === botId && m.content.startsWith("# 🃏 Welcome to"))
+      .sort((a, b) => a.createdTimestamp - b.createdTimestamp)[0];
+    return welcome?.id ?? null;
+  } catch (err) {
+    console.warn(`[bot] findWelcomeMessageId(${channelId}) failed:`, err);
+    return null;
+  }
+}
+
 // Edit an existing message in place — ping-free, like postChannelMessage. Returns
 // false if the channel/message is gone (caller can re-post). Used to refresh a
 // division's welcome content without re-posting (so nobody gets re-pinged).

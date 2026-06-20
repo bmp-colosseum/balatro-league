@@ -14,7 +14,7 @@ import {
 import { PLAYER_COMMANDS } from "./help.js";
 import { PermissionTier } from "@prisma/client";
 import { prisma } from "../db.js";
-import { PERM_PRESETS, editChannelMessage, postChannelMessage } from "../discord-helpers.js";
+import { PERM_PRESETS, editChannelMessage, postChannelMessage, findWelcomeMessageId } from "../discord-helpers.js";
 import { webUrl, WEB_HOST } from "../web-url.js";
 import { clearConfig, getConfig, LeagueConfigKey, setConfig } from "../league-config.js";
 import { requireOwner } from "../permissions.js";
@@ -167,25 +167,26 @@ async function refreshWelcome(interaction: ChatInputCommandInteraction) {
   for (const div of divisions) {
     if (!div.discordChannelId || div.members.length === 0) continue;
     const content = await renderDivisionWelcome(div, label);
-    let ok = false;
-    if (div.welcomeMessageId) {
-      ok = await editChannelMessage(div.discordChannelId, div.welcomeMessageId, content);
-      if (ok) edited++;
+    // Target message: the stored id, or — for channels bootstrapped before we
+    // stored it — the bot's existing welcome post discovered in the channel.
+    let msgId = div.welcomeMessageId ?? (await findWelcomeMessageId(div.discordChannelId));
+    const ok = msgId ? await editChannelMessage(div.discordChannelId, msgId, content) : false;
+    if (ok) {
+      edited++;
+    } else {
+      // Nothing to edit (no message / it was deleted) → fresh ping-free post.
+      msgId = await postChannelMessage(div.discordChannelId, content);
+      if (msgId) reposted++;
+      else { failed++; continue; }
     }
-    if (!ok) {
-      // No stored id, or the old message was deleted → post a fresh (ping-free) one.
-      const newId = await postChannelMessage(div.discordChannelId, content);
-      if (newId) {
-        await prisma.division.update({ where: { id: div.id }, data: { welcomeMessageId: newId } });
-        reposted++;
-      } else {
-        failed++;
-      }
+    // Remember the id we used so future runs edit it directly.
+    if (msgId !== div.welcomeMessageId) {
+      await prisma.division.update({ where: { id: div.id }, data: { welcomeMessageId: msgId } });
     }
   }
   await interaction.editReply(
     `🔄 Welcome messages refreshed — **${edited}** edited in place` +
-      (reposted ? `, **${reposted}** re-posted (original missing)` : "") +
+      (reposted ? `, **${reposted}** re-posted (no existing message found)` : "") +
       (failed ? `, **${failed}** failed` : "") +
       `. No pings sent.`,
   );
