@@ -334,10 +334,24 @@ async function bumpMatchControls(client: Client, session: MatchSession): Promise
     if (!channel || !("send" in channel) || !("messages" in channel)) return;
     const { playerA, playerB } = await loadPlayers(session);
     const { embeds, components, content } = renderMatch(session, playerA, playerB);
-    const sent = await channel.send({ content: content || undefined, embeds, components });
+    // The active decision-maker = the first @mention in the controls (render always
+    // leads with "<@them> your turn / you pick …"). Ping ONLY when that's changed
+    // since we last pinged — so a turn SWITCH notifies the new player, but a plain
+    // move-to-bottom (same person still up) is silent.
+    const decisionMaker = content?.match(/<@(\d+)>/)?.[1] ?? null;
+    const shouldPing = !!decisionMaker && decisionMaker !== session.lastPingedDiscordId;
+    const sent = await channel.send({
+      content: content || undefined,
+      embeds,
+      components,
+      allowedMentions: { parse: shouldPing ? ["users"] : [] },
+    });
     const oldId = session.matchMessageId;
     await prisma.matchSession
-      .update({ where: { id: session.id }, data: { matchMessageId: sent.id } })
+      .update({
+        where: { id: session.id },
+        data: { matchMessageId: sent.id, ...(shouldPing ? { lastPingedDiscordId: decisionMaker } : {}) },
+      })
       .catch(() => {});
     if (oldId) {
       await channel.messages.fetch(oldId).then((m) => m.delete()).catch(() => {});

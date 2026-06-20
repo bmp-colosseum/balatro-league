@@ -370,6 +370,10 @@ model MatchSession {
   // cross-interaction via REST when bans are confirmed. Set once
   // when the message is first posted; survives state changes.
   matchMessageId          String?
+  // Discord id of the player we last @-pinged as the active decision-maker. The
+  // control-bump only re-pings when this changes (a turn switch) — a plain
+  // "move to the bottom of the thread" with the same person up is silent.
+  lastPingedDiscordId     String?
 
   // Set the first time a helper is summoned for this match (via the
   // Call helper button). Gates re-calls so the helper role can't be
