@@ -6,7 +6,8 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { relabelDivisions, resyncSchedules, regenerateSchedules } from "@/app/admin/seasons/actions";
+import { relabelDivisions, resyncSchedules, regenerateSchedules, setRoundRobinTopDivisions } from "@/app/admin/seasons/actions";
+import { getPlacementRules } from "@/lib/placement-rules";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export default async function AdminDivisionsPage({
   await requireAdmin();
   const { ok, err } = await searchParams;
   const { season, tiers } = await loadAdminDivisionsIndex();
+  const rules = await getPlacementRules();
 
   return (
     <>
@@ -79,6 +81,35 @@ export default async function AdminDivisionsPage({
           </div>
         )}
 
+        {season && (
+          <form
+            action={setRoundRobinTopDivisions}
+            className="card"
+            style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}
+          >
+            <span style={{ fontSize: 13 }}>
+              Top divisions that play a full <strong>round-robin</strong>:
+            </span>
+            <input
+              type="number"
+              name="roundRobinTopDivisions"
+              defaultValue={rules.roundRobinTopDivisions}
+              min={0}
+              max={9}
+              style={{ width: 56, padding: "4px 6px", borderRadius: 6, border: "1px solid var(--border, rgba(255,255,255,0.12))", background: "var(--surface-2, rgba(255,255,255,0.05))", color: "var(--text)" }}
+            />
+            <Button type="submit" variant="secondary" size="sm">Save</Button>
+            <span className="muted" style={{ fontSize: 11 }}>
+              e.g. <strong>1</strong> = only Legendary is round-robin; Rare 1 &amp; below play a 4-opponent graph. Then click ♻️ Regenerate to apply.
+            </span>
+          </form>
+        )}
+
+        {ok === "rules-saved" && (
+          <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71", marginBottom: 12 }}>
+            ✓ Saved. Click <strong>♻️ Regenerate schedule</strong> to rebuild with the new rule.
+          </div>
+        )}
         {ok?.startsWith("regenerated-") && (
           <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71", marginBottom: 12 }}>
             ♻️ Schedule regenerated — {ok.slice("regenerated-".length)} matches created.

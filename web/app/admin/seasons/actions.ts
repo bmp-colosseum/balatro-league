@@ -8,6 +8,7 @@ import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { performSeasonActivation } from "@/lib/season-activation";
 import { resyncSeasonSchedules } from "@/lib/schedule-sync";
 import { lockDivisionSchedules } from "@/lib/lock-schedule";
+import { getPlacementRules, setPlacementRules } from "@/lib/placement-rules";
 import { formatSeasonLabel, formatDivisionName, nextSeasonNumber } from "@/lib/format-season";
 import {
   createChannelInvite,
@@ -477,6 +478,30 @@ export async function regenerateSchedules(formData: FormData) {
 
   revalidatePath("/admin/divisions");
   redirect(`/admin/divisions?ok=regenerated-${created}`);
+}
+
+// Set how many TOP divisions play a full round-robin (e.g. 1 = only Legendary;
+// Rare 1 and below become 4-opponent graphs). Editable from /admin/divisions so
+// it can be changed for a live (pre-kickoff) season; pair it with Regenerate.
+export async function setRoundRobinTopDivisions(formData: FormData) {
+  const { user } = await requireAdmin();
+  const n = Number.parseInt(String(formData.get("roundRobinTopDivisions")), 10);
+  if (!Number.isFinite(n) || n < 0) redirect("/admin/divisions?err=missing-fields");
+
+  const current = await getPlacementRules();
+  await setPlacementRules({ ...current, roundRobinTopDivisions: Math.max(0, n) }, user.discordId);
+
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "placement-rules.set-round-robin-top",
+    targetType: "LeagueConfig",
+    targetId: "placement_rules",
+    summary: `Set round-robin top divisions: ${current.roundRobinTopDivisions} → ${Math.max(0, n)}`,
+    metadata: { previous: current.roundRobinTopDivisions, next: Math.max(0, n) },
+  });
+
+  revalidatePath("/admin/divisions");
+  redirect("/admin/divisions?ok=rules-saved");
 }
 
 // Open a signup round bound to a specific season. The round's
