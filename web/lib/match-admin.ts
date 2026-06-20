@@ -11,6 +11,7 @@
 import { prisma } from "@/lib/prisma";
 import { enqueueAnnounceResult } from "@/lib/queue";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
+import { resyncSeasonSchedules } from "@/lib/schedule-sync";
 import { recordAudit, type AuditActor } from "@/lib/audit";
 
 export type ResultStr = "2-0" | "1-1" | "0-2";
@@ -332,6 +333,8 @@ export async function voidPlayerInDivision(args: {
     where: { id: member.id },
     data: { status: "DROPPED", droppedAt: new Date() },
   });
+  // Refill the voided player's ex-opponents (their matches are now CANCELLED).
+  await resyncSeasonSchedules(member.seasonId);
   await recordAudit({
     actor,
     action: "player.void",

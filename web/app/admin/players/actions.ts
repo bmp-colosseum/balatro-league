@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { enqueueMmrSnapshot } from "@/lib/queue";
 import { placePlayerInDivision } from "@/lib/division-membership";
+import { resyncSeasonSchedules } from "@/lib/schedule-sync";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
 
 // Change a player's Discord ID. Useful when a row was imported with a
@@ -83,6 +84,8 @@ export async function movePlayer(formData: FormData) {
       await prisma.divisionMember.deleteMany({
         where: { playerId, division: { seasonId: active.id } },
       });
+      // Prune the matches they just orphaned + refill their ex-opponents.
+      await resyncSeasonSchedules(active.id);
     }
   }
   revalidatePath("/admin/players");
@@ -112,6 +115,8 @@ export async function dropPlayer(formData: FormData) {
       OR: [{ playerAId: playerId }, { playerBId: playerId }],
     },
   });
+  // Refill the dropped player's ex-opponents back toward their target slate.
+  await resyncSeasonSchedules(season.id);
   recomputeDivisionStandings(membership.divisionId).catch(() => {});
   revalidatePath("/admin/players");
 }
@@ -130,6 +135,8 @@ export async function reinstatePlayer(formData: FormData) {
       where: { id: membership.id },
       data: { status: "ACTIVE", droppedAt: null, dropoutReason: null },
     });
+    // Their matches were deleted on drop — give them a schedule again.
+    await resyncSeasonSchedules(season.id);
   }
   revalidatePath("/admin/players");
 }

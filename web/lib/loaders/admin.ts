@@ -141,7 +141,7 @@ export interface AdminDivisionsTier {
 }
 
 export interface AdminDivisionsPageData {
-  season: { id: string; name: string; targetGroupSize: number } | null;
+  season: { id: string; name: string; targetGroupSize: number; scheduleLocked: boolean } | null;
   tiers: AdminDivisionsTier[];
 }
 
@@ -1753,7 +1753,7 @@ export async function loadAdminDivisionsIndex(): Promise<AdminDivisionsPageData>
     }),
   }));
   return {
-    season: { id: season.id, name: formatSeasonLabel(season), targetGroupSize: season.targetGroupSize },
+    season: { id: season.id, name: formatSeasonLabel(season), targetGroupSize: season.targetGroupSize, scheduleLocked: season.scheduleLocked },
     tiers,
   };
 }

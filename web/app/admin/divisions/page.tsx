@@ -5,7 +5,7 @@ import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
-import { relabelDivisions } from "@/app/admin/seasons/actions";
+import { relabelDivisions, resyncSchedules } from "@/app/admin/seasons/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -26,17 +26,32 @@ export default async function AdminDivisionsPage() {
         </h2>
 
         {season && (
-          <form action={relabelDivisions} style={{ marginBottom: 12 }}>
-            <input type="hidden" name="seasonId" value={season.id} />
-            <Button
-              type="submit"
-              variant="secondary"
-              size="sm"
-              title="Rewrite every division's name to the standard format: first group = 'Tier A (1)', then 'Tier 2', 'Tier 3'… (single-division tiers stay just the tier name). Doesn't move any players."
-            >
-              ↻ Relabel divisions to standard names
-            </Button>
-          </form>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+            <form action={relabelDivisions}>
+              <input type="hidden" name="seasonId" value={season.id} />
+              <Button
+                type="submit"
+                variant="secondary"
+                size="sm"
+                title="Rewrite every division's name to the standard format: first group = 'Tier A (1)', then 'Tier 2', 'Tier 3'… (single-division tiers stay just the tier name). Doesn't move any players."
+              >
+                ↻ Relabel divisions to standard names
+              </Button>
+            </form>
+            {season.scheduleLocked && (
+              <form action={resyncSchedules}>
+                <input type="hidden" name="seasonId" value={season.id} />
+                <Button
+                  type="submit"
+                  variant="secondary"
+                  size="sm"
+                  title="Rebuild the pre-created schedule to match the current roster: prune matches left over from departed players and give every active player their assigned opponents. Roster edits do this automatically — use this if a schedule looks out of sync."
+                >
+                  🗓️ Re-sync schedules
+                </Button>
+              </form>
+            )}
+          </div>
         )}
 
         {!season ? (

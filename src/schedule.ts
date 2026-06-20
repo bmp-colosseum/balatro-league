@@ -176,6 +176,96 @@ export function generateSchedule(
   return { opponents, sos: sosOut };
 }
 
+export interface ExistingMatch {
+  id: string;
+  playerAId: string;
+  playerBId: string;
+  status: string;
+  gamesWonA: number;
+  gamesWonB: number;
+}
+
+export interface ResyncPlan {
+  pruneIds: string[]; // unplayed (PENDING 0-0) rows involving a non-member → delete
+  createPairs: [string, string][]; // canonical (a<b) new matchups to pre-create
+}
+
+// Incremental schedule repair for ONE division on a locked season — used after a
+// mid-season roster change (move / add / drop). Given the current ACTIVE members,
+// the division's existing LEAGUE_BO2 matches, and the target opponent count, it
+// returns which stale unplayed rows to prune (a player left the division) and
+// which new matchups to create so every active member is connected to `target`
+// opponents. Existing valid matches (played OR still-valid pre-created) are
+// preserved — we only ADD edges to fill deficits, so nobody's existing schedule
+// is disturbed. Deterministic: connects the most-deficient member to the most-
+// deficient available partner, ties broken by id, so a re-run is idempotent.
+export function planDivisionResync(
+  activeMemberIds: string[],
+  matches: ExistingMatch[],
+  target: number,
+): ResyncPlan {
+  const active = new Set(activeMemberIds);
+  const key = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+
+  // 1. Prune unplayed (PENDING 0-0) rows that now involve a non-member.
+  const pruneIds: string[] = [];
+  const pruned = new Set<string>();
+  for (const m of matches) {
+    const unplayed = m.status === "PENDING" && m.gamesWonA === 0 && m.gamesWonB === 0;
+    if (unplayed && (!active.has(m.playerAId) || !active.has(m.playerBId))) {
+      pruneIds.push(m.id);
+      pruned.add(m.id);
+    }
+  }
+
+  // 2. Remaining valid matchups between two active members → current degree.
+  const pairSet = new Set<string>();
+  const deg = new Map<string, number>();
+  for (const id of activeMemberIds) deg.set(id, 0);
+  for (const m of matches) {
+    if (pruned.has(m.id)) continue;
+    if (!active.has(m.playerAId) || !active.has(m.playerBId)) continue;
+    const k = key(m.playerAId, m.playerBId);
+    if (pairSet.has(k)) continue;
+    pairSet.add(k);
+    deg.set(m.playerAId, deg.get(m.playerAId)! + 1);
+    deg.set(m.playerBId, deg.get(m.playerBId)! + 1);
+  }
+
+  // 3. Greedily connect deficient members up to `target` (capped at the complete
+  // graph). Stable ordering → deterministic, so re-running yields no new edges.
+  const members = [...activeMemberIds].sort();
+  const cap = Math.min(target, members.length - 1);
+  const createPairs: [string, string][] = [];
+  while (true) {
+    const needy = members
+      .filter((id) => deg.get(id)! < cap)
+      .sort((a, b) => deg.get(a)! - deg.get(b)! || (a < b ? -1 : 1));
+    if (needy.length === 0) break;
+    let progressed = false;
+    for (const a of needy) {
+      const partners = members
+        .filter((b) => b !== a && !pairSet.has(key(a, b)))
+        .sort((b1, b2) => {
+          const n1 = (deg.get(b1)! < cap ? 0 : 1) - (deg.get(b2)! < cap ? 0 : 1);
+          if (n1 !== 0) return n1; // prefer partners who also still need games
+          return deg.get(b1)! - deg.get(b2)! || (b1 < b2 ? -1 : 1);
+        });
+      if (partners.length === 0) continue; // already paired with everyone
+      const b = partners[0]!;
+      pairSet.add(key(a, b));
+      deg.set(a, deg.get(a)! + 1);
+      deg.set(b, deg.get(b)! + 1);
+      createPairs.push(a < b ? [a, b] : [b, a]);
+      progressed = true;
+      break; // degrees changed — re-evaluate from scratch
+    }
+    if (!progressed) break; // no deficient member can be paired further
+  }
+
+  return { pruneIds, createPairs };
+}
+
 export interface ScheduleSummary {
   // Target every player is pulled toward (degree · mean MMR).
   idealSos: number;

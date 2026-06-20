@@ -14,6 +14,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { removeGuildMemberRole } from "@/lib/discord";
+import { resyncSeasonSchedules } from "@/lib/schedule-sync";
 
 export interface PlaceResult {
   transferred: boolean;            // true if we removed an existing membership in another division
@@ -98,6 +99,11 @@ export async function placePlayerInDivision(
     },
     update: { status: "ACTIVE", droppedAt: null, dropoutReason: null },
   });
+
+  // Keep the pre-created schedule consistent: on a locked season this prunes any
+  // matches the player orphaned by leaving their old division and assigns them
+  // opponents in the new one. No-op on unlocked (draft / legacy) seasons.
+  await resyncSeasonSchedules(division.seasonId);
 
   return result;
 }

@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { performSeasonActivation } from "@/lib/season-activation";
+import { resyncSeasonSchedules } from "@/lib/schedule-sync";
 import { formatSeasonLabel, formatDivisionName, nextSeasonNumber } from "@/lib/format-season";
 import {
   createChannelInvite,
@@ -413,6 +414,31 @@ export async function relabelDivisions(formData: FormData) {
   revalidatePath("/admin/seasons");
   revalidatePath(`/seasons/${seasonId}`);
   redirect(`/seasons/${seasonId}?ok=relabeled-${renamed}`);
+}
+
+// Manual escape hatch for the auto-repair: rebuild a locked season's pre-created
+// schedule to match the current roster (prune matches orphaned by departed
+// players, give everyone their target opponents). Roster actions already call
+// this automatically; the button covers any path that didn't (e.g. a bot-side
+// edit). No-op on unlocked seasons.
+export async function resyncSchedules(formData: FormData) {
+  const { user } = await requireAdmin();
+  const seasonId = String(formData.get("seasonId") ?? "");
+  if (!seasonId) redirect("/admin/divisions?err=missing-fields");
+
+  const { pruned, created } = await resyncSeasonSchedules(seasonId);
+
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "season.resync-schedules",
+    targetType: "Season",
+    targetId: seasonId,
+    summary: `Re-synced schedules: pruned ${pruned}, created ${created} match(es)`,
+    metadata: { seasonId, pruned, created },
+  });
+
+  revalidatePath("/admin/divisions");
+  redirect(`/admin/divisions?ok=resynced-${pruned}-${created}`);
 }
 
 // Open a signup round bound to a specific season. The round's
