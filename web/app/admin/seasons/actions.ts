@@ -704,10 +704,6 @@ export async function finalizeSignupsForSeason(formData: FormData) {
     include: { signups: { where: { withdrawn: false }, orderBy: { signedUpAt: "asc" } } },
   });
   if (!round) return;
-  const season = await prisma.season.findUnique({
-    where: { id: seasonId },
-    select: { number: true, subtitle: true },
-  });
   await prisma.signupRound.update({
     where: { id: round.id },
     data: { status: "CLOSED", closedAt: new Date() },
@@ -728,26 +724,6 @@ export async function finalizeSignupsForSeason(formData: FormData) {
     ),
   );
   console.log(`[mmr-snapshot] queued ${round.signups.length} snapshots for season ${seasonId}`);
-
-  // Confirmation DMs: every signed-up player gets a "you're locked in"
-  // ping so they don't have to refresh the channel to see they made it.
-  // Tells them the next thing they're waiting for (division assignment).
-  // Fire via enqueueDm so pg-boss retries failures + survives crashes.
-  if (season) {
-    const seasonLabel = formatSeasonLabel(season);
-    const content =
-      `🃏 **${seasonLabel}** signups are closed — you're in!\n\n` +
-      `You'll get a division (with its own channel) when the season starts. Then play everyone in it best-of-2, via \`/start-match @opponent\` in your division channel.\n\n` +
-      `Need to withdraw? Ask a helper in your division channel.`;
-    await Promise.all(
-      round.signups.map((s) =>
-        enqueueDm({ discordId: s.discordId, content }).catch((err) =>
-          console.warn(`[signup-confirm-dm] enqueue failed for ${s.discordId}:`, err),
-        ),
-      ),
-    );
-    console.log(`[signup-confirm-dm] queued ${round.signups.length} confirmations for season ${seasonId}`);
-  }
 
   recordAudit({
     actor: actorFromAdminUser(user),

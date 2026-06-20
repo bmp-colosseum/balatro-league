@@ -13,6 +13,8 @@
 import { prisma } from "@/lib/prisma";
 import { loadDivisionStandings, loadManyDivisionStandings } from "@/lib/standings-cache";
 import { formatSeasonLabel } from "@/lib/format-season";
+import { getPlacementRules } from "@/lib/placement-rules";
+import { divisionMovement } from "@/lib/owen-placement";
 
 export type StandingsRowsForDivision = Awaited<ReturnType<typeof loadDivisionStandings>>;
 
@@ -37,6 +39,11 @@ export interface StandingsDivisionSummary {
   // Expected league matches = the division's full round-robin, N*(N-1)/2
   // over its ACTIVE members.
   expectedMatches: number;
+  // How many move at season-end (from the SAME rule the build uses) + the format
+  // this division plays. promote/relegate are 0 at the top/bottom of the ladder.
+  promote: number;
+  relegate: number;
+  format: "round-robin" | "graph";
   rows: StandingsRowsForDivision;
   shootouts: StandingsShootout[];
 }
@@ -187,6 +194,28 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
     opts.showBmpMmr,
   );
 
+  // Per-division promote/relegate + format, computed ONCE over the whole ladder
+  // (tier position, then group number) from the same rule the build uses.
+  const rules = await getPlacementRules();
+  const ladder = season.tiers.flatMap((t) =>
+    t.divisions.map((d) => ({
+      id: d.id,
+      tierName: t.name,
+      size: d.members.filter((m) => m.status === "ACTIVE").length,
+    })),
+  );
+  const movement = divisionMovement(ladder.map((l) => ({ tierName: l.tierName })), ladder.map((l) => l.size), rules);
+  const moveById = new Map(
+    ladder.map((l, i) => [
+      l.id,
+      {
+        promote: movement[i]!.promote,
+        relegate: movement[i]!.relegate,
+        format: (i < rules.roundRobinTopDivisions ? "round-robin" : "graph") as "round-robin" | "graph",
+      },
+    ]),
+  );
+
   const tiers: StandingsTierSummary[] = season.tiers.map((t) => ({
     id: t.id,
     name: t.name,
@@ -215,6 +244,9 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
         droppedMemberIds: d.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId),
         playedMatches,
         expectedMatches,
+        promote: moveById.get(d.id)?.promote ?? 0,
+        relegate: moveById.get(d.id)?.relegate ?? 0,
+        format: moveById.get(d.id)?.format ?? "graph",
         rows: standingsByDivisionId.get(d.id) ?? [],
         shootouts: shootoutsByDivisionId.get(d.id) ?? [],
       };

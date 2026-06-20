@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildOwenPlacement, type ReturnerInput, type RookieInput } from "./owen-placement.js";
+import { buildOwenPlacement, divisionMovement, type ReturnerInput, type RookieInput } from "./owen-placement.js";
 
 // Deep ladder so we can exercise the top (custom) boundaries AND the count-based
 // ones below Rare 3.
@@ -95,5 +95,32 @@ describe("buildOwenPlacement — fixed top division", () => {
     const leg = Array.from({ length: 8 }, (_, i) => returner(`leg${i + 1}`, 0, i + 1, 2000 - i * 10));
     const out = buildOwenPlacement(DIVS, leg, [], 100, { topTarget: 6 });
     expect(out[0]!.members).toHaveLength(6);
+  });
+});
+
+describe("divisionMovement — per-division promote/relegate (display = reality)", () => {
+  // The simplified launch rule: tighten off, flat 2-up/2-down, Legendary 1/1.
+  const RULES = { tightenTopTiers: false, swapThreshold: 8, baseSwap: 2, bigSwap: 2 };
+  const sizes = DIVS.map(() => 10); // sizes irrelevant when baseSwap === bigSwap
+
+  it("Legendary ↓1, Rare 1 ↑1/↓2, everywhere else ↑2/↓2, bottom ↓0", () => {
+    const m = divisionMovement(DIVS, sizes, RULES);
+    expect(m[0]).toEqual({ promote: 0, relegate: 1 }); // Legendary (top)
+    expect(m[1]).toEqual({ promote: 1, relegate: 2 }); // Rare 1
+    expect(m[2]).toEqual({ promote: 2, relegate: 2 }); // Rare 2
+    expect(m[3]).toEqual({ promote: 2, relegate: 2 }); // Rare 3
+    expect(m[5]).toEqual({ promote: 2, relegate: 2 }); // Uncommon 1
+    expect(m[6]).toEqual({ promote: 2, relegate: 0 }); // Uncommon 2 (bottom)
+  });
+
+  it("matches what buildOwenPlacement actually does (no drift)", () => {
+    // Under these rules Rare 1 relegates exactly 2 (→ Rare 2) and Rare 2 promotes 2.
+    const rare1 = [1, 2, 3, 4, 5, 6, 7, 8].map((r) => returner(`r1-${r}`, 1, r, 1800));
+    const rare2 = [1, 2, 3, 4, 5, 6, 7, 8].map((r) => returner(`r2-${r}`, 2, r, 1600));
+    const out = buildOwenPlacement(DIVS, [...rare1, ...rare2], [], 100, RULES);
+    const movedDownFromRare1 = rare1.filter((r) => divisionOf(out, r.discordId) === 2).length;
+    const movedUpFromRare2 = rare2.filter((r) => divisionOf(out, r.discordId) === 1).length;
+    expect(movedDownFromRare1).toBe(2);
+    expect(movedUpFromRare2).toBe(2);
   });
 });

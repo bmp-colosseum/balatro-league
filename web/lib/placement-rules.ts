@@ -19,9 +19,12 @@ export interface PlacementRules {
 export const DEFAULT_PLACEMENT_RULES: PlacementRules = {
   topFixedSize: 6,
   roundRobinTopDivisions: 2,
-  tightenTopTiers: true,
+  // Simplified rule: Legendary↔Rare 1 is 1-up/1-down (hardcoded for Legendary),
+  // every other boundary is a flat 2-up/2-down (tighten off, swap = 2 regardless
+  // of division size). Legendary fixed top 6; Legendary + Rare 1 play round-robin.
+  tightenTopTiers: false,
   swapThreshold: 8,
-  baseSwap: 1,
+  baseSwap: 2,
   bigSwap: 2,
 };
 

@@ -79,6 +79,54 @@ export interface PlacementOpts {
   bigSwap?: number;
 }
 
+interface TierGroup { tier: string; group: number }
+// tier + group (1-based) per division index, e.g. {Legendary,1}, {Rare,1}, …
+function computeGroups(divisions: { tierName: string }[]): TierGroup[] {
+  const groupOf: TierGroup[] = [];
+  const seen: Record<string, number> = {};
+  for (const d of divisions) {
+    seen[d.tierName] = (seen[d.tierName] ?? 0) + 1;
+    groupOf.push({ tier: d.tierName, group: seen[d.tierName]! });
+  }
+  return groupOf;
+}
+// Pairwise boundary (up = promoted lower→upper, down = relegated upper→lower) for
+// the boundary between upper index i and lower index i+1. `counts` = finishers (or
+// current members, for display) per division — only consulted for count-based tiers.
+function boundaryAt(
+  i: number,
+  groupOf: TierGroup[],
+  counts: number[],
+  opts: { tightenTopTiers: boolean; swapThreshold: number; baseSwap: number; bigSwap: number },
+): { up: number; down: number } {
+  const upper = groupOf[i]!;
+  if (upper.tier === "Legendary") return { up: 1, down: 1 };
+  if (opts.tightenTopTiers && upper.tier === "Rare" && (upper.group === 1 || upper.group === 2)) {
+    return { up: 1, down: 2 };
+  }
+  const k = (counts[i] ?? 0) >= opts.swapThreshold && (counts[i + 1] ?? 0) >= opts.swapThreshold ? opts.bigSwap : opts.baseSwap;
+  return { up: k, down: k };
+}
+
+// Per-division promote/relegate counts under the SAME rule the build uses — the
+// single source of truth for "how many move", so the standings display can never
+// drift from the actual placement. `sizes` = members (or finishers) per division
+// in ladder order. Top division never promotes; bottom never relegates.
+export function divisionMovement(
+  divisions: { tierName: string }[],
+  sizes: number[],
+  opts: PlacementOpts = {},
+): { promote: number; relegate: number }[] {
+  const { tightenTopTiers = true, swapThreshold = 8, baseSwap = 1, bigSwap = 2 } = opts;
+  const groupOf = computeGroups(divisions);
+  const o = { tightenTopTiers, swapThreshold, baseSwap, bigSwap };
+  const n = divisions.length;
+  return divisions.map((_, i) => ({
+    promote: i >= 1 ? boundaryAt(i - 1, groupOf, sizes, o).up : 0,
+    relegate: i <= n - 2 ? boundaryAt(i, groupOf, sizes, o).down : 0,
+  }));
+}
+
 export function buildOwenPlacement(
   divisions: { tierName: string; name: string }[],
   returners: ReturnerInput[],
@@ -107,26 +155,9 @@ export function buildOwenPlacement(
   for (const arr of finishers) arr.sort((a, b) => a.standingRank - b.standingRank); // best (rank 1) first
   const counts = finishers.map((a) => a.length);
 
-  // tier + group (1-based) per division index, e.g. {Legendary,1}, {Rare,1}, …
-  const groupOf: { tier: string; group: number }[] = [];
-  {
-    const seen: Record<string, number> = {};
-    for (const d of divisions) {
-      seen[d.tierName] = (seen[d.tierName] ?? 0) + 1;
-      groupOf.push({ tier: d.tierName, group: seen[d.tierName]! });
-    }
-  }
-  // (up = promoted lower→upper, down = relegated upper→lower) for the boundary
-  // between upper index i and lower index i+1.
-  const boundaryK = (i: number): { up: number; down: number } => {
-    const upper = groupOf[i]!;
-    if (upper.tier === "Legendary") return { up: 1, down: 1 };
-    if (tightenTopTiers && upper.tier === "Rare" && (upper.group === 1 || upper.group === 2)) {
-      return { up: 1, down: 2 };
-    }
-    const k = counts[i]! >= swapThreshold && counts[i + 1]! >= swapThreshold ? bigSwap : baseSwap;
-    return { up: k, down: k };
-  };
+  // Same pairwise boundary rule the display reads via divisionMovement().
+  const groupOf = computeGroups(divisions);
+  const boundaryK = (i: number) => boundaryAt(i, groupOf, counts, { tightenTopTiers, swapThreshold, baseSwap, bigSwap });
 
   // Each division's top `up` promote (via the boundary above), bottom `down`
   // relegate (via the boundary below); capped so the same finisher isn't both.

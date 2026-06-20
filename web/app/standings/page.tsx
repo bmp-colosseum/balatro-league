@@ -176,13 +176,15 @@ export default async function StandingsPage() {
                         }
                         if (current.length > 0) chains.push(current);
                       }
-                      // Effective promote/relegate count for THIS division —
-                      // clamped so we don't mark everyone in tiny divisions.
-                      // Leave at least 1 row that's neither promoting nor
-                      // relegating.
-                      const _prc = tier.promoteRelegateCount;
-                      const _maxMovers = Math.max(0, Math.floor((rows.length - 1) / 2));
-                      const effective = Math.min(_prc, _maxMovers);
+                      // Promote/relegate counts for THIS division come from the
+                      // real placement rule (div.promote / div.relegate, already 0
+                      // at the top/bottom of the ladder). Clamped so we always
+                      // leave ≥1 row that's neither promoting nor relegating.
+                      const promoteN = isFirstDivisionOverall ? 0 : div.promote;
+                      const relegateN = isLastDivisionOverall ? 0 : div.relegate;
+                      const _room = Math.max(0, rows.length - 1);
+                      const promoteEff = Math.min(promoteN, _room);
+                      const relegateEff = Math.min(relegateN, _room - promoteEff);
 
                       // Clinch predictor — who's already locked up/down even
                       // before the round-robin finishes. Top tier never
@@ -190,8 +192,8 @@ export default async function StandingsPage() {
                       const clinch = computeClinch(
                         rows,
                         activeCount,
-                        isFirstDivisionOverall ? 0 : effective,
-                        isLastDivisionOverall ? 0 : effective,
+                        promoteEff,
+                        relegateEff,
                       );
 
                       // Shootout marker is TIER-INDEPENDENT — chains crossing
@@ -203,24 +205,21 @@ export default async function StandingsPage() {
                       const relegationTieRowSet = new Set<number>();
                       for (const chain of chains) {
                         if (chain.length < 2) continue; // not a tie chain
-                        if (effective > 0) {
-                          // No promotion out of the first division overall, no
-                          // relegation out of the last — so a tie at that dead
-                          // edge isn't a showdown (nowhere to move).
-                          if (!isFirstDivisionOverall) {
-                            const crossesPromoEdge =
-                              chain.some((i) => i < effective) && chain.some((i) => i >= effective);
-                            if (crossesPromoEdge) {
-                              for (const idx of chain) promoTieRowSet.add(idx);
-                            }
+                        // A tie straddling the promotion cut (top `promoteEff`) or
+                        // the relegation cut (bottom `relegateEff`) needs a showdown.
+                        if (promoteEff > 0) {
+                          const crossesPromoEdge =
+                            chain.some((i) => i < promoteEff) && chain.some((i) => i >= promoteEff);
+                          if (crossesPromoEdge) {
+                            for (const idx of chain) promoTieRowSet.add(idx);
                           }
-                          if (!isLastDivisionOverall) {
-                            const reliEdge = rows.length - effective;
-                            const crossesReliEdge =
-                              chain.some((i) => i < reliEdge) && chain.some((i) => i >= reliEdge);
-                            if (crossesReliEdge) {
-                              for (const idx of chain) relegationTieRowSet.add(idx);
-                            }
+                        }
+                        if (relegateEff > 0) {
+                          const reliEdge = rows.length - relegateEff;
+                          const crossesReliEdge =
+                            chain.some((i) => i < reliEdge) && chain.some((i) => i >= reliEdge);
+                          if (crossesReliEdge) {
+                            for (const idx of chain) relegationTieRowSet.add(idx);
                           }
                         }
                       }
@@ -228,8 +227,8 @@ export default async function StandingsPage() {
                       // Per-row badges/MMR for the shared standings table.
                       const extras = new Map<string, StandingsRowExtras>(
                         rows.map((r, i) => [r.player.id, {
-                          promoting: complete && i < effective && !isFirstDivisionOverall && !promoTieRowSet.has(i),
-                          relegating: complete && i >= rows.length - effective && !isLastDivisionOverall && !relegationTieRowSet.has(i),
+                          promoting: complete && i < promoteEff && !promoTieRowSet.has(i),
+                          relegating: complete && i >= rows.length - relegateEff && !relegationTieRowSet.has(i),
                           clinchStatus: complete ? undefined : clinch.get(r.player.id),
                           showdown: complete && (promoTieRowSet.has(i) || relegationTieRowSet.has(i)),
                           mmr: data.mmrByPlayerId.get(r.player.id),
@@ -253,6 +252,11 @@ export default async function StandingsPage() {
                             >
                               {complete ? "✅" : ""} {playedMatches}/{expectedMatches} matches
                             </span>
+                          </div>
+                          <div className="muted" style={{ fontSize: 11, marginTop: 2, marginBottom: 8, display: "flex", flexWrap: "wrap", gap: "2px 10px" }}>
+                            {promoteN > 0 && <span><span style={{ color: "#2ecc71" }}>↑ {promoteN}</span> promote</span>}
+                            {relegateN > 0 && <span><span style={{ color: "#e74c3c" }}>↓ {relegateN}</span> relegate</span>}
+                            <span>{div.format === "round-robin" ? "🔁 Round robin (play everyone)" : "🎯 4 assigned opponents"}</span>
                           </div>
                           <DivisionStandingsTable
                             rows={rows}
