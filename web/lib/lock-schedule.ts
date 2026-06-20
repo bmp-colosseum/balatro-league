@@ -135,5 +135,7 @@ export async function lockOneDivision(divisionId: string): Promise<number> {
     });
     created++;
   }
+  // This division now has a pre-created schedule → the season is schedule-locked.
+  await prisma.season.update({ where: { id: division.seasonId }, data: { scheduleLocked: true } });
   return created;
 }

@@ -13,15 +13,21 @@ import { planDivisionResync, type ExistingMatch } from "@/lib/schedule";
 import { getPlacementRules } from "@/lib/placement-rules";
 
 export async function resyncSeasonSchedules(seasonId: string): Promise<{ pruned: number; created: number }> {
-  // Cheap short-circuit: only locked seasons have a pre-created schedule. This
-  // runs on every roster/draft action, most of which are on unlocked seasons.
+  // A season has a locked schedule iff the flag is set OR — the ground truth — a
+  // pre-created (0-0 PENDING) match exists. We honour either, so a flag that's
+  // wrongly false (e.g. a season activated before the flag existed) still gets
+  // maintained, and we re-set the flag below so the rest of the app heals. Legacy
+  // on-demand seasons have no 0-0 PENDING rows, so they correctly no-op.
   const flag = await prisma.season.findUnique({ where: { id: seasonId }, select: { scheduleLocked: true } });
-  if (!flag || !flag.scheduleLocked) return { pruned: 0, created: 0 };
+  const hasPreCreated =
+    (await prisma.match.count({
+      where: { format: "LEAGUE_BO2", status: "PENDING", gamesWonA: 0, gamesWonB: 0, division: { seasonId } },
+    })) > 0;
+  if (!flag?.scheduleLocked && !hasPreCreated) return { pruned: 0, created: 0 };
 
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
     select: {
-      scheduleLocked: true,
       divisions: {
         orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
         select: {
@@ -35,8 +41,12 @@ export async function resyncSeasonSchedules(seasonId: string): Promise<{ pruned:
       },
     },
   });
-  // Only locked seasons have a pre-created schedule to maintain.
-  if (!season || !season.scheduleLocked) return { pruned: 0, created: 0 };
+  if (!season) return { pruned: 0, created: 0 };
+  // Self-heal a stale flag so every consumer that reads season.scheduleLocked
+  // (standings, admin match-fixing, /schedule, …) starts filtering correctly.
+  if (!flag?.scheduleLocked) {
+    await prisma.season.update({ where: { id: seasonId }, data: { scheduleLocked: true } });
+  }
   const rules = await getPlacementRules();
 
   let pruned = 0;
