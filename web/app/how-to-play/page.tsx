@@ -48,7 +48,7 @@ export default async function HowToPlayPage() {
 
         <Section title="3. Play your matches">
           <p>
-            Play <strong>everyone in your division once</strong>, best-of-2. Schedule it however works.
+            Play your <strong>assigned opponents</strong> — <strong>2 games</strong> each (top divisions play everyone; most play 4 others). Run <code>/schedule</code> in Discord to see your matchups; arrange each however works.
           </p>
           <p>
             Run <code>/start-match @opponent</code> in your channel and the bot handles the ban/pick flow. Or just play in Balatro and report after.

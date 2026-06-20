@@ -1019,8 +1019,8 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
     const lockedCount = await prisma.match.count({ where: { divisionId: div.id, format: "LEAGUE_BO2" } });
     const assignedSubset = lockedCount > 0 && lockedCount < rrTotal;
     const playBullet = assignedSubset
-      ? `• Play **your assigned opponents** (best-of-2 each) — run \`/schedule\` to see exactly who you play.`
-      : `• Round-robin: play **every other person** in this list once — best-of-2 (**${N - 1} matches each**, ${rrTotal} total in this division).`;
+      ? `• Play **4 other people** (2 games each) — run \`/schedule\` to see exactly who you play.`
+      : `• Play **every other person** in this list once — 2 games each (**${N - 1} matchups**, ${rrTotal} total in this division).`;
     const welcome = [
       `# 🃏 Welcome to ${div.name}`,
       `_${seasonLabel} · ${div.name} division_`,
@@ -1161,7 +1161,7 @@ async function queueSeasonOnboardingDms(seasonId: string): Promise<void> {
         `🎴 **Welcome to ${label}!**\n` +
         `You're in **${div.name}**.\n\n` +
         `**Your matchups this season:**\n${oppLine}\n\n` +
-        `Play each a **best-of-2** — \`/start-match @opponent\` (guided) or \`/report @opponent result:2-0\`. ` +
+        `Play each **2 games** — \`/start-match @opponent\` (guided) or \`/report @opponent result:2-0\`. ` +
         `Track your progress anytime with \`/standings\`. Good luck!`;
       await enqueueDm({ discordId: m.player.discordId, content }).catch((err) =>
         console.warn(`[season.onboard] enqueue DM failed for ${m.player.discordId}:`, err),

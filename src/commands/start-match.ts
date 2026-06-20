@@ -17,7 +17,7 @@ import { ensureLeagueMatchesChannel } from "../league-matches-channel.js";
 import type { SlashCommand } from "./types.js";
 
 const MODE_CHOICES = [
-  { name: "League match (best of 2, default)", value: "league" },
+  { name: "League match (2 games, default)", value: "league" },
   { name: "Showdown (1 game — for when you're tied with the opponent)", value: "shootout" },
 ] as const;
 
@@ -32,7 +32,7 @@ export const startMatch: SlashCommand = {
     .addStringOption((opt) =>
       opt
         .setName("mode")
-        .setDescription("League match (BO2 default) or showdown tiebreaker (BO1)")
+        .setDescription("League match (2 games, default) or showdown tiebreaker (1 game)")
         .setRequired(false)
         .addChoices(...MODE_CHOICES),
     ),

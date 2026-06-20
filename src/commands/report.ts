@@ -34,7 +34,7 @@ export const report: SlashCommand = {
   // from any channel.
   data: new SlashCommandBuilder()
     .setName("report")
-    .setDescription("Report the result of your best-of-2 match against an opponent.")
+    .setDescription("Report the result of your 2-game match against an opponent.")
     .addUserOption((opt) =>
       opt.setName("opponent").setDescription("The player you faced").setRequired(true),
     )

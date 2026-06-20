@@ -285,7 +285,7 @@ function mention(player: Player): string {
 function renderWaitingAccept(s: MatchSession, a: Player, b: Player) {
   const modeLine = s.isCasual
     ? `Casual challenge · **Best of ${s.bestOf}** · not recorded to the league.`
-    : `League set (best of 2) · recorded to standings.`;
+    : `League set (2 games) · recorded to standings.`;
   // Custom-combo invites tell the opponent what they're agreeing to up
   // front. Accepting = both players agree to this deck/stake instead of
   // running the ban/pick flow.

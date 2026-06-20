@@ -126,8 +126,8 @@ export default async function JoinPage({
       <main>
         <h2>Join the league</h2>
         <p className="muted">
-          A Balatro multiplayer league on Discord. Sign up, get put in a division, and play a
-          best-of-2 against everyone in it. Climb the divisions season to season.
+          A Balatro multiplayer league on Discord. Sign up, get put in a division, and play
+          your assigned opponents — 2 games each. Climb the divisions season to season.
         </p>
 
         {ok === "signed-up" && (
@@ -278,7 +278,7 @@ export default async function JoinPage({
           <ul style={{ marginTop: 6 }}>
             <li>Sign up and wait for the season to start.</li>
             <li>You&apos;re placed in a division and get a Discord channel for it.</li>
-            <li>Play a best-of-2 against everyone in your division. You get about {playWindowLabel} to finish.</li>
+            <li>Play 2 games against each of your assigned opponents (top divisions play everyone; most play 4 others). You get about {playWindowLabel} to finish.</li>
             <li>Finish near the top to move up a division next season, near the bottom to move down.</li>
           </ul>
         </div>
