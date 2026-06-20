@@ -158,9 +158,15 @@ export async function confirmSet(pairingId: string, actorPlayerId: string): Prom
   if (pairing.playerAId !== actorPlayerId && pairing.playerBId !== actorPlayerId) {
     return { ok: false, reason: "You're not part of this match." };
   }
+  // Persist winnerId from the score (the report path doesn't set it) so every
+  // confirmed match carries a winner — derived here from gamesWon, draw → null.
+  const winnerId =
+    pairing.gamesWonA > pairing.gamesWonB ? pairing.playerAId
+      : pairing.gamesWonB > pairing.gamesWonA ? pairing.playerBId
+      : null;
   await prisma.match.update({
     where: { id: pairingId },
-    data: { status: "CONFIRMED", confirmedAt: new Date() },
+    data: { status: "CONFIRMED", confirmedAt: new Date(), winnerId },
   });
   // Fire-and-forget — don't block the caller on Discord network round-trip
   enqueueAnnounceResult(pairingId).catch(() => {});

@@ -19,6 +19,38 @@ function expectedMatchesForDivision(activeMemberCount: number): number {
   return (activeMemberCount * (activeMemberCount - 1)) / 2;
 }
 
+// Schedule-aware expected match count per division. When a division runs a locked
+// schedule (graph or pre-created round-robin — signalled by a 0-0 PENDING match),
+// the expected count is the number of pre-created matchups between active members,
+// NOT the full round-robin. Otherwise it falls back to N*(N-1)/2. Batched: one
+// query for the whole season. Pass each division's ACTIVE player-id set.
+async function expectedMatchesBySeason(
+  seasonId: string,
+  activeByDivision: Map<string, Set<string>>,
+): Promise<Map<string, number>> {
+  const matches = await prisma.match.findMany({
+    where: { format: "LEAGUE_BO2", division: { seasonId } },
+    select: { divisionId: true, playerAId: true, playerBId: true, status: true, gamesWonA: true, gamesWonB: true },
+  });
+  const byDiv = new Map<string, typeof matches>();
+  for (const m of matches) {
+    const arr = byDiv.get(m.divisionId);
+    if (arr) arr.push(m);
+    else byDiv.set(m.divisionId, [m]);
+  }
+  const expected = new Map<string, number>();
+  for (const [divisionId, activeIds] of activeByDivision) {
+    const list = byDiv.get(divisionId) ?? [];
+    const betweenActive = (m: (typeof matches)[number]) =>
+      activeIds.has(m.playerAId) && activeIds.has(m.playerBId);
+    const locked = list.some(
+      (m) => m.status === "PENDING" && m.gamesWonA === 0 && m.gamesWonB === 0 && betweenActive(m),
+    );
+    expected.set(divisionId, locked ? list.filter(betweenActive).length : expectedMatchesForDivision(activeIds.size));
+  }
+  return expected;
+}
+
 const MOCK_PREFIXES = ["mock", "sim"]; // dashless; startsWith still matches legacy "mock-"/"sim-"
 function isMockId(id: string) {
   return MOCK_PREFIXES.some((p) => id.startsWith(p));
@@ -230,13 +262,18 @@ export async function loadEndSeasonPreview(seasonId: string): Promise<EndSeasonP
   const deltas = computeRatingDeltas(season.tiers.length, divisionsForRating);
   const deltasByPlayer = new Map(deltas.map((d) => [d.playerId, d]));
 
+  // Expected counts are schedule-aware: a locked (graph) schedule expects only its
+  // pre-created matchups, not a full round-robin — else the warning fires forever.
+  const activeByDivision = new Map(
+    season.divisions.map((d) => [d.id, new Set(d.members.filter((m) => m.status === "ACTIVE").map((m) => m.playerId))]),
+  );
+  const expectedByDivision = await expectedMatchesBySeason(seasonId, activeByDivision);
   const unfinishedPairings = season.divisions.reduce((sum, d) => {
     // Active players only — a void-dropped player's missing games shouldn't read
     // as "unfinished". d.matches is CONFIRMED, and a voided game is a CONFIRMED
     // 0-0, so it correctly counts as finished here too.
-    const activeMembers = d.members.filter((m) => m.status === "ACTIVE");
-    const expected = expectedMatchesForDivision(activeMembers.length);
-    const activeIds = new Set(activeMembers.map((m) => m.playerId));
+    const activeIds = activeByDivision.get(d.id)!;
+    const expected = expectedByDivision.get(d.id) ?? 0;
     const playedActive = d.matches.filter((m) => activeIds.has(m.playerAId) && activeIds.has(m.playerBId)).length;
     return sum + Math.max(0, expected - playedActive);
   }, 0);
@@ -1159,10 +1196,13 @@ export async function loadAdminSeasonDetail(
   const initialTiers = lastUsed ? parseTemplateConfig(lastUsed.config) : DEFAULT_TIERS_FALLBACK;
   const totalMembers = season.divisions.reduce((sum, d) => sum + d.members.length, 0);
   const totalConfirmed = season.divisions.reduce((sum, d) => sum + d.matches.length, 0);
-  const totalExpected = season.divisions.reduce((sum, d) => {
-    const activeMembers = d.members.filter((m) => m.status === "ACTIVE");
-    return sum + expectedMatchesForDivision(activeMembers.length);
-  }, 0);
+  // Schedule-aware: a locked (graph) schedule expects only its pre-created
+  // matchups, so the X/Y counter can actually reach 100%.
+  const activeByDivision = new Map(
+    season.divisions.map((d) => [d.id, new Set(d.members.filter((m) => m.status === "ACTIVE").map((m) => m.playerId))]),
+  );
+  const expectedByDivision = await expectedMatchesBySeason(season.id, activeByDivision);
+  const totalExpected = season.divisions.reduce((sum, d) => sum + (expectedByDivision.get(d.id) ?? 0), 0);
   const needsChannels = !signupRound && !season.endedAt;
   const channels = needsChannels && opts.guildId ? await opts.listGuildTextChannels(opts.guildId) : [];
 
@@ -1677,7 +1717,7 @@ export async function loadAdminDivisionsIndex(): Promise<AdminDivisionsPageData>
               id: true,
               name: true,
               targetSize: true,
-              members: { select: { status: true } },
+              members: { select: { status: true, playerId: true } },
               matches: { where: { status: "CONFIRMED", format: "LEAGUE_BO2" }, select: { id: true } },
             },
           },
@@ -1686,19 +1726,28 @@ export async function loadAdminDivisionsIndex(): Promise<AdminDivisionsPageData>
     },
   });
   if (!season) return { season: null, tiers: [] };
+  // Schedule-aware expected counts so a locked (graph) division's progress bar
+  // can reach 100% instead of being measured against a full round-robin.
+  const activeByDivision = new Map(
+    season.tiers.flatMap((t) =>
+      t.divisions.map(
+        (d) => [d.id, new Set(d.members.filter((m) => m.status === "ACTIVE").map((m) => m.playerId))] as const,
+      ),
+    ),
+  );
+  const expectedByDivision = await expectedMatchesBySeason(season.id, activeByDivision);
   const tiers: AdminDivisionsTier[] = season.tiers.map((t) => ({
     id: t.id,
     name: t.name,
     position: t.position,
     divisions: t.divisions.map((d) => {
-      const activeMembers = d.members.filter((m) => m.status === "ACTIVE");
       return {
         id: d.id,
         name: d.name,
         memberCount: d.members.length,
         targetSize: d.targetSize ?? season.targetGroupSize,
         confirmedPairingCount: d.matches.length,
-        expectedPairingCount: expectedMatchesForDivision(activeMembers.length),
+        expectedPairingCount: expectedByDivision.get(d.id) ?? 0,
       };
     }),
   }));

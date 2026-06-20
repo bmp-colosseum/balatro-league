@@ -48,10 +48,12 @@ export async function applyPendingMatchMmr(): Promise<number> {
 
   const appliedIds: string[] = [];
   for (const m of pending) {
+    // Derive the winner from the score whenever it's decisive — the Discord
+    // confirm path never writes winnerId, so a 2-1 (or any non-2-0) result
+    // would otherwise be dropped. Equal scores (1-1 draw, 0-0 void) → no winner.
     let winnerId = m.winnerId ?? null;
-    if (!winnerId) {
-      if (m.gamesWonA === 2 && m.gamesWonB === 0) winnerId = m.playerAId;
-      else if (m.gamesWonB === 2 && m.gamesWonA === 0) winnerId = m.playerBId;
+    if (!winnerId && m.gamesWonA !== m.gamesWonB) {
+      winnerId = m.gamesWonA > m.gamesWonB ? m.playerAId : m.playerBId;
     }
     if (winnerId) {
       const loserId = winnerId === m.playerAId ? m.playerBId : m.playerAId;

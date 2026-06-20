@@ -22,9 +22,15 @@ export async function autoConfirmReport(pairingId: string): Promise<void> {
   if (!pairing) return;
   if (pairing.status !== "PENDING") return;
 
+  // Persist winnerId from the score (the report path doesn't set it) so every
+  // confirmed match carries a winner — derived from gamesWon, draw → null.
+  const winnerId =
+    pairing.gamesWonA > pairing.gamesWonB ? pairing.playerAId
+      : pairing.gamesWonB > pairing.gamesWonA ? pairing.playerBId
+      : null;
   await prisma.match.update({
     where: { id: pairingId },
-    data: { status: "CONFIRMED", confirmedAt: new Date() },
+    data: { status: "CONFIRMED", confirmedAt: new Date(), winnerId },
   });
   recomputeDivisionStandings(pairing.divisionId).catch(() => {});
   enqueueAnnounceResult(pairingId).catch(() => {});

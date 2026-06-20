@@ -50,16 +50,19 @@ export async function performSeasonActivation(
     summary: `Activated season "${formatSeasonLabel(target)}"${prior ? ` (deactivated "${formatSeasonLabel(prior)}")` : ""}${source === "scheduled" ? " — auto-triggered by scheduledStartAt" : ""}`,
     metadata: { previousActiveSeasonId: prior?.id ?? null, source },
   });
+  // Lock in each division's assigned-opponent schedule (pre-create the PENDING
+  // match rows). This is league DATA, not a Discord side effect, so it must run
+  // on EVERY activation path — including skipDiscord seed/e2e activations, which
+  // otherwise bring a season live with no schedule. Best-effort — activation
+  // still succeeds if it fails.
+  await lockDivisionSchedules(seasonId).catch((err) =>
+    console.warn("[season.activate] schedule lock failed:", err),
+  );
+
   // skipDiscord is for automation (seed/e2e) that flips a long chain of seasons
   // live without wanting to create+announce+tear-down Discord channels on every
   // one. Real activations always run the bootstrap.
   if (opts.skipDiscord) return;
-
-  // Lock in each division's assigned-opponent schedule (pre-create the PENDING
-  // match rows). Best-effort — activation still succeeds if it fails.
-  await lockDivisionSchedules(seasonId).catch((err) =>
-    console.warn("[season.activate] schedule lock failed:", err),
-  );
 
   // Division channels can be turned off for a lightweight league: no
   // per-division channels/roles, matches happen in #bot-commands, results

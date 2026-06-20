@@ -54,12 +54,14 @@ export async function recomputeMmrFromHistory(): Promise<RecomputeRow[]> {
   const get = (pid: string) => state.get(pid) ?? { mmr: seedByPlayer.get(pid) ?? DEFAULT_SEED, vol: 0, games: 0 };
 
   for (const m of matches) {
+    // Derive the winner from the score whenever it's decisive — the Discord
+    // confirm path never writes winnerId, so a 2-1 (or any non-2-0) result
+    // would otherwise be dropped. Equal scores (1-1 draw, 0-0 void) → no winner.
     let winnerId = m.winnerId ?? null;
-    if (!winnerId) {
-      if (m.gamesWonA === 2 && m.gamesWonB === 0) winnerId = m.playerAId;
-      else if (m.gamesWonB === 2 && m.gamesWonA === 0) winnerId = m.playerBId;
+    if (!winnerId && m.gamesWonA !== m.gamesWonB) {
+      winnerId = m.gamesWonA > m.gamesWonB ? m.playerAId : m.playerBId;
     }
-    if (!winnerId) continue; // 1-1 draw / indeterminate → no MMR change
+    if (!winnerId) continue; // 1-1 draw / 0-0 void / indeterminate → no MMR change
     const loserId = winnerId === m.playerAId ? m.playerBId : m.playerAId;
     const w = get(winnerId);
     const l = get(loserId);
