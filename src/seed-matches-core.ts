@@ -279,16 +279,34 @@ export async function seedTestMatches(opts: SeedMatchesOptions): Promise<SeedMat
   let dcGames = 0;
   const prepared: PreparedMatch[] = [];
 
+  // Respect a locked schedule: if matches were pre-created at activation, play
+  // THOSE assigned pairs (and update them in phase B) instead of a full
+  // round-robin. Falls back to round-robin when nothing is pre-created.
+  const existingMatches = await prisma.match.findMany({
+    where: { division: { seasonId: season.id }, format: "LEAGUE_BO2" },
+    select: { divisionId: true, playerAId: true, playerBId: true },
+  });
+  const assignedByDiv = new Map<string, [string, string][]>();
+  for (const m of existingMatches) {
+    const arr = assignedByDiv.get(m.divisionId) ?? [];
+    arr.push([m.playerAId, m.playerBId]);
+    assignedByDiv.set(m.divisionId, arr);
+  }
+
   for (const division of divisions) {
     const memberIds = division.members.map((m) => m.playerId);
     const rng = makeRng(`matches:${season.id}:${division.id}`);
 
-    for (let i = 0; i < memberIds.length; i++) {
-      for (let j = i + 1; j < memberIds.length; j++) {
+    const assigned = assignedByDiv.get(division.id);
+    const pairs: [string, string][] =
+      assigned && assigned.length
+        ? assigned
+        : memberIds.flatMap((a, i) => memberIds.slice(i + 1).map((b): [string, string] => (a < b ? [a, b] : [b, a])));
+
+    for (const [canonA, canonB] of pairs) {
         if (rng() > playFraction) continue; // leave some pairs unplayed
-        const pA = memberIds[i]!;
-        const pB = memberIds[j]!;
-        const [canonA, canonB] = pA < pB ? [pA, pB] : [pB, pA];
+        const pA = canonA;
+        const pB = canonB;
 
         const personaA = personaFor(pA);
         const personaB = personaFor(pB);
@@ -334,7 +352,6 @@ export async function seedTestMatches(opts: SeedMatchesOptions): Promise<SeedMat
           playedAt,
         });
       }
-    }
   }
 
   // Phase B — parallel writes. Each prepared match becomes a Match (+ its
@@ -342,21 +359,29 @@ export async function seedTestMatches(opts: SeedMatchesOptions): Promise<SeedMat
   // Bounded concurrency keeps the Prisma connection pool from being swamped.
   await runWithConcurrency(prepared, WRITE_CONCURRENCY, async (p) => {
     const winnerId = p.winsA > p.winsB ? p.canonA : p.winsB > p.winsA ? p.canonB : null;
-    const match = await prisma.match.create({
-      data: {
-        divisionId: p.divisionId,
-        playerAId: p.canonA,
-        playerBId: p.canonB,
-        format: "LEAGUE_BO2",
-        gamesWonA: p.winsA,
-        gamesWonB: p.winsB,
-        winnerId,
-        status: "CONFIRMED",
-        reporterId: p.canonA,
-        reportedAt: p.playedAt,
-        confirmedAt: p.playedAt,
-        hadDc: p.hadDc,
+    // Upsert so it fills in the PRE-CREATED (locked-schedule) match instead of
+    // colliding with the unique key, and still creates one if none was locked.
+    const result = {
+      gamesWonA: p.winsA,
+      gamesWonB: p.winsB,
+      winnerId,
+      status: "CONFIRMED" as const,
+      reporterId: p.canonA,
+      reportedAt: p.playedAt,
+      confirmedAt: p.playedAt,
+      hadDc: p.hadDc,
+    };
+    const match = await prisma.match.upsert({
+      where: {
+        divisionId_playerAId_playerBId_format: {
+          divisionId: p.divisionId,
+          playerAId: p.canonA,
+          playerBId: p.canonB,
+          format: "LEAGUE_BO2",
+        },
       },
+      create: { divisionId: p.divisionId, playerAId: p.canonA, playerBId: p.canonB, format: "LEAGUE_BO2", ...result },
+      update: result,
     });
     await writeMatchGames(match.id, p.canonA, p.canonB, p.games);
   });
