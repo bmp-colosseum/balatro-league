@@ -17,7 +17,7 @@ export const PLAYER_COMMANDS = [
   { cmd: "/standings", desc: "Current division standings" },
   { cmd: "/profile [player]", desc: "Match history + ranks (defaults to you)" },
   { cmd: "/schedule", desc: "Matches you still need to play this season" },
-  { cmd: "/start-match @opponent", desc: "Play a match: the bot runs ban/pick and records the result" },
+  { cmd: "/start-match @opponent", desc: "Play a match: guided ban/pick, result auto-recorded" },
   { cmd: "/challenge @opponent", desc: "Casual match against anyone (not recorded to standings)" },
   { cmd: "/helper [reason]", desc: "Call a moderator into the current thread/channel" },
   { cmd: "/pool", desc: "Which decks + stakes are in rotation" },

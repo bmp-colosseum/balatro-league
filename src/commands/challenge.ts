@@ -141,7 +141,7 @@ export const challenge: SlashCommand = {
       threadId = thread.id;
     } catch (err) {
       console.warn("[challenge] failed to create private thread:", err);
-      await interaction.editReply("Couldn't create the challenge thread — check the bot has Create Private Threads permission.");
+      await interaction.editReply("Couldn't create the challenge thread — an admin may need to grant the Create Private Threads permission.");
       return;
     }
 

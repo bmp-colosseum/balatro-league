@@ -208,7 +208,7 @@ export const startMatch: SlashCommand = {
       threadId = thread.id;
     } catch (err) {
       console.warn("[start-match] failed to create private thread:", err);
-      await interaction.editReply("Couldn't create the match thread — check the bot has Create Private Threads permission.");
+      await interaction.editReply("Couldn't create the match thread — an admin may need to grant the Create Private Threads permission. You can still play in Balatro and `/report @opponent result:2-0`.");
       return;
     }
 

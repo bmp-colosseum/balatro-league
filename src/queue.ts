@@ -1033,7 +1033,7 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
       `**What to do**`,
       playBullet,
       `• Schedule in this channel. DMs work too.`,
-      `• Use \`/start-match @opponent\` for the guided ban/pick flow — bot walks you both through banning and picking decks/stakes for each game. OR just play in Balatro on your own and use \`/report @opponent result:2-0|1-1|0-2\` to log it.`,
+      `• Use \`/start-match @opponent\` for the guided flow — you'll both be walked through banning and picking decks/stakes for each game. OR just play in Balatro on your own and use \`/report @opponent result:2-0|1-1|0-2\` to log it.`,
       ``,
       `**Standings + your schedule:** <${webUrl(`divisions/${div.id}`)}>`,
       ``,

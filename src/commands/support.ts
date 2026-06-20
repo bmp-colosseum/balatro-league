@@ -87,7 +87,7 @@ export const support: SlashCommand = {
       logDiscordError("support.create-thread", err, { channelId: supportChannelId, userId: interaction.user.id });
       await prisma.supportTicket.delete({ where: { id: ticket.id } }).catch(() => {});
       await interaction.editReply(
-        "Couldn't open a ticket thread — the bot may be missing permission to create private threads in the support channel.",
+        "Couldn't open a ticket thread — an admin may need to grant permission to create private threads in the support channel.",
       );
       return;
     }

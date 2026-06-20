@@ -304,12 +304,18 @@ function renderWaitingAccept(s: MatchSession, a: Player, b: Player) {
       // ignore — malformed customCombo just doesn't render
     }
   }
+  const guideLine = s.isCasual
+    ? ""
+    : `\n\n📋 You'll be walked through **2 games**:\n` +
+      `• Ban/pick happens fresh each game — **bans don't carry over to the next game**.\n` +
+      `• The winner's leftover **lives** are noted each game (for possible future tiebreakers — nothing for you to do).`;
   const embed = new EmbedBuilder()
     .setTitle(s.isCasual ? "🎴 Challenge" : "🎴 Match invite")
     .setDescription(
       `${mention(a)} wants to play ${mention(b)}.\n` +
         `${modeLine}` +
         comboLine +
+        guideLine +
         `\n\n${mention(b)}, accept within 5 minutes to start.`,
     )
     .setColor(s.isCasual ? 0x95a5a6 : 0x5865f2)
