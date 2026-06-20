@@ -308,7 +308,7 @@ function renderWaitingAccept(s: MatchSession, a: Player, b: Player) {
     ? ""
     : `\n\n📋 You'll be walked through **2 games**:\n` +
       `• Ban/pick happens fresh each game — **bans don't carry over to the next game**.\n` +
-      `• The winner's leftover **lives** are noted each game (for possible future tiebreakers — nothing for you to do).`;
+      `• The **winner records their leftover lives** at the end of each game (used for possible future tiebreakers).`;
   const embed = new EmbedBuilder()
     .setTitle(s.isCasual ? "🎴 Challenge" : "🎴 Match invite")
     .setDescription(

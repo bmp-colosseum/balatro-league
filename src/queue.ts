@@ -952,7 +952,7 @@ export async function renderDivisionWelcome(
     `**How it works**`,
     playBullet,
     `• Run \`/start-match @opponent\` and you'll both be guided through everything — banning, picking the deck/stake, and recording each game. No manual reporting.`,
-    `• Each matchup is **2 games**. Bans are fresh each game — they **don't carry over to the next game**. (The winner's leftover lives are noted each game for possible future tiebreakers — nothing for you to do.)`,
+    `• Each matchup is **2 games**. Bans are fresh each game — they **don't carry over to the next game**. The **winner records their leftover lives** at the end of each game (used for possible future tiebreakers).`,
     `• Schedule here in the channel, or by DM.`,
     ``,
     `**Standings + your schedule:** <${webUrl(`divisions/${div.id}`)}>`,
