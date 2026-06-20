@@ -37,7 +37,6 @@ export default async function HallOfFamePage() {
         ) : (
           withChampions.map((s) => {
             const champ = s.champion!;
-            const otherWinners = s.divisionWinners.filter((w) => !w.isTopDivision);
             return (
               <section
                 key={s.seasonId}
@@ -82,24 +81,6 @@ export default async function HallOfFamePage() {
                           </div>
                         );
                       })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Other division champions */}
-                {otherWinners.length > 0 && (
-                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--border, rgba(255,255,255,0.08))" }}>
-                    <div className="muted" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
-                      Division champions
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      {otherWinners.map((w) => (
-                        <div key={w.divisionName} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, flexWrap: "wrap" }}>
-                          <span className="muted" style={{ minWidth: 110 }}>{w.divisionName}</span>
-                          <Link href={`/profile/${w.playerId}`} style={{ color: "var(--text)", fontWeight: 600 }}>{w.playerName}</Link>
-                          <span className="muted" style={{ fontSize: 12 }}>{w.record} · {w.points} pts</span>
-                        </div>
-                      ))}
                     </div>
                   </div>
                 )}

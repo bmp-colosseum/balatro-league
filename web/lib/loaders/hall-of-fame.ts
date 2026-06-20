@@ -1,9 +1,8 @@
 import "server-only";
 
-// Hall of Fame: the champions of every COMPLETED season. For each ended (and not
-// archived) season we recompute the final standings of every division and crown
-// its #1 — the top division's winner is the league champion (shown with their
-// full match log), and each other division's winner is listed too.
+// Hall of Fame: the overall champion of every COMPLETED season — the winner of
+// the top division — recomputed from the final standings, shown with their record
+// and full match log. (Per-division winners could be added here later.)
 
 import { prisma } from "@/lib/prisma";
 import { computeStandings, assignRanks } from "@/lib/standings";
@@ -15,15 +14,6 @@ export interface HofMatch {
   myGames: number;
   oppGames: number;
   outcome: "win" | "loss" | "draw" | "void";
-}
-export interface HofDivisionWinner {
-  divisionName: string;
-  isTopDivision: boolean;
-  playerId: string;
-  playerName: string;
-  discordId: string;
-  record: string; // W-L-D
-  points: number;
 }
 export interface HofChampion {
   playerId: string;
@@ -40,7 +30,6 @@ export interface HofSeason {
   endedAt: Date;
   champion: HofChampion | null;
   championMatches: HofMatch[];
-  divisionWinners: HofDivisionWinner[];
 }
 
 export async function loadHallOfFame(): Promise<HofSeason[]> {
@@ -81,43 +70,26 @@ export async function loadHallOfFame(): Promise<HofSeason[]> {
 
   const out: HofSeason[] = [];
   for (const s of seasons) {
-    // Ladder order: tier position, then group number — so the first division is
-    // the top of the league (its winner is the champion).
-    const ladder = s.tiers.flatMap((t) => t.divisions);
-    const divisionWinners: HofDivisionWinner[] = [];
+    // The top of the league: first division in ladder order (tier position, then
+    // group number). Its winner is the overall champion.
+    const topDiv = s.tiers.flatMap((t) => t.divisions)[0];
     let champion: HofChampion | null = null;
     let championMatches: HofMatch[] = [];
 
-    ladder.forEach((d, idx) => {
-      const players = d.members.map((m) => m.player);
-      if (players.length === 0) return;
-      const bo2 = d.matches.filter((m) => m.format === "LEAGUE_BO2");
-      const shootouts = d.matches
+    const players = topDiv?.members.map((m) => m.player) ?? [];
+    if (topDiv && players.length > 0) {
+      const bo2 = topDiv.matches.filter((m) => m.format === "LEAGUE_BO2");
+      const shootouts = topDiv.matches
         .filter((m) => m.format === "SHOOTOUT_BO1" && m.winnerId)
         .map((m) => ({ playerAId: m.playerAId, playerBId: m.playerBId, winnerId: m.winnerId! }));
-      const rows = assignRanks(computeStandings(players, bo2, shootouts));
-      const top = rows[0];
-      if (!top) return;
-
-      const record = `${top.wins}-${top.losses}-${top.draws}`;
-      const isTopDivision = idx === 0;
-      divisionWinners.push({
-        divisionName: d.name,
-        isTopDivision,
-        playerId: top.player.id,
-        playerName: top.player.displayName,
-        discordId: top.player.discordId,
-        record,
-        points: top.points,
-      });
-
-      if (isTopDivision) {
+      const top = assignRanks(computeStandings(players, bo2, shootouts))[0];
+      if (top) {
         champion = {
           playerId: top.player.id,
           playerName: top.player.displayName,
           discordId: top.player.discordId,
-          divisionName: d.name,
-          record,
+          divisionName: topDiv.name,
+          record: `${top.wins}-${top.losses}-${top.draws}`,
           points: top.points,
         };
         const nameById = new Map(players.map((p) => [p.id, p.displayName]));
@@ -139,7 +111,7 @@ export async function loadHallOfFame(): Promise<HofSeason[]> {
             return { opponentId, opponentName: nameById.get(opponentId) ?? "Unknown", myGames, oppGames, outcome };
           });
       }
-    });
+    }
 
     out.push({
       seasonId: s.id,
@@ -148,7 +120,6 @@ export async function loadHallOfFame(): Promise<HofSeason[]> {
       endedAt: s.endedAt!,
       champion,
       championMatches,
-      divisionWinners,
     });
   }
   return out;
