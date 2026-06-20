@@ -27,7 +27,7 @@ export default async function HallOfFamePage() {
       <main>
         <h2>🏆 Hall of Fame</h2>
         <p className="muted" style={{ marginTop: -4, marginBottom: 16 }}>
-          Every season&apos;s champions, enshrined forever. The top division&apos;s winner is the league champion.
+          The top division&apos;s winner is the league champion.
         </p>
 
         {withChampions.length === 0 ? (
