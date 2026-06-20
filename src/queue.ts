@@ -138,10 +138,12 @@ export async function initQueue(): Promise<void> {
           await user.send({ content });
         } catch (err) {
           const code = (err as { code?: number })?.code;
-          if (code === 50007) {
-            // "Cannot send messages to this user" — DMs disabled, bot
-            // blocked, or no shared server. Unfixable from our side.
-            console.warn(`[notify.dm] ${discordId} can't receive DMs (disabled/blocked) — skipping.`);
+          // Permanently undeliverable — skip silently, don't retry:
+          //   50007 = DMs disabled / bot blocked / no shared server
+          //   10013 = Unknown User (left the server, deleted account, or a fake
+          //           seeded ID in a test run)
+          if (code === 50007 || code === 10013) {
+            console.warn(`[notify.dm] ${discordId} undeliverable (code ${code}) — skipping.`);
             return;
           }
           console.warn(`[notify.dm] send to ${discordId} failed (code ${code ?? "?"}) — will retry:`, err);
