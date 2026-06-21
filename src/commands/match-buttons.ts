@@ -153,12 +153,44 @@ async function loadAllowedStakes(session: MatchSession): Promise<string[]> {
 
 async function refreshMessage(interaction: AnyInteraction, session: MatchSession) {
   const { playerA, playerB } = await loadPlayers(session);
-  const { embeds, components, content } = renderMatch(session, playerA, playerB);
-  // Including content on every update lets Discord re-ping whoever's
-  // turn it is now — a new mention in an edit fires the same push
-  // notification a new message would. Same content across no-op
-  // refreshes doesn't notify anyone.
-  await editOrUpdate(interaction, { content, embeds, components });
+  const { embeds, components, content, turnKey } = renderMatch(session, playerA, playerB);
+  const channelId = session.threadId ?? session.channelId;
+  // A real turn handoff = the awaited actor (turnKey) changed since we last
+  // pinged. NOTE: Discord does NOT push-notify on message EDITS, even ones
+  // that add a mention — so an in-place edit silently updates the embed and
+  // the next player never finds out it's their turn. We only edit in place
+  // when nobody new is on the clock (same actor still up, vote tally, terminal
+  // render); a genuine handoff re-POSTS the controls below so the new player
+  // is actually pinged.
+  const turnSwitched = !!turnKey && turnKey !== session.lastPingedDiscordId;
+  if (!turnSwitched || !session.matchMessageId || !channelId) {
+    await editOrUpdate(interaction, { content, embeds, components });
+    return;
+  }
+  try {
+    // The button click already carries its channel (the match thread) — use it
+    // directly to skip a channels.fetch. Fall back to a fetch only if it's
+    // missing or somehow not this session's channel.
+    const cached =
+      interaction.channelId === channelId && interaction.channel && "send" in interaction.channel
+        ? interaction.channel
+        : null;
+    const channel = cached ?? (await interaction.client.channels.fetch(channelId).catch(() => null));
+    if (!channel || !("send" in channel) || !("messages" in channel)) {
+      await editOrUpdate(interaction, { content, embeds, components });
+      return;
+    }
+    // Ack the interaction WITHOUT editing the message we're about to delete.
+    if (!interaction.deferred && !interaction.replied) await interaction.deferUpdate();
+    await repostControls(channel as GuildTextBasedChannel, session, { content, embeds, components }, turnKey);
+  } catch (err) {
+    console.warn(`[refreshMessage] re-post failed for ${session.id}, editing in place:`, err);
+    try {
+      await editOrUpdate(interaction, { content, embeds, components });
+    } catch {
+      // Interaction already acked via deferUpdate — nothing more we can do.
+    }
+  }
 }
 
 // Edit the source message, transparently handling whether the
@@ -320,11 +352,40 @@ async function loadBanContext(
   return { gameNum: gameNum as 1 | 2 | 3, gameField, game, expected: phase.remainingForThem };
 }
 
+// Post fresh controls at the BOTTOM of the thread (pinging the awaited player)
+// and delete the previous controls message. This is the shared mechanic behind
+// every turn-switch notification: a NEW message is the only thing Discord
+// push-notifies on, so re-posting is how the next player actually gets alerted.
+// Always pings (allowedMentions.users) and stamps the new turnKey — callers
+// that only want a conditional ping (the bump sweep) do their own send.
+async function repostControls(
+  channel: GuildTextBasedChannel,
+  session: MatchSession,
+  rendered: { content: string; embeds: EmbedBuilder[]; components: ComponentRow[] },
+  turnKey: string,
+): Promise<void> {
+  const sent = await channel.send({
+    content: rendered.content || undefined,
+    embeds: rendered.embeds,
+    components: rendered.components,
+    allowedMentions: { parse: ["users"] },
+  });
+  const oldId = session.matchMessageId;
+  await prisma.matchSession
+    .update({ where: { id: session.id }, data: { matchMessageId: sent.id, lastPingedDiscordId: turnKey } })
+    .catch(() => {});
+  if (oldId && oldId !== sent.id) {
+    // Single DELETE by id — no need to fetch the message object first.
+    await channel.messages.delete(oldId).catch(() => {});
+  }
+}
+
 // Re-post the match controls at the BOTTOM of the thread. Called after the
-// bot itself posts another message (e.g. a helper summon) that would bury
-// the controls and force players to scroll up. Posts fresh controls,
-// repoints matchMessageId, then deletes the old message. No-op on terminal
-// states or when there's no channel.
+// bot itself posts another message (e.g. a helper summon) or the periodic
+// sweep finds the controls buried by chatter. Posts fresh controls, repoints
+// matchMessageId, then deletes the old message. Pings the awaited player ONLY
+// when the turn actually switched (otherwise a plain move-to-bottom is silent).
+// No-op on terminal states or when there's no channel.
 async function bumpMatchControls(client: Client, session: MatchSession): Promise<void> {
   if (session.state === "COMPLETE" || session.state === "CANCELLED") return;
   const channelId = session.threadId ?? session.channelId;
@@ -333,13 +394,11 @@ async function bumpMatchControls(client: Client, session: MatchSession): Promise
     const channel = await client.channels.fetch(channelId);
     if (!channel || !("send" in channel) || !("messages" in channel)) return;
     const { playerA, playerB } = await loadPlayers(session);
-    const { embeds, components, content } = renderMatch(session, playerA, playerB);
-    // The active decision-maker = the first @mention in the controls (render always
-    // leads with "<@them> your turn / you pick …"). Ping ONLY when that's changed
-    // since we last pinged — so a turn SWITCH notifies the new player, but a plain
-    // move-to-bottom (same person still up) is silent.
-    const decisionMaker = content?.match(/<@(\d+)>/)?.[1] ?? null;
-    const shouldPing = !!decisionMaker && decisionMaker !== session.lastPingedDiscordId;
+    const { embeds, components, content, turnKey } = renderMatch(session, playerA, playerB);
+    // Ping ONLY when the awaited actor (turnKey) changed since we last pinged —
+    // so a turn SWITCH notifies the new player, but a plain move-to-bottom
+    // (same person still up) is silent.
+    const shouldPing = !!turnKey && turnKey !== session.lastPingedDiscordId;
     const sent = await channel.send({
       content: content || undefined,
       embeds,
@@ -350,11 +409,12 @@ async function bumpMatchControls(client: Client, session: MatchSession): Promise
     await prisma.matchSession
       .update({
         where: { id: session.id },
-        data: { matchMessageId: sent.id, ...(shouldPing ? { lastPingedDiscordId: decisionMaker } : {}) },
+        data: { matchMessageId: sent.id, ...(shouldPing ? { lastPingedDiscordId: turnKey } : {}) },
       })
       .catch(() => {});
     if (oldId) {
-      await channel.messages.fetch(oldId).then((m) => m.delete()).catch(() => {});
+      // Single DELETE by id — no need to fetch the message object first.
+      await channel.messages.delete(oldId).catch(() => {});
     }
   } catch (err) {
     console.warn(`[bumpMatchControls] failed for ${session.id}:`, err);
@@ -371,22 +431,45 @@ async function refreshPublicMatchMessage(interaction: AnyInteraction, session: M
   const channelId = session.threadId ?? session.channelId;
   if (!channelId) return;
   try {
-    const channel = await interaction.client.channels.fetch(channelId);
-    if (!channel || !("messages" in channel)) return;
-    const message = await channel.messages.fetch(session.matchMessageId);
+    // Reuse the interaction's channel when it's this session's thread, else fetch.
+    const cached =
+      interaction.channelId === channelId && interaction.channel && "send" in interaction.channel
+        ? interaction.channel
+        : null;
+    const resolved = cached ?? (await interaction.client.channels.fetch(channelId).catch(() => null));
+    if (!resolved || !("messages" in resolved) || !("send" in resolved)) return;
+    const channel = resolved as GuildTextBasedChannel;
     const { playerA, playerB } = await loadPlayers(session);
-    const { embeds, components, content } = renderMatch(session, playerA, playerB);
-    await message.edit({ content, embeds, components });
+    const { embeds, components, content, turnKey } = renderMatch(session, playerA, playerB);
+    // Same turn-aware rule as refreshMessage: a real handoff re-posts (so the
+    // new player is pinged), everything else edits the public message in place.
+    const turnSwitched = !!turnKey && turnKey !== session.lastPingedDiscordId;
+    if (turnSwitched) {
+      await repostControls(channel, session, { content, embeds, components }, turnKey);
+    } else {
+      // Single PATCH by id — no need to fetch the message object first.
+      await channel.messages.edit(session.matchMessageId, { content, embeds, components });
+    }
   } catch (err) {
     console.warn(`[refreshPublicMatchMessage] failed for ${session.id}:`, err);
   }
 }
 
-// Periodic sweep: any active match whose controls have been buried by chatter gets
-// them re-posted at the bottom of the thread — which also re-pings the player whose
-// turn it is (bumpMatchControls sends, and a send notifies the @mention). Driven by
-// a timer (startMatchControlBumper) so people don't have to scroll up to keep
-// playing while they're chatting in the thread.
+// Periodic "keep the controls reachable" sweep. Turn SWITCHES already notify
+// event-driven (refreshMessage re-posts on a handoff), but the PLAYING phase
+// has NO switches — both players go off to play their run for 10-20 min while
+// chatter ("gg", "almost done") piles up in the thread. This sweep is the ONLY
+// thing that keeps the winner-vote controls drifting toward the bottom during
+// that window, so they're right there when a player returns to vote.
+//
+// It only acts when controls are actually BURIED (thread's last message isn't
+// ours), which naturally means: while turns are switching, event-driven keeps
+// the controls at the bottom so this stays out of the way; once interactions
+// settle (the play phase) and chatter buries them, it drifts them back down,
+// once per interval. Cost is near-zero — each tick reads the cached
+// lastMessageId to decide and only spends REST on a genuinely buried thread.
+// bumpMatchControls re-pings only on a real turn change, so a plain un-bury is
+// silent.
 const CONTROL_BUMP_INTERVAL_MS = 2 * 60 * 1000;
 export async function bumpStaleMatchControls(client: Client): Promise<void> {
   const sessions = await prisma.matchSession.findMany({

@@ -42,7 +42,7 @@ export function renderMatch(
   playerA: Player,
   playerB: Player,
   opts: RenderOptions = {},
-): { embeds: EmbedBuilder[]; components: ComponentRow[]; content: string } {
+): { embeds: EmbedBuilder[]; components: ComponentRow[]; content: string; turnKey: string } {
   const game1 = parseGame(session.game1);
   const game2 = parseGame(session.game2);
   const game3 = parseGame(session.game3);
@@ -76,17 +76,22 @@ export function renderMatch(
     return withHelperRow(session, renderGame(session, playerA, playerB, game.pool, game, gameNum, opts));
   })();
 
-  const content = computeActiveContent(session, playerA, playerB, game1, game2, game3);
-  return { embeds: bare.embeds, components: bare.components, content };
+  const { content, turnKey } = computeActiveContent(session, playerA, playerB, game1, game2, game3);
+  return { embeds: bare.embeds, components: bare.components, content, turnKey };
 }
 
-// Build the message-level content line that pings whoever's expected
-// to act next. Discord re-fires push notifications whenever an edit
-// introduces a new mention, so re-rendering with a different active
-// player on each transition gives the next player a fresh ping (and
-// the same content across no-op refreshes doesn't ping anyone). The
-// embed itself remains the canonical source for "what to do" — this
-// is just the loud nudge.
+// Build the message-level content line that pings whoever's expected to act
+// next, plus a `turnKey` identifying that actor. The caller compares turnKey
+// against the last-pinged actor: when it CHANGES (a real turn handoff) the
+// controls are re-POSTED with a ping — a fresh message is the only thing
+// Discord actually push-notifies on; editing in a new mention does NOT notify.
+// turnKey is the awaited player's discord id, "BOTH" for the shared go-play
+// step (both players nudged once), or "" when nobody specific is on the clock.
+// The embed itself remains the canonical "what to do" — this is just the nudge.
+interface ActiveContent {
+  content: string;
+  turnKey: string;
+}
 function computeActiveContent(
   s: MatchSession,
   a: Player,
@@ -94,7 +99,7 @@ function computeActiveContent(
   g1: GameState | null,
   g2: GameState | null,
   g3: GameState | null,
-): string {
+): ActiveContent {
   // Cancel vote pending overrides the normal turn-based ping — the
   // OTHER player needs to either confirm and drop the match, or
   // ignore it and keep playing. That decision is more urgent than
@@ -102,46 +107,46 @@ function computeActiveContent(
   if (s.cancelInitiatorPlayerId && s.state !== "CANCELLED" && s.state !== "COMPLETE") {
     const initiator = s.cancelInitiatorPlayerId === a.id ? a : b;
     const opposingDc = s.cancelInitiatorPlayerId === a.id ? b.discordId : a.discordId;
-    return `<@${opposingDc}> ⛔ **${initiator.displayName}** wants to cancel — click **Cancel match** to agree, or just keep playing.`;
+    return { content: `<@${opposingDc}> ⛔ **${initiator.displayName}** wants to cancel — click **Cancel match** to agree, or just keep playing.`, turnKey: opposingDc };
   }
   // Pause vote pending — ping the other player so it's not just a silent
   // button swap. Same precedence idea as cancel.
   if (s.pauseInitiatorPlayerId && s.state !== "PAUSED" && s.state !== "CANCELLED" && s.state !== "COMPLETE") {
     const initiator = s.pauseInitiatorPlayerId === a.id ? a : b;
     const opposingDc = s.pauseInitiatorPlayerId === a.id ? b.discordId : a.discordId;
-    return `<@${opposingDc}> ⏸️ **${initiator.displayName}** wants to pause — click **Pause** to agree, or keep playing.`;
+    return { content: `<@${opposingDc}> ⏸️ **${initiator.displayName}** wants to pause — click **Pause** to agree, or keep playing.`, turnKey: opposingDc };
   }
   // DC claim pending — ping the player it's against to confirm or dispute.
   if (s.dcInitiatorPlayerId && s.state !== "CANCELLED" && s.state !== "COMPLETE") {
     const claimant = s.dcInitiatorPlayerId === a.id ? a : b;
     const opposingDc = s.dcInitiatorPlayerId === a.id ? b.discordId : a.discordId;
-    return `<@${opposingDc}> 🔌 **${claimant.displayName}** says you disconnected — **Confirm** to forfeit this game, or **Keep playing** if you're still here.`;
+    return { content: `<@${opposingDc}> 🔌 **${claimant.displayName}** says you disconnected — **Confirm** to forfeit this game, or **Keep playing** if you're still here.`, turnKey: opposingDc };
   }
   switch (s.state) {
     case "WAITING_ACCEPT":
-      return `<@${b.discordId}> 🎴 match invite from <@${a.discordId}> — accept or decline.`;
+      return { content: `<@${b.discordId}> 🎴 match invite from <@${a.discordId}> — accept or decline.`, turnKey: b.discordId };
     case "GAME_2_CHOOSE_FIRST": {
-      if (!g1?.winnerId) return "";
+      if (!g1?.winnerId) return { content: "", turnKey: "" };
       const loserDc = g1.winnerId === a.id ? b.discordId : a.discordId;
-      return `<@${loserDc}> 🎯 you lost game 1 — pick who bans first in game 2.`;
+      return { content: `<@${loserDc}> 🎯 you lost game 1 — pick who bans first in game 2.`, turnKey: loserDc };
     }
     case "GAME_3_CHOOSE_FIRST": {
-      if (!g2?.winnerId) return "";
+      if (!g2?.winnerId) return { content: "", turnKey: "" };
       const loserDc = g2.winnerId === a.id ? b.discordId : a.discordId;
-      return `<@${loserDc}> 🎯 game 3 tiebreaker — pick who bans first.`;
+      return { content: `<@${loserDc}> 🎯 game 3 tiebreaker — pick who bans first.`, turnKey: loserDc };
     }
     case "GAME_1_BAN":
     case "GAME_2_BAN":
     case "GAME_3_BAN": {
       const game = s.state.startsWith("GAME_1") ? g1 : s.state.startsWith("GAME_2") ? g2 : g3;
-      if (!game) return "";
+      if (!game) return { content: "", turnKey: "" };
       // A custom-combo proposal in flight changes who's expected to
       // act — the OTHER player has to accept/counter. Bare-ban phase
       // pings the active banner.
       const proposal = parseProposalForRender(s.customComboProposal);
       if (proposal?.status === "pending") {
         const targetDc = proposal.by === a.id ? b.discordId : a.discordId;
-        return `<@${targetDc}> 🎯 custom combo proposed — accept, counter, or cancel.`;
+        return { content: `<@${targetDc}> 🎯 custom combo proposed — accept, counter, or cancel.`, turnKey: targetDc };
       }
       // Reroll vote pending (exactly one player voted) — ping the OTHER
       // player to confirm or keep banning, instead of leaving it as a
@@ -150,44 +155,56 @@ function computeActiveContent(
         const voterIsA = Boolean(game.rerollVoteByA);
         const voter = voterIsA ? a : b;
         const opposingDc = voterIsA ? b.discordId : a.discordId;
-        return `<@${opposingDc}> 🔄 **${voter.displayName}** wants to reroll the pool — click **Confirm reroll** to agree, or keep banning.`;
+        return { content: `<@${opposingDc}> 🔄 **${voter.displayName}** wants to reroll the pool — click **Confirm reroll** to agree, or keep banning.`, turnKey: opposingDc };
       }
       const phase = phaseFor(game, a.id, b.id, parsePolicy(s.policy));
-      if (phase.kind !== "BAN") return "";
+      if (phase.kind !== "BAN") return { content: "", turnKey: "" };
       const dc = phase.whoseBanId === a.id ? a.discordId : b.discordId;
-      return `<@${dc}> 🎯 your turn — ban ${phase.remainingForThem} combo(s).`;
+      return { content: `<@${dc}> 🎯 your turn — ban ${phase.remainingForThem} combo(s).`, turnKey: dc };
     }
     case "GAME_1_PICK":
     case "GAME_2_PICK":
     case "GAME_3_PICK": {
       const game = s.state.startsWith("GAME_1") ? g1 : s.state.startsWith("GAME_2") ? g2 : g3;
-      if (!game) return "";
+      if (!game) return { content: "", turnKey: "" };
       const phase = phaseFor(game, a.id, b.id, parsePolicy(s.policy));
-      if (phase.kind !== "PICK") return "";
+      if (phase.kind !== "PICK") return { content: "", turnKey: "" };
       const dc = phase.pickerId === a.id ? a.discordId : b.discordId;
-      return `<@${dc}> 🎯 your turn — pick the deck/stake.`;
+      return { content: `<@${dc}> 🎯 your turn — pick the deck/stake.`, turnKey: dc };
     }
     case "GAME_1_PLAYING":
     case "GAME_2_PLAYING":
-    case "GAME_3_PLAYING":
-      // Both players are expected to play the run and vote a winner.
-      // Mention once — Discord won't re-ping if the same content
-      // shows up across no-op refreshes.
-      return `<@${a.discordId}> <@${b.discordId}> 🎮 play the run, then vote for the winner.`;
+    case "GAME_3_PLAYING": {
+      const game = s.state.startsWith("GAME_1") ? g1 : s.state.startsWith("GAME_2") ? g2 : g3;
+      // After both winner votes agree, the game waits on the WINNER to record
+      // their remaining lives before it advances — single them out so they get
+      // a dedicated ping instead of the generic both-players "go play" nudge.
+      if (game) {
+        const phase = phaseFor(game, a.id, b.id, parsePolicy(s.policy));
+        if (phase.kind === "AWAIT_LIVES") {
+          const winnerDc = phase.winnerId === a.id ? a.discordId : b.discordId;
+          return { content: `<@${winnerDc}> 🏆 you won the game — record your remaining lives to wrap it up.`, turnKey: winnerDc };
+        }
+      }
+      // Both players go play the run and vote a winner — a shared nudge, so a
+      // single "BOTH" key pings them both exactly once on entry, then stays
+      // quiet across the winner-vote refreshes.
+      return { content: `<@${a.discordId}> <@${b.discordId}> 🎮 play the run, then vote for the winner.`, turnKey: "BOTH" };
+    }
     case "PAUSED": {
       // Resume vote pending — ping the other player to agree.
       if (s.resumeInitiatorPlayerId) {
         const initiator = s.resumeInitiatorPlayerId === a.id ? a : b;
         const opposingDc = s.resumeInitiatorPlayerId === a.id ? b.discordId : a.discordId;
-        return `<@${opposingDc}> ▶️ **${initiator.displayName}** wants to resume — click **Resume** to continue.`;
+        return { content: `<@${opposingDc}> ▶️ **${initiator.displayName}** wants to resume — click **Resume** to continue.`, turnKey: opposingDc };
       }
-      return "";
+      return { content: "", turnKey: "" };
     }
     case "COMPLETE":
     case "CANCELLED":
-      return "";
+      return { content: "", turnKey: "" };
     default:
-      return "";
+      return { content: "", turnKey: "" };
   }
 }
 
