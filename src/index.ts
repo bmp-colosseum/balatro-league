@@ -109,7 +109,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       // For threads, pass the parent channel id so scoped commands (e.g.
       // /helper) are allowed in a thread spawned under an allowed channel.
       const parentId = interaction.channel?.isThread?.() ? interaction.channel.parentId : null;
-      const channelCheck = await checkChannelScope(command.channelScope, interaction.channelId, parentId);
+      const channelCheck = await checkChannelScope(command.channelScope, interaction.channelId, parentId, {
+        commandName: interaction.commandName,
+      });
       if (!channelCheck.allowed) {
         await interaction.reply({
           content: channelCheck.reason ?? "This command isn't allowed in this channel.",

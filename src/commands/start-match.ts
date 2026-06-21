@@ -22,7 +22,10 @@ const MODE_CHOICES = [
 ] as const;
 
 export const startMatch: SlashCommand = {
-  channelScope: "division-only",
+  // Runs ANYWHERE: the reply is ephemeral and the match lives in a private
+  // thread under #league-matches, so nothing public lands in the channel it's
+  // run from. The division comes from the players' membership, not the channel.
+  channelScope: "any",
   data: new SlashCommandBuilder()
     .setName("start-match")
     .setDescription("Start a guided match against your opponent (ban/pick + auto-record).")

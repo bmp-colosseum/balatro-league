@@ -8,6 +8,7 @@
 // env-driven whitelist that admin would have to update every season.
 
 import { resolveBotCommandsChannelIds } from "./bot-commands-channel.js";
+import { getConfig, LeagueConfigKey } from "./league-config.js";
 import { prisma } from "./db.js";
 import type { ChannelScope } from "./commands/types.js";
 
@@ -42,10 +43,13 @@ export async function checkChannelScope(
   // the thread's parent channel is allowed — so e.g. /helper still works inside
   // a match/dispute thread spawned under the bot-commands channel.
   parentId?: string | null,
+  // Caller context, used ONLY to name the command in a friendlier blocked message.
+  opts?: { commandName?: string },
 ): Promise<ChannelCheckResult> {
   if (!scope || scope === "any") return { allowed: true };
   if (!channelId) return { allowed: false, reason: "This command must be used in a channel." };
   const ids = [channelId, ...(parentId ? [parentId] : [])];
+  const cmd = opts?.commandName ? `\`/${opts.commandName}\`` : "This command";
 
   if (scope === "match-flow") {
     const allowed = await resolveBotCommandsChannelIds();
@@ -53,7 +57,7 @@ export async function checkChannelScope(
     if (await isDivisionChannel(ids)) return { allowed: true };
     return {
       allowed: false,
-      reason: `Run this in your division channel or ${allowedMention(allowed)}.`,
+      reason: `${cmd} runs in your division channel or ${allowedMention(allowed)}.`,
     };
   }
 
@@ -61,7 +65,7 @@ export async function checkChannelScope(
     if (await isDivisionChannel(ids)) return { allowed: true };
     return {
       allowed: false,
-      reason: "Run this in your division channel — league matches are scoped to a division.",
+      reason: `${cmd} runs in your division channel — league matches are scoped to a division.`,
     };
   }
 
@@ -77,7 +81,18 @@ export async function checkChannelScope(
     );
     return {
       allowed: false,
-      reason: `Run this in ${allowedMention(allowed)} — keeps public bot output out of the other channels.`,
+      reason: `${cmd} runs in ${allowedMention(allowed)} — keeps public bot output out of the other channels.`,
+    };
+  }
+
+  if (scope === "support-only") {
+    const supportChannelId = await getConfig(LeagueConfigKey.SupportChannelId);
+    if (supportChannelId && ids.includes(supportChannelId)) return { allowed: true };
+    return {
+      allowed: false,
+      reason: supportChannelId
+        ? `${cmd} runs in the support channel — <#${supportChannelId}>.`
+        : `${cmd} needs a support channel set up first (admin: /admin/config → Support channel).`,
     };
   }
 

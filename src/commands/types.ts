@@ -27,7 +27,7 @@ export type CommandBuilder =
 //                           Right for /challenge and /report so they
 //                           don't get confused with /start-match in a
 //                           division channel.
-export type ChannelScope = "any" | "match-flow" | "division-only" | "bot-commands-only";
+export type ChannelScope = "any" | "match-flow" | "division-only" | "bot-commands-only" | "support-only";
 
 export interface SlashCommand {
   data: CommandBuilder;

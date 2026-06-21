@@ -71,7 +71,7 @@ async function rollBans(interaction: ChatInputCommandInteraction): Promise<void>
     .setTitle(`🎲 Random ban pool — ${combos.length} combos`)
     .setColor(0x9b59b6)
     .setDescription(lines.join("\n"))
-    .setFooter({ text: "Ban it down between you — same pool /challenge uses." });
+    .setFooter({ text: "Playing a league match? Use /start-match for the guided ban/pick + auto-record." });
   await interaction.reply({ embeds: [embed] });
 }
 
