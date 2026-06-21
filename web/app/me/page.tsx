@@ -77,7 +77,7 @@ export default async function MePage({
 
         {ok && (
           <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>
-            ✓ Set recorded. Standings updated.
+            ✓ Match recorded. Standings updated.
           </div>
         )}
         {err && (
@@ -94,7 +94,7 @@ export default async function MePage({
         <div className="card">
           <strong>Not in the league yet</strong>
           <p className="muted">
-            You&apos;re logged in but not in the league yet. Use the auto-sign-up button above, hit Sign Up in Discord, or ask an admin.
+            You&apos;re logged in but haven&apos;t joined yet. Use the auto-sign-up button above, hit Sign Up in Discord, or ask an admin.
           </p>
         </div>
       </main>

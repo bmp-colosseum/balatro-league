@@ -41,7 +41,11 @@ export default async function SeasonsPage() {
                     <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "#c0c8cb" }}>FINISHED</span>
                   )}
                   <div className="muted" style={{ marginTop: 6 }}>{period}</div>
-                  <div className="muted">{s.divisionCount} divisions · {s.playerCount} players · {s.pairingCount} matches</div>
+                  <div className="muted">
+                    {s.divisionCount} {s.divisionCount === 1 ? "division" : "divisions"} ·{" "}
+                    {s.playerCount} {s.playerCount === 1 ? "player" : "players"} ·{" "}
+                    {s.pairingCount} {s.pairingCount === 1 ? "match" : "matches"}
+                  </div>
                 </Link>
               );
             })}

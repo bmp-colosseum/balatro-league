@@ -57,9 +57,11 @@ h1, h2, h3 { margin: 0 0 8px 0; }
 h2 { font-size: 24px; }
 h3 { font-size: 18px; }
 
-/* Balatro-ish pixel font for headings + anything tagged .pixel (e.g. the
-   card-rank labels in standings). Body text stays system for readability. */
-h1, h2, h3, .pixel {
+/* Balatro pixel font reserved for LARGE display headings (h1/h2) only — at
+   small sizes the pixel digits (2/5/8 especially) become unreadable, and a
+   league is all numbers. So h3, data, and anything tagged .pixel use the
+   readable body font instead. */
+h1, h2 {
   font-family: var(--font-pixel), "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
   letter-spacing: 0.5px;
 }

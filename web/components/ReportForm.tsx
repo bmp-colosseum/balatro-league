@@ -85,7 +85,7 @@ export function ReportForm({
   const resultLabel = (r: ResultStr) =>
     opponent
       ? resultLabelBySelf(r, opponent.displayName)
-      : r === "2-0" ? "You win 2–0" : r === "0-2" ? "You lose 0–2" : "1–1 draw";
+      : r === "2-0" ? "You win 2-0" : r === "0-2" ? "You lose 0-2" : "1-1 draw";
 
   // Collapsed trigger — used in dense lists (division rows) so each row stays a
   // single line until the player chooses to report.

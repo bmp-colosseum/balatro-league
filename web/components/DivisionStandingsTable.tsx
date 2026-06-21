@@ -113,7 +113,7 @@ function RowBadges({
         <> <span title="Locked — guaranteed down" style={{ color: "#e74c3c" }}>🔒↓</span></>
       )}
       {showdown && (
-        <span title="Tied — play a showdown" style={{ color: "#f1c40f", marginLeft: 4 }}>⚔</span>
+        <span title="Tied — play a shootout (a 1-game tiebreaker)" style={{ color: "#f1c40f", marginLeft: 4 }}>⚔</span>
       )}
     </>
   );

@@ -75,7 +75,7 @@ export default async function HallOfFamePage() {
                         return (
                           <div key={m.opponentId} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
                             <span style={{ width: 18, fontWeight: 700, color: o.color }}>{o.tag}</span>
-                            <span style={{ width: 56, fontVariantNumeric: "tabular-nums" }}>{m.myGames}–{m.oppGames}</span>
+                            <span style={{ width: 56, fontVariantNumeric: "tabular-nums" }}>{m.myGames}-{m.oppGames}</span>
                             <span className="muted">vs</span>
                             <Link href={`/profile/${m.opponentId}`} style={{ color: "var(--text)" }}>{m.opponentName}</Link>
                           </div>

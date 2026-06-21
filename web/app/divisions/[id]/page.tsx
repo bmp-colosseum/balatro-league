@@ -91,7 +91,7 @@ export default async function PublicDivisionPage({
           <Link href="/standings" style={{ marginLeft: "auto" }}>← all standings</Link>
         </div>
         <div className="muted" style={{ marginTop: 4 }}>
-          {division.activeCount} active player(s) · {division.confirmedPairingCount} match(es) played · {unplayed.length} remaining
+          {division.activeCount} active {division.activeCount === 1 ? "player" : "players"} · {division.confirmedPairingCount} {division.confirmedPairingCount === 1 ? "match" : "matches"} played · {unplayed.length} remaining
         </div>
 
         {isAdmin && err && (
@@ -123,10 +123,10 @@ export default async function PublicDivisionPage({
         {shootouts.length > 0 && (
           <details className="card">
             <summary style={{ cursor: "pointer" }}>
-              <strong>⚔ Showdowns ({shootouts.length})</strong>
+              <strong>⚔ Shootouts ({shootouts.length})</strong>
             </summary>
             <p className="muted" style={{ marginTop: 4, fontSize: 12 }}>
-              1-game tiebreakers. Recorded when two players tied on points + drew their head-to-head.
+              A shootout is a 1-game tiebreaker. Played when two players tie on points and split their two games 1-1.
             </p>
             <table style={{ marginTop: 8 }}>
               <thead><tr><th>Date</th><th>Result</th><th></th></tr></thead>
@@ -208,8 +208,8 @@ function MatchesSections({
             <strong>Remaining ({unplayed.length})</strong>
             <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
               {viewerPlayerId
-                ? "Sign-in only lets you report your own matches — admins use the Match-actions panel below."
-                : "Players in this division report their own matches by signing in."}
+                ? "You can only report your own matches. Admins use the Match actions panel below."
+                : "Players in this division sign in to report their own matches."}
             </p>
             <UnplayedList rows={unplayed} />
           </div>
@@ -388,7 +388,7 @@ function YourPlayedTable({ rows, viewerPlayerId }: { rows: DivisionRecentPairing
                   {opponent.displayName}
                 </Link>
               </td>
-              <td><strong>{myG}–{oppG}</strong></td>
+              <td><strong>{myG}-{oppG}</strong></td>
               <td>
                 <span className="pill" style={{ background: outcome.bg, color: outcome.fg }}>
                   {outcome.label}
@@ -562,10 +562,10 @@ function AdminSection({
 
       {/* Shootouts admin controls */}
       <div className="card">
-        <strong>⚔ Showdowns ({shootouts.length})</strong>
+        <strong>⚔ Shootouts ({shootouts.length})</strong>
         <p className="muted" style={{ fontSize: 12 }}>
-          Tiebreakers for players tied on points whose regular-season set was a 1-1 draw.
-          Sort uses this between head-to-head and wins.
+          Tiebreakers for players tied on points who split their two games 1-1.
+          Standings use this between the 1-1 result and total wins.
         </p>
         {shootouts.length > 0 && (
           <table style={{ marginBottom: 12 }}>
@@ -632,7 +632,7 @@ function AdminSection({
             placeholder="winner…"
             options={members.map((m) => ({ value: m.playerId, label: m.player.displayName }))}
           />
-          <Button type="submit">Record showdown</Button>
+          <Button type="submit">Record shootout</Button>
         </form>
       </div>
 
@@ -642,12 +642,12 @@ function AdminSection({
       <div className="card">
         <strong>⚖ Resolve a tie (any size)</strong>
         <p className="muted" style={{ fontSize: 12 }}>
-          For a 3-way+ tie the single showdown above can&apos;t express. Type a placement for the
+          For a 3-way+ tie the single shootout above can&apos;t express. Type a placement for the
           tied players — <strong>1 = winner</strong>. Players with the <strong>same number stay tied</strong>{" "}
           with each other (e.g. <code>1, 2, 2</code> = one winner, the other two left level). Leave
           everyone else blank. Re-submitting overwrites this group. The{" "}
-          <span style={{ color: "#2ecc71" }}>± lives</span> figure is the net life differential (won-game
-          lives minus lost-game lives) — a reference for breaking the tie, applied however you decide.
+          <span style={{ color: "#2ecc71" }}>± lives</span> figure is the net life total (lives kept in wins
+          minus lives lost in losses) — a reference for breaking the tie, applied however you decide.
         </p>
         <form action={resolveTieAction} style={{ display: "grid", gap: 4, maxWidth: 360 }}>
           <input type="hidden" name="divisionId" value={division.id} />

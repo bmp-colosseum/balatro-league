@@ -102,7 +102,7 @@ export default async function ReportPage({
               <strong>Your recent matches ({recentMatches.length})</strong>
             </summary>
             <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>
-              Made a mistake or got an unfair confirm? Click Dispute to flag it for a helper.
+              Wrong score? Click Dispute to flag it for a helper.
             </p>
             <table style={{ marginTop: 8 }}>
               <thead>
@@ -133,7 +133,7 @@ export default async function ReportPage({
                         <Link href={`/profile/${m.opponentPlayerId}`} style={{ color: "var(--text)" }}>{m.opponentDisplayName}</Link>
                         <DiscordId value={m.opponentDiscordId} username={m.opponentUsername} />
                       </td>
-                      <td><strong>{m.myGames}–{m.opponentGames}</strong></td>
+                      <td><strong>{m.myGames}-{m.opponentGames}</strong></td>
                       <td><span className="pill" style={{ background: outcome.bg, color: outcome.fg, fontSize: isDisputed ? 10 : undefined }}>{outcome.label}</span></td>
                       <td>
                         <DisputeForm

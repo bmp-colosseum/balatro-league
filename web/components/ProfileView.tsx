@@ -701,12 +701,12 @@ export async function ProfileView({
                           <tr key={i} style={isDisputed ? { opacity: 0.7 } : undefined}>
                             <td data-label="Date">{date}</td>
                             <td className="card-header">
-                              {isShootout && <span title="Showdown (1-game tiebreaker)" style={{ marginRight: 4 }}>⚔</span>}
+                              {isShootout && <span title="Shootout (a 1-game tiebreaker)" style={{ marginRight: 4 }}>⚔</span>}
                               <Link href={`/profile/${m.opponentPlayerId}`} style={{ color: "var(--text)" }}>{m.opponentDisplayName}</Link>
-                              {isShootout && <span className="muted" style={{ marginLeft: 6, fontSize: 11 }}>(showdown)</span>}
+                              {isShootout && <span className="muted" style={{ marginLeft: 6, fontSize: 11 }}>(shootout)</span>}
                             </td>
                             <td data-label="Score">
-                              <strong>{m.myGames}–{m.opponentGames}</strong>
+                              <strong>{m.myGames}-{m.opponentGames}</strong>
                               {m.games.length > 0 && (
                                 <div className="muted" style={{ fontSize: 10, marginTop: 2 }}>
                                   {m.games.map((g, gi) => (

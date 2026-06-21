@@ -299,7 +299,7 @@ async function AdminSeasonPanel({
         )}
       </div>
       <div className="muted" style={{ marginTop: 4 }}>
-        {season.tiers.length} tier(s) · {season.divisions.length} division(s) · {totalMembers} player(s) · {totalConfirmed}/{totalExpected} match(es)
+        {season.tiers.length} {season.tiers.length === 1 ? "tier" : "tiers"} · {season.divisions.length} {season.divisions.length === 1 ? "division" : "divisions"} · {totalMembers} {totalMembers === 1 ? "player" : "players"} · {totalConfirmed}/{totalExpected} {totalExpected === 1 ? "match" : "matches"}
         {season.endedAt && (
           <>
             {" "}·{" "}ended <LocalDateTime iso={season.endedAt.toISOString()} style="date" />
@@ -647,7 +647,7 @@ function LifecycleActions({
           <Button type="submit"><strong>Start season →</strong></Button>
         </form>
         <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-          {playerCount} player(s) placed. Starting flips this to the active season for /standings + /report.
+          {playerCount} {playerCount === 1 ? "player" : "players"} placed. Starting makes this the active season for /standings and /report.
         </div>
 
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border, rgba(255,255,255,0.08))" }}>
