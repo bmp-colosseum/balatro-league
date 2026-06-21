@@ -19,7 +19,7 @@ function stillAccepting(round: { status: string; closedAt: Date | null; closesAt
 // commit either way, just without the snooze/stop buttons.
 function decideRow(roundId: string): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId(`season-ask:yes:${roundId}`).setLabel("I'm in").setEmoji("✅").setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`season-ask:yes:${roundId}`).setLabel("Sign me up").setEmoji("✅").setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`season-ask:no:${roundId}`).setLabel("Not this season").setEmoji("❌").setStyle(ButtonStyle.Secondary),
   );
 }

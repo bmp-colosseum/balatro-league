@@ -64,14 +64,15 @@ function askContent(round: SignupRound, lengthDays: number, variant: AskVariant)
     lines.push("A new season is starting and I want to know if you're in.", "");
   }
   if (windowValue) lines.push(`**Play window:** ${windowValue}`, "");
-  lines.push("Only say **yes** if you're sure you can play the whole season — dropping out mid-season throws off everyone's schedule.", "");
-  lines.push("You in?");
+  lines.push(
+    "**Tapping ✅ Sign me up signs you up right now** and puts you on the roster — so only do it if you're sure you can play the whole season. Dropping out mid-season throws off everyone's schedule.",
+  );
   return lines.join("\n");
 }
 
 function askButtons(roundId: string): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId(`season-ask:yes:${roundId}`).setLabel("I'm in").setEmoji("✅").setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId(`season-ask:yes:${roundId}`).setLabel("Sign me up").setEmoji("✅").setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`season-ask:no:${roundId}`).setLabel("Not this season").setEmoji("❌").setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`season-ask:later:${roundId}`).setLabel("Remind me later").setEmoji("💤").setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`season-ask:stop:${roundId}`).setLabel("Stop asking").setEmoji("🔕").setStyle(ButtonStyle.Secondary),
