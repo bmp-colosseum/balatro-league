@@ -74,9 +74,11 @@ model Player {
   disputedMatches Match[]             @relation("MatchDisputer")
   mmrSnapshots    PlayerMmrSnapshot[]
   strikes         Strike[]
-  // Opt-in: auto-enroll this player into the next signup round when it opens.
-  // Default off — players choose this on /me. They can still withdraw after.
-  autoSignup      Boolean             @default(false)
+  // Opt-OUT of "a new season is opening" reminder DMs. Default false = every
+  // past player gets asked when signups open (they answer in/out from the DM).
+  // Set true by the 🔕 "stop asking" button or the /me toggle. Replaces the old
+  // autoSignup auto-enroll flag — we ASK now instead of enrolling silently.
+  signupReminderOptOut Boolean        @default(false)
 
   @@index([rating])
 }
@@ -258,6 +260,7 @@ model SignupRound {
   resultingSeasonId String? // set when build-season turns this into a Season
 
   signups Signup[]
+  asks    SignupAsk[]
 
   @@index([status])
 }
@@ -283,6 +286,48 @@ model Signup {
 
   @@unique([roundId, discordId])
   @@index([roundId, withdrawn])
+}
+
+// Per-round "are you in?" state for one person we're nudging to sign up. Drives
+// the interactive ask DM (✅ I'm in / ❌ Not this season / 💤 Remind me later /
+// 🔕 Stop asking) and the reminder cadence. One row per (round, person).
+//   PENDING  — asked, no answer yet → eligible for reminders
+//   ACCEPTED — they signed up from the ask (a Signup row also exists)
+//   DECLINED — explicit "not this season" → no more reminders this round
+//   SNOOZED  — "remind me later" → skips the mid-window nudge, still gets last call
+// The reminder tick re-DMs PENDING/SNOOZED people on a schedule anchored to the
+// round's window, deleting the prior DM and posting a fresh one (edits don't
+// re-notify) so each person has exactly one live ask. Stops at round close.
+enum SignupAskStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  SNOOZED
+}
+
+model SignupAsk {
+  id             String          @id @default(cuid())
+  roundId        String
+  discordId      String
+  status         SignupAskStatus @default(PENDING)
+  // The current live ask DM — remembered so a reminder can delete it and post a
+  // fresh one (re-notifying), keeping a single live ask per person.
+  dmChannelId    String?
+  dmMessageId    String?
+  // How many asks we've sent (1 = initial, 2 = mid-window nudge, 3 = last call).
+  remindersSent  Int             @default(0)
+  lastRemindedAt DateTime?
+  // Set when they hit "Remind me later" — the tick skips the mid-window nudge
+  // for them (they still get the last call).
+  snoozedAt      DateTime?
+  respondedAt    DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  round SignupRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, discordId])
+  @@index([roundId, status])
 }
 
 // Named match-config preset — admin defines the deck + stake whitelist used

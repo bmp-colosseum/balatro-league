@@ -1,6 +1,7 @@
 import { MessageFlags, type ButtonInteraction } from "discord.js";
 import { prisma } from "../db.js";
 import { signupButtons, signupEmbed, DEFAULT_SEASON_LENGTH_DAYS } from "../signup.js";
+import { markSignedUp } from "../signup-reminders.js";
 import { getConfig, LeagueConfigKey } from "../league-config.js";
 import type { ButtonHandler } from "./types.js";
 
@@ -123,6 +124,9 @@ export const signupHandlers: ButtonHandler = {
           },
         });
       }
+      // Stop any pending "are you in?" reminders for this round and add them to
+      // the 🔔 future-season reminder list (signing up = interested).
+      await markSignedUp(roundId, interaction.user.id);
       await refreshSignupMessage(roundId, interaction);
       await interaction.reply({
         content: `✅ You're signed up for **${round.name}**.`,

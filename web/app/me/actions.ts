@@ -82,50 +82,23 @@ export async function setShowUsernameAction(formData: FormData) {
   revalidatePath("/me");
 }
 
-// Toggle auto-sign-up: when ON, the player is automatically entered into the
-// next signup round the moment it opens (they can still withdraw). Lives on
-// the profile owner settings.
-export async function setAutoSignupAction(formData: FormData) {
-  const session = await auth();
-  const u = session?.user as { discordId?: string; name?: string } | undefined;
-  const discordId = u?.discordId ?? null;
+// Single season-reminders toggle (replaces the old auto-sign-up flag AND the
+// separate notify subscribe/unsubscribe). ON = the bot DMs you a "you in?" when
+// a new season's signups open; OFF = opted out. Keeps the SeasonInterest list
+// and the per-player opt-out flag in sync so the reminder audience is correct
+// whether or not you have a Player row yet.
+export async function setSeasonRemindersAction(formData: FormData) {
+  const discordId = await currentDiscordId();
   if (!discordId) return;
   const next = String(formData.get("next") ?? "") === "1";
+  const player = await prisma.player.findUnique({ where: { discordId }, select: { id: true } });
   if (next) {
-    // Enabling auto-sign-up means "enter me as a player when the next round
-    // opens" — so create the Player record if the user doesn't have one yet.
-    // This lets admins / not-yet-joined users opt in directly (previously a
-    // silent no-op because the flag lives on Player).
-    const player = await prisma.player.upsert({
-      where: { discordId },
-      create: { discordId, displayName: u?.name?.trim() || "Player", autoSignup: true },
-      update: { autoSignup: true },
-    });
-    revalidatePath(`/profile/${player.id}`);
+    await prisma.seasonInterest.upsert({ where: { discordId }, create: { discordId }, update: {} });
+    if (player) await prisma.player.update({ where: { id: player.id }, data: { signupReminderOptOut: false } });
   } else {
-    // Disabling only matters if a Player exists.
-    const player = await prisma.player.findUnique({ where: { discordId }, select: { id: true } });
-    if (!player) return;
-    await prisma.player.update({ where: { id: player.id }, data: { autoSignup: false } });
-    revalidatePath(`/profile/${player.id}`);
+    await prisma.seasonInterest.deleteMany({ where: { discordId } });
+    if (player) await prisma.player.update({ where: { id: player.id }, data: { signupReminderOptOut: true } });
   }
-  revalidatePath("/me");
-}
-
-export async function subscribeNextSeasonAction() {
-  const discordId = await currentDiscordId();
-  if (!discordId) return;
-  await prisma.seasonInterest.upsert({
-    where: { discordId },
-    create: { discordId },
-    update: {},
-  });
-  revalidatePath("/me");
-}
-
-export async function unsubscribeNextSeasonAction() {
-  const discordId = await currentDiscordId();
-  if (!discordId) return;
-  await prisma.seasonInterest.deleteMany({ where: { discordId } });
+  if (player) revalidatePath(`/profile/${player.id}`);
   revalidatePath("/me");
 }

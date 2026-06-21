@@ -35,9 +35,9 @@ export async function getOrCreatePlayer(user: User, serverName?: string) {
   // user becomes a Player, so guarding here stops every command path — admin
   // record-match / forfeit / void-player / strike, challenge, report, … — from
   // materializing a bot, including any that forgets the nicer call-site
-  // opponentUser.bot check. It matters because a bot Player propagates: the
-  // season-open auto-enroll signs up every autoSignup player. Throw (not silent
-  // skip) so the caller surfaces the refusal instead of acting on a half-state.
+  // opponentUser.bot check. It matters because a bot Player propagates into
+  // rosters, standings, and season reminders. Throw (not silent skip) so the
+  // caller surfaces the refusal instead of acting on a half-state.
   if (user.bot) {
     throw new Error(`Refusing to create a Player for bot account ${user.username} (${user.id}).`);
   }

@@ -13,6 +13,7 @@ import { disputeModal, disputeSelect, report, reportButtons } from "./report.js"
 import { reportShootout } from "./report-shootout.js";
 import { schedule } from "./schedule.js";
 import { signupHandlers } from "./signup-buttons.js";
+import { signupAskButtonHandler } from "./signup-ask-buttons.js";
 import { standings } from "./standings.js";
 import { startMatch } from "./start-match.js";
 import { support } from "./support.js";
@@ -29,7 +30,7 @@ import type { ButtonHandler, ModalHandler, SelectMenuHandler, SlashCommand } fro
 // browser auto-detect) and shown to opponents in /schedule.
 export const slashCommands: SlashCommand[] = [help, adminHelp, helper, support, standings, schedule, profile, league, startMatch, challenge, admin, random, pool];
 
-export const buttonHandlers: ButtonHandler[] = [reportButtons, signupHandlers, matchButtons, disputeThreadButtonHandler, supportButtons];
+export const buttonHandlers: ButtonHandler[] = [reportButtons, signupHandlers, signupAskButtonHandler, matchButtons, disputeThreadButtonHandler, supportButtons];
 
 export const selectMenuHandlers: SelectMenuHandler[] = [matchSelectMenus, disputeSelect, disputeResolveSelect];
 

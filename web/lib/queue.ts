@@ -54,6 +54,14 @@ export async function enqueueDm(job: { discordId: string; content: string }): Pr
   });
 }
 
+// When an admin opens a signup round: kick off the interactive "are you in?"
+// ask blast (the bot computes the audience + DMs everyone). Replaces the old
+// silent auto-enroll + one-shot notify. Bot owns the worker (signup.ask-kickoff).
+export async function enqueueSignupAskKickoff(roundId: string): Promise<void> {
+  await ensureStarted();
+  await getBoss().send("signup.ask-kickoff", { roundId }, { retryLimit: 3, retryBackoff: true });
+}
+
 export async function enqueueBootstrapDivision(job: {
   divisionId: string;
   guildId: string;

@@ -11,13 +11,12 @@ import { lockDivisionSchedules, lockOneDivision } from "@/lib/lock-schedule";
 import { getPlacementRules, setPlacementRules } from "@/lib/placement-rules";
 import { formatSeasonLabel, formatDivisionName, nextSeasonNumber } from "@/lib/format-season";
 import {
-  createChannelInvite,
   editChannelMessage,
   fetchDiscordUser,
   fetchGuildMember,
   postChannelMessage,
 } from "@/lib/discord";
-import { enqueueDm, enqueueLeagueInfoRefresh, enqueueMmrSnapshot, enqueueWelcomeRefresh } from "@/lib/queue";
+import { enqueueLeagueInfoRefresh, enqueueMmrSnapshot, enqueueSignupAskKickoff, enqueueWelcomeRefresh } from "@/lib/queue";
 import { buildSignupPayload, buildClosedSignupPayload, getSeasonLengthDays } from "@/lib/signup-discord";
 import { endSeasonCore } from "@/lib/end-season";
 
@@ -615,19 +614,7 @@ export async function openSignupsForSeason(formData: FormData) {
     },
   });
 
-  // Auto-enroll players who opted into auto-sign-up (they can still withdraw).
-  const autoPlayers = await prisma.player.findMany({
-    where: { autoSignup: true },
-    select: { discordId: true, displayName: true },
-  });
-  if (autoPlayers.length > 0) {
-    await prisma.signup.createMany({
-      data: autoPlayers.map((p) => ({ roundId: round.id, discordId: p.discordId, displayName: p.displayName })),
-      skipDuplicates: true,
-    });
-  }
-
-  const messageId = await postChannelMessage(channelId, buildSignupPayload(round, autoPlayers.length, await getSeasonLengthDays()));
+  const messageId = await postChannelMessage(channelId, buildSignupPayload(round, 0, await getSeasonLengthDays()));
   if (!messageId) {
     await prisma.signupRound.delete({ where: { id: round.id } });
     redirect("/admin/seasons?err=signup-post-failed");
@@ -642,10 +629,11 @@ export async function openSignupsForSeason(formData: FormData) {
     metadata: { seasonId: season!.id, channelId },
   });
 
-  // Fire-and-forget: DM everyone on the next-season interest list so they
-  // know signups just opened. Don't block the admin form on this.
-  notifyNextSeasonSubscribers(seasonLabel, channelId).catch((err) =>
-    console.warn("notifyNextSeasonSubscribers failed:", err),
+  // Kick off the interactive "are you in?" ask — DMs every past player (minus
+  // opt-outs) + the 🔔 opt-in list with in/out buttons, then auto-reminds the
+  // no-answers on a cadence until the round closes. The bot owns the fan-out.
+  await enqueueSignupAskKickoff(round.id).catch((err) =>
+    console.warn("[signups.open] ask-kickoff enqueue failed:", err),
   );
 
   // Refresh #league-info so the "Signups open" block appears.
@@ -796,28 +784,6 @@ export async function refreshSignupNames(formData: FormData) {
 
   revalidatePath("/admin/seasons");
   redirect(`/admin/seasons?ok=names-refreshed-${updated}`);
-}
-
-// Enqueue one DM per subscriber. The bot's pg-boss worker drains them
-// asynchronously, retrying failures and surviving crashes — so opening
-// signups never blocks on N round-trips to Discord and we don't lose
-// the blast mid-flight if the web service restarts.
-async function notifyNextSeasonSubscribers(seasonName: string, signupChannelId: string) {
-  const subscribers = await prisma.seasonInterest.findMany();
-  if (subscribers.length === 0) return;
-  const invite = await createChannelInvite(signupChannelId, { maxAge: 0, maxUses: 0 });
-  const inviteLine = invite ? `\nJoin the server here if you're not already: ${invite}` : "";
-  const content =
-    `🃏 **${seasonName}** signups are open! Hit **Sign Up** in the signups channel to grab your spot.${inviteLine}\n\n` +
-    `_You opted in to these — turn off on your /me page anytime._`;
-  await Promise.all(
-    subscribers.map((s) =>
-      enqueueDm({ discordId: s.discordId, content }).catch((err) =>
-        console.warn(`[next-season-dm] enqueue failed for ${s.discordId}:`, err),
-      ),
-    ),
-  );
-  console.log(`[next-season-dm] queued ${subscribers.length} DMs`);
 }
 
 // Close (finalize) the signup round linked to a season AND update the

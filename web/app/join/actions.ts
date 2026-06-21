@@ -57,6 +57,13 @@ export async function signupFromJoinAction(formData: FormData) {
     update: { withdrawn: false, displayName },
     create: { roundId, discordId, displayName },
   });
+  // Stop any pending "are you in?" reminders for this round, and add them to the
+  // 🔔 season-reminder list (signing up = interested) — same as the bot paths.
+  await prisma.signupAsk.updateMany({
+    where: { roundId, discordId },
+    data: { status: "ACCEPTED", respondedAt: new Date() },
+  });
+  await prisma.seasonInterest.upsert({ where: { discordId }, create: { discordId }, update: {} });
   // Keep the Discord signup post's count live — a website signup edits the
   // post in place, same as a Discord button click would.
   await refreshSignupPost(roundId);

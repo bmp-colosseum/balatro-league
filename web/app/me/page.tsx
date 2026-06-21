@@ -86,15 +86,15 @@ export default async function MePage({
           </div>
         )}
 
-        {/* No player record yet → autoSignup=null so the card shows the
-            "enable (creates your profile)" variant. Same component the
-            profile page uses, so the two surfaces stay identical. */}
-        <NextSeasonCard interest={interest} autoSignup={null} />
+        {/* Same component the profile page uses, so the two surfaces stay
+            identical. No Player row yet → reminders are on iff they're on the
+            🔔 list. */}
+        <NextSeasonCard remindersOn={!!interest} />
 
         <div className="card">
           <strong>Not in the league yet</strong>
           <p className="muted">
-            You&apos;re logged in but haven&apos;t joined yet. Use the auto-sign-up button above, hit Sign Up in Discord, or ask an admin.
+            You&apos;re logged in but haven&apos;t joined yet. Turn on season reminders above, hit Sign Up in Discord, or ask an admin.
           </p>
         </div>
       </main>

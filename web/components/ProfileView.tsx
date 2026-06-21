@@ -147,17 +147,21 @@ export async function ProfileView({
   const myPrefs = isOwnProfile
     ? await prisma.player.findUnique({
         where: { id: profile.player.id },
-        select: { hasCustomDisplayName: true, autoSignup: true },
+        select: { hasCustomDisplayName: true, signupReminderOptOut: true },
+      })
+    : null;
+  const myInterest = isOwnProfile
+    ? await prisma.seasonInterest.findUnique({
+        where: { discordId: profile.player.discordId },
+        select: { subscribedAt: true },
       })
     : null;
   const me = isOwnProfile
     ? {
-        interest: await prisma.seasonInterest.findUnique({
-          where: { discordId: profile.player.discordId },
-          select: { subscribedAt: true },
-        }),
         hasCustomDisplayName: myPrefs?.hasCustomDisplayName ?? false,
-        autoSignup: myPrefs?.autoSignup ?? false,
+        // Reminded by default (any past player) unless they opted out; the 🔔
+        // interest row also counts as on.
+        remindersOn: !!myInterest || !(myPrefs?.signupReminderOptOut ?? false),
       }
     : null;
   // Privacy fields for the profiled player — needed both for the timezone
@@ -269,7 +273,7 @@ export async function ProfileView({
         {/* Personal settings — only on your own profile (folded in from /me). */}
         {me && (
           <>
-            <NextSeasonCard interest={me.interest} autoSignup={me.autoSignup} />
+            <NextSeasonCard remindersOn={me.remindersOn} />
 
             <div className="card" style={{ marginTop: 16 }}>
               <strong>Display name</strong>

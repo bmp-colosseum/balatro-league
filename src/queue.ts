@@ -28,6 +28,7 @@ import { env } from "./env.js";
 import { checkQueueStalls } from "./devops-alarm.js";
 import { postDevopsAlert } from "./devops-alert.js";
 import { tryGetDiscordClient } from "./discord.js";
+import { planSignupAskKickoff, sendOrRefreshAsk, planReminderTick } from "./signup-reminders.js";
 
 // Preflight for the announce worker: is a results destination configured at
 // all (global webhook/channel via env or LeagueConfig)? Per-season overrides
@@ -101,6 +102,9 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("welcome.refresh");
   await boss.createQueue("standings.refresh");
   await boss.createQueue("refresh.display-names");
+  await boss.createQueue("signup.ask-kickoff");
+  await boss.createQueue("signup.ask");
+  await boss.createQueue("signup.reminder-tick");
 
   // One-shot cleanup for retired queues. Their cron schedule rows +
   // accumulated jobs (no worker listens anymore) stay in pg-boss forever
@@ -412,6 +416,65 @@ export async function initQueue(): Promise<void> {
       }
     },
   );
+
+  // Worker: when signups open, fan out the interactive "are you in?" ask to
+  // every past player (minus opt-outs) + the 🔔 opt-in list. Computes the
+  // audience + creates the PENDING ask rows, then enqueues one send per person.
+  await boss.work<{ roundId: string }>(
+    "signup.ask-kickoff",
+    { batchSize: 1 },
+    async (jobs: Job<{ roundId: string }>[]) => {
+      for (const job of jobs) {
+        const ids = await planSignupAskKickoff(job.data.roundId);
+        for (const discordId of ids) {
+          await enqueueSignupAsk({ roundId: job.data.roundId, discordId });
+        }
+        console.log(`[signup.ask-kickoff] ${job.data.roundId} → queued ${ids.length} asks`);
+      }
+    },
+  );
+
+  // Worker: send (or re-send) one person's ask DM. batchSize 1 + a poll gap so a
+  // big audience drips out instead of slamming Discord; each send deletes the
+  // prior DM and posts fresh so a reminder actually re-notifies. Transient
+  // failures throw → pg-boss retries; permanently-undeliverable DMs are skipped
+  // inside sendOrRefreshAsk.
+  await boss.work<{ roundId: string; discordId: string }>(
+    "signup.ask",
+    { batchSize: 1, pollingIntervalSeconds: 2 },
+    async (jobs: Job<{ roundId: string; discordId: string }>[]) => {
+      for (const job of jobs) {
+        await sendOrRefreshAsk(job.data.roundId, job.data.discordId);
+      }
+    },
+  );
+
+  // Worker + schedule: hourly reminder tick. Finds who's due for a mid-window
+  // nudge or a last call on the open round and enqueues their re-send. The
+  // cadence math lives in planReminderTick(); this just fans out the result.
+  await boss.work("signup.reminder-tick", { batchSize: 1 }, async () => {
+    const due = await planReminderTick();
+    for (const d of due) {
+      await enqueueSignupAsk(d);
+    }
+    if (due.length) console.log(`[signup.reminder-tick] queued ${due.length} reminders`);
+  });
+  await boss.schedule("signup.reminder-tick", "0 * * * *");
+  console.log("[pg-boss] scheduled signup.reminder-tick hourly");
+}
+
+// When signups open: kick off the interactive ask blast (audience compute +
+// per-person DMs). Called from the web open-signups action via web/lib/queue.ts.
+export async function enqueueSignupAskKickoff(roundId: string): Promise<void> {
+  if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
+  await boss.send("signup.ask-kickoff", { roundId }, { retryLimit: 3, retryBackoff: true });
+}
+
+// Send/re-send one person's ask DM. Used by the kickoff fan-out and the
+// reminder tick.
+export async function enqueueSignupAsk(job: { roundId: string; discordId: string }): Promise<void> {
+  if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
+  await boss.send("signup.ask", job, { retryLimit: 3, retryBackoff: true });
 }
 
 export async function enqueueDisputeSpawnThread(pairingId: string): Promise<void> {
