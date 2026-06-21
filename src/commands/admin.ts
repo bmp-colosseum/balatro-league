@@ -448,7 +448,7 @@ async function persistShootout(args: {
     where: { playerId: p2.id, divisionId: member.divisionId },
   });
   if (!otherInSameDiv) {
-    return { ok: false, error: `${p1.displayName} and ${p2.displayName} aren't in the same division — a showdown only makes sense for tied opponents.` };
+    return { ok: false, error: `${p1.displayName} and ${p2.displayName} aren't in the same division — a shootout only makes sense for tied opponents.` };
   }
 
   const [canonA, canonB] = p1.id < p2.id ? [p1.id, p2.id] : [p2.id, p1.id];

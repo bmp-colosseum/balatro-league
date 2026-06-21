@@ -281,7 +281,7 @@ function mention(player: Player): string {
 function renderWaitingAccept(s: MatchSession, a: Player, b: Player) {
   const modeLine = s.isCasual
     ? `Casual challenge · **Best of ${s.bestOf}** · not recorded to the league.`
-    : `League set (2 games) · recorded to standings.`;
+    : `League match (2 games) · counts toward standings.`;
   // Custom-combo invites tell the opponent what they're agreeing to up
   // front. Accepting = both players agree to this deck/stake instead of
   // running the ban/pick flow.
@@ -303,8 +303,8 @@ function renderWaitingAccept(s: MatchSession, a: Player, b: Player) {
   const guideLine = s.isCasual
     ? ""
     : `\n\n📋 You'll be walked through **2 games**:\n` +
-      `• Each game draws a **fresh pool** — the combos from game 1 won't show up again in game 2.\n` +
-      `• The **winner records their leftover lives** at the end of each game (used for possible future tiebreakers).`;
+      `• Each game draws a **fresh pool** — the combos from game 1 won't come back in game 2.\n` +
+      `• The **winner records their leftover lives** after each game (it can matter for tiebreakers later).`;
   const embed = new EmbedBuilder()
     .setTitle(s.isCasual ? "🎴 Challenge" : "🎴 Match invite")
     .setDescription(
@@ -333,7 +333,7 @@ function renderChooseFirst(s: MatchSession, a: Player, b: Player, prevGame: Game
     .setColor(0xf1c40f)
     .setDescription(
       `${mention(loser)} lost game ${nextGameNum - 1} — you pick who bans first.\n\n` +
-        `⚠️ **This also decides who picks the deck — whoever bans first does NOT pick it.** ` +
+        `⚠️ **Heads up: whoever bans first does NOT pick the deck.** ` +
         `The **other** player makes the final pick:\n` +
         `_first bans 1 → other bans 3 → first bans 3 → **other picks 1 of the last 2**._`,
     );
@@ -692,7 +692,7 @@ function renderPaused(s: MatchSession, a: Player, b: Player) {
 function renderError(s: MatchSession, a: Player, b: Player, msg: string) {
   const embed = new EmbedBuilder()
     .setTitle("⚠️ Match error")
-    .setDescription(`${msg}. Ask an admin to look at session ${s.id}.`)
+    .setDescription(`${msg}. Ask an admin to look at match ${s.id}.`)
     .setColor(0xe74c3c);
   void a; void b;
   return { embeds: [embed], components: [] };

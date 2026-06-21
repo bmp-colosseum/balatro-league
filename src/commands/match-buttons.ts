@@ -173,7 +173,7 @@ async function reply(interaction: AnyInteraction, content: string) {
 }
 
 async function raceLost(interaction: AnyInteraction) {
-  return reply(interaction, "Someone else just acted on this match — the buttons may have changed. Try again.");
+  return reply(interaction, "Someone else just clicked first — the buttons may have changed. Try again.");
 }
 
 async function requireActor(interaction: AnyInteraction, expectedDiscordId: string): Promise<boolean> {
@@ -197,7 +197,7 @@ export const matchButtons: ButtonHandler = {
 
     const session = await loadSession(sessionId);
     if (!session) {
-      await reply(interaction, "This match isn't active anymore — it may have timed out or been cancelled.");
+      await reply(interaction, "This match is over — it may have timed out or been cancelled.");
       return;
     }
 
@@ -229,7 +229,7 @@ export const matchButtons: ButtonHandler = {
     // clicks ARE the confirmation, so there's no separate confirm step.
     if (action === "cancelmatch") return handleCancelVote(interaction, session);
 
-    await reply(interaction, "That button didn't match anything we recognize — refresh Discord and try again.");
+    await reply(interaction, "That button didn't do anything we recognize — refresh Discord and try again.");
   },
 };
 
@@ -245,19 +245,19 @@ export const matchSelectMenus: SelectMenuHandler = {
     const action = parts[1];
     const sessionId = parts[2];
     if (!sessionId) {
-      await reply(interaction, "Something went wrong with that selection — try again, or ask an admin.");
+      await reply(interaction, "Something went wrong with that pick — try again, or ask an admin.");
       return;
     }
     const session = await loadSession(sessionId);
     if (!session) {
-      await reply(interaction, "This match isn't active anymore — it may have timed out or been cancelled.");
+      await reply(interaction, "This match is over — it may have timed out or been cancelled.");
       return;
     }
     if (action === "banselect") return handleBanSelect(interaction, session);
     if (action === "pickselect") return handlePick(interaction, session, interaction.values[0]);
     if (action === "proposedeck") return handleProposeDeck(interaction, session);
     if (action === "proposestake") return handleProposeStake(interaction, session);
-    await reply(interaction, "Unknown selection — refresh Discord and try again.");
+    await reply(interaction, "We didn't recognize that pick — refresh Discord and try again.");
   },
 };
 
@@ -708,7 +708,7 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
   // Accept (it's visible to them — public message, one render), point them
   // at Decline to withdraw instead of a confusing "not your turn".
   if (interaction.user.id === playerA.discordId) {
-    return reply(interaction, "You sent this challenge — waiting on your opponent to accept. Click Decline to withdraw it.");
+    return reply(interaction, "You sent this challenge — waiting on your opponent to accept. Click Decline to take it back.");
   }
   if (interaction.user.id !== playerB.discordId) {
     return reply(interaction, "Only the challenged player can accept this match.");
@@ -1409,7 +1409,7 @@ async function handleDc(interaction: ButtonInteraction, session: MatchSession) {
   if (!isGame1 && !isGame2 && !isGame3) {
     return reply(
       interaction,
-      "DC reports only work once a game is being played. If the opponent went dark during bans/picks, use `/helper` instead.",
+      "You can only report a DC once a game is being played. If your opponent went quiet during bans/picks, use `/helper` instead.",
     );
   }
   const { playerA, playerB } = await loadPlayers(session);
@@ -1419,7 +1419,7 @@ async function handleDc(interaction: ButtonInteraction, session: MatchSession) {
   if (session.isShootout) {
     return reply(
       interaction,
-      "Showdown DCs need admin review — use `/helper` so a moderator can decide the outcome. The showdown rules don't auto-forfeit.",
+      "Shootout DCs need admin review — use `/helper` so a moderator can decide the outcome. Shootouts don't auto-forfeit.",
     );
   }
 

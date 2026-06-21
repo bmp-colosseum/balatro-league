@@ -18,7 +18,7 @@ import type { SlashCommand } from "./types.js";
 
 const MODE_CHOICES = [
   { name: "League match (2 games, default)", value: "league" },
-  { name: "Showdown (1 game — for when you're tied with the opponent)", value: "shootout" },
+  { name: "Shootout (1 game — for when you're tied with the opponent)", value: "shootout" },
 ] as const;
 
 export const startMatch: SlashCommand = {
@@ -35,7 +35,7 @@ export const startMatch: SlashCommand = {
     .addStringOption((opt) =>
       opt
         .setName("mode")
-        .setDescription("League match (2 games, default) or showdown tiebreaker (1 game)")
+        .setDescription("League match (2 games, default) or shootout tiebreaker (1 game)")
         .setRequired(false)
         .addChoices(...MODE_CHOICES),
     ),
@@ -104,7 +104,7 @@ export const startMatch: SlashCommand = {
     if (!isShootout && existing && existing.status === "CONFIRMED") {
       await interaction.editReply(
         `You've already played ${opponentUser.username} this season (${existing.gamesWonA}-${existing.gamesWonB}). ` +
-          `If you're playing a tiebreaker, use \`mode: Shootout\` instead.`,
+          `If this is a tiebreaker, use \`mode: Shootout\` instead.`,
       );
       return;
     }
@@ -142,7 +142,7 @@ export const startMatch: SlashCommand = {
     });
     if (inFlight) {
       await interaction.editReply(
-        `There's already an active match session between you two (${inFlight.id}). Finish it or have an admin cancel it before starting a new one.`,
+        `You two already have a match going (${inFlight.id}). Finish it, or have an admin cancel it, before starting a new one.`,
       );
       return;
     }

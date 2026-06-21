@@ -24,26 +24,26 @@ import { sameDivisionMemberAutocomplete } from "./autocomplete.js";
 import type { SlashCommand } from "./types.js";
 
 const WINNER_CHOICES = [
-  { name: "I won the showdown", value: "self" },
-  { name: "Opponent won the showdown", value: "opponent" },
+  { name: "I won the shootout", value: "self" },
+  { name: "Opponent won the shootout", value: "opponent" },
 ] as const;
 
 export const reportShootout: SlashCommand = {
   // No channelScope — ephemeral ack, no public side-effect channel needed.
   data: new SlashCommandBuilder()
     .setName("report-shootout")
-    .setDescription("Record the result of a 1-game showdown against a tied opponent.")
+    .setDescription("Record the result of a shootout (a 1-game tiebreaker) against a tied opponent.")
     .addStringOption((opt) =>
       opt
         .setName("opponent")
-        .setDescription("The player you played the showdown against")
+        .setDescription("The player you played the shootout against")
         .setRequired(true)
         .setAutocomplete(true),
     )
     .addStringOption((opt) =>
       opt
         .setName("winner")
-        .setDescription("Who won the showdown")
+        .setDescription("Who won the shootout")
         .setRequired(true)
         .addChoices(...WINNER_CHOICES),
     ),
@@ -61,7 +61,7 @@ export const reportShootout: SlashCommand = {
       return;
     }
     if (opponentDiscordId === interaction.user.id) {
-      await interaction.reply({ content: "You can't have a showdown against yourself.", flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: "You can't play a shootout against yourself.", flags: MessageFlags.Ephemeral });
       return;
     }
     const winnerDiscordId = winnerKey === "self" ? interaction.user.id : opponentDiscordId;
@@ -77,8 +77,8 @@ export const reportShootout: SlashCommand = {
       return;
     }
     await interaction.editReply(
-      `⚔ Showdown recorded — **${result.winnerName}** wins the tiebreaker in **${result.divisionName}**. ` +
-        `Standings sort updated. If something looks wrong, ask a Helper to re-record via \`/admin record-shootout\`.`,
+      `⚔ Shootout recorded — **${result.winnerName}** wins the tiebreaker in **${result.divisionName}**. ` +
+        `Standings updated. If something looks wrong, ask a Helper to re-record via \`/admin record-shootout\`.`,
     );
   },
 };
