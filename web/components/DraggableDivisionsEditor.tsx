@@ -72,12 +72,10 @@ export interface EditorTier {
   color: { bg: string; fg: string };
 }
 
-const TIER_GOOD = { color: "#2ecc71", label: "on target" };
 const tierHeuristic = (avg: number): { color: string; text: string } | null => {
   if (avg < 4) return { color: "#e74c3c", text: "too few players" };
   if (avg > 7) return { color: "#e74c3c", text: "too many — consider adding a division" };
   if (avg < 5) return { color: "#f1c40f", text: "below target" };
-  void TIER_GOOD;
   return null;
 };
 
