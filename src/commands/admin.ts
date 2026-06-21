@@ -15,7 +15,8 @@ import {
   type TextChannel,
 } from "discord.js";
 import { MatchSessionState } from "@prisma/client";
-import { enqueueAnnounceResult, runDisplayNameRefresh } from "../queue.js";
+import { enqueueAnnounceResult } from "../queue.js";
+import { runDisplayNameRefresh } from "../display-name-refresh.js";
 import { actorFromInteractionUser, recordAudit } from "../audit.js";
 import { purgeBotAccounts } from "../bot-purge.js";
 import { activeSeasonMemberAutocomplete } from "./autocomplete.js";
