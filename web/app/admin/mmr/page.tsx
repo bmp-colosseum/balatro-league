@@ -52,10 +52,9 @@ export default async function MmrAdminPage() {
           </span>
         </div>
         <p className="muted">
-          Each player&apos;s hidden league MMR. Two ways to set it: the <strong>ladder</strong> below — drag
-          everyone into rank order and they&apos;re spaced exactly 10 apart (the clean cold-start, no lumpy
-          BMP gaps) — or <strong>Recompute</strong>, which replays match results for a results-based spread.
-          Placement + schedule previews read from this; after launch it updates per match.
+          Each player&apos;s hidden league MMR. Set it two ways: drag players into rank order in the
+          <strong> ladder</strong> below (spaced 10 apart), or <strong>Recompute</strong> it from match results.
+          Placement and schedule previews read from this; after launch it updates per match.
         </p>
 
         <div className="card" style={{ borderColor: liveMmr ? "#2ecc71" : "#f1c40f", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -68,18 +67,18 @@ export default async function MmrAdminPage() {
           </form>
           <span className="muted" style={{ fontSize: 12 }}>
             {liveMmr
-              ? "Every confirmed match auto-updates MMR via the sweep."
-              : "Nothing auto-updates — preview freely. Flip on when you're ready to enact it."}
+              ? "Every confirmed match updates MMR automatically."
+              : "Nothing updates automatically — preview freely. Turn on when you're ready to go live."}
           </span>
           <div style={{ flexBasis: "100%", borderTop: "1px solid var(--border)", paddingTop: 8, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <form action={markMatchesSettled}>
-              <ConfirmButton message="Mark all current confirmed matches as settled WITHOUT applying them? Use this before turning live MMR on so the Season 1 backlog is skipped and Elowen only moves on NEW matches. Does not change anyone's MMR.">
-                Mark past matches settled (start Elo fresh)
+              <ConfirmButton message="Mark all current confirmed matches as settled without applying them? Do this before turning live MMR on so past matches are skipped and MMR only moves on new ones. It doesn't change anyone's MMR.">
+                Skip past matches (start fresh)
               </ConfirmButton>
             </form>
             <span className="muted" style={{ fontSize: 12 }}>
-              ⚠ Do this BEFORE turning live MMR on, or it&apos;ll replay the whole Season 1 backlog. This skips
-              the backlog so Elowen starts moving on Season 2 matches, on top of your seeded MMRs.
+              ⚠ Do this before turning live MMR on, or it&apos;ll replay every past match. Skipping them means
+              MMR only moves on new matches, on top of your seeded values.
             </span>
           </div>
         </div>
@@ -95,13 +94,13 @@ export default async function MmrAdminPage() {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <form action={recomputeMmr}>
-              <ConfirmButton message="Recompute every player's MMR from match history? This overwrites ALL current MMRs (including hand-set ones).">
-                ↻ Recompute all from match history (Elowen)
+              <ConfirmButton message="Recompute every player's MMR from match history? This overwrites ALL current MMRs, including ones you set by hand.">
+                ↻ Recompute all from match history
               </ConfirmButton>
             </form>
             <span className="muted" style={{ fontSize: 12 }}>
-              Replays every confirmed match from a BMP seed — sets MMR from real results (a strong player
-              with weak BMP climbs off their wins). Overwrites everything.
+              Replays every confirmed match, starting from each player&apos;s BMP MMR — so a strong player with
+              a weak BMP score climbs off their wins. Overwrites everything.
             </span>
           </div>
         </div>

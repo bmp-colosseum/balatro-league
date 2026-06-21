@@ -53,7 +53,7 @@ export const signupHandlers: ButtonHandler = {
     const action = parts[1];
     const roundId = parts[2];
     if (!roundId || (action !== "join" && action !== "withdraw")) {
-      await interaction.reply({ content: "Malformed button.", flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: "This button looks broken — refresh Discord and try again.", flags: MessageFlags.Ephemeral });
       return;
     }
 

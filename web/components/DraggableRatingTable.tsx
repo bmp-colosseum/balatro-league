@@ -281,7 +281,7 @@ export function DraggableRatingTable({
                   <span
                     className="pill"
                     style={{ background: pill.bg, color: pill.fg }}
-                    title={r.status === "GAP" ? `Skipped ${r.skippedSeasons} season(s)` : undefined}
+                    title={r.status === "GAP" ? `Skipped ${r.skippedSeasons} ${r.skippedSeasons === 1 ? "season" : "seasons"}` : undefined}
                   >
                     {pill.label}
                     {r.status === "GAP" && ` · ${r.skippedSeasons}`}

@@ -98,9 +98,9 @@ export default async function AdminSeasonsPage({
             </span>
           </summary>
           <p className="muted" style={{ marginTop: 8 }}>
-            Number is assigned automatically — just an optional subtitle and
-            group sizes here. Tiers and divisions are built later, from the
-            actual signups, after signups close.
+            The number is assigned automatically — set an optional subtitle and
+            group sizes here. You build tiers and divisions later, from the
+            signups, after signups close.
           </p>
           <form action={createSeason}>
             <label>Subtitle <Input name="subtitle" placeholder="Optional subtitle (e.g. 'Launch')" /></label>
@@ -115,10 +115,9 @@ export default async function AdminSeasonsPage({
           <div className="card">
             <strong>Season timeline</strong>
             <p className="muted" style={{ marginTop: 4, fontSize: 12, marginBottom: 8 }}>
-              Newest first. The season marked "ratings sourced from here" is
-              what next season's build flow reads <code>Player.rating</code>{" "}
-              from — every player's global rank was last written when that
-              season ended.
+              Newest first. The season marked "ratings sourced from here" sets
+              every player's rank for next season's build — those ranks were
+              last written when that season ended.
             </p>
             <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 4 }}>
               {timelineSeasons.map((s) => {
@@ -150,7 +149,7 @@ export default async function AdminSeasonsPage({
                       <span
                         className="pill"
                         style={{ background: "rgba(118,199,255,0.2)", color: "#76c7ff", fontSize: 10 }}
-                        title="Player.rating values were last written by this season's endSeason."
+                        title="Player ranks were last set when this season ended."
                       >
                         ratings sourced from here
                       </span>
@@ -171,9 +170,8 @@ export default async function AdminSeasonsPage({
           <div className="card" style={{ borderColor: "#76c7ff" }}>
             <strong style={{ color: "#76c7ff" }}>📋 Pending signup rounds ({orphanRounds.length})</strong>
             <p className="muted" style={{ marginTop: 4, fontSize: 12 }}>
-              Signup rounds without a built season yet. From a seed script or
-              admin closed signups without setting it up yet. Click through to
-              <code> /admin/signups/&lt;id&gt;/build</code> to assemble the season.
+              These signup rounds have closed but don't have a season built yet.
+              Click Set up to build the season from them.
             </p>
             <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
               {orphanRounds.map((r) => (
@@ -244,7 +242,7 @@ export default async function AdminSeasonsPage({
                 </div>
                 <div className="muted" style={{ marginTop: 4 }}>{tierLine}</div>
                 <div className="muted">
-                  {players} player(s) · {sets} match(es)
+                  {players} player{players === 1 ? "" : "s"} · {sets} match{sets === 1 ? "" : "es"}
                 </div>
                 <SeasonDeckPresetPicker
                   seasonId={s.id}
@@ -277,9 +275,8 @@ export default async function AdminSeasonsPage({
                   </div>
                 ) : (
                   <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
-                    No divisions yet — they get built from the signups once you
-                    finalize sign-ups (below). You set the tier shape at that
-                    build step.
+                    No divisions yet. Close signups below, then build the
+                    divisions from them — you set the tier shape there.
                   </p>
                 )}
 
@@ -288,7 +285,7 @@ export default async function AdminSeasonsPage({
                 {s.divisions.length > 0 && (
                   <div style={{ marginTop: 8 }}>
                     <Link href={`/admin/seasons/${s.id}/bulk-import`} style={{ fontSize: 12 }}>
-                      📥 Bulk import members + pairings (all divisions in one shot)
+                      📥 Bulk import members + matches (all divisions at once)
                     </Link>
                   </div>
                 )}
@@ -336,7 +333,7 @@ export default async function AdminSeasonsPage({
                     </Button>
                   </form>
                   <div className="muted" style={{ fontSize: 10, marginTop: 4 }}>
-                    Cascades: tiers, divisions, members, pairings. Signup rounds get unlinked but kept.
+                    Also deletes its tiers, divisions, members, and matches. Signup rounds are kept but unlinked.
                   </div>
                 </details>
               </div>
@@ -411,15 +408,15 @@ function LifecycleActions({
         </div>
         <details style={{ marginTop: 4 }}>
           <summary className="muted" style={{ cursor: "pointer", fontSize: 11 }}>
-            Unend this season (clears endedAt, ratings untouched)
+            Undo end season (keeps all ratings)
           </summary>
           <form action={unendSeason} style={{ marginTop: 6 }}>
             <input type="hidden" name="id" value={season.id} />
             <Button type="submit" variant="secondary" size="sm">
-              Unend
+              Undo end
             </Button>
             <span className="muted" style={{ fontSize: 10, marginLeft: 6 }}>
-              Re-running End season afterwards will rewrite Player.rating from this season's standings.
+              Ending the season again afterwards will rewrite every rating from this season's standings.
             </span>
           </form>
         </details>
@@ -447,7 +444,7 @@ function LifecycleActions({
         {accepting ? (
           <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid var(--border, rgba(255,255,255,0.08))" }}>
             <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
-              🟢 Signups still open — {round!._count.signups} joined. Close them before starting so no one joins after your arrangement.
+              🟢 Signups still open — {round!._count.signups} joined. Close them before starting so no one joins after you've placed everyone.
             </div>
             <form action={finalizeSignupsForSeason}>
               <input type="hidden" name="seasonId" value={season.id} />
@@ -468,7 +465,7 @@ function LifecycleActions({
           <Button type="submit"><strong>Start season →</strong></Button>
         </form>
         <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-          {playerCount} player(s) placed. Starting flips this to the active season for /standings + /report.
+          {playerCount} player{playerCount === 1 ? "" : "s"} placed. Starting makes this the active season for /standings and /report.
         </div>
       </div>
     );
@@ -546,7 +543,7 @@ function LifecycleActions({
         <Button type="submit" disabled={channels.length === 0}>Open signups</Button>
       </form>
       <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-        Posts a signup embed in the channel. Players click Sign Up; you Finalize when ready, then Set up divisions from the signups.
+        Posts a signup message in the channel. Players click Sign Up; close signups when ready, then build the divisions from them.
       </div>
     </details>
   );
@@ -585,7 +582,7 @@ function DiscordBootstrap({
         <form action={bootstrapSeasonDiscord}>
           <input type="hidden" name="id" value={season.id} />
           <Button type="submit" disabled={remaining === 0}>
-            {remaining === 0 ? "All divisions ready" : `Set up ${remaining} remaining division(s)`}
+            {remaining === 0 ? "All divisions ready" : `Set up ${remaining} remaining division${remaining === 1 ? "" : "s"}`}
           </Button>
         </form>
 
@@ -597,10 +594,10 @@ function DiscordBootstrap({
             ⇄ Re-home to a new server
           </summary>
           <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>
-            For moving the league to a new Discord <strong>mid-season</strong>. <strong>First:</strong> point
-            <code> DISCORD_GUILD_ID</code> at the new server, invite the bot + players, and run
-            <code> /league setup</code> there. <strong>Then</strong> this clears this season&apos;s old-server
-            channel/role links and re-creates them in the new server (re-assigning division roles). No
+            For moving the league to a new Discord <strong>mid-season</strong>. <strong>First:</strong> set
+            <code> DISCORD_GUILD_ID</code> to the new server, invite the bot and players, and run
+            <code> /league setup</code> there. <strong>Then</strong> this clears this season&apos;s old
+            channel and role links and re-creates them in the new server (re-assigning division roles). No
             gameplay data is touched. Type <code>REHOME</code> to confirm.
           </div>
           <form action={rehomeSeasonDiscord} style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>

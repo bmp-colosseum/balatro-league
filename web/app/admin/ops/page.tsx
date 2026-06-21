@@ -82,9 +82,9 @@ export default async function AdminOpsPage({
         <div className="card">
           <strong>Match-thread sweep</strong>
           <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-            The bot runs the first three passes every minute. This button fires all
-            four on demand — useful when the bot is down, or to catch the gap the
-            cron can&apos;t see.
+            The bot runs the first three passes every minute. This button runs all
+            four now — useful when the bot is down, or to catch what the scheduled
+            run can&apos;t see.
           </p>
           <ul className="muted" style={{ fontSize: 12, marginTop: 4, paddingLeft: 18 }}>
             <li><strong>Expired invites</strong> — WAITING_ACCEPT sessions past their expiry, cancel + delete thread.</li>

@@ -10,6 +10,12 @@ import { Textarea } from "@/components/ui/textarea";
 
 export const dynamic = "force-dynamic";
 
+// "1 member" / "3 members" from a count that arrives as a string param.
+function pluralN(raw: string | null | undefined, singular: string, plural = `${singular}s`): string {
+  const n = Number(raw ?? 0);
+  return `${raw ?? 0} ${n === 1 ? singular : plural}`;
+}
+
 export default async function BulkImportPage({
   params,
   searchParams,
@@ -37,23 +43,22 @@ export default async function BulkImportPage({
           </Link>
         </div>
         <p className="muted">
-          One-shot import for an entire season. Paste the two CSVs below and click
-          Import — server matches divisions by name (case + whitespace tolerant),
-          upserts Players + DivisionMembers, then creates CONFIRMED Pairings.
-          Re-runnable safely; duplicates are upserted, not duplicated.
+          Import a whole season at once. Paste the two CSVs below and click Import — it matches
+          divisions by name (ignoring case and spacing), adds the players and members, then records
+          the matches. Safe to run more than once; existing rows are updated, not duplicated.
         </p>
 
         {summary && (
           <div className="card" style={{ borderColor: "#2ecc71" }}>
             <strong>Import done</strong>
             <ul className="muted" style={{ marginTop: 4 }}>
-              <li>{summary.get("membersAdded")} member(s) added/updated</li>
+              <li>{pluralN(summary.get("membersAdded"), "member")} added/updated</li>
               {Number(summary.get("membersSkipped") ?? 0) > 0 && (
-                <li>{summary.get("membersSkipped")} member row(s) skipped</li>
+                <li>{pluralN(summary.get("membersSkipped"), "member row")} skipped</li>
               )}
-              <li>{summary.get("pairingsRecorded")} pairing(s) recorded</li>
+              <li>{pluralN(summary.get("pairingsRecorded"), "match", "matches")} recorded</li>
               {Number(summary.get("pairingsSkipped") ?? 0) > 0 && (
-                <li>{summary.get("pairingsSkipped")} pairing row(s) skipped</li>
+                <li>{pluralN(summary.get("pairingsSkipped"), "match row")} skipped</li>
               )}
               {(summary.get("unknownDivisions") ?? "").length > 0 && (
                 <li style={{ color: "#e74c3c" }}>
@@ -68,7 +73,7 @@ export default async function BulkImportPage({
               )}
               {(summary.get("transferred") ?? "").length > 0 && (
                 <li style={{ color: "#f1c40f" }}>
-                  ↪ Transferred (player listed in different division this season): {summary.get("transferred")}
+                  ↪ Moved (listed in a different division this season): {summary.get("transferred")}
                 </li>
               )}
             </ul>
@@ -76,7 +81,7 @@ export default async function BulkImportPage({
         )}
 
         <div className="card">
-          <strong>This season has {season.divisions.length} division(s)</strong>
+          <strong>This season has {season.divisions.length} division{season.divisions.length === 1 ? "" : "s"}</strong>
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6 }}>
             {season.divisions.map((d) => (
               <code key={d.id} style={{ fontSize: 11, padding: "2px 6px", background: "var(--surface-2)", borderRadius: 3 }}>
@@ -114,7 +119,7 @@ export default async function BulkImportPage({
           <div className="card">
             <strong>2. Matches</strong>
             <p className="muted" style={{ fontSize: 12 }}>
-              Format: <code>division, player1, player2, result, state</code> — one row per played set.
+              Format: <code>division, player1, player2, result, state</code> — one row per played match.
               Matches <code>scripts/out/matches.csv</code> exactly. <code>player1</code>/<code>player2</code> can be either
               a Discord ID or a display name from the members import. Rows where <code>state ≠ complete</code> are skipped.
             </p>

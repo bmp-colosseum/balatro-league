@@ -26,7 +26,7 @@ const OK_MSG: Record<string, string> = {
   recorded: "Result recorded.",
   overridden: "Result overridden.",
   forfeit: "Forfeit / DQ recorded.",
-  showdown: "Showdown recorded.",
+  showdown: "Shootout recorded.",
   undone: "Match removed.",
 };
 
@@ -47,7 +47,7 @@ export default async function ResultsPage({
       <main>
         <h2>Results</h2>
         <p className="muted">
-          Record, override, forfeit/DQ, settle a showdown, or undo any match — all in one place.
+          Record, override, forfeit/DQ, settle a shootout, or undo any match — all in one place.
         </p>
 
         <Suspense fallback={null}><FlashToast messages={OK_MSG} /></Suspense>
@@ -115,7 +115,7 @@ export default async function ResultsPage({
 
             {/* ---- Showdown ---- */}
             <section className="card">
-              <strong>⚔ Showdown</strong>
+              <strong>⚔ Shootout</strong>
               <p className="muted" style={{ fontSize: 12, marginTop: 2 }}>
                 1-game tiebreaker for two players tied on a promotion/relegation spot.
               </p>
@@ -126,7 +126,7 @@ export default async function ResultsPage({
                 <MemberSelect name="p2Id" members={sel.members} label="p2…" />
                 <span className="muted" style={{ fontSize: 12 }}>winner</span>
                 <MemberSelect name="winnerId" members={sel.members} label="winner…" />
-                <Button type="submit">Record showdown</Button>
+                <Button type="submit">Record shootout</Button>
               </form>
             </section>
 
@@ -146,7 +146,7 @@ export default async function ResultsPage({
                         <td>{m.aName}<DiscordId value={m.aDiscordId} username={m.aUsername} /> <span className="muted">vs</span> {m.bName}<DiscordId value={m.bDiscordId} username={m.bUsername} /></td>
                         <td><strong>{m.gamesWonA}-{m.gamesWonB}</strong></td>
                         <td style={{ fontSize: 11 }} className="muted">
-                          {m.format === "SHOOTOUT_BO1" ? "⚔ showdown" : m.forfeit ? "by DQ" : "league"}
+                          {m.format === "SHOOTOUT_BO1" ? "⚔ shootout" : m.forfeit ? "by DQ" : "league"}
                           {m.status !== "CONFIRMED" ? ` · ${m.status.toLowerCase()}` : ""}
                         </td>
                         <td>

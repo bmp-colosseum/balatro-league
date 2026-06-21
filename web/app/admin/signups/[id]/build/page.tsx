@@ -71,8 +71,8 @@ export default async function BuildSeasonPage({
           </Link>
         </div>
         <p className="muted">
-          Set ratings for everyone (returning + new), pick the tier shape and match preset, and
-          click <strong>Set up the season</strong>. Players are auto-sorted into divisions in rank order — top of
+          Set ratings for everyone (returning and new), pick the tier shape and match preset, then
+          click <strong>Set up the season</strong>. Players sort into divisions in rank order — the top of
           each tier goes into the lowest-numbered division (Rare 1 = strongest Rare, Rare 6 = weakest).
         </p>
 
@@ -81,13 +81,13 @@ export default async function BuildSeasonPage({
           <ol style={{ marginTop: 8, paddingLeft: 24, fontSize: 13, lineHeight: 1.6 }}>
             <li><strong>Set ratings</strong> below — drag rows to reorder, or use the sort/auto-fill buttons. Top of the list = strongest player, ratings get re-numbered on Save.</li>
             <li><strong>Pick the tier shape</strong> (Legendary / Rare / Uncommon / Common…) — use ✨ Suggest from N signups to auto-compute, or load a saved template.</li>
-            <li><strong>Click Set up the season</strong> — auto-sorts top-rated players into the top tier and fills each tier's divisions in rank order (Rare 1 gets the top Rare ranks, Rare 6 gets the bottom). Keeps entering rank close to ending rank so ranks don't shuffle wildly between seasons.</li>
+            <li><strong>Click Set up the season</strong> — sorts top-rated players into the top tier and fills each tier's divisions in rank order (Rare 1 gets the top Rare ranks, Rare 6 the bottom). Keeps each player's starting rank close to where they finished, so ranks don't shuffle wildly between seasons.</li>
             <li><strong>Review &amp; tweak placements</strong> on the season detail page that opens — use the per-player "Move to…" dropdowns to nudge anyone between divisions.</li>
             <li><strong>Start the season</strong> — when placements look right, click <strong>Start season →</strong> at the bottom of the season detail page. The league goes live, players see standings, /start-match works.</li>
           </ol>
           <p className="muted" style={{ fontSize: 12, marginTop: 8, marginBottom: 0 }}>
-            Returning players' ratings come from end-of-last-season's recompute, so good finishers naturally
-            land in higher tiers and bottom finishers drop down. New signups fall in by BMP MMR.
+            Returning players' ratings come from how they finished last season, so strong finishers land
+            in higher tiers and bottom finishers drop down. New signups fall in by their BMP MMR.
           </p>
         </details>
 

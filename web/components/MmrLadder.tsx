@@ -136,7 +136,7 @@ export function MmrLadder({
   const applyWithConfirm = () => {
     if (
       window.confirm(
-        `Apply the ladder?\n\n${seededCount} seeded player(s) get even 10-apart MMR (#1 = ${top}, then −10 each).\n${unseededCount} unseeded player(s) (no BMP) get NO MMR — tied at the base, not ranked.\n\nThis overwrites any MMRs set by hand (e.g. on the arranger) or by Recompute.`,
+        `Apply the ladder?\n\n${seededCount} seeded ${seededCount === 1 ? "player gets" : "players get"} even 10-apart MMR (#1 = ${top}, then −10 each).\n${unseededCount} unseeded ${unseededCount === 1 ? "player gets" : "players get"} no MMR — tied at the base, not ranked.\n\nThis overwrites any MMR set by hand or by Recompute.`,
       )
     ) {
       commit();

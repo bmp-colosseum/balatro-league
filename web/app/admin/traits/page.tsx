@@ -20,10 +20,10 @@ export default async function TraitsAdminPage() {
       <main>
         <h2>Player traits</h2>
         <p className="muted">
-          Cosmetic flavour shown on player profiles, earned automatically from ban/pick behaviour.
-          Edit each trait&apos;s label, description, or emoji here, or upload a custom icon (resized to
-          48px and stored in the database). Leave a field blank to fall back to the built-in default.
-          The <strong>who has it</strong> list shows everyone currently earning each trait.
+          Cosmetic badges shown on player profiles, earned automatically from each player&apos;s ban and pick
+          habits. Edit a trait&apos;s label, description, or emoji here, or upload a custom icon. Leave a field
+          blank to use the built-in default. The <strong>who has it</strong> list shows everyone earning each
+          trait right now.
         </p>
 
         <div style={{ display: "grid", gap: 16 }}>

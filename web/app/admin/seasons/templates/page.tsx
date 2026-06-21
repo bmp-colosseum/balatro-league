@@ -28,8 +28,8 @@ export default async function AdminTemplatesPage() {
       <main>
         <h2>Tier templates</h2>
         <p className="muted">
-          Saved layouts for the Create Season form. The ★ Last used template is auto-updated after
-          every season create.
+          Saved tier layouts for the Create Season form. The ★ Last used one updates automatically
+          each time you create a season.
         </p>
 
         <div className="card">

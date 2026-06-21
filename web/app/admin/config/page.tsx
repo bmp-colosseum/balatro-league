@@ -91,9 +91,8 @@ export default async function AdminConfigPage() {
       <main>
         <h2>⚙️ Config</h2>
         <p className="muted">
-          Tunable knobs that used to be SQL-only. Everything here is admin-friendly
-          form-based now. Changes apply immediately (LeagueConfig has a ~30s in-memory
-          cache on the bot side, so rules tweaks take up to that long to propagate).
+          Core league settings. Changes apply right away — the bot caches them for about
+          30 seconds, so a tweak can take that long to take effect.
         </p>
 
         <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>

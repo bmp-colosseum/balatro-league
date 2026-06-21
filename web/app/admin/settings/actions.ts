@@ -96,7 +96,7 @@ export async function deleteRulesTemplate(formData: FormData) {
     redirect(`/admin/settings?err=${encodeURIComponent("Can't delete the default template — set another as default first.")}`);
   }
   if (tpl._count.seasons > 0) {
-    redirect(`/admin/settings?err=${encodeURIComponent(`Template is used by ${tpl._count.seasons} season(s) — point them elsewhere first.`)}`);
+    redirect(`/admin/settings?err=${encodeURIComponent(`Template is used by ${tpl._count.seasons} ${tpl._count.seasons === 1 ? "season" : "seasons"} — move them to another template first.`)}`);
   }
   await prisma.leagueRulesTemplate.delete({ where: { id } });
   invalidateLeagueSettingsCache();

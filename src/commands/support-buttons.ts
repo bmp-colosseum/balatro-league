@@ -19,7 +19,7 @@ export const supportButtons: ButtonHandler = {
   async execute(interaction: ButtonInteraction) {
     const [, action, ticketId] = interaction.customId.split(":");
     if (action !== "close" || !ticketId) {
-      await interaction.reply({ content: "Malformed button.", flags: MessageFlags.Ephemeral });
+      await interaction.reply({ content: "This button looks broken — refresh Discord and try again.", flags: MessageFlags.Ephemeral });
       return;
     }
 

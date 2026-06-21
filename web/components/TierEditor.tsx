@@ -136,7 +136,7 @@ export function TierEditor({
           </label>
           {selectedTemplateId && (
             <span className="muted" style={{ marginLeft: 8, fontSize: 11 }}>
-              ✓ loaded — edit rows below and click Create season when ready
+              ✓ Loaded — edit the rows below, then click Create season
             </span>
           )}
         </div>

@@ -40,9 +40,9 @@ export default async function AdminDisputesPage({
       <main>
         <h2>Disputed matches ({disputes.length})</h2>
         <p className="muted" style={{ fontSize: 12 }}>
-          Players filed disputes from <code>/profile</code> or <code>/report</code>. If they proposed
-          a corrected result, Accept Proposed applies it in one click. Otherwise use the division
-          admin page to enter the right result manually.
+          Players filed these disputes from <code>/profile</code> or <code>/report</code>. If they proposed
+          a corrected result, Accept proposed applies it in one click. Otherwise use the division
+          admin page to enter the right result by hand.
         </p>
 
         <Suspense fallback={null}>
@@ -88,7 +88,7 @@ export default async function AdminDisputesPage({
                   <div style={{ padding: 8, background: "var(--surface-2)", borderRadius: 4 }}>
                     <div className="muted" style={{ fontSize: 11 }}>Recorded</div>
                     <div style={{ fontSize: 18, fontWeight: 600 }}>
-                      {d.playerA.displayName} <strong>{d.gamesWonA}–{d.gamesWonB}</strong> {d.playerB.displayName}
+                      {d.playerA.displayName} <strong>{d.gamesWonA}-{d.gamesWonB}</strong> {d.playerB.displayName}
                     </div>
                     {d.reporter && (
                       <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
@@ -102,7 +102,7 @@ export default async function AdminDisputesPage({
                     <div className="muted" style={{ fontSize: 11 }}>Disputer says it should be</div>
                     {hasProposal ? (
                       <div style={{ fontSize: 18, fontWeight: 600 }}>
-                        {d.playerA.displayName} <strong>{d.disputeProposedGamesWonA}–{d.disputeProposedGamesWonB}</strong> {d.playerB.displayName}
+                        {d.playerA.displayName} <strong>{d.disputeProposedGamesWonA}-{d.disputeProposedGamesWonB}</strong> {d.playerB.displayName}
                       </div>
                     ) : (
                       <div className="muted">— no specific proposal —</div>
@@ -148,7 +148,7 @@ export default async function AdminDisputesPage({
                   </form>
                   {d.disputeThreadId && (
                     <span className="muted" style={{ fontSize: 11, alignSelf: "center" }}>
-                      🧵 thread spawned
+                      🧵 thread created
                     </span>
                   )}
                 </div>

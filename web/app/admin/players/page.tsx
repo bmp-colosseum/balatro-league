@@ -236,15 +236,14 @@ export default async function AdminPlayersPage({
             </form>
           </div>
           <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
-            Auto-refreshes daily @ 12:00 UTC for current-season players. Click for an on-demand
-            refresh — fans out a snapshot job per player, drains at ~1 req/3sec, so a full season
-            takes a few minutes.
+            Refreshes automatically every day at 12:00 UTC for current-season players. Click to
+            refresh now — it fetches one player at a time, so a full season takes a few minutes.
           </p>
         </div>
 
         <div className="card">
           <strong>
-            {players.length} player(s)
+            {players.length} player{players.length === 1 ? "" : "s"}
             {selectedSeasonName && <> in {selectedSeasonName}</>}
             {!selectedSeasonName && <> (active season only)</>}
           </strong>

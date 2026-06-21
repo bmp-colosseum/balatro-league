@@ -33,10 +33,9 @@ export default async function AdminSettingsPage({
       <main>
         <h2>Rules templates</h2>
         <p className="muted" style={{ fontSize: 12 }}>
-          Templates carry timeout values. The ★ default is used by any season that hasn't
-          picked another; seasons opt into an alternate from their detail page. Scoring
-          (3/1/0) and ban/pick (4/3/9 pool with 2 left) are league-wide constants and
-          aren't editable here.
+          Each template holds the timeout values. The ★ default applies to any season that hasn't
+          picked another; a season can pick a different one from its detail page. Scoring (3/1/0)
+          and ban/pick (a 9-card pool, 4 then 3 banned, 2 left) are league-wide and can't be edited here.
         </p>
 
         {ok && (

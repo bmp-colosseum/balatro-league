@@ -183,7 +183,7 @@ export default async function AdminAuditPage({
             <Link href="/admin/audit" className="secondary" style={{ alignSelf: "center" }}>Reset</Link>
           </div>
           <div className="muted" style={{ textAlign: "right", fontSize: 12 }}>
-            {totalCount.toLocaleString()} matching row(s)
+            {totalCount.toLocaleString()} matching row{totalCount === 1 ? "" : "s"}
           </div>
         </form>
 

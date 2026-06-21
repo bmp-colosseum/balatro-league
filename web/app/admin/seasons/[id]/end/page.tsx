@@ -44,8 +44,8 @@ export default async function EndSeasonPreviewPage({
 
         {unfinishedPairings > 0 && (
           <div className="card" style={{ borderColor: "#f1c40f", color: "#f1c40f" }}>
-            ⚠ {unfinishedPairings} pairing(s) still unplayed across this season. Ending now will rank
-            players on their partial records — confirm with the league before clicking through.
+            ⚠ {unfinishedPairings} match{unfinishedPairings === 1 ? "" : "es"} still unplayed this season. Ending now ranks
+            players on their partial records — check with the league before you do.
           </div>
         )}
 
@@ -60,8 +60,8 @@ export default async function EndSeasonPreviewPage({
                 <tr>
                   <th>#</th>
                   <th>Player</th>
-                  <th title="Rank before this end-season recompute (1 = best)">Old rank</th>
-                  <th title="Rank after this end-season recompute (1 = best)">New rank</th>
+                  <th title="Rank before ending the season (1 = best)">Old rank</th>
+                  <th title="Rank after ending the season (1 = best)">New rank</th>
                   <th title="↑ = climbed in rank, ↓ = dropped">Movement</th>
                 </tr>
               </thead>
@@ -116,8 +116,8 @@ export default async function EndSeasonPreviewPage({
         <div className="card">
           <strong>Confirm</strong>
           <p className="muted">
-            This will update {totalDeltas} player rating(s) and mark the season inactive.
-            Player ratings are used by next season's auto-seed in the build-season wizard.
+            This updates {totalDeltas} player rating{totalDeltas === 1 ? "" : "s"} and marks the season inactive.
+            Next season's setup uses these ratings to seed everyone.
           </p>
           <form action={endSeason} style={{ display: "flex", gap: 8 }}>
             <input type="hidden" name="id" value={season.id} />

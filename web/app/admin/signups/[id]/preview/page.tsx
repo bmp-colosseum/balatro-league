@@ -83,7 +83,7 @@ export default async function PlacementPreviewPage({
     pill = <span className="pill" style={{ background: "rgba(118,199,255,0.2)", color: "#76c7ff" }}>{count} signups · dry run</span>;
     body =
       continuity === "NO_SEASON" ? (
-        <div className="card">No active season to base this on — use the fresh sort, or activate a season first.</div>
+        <div className="card">No active season to base this on — use the fresh sort, or start a season first.</div>
       ) : !ok ? (
         <div className="card">Couldn&apos;t load the round.</div>
       ) : count === 0 ? (
@@ -155,13 +155,13 @@ export default async function PlacementPreviewPage({
         {round.status === "CLOSED" && (
           <div className="card" style={{ borderColor: "#f1c40f", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <span style={{ color: "#f1c40f", fontSize: 13 }}>
-              ⚠ Sign-ups are <strong>closed</strong> for this round — the Discord Sign Up button is off. Re-open to let
-              people join again. (A built draft still takes sign-ups; only an explicit close stops them.)
+              ⚠ Signups are <strong>closed</strong> for this round — the Discord Sign Up button is off. Reopen to let
+              people join again.
             </span>
             <form action={reopenSignupRound} style={{ marginLeft: "auto" }}>
               <input type="hidden" name="roundId" value={round.id} />
               <button type="submit" style={{ fontSize: 12, padding: "4px 12px", fontWeight: 600 }}>
-                Re-open sign-ups
+                Reopen signups
               </button>
             </form>
           </div>
@@ -188,17 +188,17 @@ export default async function PlacementPreviewPage({
           {mode === "current" && editorSeasonId ? (
             <>
               This is the draft for next season — <strong>drag players between divisions, it saves automatically</strong>.
-              Share this page with whoever&apos;s arranging. Nothing is live until you activate.
+              Share this page with whoever&apos;s arranging. Nothing goes live until you start the season.
             </>
           ) : mode === "fresh" ? (
             <>
               Everyone sorted fresh into Owen&apos;s ladder by MMR — how a <strong>first</strong> season builds.
-              Tweak the structure; flip on <strong>Show schedules</strong> for opponents + SoS. Nothing saved.
+              Tweak the structure; turn on <strong>Show schedules</strong> to see opponents and strength of schedule. Nothing is saved.
             </>
           ) : (
             <>
-              How a <strong>returning</strong> season builds: returners hold their finish, new signups slot in by MMR.
-              Hit <strong>Edit these groupings</strong> to make it an editable draft. Nothing saved until you do.
+              How a <strong>returning</strong> season builds: returners keep their finish, new signups slot in by MMR.
+              Click <strong>Edit these groupings</strong> to turn it into an editable draft. Nothing is saved until you do.
             </>
           )}
         </p>

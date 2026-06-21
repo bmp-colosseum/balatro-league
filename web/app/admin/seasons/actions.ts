@@ -175,7 +175,7 @@ export async function deleteDivision(formData: FormData) {
   if (division!._count.members > 0) {
     redirect(
       `/seasons/${division!.season.id}?err=${encodeURIComponent(
-        `"${division!.name}" still has ${division!._count.members} member(s). Move them to other divisions first, then delete.`,
+        `"${division!.name}" still has ${division!._count.members} ${division!._count.members === 1 ? "member" : "members"}. Move them to other divisions first, then delete.`,
       )}`,
     );
   }
@@ -346,7 +346,7 @@ export async function endSeason(formData: FormData) {
   if (result.status === "already-ended") {
     redirect(
       `/admin/seasons?err=${encodeURIComponent(
-        `${result.seasonLabel} already ended. Unend it first if you really mean to recompute ratings.`,
+        `${result.seasonLabel} already ended. Use "Undo end" first if you really mean to recompute ratings.`,
       )}`,
     );
   }
