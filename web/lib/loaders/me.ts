@@ -10,6 +10,7 @@
 // the read that depends on it, not buried in the page's render flow.
 
 import { prisma } from "@/lib/prisma";
+import { isScheduleLocked } from "@/lib/schedule-locked";
 import { getLeagueSettingsForSeason, type ScoringConfig } from "@/lib/league-settings";
 import { formatSeasonLabel } from "@/lib/format-season";
 
@@ -129,9 +130,7 @@ async function loadActiveDivisionContext(
   // With a locked schedule, reportable = your ASSIGNED, not-yet-confirmed
   // opponents. Locked = the flag OR a pre-created 0-0 PENDING match (robust against
   // a stale flag). No lock (legacy round-robin) = every member you haven't played.
-  const scheduleLocked =
-    div.season.scheduleLocked ||
-    myMatches.some((p) => p.status === "PENDING" && p.gamesWonA === 0 && p.gamesWonB === 0);
+  const scheduleLocked = isScheduleLocked(div.season.scheduleLocked, myMatches);
   const reportableOpponents = div.members
     .filter(
       (m) =>

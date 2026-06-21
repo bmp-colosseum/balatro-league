@@ -10,6 +10,7 @@
 //     computeStandings
 
 import { prisma } from "@/lib/prisma";
+import { isScheduleLocked } from "@/lib/schedule-locked";
 import { computeStandings } from "@/lib/standings";
 import { computeRatingDeltas, type DivisionForRating } from "@/lib/end-season";
 import { formatSeasonLabel } from "@/lib/format-season";
@@ -45,7 +46,7 @@ async function expectedMatchesBySeason(
   }
   for (const [divisionId, activeIds] of activeByDivision) {
     const list = byDiv.get(divisionId) ?? [];
-    const divLocked = scheduleLocked || list.some((m) => m.status === "PENDING" && m.gamesWonA === 0 && m.gamesWonB === 0);
+    const divLocked = isScheduleLocked(scheduleLocked, list);
     expected.set(
       divisionId,
       divLocked
@@ -509,9 +510,7 @@ export async function loadAdminPlayersDivisionView(
     const assignedThisPlayer = new Set(mine.map(oppOf)); // any status = on their schedule
     // Flag OR the ground truth (a pre-created 0-0 PENDING match exists) — so a
     // stale/false flag can't fall this back to a full round-robin.
-    const locked =
-      division.season.scheduleLocked ||
-      division.matches.some((p) => p.status === "PENDING" && p.gamesWonA === 0 && p.gamesWonB === 0);
+    const locked = isScheduleLocked(division.season.scheduleLocked, division.matches);
     const unplayed = active
       .filter(
         (o) =>
@@ -633,9 +632,7 @@ export async function loadAdminPlayersListView(opts: {
     const playedSet = new Set<string>(); // CONFIRMED pairs
     const assignedSet = new Set<string>(); // any-status pairs = on the schedule
     // Flag OR the ground truth (a pre-created 0-0 PENDING match exists).
-    const locked =
-      selectedSeason.scheduleLocked ||
-      pairings.some((p) => p.status === "PENDING" && p.gamesWonA === 0 && p.gamesWonB === 0);
+    const locked = isScheduleLocked(selectedSeason.scheduleLocked, pairings);
     for (const p of pairings) {
       const k = pairKey(p.divisionId, p.playerAId, p.playerBId);
       assignedSet.add(k);

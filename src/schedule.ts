@@ -15,6 +15,8 @@
 // preserving 2-swaps (rewire two edges, keeping every degree fixed) that reduce
 // SoS variance, with a few seeded restarts. Trivial at division scale.
 
+import { isUnplayedPending } from "./schedule-locked.js";
+
 export interface SchedulePlayer {
   id: string;
   mmr: number;
@@ -211,7 +213,7 @@ export function planDivisionResync(
   const pruneIds: string[] = [];
   const pruned = new Set<string>();
   for (const m of matches) {
-    const unplayed = m.status === "PENDING" && m.gamesWonA === 0 && m.gamesWonB === 0;
+    const unplayed = isUnplayedPending(m);
     if (unplayed && (!active.has(m.playerAId) || !active.has(m.playerBId))) {
       pruneIds.push(m.id);
       pruned.add(m.id);

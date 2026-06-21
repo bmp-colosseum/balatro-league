@@ -7,6 +7,7 @@ import {
 import { activePublicSeason } from "../active-season.js";
 import { prisma } from "../db.js";
 import { computeStandings, formatDivisionField, formatStandingsTable } from "../standings.js";
+import { isScheduleLocked } from "../schedule-locked.js";
 import { tierEmbedColor } from "../tiers.js";
 import { divisionNameAutocomplete } from "./autocomplete.js";
 import { formatSeasonLabel } from "../format-season.js";
@@ -202,7 +203,12 @@ async function renderAllDivisions(
       const activeCount = div.members.filter((m) => m.status === "ACTIVE").length;
       // Locked schedule → expected = the assigned (pre-created) count; otherwise
       // on-demand round-robin = C(N,2).
-      const expectedMatches = scheduleLocked ? div.matches.length : (activeCount * (activeCount - 1)) / 2;
+      // Robust per-division: the season flag is a fast-path, but a pre-created
+      // 0-0 PENDING match in this division is the ground truth (so a stale flag
+      // can't fall the bar back to a full round-robin denominator).
+      const expectedMatches = isScheduleLocked(scheduleLocked, div.matches)
+        ? div.matches.length
+        : (activeCount * (activeCount - 1)) / 2;
       const playedMatches = confirmed.length;
       const barWidth = 12;
       const pct = expectedMatches === 0 ? 0 : playedMatches / expectedMatches;

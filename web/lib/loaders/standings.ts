@@ -11,6 +11,7 @@
 // divisions, so the first viewer pays the compute cost once.
 
 import { prisma } from "@/lib/prisma";
+import { isScheduleLocked } from "@/lib/schedule-locked";
 import { loadDivisionStandings, loadManyDivisionStandings } from "@/lib/standings-cache";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { getPlacementRules } from "@/lib/placement-rules";
@@ -237,9 +238,7 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
       // Expected = the locked schedule's matches when this division has a
       // pre-created schedule (the flag OR a 0-0 PENDING match, robust to a stale
       // flag); otherwise a full round-robin.
-      const divLocked =
-        season.scheduleLocked ||
-        d.matches.some((m) => m.status === "PENDING" && m.gamesWonA === 0 && m.gamesWonB === 0);
+      const divLocked = isScheduleLocked(season.scheduleLocked, d.matches);
       const expectedMatches = divLocked
         ? d.matches.filter(betweenActive).length
         : (activeMembers.length * (activeMembers.length - 1)) / 2;

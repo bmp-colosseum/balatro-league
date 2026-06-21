@@ -9,6 +9,7 @@
 // display names so the rendering doesn't need a second hydration pass.
 
 import { prisma } from "@/lib/prisma";
+import { isScheduleLocked } from "@/lib/schedule-locked";
 import { loadDivisionStandings } from "@/lib/standings-cache";
 import { formatSeasonLabel } from "@/lib/format-season";
 
@@ -150,9 +151,7 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
     where: { divisionId, format: "LEAGUE_BO2" },
     select: { playerAId: true, playerBId: true, status: true, gamesWonA: true, gamesWonB: true },
   });
-  const scheduleLocked =
-    division.season.scheduleLocked ||
-    scheduleMatches.some((m) => m.status === "PENDING" && m.gamesWonA === 0 && m.gamesWonB === 0);
+  const scheduleLocked = isScheduleLocked(division.season.scheduleLocked, scheduleMatches);
   const assignedSet = new Set(scheduleMatches.map((p) => playedKey(p.playerAId, p.playerBId)));
   const unplayed: DivisionUnplayed[] = [];
   for (let i = 0; i < activeMembers.length; i++) {

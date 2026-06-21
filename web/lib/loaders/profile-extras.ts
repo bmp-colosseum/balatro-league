@@ -7,6 +7,7 @@
 // several conditional Prisma calls inline.
 
 import { prisma } from "@/lib/prisma";
+import { isScheduleLocked } from "@/lib/schedule-locked";
 import { formatSeasonLabel } from "@/lib/format-season";
 
 export interface ProfileViewer {
@@ -218,9 +219,7 @@ async function loadOwnActiveDivision(playerId: string): Promise<OwnActiveDivisio
     if (p.status === "CONFIRMED") played.add(opp);
   }
   // Locked = the flag OR a pre-created 0-0 PENDING match (robust to a stale flag).
-  const scheduleLocked =
-    div.season.scheduleLocked ||
-    myPairings.some((p) => p.status === "PENDING" && p.gamesWonA === 0 && p.gamesWonB === 0);
+  const scheduleLocked = isScheduleLocked(div.season.scheduleLocked, myPairings);
   const reportableOpponents = div.members
     .filter(
       (m) =>
@@ -269,9 +268,7 @@ async function loadAdminRecordContext(playerId: string): Promise<AdminRecordCont
   const assignedOpponents = new Set(myMatches.map(oppOf)); // any status = on the schedule
   // Locked = the flag OR (ground truth) the division has a pre-created 0-0 PENDING
   // match — so a stale/false flag can't make this fall back to a full round-robin.
-  const scheduleLocked =
-    div.season.scheduleLocked ||
-    div.matches.some((m) => m.status === "PENDING" && m.gamesWonA === 0 && m.gamesWonB === 0);
+  const scheduleLocked = isScheduleLocked(div.season.scheduleLocked, div.matches);
   const played = myMatches
     .filter((p) => p.status === "CONFIRMED")
     .map((p) => ({

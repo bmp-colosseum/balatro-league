@@ -20,6 +20,8 @@ export interface SchedulePlayer {
   mmr: number;
 }
 
+import { isUnplayedPending } from "@/lib/schedule-locked";
+
 export interface ScheduleResult {
   // playerId -> their assigned opponents (sorted strongest-first).
   opponents: Map<string, string[]>;
@@ -211,7 +213,7 @@ export function planDivisionResync(
   const pruneIds: string[] = [];
   const pruned = new Set<string>();
   for (const m of matches) {
-    const unplayed = m.status === "PENDING" && m.gamesWonA === 0 && m.gamesWonB === 0;
+    const unplayed = isUnplayedPending(m);
     if (unplayed && (!active.has(m.playerAId) || !active.has(m.playerBId))) {
       pruneIds.push(m.id);
       pruned.add(m.id);

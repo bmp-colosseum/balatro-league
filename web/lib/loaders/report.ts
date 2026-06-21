@@ -14,6 +14,7 @@
 // pairing table; we do one findMany and partition in JS).
 
 import { prisma } from "@/lib/prisma";
+import { isScheduleLocked } from "@/lib/schedule-locked";
 import { formatSeasonLabel } from "@/lib/format-season";
 
 export interface ReportOpponent {
@@ -113,9 +114,7 @@ export async function loadReportPageData(discordId: string): Promise<ReportPageD
   const pendingOpponentIds = new Set<string>();
   const assignedOpponentIds = new Set<string>(); // any status = on your schedule
   // Flag OR a pre-created 0-0 PENDING match (robust against a stale flag).
-  const scheduleLocked =
-    div.season.scheduleLocked ||
-    myPairings.some((p) => p.status === "PENDING" && p.gamesWonA === 0 && p.gamesWonB === 0);
+  const scheduleLocked = isScheduleLocked(div.season.scheduleLocked, myPairings);
   for (const p of myPairings) {
     const opp = p.playerAId === player.id ? p.playerBId : p.playerAId;
     assignedOpponentIds.add(opp);
