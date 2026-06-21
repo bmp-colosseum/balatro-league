@@ -813,12 +813,14 @@ model LeagueRulesTemplate {
 // (via src/audit.ts) and the web app (via web/lib/audit.ts) call
 // recordAudit() to write rows.
 //
-// action: dot-separated canonical key, e.g.
+// action: dot-separated canonical key (a freeform string, NOT a DB enum). e.g.
 //   match.override, match.cancel-admin, match.cancel-player,
 //   season.create, season.end, season.build,
 //   role.strip, role.award-champion,
 //   config.set, role-binding.set,
-//   pairing.undo, pairing.record, shootout.record,
+//   pairing.undo, pairing.record, shootout.record,  ← legacy key names; these
+//     ops now write the unified Match model, but the keys are kept as-is so
+//     historical audit rows stay searchable.
 //   signup-round.open, signup-round.close,
 //   match.start, match.complete
 // actor* describes who took the action. For system events that don't
@@ -830,7 +832,7 @@ model AdminAuditEvent {
   actorDiscordId String
   actorName      String
   action         String
-  targetType     String? // "MatchSession" | "Season" | "Pairing" | "Player" | "LeagueConfig" | ...
+  targetType     String? // "MatchSession" | "Season" | "Match" | "Player" | "LeagueConfig" | ...
   targetId       String?
   summary        String // one-line human description
   metadata       Json? // structured payload — reason, before/after snapshots, etc.

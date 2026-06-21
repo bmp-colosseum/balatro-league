@@ -11,6 +11,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { isScheduleLocked } from "@/lib/schedule-locked";
+import { byBestBmpSnapshot } from "@/lib/bmp-snapshots";
 import { computeStandings } from "@/lib/standings";
 import { computeRatingDeltas, type DivisionForRating } from "@/lib/end-season";
 import { formatSeasonLabel } from "@/lib/format-season";
@@ -817,13 +818,6 @@ export async function loadBuildSeasonPage(roundId: string): Promise<BuildSeasonR
       fetchError: true,
     },
   });
-  // Extract numeric suffix from a bmpSeason tag ("season6" → 6). Null
-  // tag → -Infinity so it sorts last.
-  const seasonNum = (tag: string | null): number => {
-    if (!tag) return -Infinity;
-    const m = /^season(\d+)$/.exec(tag);
-    return m ? parseInt(m[1]!, 10) : -Infinity;
-  };
   const snapshotsByDiscordId = new Map<string, typeof allSnapshots>();
   for (const s of allSnapshots) {
     const arr = snapshotsByDiscordId.get(s.discordId) ?? [];
@@ -833,12 +827,7 @@ export async function loadBuildSeasonPage(roundId: string): Promise<BuildSeasonR
   // Sort each player's snapshots so [0] is the preferred one (latest
   // tagged season, falling back to ad-hoc captures by recency).
   for (const arr of snapshotsByDiscordId.values()) {
-    arr.sort((a, b) => {
-      const na = seasonNum(a.bmpSeason);
-      const nb = seasonNum(b.bmpSeason);
-      if (na !== nb) return nb - na;
-      return b.capturedAt.getTime() - a.capturedAt.getTime();
-    });
+    arr.sort(byBestBmpSnapshot);
   }
   const stripDid = (s: typeof allSnapshots[number]): BuildSeasonSnapshot => ({
     rankedMmr: s.rankedMmr,
@@ -1024,11 +1013,6 @@ export async function loadSignupMmrOverview(roundId: string): Promise<SignupMmrO
   ]);
   const bmpCurrentSeason = bmpSeasonRow?.value ?? null;
   // Best snapshot per discordId: latest tagged BMP season, then newest capture.
-  const seasonNum = (tag: string | null): number => {
-    if (!tag) return -Infinity;
-    const m = /^season(\d+)$/.exec(tag);
-    return m ? parseInt(m[1]!, 10) : -Infinity;
-  };
   const byDid = new Map<string, typeof snaps>();
   for (const s of snaps) {
     const arr = byDid.get(s.discordId) ?? [];
@@ -1037,12 +1021,7 @@ export async function loadSignupMmrOverview(roundId: string): Promise<SignupMmrO
   }
   const best = new Map<string, (typeof snaps)[number]>();
   for (const [did, arr] of byDid) {
-    arr.sort((a, b) => {
-      const na = seasonNum(a.bmpSeason);
-      const nb = seasonNum(b.bmpSeason);
-      if (na !== nb) return nb - na;
-      return b.capturedAt.getTime() - a.capturedAt.getTime();
-    });
+    arr.sort(byBestBmpSnapshot);
     best.set(did, arr[0]!);
   }
 
@@ -1264,11 +1243,6 @@ async function buildAdminSeasonMemberContext(season: {
     where: { discordId: { in: discordIds }, rankedMmr: { not: null } },
     select: { discordId: true, bmpSeason: true, rankedMmr: true, peakMmr: true, rankedTier: true, capturedAt: true },
   });
-  const seasonNum = (tag: string | null): number => {
-    if (!tag) return -Infinity;
-    const m = /^season(\d+)$/.exec(tag);
-    return m ? parseInt(m[1]!, 10) : -Infinity;
-  };
   const snapsByDiscord = new Map<string, typeof snapshots>();
   for (const s of snapshots) {
     const arr = snapsByDiscord.get(s.discordId) ?? [];
@@ -1276,12 +1250,7 @@ async function buildAdminSeasonMemberContext(season: {
     snapsByDiscord.set(s.discordId, arr);
   }
   for (const arr of snapsByDiscord.values()) {
-    arr.sort((a, b) => {
-      const na = seasonNum(a.bmpSeason);
-      const nb = seasonNum(b.bmpSeason);
-      if (na !== nb) return nb - na;
-      return b.capturedAt.getTime() - a.capturedAt.getTime();
-    });
+    arr.sort(byBestBmpSnapshot);
   }
 
   // Prior-season finalGlobalRank — most recent ended season the

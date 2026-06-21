@@ -12,6 +12,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { isScheduleLocked } from "@/lib/schedule-locked";
+import { byBestBmpSnapshot } from "@/lib/bmp-snapshots";
 import { loadDivisionStandings, loadManyDivisionStandings } from "@/lib/standings-cache";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { getPlacementRules } from "@/lib/placement-rules";
@@ -292,11 +293,6 @@ export async function loadMmrForPlayerIds(
     orderBy: { capturedAt: "desc" },
     select: { playerId: true, bmpSeason: true, rankedMmr: true, capturedAt: true },
   });
-  const seasonNum = (tag: string | null): number => {
-    if (!tag) return -Infinity;
-    const m = /^season(\d+)$/.exec(tag);
-    return m ? parseInt(m[1]!, 10) : -Infinity;
-  };
   const byPlayer = new Map<string, typeof snapshots>();
   for (const s of snapshots) {
     if (!s.playerId) continue;
@@ -305,12 +301,7 @@ export async function loadMmrForPlayerIds(
     byPlayer.set(s.playerId, arr);
   }
   for (const [pid, arr] of byPlayer) {
-    arr.sort((a, b) => {
-      const na = seasonNum(a.bmpSeason);
-      const nb = seasonNum(b.bmpSeason);
-      if (na !== nb) return nb - na;
-      return b.capturedAt.getTime() - a.capturedAt.getTime();
-    });
+    arr.sort(byBestBmpSnapshot);
     const best = arr[0];
     if (best?.rankedMmr != null) {
       mmrByPlayerId.set(pid, { mmr: best.rankedMmr, bmpSeason: best.bmpSeason });

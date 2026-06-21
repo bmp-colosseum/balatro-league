@@ -26,6 +26,15 @@ export interface ChannelCheckResult {
   reason?: string;
 }
 
+// Is any of these channel ids a bot-managed division channel?
+async function isDivisionChannel(ids: string[]): Promise<boolean> {
+  const div = await prisma.division.findFirst({
+    where: { discordChannelId: { in: ids } },
+    select: { id: true },
+  });
+  return div !== null;
+}
+
 export async function checkChannelScope(
   scope: ChannelScope | undefined,
   channelId: string | null,
@@ -41,11 +50,7 @@ export async function checkChannelScope(
   if (scope === "match-flow") {
     const allowed = await resolveBotCommandsChannelIds();
     if (ids.some((id) => allowed.includes(id))) return { allowed: true };
-    const div = await prisma.division.findFirst({
-      where: { discordChannelId: { in: ids } },
-      select: { id: true },
-    });
-    if (div) return { allowed: true };
+    if (await isDivisionChannel(ids)) return { allowed: true };
     return {
       allowed: false,
       reason: `Run this in your division channel or ${allowedMention(allowed)}.`,
@@ -53,11 +58,7 @@ export async function checkChannelScope(
   }
 
   if (scope === "division-only") {
-    const div = await prisma.division.findFirst({
-      where: { discordChannelId: { in: ids } },
-      select: { id: true },
-    });
-    if (div) return { allowed: true };
+    if (await isDivisionChannel(ids)) return { allowed: true };
     return {
       allowed: false,
       reason: "Run this in your division channel — league matches are scoped to a division.",
