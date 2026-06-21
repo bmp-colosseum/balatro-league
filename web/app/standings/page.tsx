@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
 import { loadStandingsPageData } from "@/lib/loaders/standings";
+import { loadOpenSignupRoundId } from "@/lib/loaders/join";
 import { getShowBmpMmr } from "@/lib/preferences";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
@@ -58,11 +58,7 @@ export default async function StandingsPage() {
   const showBmpMmr = await getShowBmpMmr();
   const [data, openRound] = await Promise.all([
     loadStandingsPageData({ showBmpMmr }),
-    prisma.signupRound.findFirst({
-      where: { status: "OPEN" },
-      orderBy: { openedAt: "desc" },
-      select: { id: true },
-    }),
+    loadOpenSignupRoundId(),
   ]);
 
   // Season-wide match progress (sum of every division's round-robin).

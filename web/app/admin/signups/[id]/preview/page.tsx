@@ -2,8 +2,12 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { notFound, redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
-import { prisma } from "@/lib/prisma";
 import { loadBuildSeasonPage } from "@/lib/loaders/admin";
+import {
+  loadPreviewRound,
+  loadSeasonLifecycle,
+  loadDraftMemberCount,
+} from "@/lib/loaders/admin-preview";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
@@ -36,10 +40,7 @@ export default async function PlacementPreviewPage({
   const { basis, err } = await searchParams;
   const mode = basis === "current" ? "current" : "fresh";
 
-  const round = await prisma.signupRound.findUnique({
-    where: { id },
-    select: { id: true, name: true, resultingSeasonId: true, status: true },
-  });
+  const round = await loadPreviewRound(id);
   if (!round) notFound();
 
   const rules = await getPlacementRules();
@@ -48,10 +49,7 @@ export default async function PlacementPreviewPage({
   let draftSeasonId: string | null = null;
   let seasonLive = false;
   if (round.resultingSeasonId) {
-    const s = await prisma.season.findUnique({
-      where: { id: round.resultingSeasonId },
-      select: { isActive: true, endedAt: true },
-    });
+    const s = await loadSeasonLifecycle(round.resultingSeasonId);
     if (s && (s.isActive || s.endedAt)) seasonLive = true;
     else if (s) draftSeasonId = round.resultingSeasonId;
   }
@@ -67,7 +65,7 @@ export default async function PlacementPreviewPage({
     } catch (e) {
       console.warn("[preview] absorb sign-ups failed:", e);
     }
-    const memberCount = await prisma.divisionMember.count({ where: { seasonId: draftSeasonId } });
+    const memberCount = await loadDraftMemberCount(draftSeasonId);
     if (memberCount > 0) editorSeasonId = draftSeasonId;
   }
 

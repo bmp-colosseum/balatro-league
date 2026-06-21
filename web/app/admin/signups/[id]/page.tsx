@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import { loadSignupMmrOverview } from "@/lib/loaders/admin";
-import { prisma } from "@/lib/prisma";
+import { loadAllPlayersForPicker } from "@/lib/loaders/players";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
@@ -25,10 +25,7 @@ export default async function SignupMmrPage({
   const { refreshing, err } = await searchParams;
   const data = await loadSignupMmrOverview(id);
   if (!data) notFound();
-  const allPlayers = await prisma.player.findMany({
-    select: { id: true, displayName: true, discordId: true, username: true },
-    orderBy: { displayName: "asc" },
-  });
+  const allPlayers = await loadAllPlayersForPicker();
 
   const { round, rows, withData, withoutData, min, max, median, avg, byTier, bmpCurrentSeason } = data;
   const maxTierCount = Math.max(1, ...byTier.map((t) => t.count));

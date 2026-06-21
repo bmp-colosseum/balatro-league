@@ -8,7 +8,7 @@
 // writes go through scoped server actions in actions.ts.
 
 import { requireAdmin, hasTier } from "@/lib/admin";
-import { prisma } from "@/lib/prisma";
+import { loadAdminConfigPage } from "@/lib/loaders/admin-config";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
@@ -81,10 +81,7 @@ export default async function AdminConfigPage() {
   // Role binding (role → tier) is OWNER-only — an ADMIN binding a role to
   // OWNER would be self-escalation. Non-owners see config but not the binder.
   const isOwner = await hasTier("OWNER");
-  const [configRows, roleBindings] = await Promise.all([
-    prisma.leagueConfig.findMany(),
-    prisma.roleBinding.findMany({ orderBy: { tier: "asc" } }),
-  ]);
+  const { configRows, roleBindings } = await loadAdminConfigPage();
   const valueByKey = new Map(configRows.map((r) => [r.key, r.value]));
 
   return (

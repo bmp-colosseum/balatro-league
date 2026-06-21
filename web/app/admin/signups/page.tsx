@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/admin";
-import { prisma } from "@/lib/prisma";
+import { loadSignupRoundsIndex } from "@/lib/loaders/admin-signups";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 
@@ -14,17 +14,7 @@ const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
 
 export default async function SignupsIndexPage() {
   await requireAdmin();
-  const rounds = await prisma.signupRound.findMany({
-    orderBy: { openedAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      status: true,
-      openedAt: true,
-      resultingSeasonId: true,
-      signups: { where: { withdrawn: false }, select: { id: true } },
-    },
-  });
+  const rounds = await loadSignupRoundsIndex();
 
   return (
     <>

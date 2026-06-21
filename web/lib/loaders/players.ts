@@ -5,6 +5,34 @@
 import { prisma } from "@/lib/prisma";
 import { isMockPlayer } from "@/lib/mock";
 
+export interface PlayerPickerEntry {
+  id: string;
+  displayName: string;
+  discordId: string;
+  username: string | null;
+}
+
+// Every player, shaped for the "add existing player by name" search
+// pickers used by the season detail / signup / build-season admin pages.
+// Assumes the calling page already gated on requireAdmin().
+export async function loadAllPlayersForPicker(): Promise<PlayerPickerEntry[]> {
+  return prisma.player.findMany({
+    select: { id: true, displayName: true, discordId: true, username: true },
+    orderBy: { displayName: "asc" },
+  });
+}
+
+// Resolve a Discord ID to its internal player id (or null if no such
+// player). Used to map the signed-in viewer to their player row for
+// per-row reporting controls.
+export async function loadPlayerIdByDiscordId(discordId: string): Promise<string | null> {
+  const player = await prisma.player.findUnique({
+    where: { discordId },
+    select: { id: true },
+  });
+  return player?.id ?? null;
+}
+
 export interface PlayersListEntry {
   id: string;
   displayName: string;

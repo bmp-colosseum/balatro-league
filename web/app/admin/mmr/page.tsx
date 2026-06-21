@@ -3,7 +3,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
 import { loadMmrAdmin } from "@/lib/mmr-admin";
-import { prisma } from "@/lib/prisma";
+import { loadLiveMmrEnabled } from "@/lib/loaders/admin-mmr";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { MmrLadder, type MmrLadderRow } from "@/components/MmrLadder";
 import { applyMmrLadder, fillMissingMmr, markMatchesSettled, recomputeMmr, setLiveMmr, saveMmrs } from "./actions";
@@ -38,8 +38,7 @@ export default async function MmrAdminPage() {
       bmpPeak: r.bmpPeak,
       bmpTier: r.bmpTier,
     }));
-  const liveMmr =
-    (await prisma.leagueConfig.findUnique({ where: { key: "live_mmr_enabled" } }))?.value === "true";
+  const liveMmr = await loadLiveMmrEnabled();
 
   return (
     <>

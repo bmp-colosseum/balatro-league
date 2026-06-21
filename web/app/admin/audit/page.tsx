@@ -6,9 +6,13 @@
 
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
-import { unstable_cache } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
-import { prisma } from "@/lib/prisma";
+import {
+  loadAuditEvents,
+  loadAuditFilterOptions,
+  loadAuditFilteredCount,
+  loadAuditTotalCount,
+} from "@/lib/loaders/admin-audit";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,44 +22,6 @@ import { AdminNav } from "@/components/AdminNav";
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 50;
-
-// The filter-dropdown lists (distinct actors/actions/targets) and the unfiltered
-// total require full scans of the audit table — expensive and slow-changing, so
-// cache them. The paginated page rows stay live (cursor-based, indexed).
-const loadAuditFilterOptions = unstable_cache(
-  async () => {
-    const [actorRows, actionRows, targetRows] = await Promise.all([
-      prisma.adminAuditEvent.findMany({
-        distinct: ["actorDiscordId"],
-        select: { actorDiscordId: true, actorName: true },
-        orderBy: { actorName: "asc" },
-        take: 200,
-      }),
-      prisma.adminAuditEvent.findMany({
-        distinct: ["action"],
-        select: { action: true },
-        orderBy: { action: "asc" },
-        take: 200,
-      }),
-      prisma.adminAuditEvent.findMany({
-        distinct: ["targetType"],
-        where: { targetType: { not: null } },
-        select: { targetType: true },
-        orderBy: { targetType: "asc" },
-        take: 200,
-      }),
-    ]);
-    return { actorRows, actionRows, targetRows };
-  },
-  ["audit-filter-options"],
-  { revalidate: 300, tags: ["audit"] },
-);
-
-const loadAuditTotalCount = unstable_cache(
-  async () => prisma.adminAuditEvent.count(),
-  ["audit-total-count"],
-  { revalidate: 60, tags: ["audit"] },
-);
 
 interface SearchParams {
   actor?: string;
@@ -119,13 +85,9 @@ export default async function AdminAuditPage({
   // filtered count is only computed when a filter is actually applied.
   const hasFilter = !!(sp.actor || sp.action || sp.target || sp.since || sp.until || sp.q);
   const [rows, { actorRows, actionRows, targetRows }, totalCount] = await Promise.all([
-    prisma.adminAuditEvent.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: PAGE_SIZE + 1, // one extra to know if there's a next page
-    }),
+    loadAuditEvents(where, PAGE_SIZE + 1), // one extra to know if there's a next page
     loadAuditFilterOptions(),
-    hasFilter ? prisma.adminAuditEvent.count({ where }) : loadAuditTotalCount(),
+    hasFilter ? loadAuditFilteredCount(where) : loadAuditTotalCount(),
   ]);
 
   const hasNextPage = rows.length > PAGE_SIZE;

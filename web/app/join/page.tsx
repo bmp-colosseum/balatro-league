@@ -10,10 +10,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { auth } from "@/auth";
-import { isAdminUser } from "@/lib/admin";
-import { prisma } from "@/lib/prisma";
 import { SiteNav } from "@/components/SiteNav";
+import { loadJoinPageData, loadSeasonLengthDays } from "@/lib/loaders/join";
 import {
   signupFromJoinAction,
   subscribeFromJoinAction,
@@ -22,88 +20,6 @@ import {
 } from "./actions";
 
 export const dynamic = "force-dynamic";
-
-interface JoinPageData {
-  discordInviteUrl: string | null;
-  openRound: {
-    id: string;
-    name: string;
-    seasonLabel: string | null;
-    signupCount: number;
-  } | null;
-  viewerDiscordId: string | null;
-  viewerIsSubscribed: boolean;
-  viewerIsSignedUp: boolean;
-  // Only true for ADMIN+ tier viewers. Drives the inline "set the
-  // invite URL" nudge that shows up when the LeagueConfig key is
-  // empty — public visitors never see that message.
-  viewerIsAdmin: boolean;
-}
-
-async function loadJoinPageData(): Promise<JoinPageData> {
-  const session = await auth();
-  const viewerDiscordId =
-    (session?.user as { discordId?: string } | undefined)?.discordId ?? null;
-
-  const [inviteRow, round, interest, mySignup] = await Promise.all([
-    prisma.leagueConfig.findUnique({
-      where: { key: "discord_server_invite_url" },
-      select: { value: true },
-    }),
-    prisma.signupRound.findFirst({
-      where: { status: "OPEN" },
-      orderBy: { openedAt: "desc" },
-      include: {
-        // Count non-withdrawn signups for the public counter shown on
-        // the page. _count on Prisma includes can't take a `where`
-        // filter, so we shape this via a relation query instead.
-        signups: { where: { withdrawn: false }, select: { id: true } },
-      },
-    }),
-    viewerDiscordId
-      ? prisma.seasonInterest.findUnique({ where: { discordId: viewerDiscordId } })
-      : Promise.resolve(null),
-    null,
-  ]);
-
-  // If the round has a resultingSeasonId, fetch its label for context.
-  let seasonLabel: string | null = null;
-  if (round?.resultingSeasonId) {
-    const s = await prisma.season.findUnique({
-      where: { id: round.resultingSeasonId },
-      select: { number: true, subtitle: true },
-    });
-    if (s) {
-      seasonLabel = s.subtitle ? `Season ${s.number} — ${s.subtitle}` : `Season ${s.number}`;
-    }
-  }
-
-  // Second query — couldn't run in the Promise.all above because round.id
-  // isn't known until after the round fetch resolves.
-  let viewerIsSignedUp = false;
-  if (round && viewerDiscordId) {
-    const existing = await prisma.signup.findUnique({
-      where: { roundId_discordId: { roundId: round.id, discordId: viewerDiscordId } },
-    });
-    viewerIsSignedUp = !!(existing && !existing.withdrawn);
-  }
-  void mySignup;
-
-  // Admin check only runs if we know the viewer is logged in — saves
-  // a roundtrip for anonymous public visitors.
-  const viewerIsAdmin = viewerDiscordId ? await isAdminUser() : false;
-
-  return {
-    discordInviteUrl: inviteRow?.value ?? null,
-    openRound: round
-      ? { id: round.id, name: round.name, seasonLabel, signupCount: round.signups.length }
-      : null,
-    viewerDiscordId,
-    viewerIsSubscribed: !!interest,
-    viewerIsSignedUp,
-    viewerIsAdmin,
-  };
-}
 
 export default async function JoinPage({
   searchParams,
@@ -116,8 +32,7 @@ export default async function JoinPage({
 
   // Play-window length for the "how it works" blurb. Default two weeks; admins
   // can change season_length_days on /admin/config.
-  const lenRow = await prisma.leagueConfig.findUnique({ where: { key: "season_length_days" } });
-  const lenDays = Number(lenRow?.value) > 0 ? Number(lenRow!.value) : 14;
+  const lenDays = await loadSeasonLengthDays();
   const playWindowLabel = lenDays % 7 === 0 ? `${lenDays / 7} week${lenDays / 7 === 1 ? "" : "s"}` : `${lenDays} days`;
 
   return (

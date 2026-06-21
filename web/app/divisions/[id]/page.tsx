@@ -11,7 +11,7 @@ import { loadMmrForPlayerIds } from "@/lib/loaders/standings";
 import { getShowBmpMmr } from "@/lib/preferences";
 import { loadDivisionPageData, type DivisionRecentPairing, type DivisionUnplayed } from "@/lib/loaders/division";
 import { loadAdminDivisionDetail } from "@/lib/loaders/admin";
-import { prisma } from "@/lib/prisma";
+import { loadPlayerIdByDiscordId } from "@/lib/loaders/players";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { DiscordId } from "@/components/DiscordId";
@@ -59,10 +59,7 @@ export default async function PublicDivisionPage({
   const session = await auth();
   const viewerDiscordId = (session?.user as { discordId?: string } | undefined)?.discordId ?? null;
   const viewerPlayerId: string | null = viewerDiscordId
-    ? (await prisma.player.findUnique({
-        where: { discordId: viewerDiscordId },
-        select: { id: true },
-      }))?.id ?? null
+    ? await loadPlayerIdByDiscordId(viewerDiscordId)
     : null;
   const isAdmin = await hasTier("ADMIN");
 

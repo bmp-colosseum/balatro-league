@@ -4,7 +4,7 @@
 
 import { requireOwnerOrDevops } from "@/lib/admin";
 import { DEFAULTS } from "@/lib/league-settings";
-import { prisma } from "@/lib/prisma";
+import { loadRulesTemplates } from "@/lib/loaders/admin-settings";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,10 +24,7 @@ export default async function AdminSettingsPage({
 }) {
   await requireOwnerOrDevops();
   const { ok, err } = await searchParams;
-  const templates = await prisma.leagueRulesTemplate.findMany({
-    include: { _count: { select: { seasons: true } } },
-    orderBy: [{ isDefault: "desc" }, { name: "asc" }],
-  });
+  const templates = await loadRulesTemplates();
 
   return (
     <>

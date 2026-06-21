@@ -12,8 +12,8 @@ import { DraggableRatingTable, type RatingRow } from "@/components/DraggableRati
 import { addSignupByDiscordId, addSignupByPlayerId, autoFillRatingsFromMmr, buildSeason, refreshSignupMmrSnapshots, saveRatings } from "./actions";
 import { PlayerSearch } from "@/components/PlayerSearch";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { nextSeasonNumber } from "@/lib/format-season";
-import { prisma } from "@/lib/prisma";
+import { loadAllPlayersForPicker } from "@/lib/loaders/players";
+import { loadExistingSeasonForBuild, loadNextSeasonNumber } from "@/lib/loaders/admin-build";
 
 export const dynamic = "force-dynamic";
 
@@ -44,20 +44,14 @@ export default async function BuildSeasonPage({
     totalSlots,
     playerCount,
   } = result;
-  const nextNumber = await nextSeasonNumber(prisma);
+  const nextNumber = await loadNextSeasonNumber();
   // If this round was opened from an EXISTING season, build into that one —
   // show its real number/name instead of "create Season <next>".
   const existingSeason = round.resultingSeasonId
-    ? await prisma.season.findUnique({
-        where: { id: round.resultingSeasonId },
-        select: { number: true, subtitle: true },
-      })
+    ? await loadExistingSeasonForBuild(round.resultingSeasonId)
     : null;
   // Existing players for the "add by name" search picker.
-  const allPlayers = await prisma.player.findMany({
-    select: { id: true, displayName: true, discordId: true, username: true },
-    orderBy: { displayName: "asc" },
-  });
+  const allPlayers = await loadAllPlayersForPicker();
 
   return (
     <>

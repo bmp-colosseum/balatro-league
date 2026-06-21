@@ -43,6 +43,22 @@ export async function loadAdminTemplates(): Promise<AdminTemplateRow[]> {
   }));
 }
 
+// League rules templates shaped for the picker on the season detail admin
+// panel (id/name/isDefault, default first). Cheap select — loaded inline on
+// the page rather than threaded through loadAdminSeasonDetail.
+export interface RulesTemplatePickerRow {
+  id: string;
+  name: string;
+  isDefault: boolean;
+}
+
+export async function loadRulesTemplatePickerOptions(): Promise<RulesTemplatePickerRow[]> {
+  return prisma.leagueRulesTemplate.findMany({
+    orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+    select: { id: true, name: true, isDefault: true },
+  });
+}
+
 // ── /admin/seasons/[id]/end ──────────────────────────────────────────
 
 export interface EndSeasonDivisionRow {

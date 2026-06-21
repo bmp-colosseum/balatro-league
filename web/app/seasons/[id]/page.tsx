@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { hasTier } from "@/lib/admin";
 import { loadSeasonDetail } from "@/lib/loaders/seasons";
-import { loadAdminSeasonDetail } from "@/lib/loaders/admin";
-import { prisma } from "@/lib/prisma";
+import { loadAdminSeasonDetail, loadRulesTemplatePickerOptions } from "@/lib/loaders/admin";
+import { loadAllPlayersForPicker } from "@/lib/loaders/players";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -260,15 +260,9 @@ async function AdminSeasonPanel({
 
   // Loaded inline (small table, cheap query) — not worth threading
   // through loadAdminSeasonDetail just for this picker.
-  const rulesTemplates = await prisma.leagueRulesTemplate.findMany({
-    orderBy: [{ isDefault: "desc" }, { name: "asc" }],
-    select: { id: true, name: true, isDefault: true },
-  });
+  const rulesTemplates = await loadRulesTemplatePickerOptions();
   // Existing players for the draft editor's "add existing player" search.
-  const allPlayers = await prisma.player.findMany({
-    select: { id: true, displayName: true, discordId: true, username: true },
-    orderBy: { displayName: "asc" },
-  });
+  const allPlayers = await loadAllPlayersForPicker();
 
   return (
     <>
