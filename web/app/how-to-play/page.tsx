@@ -25,7 +25,7 @@ export default async function HowToPlayPage() {
         <WipBanner note="Draft onboarding guide — not shown to players yet." />
         <h2>How to play</h2>
         <p className="muted">
-          The round-robin format in a nutshell.
+          How the league works.
         </p>
 
         <Section title="1. Sign up">
@@ -48,7 +48,7 @@ export default async function HowToPlayPage() {
 
         <Section title="3. Play your matches">
           <p>
-            Play your <strong>assigned opponents</strong> — <strong>2 games</strong> each (top divisions play everyone; most play 4 others). Run <code>/schedule</code> in Discord to see your matchups; arrange each however works.
+            Play <strong>2 games</strong> against each of your opponents. Run <code>/schedule</code> in Discord to see who you've got, and play each whenever suits you both.
           </p>
           <p>
             Run <code>/start-match @opponent</code> in your channel and the bot handles the ban/pick flow. Or just play in Balatro and report after.
@@ -81,7 +81,7 @@ export default async function HowToPlayPage() {
           </p>
           <p>
             Tied at a promotion or relegation slot? You'll see a{" "}
-            <span style={{ color: "#f1c40f" }}>⚔</span> next to each tied player. Play a quick <strong>showdown</strong> to settle it.
+            <span style={{ color: "#f1c40f" }}>⚔</span> next to each tied player. Play a quick <strong>shootout</strong> (a 1-game tiebreaker) to settle it.
           </p>
         </Section>
 

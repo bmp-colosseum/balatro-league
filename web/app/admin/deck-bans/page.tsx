@@ -47,8 +47,7 @@ export default async function DeckSelectionPage({
       <main>
         <h2>Deck/stake presets</h2>
         <p className="muted">
-          A preset is a named set of decks + stakes the ban/pick flow samples combos from.
-          Names are arbitrary — what matters is which preset each <strong>role</strong> points at:
+          A preset is a pool of decks and stakes. Pick which one each mode below uses:
         </p>
         <ul className="muted" style={{ marginTop: -4, fontSize: 13 }}>
           <li>
@@ -82,7 +81,7 @@ export default async function DeckSelectionPage({
           </li>
         </ul>
         <p className="muted" style={{ fontSize: 13 }}>
-          A stock &apos;Stock&apos; preset is auto-seeded on first use and both pointers are set to it. Repoint either pointer below by editing a preset.
+          A starter preset is made automatically the first time. To change which one a mode uses, edit it below.
         </p>
         <div className="card" style={{ fontSize: 12 }}>
           <strong>Stock seed</strong>
@@ -93,7 +92,7 @@ export default async function DeckSelectionPage({
             <strong>Stakes ({defaults.stakes.length}):</strong> {defaults.stakes.join(", ")}
           </p>
           <p className="muted">
-            {defaults.decks.length * defaults.stakes.length} combos available to the bot&apos;s 9-pick sampler.
+            {defaults.decks.length * defaults.stakes.length} deck+stake combos — the bot draws 9 per match.
           </p>
         </div>
 
