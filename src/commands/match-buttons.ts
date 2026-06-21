@@ -45,33 +45,17 @@ import { recomputeDivisionStandings } from "../standings-cache.js";
 import { writeMatchGames } from "../match-write.js";
 import {
   emptyGameState,
+  parseGame,
+  parseCustomCombo,
+  parseProposal,
   parsePolicy,
   phaseFor,
   remainingCombos,
   MAX_GAME_LIVES,
   type GameState,
+  type ComboProposal,
 } from "../match-session.js";
 import type { ButtonHandler, SelectMenuHandler } from "./types.js";
-
-function parseGame(json: string | null): GameState | null {
-  if (!json) return null;
-  try { return JSON.parse(json) as GameState; } catch { return null; }
-}
-
-// Decode the session.customCombo JSON. Returns null on parse failure or
-// missing fields so callers can treat it like "no custom combo set."
-function parseCustomCombo(json: string | null): { deck: string; stake: string } | null {
-  if (!json) return null;
-  try {
-    const v = JSON.parse(json);
-    if (v && typeof v.deck === "string" && typeof v.stake === "string") {
-      return { deck: v.deck, stake: v.stake };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
 
 async function loadSession(id: string) {
   return prisma.matchSession.findUnique({ where: { id } });
@@ -80,38 +64,6 @@ async function loadSession(id: string) {
 // How long after a helper call before the Call helper button works again.
 // Stops accidental double-pings without permanently locking the button.
 const HELPER_CALL_COOLDOWN_MS = 5 * 60 * 1000;
-
-// In-flight customCombo negotiation: one player proposes a deck+stake,
-// the other can accept / counter / cancel. Stored as JSON on
-// session.customComboProposal. Cleared once accepted (moves into
-// session.customCombo) or cancelled.
-type ProposalStatus = "building" | "pending";
-interface ComboProposal {
-  by: string;          // player id of the proposer
-  deck?: string;       // canonical deck name
-  stake?: string;      // must be in preset.stakes for this match
-  status: ProposalStatus;
-}
-
-function parseProposal(json: string | null): ComboProposal | null {
-  if (!json) return null;
-  try {
-    const v = JSON.parse(json);
-    if (
-      v &&
-      typeof v.by === "string" &&
-      (v.status === "building" || v.status === "pending")
-    ) {
-      const out: ComboProposal = { by: v.by, status: v.status };
-      if (typeof v.deck === "string") out.deck = v.deck;
-      if (typeof v.stake === "string") out.stake = v.stake;
-      return out;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
 
 async function loadPlayers(session: { playerAId: string; playerBId: string }) {
   const [a, b] = await Promise.all([

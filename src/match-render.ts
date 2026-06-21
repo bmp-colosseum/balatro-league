@@ -17,13 +17,8 @@ import {
   stakeDescription,
 } from "./balatro-info.js";
 import { deckEmoji, deckEmojiPartial, stakeEmoji, stakeEmojiPartial } from "./balatro-emojis.js";
-import { parsePolicy, phaseFor, remainingCombos, MAX_GAME_LIVES, type GameState } from "./match-session.js";
+import { parseGame, parseProposal, parsePolicy, phaseFor, remainingCombos, MAX_GAME_LIVES, type GameState, type ComboProposal } from "./match-session.js";
 import type { DeckEntry } from "./match-config.js";
-
-function parseGame(json: string | null): GameState | null {
-  if (!json) return null;
-  try { return JSON.parse(json) as GameState; } catch { return null; }
-}
 
 // Components row can hold buttons OR a string-select menu — ban phase
 // renders both (a select menu row + a confirm button row), other phases
@@ -143,7 +138,7 @@ function computeActiveContent(
       // A custom-combo proposal in flight changes who's expected to
       // act — the OTHER player has to accept/counter. Bare-ban phase
       // pings the active banner.
-      const proposal = parseProposalForRender(s.customComboProposal);
+      const proposal = parseProposal(s.customComboProposal);
       if (proposal?.status === "pending") {
         const targetDc = proposal.by === a.id ? b.discordId : a.discordId;
         return { content: `<@${targetDc}> 🎯 custom combo proposed — accept, counter, or cancel.`, turnKey: targetDc };
@@ -185,10 +180,23 @@ function computeActiveContent(
           const winnerDc = phase.winnerId === a.id ? a.discordId : b.discordId;
           return { content: `<@${winnerDc}> 🏆 you won the game — record your remaining lives to wrap it up.`, turnKey: winnerDc };
         }
+        // Both voted but disagreed → they need to talk it out and re-vote (or
+        // call a helper). Ping both, with a dedicated key so it fires once on
+        // the dispute rather than on every failed re-vote.
+        if (game.disputed) {
+          return { content: `<@${a.discordId}> <@${b.discordId}> ⚖️ you voted for different winners — talk it out and re-vote, or use 🆘 Call helper.`, turnKey: "DISPUTE" };
+        }
+        // Exactly one player has voted → nudge the OTHER to cast their vote so
+        // the result can lock in, instead of leaving them to notice silently.
+        if (Boolean(game.voteByA) !== Boolean(game.voteByB)) {
+          const aVoted = Boolean(game.voteByA);
+          const voter = aVoted ? a : b;
+          const pendingDc = aVoted ? b.discordId : a.discordId;
+          return { content: `<@${pendingDc}> 🗳️ ${voter.displayName} reported the result — cast your vote to confirm the winner.`, turnKey: pendingDc };
+        }
       }
-      // Both players go play the run and vote a winner — a shared nudge, so a
-      // single "BOTH" key pings them both exactly once on entry, then stays
-      // quiet across the winner-vote refreshes.
+      // No votes yet → both players go play the run, then vote a winner. A
+      // single "BOTH" key pings them both once on entry, then stays quiet.
       return { content: `<@${a.discordId}> <@${b.discordId}> 🎮 play the run, then vote for the winner.`, turnKey: "BOTH" };
     }
     case "PAUSED": {
@@ -264,35 +272,6 @@ function withHelperRow(
   );
   const helperRow = new ActionRowBuilder<ButtonBuilder>().addComponents(...extras);
   return { embeds: rendered.embeds, components: [...rendered.components, helperRow] };
-}
-
-// Decode session.customComboProposal (JSON). Match-render only needs the
-// shape — the source of truth for the type lives in match-buttons.ts.
-interface ProposalForRender {
-  by: string;
-  deck?: string;
-  stake?: string;
-  status: "building" | "pending";
-}
-
-function parseProposalForRender(json: string | null): ProposalForRender | null {
-  if (!json) return null;
-  try {
-    const v = JSON.parse(json);
-    if (
-      v &&
-      typeof v.by === "string" &&
-      (v.status === "building" || v.status === "pending")
-    ) {
-      const out: ProposalForRender = { by: v.by, status: v.status };
-      if (typeof v.deck === "string") out.deck = v.deck;
-      if (typeof v.stake === "string") out.stake = v.stake;
-      return out;
-    }
-    return null;
-  } catch {
-    return null;
-  }
 }
 
 function mention(player: Player): string {
@@ -394,7 +373,7 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
     // Only a SUBMITTED proposal takes over the public message. While the
     // proposer is still building (status "building"), that UI lives in
     // their private ephemeral, so the ban phase isn't interrupted here.
-    const proposal = parseProposalForRender(s.customComboProposal);
+    const proposal = parseProposal(s.customComboProposal);
     if (proposal && proposal.status === "pending") {
       return renderProposal(s, a, b, proposal);
     }
@@ -809,7 +788,7 @@ function renderProposal(
   s: MatchSession,
   a: Player,
   b: Player,
-  proposal: ProposalForRender,
+  proposal: ComboProposal,
 ): { embeds: EmbedBuilder[]; components: ComponentRow[] } {
   const proposer = proposal.by === a.id ? a : b;
   const responder = proposal.by === a.id ? b : a;

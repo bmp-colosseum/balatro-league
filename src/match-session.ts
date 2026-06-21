@@ -68,6 +68,55 @@ export function emptyGameState(firstId: string, pool: DeckEntry[]): GameState {
   return { firstId, bans: [], pool };
 }
 
+// JSON decoders for the session's string-blob fields. Shared by the match
+// button handlers and the renderer, which both read these blobs.
+export function parseGame(json: string | null): GameState | null {
+  if (!json) return null;
+  try { return JSON.parse(json) as GameState; } catch { return null; }
+}
+
+// session.customCombo JSON → {deck, stake}; null on parse failure or missing
+// fields, so callers can treat it as "no custom combo set."
+export function parseCustomCombo(json: string | null): { deck: string; stake: string } | null {
+  if (!json) return null;
+  try {
+    const v = JSON.parse(json);
+    if (v && typeof v.deck === "string" && typeof v.stake === "string") {
+      return { deck: v.deck, stake: v.stake };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// In-flight custom-combo negotiation, stored on session.customComboProposal:
+// one player proposes a deck+stake, the other accepts / counters / cancels.
+// Cleared once accepted (moved into session.customCombo) or cancelled.
+export type ProposalStatus = "building" | "pending";
+export interface ComboProposal {
+  by: string;        // player id of the proposer
+  deck?: string;     // canonical deck name
+  stake?: string;    // must be in the match's allowed stakes
+  status: ProposalStatus;
+}
+
+export function parseProposal(json: string | null): ComboProposal | null {
+  if (!json) return null;
+  try {
+    const v = JSON.parse(json);
+    if (v && typeof v.by === "string" && (v.status === "building" || v.status === "pending")) {
+      const out: ComboProposal = { by: v.by, status: v.status };
+      if (typeof v.deck === "string") out.deck = v.deck;
+      if (typeof v.stake === "string") out.stake = v.stake;
+      return out;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // Default ban counts when no policy is supplied. Real flows pass the
 // session-stamped policy so admin tweaks don't disrupt in-flight games.
 // Pattern: first bans 1, second bans SECOND_TOTAL, first bans
