@@ -24,8 +24,6 @@ export interface StatsLeaderRow {
 export interface StatsItemRow {
   name: string;
   gamesTotal: number;
-  gamesWon: number;
-  winRatePct: number;
   bansTotal: number;
   appearancesTotal: number; // pool appearances (ban-rate denominator)
   banRatePct: number; // bans ÷ appearances
@@ -54,7 +52,6 @@ export interface StatsStreakRow {
 }
 
 export interface StatsPageData {
-  topByRating: StatsLeaderRow[];
   topByMatchWins: StatsLeaderRow[];
   topByGameWins: StatsLeaderRow[];
   decks: StatsItemRow[];
@@ -93,7 +90,7 @@ async function getStandardPool(): Promise<{ decks: string[]; stakes: string[] }>
 // always visible), sorted by games played.
 function buildItemRows(
   poolNames: readonly string[],
-  gameAgg: Map<string, { games: number; won: number }>,
+  gameAgg: Map<string, { games: number }>,
   banAgg: Map<string, { appearances: number; bans: number }>,
 ): StatsItemRow[] {
   return [...new Set(poolNames)]
@@ -101,14 +98,11 @@ function buildItemRows(
       const g = gameAgg.get(name);
       const b = banAgg.get(name);
       const gamesTotal = g?.games ?? 0;
-      const gamesWon = g?.won ?? 0;
       const appearancesTotal = b?.appearances ?? 0;
       const bansTotal = b?.bans ?? 0;
       return {
         name,
         gamesTotal,
-        gamesWon,
-        winRatePct: gamesTotal === 0 ? 0 : Math.round((gamesWon / gamesTotal) * 100),
         appearancesTotal,
         bansTotal,
         banRatePct: appearancesTotal === 0 ? 0 : Math.round((bansTotal / appearancesTotal) * 100),
@@ -128,7 +122,6 @@ async function computeStatsPageData(): Promise<StatsPageData> {
 
   // ── Everything aggregated at the DB in one parallel batch ───────────
   const [
-    topRated,
     // Match wins (a BO2 win is a 2-0, i.e. gamesWonX === 2) per side.
     winsAsA,
     winsAsB,
@@ -142,31 +135,17 @@ async function computeStatsPageData(): Promise<StatsPageData> {
     playedComboAgg,
     bannedComboAgg,
   ] = await Promise.all([
-    prisma.player.findMany({
-      where: { rating: { not: null } },
-      orderBy: { rating: "asc" },
-      take: 5,
-      select: { id: true, displayName: true, discordId: true, username: true, rating: true },
-    }),
     prisma.match.groupBy({ by: ["playerAId"], where: { ...matchWhere, gamesWonA: 2 }, _count: { _all: true } }),
     prisma.match.groupBy({ by: ["playerBId"], where: { ...matchWhere, gamesWonB: 2 }, _count: { _all: true } }),
     prisma.match.groupBy({ by: ["playerAId"], where: matchWhere, _sum: { gamesWonA: true } }),
     prisma.match.groupBy({ by: ["playerBId"], where: matchWhere, _sum: { gamesWonB: true } }),
-    prisma.game.groupBy({ by: ["deck"], where: gameWhere, _count: { _all: true, winnerId: true } }),
-    prisma.game.groupBy({ by: ["stake"], where: gameWhere, _count: { _all: true, winnerId: true } }),
+    prisma.game.groupBy({ by: ["deck"], where: gameWhere, _count: { _all: true } }),
+    prisma.game.groupBy({ by: ["stake"], where: gameWhere, _count: { _all: true } }),
     prisma.gameDeck.groupBy({ by: ["deck"], where: poolWhere, _count: { _all: true, banOrdinal: true } }),
     prisma.gameDeck.groupBy({ by: ["stake"], where: poolWhere, _count: { _all: true, banOrdinal: true } }),
     prisma.game.groupBy({ by: ["deck", "stake"], where: gameWhere, _count: { _all: true } }),
     prisma.gameDeck.groupBy({ by: ["deck", "stake"], where: poolWhere, _count: { _all: true, banOrdinal: true } }),
   ]);
-
-  const topByRating: StatsLeaderRow[] = topRated.map((p) => ({
-    playerId: p.id,
-    displayName: p.displayName,
-    discordId: p.discordId,
-    username: p.username,
-    value: p.rating ?? 0,
-  }));
 
   // Fold the per-side aggregates into per-player totals.
   const matchWinsByPlayer = new Map<string, number>();
@@ -198,8 +177,8 @@ async function computeStatsPageData(): Promise<StatsPageData> {
   // ── Per-deck / per-stake rows (full canonical list) ────────────────
   // gameWhere filters `deck: { not: null }`, so deck/stake are non-null here
   // (Prisma's groupBy result type still widens to `string | null`).
-  const deckGameMap = new Map(deckGameAgg.map((r) => [r.deck!, { games: r._count._all, won: r._count.winnerId }]));
-  const stakeGameMap = new Map(stakeGameAgg.map((r) => [r.stake!, { games: r._count._all, won: r._count.winnerId }]));
+  const deckGameMap = new Map(deckGameAgg.map((r) => [r.deck!, { games: r._count._all }]));
+  const stakeGameMap = new Map(stakeGameAgg.map((r) => [r.stake!, { games: r._count._all }]));
   const deckBanMap = new Map(deckBanAgg.map((r) => [r.deck, { appearances: r._count._all, bans: r._count.banOrdinal }]));
   const stakeBanMap = new Map(stakeBanAgg.map((r) => [r.stake, { appearances: r._count._all, bans: r._count.banOrdinal }]));
   const pool = await getStandardPool();
@@ -237,7 +216,6 @@ async function computeStatsPageData(): Promise<StatsPageData> {
   const longestActiveStreaks = await computeStreaks();
 
   return {
-    topByRating,
     topByMatchWins,
     topByGameWins,
     decks,
@@ -250,7 +228,7 @@ async function computeStatsPageData(): Promise<StatsPageData> {
 
 // Longest active win streaks: for each player in the active season, walk their
 // confirmed pairings (across seasons) from most-recent backward, counting
-// consecutive 2-0 wins. 3+ qualifies. Flags whether their last match was a win.
+// consecutive 2-0 wins. 2+ qualifies. Flags whether their last match was a win.
 async function computeStreaks(): Promise<StatsStreakRow[]> {
   const activeSeason = await prisma.season.findFirst({ where: { isActive: true }, select: { id: true } });
   if (!activeSeason) return [];
@@ -303,7 +281,7 @@ async function computeStreaks(): Promise<StatsStreakRow[]> {
         break;
       }
     }
-    if (streak >= 3) {
+    if (streak >= 2) {
       streaks.push({ playerId, displayName: namesById.get(playerId) ?? "Unknown", discordId: discordById.get(playerId) ?? "", username: usernameById.get(playerId) ?? null, streak, isActive: activeStreak });
     }
   }

@@ -25,8 +25,7 @@ export default async function StatsPage() {
         <h2>League stats</h2>
         <p className="muted">Career numbers, all seasons.</p>
 
-        <div className="grid grid-3" style={{ marginTop: 16 }}>
-          <LeaderCard title="Top global rank" subtitle="Lower = better" rows={data.topByRating} valueFormat={(v) => `#${v}`} />
+        <div className="grid grid-2" style={{ marginTop: 16 }}>
           <LeaderCard title="Most match wins" subtitle="2-0 results, all-time" rows={data.topByMatchWins} valueFormat={(v) => `${v}`} />
           <LeaderCard title="Most games won" subtitle="Game-level, all-time" rows={data.topByGameWins} valueFormat={(v) => `${v}`} />
         </div>
@@ -34,7 +33,7 @@ export default async function StatsPage() {
         <h3 style={{ marginTop: 24 }}>Streaks</h3>
         {data.longestActiveStreaks.length === 0 ? (
           <div className="card muted">
-            No streaks of 3+ wins yet.
+            No streaks of 2+ wins yet.
           </div>
         ) : (
           <div className="card">
@@ -174,7 +173,6 @@ function ItemTable({
               <th></th>
               <th>Name</th>
               <th style={{ textAlign: "right" }}>Games</th>
-              <th style={{ textAlign: "right" }}>Win%</th>
               <th style={{ minWidth: 90 }}>Ban rate</th>
             </tr>
           </thead>
@@ -187,7 +185,6 @@ function ItemTable({
                 </td>
                 <td>{r.name}</td>
                 <td style={{ textAlign: "right" }}>{r.gamesTotal > 0 ? r.gamesTotal : <span className="muted">—</span>}</td>
-                <td style={{ textAlign: "right" }} className="muted">{r.gamesTotal > 0 ? `${r.winRatePct}%` : "—"}</td>
                 <td>
                   <BanBar pct={r.banRatePct} appearances={r.appearancesTotal} />
                 </td>
