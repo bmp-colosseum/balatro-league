@@ -17,17 +17,17 @@ import { Button } from "@/components/ui/button";
 import { FormSelect } from "@/components/FormSelect";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { addFakePlayer, deletePlayer, dropPlayer, movePlayer, refreshActiveSeasonMmrs, reinstatePlayer, setPlayerDiscordId } from "./actions";
+import { addFakePlayer, deletePlayer, dropPlayer, movePlayer, refreshActiveSeasonMmrs, reinstatePlayer, setPlayerDiscordId, swapPlayers } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPlayersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ season?: string; division?: string; sort?: AdminPlayersListSort }>;
+  searchParams: Promise<{ season?: string; division?: string; sort?: AdminPlayersListSort; swap?: string; swaperr?: string }>;
 }) {
   await requireAdmin();
-  const { season: seasonId, division: divisionId, sort = "name" } = await searchParams;
+  const { season: seasonId, division: divisionId, sort = "name", swap, swaperr } = await searchParams;
   const nav = await loadPlayersPageNav({ seasonId, divisionId });
   // Divisions to offer in the per-row "set division" dropdown: the selected
   // season's if one's picked, otherwise the active season's — so a player who
@@ -153,6 +153,8 @@ export default async function AdminPlayersPage({
   // Mode B — no division selected
   const players = await loadAdminPlayersListView({ seasonId, sort });
   const selectedSeasonName = nav.seasons.find((s) => s.id === seasonId)?.name;
+  // Players eligible to swap = currently in a division (and not dropped).
+  const swappable = players.filter((p) => p.membership && !p.membership.dropped);
 
   return (
     <>
@@ -160,6 +162,54 @@ export default async function AdminPlayersPage({
       <AdminNav activePath="/admin/players" />
       <main>
         <PageHeader nav={nav} selectedSeasonId={seasonId} selectedDivisionId={divisionId} sort={sort} />
+
+        {swap === "ok" && (
+          <div className="card" style={{ borderColor: "#2ecc71", marginTop: 12 }}>
+            <strong>✅ Players swapped — they&apos;ve traded divisions and schedules.</strong>
+          </div>
+        )}
+        {swaperr && (
+          <div className="card" style={{ borderColor: "#e74c3c", marginTop: 12 }}>
+            <strong>⚠️ Couldn&apos;t swap:</strong> {swaperr}
+          </div>
+        )}
+
+        {swappable.length >= 2 && (
+          <div className="card" style={{ marginTop: 12 }}>
+            <strong>Swap two players</strong>
+            <p className="muted" style={{ fontSize: 12, margin: "4px 0 8px" }}>
+              Trade two players between their divisions — each takes over the other&apos;s exact schedule, and
+              nobody else&apos;s matchups change. Blocked if either player already has a reported result.
+            </p>
+            <form action={swapPlayers} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+              <input type="hidden" name="seasonParam" value={seasonId ?? ""} />
+              <FormSelect
+                name="playerAId"
+                defaultValue=""
+                options={[
+                  { value: "", label: "— player A —" },
+                  ...swappable.map((p) => ({ value: p.id, label: `${p.displayName} · ${p.membership!.divisionName}` })),
+                ]}
+              />
+              <span className="muted">↔</span>
+              <FormSelect
+                name="playerBId"
+                defaultValue=""
+                options={[
+                  { value: "", label: "— player B —" },
+                  ...swappable.map((p) => ({ value: p.id, label: `${p.displayName} · ${p.membership!.divisionName}` })),
+                ]}
+              />
+              <ConfirmButton
+                message="Swap these two players between their divisions? They'll trade schedules entirely. Blocked if either already has a reported result."
+                className="secondary"
+                style={{ fontSize: 12 }}
+              >
+                Swap
+              </ConfirmButton>
+            </form>
+          </div>
+        )}
 
         <div className="card" style={{ marginTop: 12 }}>
           <strong>Add fake player</strong>

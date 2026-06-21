@@ -3,12 +3,37 @@
 // Server actions for /admin/players. Called from forms.
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { enqueueMmrSnapshot, enqueueWelcomeRefresh } from "@/lib/queue";
 import { placePlayerInDivision } from "@/lib/division-membership";
 import { resyncSeasonSchedules } from "@/lib/schedule-sync";
+import { swapDivisionPlayers, SwapError } from "@/lib/swap-division-players";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
+
+// Swap two players between their divisions, trading schedules wholesale (each
+// inherits the other's matchups; nobody else changes). Refuses if either player
+// already has a reported result. Feedback is surfaced via ?swap / ?swaperr.
+export async function swapPlayers(formData: FormData) {
+  await requireAdmin();
+  const playerAId = String(formData.get("playerAId") ?? "");
+  const playerBId = String(formData.get("playerBId") ?? "");
+  const seasonParam = String(formData.get("seasonParam") ?? "");
+  const back = seasonParam ? `/admin/players?season=${seasonParam}` : "/admin/players";
+
+  let qs: string;
+  try {
+    const res = await swapDivisionPlayers(playerAId, playerBId);
+    await enqueueWelcomeRefresh(res.seasonId).catch(() => {});
+    qs = "swap=ok";
+  } catch (e) {
+    if (!(e instanceof SwapError)) throw e;
+    qs = `swaperr=${encodeURIComponent(e.message)}`;
+  }
+  revalidatePath("/admin/players");
+  redirect(`${back}${back.includes("?") ? "&" : "?"}${qs}`);
+}
 
 // Change a player's Discord ID. Useful when a row was imported with a
 // typo or the wrong account ID. Keeps everything else (rating, memberships,
