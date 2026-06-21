@@ -19,10 +19,10 @@
 
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import type { SignupRound } from "@prisma/client";
-import { prisma } from "./db.js";
-import { tryGetDiscordClient } from "./discord.js";
-import { deleteChannelMessage } from "./discord-helpers.js";
-import { getConfig, LeagueConfigKey } from "./league-config.js";
+import { prisma } from "../db.js";
+import { tryGetDiscordClient } from "../discord.js";
+import { deleteChannelMessage } from "../discord-helpers.js";
+import { getConfig, LeagueConfigKey } from "../league-config.js";
 import { DEFAULT_SEASON_LENGTH_DAYS, playWindow, seasonWindowValue, signupEmbed, signupButtons } from "./signup.js";
 
 // How long before close the "last call" reminder fires. 36h sits in the middle

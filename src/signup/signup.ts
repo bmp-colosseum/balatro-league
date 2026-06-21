@@ -3,7 +3,7 @@
 
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from "discord.js";
 import type { Signup, SignupRound } from "@prisma/client";
-import { env } from "./env.js";
+import { env } from "../env.js";
 
 const LOGO_URL = `${env.WEB_BASE_URL}/Balatro_League.png`;
 // Default play-window length (days) when the admin hasn't set an explicit end.

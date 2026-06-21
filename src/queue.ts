@@ -28,7 +28,7 @@ import { env } from "./env.js";
 import { checkQueueStalls } from "./devops-alarm.js";
 import { postDevopsAlert } from "./devops-alert.js";
 import { tryGetDiscordClient } from "./discord.js";
-import { planSignupAskKickoff, sendOrRefreshAsk, planReminderTick } from "./signup-reminders.js";
+import { planSignupAskKickoff, sendOrRefreshAsk, planReminderTick } from "./signup/signup-reminders.js";
 
 // Preflight for the announce worker: is a results destination configured at
 // all (global webhook/channel via env or LeagueConfig)? Per-season overrides

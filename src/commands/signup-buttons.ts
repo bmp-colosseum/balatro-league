@@ -1,7 +1,7 @@
 import { MessageFlags, type ButtonInteraction } from "discord.js";
 import { prisma } from "../db.js";
-import { signupButtons, signupEmbed, DEFAULT_SEASON_LENGTH_DAYS } from "../signup.js";
-import { markSignedUp } from "../signup-reminders.js";
+import { signupButtons, signupEmbed, DEFAULT_SEASON_LENGTH_DAYS } from "../signup/signup.js";
+import { markSignedUp } from "../signup/signup-reminders.js";
 import { getConfig, LeagueConfigKey } from "../league-config.js";
 import type { ButtonHandler } from "./types.js";
 

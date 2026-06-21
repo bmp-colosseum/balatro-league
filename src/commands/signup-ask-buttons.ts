@@ -7,7 +7,7 @@
 
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, type ButtonInteraction } from "discord.js";
 import { prisma } from "../db.js";
-import { markSignedUp, refreshChannelSignupPost } from "../signup-reminders.js";
+import { markSignedUp, refreshChannelSignupPost } from "../signup/signup-reminders.js";
 import type { ButtonHandler } from "./types.js";
 
 function stillAccepting(round: { status: string; closedAt: Date | null; closesAt: Date | null }): boolean {
