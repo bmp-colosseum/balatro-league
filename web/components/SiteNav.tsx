@@ -11,16 +11,14 @@ import { toggleShowBmpMmr, toggleShowUsernames } from "@/app/preferences/actions
 import { loadOpenSignupRoundId } from "@/lib/loaders/join";
 import { CommandButton } from "@/components/CommandButton";
 
-// Primary nav — what people actually come for. Browse/history pages move under
-// the "More" dropdown so the bar stays scannable; Join only shows when signups
-// are open.
+// Public nav links — all shown directly. The bar's short enough (Report dropped,
+// Join conditional) that hiding anything behind a "More" menu just makes things
+// feel "gone". Join only shows when signups are open.
 const PRIMARY_LINKS = [
   { href: "/standings", label: "Standings" },
   { href: "/players", label: "Players" },
   { href: "/stats", label: "Stats" },
   { href: "/hall-of-fame", label: "Hall of Fame" },
-] as const;
-const MORE_LINKS = [
   { href: "/seasons", label: "Past seasons" },
   { href: "/traits", label: "Traits" },
 ] as const;
@@ -69,22 +67,6 @@ export async function SiteNav({ activePath }: { activePath: string }) {
             </Link>
           );
         })}
-        <details className="relative">
-          <summary className="cursor-pointer list-none rounded px-2 py-1 text-[var(--muted)] transition-colors hover:text-foreground">
-            More ▾
-          </summary>
-          <div className="absolute left-0 top-[calc(100%+6px)] z-50 min-w-[160px] rounded-md border border-border bg-card p-1 shadow-lg">
-            {MORE_LINKS.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="block rounded px-2 py-1.5 text-[13px] text-foreground no-underline hover:bg-secondary"
-              >
-                {link.label}
-              </Link>
-            ))}
-          </div>
-        </details>
       </nav>
 
       <span className="ml-auto flex items-center gap-3">
