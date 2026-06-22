@@ -199,8 +199,8 @@ export async function ProfileView({
         )}
 
         {activeSeason && (
-          <div className="card" style={{ marginTop: 12, borderColor: "#76c7ff" }}>
-            <strong style={{ color: "#76c7ff" }}>This season</strong>
+          <div className="card card-info" style={{ marginTop: 12 }}>
+            <strong style={{ color: "var(--info)" }}>This season</strong>
             <div style={{ marginTop: 4 }}>
               In{" "}
               <Link href={`/divisions/${activeSeason.divisionId}`} style={{ color: "var(--text)", fontWeight: 600 }}>
@@ -225,8 +225,8 @@ export async function ProfileView({
         )}
 
         {isAdmin && (
-          <div className="card" style={{ marginTop: 12, borderColor: "#e67e22" }}>
-            <strong style={{ color: "#e67e22", fontSize: 13 }}>⚙ Admin · manage</strong>
+          <div className="card card-admin" style={{ marginTop: 12 }}>
+            <strong style={{ color: "var(--admin)", fontSize: 13 }}>⚙ Admin · manage</strong>
             {activeSeasonEntry && (
               <div style={{ marginTop: 8 }}>
                 {activeSeasonEntry.status === "ACTIVE" ? (
@@ -545,8 +545,8 @@ export async function ProfileView({
           );
           if (!h2h) return null;
           return (
-            <div className="card" style={{ marginTop: 16, borderColor: "#76c7ff" }}>
-              <strong style={{ color: "#76c7ff" }}>vs you</strong>
+            <div className="card card-info" style={{ marginTop: 16 }}>
+              <strong style={{ color: "var(--info)" }}>vs you</strong>
               <p style={{ marginTop: 4, marginBottom: 0 }}>
                 <strong>{h2h.wins}W</strong> – <strong>{h2h.draws}D</strong> – <strong>{h2h.losses}L</strong>{" "}
                 across {h2h.totalMatches} matches (game record {h2h.gamesWon}-{h2h.gamesLost}).{" "}

@@ -14,6 +14,8 @@
   --accent-2: #5865f2;
   --danger: #e74c3c;
   --success: #2ecc71;
+  --info: #76c7ff;
+  --admin: #e67e22;
   --radius: 0.5rem;
 }
 
@@ -75,6 +77,13 @@ h1, h2 {
   padding: 16px;
   margin-bottom: 16px;
 }
+/* Accent-bordered card variants — replace ad-hoc inline borderColor so colored
+   cards (status, admin, head-to-head, flashes) read consistently everywhere. */
+.card-accent { border-color: var(--accent-2); }
+.card-info   { border-color: var(--info); }
+.card-admin  { border-color: var(--admin); }
+.card-success { border-color: var(--success); }
+.card-danger  { border-color: var(--danger); }
 .muted { color: var(--muted); }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
