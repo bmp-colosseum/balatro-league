@@ -14,10 +14,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ReportForm } from "@/components/ReportForm";
 import { MatchActionsPanel } from "@/components/MatchActionsPanel";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { DisputeForm } from "@/components/DisputeForm";
 import { CANONICAL_DECKS, CANONICAL_STAKES } from "@/lib/balatro-info";
 import { reportFromProfileAction, submitProfileDispute } from "@/app/profile/[id]/actions";
 import { resetToDiscordNameAction, setCustomNameAction, setShowUsernameAction } from "@/app/me/actions";
+import { dropPlayer, reinstatePlayer } from "@/app/admin/players/actions";
 import { TimezoneSetting } from "@/components/TimezoneSetting";
 import { NextSeasonCard } from "@/components/NextSeasonCard";
 import { prisma } from "@/lib/prisma";
@@ -177,9 +179,11 @@ export async function ProfileView({
   // What this player bans (most-banned decks/stakes + their ban rate).
   const banStats = await loadPlayerBanStats(profile.player.id);
 
-  // Current-season standing — the "where do I stand right now" summary, shown up
-  // top so it isn't buried under career stats. Only for a current ACTIVE member.
-  const activeSeason = profile.history.find((h) => h.isActive && h.status === "ACTIVE");
+  // Current-season standing. activeSeasonEntry covers a dropped member too (so the
+  // admin reinstate control can show); activeSeason is the ACTIVE-only subset used
+  // for the public "This season" block.
+  const activeSeasonEntry = profile.history.find((h) => h.isActive);
+  const activeSeason = activeSeasonEntry?.status === "ACTIVE" ? activeSeasonEntry : undefined;
 
   return (
     <>
@@ -216,6 +220,45 @@ export async function ProfileView({
               </span>
               <span className="muted">{activeSeason.played} played</span>
             </div>
+          </div>
+        )}
+
+        {isAdmin && activeSeasonEntry && (
+          <div className="card" style={{ marginTop: 12, borderColor: "#e67e22" }}>
+            <strong style={{ color: "#e67e22", fontSize: 13 }}>⚙ Admin · roster</strong>
+            {activeSeasonEntry.status === "ACTIVE" ? (
+              <>
+                <p className="muted" style={{ fontSize: 12, margin: "4px 0 8px" }}>
+                  In {activeSeasonEntry.divisionName}. Drop them if they&apos;ve left or gone inactive — their unplayed matches are removed and opponents refilled.
+                </p>
+                <form action={dropPlayer}>
+                  <input type="hidden" name="playerId" value={profile.player.id} />
+                  <ConfirmButton
+                    message={`Drop ${profile.player.displayName} from ${activeSeasonEntry.divisionName}? Their unplayed matches are removed. You can reinstate them after.`}
+                    className="secondary"
+                    style={{ fontSize: 12 }}
+                  >
+                    Drop from division
+                  </ConfirmButton>
+                </form>
+              </>
+            ) : (
+              <>
+                <p className="muted" style={{ fontSize: 12, margin: "4px 0 8px" }}>
+                  Dropped from {activeSeasonEntry.divisionName}. Reinstate to give them their schedule back.
+                </p>
+                <form action={reinstatePlayer}>
+                  <input type="hidden" name="playerId" value={profile.player.id} />
+                  <ConfirmButton
+                    message={`Reinstate ${profile.player.displayName} into ${activeSeasonEntry.divisionName}?`}
+                    className="secondary"
+                    style={{ fontSize: 12 }}
+                  >
+                    Reinstate
+                  </ConfirmButton>
+                </form>
+              </>
+            )}
           </div>
         )}
 

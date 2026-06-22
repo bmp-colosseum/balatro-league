@@ -181,6 +181,7 @@ export async function dropPlayer(formData: FormData) {
   await recomputeDivisionStandings(membership.divisionId).catch(() => {});
   await enqueueStandingsRefresh().catch(() => {});
   revalidatePath("/admin/players");
+  revalidatePath(`/profile/${playerId}`);
 }
 
 export async function reinstatePlayer(formData: FormData) {
@@ -204,6 +205,7 @@ export async function reinstatePlayer(formData: FormData) {
     }
   }
   revalidatePath("/admin/players");
+  revalidatePath(`/profile/${playerId}`);
 }
 
 export async function deletePlayer(formData: FormData) {
