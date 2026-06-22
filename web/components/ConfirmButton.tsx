@@ -1,13 +1,15 @@
 "use client";
 
 // A submit button that asks for confirmation before letting the form submit.
-// For destructive admin actions (drop/delete/wipe) that previously fired on a
-// single misclick. Works inside a server-action <form>: declining cancels the
-// native submit. While the action runs it disables + shows "Working…" so a slow
-// op never looks frozen (and you can't double-fire it).
+// For destructive/irreversible admin actions (drop/delete/wipe) that previously
+// fired on a single misclick. Works inside a server-action <form>: declining
+// cancels the native submit. While the action runs it disables + shows "Working…"
+// so a slow op never looks frozen (and you can't double-fire it). Renders the
+// shared <Button> so confirm actions look identical to every other button.
 
 import { useFormStatus } from "react-dom";
 import type { CSSProperties, ReactNode } from "react";
+import { Button } from "@/components/ui/button";
 
 export function ConfirmButton({
   message,
@@ -16,6 +18,7 @@ export function ConfirmButton({
   style,
   name,
   value,
+  variant = "default",
   pendingText = "Working…",
 }: {
   message: string;
@@ -24,12 +27,14 @@ export function ConfirmButton({
   style?: CSSProperties;
   name?: string;
   value?: string;
+  variant?: "default" | "secondary" | "destructive";
   pendingText?: string;
 }) {
   const { pending } = useFormStatus();
   return (
-    <button
+    <Button
       type="submit"
+      variant={variant}
       disabled={pending}
       className={className}
       style={style}
@@ -40,6 +45,6 @@ export function ConfirmButton({
       }}
     >
       {pending ? pendingText : children}
-    </button>
+    </Button>
   );
 }

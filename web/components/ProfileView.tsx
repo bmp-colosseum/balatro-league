@@ -237,7 +237,7 @@ export async function ProfileView({
                     </p>
                     <form action={dropPlayer}>
                       <input type="hidden" name="playerId" value={profile.player.id} />
-                      <ConfirmButton message={`Drop ${profile.player.displayName} from ${activeSeasonEntry.divisionName}? Their unplayed matches are removed. You can reinstate them after.`} className="secondary" style={{ fontSize: 12 }}>Drop from division</ConfirmButton>
+                      <ConfirmButton message={`Drop ${profile.player.displayName} from ${activeSeasonEntry.divisionName}? Their unplayed matches are removed. You can reinstate them after.`} variant="secondary" style={{ fontSize: 12 }}>Drop from division</ConfirmButton>
                     </form>
                   </>
                 ) : (
@@ -247,7 +247,7 @@ export async function ProfileView({
                     </p>
                     <form action={reinstatePlayer}>
                       <input type="hidden" name="playerId" value={profile.player.id} />
-                      <ConfirmButton message={`Reinstate ${profile.player.displayName} into ${activeSeasonEntry.divisionName}?`} className="secondary" style={{ fontSize: 12 }}>Reinstate</ConfirmButton>
+                      <ConfirmButton message={`Reinstate ${profile.player.displayName} into ${activeSeasonEntry.divisionName}?`} variant="secondary" style={{ fontSize: 12 }}>Reinstate</ConfirmButton>
                     </form>
                   </>
                 )}
@@ -263,7 +263,7 @@ export async function ProfileView({
                     defaultValue={activeSeasonEntry?.divisionId ?? ""}
                     options={[{ value: "", label: "— remove from season —" }, ...adminDivisions.map((d) => ({ value: d.id, label: d.name }))]}
                   />
-                  <ConfirmButton message={`Move ${profile.player.displayName} to the selected division (or remove from the season)?`} className="secondary" style={{ fontSize: 12 }}>Apply</ConfirmButton>
+                  <ConfirmButton message={`Move ${profile.player.displayName} to the selected division (or remove from the season)?`} variant="secondary" style={{ fontSize: 12 }}>Apply</ConfirmButton>
                 </form>
               </div>
             )}
@@ -272,7 +272,7 @@ export async function ProfileView({
               <form action={setPlayerDiscordId} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 <input type="hidden" name="playerId" value={profile.player.id} />
                 <Input name="discordId" placeholder="17–20 digit Discord ID" defaultValue={profile.player.discordId} className="max-w-60" />
-                <ConfirmButton message={`Change ${profile.player.displayName}'s Discord ID?`} className="secondary" style={{ fontSize: 12 }}>Save ID</ConfirmButton>
+                <ConfirmButton message={`Change ${profile.player.displayName}'s Discord ID?`} variant="secondary" style={{ fontSize: 12 }}>Save ID</ConfirmButton>
               </form>
             </div>
           </div>
