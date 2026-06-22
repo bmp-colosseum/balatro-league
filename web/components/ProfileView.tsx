@@ -414,35 +414,19 @@ export async function ProfileView({
           </div>
         )}
         <div className="grid grid-3" style={{ marginTop: 16 }}>
-          <div className="stat"><div className="label">Wins (2-0)</div><div className="value">{t.wins}</div></div>
-          <div className="stat"><div className="label">Draws (1-1)</div><div className="value">{t.draws}</div></div>
-          <div className="stat"><div className="label">Losses (0-2)</div><div className="value">{t.losses}</div></div>
-        </div>
-        {t.totalMatches > 0 && (
-          <div className="grid grid-3" style={{ marginTop: 8 }}>
-            <div
-              className="stat"
-              title={`${t.wins}/${t.totalMatches} matches won 2-0`}
-            >
-              <div className="label">Win rate</div>
-              <div className="value">{t.winRatePct}%</div>
-            </div>
-            <div
-              className="stat"
-              title={`${t.draws}/${t.totalMatches} matches drew 1-1`}
-            >
-              <div className="label">Draw rate</div>
-              <div className="value">{t.drawRatePct}%</div>
-            </div>
-            <div
-              className="stat"
-              title={`${t.losses}/${t.totalMatches} matches lost 0-2`}
-            >
-              <div className="label">Loss rate</div>
-              <div className="value">{t.lossRatePct}%</div>
-            </div>
+          <div className="stat" title={t.totalMatches > 0 ? `${t.wins}/${t.totalMatches} matches won 2-0` : undefined}>
+            <div className="label">Wins (2-0)</div>
+            <div className="value">{t.wins}{t.totalMatches > 0 && <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}> · {t.winRatePct}%</span>}</div>
           </div>
-        )}
+          <div className="stat" title={t.totalMatches > 0 ? `${t.draws}/${t.totalMatches} matches drew 1-1` : undefined}>
+            <div className="label">Draws (1-1)</div>
+            <div className="value">{t.draws}{t.totalMatches > 0 && <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}> · {t.drawRatePct}%</span>}</div>
+          </div>
+          <div className="stat" title={t.totalMatches > 0 ? `${t.losses}/${t.totalMatches} matches lost 0-2` : undefined}>
+            <div className="label">Losses (0-2)</div>
+            <div className="value">{t.losses}{t.totalMatches > 0 && <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}> · {t.lossRatePct}%</span>}</div>
+          </div>
+        </div>
         {t.totalGames > 0 && (
           <div
             className="muted"
@@ -484,6 +468,14 @@ export async function ProfileView({
           );
         })()}
 
+        {/* Personal deck/stake analytics — collapsed so they don't bury the
+            record above. These are YOUR numbers; league-wide stats live on /stats. */}
+        {(profile.deckPerformance.filter((d) => d.gamesTotal >= 5).length > 0
+          || profile.favorites.mostPlayed.decks.length > 0
+          || banStats.decks.length > 0
+          || banStats.stakes.length > 0) && (
+          <details className="card" style={{ marginTop: 16 }}>
+            <summary style={{ cursor: "pointer" }}><strong>Your deck &amp; stake stats</strong></summary>
         {/* Deck + stake performance cards. Apply a minimum-games filter
             (5+ games) so a 100%/1 deck doesn't shout louder than a
             real signal. */}
@@ -604,6 +596,8 @@ export async function ProfileView({
               </div>
             )}
           </div>
+        )}
+          </details>
         )}
 
         <h3 style={{ marginTop: 24 }}>Season history</h3>
