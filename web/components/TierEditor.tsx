@@ -176,36 +176,36 @@ export function TierEditor({
             onChange={(e) => updateRow(idx, { divisionCount: parseInt(e.target.value, 10) || 1 })}
             style={{ width: 80 }}
           />
-          <button
+          <Button
             type="button"
-            className="secondary"
+            variant="secondary"
+            size="icon-sm"
             onClick={() => move(idx, -1)}
             disabled={idx === 0}
-            style={{ padding: "4px 8px", fontSize: 12 }}
             title="Move up"
           >
             ▲
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="secondary"
+            variant="secondary"
+            size="icon-sm"
             onClick={() => move(idx, 1)}
             disabled={idx === rows.length - 1}
-            style={{ padding: "4px 8px", fontSize: 12 }}
             title="Move down"
           >
             ▼
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="danger"
+            variant="destructive"
+            size="icon-sm"
             onClick={() => removeRow(idx)}
             disabled={rows.length === 1}
-            style={{ padding: "4px 8px", fontSize: 12 }}
             title="Remove"
           >
             ✕
-          </button>
+          </Button>
         </div>
       ))}
 
