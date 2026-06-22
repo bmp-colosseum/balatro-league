@@ -8,16 +8,21 @@ import { auth } from "@/auth";
 import { isAdminUser } from "@/lib/admin";
 import { getShowBmpMmr, getShowUsernames } from "@/lib/preferences";
 import { toggleShowBmpMmr, toggleShowUsernames } from "@/app/preferences/actions";
+import { loadOpenSignupRoundId } from "@/lib/loaders/join";
 import { CommandButton } from "@/components/CommandButton";
 
-const PUBLIC_LINKS = [
+// Primary nav — what people actually come for. Browse/history pages move under
+// the "More" dropdown so the bar stays scannable; Join only shows when signups
+// are open.
+const PRIMARY_LINKS = [
   { href: "/standings", label: "Standings" },
-  { href: "/hall-of-fame", label: "Hall of Fame" },
   { href: "/players", label: "Players" },
   { href: "/stats", label: "Stats" },
-  { href: "/traits", label: "Traits" },
+] as const;
+const MORE_LINKS = [
+  { href: "/hall-of-fame", label: "Hall of Fame" },
   { href: "/seasons", label: "Past seasons" },
-  { href: "/join", label: "Join" },
+  { href: "/traits", label: "Traits" },
 ] as const;
 
 export async function SiteNav({ activePath }: { activePath: string }) {
@@ -30,12 +35,12 @@ export async function SiteNav({ activePath }: { activePath: string }) {
   // @username display is members-only — only offer the toggle to verified members.
   const inGuild = (session?.user as { inGuild?: boolean } | undefined)?.inGuild === true;
 
-  const links: { href: string; label: string }[] = [...PUBLIC_LINKS];
-  if (isLoggedIn) {
-    links.push({ href: "/report", label: "Report match" });
-    links.push({ href: "/me", label: "My profile" });
-  }
-  if (isAdmin) links.push({ href: "/admin", label: "Admin" });
+  // Only surface "Join" when there's actually an open signup round.
+  const signupsOpen = !!(await loadOpenSignupRoundId());
+  const primary: { href: string; label: string }[] = [...PRIMARY_LINKS];
+  if (signupsOpen) primary.push({ href: "/join", label: "Join" });
+  if (isLoggedIn) primary.push({ href: "/me", label: "My profile" });
+  if (isAdmin) primary.push({ href: "/admin", label: "Admin" });
 
   return (
     <header className="flex flex-wrap items-center gap-3 border-b border-border bg-card px-4 py-2.5 md:gap-6 md:px-6 md:py-3">
@@ -45,8 +50,8 @@ export async function SiteNav({ activePath }: { activePath: string }) {
           Balatro League
         </Link>
       </h1>
-      <nav className="pixel flex flex-wrap gap-1 md:gap-2 text-[13px]">
-        {links.map((link) => {
+      <nav className="pixel flex flex-wrap items-center gap-1 md:gap-2 text-[13px]">
+        {primary.map((link) => {
           const isActive =
             link.href === "/admin" ? activePath.startsWith("/admin") : link.href === activePath;
           return (
@@ -64,6 +69,22 @@ export async function SiteNav({ activePath }: { activePath: string }) {
             </Link>
           );
         })}
+        <details className="relative">
+          <summary className="cursor-pointer list-none rounded px-2 py-1 text-[var(--muted)] transition-colors hover:text-foreground">
+            More ▾
+          </summary>
+          <div className="absolute left-0 top-[calc(100%+6px)] z-50 min-w-[160px] rounded-md border border-border bg-card p-1 shadow-lg">
+            {MORE_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="block rounded px-2 py-1.5 text-[13px] text-foreground no-underline hover:bg-secondary"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </div>
+        </details>
       </nav>
 
       <span className="ml-auto flex items-center gap-3">
