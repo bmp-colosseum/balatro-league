@@ -7,6 +7,7 @@ import { DiscordId } from "@/components/DiscordId";
 import { AdminNav } from "@/components/AdminNav";
 import { endSeason } from "../../actions";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -121,7 +122,7 @@ export default async function EndSeasonPreviewPage({
           </p>
           <form action={endSeason} style={{ display: "flex", gap: 8 }}>
             <input type="hidden" name="id" value={season.id} />
-            <Button type="submit">End season + apply ratings</Button>
+            <SubmitButton>End season + apply ratings</SubmitButton>
             <Link href="/admin/seasons" className="secondary">Cancel</Link>
           </form>
         </div>

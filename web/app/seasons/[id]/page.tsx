@@ -6,6 +6,7 @@ import { loadAdminSeasonDetail, loadRulesTemplatePickerOptions } from "@/lib/loa
 import { loadAllPlayersForPicker } from "@/lib/loaders/players";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import { Input } from "@/components/ui/input";
 import { FormSelect } from "@/components/FormSelect";
 import { DraggableDivisionsEditor, type EditorMember, type EditorTier } from "@/components/DraggableDivisionsEditor";
@@ -624,7 +625,7 @@ function LifecycleActions({
             </div>
             <form action={finalizeSignupsForSeason}>
               <input type="hidden" name="seasonId" value={season.id} />
-              <Button type="submit" variant="secondary" size="sm">Close signups →</Button>
+              <SubmitButton variant="secondary" size="sm">Close signups →</SubmitButton>
             </form>
           </div>
         ) : round?.closedAt ? (
@@ -638,7 +639,7 @@ function LifecycleActions({
         ) : null}
         <form action={activateSeason} style={{ display: "inline-flex" }}>
           <input type="hidden" name="id" value={season.id} />
-          <Button type="submit"><strong>Start season →</strong></Button>
+          <SubmitButton><strong>Start season →</strong></SubmitButton>
         </form>
         <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
           {playerCount} {playerCount === 1 ? "player" : "players"} placed. Starting makes this the active season for /standings and /report.
@@ -704,7 +705,7 @@ function LifecycleActions({
         </div>
         <form action={finalizeSignupsForSeason}>
           <input type="hidden" name="seasonId" value={season.id} />
-          <Button type="submit" variant="secondary">Finalize signups →</Button>
+          <SubmitButton variant="secondary">Finalize signups →</SubmitButton>
         </form>
       </div>
     );
@@ -722,7 +723,7 @@ function LifecycleActions({
           options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
         />
         <LocalDateTimeField name="closesAt" label="Signups close (your time, optional)" />
-        <Button type="submit" disabled={channels.length === 0}>Open signups</Button>
+        <SubmitButton disabled={channels.length === 0}>Open signups</SubmitButton>
       </form>
     </details>
   );

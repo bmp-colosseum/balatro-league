@@ -12,6 +12,7 @@ import { DraggableRatingTable, type RatingRow } from "@/components/DraggableRati
 import { addSignupByDiscordId, addSignupByPlayerId, autoFillRatingsFromMmr, buildSeason, refreshSignupMmrSnapshots, saveRatings } from "./actions";
 import { PlayerSearch } from "@/components/PlayerSearch";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { SubmitButton } from "@/components/SubmitButton";
 import { loadAllPlayersForPicker } from "@/lib/loaders/players";
 import { loadExistingSeasonForBuild, loadNextSeasonNumber } from "@/lib/loaders/admin-build";
 
@@ -266,9 +267,9 @@ export default async function BuildSeasonPage({
                 Redo Season {existingSeason.number} setup · place {playerCount} players
               </ConfirmButton>
             ) : (
-              <Button type="submit" className="mt-4">
+              <SubmitButton className="mt-4">
                 Set up the season · place {playerCount} players
-              </Button>
+              </SubmitButton>
             )}
           </form>
         </div>

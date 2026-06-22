@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/admin";
 import { loadAdminSeasonsIndex } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/SubmitButton";
 import { Input } from "@/components/ui/input";
 import { FormSelect } from "@/components/FormSelect";
 import { AdminNav } from "@/components/AdminNav";
@@ -362,14 +363,13 @@ function RosterPanel({ round }: { round: LifecycleRound }) {
       {round.signups.length > 0 && (
         <form action={refreshSignupNames} style={{ marginTop: 4 }}>
           <input type="hidden" name="roundId" value={round.id} />
-          <Button
-            type="submit"
+          <SubmitButton
             variant="secondary"
             size="sm"
             title="Re-pull each player's current Discord username + global display name, and re-check server membership"
           >
             ↻ Refresh names from Discord
-          </Button>
+          </SubmitButton>
         </form>
       )}
     </div>
@@ -440,7 +440,7 @@ function LifecycleActions({
             </div>
             <form action={finalizeSignupsForSeason}>
               <input type="hidden" name="seasonId" value={season.id} />
-              <Button type="submit" variant="secondary" size="sm">Close signups →</Button>
+              <SubmitButton variant="secondary" size="sm">Close signups →</SubmitButton>
             </form>
           </div>
         ) : round?.closedAt ? (
@@ -454,7 +454,7 @@ function LifecycleActions({
         ) : null}
         <form action={activateSeason}>
           <input type="hidden" name="id" value={season.id} />
-          <Button type="submit"><strong>Start season →</strong></Button>
+          <SubmitButton><strong>Start season →</strong></SubmitButton>
         </form>
         <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
           {playerCount} player{playerCount === 1 ? "" : "s"} placed. Starting makes this the active season for /standings and /report.
@@ -486,7 +486,7 @@ function LifecycleActions({
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <form action={finalizeSignupsForSeason}>
             <input type="hidden" name="seasonId" value={season.id} />
-            <Button type="submit" variant="secondary">Finalize signups →</Button>
+            <SubmitButton variant="secondary">Finalize signups →</SubmitButton>
           </form>
           <Link href={`/admin/signups/${round.id}`} style={{ fontSize: 12 }}>📊 Signup MMR distribution →</Link>
         </div>
@@ -532,7 +532,7 @@ function LifecycleActions({
         <LocalDateTimeField name="closesAt" label="Signups close (your time, optional)" />
         <LocalDateTimeField name="seasonStartsAt" label="Season starts (your time, optional)" />
         <LocalDateTimeField name="seasonEndsAt" label="Season ends (your time, optional)" />
-        <Button type="submit" disabled={channels.length === 0}>Open signups</Button>
+        <SubmitButton disabled={channels.length === 0}>Open signups</SubmitButton>
       </form>
       <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
         Posts a signup message in the channel. Players click Sign Up; close signups when ready, then build the divisions from them.

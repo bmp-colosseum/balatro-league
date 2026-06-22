@@ -6,6 +6,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { SubmitButton } from "@/components/SubmitButton";
 import { relabelDivisions, resyncSchedules, regenerateSchedules, regenerateDivisionSchedule, setRoundRobinTopDivisions, setDivisionFormat } from "@/app/admin/seasons/actions";
 import { getPlacementRules } from "@/lib/placement-rules";
 
@@ -49,14 +50,13 @@ export default async function AdminDivisionsPage({
             {season.scheduleLocked && (
               <form action={resyncSchedules}>
                 <input type="hidden" name="seasonId" value={season.id} />
-                <Button
-                  type="submit"
+                <SubmitButton
                   variant="secondary"
                   size="sm"
                   title="Rebuild the schedule to match the current roster: remove matches left over from players who left, and give every active player their assigned opponents. Roster edits do this automatically — use this if a schedule looks out of sync."
                 >
                   🗓️ Re-sync schedules
-                </Button>
+                </SubmitButton>
               </form>
             )}
             {season.scheduleLocked && (
