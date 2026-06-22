@@ -8,6 +8,7 @@ import { AdminNav } from "@/components/AdminNav";
 import { endSeason } from "../../actions";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/SubmitButton";
+import { Callout } from "@/components/Callout";
 
 export const dynamic = "force-dynamic";
 
@@ -44,10 +45,10 @@ export default async function EndSeasonPreviewPage({
         </p>
 
         {unfinishedPairings > 0 && (
-          <div className="card" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>
+          <Callout type="accent">
             ⚠ {unfinishedPairings} match{unfinishedPairings === 1 ? "" : "es"} still unplayed this season. Ending now ranks
             players on their partial records — check with the league before you do.
-          </div>
+          </Callout>
         )}
 
         {divisions.map((d) => (

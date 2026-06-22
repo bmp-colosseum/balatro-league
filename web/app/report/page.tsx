@@ -10,6 +10,7 @@ import { loadReportPageData } from "@/lib/loaders/report";
 import { CANONICAL_DECKS, CANONICAL_STAKES } from "@/lib/balatro-info";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
+import { Callout } from "@/components/Callout";
 import { DiscordId } from "@/components/DiscordId";
 import { ReportForm } from "@/components/ReportForm";
 import { DisputeForm } from "@/components/DisputeForm";
@@ -38,14 +39,14 @@ export default async function ReportPage({
         <h2>Report a match</h2>
 
         {ok && (
-          <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)" }}>
+          <Callout type="success">
             ✓ Reported. Your opponent got a DM with a dispute link.
-          </div>
+          </Callout>
         )}
         {err && (
-          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+          <Callout type="danger">
             {err}
-          </div>
+          </Callout>
         )}
 
         {!player ? (
@@ -86,14 +87,14 @@ export default async function ReportPage({
         )}
 
         {disputeOk && (
-          <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)" }}>
+          <Callout type="success">
             ✓ Dispute filed. A helper has been pinged in #results.
-          </div>
+          </Callout>
         )}
         {disputeErr && (
-          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+          <Callout type="danger">
             {disputeErr}
-          </div>
+          </Callout>
         )}
 
         {player && division && recentMatches.length > 0 && (

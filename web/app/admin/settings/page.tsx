@@ -9,6 +9,7 @@ import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SiteNav } from "@/components/SiteNav";
+import { Callout } from "@/components/Callout";
 import {
   deleteRulesTemplate,
   saveRulesTemplate,
@@ -39,14 +40,14 @@ export default async function AdminSettingsPage({
         </p>
 
         {ok && (
-          <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)" }}>
+          <Callout type="success">
             ✓ Saved.
-          </div>
+          </Callout>
         )}
         {err && (
-          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+          <Callout type="danger">
             {err}
-          </div>
+          </Callout>
         )}
 
         {templates.length === 0 && (

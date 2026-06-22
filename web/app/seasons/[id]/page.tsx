@@ -5,6 +5,7 @@ import { loadSeasonDetail } from "@/lib/loaders/seasons";
 import { loadAdminSeasonDetail, loadRulesTemplatePickerOptions } from "@/lib/loaders/admin";
 import { loadAllPlayersForPicker } from "@/lib/loaders/players";
 import { SiteNav } from "@/components/SiteNav";
+import { Callout } from "@/components/Callout";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Input } from "@/components/ui/input";
@@ -141,10 +142,10 @@ async function PublicSummary({
       </div>
 
       {ok && (
-        <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)" }}>✓ Final rank updated.</div>
+        <Callout type="success">✓ Final rank updated.</Callout>
       )}
       {err && (
-        <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>{err}</div>
+        <Callout type="danger">{err}</Callout>
       )}
       {isEnded && isAdmin && (
         <p className="muted" style={{ fontSize: 12 }}>
@@ -267,7 +268,7 @@ async function AdminSeasonPanel({
 
   return (
     <>
-      <div className="card" style={{ borderColor: "var(--accent)", marginTop: 24 }}>
+      <div className="card card-accent" style={{ marginTop: 24 }}>
         <strong style={{ color: "var(--accent)" }}>🔧 Admin tools</strong>
         <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
           Draft editor, lifecycle, settings, and danger zone — only visible to admins.
@@ -309,11 +310,11 @@ async function AdminSeasonPanel({
       </div>
 
       {errParam && (
-        <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>{errParam}</div>
+        <Callout type="danger">{errParam}</Callout>
       )}
 
       {imported && (
-        <div className="card" style={{ borderColor: "var(--success)" }}>
+        <div className="card card-success">
           ✓ Bulk import succeeded. Review the divisions below, then Start the season when ready.
         </div>
       )}

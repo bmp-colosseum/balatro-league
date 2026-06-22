@@ -11,6 +11,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { SiteNav } from "@/components/SiteNav";
+import { Callout } from "@/components/Callout";
 import { loadJoinPageData, loadSeasonLengthDays } from "@/lib/loaders/join";
 import {
   signupFromJoinAction,
@@ -46,19 +47,19 @@ export default async function JoinPage({
         </p>
 
         {ok === "signed-up" && (
-          <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)" }}>
+          <Callout type="success">
             ✓ You're signed up. You'll get your division when the season starts — keep an eye on Discord.
-          </div>
+          </Callout>
         )}
         {ok === "withdrew" && (
-          <div className="card" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>
+          <Callout type="accent">
             You've withdrawn from this round. Sign up again any time before sign-ups close.
-          </div>
+          </Callout>
         )}
         {err && (
-          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+          <Callout type="danger">
             {err}
-          </div>
+          </Callout>
         )}
 
         {/* Step 1: Discord server invite. Hidden entirely when no URL
@@ -91,7 +92,7 @@ export default async function JoinPage({
           </div>
         )}
         {!data.discordInviteUrl && data.viewerIsAdmin && (
-          <div className="card" style={{ borderColor: "var(--accent)" }}>
+          <div className="card card-accent">
             <strong style={{ color: "var(--accent)" }}>⚠ Admin nudge:</strong>{" "}
             <span className="muted">
               No public invite link configured. Set{" "}

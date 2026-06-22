@@ -8,6 +8,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
 import { NextSeasonCard } from "@/components/NextSeasonCard";
 import { ProfileView } from "@/components/ProfileView";
+import { Callout } from "@/components/Callout";
 
 export const dynamic = "force-dynamic";
 
@@ -76,14 +77,14 @@ export default async function MePage({
         </div>
 
         {ok && (
-          <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)" }}>
+          <Callout type="success">
             ✓ Match recorded. Standings updated.
-          </div>
+          </Callout>
         )}
         {err && (
-          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+          <Callout type="danger">
             {err}
-          </div>
+          </Callout>
         )}
 
         {/* Same component the profile page uses, so the two surfaces stay

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PlayerSearch } from "@/components/PlayerSearch";
 import { SignupMmrTable } from "@/components/SignupMmrTable";
+import { Callout } from "@/components/Callout";
 import { refreshSignupMmrs, addSignupToRound } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -53,10 +54,10 @@ export default async function SignupMmrPage({
         </p>
 
         {refreshing && (
-          <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)" }}>
+          <Callout type="success">
             ✓ Queued an MMR fetch for {refreshing} signup{refreshing === "1" ? "" : "s"}. It runs in the background (about
             one every few seconds) — refresh this page in a minute to see updated numbers.
-          </div>
+          </Callout>
         )}
 
         {/* Add a sign-up directly — by Discord ID or an existing player. */}

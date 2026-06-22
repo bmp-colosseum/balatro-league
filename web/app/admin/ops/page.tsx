@@ -54,7 +54,7 @@ export default async function AdminOpsPage({
         </p>
 
         {diag && (
-          <div className="card" style={{ borderColor: "var(--success)" }}>
+          <div className="card card-success">
             <strong style={{ color: "var(--success)" }}>✓ Sweep complete</strong>
             <table className="table-dense" style={{ marginTop: 8 }}>
               <tbody>

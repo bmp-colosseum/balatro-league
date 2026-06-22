@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { FormSelect } from "@/components/FormSelect";
 import { AdminNav } from "@/components/AdminNav";
 import { LocalDateTimeField } from "@/components/LocalDateTimeField";
+import { Callout } from "@/components/Callout";
 import {
   activateSeason,
   archiveSeason,
@@ -86,9 +87,9 @@ export default async function AdminSeasonsPage({
         </div>
 
         {err && (
-          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+          <Callout type="danger">
             {err}
-          </div>
+          </Callout>
         )}
 
         <details className="card">
@@ -168,7 +169,7 @@ export default async function AdminSeasonsPage({
         )}
 
         {orphanRounds.length > 0 && (
-          <div className="card" style={{ borderColor: "var(--info)" }}>
+          <div className="card card-info">
             <strong style={{ color: "var(--info)" }}>📋 Pending signup rounds ({orphanRounds.length})</strong>
             <p className="muted" style={{ marginTop: 4, fontSize: 12 }}>
               These signup rounds have closed but don't have a season built yet.

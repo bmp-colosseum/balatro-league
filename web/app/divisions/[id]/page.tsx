@@ -14,6 +14,7 @@ import { loadAdminDivisionDetail } from "@/lib/loaders/admin";
 import { loadPlayerIdByDiscordId } from "@/lib/loaders/players";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
+import { Callout } from "@/components/Callout";
 import { DiscordId } from "@/components/DiscordId";
 import { Button } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -95,9 +96,9 @@ export default async function PublicDivisionPage({
         </div>
 
         {isAdmin && err && (
-          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+          <Callout type="danger">
             {err}
-          </div>
+          </Callout>
         )}
 
         <div className="card">
@@ -417,7 +418,7 @@ function AdminSection({
   const { division, members, pairings, shootouts, unplayed, playerById, lifeDiffByPlayer } = adminData;
   return (
     <>
-      <div className="card" style={{ borderColor: "var(--accent)" }}>
+      <div className="card card-accent">
         <strong style={{ color: "var(--accent)" }}>🔧 Admin tools</strong>
         <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
           Editing controls only visible to admins. Add/drop/remove players, override results, shootouts, match progress.

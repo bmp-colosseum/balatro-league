@@ -15,6 +15,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { SubmitButton } from "@/components/SubmitButton";
 import { loadAllPlayersForPicker } from "@/lib/loaders/players";
 import { loadExistingSeasonForBuild, loadNextSeasonNumber } from "@/lib/loaders/admin-build";
+import { Callout } from "@/components/Callout";
 
 export const dynamic = "force-dynamic";
 
@@ -93,9 +94,9 @@ export default async function BuildSeasonPage({
         </details>
 
         {err && (
-          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+          <Callout type="danger">
             {err}
-          </div>
+          </Callout>
         )}
 
         <div className="card">
@@ -204,14 +205,11 @@ export default async function BuildSeasonPage({
             slots, the bottom tier absorbs the overflow.
           </p>
           {existingSeason && (
-            <div
-              className="card"
-              style={{ borderColor: "var(--accent)", color: "var(--accent)", marginBottom: 12 }}
-            >
+            <Callout type="accent" style={{ marginBottom: 12 }}>
               ⚠ <strong>Redoing Season {existingSeason.number}&apos;s setup.</strong> This replaces its current
               divisions and player placements with the layout below. Don&apos;t redo setup for a season that&apos;s
               already in progress — recorded results in those divisions can be lost.
-            </div>
+            </Callout>
           )}
           <form action={buildSeason}>
             <input type="hidden" name="roundId" value={round.id} />

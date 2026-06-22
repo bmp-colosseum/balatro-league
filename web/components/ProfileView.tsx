@@ -9,6 +9,7 @@ import { getShowBmpMmr } from "@/lib/preferences";
 import { loadPlayerHistory, loadPlayerBanStats } from "@/lib/profile";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
+import { Callout } from "@/components/Callout";
 import { DiscordId } from "@/components/DiscordId";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -526,14 +527,14 @@ export async function ProfileView({
         )}
 
         {disputeOk && (
-          <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)" }}>
+          <Callout type="success">
             ✓ Dispute filed. A helper has been pinged in #results.
-          </div>
+          </Callout>
         )}
         {disputeErr && (
-          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
+          <Callout type="danger">
             {disputeErr}
-          </div>
+          </Callout>
         )}
 
         {/* "Vs you" head-to-head — only when looking at someone else's

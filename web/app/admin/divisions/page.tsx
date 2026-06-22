@@ -9,6 +9,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { SubmitButton } from "@/components/SubmitButton";
 import { relabelDivisions, resyncSchedules, regenerateSchedules, regenerateDivisionSchedule, setRoundRobinTopDivisions, setDivisionFormat } from "@/app/admin/seasons/actions";
 import { getPlacementRules } from "@/lib/placement-rules";
+import { Callout } from "@/components/Callout";
 
 export const dynamic = "force-dynamic";
 
@@ -106,19 +107,19 @@ export default async function AdminDivisionsPage({
         )}
 
         {ok === "rules-saved" && (
-          <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)", marginBottom: 12 }}>
+          <Callout type="success" style={{ marginBottom: 12 }}>
             ✓ Saved. Click <strong>♻️ Regenerate schedule</strong> to rebuild with the new rule.
-          </div>
+          </Callout>
         )}
         {ok?.startsWith("regenerated-") && (
-          <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)", marginBottom: 12 }}>
+          <Callout type="success" style={{ marginBottom: 12 }}>
             ♻️ Schedule regenerated — {ok.slice("regenerated-".length)} matches created.
-          </div>
+          </Callout>
         )}
         {err === "games-already-played" && (
-          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)", marginBottom: 12 }}>
+          <Callout type="danger" style={{ marginBottom: 12 }}>
             Can&apos;t regenerate — a game has already been played or reported this season. Regenerate only works before kickoff.
-          </div>
+          </Callout>
         )}
 
         {!season ? (

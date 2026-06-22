@@ -170,22 +170,22 @@ export default async function AdminPlayersPage({
         <PageHeader nav={nav} selectedSeasonId={seasonId} selectedDivisionId={divisionId} sort={sort} />
 
         {swap === "ok" && (
-          <div className="card" style={{ borderColor: "var(--success)", marginTop: 12 }}>
+          <div className="card card-success" style={{ marginTop: 12 }}>
             <strong>✅ Players swapped — they&apos;ve traded divisions and schedules.</strong>
           </div>
         )}
         {swaperr && (
-          <div className="card" style={{ borderColor: "var(--danger)", marginTop: 12 }}>
+          <div className="card card-danger" style={{ marginTop: 12 }}>
             <strong>⚠️ Couldn&apos;t swap:</strong> {swaperr}
           </div>
         )}
         {replace && (
-          <div className="card" style={{ borderColor: "var(--success)", marginTop: 12 }}>
+          <div className="card card-success" style={{ marginTop: 12 }}>
             <strong>✅ Replaced:</strong> {replace}
           </div>
         )}
         {replaceerr && (
-          <div className="card" style={{ borderColor: "var(--danger)", marginTop: 12 }}>
+          <div className="card card-danger" style={{ marginTop: 12 }}>
             <strong>⚠️ Couldn&apos;t replace:</strong> {replaceerr}
           </div>
         )}

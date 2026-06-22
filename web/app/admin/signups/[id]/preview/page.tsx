@@ -21,6 +21,7 @@ import { loadContinuityPlacement } from "@/lib/loaders/continuity";
 import { absorbSignupsIntoDraft } from "@/lib/build-season-continuity";
 import { getPlacementRules } from "@/lib/placement-rules";
 import { buildContinuitySeason, reopenSignupRound, savePlacementRules } from "./actions";
+import { Callout } from "@/components/Callout";
 
 export const dynamic = "force-dynamic";
 
@@ -91,9 +92,9 @@ export default async function PlacementPreviewPage({
       ) : (
         <>
           {err && (
-            <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)", fontSize: 13 }}>
+            <Callout type="danger" style={{ fontSize: 13 }}>
               {err === "no-season" ? "No active season to base this on." : "Couldn't build the season — try again."}
-            </div>
+            </Callout>
           )}
           <ContinuityPreview
             divisions={continuity.divisions}
@@ -153,7 +154,7 @@ export default async function PlacementPreviewPage({
           </Link>
         </div>
         {round.status === "CLOSED" && (
-          <div className="card" style={{ borderColor: "var(--accent)", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div className="card card-accent" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <span style={{ color: "var(--accent)", fontSize: 13 }}>
               ⚠ Signups are <strong>closed</strong> for this round — the Discord Sign Up button is off. Reopen to let
               people join again.
