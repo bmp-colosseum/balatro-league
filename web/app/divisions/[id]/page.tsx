@@ -100,8 +100,8 @@ export default async function PublicDivisionPage({
           </div>
         )}
 
-        <details className="card">
-          <summary style={{ cursor: "pointer" }}><strong>Standings</strong></summary>
+        <div className="card">
+          <strong>Standings</strong>
           <div style={{ marginTop: 8 }}>
             <DivisionStandingsTable
               rows={standings}
@@ -110,7 +110,7 @@ export default async function PublicDivisionPage({
               bmpCurrentSeason={bmpCurrentSeason}
             />
           </div>
-        </details>
+        </div>
 
         <MatchesSections
           divisionId={id}
