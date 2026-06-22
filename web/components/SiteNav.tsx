@@ -19,7 +19,7 @@ const PRIMARY_LINKS = [
   { href: "/players", label: "Players" },
   { href: "/stats", label: "Stats" },
   { href: "/hall-of-fame", label: "Hall of Fame" },
-  { href: "/seasons", label: "Past seasons" },
+  { href: "/seasons", label: "Seasons" },
   { href: "/traits", label: "Traits" },
 ] as const;
 
