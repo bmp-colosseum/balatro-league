@@ -10,7 +10,7 @@
 // seasons) is supplied as a render-prop so the admin inline-edit stays put.
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { ReactNode, CSSProperties } from "react";
 import { rankLabel } from "@/lib/standings";
 import { DiscordId } from "@/components/DiscordId";
 import type { StandingsMmrEntry } from "@/lib/loaders/standings";
@@ -119,6 +119,29 @@ function RowBadges({
   );
 }
 
+// Spelled-out, color-coded W/D/L so the record reads itself — no need to know
+// the column order. Win green, loss red, draws muted.
+function RecordCells({ r }: { r: StandingsTableRow }) {
+  return (
+    <span style={{ whiteSpace: "nowrap" }}>
+      <span style={{ color: "#2ecc71" }}>{r.wins}W</span>
+      <span className="muted"> · </span>
+      <span className="muted">{r.draws}D</span>
+      <span className="muted"> · </span>
+      <span style={{ color: "#e74c3c" }}>{r.losses}L</span>
+    </span>
+  );
+}
+
+// Faint background band marking the promotion (green) / relegation (red) zone so
+// the stakes read at a glance. Covers the decided state (promoting/relegating,
+// set once a division is complete) and the mid-season clinch.
+function rowTint(ex?: StandingsRowExtras): CSSProperties | undefined {
+  if (ex?.promoting || ex?.clinchStatus === "up") return { background: "rgba(46,204,113,0.08)" };
+  if (ex?.relegating || ex?.clinchStatus === "down") return { background: "rgba(231,76,60,0.08)" };
+  return undefined;
+}
+
 export function DivisionStandingsTable({
   rows,
   extras,
@@ -137,7 +160,7 @@ export function DivisionStandingsTable({
   finalRankCell?: (r: Row) => ReactNode;
 }) {
   const hasFinalRank = !!finalRankHeader && !!finalRankCell;
-  const colCount = 7 + (showBmpMmr ? 1 : 0) + (hasFinalRank ? 1 : 0);
+  const colCount = 5 + (showBmpMmr ? 1 : 0) + (hasFinalRank ? 1 : 0);
 
   return (
     <>
@@ -149,10 +172,8 @@ export function DivisionStandingsTable({
               <th>Player</th>
               {hasFinalRank && <th>{finalRankHeader}</th>}
               <th>Pts</th>
-              <th>W-D-L</th>
-              <th title="% of matches won 2-0">Match W%</th>
-              <th title="% of matches drawn 1-1">Match D%</th>
-              <th>Games</th>
+              <th>Record</th>
+              <th title="Individual games won-lost">Games</th>
               {showBmpMmr && (
                 <th title="Ranked MMR from balatromp.com. Separate from league rank.">BMP MMR</th>
               )}
@@ -171,23 +192,13 @@ export function DivisionStandingsTable({
                   </Link>
                 );
                 return (
-                  <tr key={r.player.id}>
+                  <tr key={r.player.id} style={rowTint(ex)}>
                     <td><RowBadges medal={medal} promoting={ex?.promoting} relegating={ex?.relegating} clinchStatus={ex?.clinchStatus} showdown={ex?.showdown} /></td>
                     <td>{r.dropped ? <s>{link}</s> : link}<DiscordId value={r.player.discordId} username={r.player.username} /></td>
                     {hasFinalRank && <td>{finalRankCell!(r)}</td>}
                     <td><strong>{r.points}</strong></td>
-                    <td title={standingRateTooltip(r)}>{r.wins}-{r.draws}-{r.losses}</td>
-                    <td>
-                      {r.played > 0
-                        ? `${Math.round((r.wins / r.played) * 100)}%`
-                        : <span className="muted">—</span>}
-                    </td>
-                    <td>
-                      {r.played > 0
-                        ? `${Math.round((r.draws / r.played) * 100)}%`
-                        : <span className="muted">—</span>}
-                    </td>
-                    <td title={gameRateTooltip(r)}>{r.gamesWon}-{r.gamesLost}</td>
+                    <td title={standingRateTooltip(r)}><RecordCells r={r} /></td>
+                    <td className="muted" title={gameRateTooltip(r)}>{r.gamesWon}-{r.gamesLost}</td>
                     {showBmpMmr && <td>{renderMmrCell(ex?.mmr, bmpCurrentSeason)}</td>}
                   </tr>
                 );
@@ -205,7 +216,7 @@ export function DivisionStandingsTable({
             const ex = extras?.get(r.player.id);
             const medal = rankLabel(r, i);
             return (
-              <div key={r.player.id} className="standings-card">
+              <div key={r.player.id} className="standings-card" style={rowTint(ex)}>
                 <div className="standings-card-head">
                   <span><RowBadges medal={medal} promoting={ex?.promoting} relegating={ex?.relegating} clinchStatus={ex?.clinchStatus} showdown={ex?.showdown} /></span>
                   <Link href={`/profile/${r.player.id}`} className="standings-card-name" style={{ color: "var(--text)" }}>
@@ -215,7 +226,7 @@ export function DivisionStandingsTable({
                   <strong style={{ whiteSpace: "nowrap" }}>{r.points} pts</strong>
                 </div>
                 <div className="standings-card-sub muted">
-                  {r.wins}-{r.draws}-{r.losses} W-D-L · {r.gamesWon}-{r.gamesLost} games · {r.played} played
+                  <RecordCells r={r} /> · {r.gamesWon}-{r.gamesLost} games · {r.played} played
                   {showBmpMmr && ex?.mmr ? <> · MMR {renderMmrCell(ex.mmr, bmpCurrentSeason)}</> : null}
                 </div>
               </div>
@@ -223,6 +234,11 @@ export function DivisionStandingsTable({
           })
         )}
       </div>
+      <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>
+        <strong>3</strong> pts per win · <strong>1</strong> per draw · Record = wins·draws·losses ·{" "}
+        <span style={{ color: "#2ecc71" }}>green = promoting</span> ·{" "}
+        <span style={{ color: "#e74c3c" }}>red = relegating</span>
+      </p>
     </>
   );
 }
