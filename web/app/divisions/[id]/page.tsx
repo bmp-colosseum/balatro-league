@@ -376,7 +376,7 @@ function YourPlayedTable({ rows, viewerPlayerId }: { rows: DivisionRecentPairing
           const oppG = isA ? p.gamesWonB : p.gamesWonA;
           // A 0-0 is a void (finished, no points) — distinct from a 1-1 draw.
           const outcome =
-            myG === 0 && oppG === 0 ? { bg: "rgba(149,165,166,0.18)", fg: "#95a5a6", label: "V" }
+            myG === 0 && oppG === 0 ? { bg: "rgba(149,165,166,0.18)", fg: "var(--muted)", label: "V" }
             : myG > oppG ? { bg: "rgba(46,204,113,0.15)", fg: "var(--success)", label: "W" }
             : myG < oppG ? { bg: "rgba(231,76,60,0.15)", fg: "var(--danger)", label: "L" }
             : { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)", label: "D" };

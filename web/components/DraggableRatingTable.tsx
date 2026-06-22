@@ -266,8 +266,8 @@ export function DraggableRatingTable({
                   userSelect: "none",
                 }}
               >
-                <td style={{ color: "#888", textAlign: "center" }} title="Drag to reorder">⋮⋮</td>
-                <td style={{ fontVariantNumeric: "tabular-nums", color: "#888" }}>{i + 1}</td>
+                <td style={{ color: "var(--muted)", textAlign: "center" }} title="Drag to reorder">⋮⋮</td>
+                <td style={{ fontVariantNumeric: "tabular-nums", color: "var(--muted)" }}>{i + 1}</td>
                 <td>
                   {r.playerId ? (
                     <Link href={`/profile/${r.playerId}`} style={{ color: "var(--text)" }}>

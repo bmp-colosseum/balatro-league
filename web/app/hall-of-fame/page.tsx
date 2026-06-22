@@ -13,8 +13,8 @@ function endedLabel(d: Date): string {
 const OUTCOME: Record<HofMatch["outcome"], { tag: string; color: string }> = {
   win: { tag: "W", color: "var(--success)" },
   loss: { tag: "L", color: "var(--danger)" },
-  draw: { tag: "D", color: "#95a5a6" },
-  void: { tag: "–", color: "#7f8c8d" },
+  draw: { tag: "D", color: "var(--muted)" },
+  void: { tag: "–", color: "var(--muted)" },
 };
 
 export default async function HallOfFamePage() {

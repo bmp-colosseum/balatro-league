@@ -38,7 +38,7 @@ export default async function SignupMmrPage({
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           <h2 style={{ margin: 0 }}>📊 Signup MMR</h2>
           <span style={{ fontSize: 16 }}>{round.name}</span>
-          <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "#c0c8cb" }}>{round.status}</span>
+          <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "var(--muted)" }}>{round.status}</span>
           <span className="muted" style={{ fontSize: 12 }}>{round.signupCount} signed up</span>
           {round.status !== "BUILT" && (
             <span style={{ marginLeft: "auto", display: "inline-flex", gap: 12, fontSize: 13 }}>

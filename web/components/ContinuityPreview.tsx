@@ -121,7 +121,7 @@ export function ContinuityPreview({
                   }}
                 >
                   {/* movement vs last season */}
-                  <span style={{ width: 14, textAlign: "center", color: promoted ? "var(--success)" : relegated ? "var(--danger)" : "#666" }}>
+                  <span style={{ width: 14, textAlign: "center", color: promoted ? "var(--success)" : relegated ? "var(--danger)" : "var(--muted)" }}>
                     {m.isRookie ? "" : promoted ? "↑" : relegated ? "↓" : "="}
                   </span>
                   <span style={{ flex: "1 1 160px", fontWeight: 500 }}>

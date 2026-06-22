@@ -137,7 +137,7 @@ export function PlacementSandbox({
                 type="button"
                 onClick={() => removeTier(i)}
                 disabled={tiers.length <= 1}
-                style={{ background: "none", border: "none", color: tiers.length <= 1 ? "#555" : "var(--danger)", cursor: tiers.length <= 1 ? "default" : "pointer", fontSize: 12 }}
+                style={{ background: "none", border: "none", color: tiers.length <= 1 ? "var(--muted)" : "var(--danger)", cursor: tiers.length <= 1 ? "default" : "pointer", fontSize: 12 }}
               >
                 remove
               </button>

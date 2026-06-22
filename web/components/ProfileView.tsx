@@ -747,7 +747,7 @@ export async function ProfileView({
                                   ? "var(--success)"
                                   : h.finalGlobalRank > h.seedRank
                                   ? "var(--danger)"
-                                  : "#888",
+                                  : "var(--muted)",
                             }}
                           >
                             ({h.finalGlobalRank < h.seedRank ? "↑" : h.finalGlobalRank > h.seedRank ? "↓" : "·"}
@@ -779,7 +779,7 @@ export async function ProfileView({
                         const isVoid = m.myGames === 0 && m.opponentGames === 0;
                         const outcomePill =
                           isDisputed ? { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)", label: "DISPUTED" }
-                          : isVoid ? { bg: "rgba(149,165,166,0.18)", fg: "#95a5a6", label: "V" }
+                          : isVoid ? { bg: "rgba(149,165,166,0.18)", fg: "var(--muted)", label: "V" }
                           : m.outcome === "WIN" ? { bg: "rgba(46,204,113,0.15)", fg: "var(--success)", label: "W" }
                           : m.outcome === "LOSS" ? { bg: "rgba(231,76,60,0.15)", fg: "var(--danger)", label: "L" }
                           : { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)", label: "D" };

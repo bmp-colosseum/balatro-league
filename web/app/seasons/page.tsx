@@ -38,7 +38,7 @@ export default async function SeasonsPage() {
                   {s.isActive ? (
                     <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--success)" }}>ACTIVE</span>
                   ) : (
-                    <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "#c0c8cb" }}>FINISHED</span>
+                    <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "var(--muted)" }}>FINISHED</span>
                   )}
                   <div className="muted" style={{ marginTop: 6 }}>{period}</div>
                   <div className="muted">

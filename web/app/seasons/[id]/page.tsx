@@ -134,7 +134,7 @@ async function PublicSummary({
         {season.isActive ? (
           <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--success)" }}>ACTIVE</span>
         ) : (
-          <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "#c0c8cb" }}>FINISHED</span>
+          <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "var(--muted)" }}>FINISHED</span>
         )}
         <span className="muted">· {period}</span>
         <Link href="/seasons" style={{ marginLeft: "auto" }}>← all seasons</Link>
@@ -293,7 +293,7 @@ async function AdminSeasonPanel({
           <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--success)" }}>ACTIVE</span>
         )}
         {!season.isActive && !season.endedAt && (
-          <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "#c0c8cb" }}>Inactive</span>
+          <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "var(--muted)" }}>Inactive</span>
         )}
         {season.endedAt && (
           <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "var(--danger)" }}>Ended</span>

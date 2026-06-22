@@ -224,17 +224,17 @@ export function MmrLadder({
                   userSelect: "none",
                 }}
               >
-                <td style={{ color: "#888", textAlign: "center" }} title="Drag to reorder">⋮⋮</td>
-                <td style={{ fontVariantNumeric: "tabular-nums", color: "#888" }}>{i + 1}</td>
+                <td style={{ color: "var(--muted)", textAlign: "center" }} title="Drag to reorder">⋮⋮</td>
+                <td style={{ fontVariantNumeric: "tabular-nums", color: "var(--muted)" }}>{i + 1}</td>
                 <td style={{ padding: "3px 8px" }}>
                   <Link href={`/profile/${r.playerId}`} style={{ color: "var(--text)" }} onPointerDown={(e) => e.stopPropagation()}>
                     {r.displayName}
                   </Link>
                 </td>
-                <td style={{ padding: "3px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: next == null ? "#888" : undefined }}>
+                <td style={{ padding: "3px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: next == null ? "var(--muted)" : undefined }}>
                   {next == null ? <span style={{ fontWeight: 400, fontSize: 11 }} title="No BMP basis — tied at the base until seeded by hand or by results">unseeded</span> : next}
                 </td>
-                <td style={{ padding: "3px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: drifted ? "var(--accent)" : "#888" }} title={drifted ? "Stored MMR differs from what Apply would write." : undefined}>
+                <td style={{ padding: "3px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: drifted ? "var(--accent)" : "var(--muted)" }} title={drifted ? "Stored MMR differs from what Apply would write." : undefined}>
                   {r.hiddenMmr ?? "—"}
                 </td>
                 <td style={{ padding: "3px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} className="muted">

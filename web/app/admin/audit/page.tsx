@@ -204,7 +204,7 @@ export default async function AdminAuditPage({
             <tbody>
               {pageRows.map((row) => (
                 <tr key={row.id} style={{ borderBottom: "1px solid #2a2a2a", verticalAlign: "top" }}>
-                  <td style={{ padding: "6px 4px", whiteSpace: "nowrap", fontFamily: "monospace", color: "#888" }}>
+                  <td style={{ padding: "6px 4px", whiteSpace: "nowrap", fontFamily: "monospace", color: "var(--muted)" }}>
                     {formatTimestamp(row.createdAt)}
                   </td>
                   <td style={{ padding: "6px 4px", whiteSpace: "nowrap" }}>
@@ -217,10 +217,10 @@ export default async function AdminAuditPage({
                       </span>
                     )}
                   </td>
-                  <td style={{ padding: "6px 4px", fontFamily: "monospace", fontSize: 12, color: "#bdc3c7" }}>
+                  <td style={{ padding: "6px 4px", fontFamily: "monospace", fontSize: 12, color: "var(--muted)" }}>
                     {row.action}
                   </td>
-                  <td style={{ padding: "6px 4px", fontFamily: "monospace", fontSize: 12, color: "#95a5a6" }}>
+                  <td style={{ padding: "6px 4px", fontFamily: "monospace", fontSize: 12, color: "var(--muted)" }}>
                     {row.targetType ? `${row.targetType}${row.targetId ? ` ${row.targetId.slice(-6)}` : ""}` : "—"}
                   </td>
                   <td style={{ padding: "6px 4px" }}>
@@ -228,7 +228,7 @@ export default async function AdminAuditPage({
                     {row.metadata != null && (
                       <details style={{ marginTop: 4 }}>
                         <summary className="muted" style={{ cursor: "pointer", fontSize: 11 }}>metadata</summary>
-                        <pre style={{ fontSize: 11, color: "#7f8c8d", marginTop: 4, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+                        <pre style={{ fontSize: 11, color: "var(--muted)", marginTop: 4, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
                           {JSON.stringify(row.metadata, null, 2)}
                         </pre>
                       </details>

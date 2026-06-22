@@ -225,7 +225,7 @@ export function TierEditor({
                 </span>
               )}
               {signupCount < totalCapacity && (
-                <span style={{ color: "#95a5a6", marginLeft: 4 }}>
+                <span style={{ color: "var(--muted)", marginLeft: 4 }}>
                   ({totalCapacity - signupCount} slots free)
                 </span>
               )}
@@ -265,7 +265,7 @@ export function TierEditor({
                     : null;
             return (
               <div key={idx} style={{ display: "flex", alignItems: "center", gap: 6, fontVariantNumeric: "tabular-nums" }}>
-                <span style={{ width: 100, color: "#bdc3c7" }}>{row.name || `Tier ${idx + 1}`}:</span>
+                <span style={{ width: 100, color: "var(--muted)" }}>{row.name || `Tier ${idx + 1}`}:</span>
                 <span style={{ flex: "0 0 auto" }}>
                   {sizes.length === 0 ? "—" : sizes.join(" / ")}
                 </span>

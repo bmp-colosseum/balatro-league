@@ -127,7 +127,7 @@ export default async function AdminSeasonsPage({
                 const status = s.isActive
                   ? { label: "ACTIVE", bg: "rgba(46,204,113,0.2)", fg: "var(--success)" }
                   : s.endedAt
-                  ? { label: `ended ${s.endedAt.toISOString().slice(0, 10)}`, bg: "rgba(149,165,166,0.2)", fg: "#c0c8cb" }
+                  ? { label: `ended ${s.endedAt.toISOString().slice(0, 10)}`, bg: "rgba(149,165,166,0.2)", fg: "var(--muted)" }
                   : { label: "draft", bg: "rgba(241,196,15,0.2)", fg: "var(--accent)" };
                 return (
                   <li
@@ -238,7 +238,7 @@ export default async function AdminSeasonsPage({
                   {s.isActive ? (
                     <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--success)" }}>ACTIVE</span>
                   ) : (
-                    <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "#c0c8cb" }}>Inactive</span>
+                    <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "var(--muted)" }}>Inactive</span>
                   )}
                 </div>
                 <div className="muted" style={{ marginTop: 4 }}>{tierLine}</div>

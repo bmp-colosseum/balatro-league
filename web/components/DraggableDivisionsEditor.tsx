@@ -97,14 +97,14 @@ function shortBmpSeason(s: string | null): string {
   return m ? `S${m[1]}` : s;
 }
 function bmpTierColor(tier: string | null): string {
-  if (!tier) return "#888";
+  if (!tier) return "var(--muted)";
   const t = tier.toLowerCase();
   if (t.includes("glass")) return "#9bdcff";
   if (t.includes("lucky")) return "var(--success)";
   if (t.includes("gold")) return "var(--accent)";
-  if (t.includes("steel")) return "#c0c8cb";
-  if (t.includes("stone")) return "#9aa0a6";
-  return "#888";
+  if (t.includes("steel")) return "var(--muted)";
+  if (t.includes("stone")) return "var(--muted)";
+  return "var(--muted)";
 }
 
 // Shared column template for the member header + rows so they line up.
@@ -521,7 +521,7 @@ export function DraggableDivisionsEditor({
                                 borderTop: showLineAbove ? "2px solid #76c7ff" : "2px solid transparent",
                               }}
                             >
-                              <span style={{ color: "#888" }} title="Drag to move">⋮⋮</span>
+                              <span style={{ color: "var(--muted)" }} title="Drag to move">⋮⋮</span>
                               <Link
                                 href={`/profile/${m.playerId}`}
                                 style={{ color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
@@ -583,7 +583,7 @@ export function DraggableDivisionsEditor({
                                   </span>
                                 )}
                               </span>
-                              <span title="Overall finish last season (across all divisions)" style={{ fontSize: 11, textAlign: "right", color: m.priorRank == null ? "#666" : "var(--text)" }}>
+                              <span title="Overall finish last season (across all divisions)" style={{ fontSize: 11, textAlign: "right", color: m.priorRank == null ? "var(--muted)" : "var(--text)" }}>
                                 {m.priorRank == null ? "—" : `#${m.priorRank}`}
                               </span>
                               <select
@@ -620,7 +620,7 @@ export function DraggableDivisionsEditor({
                               </select>
                             </div>
                             {showSchedules && scheduleByDiv.get(d.id) && (
-                              <div style={{ fontSize: 10, color: "#888", padding: "0 4px 4px 24px", lineHeight: 1.3 }}>
+                              <div style={{ fontSize: 10, color: "var(--muted)", padding: "0 4px 4px 24px", lineHeight: 1.3 }}>
                                 vs {(scheduleByDiv.get(d.id)!.opponents.get(m.playerId) ?? []).map((id) => nameById.get(id) ?? id).join(", ") || "—"}
                                 <span style={{ marginLeft: 6 }}>· SoS {scheduleByDiv.get(d.id)!.sos.get(m.playerId) ?? "—"}</span>
                               </div>
@@ -708,7 +708,7 @@ function AddPlayerControls({
         className="muted"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={() => setOpen(false)}
-        style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 10, padding: 0, justifySelf: "start" }}
+        style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 10, padding: 0, justifySelf: "start" }}
       >
         done
       </button>
@@ -733,7 +733,7 @@ function MovementMark({ member, currentGlobalIndex }: { member: EditorMember; cu
   const prior = member.priorDivisionGlobalIndex;
   const dir = currentGlobalIndex < prior ? "up" : currentGlobalIndex > prior ? "down" : "same";
   const sym = dir === "up" ? "↑" : dir === "down" ? "↓" : "=";
-  const color = dir === "up" ? "var(--success)" : dir === "down" ? "var(--danger)" : "#666";
+  const color = dir === "up" ? "var(--success)" : dir === "down" ? "var(--danger)" : "var(--muted)";
   const title =
     `Last season: ${member.priorDivisionName ?? "—"}` +
     (member.priorStanding ? ` (${member.priorStanding})` : "") +

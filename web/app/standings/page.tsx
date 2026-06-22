@@ -237,7 +237,7 @@ export default async function StandingsPage() {
                               className="pill"
                               style={{
                                 background: complete ? "rgba(46,204,113,0.15)" : "rgba(149,165,166,0.15)",
-                                color: complete ? "var(--success)" : "#95a5a6",
+                                color: complete ? "var(--success)" : "var(--muted)",
                                 fontSize: 11,
                                 marginLeft: "auto",
                               }}
