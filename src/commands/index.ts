@@ -12,6 +12,7 @@ import { random } from "./random.js";
 import { disputeModal, disputeSelect, report, reportButtons } from "./report.js";
 import { reportShootout } from "./report-shootout.js";
 import { schedule } from "./schedule.js";
+import { status } from "./status.js";
 import { signupHandlers } from "./signup-buttons.js";
 import { signupAskButtonHandler } from "./signup-ask-buttons.js";
 import { standings } from "./standings.js";
@@ -28,7 +29,7 @@ import type { ButtonHandler, ModalHandler, SelectMenuHandler, SlashCommand } fro
 // /timezone removed — the messed-up autocomplete (Discord's 25-result cap on
 // IANA zones) wasn't worth it. Timezone is still settable on the website (/me, with
 // browser auto-detect) and shown to opponents in /schedule.
-export const slashCommands: SlashCommand[] = [help, adminHelp, helper, support, standings, schedule, profile, league, startMatch, challenge, admin, random, pool];
+export const slashCommands: SlashCommand[] = [help, adminHelp, helper, support, standings, schedule, status, profile, league, startMatch, challenge, admin, random, pool];
 
 export const buttonHandlers: ButtonHandler[] = [reportButtons, signupHandlers, signupAskButtonHandler, matchButtons, disputeThreadButtonHandler, supportButtons];
 
