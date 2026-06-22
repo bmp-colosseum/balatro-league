@@ -18,9 +18,9 @@ const PRIMARY_LINKS = [
   { href: "/standings", label: "Standings" },
   { href: "/players", label: "Players" },
   { href: "/stats", label: "Stats" },
+  { href: "/hall-of-fame", label: "Hall of Fame" },
 ] as const;
 const MORE_LINKS = [
-  { href: "/hall-of-fame", label: "Hall of Fame" },
   { href: "/seasons", label: "Past seasons" },
   { href: "/traits", label: "Traits" },
 ] as const;
