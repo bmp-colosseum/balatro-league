@@ -436,9 +436,15 @@ export async function bumpStaleMatchControls(client: Client): Promise<void> {
     if (!session.threadId) continue;
     try {
       const channel = await client.channels.fetch(session.threadId);
-      if (!channel || !("lastMessageId" in channel)) continue;
-      // Controls are buried if the thread's last message isn't ours.
-      if (channel.lastMessageId && channel.lastMessageId !== session.matchMessageId) {
+      if (!channel || !channel.isTextBased() || !("messages" in channel)) continue;
+      // Controls are buried if the thread's last message isn't ours. We fetch the
+      // latest message over REST instead of trusting channel.lastMessageId: the
+      // bot runs without the GuildMessages intent, so it never sees players' chat
+      // ("gl") and the cached lastMessageId stays stuck on our own controls — the
+      // old check compared that stale id to itself and never fired.
+      const recent = await channel.messages.fetch({ limit: 1 }).catch(() => null);
+      const lastId = recent?.first()?.id;
+      if (lastId && lastId !== session.matchMessageId) {
         await bumpMatchControls(client, session);
       }
     } catch (err) {
