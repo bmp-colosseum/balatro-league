@@ -106,17 +106,17 @@ export default async function AdminDivisionsPage({
         )}
 
         {ok === "rules-saved" && (
-          <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71", marginBottom: 12 }}>
+          <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)", marginBottom: 12 }}>
             ✓ Saved. Click <strong>♻️ Regenerate schedule</strong> to rebuild with the new rule.
           </div>
         )}
         {ok?.startsWith("regenerated-") && (
-          <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71", marginBottom: 12 }}>
+          <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)", marginBottom: 12 }}>
             ♻️ Schedule regenerated — {ok.slice("regenerated-".length)} matches created.
           </div>
         )}
         {err === "games-already-played" && (
-          <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c", marginBottom: 12 }}>
+          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)", marginBottom: 12 }}>
             Can&apos;t regenerate — a game has already been played or reported this season. Regenerate only works before kickoff.
           </div>
         )}

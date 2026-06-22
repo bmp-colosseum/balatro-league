@@ -120,7 +120,7 @@ export default async function AdminDisputesPage({
                   {hasProposal && (
                     <form action={acceptDisputeProposal}>
                       <input type="hidden" name="pairingId" value={d.pairingId} />
-                      <Button type="submit" style={{ background: "#2ecc71", color: "#fff" }}>
+                      <Button type="submit" style={{ background: "var(--success)", color: "#fff" }}>
                         ✓ Accept proposed
                       </Button>
                     </form>

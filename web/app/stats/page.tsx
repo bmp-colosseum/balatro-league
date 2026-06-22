@@ -55,7 +55,7 @@ export default async function StatsPage() {
                     <td>
                       <Link href={`/profile/${r.playerId}`} style={{ color: "var(--text)" }}>{r.displayName}</Link>
                       <DiscordId value={r.discordId} username={r.username} />
-                      {r.isActive && <span style={{ marginLeft: 6, color: "#2ecc71", fontSize: 11 }}>● active</span>}
+                      {r.isActive && <span style={{ marginLeft: 6, color: "var(--success)", fontSize: 11 }}>● active</span>}
                     </td>
                     <td style={{ textAlign: "right" }}>
                       <strong>{r.streak}</strong>

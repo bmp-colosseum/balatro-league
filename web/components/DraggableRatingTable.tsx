@@ -47,9 +47,9 @@ export interface RatingRow {
 }
 
 const STATUS_PILL = {
-  NEW: { bg: "rgba(241,196,15,0.2)", fg: "#f1c40f", label: "New" },
-  RETURNING: { bg: "rgba(52,152,219,0.2)", fg: "#76c7ff", label: "Returning" },
-  GAP: { bg: "rgba(241,196,15,0.2)", fg: "#f1c40f", label: "Gap" },
+  NEW: { bg: "rgba(241,196,15,0.2)", fg: "var(--accent)", label: "New" },
+  RETURNING: { bg: "rgba(52,152,219,0.2)", fg: "var(--info)", label: "Returning" },
+  GAP: { bg: "rgba(241,196,15,0.2)", fg: "var(--accent)", label: "Gap" },
 };
 
 export function DraggableRatingTable({
@@ -215,7 +215,7 @@ export function DraggableRatingTable({
         </button>
         <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
           {saveError ? (
-            <span style={{ color: "#e74c3c" }}>⚠ save failed: {saveError}</span>
+            <span style={{ color: "var(--danger)" }}>⚠ save failed: {saveError}</span>
           ) : isPending ? (
             "Saving…"
           ) : (
@@ -315,7 +315,7 @@ export function DraggableRatingTable({
                       {r.bmpMmr != null && (
                         <span
                           className="muted"
-                          style={{ marginLeft: 6, fontSize: 11, color: "#f1c40f" }}
+                          style={{ marginLeft: 6, fontSize: 11, color: "var(--accent)" }}
                           title="Has both a league rank AND BMP MMR — verify whether the rank still reflects current skill."
                         >
                           ⚠

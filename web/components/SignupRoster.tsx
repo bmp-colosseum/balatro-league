@@ -48,7 +48,7 @@ export function SignupRoster({ signups }: { signups: RosterEntry[] }) {
       <summary style={{ cursor: "pointer", fontSize: 12 }} className="muted">
         View who&apos;s signed up ({signups.length})
         {goneCount > 0 && (
-          <span style={{ color: "#e67e22", marginLeft: 6 }}>· {goneCount} not in server</span>
+          <span style={{ color: "var(--admin)", marginLeft: 6 }}>· {goneCount} not in server</span>
         )}
       </summary>
 
@@ -77,7 +77,7 @@ export function SignupRoster({ signups }: { signups: RosterEntry[] }) {
                   {s.globalName && <span className="discord-username">(@{s.displayName})</span>}
                 </span>
                 {s.inGuild === false && (
-                  <span style={{ color: "#e67e22", fontSize: 11 }} title="Signed up but not currently a member of the Discord server">
+                  <span style={{ color: "var(--admin)", fontSize: 11 }} title="Signed up but not currently a member of the Discord server">
                     ⚠️ not in server
                   </span>
                 )}

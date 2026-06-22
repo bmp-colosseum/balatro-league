@@ -48,7 +48,7 @@ export default async function PlayersPage() {
                             <TierPill name={p.membership.division.name} position={p.membership.division.tierPosition} />
                           </Link>
                           {p.membership.dropped && (
-                            <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "#e74c3c", marginLeft: 6 }}>
+                            <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "var(--danger)", marginLeft: 6 }}>
                               DROPPED
                             </span>
                           )}

@@ -54,8 +54,8 @@ export default async function AdminOpsPage({
         </p>
 
         {diag && (
-          <div className="card" style={{ borderColor: "#2ecc71" }}>
-            <strong style={{ color: "#2ecc71" }}>✓ Sweep complete</strong>
+          <div className="card" style={{ borderColor: "var(--success)" }}>
+            <strong style={{ color: "var(--success)" }}>✓ Sweep complete</strong>
             <table className="table-dense" style={{ marginTop: 8 }}>
               <tbody>
                 <tr><td className="muted">Expired invites cancelled</td><td>{diag.expiredInvitesCancelled ?? 0}</td></tr>
@@ -64,11 +64,11 @@ export default async function AdminOpsPage({
                 <tr><td colSpan={2} style={{ paddingTop: 8, fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Orphan scan</td></tr>
                 <tr>
                   <td className="muted">DISCORD_GUILD_ID configured</td>
-                  <td>{diag.guildIdConfigured ? "yes" : <span style={{ color: "#e74c3c" }}>NO — orphan scan skipped</span>}</td>
+                  <td>{diag.guildIdConfigured ? "yes" : <span style={{ color: "var(--danger)" }}>NO — orphan scan skipped</span>}</td>
                 </tr>
                 <tr>
                   <td className="muted">Match-parent channels scanned</td>
-                  <td>{diag.matchParentChannels ?? 0}{diag.matchParentChannels === 0 && <span style={{ color: "#e74c3c" }}> — no channels found, scan skipped</span>}</td>
+                  <td>{diag.matchParentChannels ?? 0}{diag.matchParentChannels === 0 && <span style={{ color: "var(--danger)" }}> — no channels found, scan skipped</span>}</td>
                 </tr>
                 <tr><td className="muted">Active threads in guild (any parent)</td><td>{diag.activeThreadsInGuild ?? 0}</td></tr>
                 <tr><td className="muted">Active threads under match-parents</td><td>{diag.activeThreadsUnderMatchParents ?? 0}</td></tr>

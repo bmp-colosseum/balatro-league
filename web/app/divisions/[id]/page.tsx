@@ -95,7 +95,7 @@ export default async function PublicDivisionPage({
         </div>
 
         {isAdmin && err && (
-          <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c" }}>
+          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
             {err}
           </div>
         )}
@@ -377,9 +377,9 @@ function YourPlayedTable({ rows, viewerPlayerId }: { rows: DivisionRecentPairing
           // A 0-0 is a void (finished, no points) — distinct from a 1-1 draw.
           const outcome =
             myG === 0 && oppG === 0 ? { bg: "rgba(149,165,166,0.18)", fg: "#95a5a6", label: "V" }
-            : myG > oppG ? { bg: "rgba(46,204,113,0.15)", fg: "#2ecc71", label: "W" }
-            : myG < oppG ? { bg: "rgba(231,76,60,0.15)", fg: "#e74c3c", label: "L" }
-            : { bg: "rgba(241,196,15,0.15)", fg: "#f1c40f", label: "D" };
+            : myG > oppG ? { bg: "rgba(46,204,113,0.15)", fg: "var(--success)", label: "W" }
+            : myG < oppG ? { bg: "rgba(231,76,60,0.15)", fg: "var(--danger)", label: "L" }
+            : { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)", label: "D" };
           return (
             <tr key={p.id}>
               <td className="muted">{date}</td>
@@ -417,8 +417,8 @@ function AdminSection({
   const { division, members, pairings, shootouts, unplayed, playerById, lifeDiffByPlayer } = adminData;
   return (
     <>
-      <div className="card" style={{ borderColor: "#f1c40f" }}>
-        <strong style={{ color: "#f1c40f" }}>🔧 Admin tools</strong>
+      <div className="card" style={{ borderColor: "var(--accent)" }}>
+        <strong style={{ color: "var(--accent)" }}>🔧 Admin tools</strong>
         <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
           Editing controls only visible to admins. Add/drop/remove players, override results, shootouts, match progress.
         </p>
@@ -472,7 +472,7 @@ function AdminSection({
                       <Link href={`/profile/${m.player.id}`} style={{ color: "var(--text)" }}>{m.player.displayName}</Link>
                     </strong>
                     {isDropped && (
-                      <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "#e74c3c", marginLeft: 6 }}>DROPPED</span>
+                      <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "var(--danger)", marginLeft: 6 }}>DROPPED</span>
                     )}
                   </td>
                   <td><span className="muted">{m.player.discordId}</span></td>
@@ -646,7 +646,7 @@ function AdminSection({
           tied players — <strong>1 = winner</strong>. Players with the <strong>same number stay tied</strong>{" "}
           with each other (e.g. <code>1, 2, 2</code> = one winner, the other two left level). Leave
           everyone else blank. Re-submitting overwrites this group. The{" "}
-          <span style={{ color: "#2ecc71" }}>± lives</span> figure is the net life total (lives kept in wins
+          <span style={{ color: "var(--success)" }}>± lives</span> figure is the net life total (lives kept in wins
           minus lives lost in losses) — a reference for breaking the tie, applied however you decide.
         </p>
         <form action={resolveTieAction} style={{ display: "grid", gap: 4, maxWidth: 360 }}>
@@ -664,7 +664,7 @@ function AdminSection({
                         marginLeft: 6,
                         fontSize: 11,
                         fontVariantNumeric: "tabular-nums",
-                        color: diff > 0 ? "#2ecc71" : diff < 0 ? "#e74c3c" : "var(--muted)",
+                        color: diff > 0 ? "var(--success)" : diff < 0 ? "var(--danger)" : "var(--muted)",
                       }}
                     >
                       {diff > 0 ? `+${diff}` : diff} lives

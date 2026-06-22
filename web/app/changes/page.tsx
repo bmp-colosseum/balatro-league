@@ -552,8 +552,8 @@ function SubHeading({ children }: { children: React.ReactNode }) {
 // One reworked/exclusive item with a colored tag.
 const TAG_STYLE: Record<string, { bg: string; fg: string }> = {
   "MP exclusive": { bg: "rgba(52,152,219,0.15)", fg: "#3498db" },
-  Reworked: { bg: "rgba(241,196,15,0.15)", fg: "#f1c40f" },
-  Banned: { bg: "rgba(231,76,60,0.15)", fg: "#e74c3c" },
+  Reworked: { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)" },
+  Banned: { bg: "rgba(231,76,60,0.15)", fg: "var(--danger)" },
   Order: { bg: "rgba(155,89,182,0.15)", fg: "#9b59b6" },
 };
 
@@ -595,7 +595,7 @@ function SpriteTile({ id, label, banned }: { id: string; label: string; banned?:
       <span style={{ display: "inline-block", filter: banned ? "grayscale(0.45) brightness(0.92)" : undefined }}>
         <Sprite id={id} height={64} />
       </span>
-      <div style={{ fontSize: 11, marginTop: 2, color: banned ? "#e74c3c" : "var(--text)" }}>{label}</div>
+      <div style={{ fontSize: 11, marginTop: 2, color: banned ? "var(--danger)" : "var(--text)" }}>{label}</div>
     </div>
   );
 }
@@ -713,7 +713,7 @@ function CardRow({ items, highlight }: { items: string[]; highlight?: number }) 
               padding: on ? "3px 7px" : "4px 8px",
               fontSize: 12,
               fontWeight: isCard ? 600 : 400,
-              color: red ? "#e74c3c" : "var(--text)",
+              color: red ? "var(--danger)" : "var(--text)",
               background: on ? "rgba(241,196,15,0.14)" : "var(--surface-2)",
             }}
           >
@@ -748,7 +748,7 @@ function BitQueue({ bits, used }: { bits: string; used?: number }) {
               fontWeight: 700,
               border: consumed ? "2px solid var(--accent)" : "1px solid var(--border)",
               background: hit ? "rgba(46,204,113,0.18)" : "rgba(255,255,255,0.03)",
-              color: hit ? "#2ecc71" : "var(--muted)",
+              color: hit ? "var(--success)" : "var(--muted)",
               opacity: consumed ? 1 : 0.5,
             }}
           >

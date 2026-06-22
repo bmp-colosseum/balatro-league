@@ -124,8 +124,8 @@ export async function DraftArranger({ seasonId, roundId }: { seasonId: string; r
 
   return (
     <div>
-      <div className="card" style={{ borderColor: "#f1c40f", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <strong style={{ color: "#f1c40f" }}>Draft — not live</strong>
+      <div className="card" style={{ borderColor: "var(--accent)", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <strong style={{ color: "var(--accent)" }}>Draft — not live</strong>
         <span className="muted" style={{ fontSize: 12 }}>
           Drag any player into any division — it saves automatically. Nothing goes live until you activate.
         </span>

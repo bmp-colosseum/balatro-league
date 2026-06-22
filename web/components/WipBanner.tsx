@@ -14,7 +14,7 @@ export function WipBanner({ note }: { note?: string }) {
         borderRadius: 8,
         border: "1px solid #f1c40f",
         background: "rgba(241,196,15,0.12)",
-        color: "#f1c40f",
+        color: "var(--accent)",
         fontSize: 13,
         fontWeight: 600,
       }}

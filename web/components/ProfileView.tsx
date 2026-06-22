@@ -69,7 +69,7 @@ function favRow(r: FavoriteEntry, kind: "deck" | "stake" | "combo", metric: "pla
           fontWeight: 600,
           minWidth: 36,
           textAlign: "right",
-          color: winRate >= 50 ? "#2ecc71" : "#e74c3c",
+          color: winRate >= 50 ? "var(--success)" : "var(--danger)",
         }}
       >
         {winRate}%
@@ -93,7 +93,7 @@ function banRow(r: BanStatEntry, kind: "deck" | "stake") {
       <span className="muted" style={{ whiteSpace: "nowrap", fontSize: 11, fontVariantNumeric: "tabular-nums" }}>
         {r.bans}/{r.appearances}
       </span>
-      <span style={{ whiteSpace: "nowrap", fontWeight: 600, fontVariantNumeric: "tabular-nums", minWidth: 36, textAlign: "right", color: "#e67e22" }}>
+      <span style={{ whiteSpace: "nowrap", fontWeight: 600, fontVariantNumeric: "tabular-nums", minWidth: 36, textAlign: "right", color: "var(--admin)" }}>
         {r.banRatePct}%
       </span>
     </li>
@@ -215,9 +215,9 @@ export async function ProfileView({
               </span>
               <span><strong>{activeSeason.points}</strong> <span className="muted">pts</span></span>
               <span>
-                <span style={{ color: "#2ecc71" }}>{activeSeason.wins}W</span>
+                <span style={{ color: "var(--success)" }}>{activeSeason.wins}W</span>
                 <span className="muted"> · {activeSeason.draws}D · </span>
-                <span style={{ color: "#e74c3c" }}>{activeSeason.losses}L</span>
+                <span style={{ color: "var(--danger)" }}>{activeSeason.losses}L</span>
               </span>
               <span className="muted">{activeSeason.played} played</span>
             </div>
@@ -448,7 +448,7 @@ export async function ProfileView({
                       </td>
                       <td data-label="MMR"><strong>{snap.rankedMmr}</strong></td>
                       <td data-label="Tier">
-                        <span className="pill" style={{ background: "rgba(118,199,255,0.15)", color: "#76c7ff", fontSize: 11 }}>
+                        <span className="pill" style={{ background: "rgba(118,199,255,0.15)", color: "var(--info)", fontSize: 11 }}>
                           {snap.rankedTier}
                         </span>
                       </td>
@@ -472,7 +472,7 @@ export async function ProfileView({
                 </div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 22, fontWeight: 600 }}>{fallbackSnapshot.rankedMmr}</span>
-                  <span className="pill" style={{ background: "rgba(118,199,255,0.15)", color: "#76c7ff", fontSize: 11 }}>
+                  <span className="pill" style={{ background: "rgba(118,199,255,0.15)", color: "var(--info)", fontSize: 11 }}>
                     {fallbackSnapshot.rankedTier}
                   </span>
                   {fallbackSnapshot.totalGames != null && (
@@ -489,7 +489,7 @@ export async function ProfileView({
         {adminCtx && adminCtx.members.length > 1 && (
           <div style={{ marginTop: 16 }}>
             <p className="muted" style={{ fontSize: 12, margin: "0 0 6px" }}>
-              <span style={{ color: "#f1c40f" }}>⚙ Admin</span> — {profile.player.displayName}&apos;s matches in{" "}
+              <span style={{ color: "var(--accent)" }}>⚙ Admin</span> — {profile.player.displayName}&apos;s matches in{" "}
               <strong>{adminCtx.divisionName}</strong>. Record, fix, void, or DQ any of them below.
             </p>
             <MatchActionsPanel
@@ -526,12 +526,12 @@ export async function ProfileView({
         )}
 
         {disputeOk && (
-          <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>
+          <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)" }}>
             ✓ Dispute filed. A helper has been pinged in #results.
           </div>
         )}
         {disputeErr && (
-          <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c" }}>
+          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
             {disputeErr}
           </div>
         )}
@@ -590,7 +590,7 @@ export async function ProfileView({
                           {d.gamesWon}/{d.gamesTotal}
                         </td>
                         <td style={{ textAlign: "right", width: 50 }}>
-                          <strong style={{ color: d.winRatePct >= 50 ? "#2ecc71" : "#e74c3c" }}>
+                          <strong style={{ color: d.winRatePct >= 50 ? "var(--success)" : "var(--danger)" }}>
                             {d.winRatePct}%
                           </strong>
                         </td>
@@ -620,7 +620,7 @@ export async function ProfileView({
                             {s.gamesWon}/{s.gamesTotal}
                           </td>
                           <td style={{ textAlign: "right", width: 50 }}>
-                            <strong style={{ color: s.winRatePct >= 50 ? "#2ecc71" : "#e74c3c" }}>
+                            <strong style={{ color: s.winRatePct >= 50 ? "var(--success)" : "var(--danger)" }}>
                               {s.winRatePct}%
                             </strong>
                           </td>
@@ -705,7 +705,7 @@ export async function ProfileView({
                   <span className="pill" style={{ background: color.bg, color: color.fg }}>{h.tierName}</span>
                   <Link href={`/divisions/${h.divisionId}`} style={{ color: "var(--text)" }}>{h.divisionName}</Link>
                   {h.status === "DROPPED" && (
-                    <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "#e74c3c" }}>DROPPED</span>
+                    <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "var(--danger)" }}>DROPPED</span>
                   )}
                 </div>
                 {/* Stat summary on its own line directly under the title —
@@ -744,9 +744,9 @@ export async function ProfileView({
                               fontSize: 11,
                               color:
                                 h.finalGlobalRank < h.seedRank
-                                  ? "#2ecc71"
+                                  ? "var(--success)"
                                   : h.finalGlobalRank > h.seedRank
-                                  ? "#e74c3c"
+                                  ? "var(--danger)"
                                   : "#888",
                             }}
                           >
@@ -778,11 +778,11 @@ export async function ProfileView({
                         // A 0-0 is a void (finished, no points) — distinct from a 1-1 draw.
                         const isVoid = m.myGames === 0 && m.opponentGames === 0;
                         const outcomePill =
-                          isDisputed ? { bg: "rgba(241,196,15,0.15)", fg: "#f1c40f", label: "DISPUTED" }
+                          isDisputed ? { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)", label: "DISPUTED" }
                           : isVoid ? { bg: "rgba(149,165,166,0.18)", fg: "#95a5a6", label: "V" }
-                          : m.outcome === "WIN" ? { bg: "rgba(46,204,113,0.15)", fg: "#2ecc71", label: "W" }
-                          : m.outcome === "LOSS" ? { bg: "rgba(231,76,60,0.15)", fg: "#e74c3c", label: "L" }
-                          : { bg: "rgba(241,196,15,0.15)", fg: "#f1c40f", label: "D" };
+                          : m.outcome === "WIN" ? { bg: "rgba(46,204,113,0.15)", fg: "var(--success)", label: "W" }
+                          : m.outcome === "LOSS" ? { bg: "rgba(231,76,60,0.15)", fg: "var(--danger)", label: "L" }
+                          : { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)", label: "D" };
                         return (
                           <tr key={i} style={isDisputed ? { opacity: 0.7 } : undefined}>
                             <td data-label="Date">{date}</td>
@@ -810,9 +810,9 @@ export async function ProfileView({
                                           gap: 2,
                                           color:
                                             g.iWon === true
-                                              ? "#2ecc71"
+                                              ? "var(--success)"
                                               : g.iWon === false
-                                              ? "#e74c3c"
+                                              ? "var(--danger)"
                                               : undefined,
                                         }}
                                       >

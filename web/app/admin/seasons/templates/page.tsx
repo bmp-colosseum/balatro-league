@@ -62,7 +62,7 @@ export default async function AdminTemplatesPage() {
                 <tr key={t.id}>
                   <td>
                     {t.isLastUsed && (
-                      <span className="pill" style={{ background: "rgba(241,196,15,0.2)", color: "#f1c40f", marginRight: 6 }}>
+                      <span className="pill" style={{ background: "rgba(241,196,15,0.2)", color: "var(--accent)", marginRight: 6 }}>
                         LAST USED
                       </span>
                     )}

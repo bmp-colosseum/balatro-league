@@ -73,9 +73,9 @@ export interface EditorTier {
 }
 
 const tierHeuristic = (avg: number): { color: string; text: string } | null => {
-  if (avg < 4) return { color: "#e74c3c", text: "too few players" };
-  if (avg > 7) return { color: "#e74c3c", text: "too many — consider adding a division" };
-  if (avg < 5) return { color: "#f1c40f", text: "below target" };
+  if (avg < 4) return { color: "var(--danger)", text: "too few players" };
+  if (avg > 7) return { color: "var(--danger)", text: "too many — consider adding a division" };
+  if (avg < 5) return { color: "var(--accent)", text: "below target" };
   return null;
 };
 
@@ -100,8 +100,8 @@ function bmpTierColor(tier: string | null): string {
   if (!tier) return "#888";
   const t = tier.toLowerCase();
   if (t.includes("glass")) return "#9bdcff";
-  if (t.includes("lucky")) return "#2ecc71";
-  if (t.includes("gold")) return "#f1c40f";
+  if (t.includes("lucky")) return "var(--success)";
+  if (t.includes("gold")) return "var(--accent)";
   if (t.includes("steel")) return "#c0c8cb";
   if (t.includes("stone")) return "#9aa0a6";
   return "#888";
@@ -387,11 +387,11 @@ export function DraggableDivisionsEditor({
           📅 Show schedules
         </label>
         {saveError ? (
-          <span style={{ color: "#e74c3c" }}>⚠ {saveError} — refresh and retry</span>
+          <span style={{ color: "var(--danger)" }}>⚠ {saveError} — refresh and retry</span>
         ) : isPending ? (
           <span className="muted">Saving…</span>
         ) : everSaved ? (
-          <span style={{ color: "#2ecc71" }}>✓ Saved</span>
+          <span style={{ color: "var(--success)" }}>✓ Saved</span>
         ) : (
           <span className="muted" style={{ fontSize: 11 }}>Changes save automatically</span>
         )}
@@ -466,7 +466,7 @@ export function DraggableDivisionsEditor({
                             style={{
                               background: "none",
                               border: "none",
-                              color: "#e74c3c",
+                              color: "var(--danger)",
                               cursor: "pointer",
                               fontSize: 11,
                               padding: 0,
@@ -549,7 +549,7 @@ export function DraggableDivisionsEditor({
                                   fontSize: 11,
                                   padding: "1px 3px",
                                   textAlign: "right",
-                                  color: m.hiddenMmr == null ? "#f1c40f" : "#2ecc71",
+                                  color: m.hiddenMmr == null ? "var(--accent)" : "var(--success)",
                                   fontWeight: 600,
                                   background: "transparent",
                                   border: `1px solid ${m.hiddenMmr == null ? "rgba(241,196,15,0.4)" : "rgba(46,204,113,0.3)"}`,
@@ -668,7 +668,7 @@ function AddPlayerControls({
         type="button"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={() => setOpen(true)}
-        style={{ background: "none", border: "none", color: "#76c7ff", cursor: "pointer", fontSize: 11, padding: 0, marginTop: 6 }}
+        style={{ background: "none", border: "none", color: "var(--info)", cursor: "pointer", fontSize: 11, padding: 0, marginTop: 6 }}
       >
         + Add player
       </button>
@@ -724,7 +724,7 @@ function MovementMark({ member, currentGlobalIndex }: { member: EditorMember; cu
   if (member.priorDivisionGlobalIndex === undefined) return null;
   if (member.priorDivisionGlobalIndex === null) {
     return (
-      <span title="New this season" style={{ color: "#76c7ff", fontSize: 9, fontWeight: 700, width: 12, textAlign: "center" }}>
+      <span title="New this season" style={{ color: "var(--info)", fontSize: 9, fontWeight: 700, width: 12, textAlign: "center" }}>
         NEW
       </span>
     );
@@ -733,7 +733,7 @@ function MovementMark({ member, currentGlobalIndex }: { member: EditorMember; cu
   const prior = member.priorDivisionGlobalIndex;
   const dir = currentGlobalIndex < prior ? "up" : currentGlobalIndex > prior ? "down" : "same";
   const sym = dir === "up" ? "↑" : dir === "down" ? "↓" : "=";
-  const color = dir === "up" ? "#2ecc71" : dir === "down" ? "#e74c3c" : "#666";
+  const color = dir === "up" ? "var(--success)" : dir === "down" ? "var(--danger)" : "#666";
   const title =
     `Last season: ${member.priorDivisionName ?? "—"}` +
     (member.priorStanding ? ` (${member.priorStanding})` : "") +
@@ -756,7 +756,7 @@ function FloorWarn({ member, currentGlobalIndex }: { member: EditorMember; curre
   return (
     <span
       title={`Below their floor — entitled to at least ${member.floorDivisionName ?? "their earned division"} (they weren't relegated).`}
-      style={{ color: "#e74c3c", fontWeight: 700 }}
+      style={{ color: "var(--danger)", fontWeight: 700 }}
     >
       ⚠
     </span>

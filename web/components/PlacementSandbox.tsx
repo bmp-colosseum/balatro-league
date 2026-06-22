@@ -137,7 +137,7 @@ export function PlacementSandbox({
                 type="button"
                 onClick={() => removeTier(i)}
                 disabled={tiers.length <= 1}
-                style={{ background: "none", border: "none", color: tiers.length <= 1 ? "#555" : "#e74c3c", cursor: tiers.length <= 1 ? "default" : "pointer", fontSize: 12 }}
+                style={{ background: "none", border: "none", color: tiers.length <= 1 ? "#555" : "var(--danger)", cursor: tiers.length <= 1 ? "default" : "pointer", fontSize: 12 }}
               >
                 remove
               </button>
@@ -146,7 +146,7 @@ export function PlacementSandbox({
           <button
             type="button"
             onClick={addTier}
-            style={{ background: "none", border: "none", color: "#76c7ff", cursor: "pointer", fontSize: 12, justifySelf: "start", padding: 0 }}
+            style={{ background: "none", border: "none", color: "var(--info)", cursor: "pointer", fontSize: 12, justifySelf: "start", padding: 0 }}
           >
             + Add tier
           </button>
@@ -155,7 +155,7 @@ export function PlacementSandbox({
         <div className="muted" style={{ fontSize: 12, marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 8 }}>
           {projection.placed} players · {projection.totalDivs} divisions
           {unsetMmr > 0 && (
-            <span style={{ color: "#f1c40f" }}>
+            <span style={{ color: "var(--accent)" }}>
               {" "}· ⚠ {unsetMmr} with no hidden MMR — set them on <a href="/admin/mmr">/admin/mmr</a> for an accurate preview
             </span>
           )}
@@ -185,7 +185,7 @@ export function PlacementSandbox({
                     — {div.size} players · {Math.max(0, Math.min(4, div.size - 1))} games each
                   </span>
                   {div.schedule && (
-                    <span className="muted" style={{ fontWeight: 400, marginLeft: 8, color: "#2ecc71" }}>
+                    <span className="muted" style={{ fontWeight: 400, marginLeft: 8, color: "var(--success)" }}>
                       · SoS {div.schedule.summary.minSos}–{div.schedule.summary.maxSos} (spread {div.schedule.summary.spread})
                     </span>
                   )}
@@ -248,7 +248,7 @@ export function PlacementSandbox({
                           </span>
                           <span
                             className="muted"
-                            style={{ fontSize: 11, fontVariantNumeric: "tabular-nums", color: p?.hiddenMmr == null ? "#f1c40f" : undefined }}
+                            style={{ fontSize: 11, fontVariantNumeric: "tabular-nums", color: p?.hiddenMmr == null ? "var(--accent)" : undefined }}
                             title="Hidden MMR"
                           >
                             {p?.hiddenMmr == null ? "no MMR" : p.hiddenMmr}

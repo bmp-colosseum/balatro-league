@@ -39,12 +39,12 @@ export default async function AdminSettingsPage({
         </p>
 
         {ok && (
-          <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>
+          <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)" }}>
             ✓ Saved.
           </div>
         )}
         {err && (
-          <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c" }}>
+          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
             {err}
           </div>
         )}
@@ -59,7 +59,7 @@ export default async function AdminSettingsPage({
           <details key={t.id} className="card" open={t.isDefault}>
             <summary style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
               {t.isDefault && (
-                <span className="pill" style={{ background: "rgba(241,196,15,0.2)", color: "#f1c40f" }}>
+                <span className="pill" style={{ background: "rgba(241,196,15,0.2)", color: "var(--accent)" }}>
                   ★ default
                 </span>
               )}

@@ -47,7 +47,7 @@ export default async function MmrAdminPage() {
       <main>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <h2 style={{ margin: 0 }}>Hidden MMR</h2>
-          <span className="pill" style={{ background: "rgba(118,199,255,0.2)", color: "#76c7ff" }}>
+          <span className="pill" style={{ background: "rgba(118,199,255,0.2)", color: "var(--info)" }}>
             {set} set · {unset} unset
           </span>
         </div>
@@ -57,8 +57,8 @@ export default async function MmrAdminPage() {
           Placement and schedule previews read from this; after launch it updates per match.
         </p>
 
-        <div className="card" style={{ borderColor: liveMmr ? "#2ecc71" : "#f1c40f", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <strong style={{ color: liveMmr ? "#2ecc71" : "#f1c40f" }}>
+        <div className="card" style={{ borderColor: liveMmr ? "var(--success)" : "var(--accent)", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <strong style={{ color: liveMmr ? "var(--success)" : "var(--accent)" }}>
             Live MMR: {liveMmr ? "ON — hands-off" : "OFF — preview only"}
           </strong>
           <form action={setLiveMmr}>

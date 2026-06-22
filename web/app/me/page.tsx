@@ -58,12 +58,12 @@ export default async function MePage({
             <div style={{ fontSize: 18, fontWeight: 600 }}>{user.name ?? "(unknown)"}</div>
             {player ? (
               <div style={{ marginTop: 4 }}>
-                <span className="pill" style={{ background: "rgba(46,204,113,0.15)", color: "#2ecc71" }}>Linked</span>{" "}
+                <span className="pill" style={{ background: "rgba(46,204,113,0.15)", color: "var(--success)" }}>Linked</span>{" "}
                 Connected to a league profile.
               </div>
             ) : (
               <div style={{ marginTop: 4 }}>
-                <span className="pill" style={{ background: "rgba(241,196,15,0.15)", color: "#f1c40f" }}>Not linked</span>{" "}
+                <span className="pill" style={{ background: "rgba(241,196,15,0.15)", color: "var(--accent)" }}>Not linked</span>{" "}
                 Sign up via the Discord bot to join the league.
               </div>
             )}
@@ -76,12 +76,12 @@ export default async function MePage({
         </div>
 
         {ok && (
-          <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>
+          <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)" }}>
             ✓ Match recorded. Standings updated.
           </div>
         )}
         {err && (
-          <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c" }}>
+          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
             {err}
           </div>
         )}

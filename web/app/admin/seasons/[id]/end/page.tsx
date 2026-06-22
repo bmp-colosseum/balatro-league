@@ -44,7 +44,7 @@ export default async function EndSeasonPreviewPage({
         </p>
 
         {unfinishedPairings > 0 && (
-          <div className="card" style={{ borderColor: "#f1c40f", color: "#f1c40f" }}>
+          <div className="card" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>
             ⚠ {unfinishedPairings} match{unfinishedPairings === 1 ? "" : "es"} still unplayed this season. Ending now ranks
             players on their partial records — check with the league before you do.
           </div>
@@ -103,7 +103,7 @@ export default async function EndSeasonPreviewPage({
                       </td>
                       <td>{delta.oldRating != null ? `#${delta.oldRating}` : "—"}</td>
                       <td>#{delta.newRating}</td>
-                      <td style={{ color: improved ? "#2ecc71" : worsened ? "#e74c3c" : undefined }}>
+                      <td style={{ color: improved ? "var(--success)" : worsened ? "var(--danger)" : undefined }}>
                         {improved ? `↑ ${positions}` : worsened ? `↓ ${positions}` : "—"}
                       </td>
                     </tr>

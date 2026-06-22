@@ -98,7 +98,7 @@ export function ContinuityPreview({
               {d.schedule ? ` · SoS ${d.schedule.summary.minSos}–${d.schedule.summary.maxSos} (spread ${d.schedule.summary.spread})` : ""}
             </span>
             {d.divIdx >= roundRobinTop && d.members.length < 5 && (
-              <span style={{ fontWeight: 400, marginLeft: 8, color: "#f1c40f", fontSize: 12 }}>
+              <span style={{ fontWeight: 400, marginLeft: 8, color: "var(--accent)", fontSize: 12 }}>
                 ⚠ thin (&lt;5)
               </span>
             )}
@@ -121,12 +121,12 @@ export function ContinuityPreview({
                   }}
                 >
                   {/* movement vs last season */}
-                  <span style={{ width: 14, textAlign: "center", color: promoted ? "#2ecc71" : relegated ? "#e74c3c" : "#666" }}>
+                  <span style={{ width: 14, textAlign: "center", color: promoted ? "var(--success)" : relegated ? "var(--danger)" : "#666" }}>
                     {m.isRookie ? "" : promoted ? "↑" : relegated ? "↓" : "="}
                   </span>
                   <span style={{ flex: "1 1 160px", fontWeight: 500 }}>
                     {m.displayName}
-                    {m.isRookie && <span style={{ color: "#76c7ff", fontSize: 11, marginLeft: 6 }}>NEW</span>}
+                    {m.isRookie && <span style={{ color: "var(--info)", fontSize: 11, marginLeft: 6 }}>NEW</span>}
                     {fromName && <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>← {fromName}</span>}
                   </span>
                   <span className="muted" style={{ fontSize: 11, minWidth: 78, textAlign: "right" }} title="Last-season standing">
@@ -155,10 +155,10 @@ export function ContinuityPreview({
 
       {/* Commit: turn this projection into a real draft season, then drag-edit it. */}
       {onBuild && roundId && (
-        <form action={onBuild} className="card" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", borderColor: "#2ecc71" }}>
+        <form action={onBuild} className="card" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", borderColor: "var(--success)" }}>
           <input type="hidden" name="roundId" value={roundId} />
           <input type="hidden" name="moves" value="{}" />
-          <strong style={{ color: "#2ecc71" }}>Open this to drag &amp; edit</strong>
+          <strong style={{ color: "var(--success)" }}>Open this to drag &amp; edit</strong>
           <input
             name="subtitle"
             placeholder="Subtitle (optional)"

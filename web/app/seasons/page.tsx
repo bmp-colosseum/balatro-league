@@ -36,7 +36,7 @@ export default async function SeasonsPage() {
                 >
                   <strong style={{ fontSize: 16 }}>{s.name}</strong>{" "}
                   {s.isActive ? (
-                    <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "#2ecc71" }}>ACTIVE</span>
+                    <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--success)" }}>ACTIVE</span>
                   ) : (
                     <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "#c0c8cb" }}>FINISHED</span>
                   )}

@@ -175,13 +175,13 @@ export function MmrLadder({
         </span>
         <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
           {saveError ? (
-            <span style={{ color: "#e74c3c" }}>⚠ {saveError}</span>
+            <span style={{ color: "var(--danger)" }}>⚠ {saveError}</span>
           ) : isPending ? (
             "Applying…"
           ) : dirty ? (
-            <span style={{ color: "#f1c40f" }}>● unsaved — click Apply</span>
+            <span style={{ color: "var(--accent)" }}>● unsaved — click Apply</span>
           ) : (
-            <span style={{ color: "#2ecc71" }}>✓ Applied</span>
+            <span style={{ color: "var(--success)" }}>✓ Applied</span>
           )}
         </span>
       </div>
@@ -234,7 +234,7 @@ export function MmrLadder({
                 <td style={{ padding: "3px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: next == null ? "#888" : undefined }}>
                   {next == null ? <span style={{ fontWeight: 400, fontSize: 11 }} title="No BMP basis — tied at the base until seeded by hand or by results">unseeded</span> : next}
                 </td>
-                <td style={{ padding: "3px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: drifted ? "#f1c40f" : "#888" }} title={drifted ? "Stored MMR differs from what Apply would write." : undefined}>
+                <td style={{ padding: "3px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: drifted ? "var(--accent)" : "#888" }} title={drifted ? "Stored MMR differs from what Apply would write." : undefined}>
                   {r.hiddenMmr ?? "—"}
                 </td>
                 <td style={{ padding: "3px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums" }} className="muted">

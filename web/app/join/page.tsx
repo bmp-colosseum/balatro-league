@@ -46,17 +46,17 @@ export default async function JoinPage({
         </p>
 
         {ok === "signed-up" && (
-          <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>
+          <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)" }}>
             ✓ You're signed up. You'll get your division when the season starts — keep an eye on Discord.
           </div>
         )}
         {ok === "withdrew" && (
-          <div className="card" style={{ borderColor: "#f1c40f", color: "#f1c40f" }}>
+          <div className="card" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>
             You've withdrawn from this round. Sign up again any time before sign-ups close.
           </div>
         )}
         {err && (
-          <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c" }}>
+          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
             {err}
           </div>
         )}
@@ -78,7 +78,7 @@ export default async function JoinPage({
               className="primary-btn"
               style={{
                 display: "inline-block",
-                background: "#5865f2",
+                background: "var(--accent-2)",
                 color: "white",
                 padding: "8px 16px",
                 borderRadius: 4,
@@ -91,8 +91,8 @@ export default async function JoinPage({
           </div>
         )}
         {!data.discordInviteUrl && data.viewerIsAdmin && (
-          <div className="card" style={{ borderColor: "#f1c40f" }}>
-            <strong style={{ color: "#f1c40f" }}>⚠ Admin nudge:</strong>{" "}
+          <div className="card" style={{ borderColor: "var(--accent)" }}>
+            <strong style={{ color: "var(--accent)" }}>⚠ Admin nudge:</strong>{" "}
             <span className="muted">
               No public invite link configured. Set{" "}
               <code>discord_server_invite_url</code> on{" "}
@@ -113,7 +113,7 @@ export default async function JoinPage({
               href="/auth/signin?callbackUrl=%2Fjoin"
               style={{
                 display: "inline-block",
-                background: "#5865f2",
+                background: "var(--accent-2)",
                 color: "white",
                 padding: "8px 16px",
                 borderRadius: 4,
@@ -135,7 +135,7 @@ export default async function JoinPage({
                 {data.viewerIsSignedUp ? (
                   <div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                      <span style={{ color: "#2ecc71", fontWeight: 600 }}>
+                      <span style={{ color: "var(--success)", fontWeight: 600 }}>
                         ✓ You're signed up.
                       </span>
                       <form action={withdrawFromJoinAction}>
@@ -169,7 +169,7 @@ export default async function JoinPage({
                 {data.viewerIsSubscribed ? (
                   <form action={unsubscribeFromJoinAction}>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <span style={{ color: "#2ecc71", fontWeight: 600 }}>
+                      <span style={{ color: "var(--success)", fontWeight: 600 }}>
                         ✓ You'll be notified when signups open.
                       </span>
                       <Button type="submit" variant="secondary" size="sm">Turn off</Button>

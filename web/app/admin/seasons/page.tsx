@@ -86,7 +86,7 @@ export default async function AdminSeasonsPage({
         </div>
 
         {err && (
-          <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c" }}>
+          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
             {err}
           </div>
         )}
@@ -125,10 +125,10 @@ export default async function AdminSeasonsPage({
                 const label = formatSeasonLabel(s);
                 const isRatingSource = s.id === mostRecentlyEndedId;
                 const status = s.isActive
-                  ? { label: "ACTIVE", bg: "rgba(46,204,113,0.2)", fg: "#2ecc71" }
+                  ? { label: "ACTIVE", bg: "rgba(46,204,113,0.2)", fg: "var(--success)" }
                   : s.endedAt
                   ? { label: `ended ${s.endedAt.toISOString().slice(0, 10)}`, bg: "rgba(149,165,166,0.2)", fg: "#c0c8cb" }
-                  : { label: "draft", bg: "rgba(241,196,15,0.2)", fg: "#f1c40f" };
+                  : { label: "draft", bg: "rgba(241,196,15,0.2)", fg: "var(--accent)" };
                 return (
                   <li
                     key={s.id}
@@ -149,7 +149,7 @@ export default async function AdminSeasonsPage({
                     {isRatingSource && (
                       <span
                         className="pill"
-                        style={{ background: "rgba(118,199,255,0.2)", color: "#76c7ff", fontSize: 10 }}
+                        style={{ background: "rgba(118,199,255,0.2)", color: "var(--info)", fontSize: 10 }}
                         title="Player ranks were last set when this season ended."
                       >
                         ratings sourced from here
@@ -168,8 +168,8 @@ export default async function AdminSeasonsPage({
         )}
 
         {orphanRounds.length > 0 && (
-          <div className="card" style={{ borderColor: "#76c7ff" }}>
-            <strong style={{ color: "#76c7ff" }}>📋 Pending signup rounds ({orphanRounds.length})</strong>
+          <div className="card" style={{ borderColor: "var(--info)" }}>
+            <strong style={{ color: "var(--info)" }}>📋 Pending signup rounds ({orphanRounds.length})</strong>
             <p className="muted" style={{ marginTop: 4, fontSize: 12 }}>
               These signup rounds have closed but don't have a season built yet.
               Click Set up to build the season from them.
@@ -199,7 +199,7 @@ export default async function AdminSeasonsPage({
                         r.status === "CLOSED"
                           ? "rgba(241,196,15,0.2)"
                           : "rgba(46,204,113,0.2)",
-                      color: r.status === "CLOSED" ? "#f1c40f" : "#2ecc71",
+                      color: r.status === "CLOSED" ? "var(--accent)" : "var(--success)",
                       fontSize: 11,
                     }}
                   >
@@ -236,7 +236,7 @@ export default async function AdminSeasonsPage({
                     {formatSeasonLabel(s)} <span className="muted" style={{ fontSize: 11, fontWeight: 400 }}>→ manage</span>
                   </Link>
                   {s.isActive ? (
-                    <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "#2ecc71" }}>ACTIVE</span>
+                    <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--success)" }}>ACTIVE</span>
                   ) : (
                     <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "#c0c8cb" }}>Inactive</span>
                   )}
@@ -314,7 +314,7 @@ export default async function AdminSeasonsPage({
                 </div>
 
                 <details style={{ marginTop: 8 }}>
-                  <summary className="muted" style={{ cursor: "pointer", fontSize: 11, color: "#e74c3c" }}>
+                  <summary className="muted" style={{ cursor: "pointer", fontSize: 11, color: "var(--danger)" }}>
                     Delete season
                   </summary>
                   <form action={deleteSeason} style={{ marginTop: 6, display: "flex", gap: 6, alignItems: "center" }}>
@@ -582,7 +582,7 @@ function DiscordBootstrap({
             old-guild links and re-bootstraps into the current DISCORD_GUILD_ID.
             Gameplay data is untouched. */}
         <details style={{ marginTop: 4 }}>
-          <summary style={{ cursor: "pointer", fontSize: 11, color: "#e67e22" }}>
+          <summary style={{ cursor: "pointer", fontSize: 11, color: "var(--admin)" }}>
             ⇄ Re-home to a new server
           </summary>
           <div className="muted" style={{ fontSize: 11, marginTop: 6 }}>

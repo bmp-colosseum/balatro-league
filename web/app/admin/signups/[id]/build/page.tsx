@@ -61,7 +61,7 @@ export default async function BuildSeasonPage({
       <main>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <h2 style={{ margin: 0 }}>Set up the season — "{round.name}"</h2>
-          <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "#2ecc71" }}>
+          <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--success)" }}>
             {playerCount} signups
           </span>
           <Link href={`/admin/signups/${round.id}/preview`} style={{ marginLeft: "auto" }}>
@@ -77,8 +77,8 @@ export default async function BuildSeasonPage({
           each tier goes into the lowest-numbered division (Rare 1 = strongest Rare, Rare 6 = weakest).
         </p>
 
-        <details className="card" style={{ background: "rgba(118,199,255,0.06)", borderColor: "#76c7ff" }}>
-          <summary style={{ cursor: "pointer" }}><strong style={{ color: "#76c7ff" }}>ℹ️ How this works — setting up the season</strong></summary>
+        <details className="card" style={{ background: "rgba(118,199,255,0.06)", borderColor: "var(--info)" }}>
+          <summary style={{ cursor: "pointer" }}><strong style={{ color: "var(--info)" }}>ℹ️ How this works — setting up the season</strong></summary>
           <ol style={{ marginTop: 8, paddingLeft: 24, fontSize: 13, lineHeight: 1.6 }}>
             <li><strong>Set ratings</strong> below — drag rows to reorder, or use the sort/auto-fill buttons. Top of the list = strongest player, ratings get re-numbered on Save.</li>
             <li><strong>Pick the tier shape</strong> (Legendary / Rare / Uncommon / Common…) — use ✨ Suggest from N signups to auto-compute, or load a saved template.</li>
@@ -93,7 +93,7 @@ export default async function BuildSeasonPage({
         </details>
 
         {err && (
-          <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c" }}>
+          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
             {err}
           </div>
         )}
@@ -206,7 +206,7 @@ export default async function BuildSeasonPage({
           {existingSeason && (
             <div
               className="card"
-              style={{ borderColor: "#f1c40f", color: "#f1c40f", marginBottom: 12 }}
+              style={{ borderColor: "var(--accent)", color: "var(--accent)", marginBottom: 12 }}
             >
               ⚠ <strong>Redoing Season {existingSeason.number}&apos;s setup.</strong> This replaces its current
               divisions and player placements with the layout below. Don&apos;t redo setup for a season that&apos;s

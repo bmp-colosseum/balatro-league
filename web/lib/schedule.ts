@@ -15,12 +15,12 @@
 // preserving 2-swaps (rewire two edges, keeping every degree fixed) that reduce
 // SoS variance, with a few seeded restarts. Trivial at division scale.
 
+import { isUnplayedPending } from "./schedule-locked.js";
+
 export interface SchedulePlayer {
   id: string;
   mmr: number;
 }
-
-import { isUnplayedPending } from "@/lib/schedule-locked";
 
 export interface ScheduleResult {
   // playerId -> their assigned opponents (sorted strongest-first).

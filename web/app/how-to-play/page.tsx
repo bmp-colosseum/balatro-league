@@ -81,7 +81,7 @@ export default async function HowToPlayPage() {
           </p>
           <p>
             Tied at a promotion or relegation slot? You'll see a{" "}
-            <span style={{ color: "#f1c40f" }}>⚔</span> next to each tied player. Play a quick <strong>shootout</strong> (a 1-game tiebreaker) to settle it.
+            <span style={{ color: "var(--accent)" }}>⚔</span> next to each tied player. Play a quick <strong>shootout</strong> (a 1-game tiebreaker) to settle it.
           </p>
         </Section>
 

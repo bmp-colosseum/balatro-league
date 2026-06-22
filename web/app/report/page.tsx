@@ -38,12 +38,12 @@ export default async function ReportPage({
         <h2>Report a match</h2>
 
         {ok && (
-          <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>
+          <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)" }}>
             ✓ Reported. Your opponent got a DM with a dispute link.
           </div>
         )}
         {err && (
-          <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c" }}>
+          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
             {err}
           </div>
         )}
@@ -86,12 +86,12 @@ export default async function ReportPage({
         )}
 
         {disputeOk && (
-          <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>
+          <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)" }}>
             ✓ Dispute filed. A helper has been pinged in #results.
           </div>
         )}
         {disputeErr && (
-          <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c" }}>
+          <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>
             {disputeErr}
           </div>
         )}
@@ -121,11 +121,11 @@ export default async function ReportPage({
                   // A 0-0 is a void (finished, no points) — distinct from a 1-1 draw.
                   const isVoid = m.myGames === 0 && m.opponentGames === 0;
                   const outcome =
-                    isDisputed ? { bg: "rgba(241,196,15,0.15)", fg: "#f1c40f", label: "DISPUTED" }
+                    isDisputed ? { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)", label: "DISPUTED" }
                     : isVoid ? { bg: "rgba(149,165,166,0.18)", fg: "#95a5a6", label: "V" }
-                    : m.outcome === "WIN" ? { bg: "rgba(46,204,113,0.15)", fg: "#2ecc71", label: "W" }
-                    : m.outcome === "LOSS" ? { bg: "rgba(231,76,60,0.15)", fg: "#e74c3c", label: "L" }
-                    : { bg: "rgba(241,196,15,0.15)", fg: "#f1c40f", label: "D" };
+                    : m.outcome === "WIN" ? { bg: "rgba(46,204,113,0.15)", fg: "var(--success)", label: "W" }
+                    : m.outcome === "LOSS" ? { bg: "rgba(231,76,60,0.15)", fg: "var(--danger)", label: "L" }
+                    : { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)", label: "D" };
                   return (
                     <tr key={m.pairingId} style={isDisputed ? { opacity: 0.7 } : undefined}>
                       <td>{date}</td>

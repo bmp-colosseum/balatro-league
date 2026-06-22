@@ -11,8 +11,8 @@ function endedLabel(d: Date): string {
 }
 
 const OUTCOME: Record<HofMatch["outcome"], { tag: string; color: string }> = {
-  win: { tag: "W", color: "#2ecc71" },
-  loss: { tag: "L", color: "#e74c3c" },
+  win: { tag: "W", color: "var(--success)" },
+  loss: { tag: "L", color: "var(--danger)" },
   draw: { tag: "D", color: "#95a5a6" },
   void: { tag: "–", color: "#7f8c8d" },
 };
@@ -41,7 +41,7 @@ export default async function HallOfFamePage() {
               <section
                 key={s.seasonId}
                 className="card"
-                style={{ marginBottom: 16, borderColor: "#f1c40f", borderWidth: 1, borderStyle: "solid" }}
+                style={{ marginBottom: 16, borderColor: "var(--accent)", borderWidth: 1, borderStyle: "solid" }}
               >
                 <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
                   <strong className="pixel" style={{ fontSize: 18 }}>{s.seasonLabel}</strong>
@@ -53,7 +53,7 @@ export default async function HallOfFamePage() {
                   <span style={{ fontSize: 32 }}>🏆</span>
                   <div>
                     <div style={{ fontSize: 20, fontWeight: 700 }}>
-                      <Link href={`/profile/${champ.playerId}`} style={{ color: "#f1c40f", textDecoration: "none" }}>
+                      <Link href={`/profile/${champ.playerId}`} style={{ color: "var(--accent)", textDecoration: "none" }}>
                         {champ.playerName}
                       </Link>
                     </div>

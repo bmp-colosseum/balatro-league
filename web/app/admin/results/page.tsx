@@ -177,7 +177,7 @@ export default async function ResultsPage({
                             <ConfirmButton
                               message={`Remove the ${m.aName} vs ${m.bName} result? Standings fall back to the next tiebreaker.`}
                               className="secondary"
-                              style={{ fontSize: 11, color: "#e74c3c" }}
+                              style={{ fontSize: 11, color: "var(--danger)" }}
                             >
                               Undo
                             </ConfirmButton>

@@ -170,22 +170,22 @@ export default async function AdminPlayersPage({
         <PageHeader nav={nav} selectedSeasonId={seasonId} selectedDivisionId={divisionId} sort={sort} />
 
         {swap === "ok" && (
-          <div className="card" style={{ borderColor: "#2ecc71", marginTop: 12 }}>
+          <div className="card" style={{ borderColor: "var(--success)", marginTop: 12 }}>
             <strong>✅ Players swapped — they&apos;ve traded divisions and schedules.</strong>
           </div>
         )}
         {swaperr && (
-          <div className="card" style={{ borderColor: "#e74c3c", marginTop: 12 }}>
+          <div className="card" style={{ borderColor: "var(--danger)", marginTop: 12 }}>
             <strong>⚠️ Couldn&apos;t swap:</strong> {swaperr}
           </div>
         )}
         {replace && (
-          <div className="card" style={{ borderColor: "#2ecc71", marginTop: 12 }}>
+          <div className="card" style={{ borderColor: "var(--success)", marginTop: 12 }}>
             <strong>✅ Replaced:</strong> {replace}
           </div>
         )}
         {replaceerr && (
-          <div className="card" style={{ borderColor: "#e74c3c", marginTop: 12 }}>
+          <div className="card" style={{ borderColor: "var(--danger)", marginTop: 12 }}>
             <strong>⚠️ Couldn&apos;t replace:</strong> {replaceerr}
           </div>
         )}
@@ -237,7 +237,7 @@ export default async function AdminPlayersPage({
           {!leavers ? (
             <Link href={checkHref} style={{ fontSize: 13 }}>🔍 Check server membership →</Link>
           ) : leavers.length === 0 ? (
-            <p style={{ fontSize: 13, color: "#2ecc71", margin: 0 }}>✅ Everyone in the active season is still in the server.</p>
+            <p style={{ fontSize: 13, color: "var(--success)", margin: 0 }}>✅ Everyone in the active season is still in the server.</p>
           ) : (
             <table style={{ marginTop: 4 }}>
               <thead><tr><th>Left the server</th><th>Division</th><th>Replace with (Discord ID)</th></tr></thead>
@@ -382,7 +382,7 @@ export default async function AdminPlayersPage({
                       <ConfirmButton
                         message={`Permanently delete ${p.displayName}? This removes the player and ALL their match history across every season. This cannot be undone.`}
                         className="secondary"
-                        style={{ fontSize: 11, color: "#e74c3c" }}
+                        style={{ fontSize: 11, color: "var(--danger)" }}
                       >
                         Delete
                       </ConfirmButton>

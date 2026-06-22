@@ -119,7 +119,7 @@ export function SignupMmrTable({
                     {r.bmpSeason == null ? (
                       <span className="muted">—</span>
                     ) : isPrev ? (
-                      <span style={{ color: "#f1c40f" }} title="Hasn't played the current BMP season — showing their most recent one">
+                      <span style={{ color: "var(--accent)" }} title="Hasn't played the current BMP season — showing their most recent one">
                         {bmpSeasonLabel(r.bmpSeason)} · prev
                       </span>
                     ) : (

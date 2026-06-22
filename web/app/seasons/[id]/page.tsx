@@ -132,7 +132,7 @@ async function PublicSummary({
       <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 8 }}>
         <h2 style={{ margin: 0 }}>{season.name}</h2>
         {season.isActive ? (
-          <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "#2ecc71" }}>ACTIVE</span>
+          <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--success)" }}>ACTIVE</span>
         ) : (
           <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "#c0c8cb" }}>FINISHED</span>
         )}
@@ -141,10 +141,10 @@ async function PublicSummary({
       </div>
 
       {ok && (
-        <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>✓ Final rank updated.</div>
+        <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)" }}>✓ Final rank updated.</div>
       )}
       {err && (
-        <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c" }}>{err}</div>
+        <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>{err}</div>
       )}
       {isEnded && isAdmin && (
         <p className="muted" style={{ fontSize: 12 }}>
@@ -267,8 +267,8 @@ async function AdminSeasonPanel({
 
   return (
     <>
-      <div className="card" style={{ borderColor: "#f1c40f", marginTop: 24 }}>
-        <strong style={{ color: "#f1c40f" }}>🔧 Admin tools</strong>
+      <div className="card" style={{ borderColor: "var(--accent)", marginTop: 24 }}>
+        <strong style={{ color: "var(--accent)" }}>🔧 Admin tools</strong>
         <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
           Draft editor, lifecycle, settings, and danger zone — only visible to admins.
         </p>
@@ -290,13 +290,13 @@ async function AdminSeasonPanel({
           <Button type="submit" variant="secondary" size="sm">Save</Button>
         </form>
         {season.isActive && (
-          <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "#2ecc71" }}>ACTIVE</span>
+          <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--success)" }}>ACTIVE</span>
         )}
         {!season.isActive && !season.endedAt && (
           <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "#c0c8cb" }}>Inactive</span>
         )}
         {season.endedAt && (
-          <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "#e74c3c" }}>Ended</span>
+          <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "var(--danger)" }}>Ended</span>
         )}
       </div>
       <div className="muted" style={{ marginTop: 4 }}>
@@ -309,11 +309,11 @@ async function AdminSeasonPanel({
       </div>
 
       {errParam && (
-        <div className="card" style={{ borderColor: "#e74c3c", color: "#e74c3c" }}>{errParam}</div>
+        <div className="card" style={{ borderColor: "var(--danger)", color: "var(--danger)" }}>{errParam}</div>
       )}
 
       {imported && (
-        <div className="card" style={{ borderColor: "#2ecc71" }}>
+        <div className="card" style={{ borderColor: "var(--success)" }}>
           ✓ Bulk import succeeded. Review the divisions below, then Start the season when ready.
         </div>
       )}
@@ -341,8 +341,8 @@ async function AdminSeasonPanel({
               standings preview below. */}
           {!season.isActive && !season.endedAt && (
             <>
-              <div className="card" style={{ background: justBuilt ? "rgba(46,204,113,0.10)" : "rgba(241,196,15,0.08)", borderColor: justBuilt ? "#2ecc71" : "#f1c40f", marginTop: 12 }}>
-                <strong style={{ color: justBuilt ? "#2ecc71" : "#f1c40f" }}>
+              <div className="card" style={{ background: justBuilt ? "rgba(46,204,113,0.10)" : "rgba(241,196,15,0.08)", borderColor: justBuilt ? "var(--success)" : "var(--accent)", marginTop: 12 }}>
+                <strong style={{ color: justBuilt ? "var(--success)" : "var(--accent)" }}>
                   {justBuilt ? "✓ Season built — review below" : "📝 Draft mode"}
                 </strong>{" "}
                 <span className="muted" style={{ fontSize: 12 }}>
@@ -450,7 +450,7 @@ async function AdminSeasonPanel({
             )}
 
             <div>
-              <strong style={{ color: "#f1c40f" }}>🏆 Award champion roles</strong>
+              <strong style={{ color: "var(--accent)" }}>🏆 Award champion roles</strong>
               <p className="muted" style={{ fontSize: 12 }}>
                 Rank-1 finisher in each division gets a permanent
                 <code> 🏆 {formatSeasonLabel(season)} · &lt;Division&gt; Champion</code> role. Idempotent;
@@ -554,7 +554,7 @@ async function AdminSeasonPanel({
       />
 
       <details className="card" style={{ marginTop: 16 }}>
-        <summary style={{ cursor: "pointer", color: "#e74c3c", fontSize: 12 }}>Danger zone</summary>
+        <summary style={{ cursor: "pointer", color: "var(--danger)", fontSize: 12 }}>Danger zone</summary>
         <form action={deleteSeason} style={{ marginTop: 6, display: "flex", gap: 6, alignItems: "center" }}>
           <input type="hidden" name="id" value={season.id} />
           <span className="muted" style={{ fontSize: 11 }}>Type "{formatSeasonLabel(season)}" to confirm:</span>

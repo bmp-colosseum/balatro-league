@@ -25,7 +25,7 @@ export function MmrSeedingTable({ players }: { players: SeedPlayer[] }) {
           stored per player · set on <a href="/admin/mmr">/admin/mmr</a>
         </span>
         {unset > 0 && (
-          <span style={{ color: "#f1c40f", fontSize: 12, marginLeft: "auto" }}>
+          <span style={{ color: "var(--accent)", fontSize: 12, marginLeft: "auto" }}>
             ⚠ {unset} unset — seed them for an accurate preview
           </span>
         )}
@@ -46,7 +46,7 @@ export function MmrSeedingTable({ players }: { players: SeedPlayer[] }) {
               <td style={{ padding: "3px 8px" }} className="muted">{i + 1}</td>
               <td style={{ padding: "3px 8px" }}>{p.displayName}</td>
               <td
-                style={{ padding: "3px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: p.hiddenMmr == null ? "#f1c40f" : undefined }}
+                style={{ padding: "3px 8px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600, color: p.hiddenMmr == null ? "var(--accent)" : undefined }}
               >
                 {p.hiddenMmr ?? "unset"}
               </td>

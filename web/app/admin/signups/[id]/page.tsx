@@ -53,7 +53,7 @@ export default async function SignupMmrPage({
         </p>
 
         {refreshing && (
-          <div className="card" style={{ borderColor: "#2ecc71", color: "#2ecc71" }}>
+          <div className="card" style={{ borderColor: "var(--success)", color: "var(--success)" }}>
             ✓ Queued an MMR fetch for {refreshing} signup{refreshing === "1" ? "" : "s"}. It runs in the background (about
             one every few seconds) — refresh this page in a minute to see updated numbers.
           </div>
@@ -62,7 +62,7 @@ export default async function SignupMmrPage({
         {/* Add a sign-up directly — by Discord ID or an existing player. */}
         <div className="card" style={{ display: "grid", gap: 8 }}>
           <strong>➕ Add a sign-up</strong>
-          {err && <span style={{ color: "#e74c3c", fontSize: 12 }}>{err}</span>}
+          {err && <span style={{ color: "var(--danger)", fontSize: 12 }}>{err}</span>}
           <form action={addSignupToRound} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
             <input type="hidden" name="roundId" value={round.id} />
             <Input name="discordId" placeholder="Discord ID (17-20 digits)" pattern="\d{17,20}" style={{ flex: "1 1 200px" }} />
