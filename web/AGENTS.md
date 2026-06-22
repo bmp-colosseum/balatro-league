@@ -33,6 +33,9 @@ the mobile-card layout), `.flash` / `.flash.success` / `.flash.error`. A plain
 (`@/components/ui/button`) for actions; `<SubmitButton>` for form submits (it
 shows a pending "Working…" state); `<ConfirmButton>` for destructive/confirm
 actions (confirm prompt + pending). Don't hand-roll or inline-style buttons.
+For a tiny inline text affordance (a `+ Add` / `remove` / `done` link inside a
+row), use the `.link-action` class + a color token — NOT a `<Button>` (its forced
+height/padding won't sit inline).
 
 **Inline `style={{}}` is fine ONLY for true layout one-offs** (a flex `gap`, a
 specific `width`/`marginTop`). Colors, card borders, and anything a token or

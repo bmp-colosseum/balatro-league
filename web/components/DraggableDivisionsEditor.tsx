@@ -463,15 +463,8 @@ export function DraggableDivisionsEditor({
                           <input type="hidden" name="divisionId" value={d.id} />
                           <button
                             type="submit"
-                            className="muted"
-                            style={{
-                              background: "none",
-                              border: "none",
-                              color: "var(--danger)",
-                              cursor: "pointer",
-                              fontSize: 11,
-                              padding: 0,
-                            }}
+                            className="link-action"
+                            style={{ color: "var(--danger)", fontSize: 11 }}
                             title="Delete this empty division (draft mode only)"
                           >
                             delete
@@ -667,9 +660,10 @@ function AddPlayerControls({
     return (
       <button
         type="button"
+        className="link-action"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={() => setOpen(true)}
-        style={{ background: "none", border: "none", color: "var(--info)", cursor: "pointer", fontSize: 11, padding: 0, marginTop: 6 }}
+        style={{ color: "var(--info)", fontSize: 11, marginTop: 6 }}
       >
         + Add player
       </button>
@@ -706,10 +700,10 @@ function AddPlayerControls({
       )}
       <button
         type="button"
-        className="muted"
+        className="link-action"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={() => setOpen(false)}
-        style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: 10, padding: 0, justifySelf: "start" }}
+        style={{ color: "var(--muted)", fontSize: 10, justifySelf: "start" }}
       >
         done
       </button>

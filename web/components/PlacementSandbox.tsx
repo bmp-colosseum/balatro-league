@@ -135,9 +135,10 @@ export function PlacementSandbox({
               </label>
               <button
                 type="button"
+                className="link-action"
                 onClick={() => removeTier(i)}
                 disabled={tiers.length <= 1}
-                style={{ background: "none", border: "none", color: tiers.length <= 1 ? "var(--muted)" : "var(--danger)", cursor: tiers.length <= 1 ? "default" : "pointer", fontSize: 12 }}
+                style={{ color: tiers.length <= 1 ? "var(--muted)" : "var(--danger)", fontSize: 12 }}
               >
                 remove
               </button>
@@ -145,8 +146,9 @@ export function PlacementSandbox({
           ))}
           <button
             type="button"
+            className="link-action"
             onClick={addTier}
-            style={{ background: "none", border: "none", color: "var(--info)", cursor: "pointer", fontSize: 12, justifySelf: "start", padding: 0 }}
+            style={{ color: "var(--info)", fontSize: 12, justifySelf: "start" }}
           >
             + Add tier
           </button>
