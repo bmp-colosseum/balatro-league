@@ -12,6 +12,7 @@
 
 import Link from "next/link";
 import { useMemo, useRef, useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
 
 export interface MmrLadderRow {
   playerId: string;
@@ -161,14 +162,14 @@ export function MmrLadder({
             title="The #1 player's MMR. Everyone below is 10 lower per slot."
           />
         </label>
-        <button
+        <Button
           type="button"
           style={{ fontSize: 12, padding: "3px 10px", fontWeight: 600, opacity: dirty ? 1 : 0.7 }}
           onClick={applyWithConfirm}
           disabled={isPending}
         >
           Apply: space everyone 10 apart →
-        </button>
+        </Button>
         <span className="muted" style={{ fontSize: 11 }}>
           {seededCount} seeded get −10 spacing from {top}; {N - seededCount} unseeded (no BMP) are tied at the
           base. Drag to reorder the seeded; nothing is written until you Apply (and confirm).

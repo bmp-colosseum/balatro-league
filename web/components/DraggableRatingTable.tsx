@@ -15,6 +15,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
 
 export interface RatingRow {
   discordId: string;
@@ -207,12 +208,12 @@ export function DraggableRatingTable({
       </p>
       <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
         <span className="muted" style={{ fontSize: 11 }}>Sort:</span>
-        <button type="button" className="secondary" style={{ fontSize: 11, padding: "2px 8px" }} onClick={sortSmart}>
+        <Button type="button" variant="secondary" style={{ fontSize: 11, padding: "2px 8px" }} onClick={sortSmart}>
           Smart (returners by league rating, then BMP MMR)
-        </button>
-        <button type="button" className="secondary" style={{ fontSize: 11, padding: "2px 8px" }} onClick={sortByLeagueRating}>
+        </Button>
+        <Button type="button" variant="secondary" style={{ fontSize: 11, padding: "2px 8px" }} onClick={sortByLeagueRating}>
           League rating only
-        </button>
+        </Button>
         <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
           {saveError ? (
             <span style={{ color: "var(--danger)" }}>⚠ save failed: {saveError}</span>

@@ -161,9 +161,9 @@ export default async function PlacementPreviewPage({
             </span>
             <form action={reopenSignupRound} style={{ marginLeft: "auto" }}>
               <input type="hidden" name="roundId" value={round.id} />
-              <button type="submit" style={{ fontSize: 12, padding: "4px 12px", fontWeight: 600 }}>
+              <Button type="submit" style={{ fontSize: 12, padding: "4px 12px", fontWeight: 600 }}>
                 Reopen signups
-              </button>
+              </Button>
             </form>
           </div>
         )}

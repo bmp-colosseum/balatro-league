@@ -5,6 +5,7 @@
 // Submits its current rows as a hidden JSON input on form submit.
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 
 export interface TierConfig {
   name: string;
@@ -209,14 +210,14 @@ export function TierEditor({
       ))}
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}>
-        <button type="button" className="secondary" onClick={addRow}>
+        <Button type="button" variant="secondary" onClick={addRow}>
           + Add tier
-        </button>
+        </Button>
         {signupCount !== undefined && signupCount > 0 && (
           <>
-            <button type="button" className="secondary" onClick={suggestFromSignups}>
+            <Button type="button" variant="secondary" onClick={suggestFromSignups}>
               ✨ Suggest from {signupCount} signup{signupCount === 1 ? "" : "s"}
-            </button>
+            </Button>
             <span className="muted" style={{ fontSize: 11 }}>
               {totalDivisions} div{totalDivisions === 1 ? "" : "s"} · capacity at 6/div: {totalCapacity}
               {signupCount > totalCapacity && (

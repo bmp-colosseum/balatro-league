@@ -25,6 +25,7 @@ import { moveDivisionMember, moveDivisionMemberToPosition, setPlayerHiddenMmr } 
 import { addExistingPlayerToDivision, addLatePlayerToDivision, deleteDivision } from "@/app/admin/seasons/actions";
 import { PlayerSearch, type PlayerOption } from "@/components/PlayerSearch";
 import { addDivisionToTier } from "@/app/admin/seasons/actions";
+import { Button } from "@/components/ui/button";
 
 export interface EditorMember {
   id: string;
@@ -418,9 +419,9 @@ export function DraggableDivisionsEditor({
               >
                 <input type="hidden" name="seasonId" value={seasonId} />
                 <input type="hidden" name="tierId" value={tier.id} />
-                <button type="submit" className="secondary" style={{ fontSize: 11, padding: "2px 8px" }}>
+                <Button type="submit" variant="secondary" style={{ fontSize: 11, padding: "2px 8px" }}>
                   + Add division
-                </button>
+                </Button>
               </form>
             </h4>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(580px, 1fr))", gap: 8 }}>
@@ -690,7 +691,7 @@ function AddPlayerControls({
           pattern="\d{17,20}"
           style={{ flex: 1, fontSize: 11, padding: "1px 4px" }}
         />
-        <button type="submit" className="secondary" style={{ fontSize: 11, padding: "1px 6px" }}>Add</button>
+        <Button type="submit" variant="secondary" style={{ fontSize: 11, padding: "1px 6px" }}>Add</Button>
       </form>
       {allPlayers.length > 0 && (
         <form
@@ -700,7 +701,7 @@ function AddPlayerControls({
         >
           <input type="hidden" name="divisionId" value={divisionId} />
           <PlayerSearch players={allPlayers} name="playerId" placeholder="+ search existing player…" />
-          <button type="submit" className="secondary" style={{ fontSize: 11, padding: "1px 6px" }}>Add</button>
+          <Button type="submit" variant="secondary" style={{ fontSize: 11, padding: "1px 6px" }}>Add</Button>
         </form>
       )}
       <button
