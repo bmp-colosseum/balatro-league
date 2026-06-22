@@ -12,6 +12,7 @@ import { DiscordId } from "@/components/DiscordId";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { SubmitButton } from "@/components/SubmitButton";
 import { MatchActionsPanel } from "@/components/MatchActionsPanel";
 import { Button } from "@/components/ui/button";
 import { FormSelect } from "@/components/FormSelect";
@@ -290,7 +291,7 @@ export default async function AdminPlayersPage({
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
             <strong>BMP MMR snapshots</strong>
             <form action={refreshActiveSeasonMmrs}>
-              <Button type="submit" variant="secondary" size="sm">Refresh BMP MMRs (active season)</Button>
+              <SubmitButton variant="secondary" size="sm">Refresh BMP MMRs (active season)</SubmitButton>
             </form>
           </div>
           <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
