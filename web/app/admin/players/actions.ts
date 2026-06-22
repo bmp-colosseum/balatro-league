@@ -10,6 +10,7 @@ import { enqueueMmrSnapshot, enqueueWelcomeRefresh, enqueueStandingsRefresh } fr
 import { placePlayerInDivision } from "@/lib/division-membership";
 import { resyncSeasonSchedules } from "@/lib/schedule-sync";
 import { swapDivisionPlayers, SwapError } from "@/lib/swap-division-players";
+import { replaceDivisionPlayer, ReplaceError } from "@/lib/replace-division-player";
 import { recomputeDivisionStandings, refreshStandingsCacheIfWarm } from "@/lib/standings-cache";
 
 // Swap two players between their divisions, trading schedules wholesale (each
@@ -30,6 +31,29 @@ export async function swapPlayers(formData: FormData) {
   } catch (e) {
     if (!(e instanceof SwapError)) throw e;
     qs = `swaperr=${encodeURIComponent(e.message)}`;
+  }
+  revalidatePath("/admin/players");
+  redirect(`${back}${back.includes("?") ? "&" : "?"}${qs}`);
+}
+
+// Replace a departed member (left the Discord server) with a new person who
+// isn't in the league, handing them the departed's matchups. Pre-play only —
+// refuses if the departed has already played. Feedback via ?replace / ?replaceerr.
+export async function replacePlayer(formData: FormData) {
+  await requireAdmin();
+  const departedPlayerId = String(formData.get("departedPlayerId") ?? "");
+  const newDiscordId = String(formData.get("newDiscordId") ?? "");
+  const seasonParam = String(formData.get("seasonParam") ?? "");
+  const back = seasonParam ? `/admin/players?season=${seasonParam}` : "/admin/players";
+
+  let qs: string;
+  try {
+    const res = await replaceDivisionPlayer(departedPlayerId, newDiscordId);
+    await enqueueWelcomeRefresh(res.seasonId).catch(() => {});
+    qs = `replace=${encodeURIComponent(`${res.departedName} → ${res.newName} (${res.divisionName})`)}`;
+  } catch (e) {
+    if (!(e instanceof ReplaceError)) throw e;
+    qs = `replaceerr=${encodeURIComponent(e.message)}`;
   }
   revalidatePath("/admin/players");
   redirect(`${back}${back.includes("?") ? "&" : "?"}${qs}`);

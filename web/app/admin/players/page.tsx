@@ -17,17 +17,18 @@ import { Button } from "@/components/ui/button";
 import { FormSelect } from "@/components/FormSelect";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { addFakePlayer, deletePlayer, dropPlayer, movePlayer, refreshActiveSeasonMmrs, reinstatePlayer, setPlayerDiscordId, swapPlayers } from "./actions";
+import { addFakePlayer, deletePlayer, dropPlayer, movePlayer, refreshActiveSeasonMmrs, reinstatePlayer, replacePlayer, setPlayerDiscordId, swapPlayers } from "./actions";
+import { loadServerLeavers } from "@/lib/loaders/server-leavers";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPlayersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ season?: string; division?: string; sort?: AdminPlayersListSort; swap?: string; swaperr?: string }>;
+  searchParams: Promise<{ season?: string; division?: string; sort?: AdminPlayersListSort; swap?: string; swaperr?: string; replace?: string; replaceerr?: string; serverCheck?: string }>;
 }) {
   await requireAdmin();
-  const { season: seasonId, division: divisionId, sort = "name", swap, swaperr } = await searchParams;
+  const { season: seasonId, division: divisionId, sort = "name", swap, swaperr, replace, replaceerr, serverCheck } = await searchParams;
   const nav = await loadPlayersPageNav({ seasonId, divisionId });
   // Divisions to offer in the per-row "set division" dropdown: the selected
   // season's if one's picked, otherwise the active season's — so a player who
@@ -155,6 +156,10 @@ export default async function AdminPlayersPage({
   const selectedSeasonName = nav.seasons.find((s) => s.id === seasonId)?.name;
   // Players eligible to swap = currently in a division (and not dropped).
   const swappable = players.filter((p) => p.membership && !p.membership.dropped);
+  // On-demand server-membership check (the "Check" button sets ?serverCheck=1).
+  // It's one Discord API call per active member, so only run when asked.
+  const leavers = serverCheck ? await loadServerLeavers() : null;
+  const checkHref = `/admin/players?serverCheck=1${seasonId ? `&season=${seasonId}` : ""}`;
 
   return (
     <>
@@ -171,6 +176,16 @@ export default async function AdminPlayersPage({
         {swaperr && (
           <div className="card" style={{ borderColor: "#e74c3c", marginTop: 12 }}>
             <strong>⚠️ Couldn&apos;t swap:</strong> {swaperr}
+          </div>
+        )}
+        {replace && (
+          <div className="card" style={{ borderColor: "#2ecc71", marginTop: 12 }}>
+            <strong>✅ Replaced:</strong> {replace}
+          </div>
+        )}
+        {replaceerr && (
+          <div className="card" style={{ borderColor: "#e74c3c", marginTop: 12 }}>
+            <strong>⚠️ Couldn&apos;t replace:</strong> {replaceerr}
           </div>
         )}
 
@@ -210,6 +225,49 @@ export default async function AdminPlayersPage({
             </form>
           </div>
         )}
+
+        <div className="card" style={{ marginTop: 12 }}>
+          <strong>Left the server?</strong>
+          <p className="muted" style={{ fontSize: 12, margin: "4px 0 8px" }}>
+            Find active players who&apos;ve left the Discord server (so they can no longer play), then
+            replace one with someone new — the replacement takes over their exact schedule. Pre-play only:
+            blocked once the departing player has a reported result.
+          </p>
+          {!leavers ? (
+            <Link href={checkHref} style={{ fontSize: 13 }}>🔍 Check server membership →</Link>
+          ) : leavers.length === 0 ? (
+            <p style={{ fontSize: 13, color: "#2ecc71", margin: 0 }}>✅ Everyone in the active season is still in the server.</p>
+          ) : (
+            <table style={{ marginTop: 4 }}>
+              <thead><tr><th>Left the server</th><th>Division</th><th>Replace with (Discord ID)</th></tr></thead>
+              <tbody>
+                {leavers.map((l) => (
+                  <tr key={l.playerId}>
+                    <td>
+                      <strong>{l.displayName}</strong>
+                      <DiscordId value={l.discordId} username={null} />
+                    </td>
+                    <td className="muted">{l.divisionName}</td>
+                    <td>
+                      <form action={replacePlayer} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input type="hidden" name="seasonParam" value={seasonId ?? ""} />
+                        <input type="hidden" name="departedPlayerId" value={l.playerId} />
+                        <Input name="newDiscordId" required placeholder="Discord ID" className="max-w-40" />
+                        <ConfirmButton
+                          message={`Replace ${l.displayName} with this person? They take over the exact schedule. Blocked if ${l.displayName} already has a reported result.`}
+                          className="secondary"
+                          style={{ fontSize: 11 }}
+                        >
+                          Replace
+                        </ConfirmButton>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
 
         <div className="card" style={{ marginTop: 12 }}>
           <strong>Add fake player</strong>
