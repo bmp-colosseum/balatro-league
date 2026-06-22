@@ -44,6 +44,10 @@ import {
   setSeasonResultsWebhook,
   stripSeasonDivisionRoles,
 } from "@/app/admin/seasons/bootstrap-actions";
+import { ConfirmButton } from "@/components/ConfirmButton";
+import { DiscordId } from "@/components/DiscordId";
+import { loadServerLeavers, type ServerLeaver } from "@/lib/loaders/server-leavers";
+import { addFakePlayer, refreshActiveSeasonMmrs, replacePlayer, swapPlayers } from "@/app/admin/players/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -52,10 +56,10 @@ export default async function SeasonDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ ok?: string; err?: string; imported?: string; "just-built"?: string }>;
+  searchParams: Promise<{ ok?: string; err?: string; imported?: string; "just-built"?: string; swap?: string; swaperr?: string; replace?: string; replaceerr?: string; serverCheck?: string }>;
 }) {
   const { id } = await params;
-  const { ok, err, imported, ["just-built"]: justBuiltParam } = await searchParams;
+  const { ok, err, imported, ["just-built"]: justBuiltParam, swap, swaperr, replace, replaceerr, serverCheck } = await searchParams;
   const isAdmin = await hasTier("ADMIN");
   const justBuilt = justBuiltParam === "1";
 
@@ -74,6 +78,10 @@ export default async function SeasonDetailPage({
 
   // Non-admin viewer + draft (not active and not ended) → 404 publicly.
   if (!seasonPublic && !adminData) notFound();
+
+  // On-demand server-membership scan for the roster tools — one Discord API call
+  // per active member, so only when the admin clicks "check" on the active season.
+  const leavers = adminData?.season.isActive && serverCheck ? await loadServerLeavers() : null;
 
   // Admin views the FULL admin page; non-admin views the read-only
   // public summary. We always render the public summary when it's
@@ -97,6 +105,13 @@ export default async function SeasonDetailPage({
             imported={imported}
             justBuilt={justBuilt}
             errParam={err}
+            seasonId={id}
+            swap={swap}
+            swaperr={swaperr}
+            replace={replace}
+            replaceerr={replaceerr}
+            leavers={leavers}
+            serverChecked={!!serverCheck}
           />
         )}
       </main>
@@ -242,11 +257,25 @@ async function AdminSeasonPanel({
   imported,
   justBuilt,
   errParam,
+  seasonId,
+  swap,
+  swaperr,
+  replace,
+  replaceerr,
+  leavers,
+  serverChecked,
 }: {
   adminData: NonNullable<Awaited<ReturnType<typeof loadAdminSeasonDetail>>>;
   imported: string | undefined;
   justBuilt: boolean;
   errParam: string | undefined;
+  seasonId: string;
+  swap?: string;
+  swaperr?: string;
+  replace?: string;
+  replaceerr?: string;
+  leavers: ServerLeaver[] | null;
+  serverChecked: boolean;
 }) {
   const {
     season,
@@ -265,6 +294,17 @@ async function AdminSeasonPanel({
   const rulesTemplates = await loadRulesTemplatePickerOptions();
   // Existing players for the draft editor's "add existing player" search.
   const allPlayers = await loadAllPlayersForPicker();
+
+  // Season-wide roster tools (active seasons only): swap operates across all
+  // divisions, so its pickers list every active member with their division.
+  const swappable = season.isActive
+    ? season.divisions.flatMap((d) =>
+        d.members
+          .filter((m) => m.status === "ACTIVE")
+          .map((m) => ({ id: m.player.id, label: `${m.player.displayName} · ${d.name}` })),
+      )
+    : [];
+  const divisionOptions = season.divisions.map((d) => ({ value: d.id, label: d.name }));
 
   return (
     <>
@@ -311,6 +351,18 @@ async function AdminSeasonPanel({
 
       {errParam && (
         <Callout type="danger">{errParam}</Callout>
+      )}
+      {swap === "ok" && (
+        <Callout type="success">✓ Players swapped — they&apos;ve traded divisions and schedules.</Callout>
+      )}
+      {swaperr && (
+        <Callout type="danger">Couldn&apos;t swap: {swaperr}</Callout>
+      )}
+      {replace && (
+        <Callout type="success">✓ Replaced: {replace}</Callout>
+      )}
+      {replaceerr && (
+        <Callout type="danger">Couldn&apos;t replace: {replaceerr}</Callout>
       )}
 
       {imported && (
@@ -421,6 +473,16 @@ async function AdminSeasonPanel({
               strictly more info. Draft mode editing remains in the
               DraggableDivisionsEditor above. */}
         </>
+      )}
+
+      {season.isActive && (
+        <SeasonRosterTools
+          seasonId={seasonId}
+          swappable={swappable}
+          divisionOptions={divisionOptions}
+          leavers={leavers}
+          serverChecked={serverChecked}
+        />
       )}
 
       {/* Post-season cleanup actions — collapsed by default since
@@ -569,6 +631,120 @@ async function AdminSeasonPanel({
         </div>
       </details>
     </>
+  );
+}
+
+// Season-wide roster tools, folded in from the retired /admin/players page.
+// Per-division add / drop / remove live on each division page; these are the
+// moves that span divisions or the whole season: swap, replace-a-leaver, refresh
+// BMP MMRs, add a fake player. Active season only — the only one with a live roster.
+function SeasonRosterTools({
+  seasonId,
+  swappable,
+  divisionOptions,
+  leavers,
+  serverChecked,
+}: {
+  seasonId: string;
+  swappable: { id: string; label: string }[];
+  divisionOptions: { value: string; label: string }[];
+  leavers: ServerLeaver[] | null;
+  serverChecked: boolean;
+}) {
+  const returnTo = `/seasons/${seasonId}`;
+  const checkHref = `/seasons/${seasonId}?serverCheck=1`;
+  return (
+    <div className="card">
+      <strong>🔧 Roster tools</strong>
+      <p className="muted" style={{ fontSize: 12, margin: "4px 0 12px" }}>
+        Season-wide player moves. Per-division add / drop / remove live on each division page.
+      </p>
+
+      {swappable.length >= 2 && (
+        <div style={{ marginBottom: 16 }}>
+          <strong style={{ fontSize: 13 }}>Swap two players</strong>
+          <p className="muted" style={{ fontSize: 12, margin: "2px 0 6px" }}>
+            Trade two players between their divisions — each takes over the other&apos;s exact schedule, nobody
+            else changes. Blocked if either already has a reported result.
+          </p>
+          <form action={swapPlayers} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            <input type="hidden" name="returnTo" value={returnTo} />
+            <FormSelect
+              name="playerAId"
+              defaultValue=""
+              options={[{ value: "", label: "— player A —" }, ...swappable.map((p) => ({ value: p.id, label: p.label }))]}
+            />
+            <span className="muted">↔</span>
+            <FormSelect
+              name="playerBId"
+              defaultValue=""
+              options={[{ value: "", label: "— player B —" }, ...swappable.map((p) => ({ value: p.id, label: p.label }))]}
+            />
+            <ConfirmButton
+              message="Swap these two players between their divisions? They'll trade schedules entirely. Blocked if either already has a reported result."
+              variant="secondary"
+            >
+              Swap
+            </ConfirmButton>
+          </form>
+        </div>
+      )}
+
+      <div style={{ marginBottom: 16 }}>
+        <strong style={{ fontSize: 13 }}>Left the server?</strong>
+        <p className="muted" style={{ fontSize: 12, margin: "2px 0 6px" }}>
+          Find active players who&apos;ve left Discord, then replace one with someone new — the replacement
+          inherits their exact schedule. Pre-play only: blocked once the departing player has a reported result.
+        </p>
+        {!serverChecked ? (
+          <Link href={checkHref} style={{ fontSize: 13 }}>🔍 Check server membership →</Link>
+        ) : !leavers || leavers.length === 0 ? (
+          <p style={{ fontSize: 13, color: "var(--success)", margin: 0 }}>✓ Everyone in the season is still in the server.</p>
+        ) : (
+          <table style={{ marginTop: 4 }}>
+            <thead><tr><th>Left the server</th><th>Division</th><th>Replace with (Discord ID)</th></tr></thead>
+            <tbody>
+              {leavers.map((l) => (
+                <tr key={l.playerId}>
+                  <td><strong>{l.displayName}</strong><DiscordId value={l.discordId} username={null} /></td>
+                  <td className="muted">{l.divisionName}</td>
+                  <td>
+                    <form action={replacePlayer} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <input type="hidden" name="returnTo" value={returnTo} />
+                      <input type="hidden" name="departedPlayerId" value={l.playerId} />
+                      <Input name="newDiscordId" required placeholder="Discord ID" className="max-w-40" />
+                      <ConfirmButton
+                        message={`Replace ${l.displayName} with this person? They take over the exact schedule. Blocked if ${l.displayName} already has a reported result.`}
+                        variant="secondary"
+                      >
+                        Replace
+                      </ConfirmButton>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <form action={refreshActiveSeasonMmrs}>
+          <input type="hidden" name="returnTo" value={returnTo} />
+          <SubmitButton variant="secondary" size="sm">Refresh BMP MMRs</SubmitButton>
+        </form>
+        <form action={addFakePlayer} style={{ display: "flex", gap: 6, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <input type="hidden" name="returnTo" value={returnTo} />
+          <Input name="name" required placeholder="Fake player name" className="max-w-40" />
+          <FormSelect
+            name="divisionId"
+            defaultValue=""
+            options={[{ value: "", label: "— no division —" }, ...divisionOptions]}
+          />
+          <SubmitButton variant="secondary" size="sm">Add fake player</SubmitButton>
+        </form>
+      </div>
+    </div>
   );
 }
 

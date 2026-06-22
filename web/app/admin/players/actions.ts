@@ -13,6 +13,16 @@ import { swapDivisionPlayers, SwapError } from "@/lib/swap-division-players";
 import { replaceDivisionPlayer, ReplaceError } from "@/lib/replace-division-player";
 import { recomputeDivisionStandings, refreshStandingsCacheIfWarm } from "@/lib/standings-cache";
 
+// Where to bounce back to after a roster action. The forms pass an explicit
+// `returnTo` (e.g. the season page these tools now live on); we fall back to the
+// legacy ?season-scoped /admin/players path for any older caller.
+function resolveReturnTo(formData: FormData): string {
+  const returnTo = String(formData.get("returnTo") ?? "").trim();
+  if (returnTo.startsWith("/")) return returnTo;
+  const seasonParam = String(formData.get("seasonParam") ?? "");
+  return seasonParam ? `/admin/players?season=${seasonParam}` : "/admin/players";
+}
+
 // Swap two players between their divisions, trading schedules wholesale (each
 // inherits the other's matchups; nobody else changes). Refuses if either player
 // already has a reported result. Feedback is surfaced via ?swap / ?swaperr.
@@ -20,8 +30,7 @@ export async function swapPlayers(formData: FormData) {
   await requireAdmin();
   const playerAId = String(formData.get("playerAId") ?? "");
   const playerBId = String(formData.get("playerBId") ?? "");
-  const seasonParam = String(formData.get("seasonParam") ?? "");
-  const back = seasonParam ? `/admin/players?season=${seasonParam}` : "/admin/players";
+  const back = resolveReturnTo(formData);
 
   let qs: string;
   try {
@@ -32,7 +41,7 @@ export async function swapPlayers(formData: FormData) {
     if (!(e instanceof SwapError)) throw e;
     qs = `swaperr=${encodeURIComponent(e.message)}`;
   }
-  revalidatePath("/admin/players");
+  revalidatePath(back.split("?")[0]!);
   redirect(`${back}${back.includes("?") ? "&" : "?"}${qs}`);
 }
 
@@ -43,8 +52,7 @@ export async function replacePlayer(formData: FormData) {
   await requireAdmin();
   const departedPlayerId = String(formData.get("departedPlayerId") ?? "");
   const newDiscordId = String(formData.get("newDiscordId") ?? "");
-  const seasonParam = String(formData.get("seasonParam") ?? "");
-  const back = seasonParam ? `/admin/players?season=${seasonParam}` : "/admin/players";
+  const back = resolveReturnTo(formData);
 
   let qs: string;
   try {
@@ -55,7 +63,7 @@ export async function replacePlayer(formData: FormData) {
     if (!(e instanceof ReplaceError)) throw e;
     qs = `replaceerr=${encodeURIComponent(e.message)}`;
   }
-  revalidatePath("/admin/players");
+  revalidatePath(back.split("?")[0]!);
   redirect(`${back}${back.includes("?") ? "&" : "?"}${qs}`);
 }
 
@@ -106,7 +114,7 @@ export async function addFakePlayer(formData: FormData) {
     const div = await prisma.division.findUnique({ where: { id: divisionId } });
     if (div) await placePlayerInDivision(div.id, player.id);
   }
-  revalidatePath("/admin/players");
+  revalidatePath(resolveReturnTo(formData).split("?")[0]!);
 }
 
 // Move a player into/out of a division. divisionId encodes which season,
@@ -235,7 +243,7 @@ export async function deletePlayer(formData: FormData) {
 // fresh BMP MMR snapshot for every active-season member. Same scope as
 // the 12:00 UTC cron in src/queue.ts: past-season players aren't
 // refreshed because their snapshots are historical and immutable.
-export async function refreshActiveSeasonMmrs() {
+export async function refreshActiveSeasonMmrs(formData: FormData) {
   await requireAdmin();
   const activeSeason = await prisma.season.findFirst({
     where: { isActive: true, endedAt: null },
@@ -263,5 +271,5 @@ export async function refreshActiveSeasonMmrs() {
     }
   }
   console.log(`[admin-refresh-mmr] queued ${seen.size} for active season ${activeSeason.id}`);
-  revalidatePath("/admin/players");
+  revalidatePath(resolveReturnTo(formData).split("?")[0]!);
 }
