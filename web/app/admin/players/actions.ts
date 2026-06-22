@@ -80,6 +80,7 @@ export async function setPlayerDiscordId(formData: FormData) {
     data: { discordId: newId, hasCustomDisplayName: false },
   });
   revalidatePath("/admin/players");
+  revalidatePath(`/profile/${playerId}`);
 }
 
 // Admin match record / override / DQ / void for a player now lives in the
@@ -150,6 +151,7 @@ export async function movePlayer(formData: FormData) {
     }
   }
   revalidatePath("/admin/players");
+  revalidatePath(`/profile/${playerId}`);
 }
 
 export async function dropPlayer(formData: FormData) {

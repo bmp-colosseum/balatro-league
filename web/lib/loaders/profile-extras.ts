@@ -66,6 +66,8 @@ export interface ProfileExtras {
   fallbackSnapshot: ProfileBmpSnapshot | null;
   adminCtx: AdminRecordContext | null;
   ownActiveDivision: OwnActiveDivision | null;
+  // Active-season divisions (admin only) — for the inline move-to-division control.
+  adminDivisions: Array<{ id: string; name: string }>;
 }
 
 export async function loadProfileExtras(opts: {
@@ -92,7 +94,7 @@ export async function loadProfileExtras(opts: {
     : null;
 
   // All independent lookups in parallel. Each is a single small query.
-  const [bmpSeasonSnapshots, adminCtx] = await Promise.all([
+  const [bmpSeasonSnapshots, adminCtx, adminDivisions] = await Promise.all([
     showBmpMmr
       ? prisma.playerMmrSnapshot.findMany({
           where: {
@@ -119,6 +121,13 @@ export async function loadProfileExtras(opts: {
         })
       : Promise.resolve([] as ProfileBmpSnapshot[]),
     isViewerAdmin ? loadAdminRecordContext(profilePlayerId) : Promise.resolve(null),
+    isViewerAdmin
+      ? prisma.division.findMany({
+          where: { season: { isActive: true } },
+          select: { id: true, name: true },
+          orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
+        })
+      : Promise.resolve([] as Array<{ id: string; name: string }>),
   ]);
 
   // Lexicographic 'seasonN' sort puts season9 above season10. Fix by
@@ -174,6 +183,7 @@ export async function loadProfileExtras(opts: {
     fallbackSnapshot,
     adminCtx,
     ownActiveDivision,
+    adminDivisions,
   };
 }
 

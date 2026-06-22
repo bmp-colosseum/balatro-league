@@ -12,6 +12,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { DiscordId } from "@/components/DiscordId";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FormSelect } from "@/components/FormSelect";
 import { ReportForm } from "@/components/ReportForm";
 import { MatchActionsPanel } from "@/components/MatchActionsPanel";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -19,7 +20,7 @@ import { DisputeForm } from "@/components/DisputeForm";
 import { CANONICAL_DECKS, CANONICAL_STAKES } from "@/lib/balatro-info";
 import { reportFromProfileAction, submitProfileDispute } from "@/app/profile/[id]/actions";
 import { resetToDiscordNameAction, setCustomNameAction, setShowUsernameAction } from "@/app/me/actions";
-import { dropPlayer, reinstatePlayer } from "@/app/admin/players/actions";
+import { dropPlayer, reinstatePlayer, movePlayer, setPlayerDiscordId } from "@/app/admin/players/actions";
 import { TimezoneSetting } from "@/components/TimezoneSetting";
 import { NextSeasonCard } from "@/components/NextSeasonCard";
 import { prisma } from "@/lib/prisma";
@@ -136,7 +137,7 @@ export async function ProfileView({
     (viewerSession?.user as { inGuild?: boolean } | undefined)?.inGuild === true;
   const showBmpMmr = await getShowBmpMmr();
   const isAdmin = await hasTier("ADMIN");
-  const { viewer, bmpSeasonSnapshots, fallbackSnapshot, adminCtx, ownActiveDivision } = await loadProfileExtras({
+  const { viewer, bmpSeasonSnapshots, fallbackSnapshot, adminCtx, ownActiveDivision, adminDivisions } = await loadProfileExtras({
     profilePlayerId: profile.player.id,
     profileDiscordId: profile.player.discordId,
     viewerDiscordId,
@@ -223,42 +224,56 @@ export async function ProfileView({
           </div>
         )}
 
-        {isAdmin && activeSeasonEntry && (
+        {isAdmin && (
           <div className="card" style={{ marginTop: 12, borderColor: "#e67e22" }}>
-            <strong style={{ color: "#e67e22", fontSize: 13 }}>⚙ Admin · roster</strong>
-            {activeSeasonEntry.status === "ACTIVE" ? (
-              <>
-                <p className="muted" style={{ fontSize: 12, margin: "4px 0 8px" }}>
-                  In {activeSeasonEntry.divisionName}. Drop them if they&apos;ve left or gone inactive — their unplayed matches are removed and opponents refilled.
-                </p>
-                <form action={dropPlayer}>
-                  <input type="hidden" name="playerId" value={profile.player.id} />
-                  <ConfirmButton
-                    message={`Drop ${profile.player.displayName} from ${activeSeasonEntry.divisionName}? Their unplayed matches are removed. You can reinstate them after.`}
-                    className="secondary"
-                    style={{ fontSize: 12 }}
-                  >
-                    Drop from division
-                  </ConfirmButton>
-                </form>
-              </>
-            ) : (
-              <>
-                <p className="muted" style={{ fontSize: 12, margin: "4px 0 8px" }}>
-                  Dropped from {activeSeasonEntry.divisionName}. Reinstate to give them their schedule back.
-                </p>
-                <form action={reinstatePlayer}>
-                  <input type="hidden" name="playerId" value={profile.player.id} />
-                  <ConfirmButton
-                    message={`Reinstate ${profile.player.displayName} into ${activeSeasonEntry.divisionName}?`}
-                    className="secondary"
-                    style={{ fontSize: 12 }}
-                  >
-                    Reinstate
-                  </ConfirmButton>
-                </form>
-              </>
+            <strong style={{ color: "#e67e22", fontSize: 13 }}>⚙ Admin · manage</strong>
+            {activeSeasonEntry && (
+              <div style={{ marginTop: 8 }}>
+                {activeSeasonEntry.status === "ACTIVE" ? (
+                  <>
+                    <p className="muted" style={{ fontSize: 12, margin: "0 0 6px" }}>
+                      In {activeSeasonEntry.divisionName}. Drop if they&apos;ve left or gone inactive — unplayed matches are removed and opponents refilled.
+                    </p>
+                    <form action={dropPlayer}>
+                      <input type="hidden" name="playerId" value={profile.player.id} />
+                      <ConfirmButton message={`Drop ${profile.player.displayName} from ${activeSeasonEntry.divisionName}? Their unplayed matches are removed. You can reinstate them after.`} className="secondary" style={{ fontSize: 12 }}>Drop from division</ConfirmButton>
+                    </form>
+                  </>
+                ) : (
+                  <>
+                    <p className="muted" style={{ fontSize: 12, margin: "0 0 6px" }}>
+                      Dropped from {activeSeasonEntry.divisionName}. Reinstate to give them their schedule back.
+                    </p>
+                    <form action={reinstatePlayer}>
+                      <input type="hidden" name="playerId" value={profile.player.id} />
+                      <ConfirmButton message={`Reinstate ${profile.player.displayName} into ${activeSeasonEntry.divisionName}?`} className="secondary" style={{ fontSize: 12 }}>Reinstate</ConfirmButton>
+                    </form>
+                  </>
+                )}
+              </div>
             )}
+            {adminDivisions.length > 0 && (
+              <div style={{ marginTop: 12 }}>
+                <p className="muted" style={{ fontSize: 12, margin: "0 0 6px" }}>Move to a division (or remove from the season):</p>
+                <form action={movePlayer} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                  <input type="hidden" name="playerId" value={profile.player.id} />
+                  <FormSelect
+                    name="divisionId"
+                    defaultValue={activeSeasonEntry?.divisionId ?? ""}
+                    options={[{ value: "", label: "— remove from season —" }, ...adminDivisions.map((d) => ({ value: d.id, label: d.name }))]}
+                  />
+                  <ConfirmButton message={`Move ${profile.player.displayName} to the selected division (or remove from the season)?`} className="secondary" style={{ fontSize: 12 }}>Apply</ConfirmButton>
+                </form>
+              </div>
+            )}
+            <div style={{ marginTop: 12 }}>
+              <p className="muted" style={{ fontSize: 12, margin: "0 0 6px" }}>Discord ID (fix a wrong/typo&apos;d account):</p>
+              <form action={setPlayerDiscordId} style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <input type="hidden" name="playerId" value={profile.player.id} />
+                <Input name="discordId" placeholder="17–20 digit Discord ID" defaultValue={profile.player.discordId} className="max-w-60" />
+                <ConfirmButton message={`Change ${profile.player.displayName}'s Discord ID?`} className="secondary" style={{ fontSize: 12 }}>Save ID</ConfirmButton>
+              </form>
+            </div>
           </div>
         )}
 
