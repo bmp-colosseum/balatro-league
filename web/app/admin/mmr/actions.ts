@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { seedMissingMmrFromBmp, setPlayerMmr } from "@/lib/mmr-admin";
-import { applySeasonMmr, type MmrSeedSource } from "@/lib/mmr-recompute";
+import { applySeasonMmr, resetSeasonMmrApplication, type MmrSeedSource } from "@/lib/mmr-recompute";
 
 // Flip live MMR on/off. Off = preview-only (the sweep won't auto-apply matches);
 // on = hands-off (every confirmed match updates MMR via the sweep).
@@ -34,6 +34,14 @@ export async function applySeasonMmrApply(formData: FormData) {
   const seasonId = String(formData.get("mmrSeason") ?? "").trim() || undefined;
   const seedSource: MmrSeedSource = String(formData.get("mmrSeed")) === "bmp" ? "bmp" : "current";
   await applySeasonMmr({ seasonId, seedSource });
+  revalidatePath("/admin/mmr");
+}
+
+// Recovery: un-settle the active season's confirmed games so MMR can be re-applied
+// from a fresh baseline. Doesn't change anyone's MMR — only the applied flags.
+export async function unsettleSeasonGames() {
+  await requireAdmin();
+  await resetSeasonMmrApplication();
   revalidatePath("/admin/mmr");
 }
 

@@ -7,7 +7,7 @@ import { loadLiveMmrEnabled, loadMmrSeasons } from "@/lib/loaders/admin-mmr";
 import { previewSeasonMmr, type MmrSeedSource } from "@/lib/mmr-recompute";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { MmrLadder, type MmrLadderRow } from "@/components/MmrLadder";
-import { applyMmrLadder, applySeasonMmrApply, fillMissingMmr, markMatchesSettled, setLiveMmr, saveMmrs } from "./actions";
+import { applyMmrLadder, applySeasonMmrApply, fillMissingMmr, markMatchesSettled, setLiveMmr, saveMmrs, unsettleSeasonGames } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -218,6 +218,24 @@ export default async function MmrAdminPage({
             )
           )}
         </div>
+
+        <details className="card card-danger">
+          <summary style={{ cursor: "pointer", color: "var(--danger)" }}>
+            <strong>⚠️ Recovery — un-settle this season&apos;s games</strong>
+            <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>only if a recompute went wrong</span>
+          </summary>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 10 }}>
+            <form action={unsettleSeasonGames}>
+              <ConfirmButton message="Un-settle the active season's confirmed games so they can be re-applied? This does NOT change anyone's MMR — it only clears the 'already applied' flags. Use it after restoring/re-entering seeds, then Apply with 'Current MMR' to lay the season on top once.">
+                Un-settle this season&apos;s games
+              </ConfirmButton>
+            </form>
+            <span className="muted" style={{ fontSize: 12 }}>
+              Doesn&apos;t touch MMR — only clears the applied flags. Restore your seeds first (ladder / Set exact),
+              then this, then <strong>Apply with &ldquo;Current MMR&rdquo;</strong> to re-apply the season once.
+            </span>
+          </div>
+        </details>
 
         <div className="card">
           <MmrLadder initial={ladderRows} applyOrder={applyMmrLadder} />

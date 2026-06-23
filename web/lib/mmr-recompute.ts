@@ -156,6 +156,20 @@ export async function previewSeasonMmr(opts: { seasonId?: string; seedSource: Mm
   return { rows, seasonId: season.id, seasonLabel: formatSeasonLabel(season), seedSource: opts.seedSource, matchCount };
 }
 
+// Recovery helper: un-settle every confirmed game in a season (mmrApplied=false)
+// so they can be re-applied from scratch. Does NOT touch anyone's MMR — only the
+// applied flags. Use after restoring/re-entering seeds, to then apply the season
+// once cleanly on top with the "Current MMR" (incremental) option.
+export async function resetSeasonMmrApplication(seasonId?: string): Promise<{ reset: number; seasonId: string | null }> {
+  const season = await resolveSeason(seasonId);
+  if (!season) return { reset: 0, seasonId: null };
+  const res = await prisma.match.updateMany({
+    where: { status: "CONFIRMED", format: "LEAGUE_BO2", division: { seasonId: season.id } },
+    data: { mmrApplied: false },
+  });
+  return { reset: res.count, seasonId: season.id };
+}
+
 // Apply — run the same computation and commit it, idempotently. Writes each
 // player's hiddenMmr + volatility, then settles the matches this pass consumed:
 //   • "current" → only the games it just applied (so future games stay live).
