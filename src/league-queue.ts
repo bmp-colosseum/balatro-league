@@ -98,6 +98,32 @@ export async function remainingMatchCount(playerId: string, seasonId: string): P
   });
 }
 
+// Remove queue entries for anyone no longer eligible — not an ACTIVE division
+// member this season (not in the league), or with no scheduled matches left.
+// Mirrors the Queue-up gate; runs each sweep so the queue self-cleans. Returns
+// how many entries were removed.
+export async function pruneIneligibleQueue(seasonId: string): Promise<number> {
+  const entries = await prisma.queueEntry.findMany({ select: { playerId: true } });
+  if (entries.length === 0) return 0;
+  const queuedIds = entries.map((e) => e.playerId);
+  const members = await prisma.divisionMember.findMany({
+    where: { seasonId, status: "ACTIVE", playerId: { in: queuedIds } },
+    select: { playerId: true },
+  });
+  const memberSet = new Set(members.map((m) => m.playerId));
+  const toRemove: string[] = [];
+  for (const id of queuedIds) {
+    if (!memberSet.has(id)) {
+      toRemove.push(id); // not in the league this season
+      continue;
+    }
+    if ((await remainingMatchCount(id, seasonId)) === 0) toRemove.push(id); // nothing left to play
+  }
+  if (toRemove.length === 0) return 0;
+  const res = await prisma.queueEntry.deleteMany({ where: { playerId: { in: toRemove } } });
+  return res.count;
+}
+
 export interface QueueStatus {
   queued: boolean;
   free: Player[]; // everyone currently free (excluding the asker)
@@ -208,25 +234,30 @@ export async function tryStartFromQueue(opts: {
 export async function sweepQueueMatches(): Promise<number> {
   const season = await activePublicSeason();
   if (!season) return 0;
+  const client = getDiscordClient();
+
+  // First, drop anyone no longer eligible (left the league, finished their
+  // matches) so the queue stays clean even between clicks.
+  const pruned = await pruneIneligibleQueue(season.id);
+
   const entries = await prisma.queueEntry.findMany({
     where: { seasonId: season.id },
     orderBy: { queuedAt: "asc" },
     select: { playerId: true },
   });
-  if (entries.length < 2) return 0;
-
-  const client = getDiscordClient();
   let started = 0;
-  for (const { playerId } of entries) {
-    // tryStartFromQueue removes both players on a match, so skip anyone already
-    // paired earlier in this pass.
-    if (!(await isQueued(playerId))) continue;
-    const me = await prisma.player.findUnique({ where: { id: playerId } });
-    if (!me) continue;
-    const outcome = await tryStartFromQueue({ client, me, actor: SYSTEM_ACTOR });
-    if (outcome.matched) started++;
+  if (entries.length >= 2) {
+    for (const { playerId } of entries) {
+      // tryStartFromQueue removes both players on a match, so skip anyone already
+      // paired earlier in this pass.
+      if (!(await isQueued(playerId))) continue;
+      const me = await prisma.player.findUnique({ where: { id: playerId } });
+      if (!me) continue;
+      const outcome = await tryStartFromQueue({ client, me, actor: SYSTEM_ACTOR });
+      if (outcome.matched) started++;
+    }
   }
-  if (started > 0) await refreshQueueMessage(client);
+  if (pruned > 0 || started > 0) await refreshQueueMessage(client);
   return started;
 }
 
