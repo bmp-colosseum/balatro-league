@@ -9,6 +9,7 @@
 //     computeStandings
 
 import { prisma } from "@/lib/prisma";
+import { isScheduleLocked } from "@/lib/schedule-locked";
 import { computeStandings } from "@/lib/standings";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { expectedMatchesBySeason } from "@/lib/loaders/admin-shared";
@@ -103,7 +104,7 @@ export async function loadAdminDivisionDetail(
   const division = await prisma.division.findUnique({
     where: { id: divisionId },
     include: {
-      season: { select: { id: true, number: true, subtitle: true, targetGroupSize: true } },
+      season: { select: { id: true, number: true, subtitle: true, targetGroupSize: true, scheduleLocked: true } },
       tier: { select: { name: true, position: true } },
       members: { include: { player: true }, orderBy: { joinedAt: "asc" } },
       matches: {
@@ -174,15 +175,25 @@ export async function loadAdminDivisionDetail(
     const [x, y] = a < b ? [a, b] : [b, a];
     return `${x}-${y}`;
   };
-  const playedSet = new Set(pairings.map((p) => playedKey(p.playerAId, p.playerBId)));
+  // "Played" = a matchup that already has a result (anything but a 0-0 PENDING).
+  // "Assigned" = every pre-created BO2 match = the locked schedule's pairs. With a
+  // locked (graph) schedule only ASSIGNED pairs are real matchups, so the admin
+  // match-actions list shows exactly the players' scheduled-but-unplayed games — not
+  // the full round-robin. Mirrors loadDivisionPageData (this is the same fix).
+  const playedSet = new Set(
+    pairings.filter((p) => p.status !== "PENDING").map((p) => playedKey(p.playerAId, p.playerBId)),
+  );
+  const assignedSet = new Set(pairings.map((p) => playedKey(p.playerAId, p.playerBId)));
+  const scheduleLocked = isScheduleLocked(division.season.scheduleLocked, pairings);
   const unplayed: AdminDivisionDetailData["unplayed"] = [];
   for (let i = 0; i < activeMembers.length; i++) {
     for (let j = i + 1; j < activeMembers.length; j++) {
       const a = activeMembers[i]!.player;
       const b = activeMembers[j]!.player;
-      if (!playedSet.has(playedKey(a.id, b.id))) {
-        unplayed.push({ a, b });
-      }
+      const key = playedKey(a.id, b.id);
+      if (playedSet.has(key)) continue;
+      if (scheduleLocked && !assignedSet.has(key)) continue; // not on the schedule
+      unplayed.push({ a, b });
     }
   }
 
