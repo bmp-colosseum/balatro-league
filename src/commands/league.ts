@@ -17,6 +17,7 @@ import { prisma } from "../db.js";
 import { PERM_PRESETS } from "../discord-helpers.js";
 import { webUrl, WEB_HOST } from "../web-url.js";
 import { clearConfig, getConfig, LeagueConfigKey, setConfig } from "../league-config.js";
+import { ensureQueueMessage } from "../league-queue.js";
 import { requireOwner } from "../permissions.js";
 import { enqueueLeagueInfoRefresh, enqueueStandingsRefresh, refreshDivisionWelcomes } from "../queue.js";
 import { activePublicSeason } from "../active-season.js";
@@ -368,6 +369,12 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       ChannelType.GuildText,
       LeagueConfigKey.FeedbackChannelId,
     );
+    const queueChan = await ensureChannel(
+      "league-queue",
+      "Click 'I'm free' when you're around to play. When a scheduled opponent is also free, the bot opens a match invite for both of you to accept.",
+      ChannelType.GuildText,
+      LeagueConfigKey.LeagueQueueChannelId,
+    );
 
     // Persist channel ids in LeagueConfig so the bot's per-channel
     // resolvers (command-channels.ts, announcements-channel.ts, etc.)
@@ -418,6 +425,11 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       where: { key: "general_channel_id" },
       create: { key: "general_channel_id", value: chatChan.id, updatedBy: interaction.user.id },
       update: { value: chatChan.id, updatedBy: interaction.user.id },
+    });
+    await prisma.leagueConfig.upsert({
+      where: { key: "league_queue_channel_id" },
+      create: { key: "league_queue_channel_id", value: queueChan.id, updatedBy: interaction.user.id },
+      update: { value: queueChan.id, updatedBy: interaction.user.id },
     });
 
     // Lock #league-results-bot to bot-only posting: @everyone keeps view +
@@ -512,6 +524,9 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     await lockReadOnly(signupChan, "#league-signups", false);
     await lockReadOnly(standingsChan, "#league-standings", false);
     await lockReadOnly(helpChan, "#league-help", false);
+    // #league-queue is bot-only too — the pinned message + its Join/Leave buttons
+    // are the whole UI; buttons work regardless of send-message perms.
+    await lockReadOnly(queueChan, "#league-queue", false);
 
     // Post (or refresh) the pinned command list in #league-help. Idempotent —
     // edits the bot's stored message if it exists, else posts + pins a new one,
@@ -547,6 +562,14 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     await lockPostable(chatChan, "#league-chat");
     await lockPostable(botCmdChan, "#league-bot-commands");
     await lockPostable(feedbackChan, "#league-feedback");
+
+    // Post (or refresh) the pinned queue message with its Join/Leave buttons.
+    try {
+      await ensureQueueMessage(interaction.client, queueChan.id);
+    } catch (err) {
+      console.warn("[bootstrap] couldn't post #league-queue message:", (err as Error).message);
+      reused.push("#league-queue (couldn't post the queue message — re-run /league setup)");
+    }
 
     // #league-results (the old human-postable backup) is retired — results
     // auto-post to #league-results-bot and that's the only results channel now.
@@ -866,6 +889,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       `📌 <#${infoChan.id}> — league-info`,
       `📝 <#${signupChan.id}> — league-signups`,
       `🏆 <#${resultsChan.id}> — league-results-bot (bot-only auto-post target)`,
+      `🎮 <#${queueChan.id}> — league-queue (click "I'm free"; matches scheduled opponents)`,
       `📣 <#${announcementsChan.id}> — league-announcements (season starts, recaps)`,
       `💬 <#${chatChan.id}> — league-chat`,
       `🗣️ <#${feedbackChan.id}> — league-feedback (player suggestions + bug reports)`,

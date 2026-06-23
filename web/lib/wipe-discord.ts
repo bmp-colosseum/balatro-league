@@ -64,6 +64,7 @@ const CONFIG_CHANNEL_KEYS = [
   "devops_channel_id",
   "challenges_channel_id",
   "league_matches_channel_id",
+  "league_queue_channel_id",
 ];
 // LeagueConfig keys that hold a CATEGORY id.
 const CONFIG_CATEGORY_KEYS = ["league_category_id", "matches_category_id"];

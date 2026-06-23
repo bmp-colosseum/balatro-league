@@ -2,18 +2,13 @@ import {
   ChannelType,
   MessageFlags,
   SlashCommandBuilder,
-  ThreadAutoArchiveDuration,
   type ChatInputCommandInteraction,
-  type TextChannel,
 } from "discord.js";
 import { activePublicSeason } from "../active-season.js";
-import { actorFromInteractionUser, recordAudit } from "../audit.js";
+import { actorFromInteractionUser } from "../audit.js";
 import { prisma } from "../db.js";
-import { getLeagueSettingsForSeason } from "../league-settings.js";
-import { bootstrapPresetsAndPointers, presetForSeason } from "../match-config.js";
-import { renderMatch } from "../match-render.js";
 import { getOrCreatePlayer, guildDisplayName } from "../players.js";
-import { ensureLeagueMatchesChannel } from "../league-matches-channel.js";
+import { createLeagueMatchInvite } from "../league-match-invite.js";
 import type { SlashCommand } from "./types.js";
 
 const MODE_CHOICES = [
@@ -86,180 +81,27 @@ export const startMatch: SlashCommand = {
 
     const division = sharedMembership.division;
 
-    // For league mode, refuse a duplicate match. For shootout mode the
-    // regular-season Pairing SHOULD already exist (the 1-1 draw that
-    // triggered the need for a shootout in the first place) — so we
-    // allow the shootout flow to proceed even with an existing Pairing.
-    const [playerAId, playerBId] = me.id < opp.id ? [me.id, opp.id] : [opp.id, me.id];
-    const existing = await prisma.match.findUnique({
-      where: {
-        divisionId_playerAId_playerBId_format: {
-          divisionId: division.id,
-          playerAId,
-          playerBId,
-          format: "LEAGUE_BO2",
-        },
-      },
-    });
-    if (!isShootout && existing && existing.status === "CONFIRMED") {
-      await interaction.editReply(
-        `You've already played ${opponentUser.username} this season (${existing.gamesWonA}-${existing.gamesWonB}). ` +
-          `If this is a tiebreaker, use \`mode: Shootout\` instead.`,
-      );
-      return;
-    }
-    // Shootout mode also wants to avoid a duplicate Shootout row — bail
-    // if one already exists.
-    if (isShootout) {
-      const existingShootout = await prisma.match.findUnique({
-        where: {
-          divisionId_playerAId_playerBId_format: {
-            divisionId: division.id,
-            playerAId,
-            playerBId,
-            format: "SHOOTOUT_BO1",
-          },
-        },
-      });
-      if (existingShootout) {
-        await interaction.editReply(
-          `A shootout result is already recorded for this pair. Ask a Helper to revise via \`/admin record-shootout\` if it's wrong.`,
-        );
-        return;
-      }
-    }
-
-    // Refuse if there's already an in-flight session between them
-    const inFlight = await prisma.matchSession.findFirst({
-      where: {
-        divisionId: division.id,
-        OR: [
-          { playerAId: me.id, playerBId: opp.id },
-          { playerAId: opp.id, playerBId: me.id },
-        ],
-        state: { notIn: ["COMPLETE", "CANCELLED"] },
-      },
-    });
-    if (inFlight) {
-      await interaction.editReply(
-        `You two already have a match going (${inFlight.id}). Finish it, or have an admin cancel it, before starting a new one.`,
-      );
-      return;
-    }
-
-    // Resolve the season's match-config preset (or bootstrap a stock
-    // preset + config pointers on first run).
-    await bootstrapPresetsAndPointers();
-    const preset = await presetForSeason(season.id);
-    if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) {
-      await interaction.editReply(
-        "This season's match config preset is empty or missing — ask an admin to pick a preset on `/admin/deck-bans` and (optionally) assign one to this season.",
-      );
-      return;
-    }
-
-    // Create the session — expiresAt is DB-backed so it survives bot restarts.
-    // The accept handler checks it before doing anything else; the boot sweep
-    // (match-sweep.ts) also cleans up expired invites we never saw a click on.
-    const settings = await getLeagueSettingsForSeason(season.id);
-    const expiresAt = new Date(Date.now() + settings.matchInviteExpiryMinutes * 60 * 1000);
-    const session = await prisma.matchSession.create({
-      data: {
-        divisionId: division.id,
-        playerAId: me.id,
-        playerBId: opp.id,
-        state: "WAITING_ACCEPT",
-        channelId: interaction.channelId,
-        expiresAt,
-        // Shootout = 1-game tiebreaker. Same ban/pick flow but one
-        // game decides it, and finalizeMatch writes a Shootout row
-        // instead of a Pairing.
-        isShootout,
-        bestOf: isShootout ? 1 : 2,
-      },
-    });
-
-    // Create the match thread in the dedicated #league-matches channel, NOT the
-    // division channel — staff have ManageThreads on division channels (to see
-    // group threads), and that would expose every match. #league-matches has no
-    // staff ManageThreads, so the thread stays private to the two players until
-    // someone runs /helper. Falls back to the current channel if it can't be
-    // resolved (and a thread parent must not itself be a thread).
-    let threadId: string | null = null;
-    try {
-      let parent: TextChannel | null = null;
-      const matchesChannelId = await ensureLeagueMatchesChannel();
-      if (matchesChannelId) {
-        const mc = await interaction.client.channels.fetch(matchesChannelId).catch(() => null);
-        if (mc && mc.type === ChannelType.GuildText) parent = mc as TextChannel;
-      }
-      if (!parent) {
-        const ch = interaction.channel;
-        const threadParent = ch && ch.isThread() ? (ch as unknown as { parent: TextChannel | null }).parent : null;
-        parent = (threadParent ?? ch) as TextChannel | null;
-      }
-      if (!parent) throw new Error("no parent channel for the match thread");
-      const suffix = session.id.slice(-6);
-      const thread = await parent.threads.create({
-        name: `Match: ${me.displayName} vs ${opp.displayName} (${suffix})`,
-        type: ChannelType.PrivateThread,
-        autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
-        invitable: false,
-      });
-      await thread.members.add(me.discordId).catch(() => {});
-      await thread.members.add(opp.discordId).catch(() => {});
-      threadId = thread.id;
-    } catch (err) {
-      console.warn("[start-match] failed to create private thread:", err);
-      await interaction.editReply("Couldn't create the match thread — an admin may need to grant the Create Private Threads permission. You can still play in Balatro and `/report @opponent result:2-0`.");
-      return;
-    }
-
-    const updatedSession = await prisma.matchSession.update({
-      where: { id: session.id },
-      data: { threadId },
-    });
-
-    const { embeds, components, content } = renderMatch(updatedSession, me, opp);
-    let inviteUrl: string | null = null;
-    try {
-      const thread = await interaction.client.channels.fetch(threadId);
-      if (thread && thread.type === ChannelType.PrivateThread) {
-        const sent = await thread.send({
-          content:
-            content ||
-            `<@${opp.discordId}> — <@${me.discordId}> wants to play. Accept within ${settings.matchInviteExpiryMinutes} min.`,
-          embeds,
-          components,
-        });
-        await prisma.matchSession.update({
-          where: { id: session.id },
-          data: { matchMessageId: sent.id },
-        }).catch((err) => console.warn(`[start-match] persist messageId failed:`, err));
-        inviteUrl = sent.url;
-      }
-    } catch (err) {
-      console.warn("[start-match] failed to post invite into thread:", err);
-    }
-
-    recordAudit({
+    // All the match-validity checks + session/thread/invite creation live in the
+    // shared helper, so /start-match and the league queue create matches the
+    // exact same way.
+    const result = await createLeagueMatchInvite({
+      client: interaction.client,
+      season: { id: season.id },
+      division: { id: division.id },
+      me,
+      opp,
+      isShootout,
+      channelId: interaction.channelId,
       actor: actorFromInteractionUser(interaction.user),
-      action: "match.create",
-      targetType: "MatchSession",
-      targetId: session.id,
-      summary: `Invited ${opp.displayName} to ${isShootout ? "a showdown" : "a league match"}`,
-      metadata: {
-        isShootout,
-        divisionId: division.id,
-        seasonId: season.id,
-        opponentDiscordId: opponentUser.id,
-        threadId,
-      },
     });
+    if (!result.ok) {
+      await interaction.editReply(result.error ?? "Couldn't start the match.");
+      return;
+    }
 
     await interaction.editReply(
-      `Match invite sent — opened a private thread with ${opponentUser}. Check your sidebar; expires in ${settings.matchInviteExpiryMinutes} min if not accepted.` +
-        (inviteUrl ? `\n${inviteUrl}` : ""),
+      `Match invite sent — opened a private thread with ${opponentUser}. Check your sidebar; expires in ${result.expiryMinutes} min if not accepted.` +
+        (result.inviteUrl ? `\n${result.inviteUrl}` : ""),
     );
   },
 };

@@ -28,6 +28,7 @@ const WIPED_TABLES = [
   "Game",
   "GameDeck",
   "MatchSession",
+  "QueueEntry",
   "DivisionStandings",
   "DivisionMember",
   "Division",

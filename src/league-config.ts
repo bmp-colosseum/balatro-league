@@ -40,6 +40,11 @@ export const LeagueConfigKey = {
   // to the two players; /helper pulls a moderator in on demand. Auto-created on
   // first /start-match under the '🎴 Matches' category.
   LeagueMatchesChannelId: "league_matches_channel_id",
+  // #league-queue: players mark themselves "free to play" via a pinned message
+  // (LeagueQueueMessageId) carrying the Join/Leave buttons + the live free list.
+  // When two scheduled opponents are both queued, the normal match invite fires.
+  LeagueQueueChannelId: "league_queue_channel_id",
+  LeagueQueueMessageId: "league_queue_message_id",
   // Private channel for infra/DevOps alerts (queue stalls, rate-limit
   // floods, anything that needs a tech person not a game admin). Resolved
   // env.DEVOPS_CHANNEL_ID → LeagueConfig.DevopsChannelId → null (alerts

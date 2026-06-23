@@ -945,3 +945,19 @@ model TraitOverride {
   updatedAt   DateTime @updatedAt
   updatedBy   String?
 }
+
+// League queue: a player who has marked themselves "free to play" in
+// #league-queue. One active entry per player (until they leave or a match
+// starts). When two players who are scheduled opponents (a PENDING LEAGUE_BO2
+// Match between them) are both queued, the bot fires the normal match invite.
+// No expiry column — availability is "until I leave" by design; removed on
+// Leave or when a match starts. playerId/seasonId are plain ids (no relation)
+// to keep the model self-contained; the queue logic scopes by active season.
+model QueueEntry {
+  id       String   @id @default(cuid())
+  playerId String   @unique
+  seasonId String
+  queuedAt DateTime @default(now())
+
+  @@index([seasonId])
+}
