@@ -55,7 +55,10 @@ export async function applyPendingMatchMmr(): Promise<number> {
   const get = (id: string) => state.get(id) ?? { mmr: DEFAULT_SEED, vol: 0 };
 
   const appliedIds: string[] = [];
+  const ledger: Array<{ id: string; beforeA: number; afterA: number; beforeB: number; afterB: number }> = [];
   for (const m of pending) {
+    const beforeA = get(m.playerAId).mmr;
+    const beforeB = get(m.playerBId).mmr;
     // Derive the winner from the score whenever it's decisive — the Discord
     // confirm path never writes winnerId, so a 2-1 (or any non-2-0) result
     // would otherwise be dropped. Equal scores (1-1 draw, 0-0 void) → no winner.
@@ -71,12 +74,28 @@ export async function applyPendingMatchMmr(): Promise<number> {
       state.set(winnerId, { mmr: r.winner.mmr, vol: r.winner.volatility });
       state.set(loserId, { mmr: r.loser.mmr, vol: r.loser.volatility });
     }
+    const afterA = state.get(m.playerAId)?.mmr ?? beforeA;
+    const afterB = state.get(m.playerBId)?.mmr ?? beforeB;
+    ledger.push({
+      id: m.id,
+      beforeA: Math.round(beforeA),
+      afterA: Math.round(afterA),
+      beforeB: Math.round(beforeB),
+      afterB: Math.round(afterB),
+    });
     appliedIds.push(m.id); // also flag draws (no change) so they aren't re-scanned
   }
 
   await prisma.$transaction([
     ...[...state.entries()].map(([id, s]) =>
       prisma.player.update({ where: { id }, data: { hiddenMmr: Math.round(s.mmr), mmrVolatility: s.vol } }),
+    ),
+    // Per-match MMR ledger (before/after for both sides).
+    ...ledger.map((e) =>
+      prisma.match.update({
+        where: { id: e.id },
+        data: { mmrBeforeA: e.beforeA, mmrAfterA: e.afterA, mmrBeforeB: e.beforeB, mmrAfterB: e.afterB },
+      }),
     ),
     prisma.match.updateMany({ where: { id: { in: appliedIds } }, data: { mmrApplied: true } }),
   ]);

@@ -756,6 +756,14 @@ model Match {
   // The match-sweep picks up confirmed matches where this is false and nudges
   // MMR, so every confirm path is covered with no double-apply.
   mmrApplied               Boolean       @default(false)
+  // MMR ledger — each player's hidden MMR right BEFORE this match was applied and
+  // right AFTER. change = after − before (winner gains, loser loses; 0 on a draw).
+  // Written whenever Elowen applies the match (live sweep or an admin recompute),
+  // overwritten on a full recompute. Null until the match has been applied.
+  mmrBeforeA               Int?
+  mmrAfterA                Int?
+  mmrBeforeB               Int?
+  mmrAfterB                Int?
 
   division Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
   playerA  Player   @relation("MatchPlayerA", fields: [playerAId], references: [id])

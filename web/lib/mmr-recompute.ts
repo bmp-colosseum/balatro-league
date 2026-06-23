@@ -64,7 +64,12 @@ async function resolveSeason(seasonId?: string) {
 async function computeSeasonMmr(
   seasonId: string,
   seedSource: MmrSeedSource,
-): Promise<{ rows: MmrPreviewRow[]; matchCount: number; appliedMatchIds: string[] }> {
+): Promise<{
+  rows: MmrPreviewRow[];
+  matchCount: number;
+  appliedMatchIds: string[];
+  ledger: Array<{ id: string; beforeA: number; afterA: number; beforeB: number; afterB: number }>;
+}> {
   const players = await prisma.player.findMany({
     select: { id: true, discordId: true, displayName: true, hiddenMmr: true, mmrVolatility: true },
   });
@@ -111,21 +116,34 @@ async function computeSeasonMmr(
     state.get(pid) ?? { mmr: seedByPlayer.get(pid) ?? DEFAULT_SEED, vol: seedVolByPlayer.get(pid) ?? 0, games: 0 };
 
   const appliedMatchIds: string[] = [];
+  const ledger: Array<{ id: string; beforeA: number; afterA: number; beforeB: number; afterB: number }> = [];
   for (const m of matches) {
     appliedMatchIds.push(m.id); // consumed regardless of outcome (draws settle too)
+    const beforeA = get(m.playerAId).mmr;
+    const beforeB = get(m.playerBId).mmr;
     // Derive the winner from the score whenever it's decisive — the Discord
     // confirm path never writes winnerId. Equal scores (1-1 / 0-0) → no winner.
     let winnerId = m.winnerId ?? null;
     if (!winnerId && m.gamesWonA !== m.gamesWonB) {
       winnerId = m.gamesWonA > m.gamesWonB ? m.playerAId : m.playerBId;
     }
-    if (!winnerId) continue;
-    const loserId = winnerId === m.playerAId ? m.playerBId : m.playerAId;
-    const w = get(winnerId);
-    const l = get(loserId);
-    const r = elowen1v1({ mmr: w.mmr, volatility: w.vol }, { mmr: l.mmr, volatility: l.vol });
-    state.set(winnerId, { mmr: r.winner.mmr, vol: r.winner.volatility, games: w.games + 1 });
-    state.set(loserId, { mmr: r.loser.mmr, vol: r.loser.volatility, games: l.games + 1 });
+    if (winnerId) {
+      const loserId = winnerId === m.playerAId ? m.playerBId : m.playerAId;
+      const w = get(winnerId);
+      const l = get(loserId);
+      const r = elowen1v1({ mmr: w.mmr, volatility: w.vol }, { mmr: l.mmr, volatility: l.vol });
+      state.set(winnerId, { mmr: r.winner.mmr, vol: r.winner.volatility, games: w.games + 1 });
+      state.set(loserId, { mmr: r.loser.mmr, vol: r.loser.volatility, games: l.games + 1 });
+    }
+    const afterA = state.get(m.playerAId)?.mmr ?? beforeA;
+    const afterB = state.get(m.playerBId)?.mmr ?? beforeB;
+    ledger.push({
+      id: m.id,
+      beforeA: Math.round(beforeA),
+      afterA: Math.round(afterA),
+      beforeB: Math.round(beforeB),
+      afterB: Math.round(afterB),
+    });
   }
 
   const rows: MmrPreviewRow[] = players.map((p) => {
@@ -142,7 +160,7 @@ async function computeSeasonMmr(
       volatility: s?.vol ?? seedVolByPlayer.get(p.id) ?? 0,
     };
   });
-  return { rows, matchCount: matches.length, appliedMatchIds };
+  return { rows, matchCount: matches.length, appliedMatchIds, ledger };
 }
 
 // Preview only — compute and return, write nothing.
@@ -180,10 +198,17 @@ export async function resetSeasonMmrApplication(seasonId?: string): Promise<{ re
 export async function applySeasonMmr(opts: { seasonId?: string; seedSource: MmrSeedSource }): Promise<{ updated: number; applied: number; seasonId: string | null }> {
   const season = await resolveSeason(opts.seasonId);
   if (!season) return { updated: 0, applied: 0, seasonId: null };
-  const { rows, appliedMatchIds } = await computeSeasonMmr(season.id, opts.seedSource);
+  const { rows, appliedMatchIds, ledger } = await computeSeasonMmr(season.id, opts.seedSource);
   await prisma.$transaction([
     ...rows.map((r) =>
       prisma.player.update({ where: { id: r.playerId }, data: { hiddenMmr: r.final, mmrVolatility: r.volatility } }),
+    ),
+    // Per-match MMR ledger (before/after for both sides).
+    ...ledger.map((e) =>
+      prisma.match.update({
+        where: { id: e.id },
+        data: { mmrBeforeA: e.beforeA, mmrAfterA: e.afterA, mmrBeforeB: e.beforeB, mmrAfterB: e.afterB },
+      }),
     ),
     opts.seedSource === "bmp"
       ? prisma.match.updateMany({
