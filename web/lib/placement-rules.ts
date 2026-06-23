@@ -18,10 +18,13 @@ export interface PlacementRules {
 
 export const DEFAULT_PLACEMENT_RULES: PlacementRules = {
   topFixedSize: 6,
-  roundRobinTopDivisions: 2,
+  // Only the single top division plays a full round-robin by default; every other
+  // division defaults to the 4-opponent graph schedule. Admins override any
+  // division individually via the per-division format selector on /admin/divisions.
+  roundRobinTopDivisions: 1,
   // Simplified rule: Legendary↔Rare 1 is 1-up/1-down (hardcoded for Legendary),
   // every other boundary is a flat 2-up/2-down (tighten off, swap = 2 regardless
-  // of division size). Legendary fixed top 6; Legendary + Rare 1 play round-robin.
+  // of division size). Legendary fixed top 6.
   tightenTopTiers: false,
   swapThreshold: 8,
   baseSwap: 2,
