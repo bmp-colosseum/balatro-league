@@ -3,7 +3,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
 import { loadMmrAdmin } from "@/lib/mmr-admin";
-import { loadLiveMmrEnabled, loadMmrSeasons } from "@/lib/loaders/admin-mmr";
+import { loadLiveMmrEnabled, loadMmrSeasons, loadMmrStatus } from "@/lib/loaders/admin-mmr";
 import { previewSeasonMmr, type MmrSeedSource } from "@/lib/mmr-recompute";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { MmrLadder, type MmrLadderRow } from "@/components/MmrLadder";
@@ -63,6 +63,7 @@ export default async function MmrAdminPage({
       bmpTier: r.bmpTier,
     }));
   const liveMmr = await loadLiveMmrEnabled();
+  const status = await loadMmrStatus();
 
   return (
     <>
@@ -80,6 +81,33 @@ export default async function MmrAdminPage({
           <strong> ladder</strong> below (spaced 10 apart), or <strong>Recompute</strong> it from match results.
           Placement and schedule previews read from this; after launch it updates per match.
         </p>
+
+        {/* At-a-glance: has MMR actually been applied this season? */}
+        <div className="card card-info" style={{ display: "grid", gap: 6 }}>
+          <strong style={{ fontSize: 13 }}>
+            Status · {status.seasonLabel ?? "no active season"}
+          </strong>
+          <div style={{ display: "flex", gap: "4px 18px", flexWrap: "wrap", fontSize: 13 }}>
+            <span>Live MMR: <strong style={{ color: status.liveMmr ? "var(--success)" : "var(--muted)" }}>{status.liveMmr ? "ON" : "OFF"}</strong></span>
+            <span>
+              Applied to MMR:{" "}
+              <strong style={{ color: status.applied > 0 ? "var(--success)" : "var(--muted)" }}>
+                {status.applied}
+              </strong>
+              <span className="muted"> / {status.totalConfirmed} confirmed</span>
+              {status.pending > 0 && <span className="muted"> · {status.pending} pending</span>}
+            </span>
+            <span>MMR set: <strong>{status.playersWithMmr}</strong><span className="muted"> / {status.totalPlayers}</span></span>
+            {status.mmrMin !== null && (
+              <span className="muted">range {status.mmrMin}–{status.mmrMax}</span>
+            )}
+          </div>
+          <div className="muted" style={{ fontSize: 12 }}>
+            {status.applied === 0
+              ? "No games have been applied to MMR yet — the ladder is your raw seeds, untouched."
+              : `MMR reflects ${status.applied} applied game${status.applied === 1 ? "" : "s"}${status.pending > 0 ? ` (${status.pending} not yet applied)` : ""}.`}
+          </div>
+        </div>
 
         <div className="card" style={{ borderColor: liveMmr ? "var(--success)" : "var(--accent)", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <strong style={{ color: liveMmr ? "var(--success)" : "var(--accent)" }}>
