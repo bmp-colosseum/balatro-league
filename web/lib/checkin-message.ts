@@ -21,7 +21,7 @@ export function buildCheckinMessage(o: CheckinMessageOpts): string {
   const lines = [
     `👋 **Still playing ${o.seasonLabel}?**`,
     ``,
-    `Hey **${o.name}** — you're in **${o.divisionName}** but haven't played any matches yet. Just checking you're still up for it!`,
+    `Hey **${o.name}** — just checking in! We haven't seen you post in your division channel (**${o.divisionName}**) and you haven't played any matches yet this season. No worries at all — just making sure you're still up for it!`,
     ``,
     `**If yes — getting your matches played is on you.** Head to ${divLink}, run \`/schedule\` to see who you play, and **message your opponents directly to set up games.** Don't wait for them to come to you.`,
   ];

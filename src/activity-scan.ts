@@ -4,49 +4,23 @@
 // have gone silent. Runs async (the activity.scan pg-boss job); the ActivityScan
 // row is updated as it goes so /league scan-status can poll progress.
 
-import { ChannelType, PermissionFlagsBits } from "discord.js";
 import { prisma } from "./db.js";
 import { getDiscordClient } from "./discord.js";
-import { getConfig, LeagueConfigKey } from "./league-config.js";
-import { env } from "./env.js";
 
 // Hard cap on messages fetched per channel, so a busy channel can't run the
 // scan away on rate limits. 100/fetch → at most this/100 fetches per channel.
 const PER_CHANNEL_CAP = 3000;
 
-// EVERY text/announcement channel in the guild the bot can read — so "silent"
-// means they haven't posted ANYWHERE in the server, not just league channels.
-// Falls back to the configured league channels if the guild can't be resolved.
-// Threads are skipped (match threads etc. would balloon the scan + aren't chat).
+// Just the division channels. Worst case is "we haven't seen you in your
+// division channel" — which the check-in message states honestly. Simple, and
+// no server-wide read-permission concerns.
 async function collectScanChannels(seasonId: string): Promise<string[]> {
-  const ids = new Set<string>();
-  const guildId = env.DISCORD_GUILD_ID;
-  if (guildId) {
-    try {
-      const guild = await getDiscordClient().guilds.fetch(guildId);
-      await guild.channels.fetch();
-      const me = guild.members.me;
-      for (const ch of guild.channels.cache.values()) {
-        if (!ch || (ch.type !== ChannelType.GuildText && ch.type !== ChannelType.GuildAnnouncement)) continue;
-        const perms = me ? ch.permissionsFor(me) : null;
-        if (perms && perms.has(PermissionFlagsBits.ViewChannel) && perms.has(PermissionFlagsBits.ReadMessageHistory)) {
-          ids.add(ch.id);
-        }
-      }
-    } catch (err) {
-      console.warn("[activity-scan] guild channel enumeration failed, falling back to league channels:", err);
-    }
-  }
-  // Always include the known league channels (covers a perms-check miss / no guild id).
   const divisions = await prisma.division.findMany({
     where: { seasonId, discordChannelId: { not: null } },
     select: { discordChannelId: true },
   });
+  const ids = new Set<string>();
   for (const d of divisions) if (d.discordChannelId) ids.add(d.discordChannelId);
-  for (const key of [LeagueConfigKey.GeneralChannelId, LeagueConfigKey.BotCommandsChannelId, LeagueConfigKey.FeedbackChannelId]) {
-    const v = await getConfig(key);
-    if (v) ids.add(v);
-  }
   return [...ids];
 }
 
