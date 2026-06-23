@@ -15,13 +15,19 @@ export async function startActivityScan() {
   const season = await prisma.season.findFirst({ where: { isActive: true }, select: { id: true } });
   if (!season) return;
 
+  const staleCutoff = new Date(Date.now() - 10 * 60 * 1000);
   const running = await prisma.activityScan.findFirst({
-    where: { status: "RUNNING", startedAt: { gt: new Date(Date.now() - 30 * 60 * 1000) } },
+    where: { status: "RUNNING", startedAt: { gt: staleCutoff } },
   });
   if (running) {
     revalidatePath("/admin/activity");
     return;
   }
+  // Clear stuck (stale) RUNNING scans so they don't block a fresh one.
+  await prisma.activityScan.updateMany({
+    where: { status: "RUNNING", startedAt: { lte: staleCutoff } },
+    data: { status: "FAILED", error: "stale — superseded by a new scan", finishedAt: new Date() },
+  });
 
   const scan = await prisma.activityScan.create({
     data: { seasonId: season.id, startedById: user.discordId },

@@ -106,6 +106,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("signup.ask-kickoff");
   await boss.createQueue("signup.ask");
   await boss.createQueue("signup.reminder-tick");
+  await boss.createQueue("activity.scan");
 
   // One-shot cleanup for retired queues. Their cron schedule rows +
   // accumulated jobs (no worker listens anymore) stay in pg-boss forever
