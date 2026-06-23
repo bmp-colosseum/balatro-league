@@ -20,7 +20,7 @@ import { webUrl, WEB_HOST } from "../web-url.js";
 import { clearConfig, getConfig, LeagueConfigKey, setConfig } from "../league-config.js";
 import { ensureQueueMessage, refreshQueueMessage } from "../league-queue.js";
 import { requireOwner } from "../permissions.js";
-import { enqueueLeagueInfoRefresh, enqueueStandingsRefresh, refreshDivisionWelcomes, previewDivisionWelcomes } from "../queue.js";
+import { enqueueLeagueInfoRefresh, enqueueStandingsRefresh, refreshDivisionWelcomes, previewDivisionWelcomes, enqueueActivityScan } from "../queue.js";
 import { activePublicSeason } from "../active-season.js";
 import { formatSeasonLabel } from "../format-season.js";
 import type { SlashCommand } from "./types.js";
@@ -129,6 +129,21 @@ export const league: SlashCommand = {
     )
     .addSubcommand((sub) =>
       sub
+        .setName("scan-activity")
+        .setDescription("Scan league channels for who's been posting (runs in the background). Owner only."),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("scan-status")
+        .setDescription("Check the running or last activity scan's progress."),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("inactive")
+        .setDescription("List registered players who've gone silent + played nothing (run a scan first)."),
+    )
+    .addSubcommand((sub) =>
+      sub
         .setName("refresh-messages")
         .setDescription("Refresh the bot's pinned messages (queue, info, welcomes) to current copy. Owner only."),
     )
@@ -161,6 +176,9 @@ export const league: SlashCommand = {
     if (sub === "set-results-webhook") return setResultsWebhook(interaction);
     if (sub === "unset-results-webhook") return unsetResultsWebhook(interaction);
     if (sub === "reset-discord-state") return resetDiscordState(interaction);
+    if (sub === "scan-activity") return scanActivity(interaction);
+    if (sub === "scan-status") return scanStatus(interaction);
+    if (sub === "inactive") return inactiveRegistry(interaction);
     if (sub === "refresh-messages") return refreshMessages(interaction);
     if (sub === "refresh-welcome") return refreshWelcome(interaction);
   },
@@ -169,6 +187,143 @@ export const league: SlashCommand = {
 // Re-render each active-season division's welcome message in place. Edits the
 // stored message (ping-free) so updated wording/rosters reach players without a
 // new post or a re-ping. Re-posts only if the original message is gone.
+// Kick off an async activity scan (walks league channels for who's posted).
+async function scanActivity(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const season = await activePublicSeason();
+  if (!season) {
+    await interaction.editReply("No active season — nothing to scan.");
+    return;
+  }
+  const running = await prisma.activityScan.findFirst({
+    where: { status: "RUNNING", startedAt: { gt: new Date(Date.now() - 30 * 60 * 1000) } },
+    orderBy: { startedAt: "desc" },
+  });
+  if (running) {
+    await interaction.editReply("A scan is already running — check `/league scan-status`.");
+    return;
+  }
+  const scan = await prisma.activityScan.create({ data: { seasonId: season.id, startedById: interaction.user.id } });
+  await enqueueActivityScan(scan.id);
+  await interaction.editReply(
+    "🔎 Activity scan started — walking the division + chat channels in the background (can take a minute or two). " +
+      "Poll it with `/league scan-status`, then `/league inactive` for the list.",
+  );
+}
+
+// Poll the latest activity scan's progress.
+async function scanStatus(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const scan = await prisma.activityScan.findFirst({ orderBy: { startedAt: "desc" } });
+  if (!scan) {
+    await interaction.editReply("No activity scan yet. Start one with `/league scan-activity`.");
+    return;
+  }
+  const elapsedS = Math.round(((scan.finishedAt ?? new Date()).getTime() - scan.startedAt.getTime()) / 1000);
+  const label = scan.status === "RUNNING" ? "⏳ running" : scan.status === "DONE" ? "✅ done" : "❌ failed";
+  const lines = [
+    `**Activity scan** — ${label}`,
+    `Channels: **${scan.channelsDone}/${scan.channelsTotal}** · messages scanned: **${scan.messagesScanned}** · ${elapsedS}s`,
+  ];
+  if (scan.status === "DONE") lines.push("Run `/league inactive` for the registry.");
+  if (scan.status === "FAILED" && scan.error) lines.push(`Error: \`${scan.error}\``);
+  await interaction.editReply(lines.join("\n"));
+}
+
+// Registry: registered, placed players who've gone fully silent — no chat this
+// season (per the last completed scan), and no match played or even attempted.
+async function inactiveRegistry(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const season = await activePublicSeason();
+  if (!season) {
+    await interaction.editReply("No active season.");
+    return;
+  }
+  const [scan, seasonRow] = await Promise.all([
+    prisma.activityScan.findFirst({ where: { seasonId: season.id, status: "DONE" }, orderBy: { startedAt: "desc" } }),
+    prisma.season.findUnique({ where: { id: season.id }, select: { startedAt: true } }),
+  ]);
+  if (!scan) {
+    await interaction.editReply("No completed scan yet — run `/league scan-activity` and wait for it to finish.");
+    return;
+  }
+  const lastPost = (scan.lastPostByDiscordId ?? {}) as unknown as Record<string, string>;
+  const seasonStart = (seasonRow?.startedAt ?? new Date(0)).getTime();
+
+  const members = await prisma.divisionMember.findMany({
+    where: { seasonId: season.id, status: "ACTIVE" },
+    select: {
+      playerId: true,
+      player: { select: { discordId: true, displayName: true } },
+      division: { select: { name: true } },
+    },
+  });
+  if (members.length === 0) {
+    await interaction.editReply("No active players this season.");
+    return;
+  }
+  const playerIds = members.map((m) => m.playerId);
+  const divs = await prisma.division.findMany({ where: { seasonId: season.id }, select: { id: true } });
+  const divIds = divs.map((d) => d.id);
+
+  const [playedRows, sessionRows] = await Promise.all([
+    prisma.match.findMany({
+      where: {
+        status: "CONFIRMED",
+        format: "LEAGUE_BO2",
+        divisionId: { in: divIds },
+        OR: [{ playerAId: { in: playerIds } }, { playerBId: { in: playerIds } }],
+      },
+      select: { playerAId: true, playerBId: true },
+    }),
+    prisma.matchSession.findMany({
+      where: { divisionId: { in: divIds }, OR: [{ playerAId: { in: playerIds } }, { playerBId: { in: playerIds } }] },
+      select: { playerAId: true, playerBId: true },
+    }),
+  ]);
+  const playedSet = new Set<string>();
+  for (const m of playedRows) { playedSet.add(m.playerAId); playedSet.add(m.playerBId); }
+  const attemptedSet = new Set<string>();
+  for (const s of sessionRows) { attemptedSet.add(s.playerAId); attemptedSet.add(s.playerBId); }
+
+  const now = Date.now();
+  const daysAgo = (ms: number) => Math.floor((now - ms) / 86_400_000);
+
+  type Row = { name: string; div: string; lastPostMs: number | null; played: boolean; attempted: boolean };
+  const rows: Row[] = members.map((m) => {
+    const iso = lastPost[m.player.discordId];
+    return {
+      name: m.player.displayName,
+      div: m.division.name,
+      lastPostMs: iso ? new Date(iso).getTime() : null,
+      played: playedSet.has(m.playerId),
+      attempted: attemptedSet.has(m.playerId),
+    };
+  });
+
+  const isSilent = (r: Row) => r.lastPostMs === null || r.lastPostMs < seasonStart;
+  const ghosts = rows.filter((r) => isSilent(r) && !r.played && !r.attempted);
+  ghosts.sort((a, b) => (a.lastPostMs ?? 0) - (b.lastPostMs ?? 0));
+  const fmtLast = (r: Row) => (r.lastPostMs === null ? "never posted" : `last posted ${daysAgo(r.lastPostMs)}d ago`);
+
+  const out: string[] = [
+    `**Inactive registry**`,
+    `Scanned ${scan.messagesScanned} message(s) across ${scan.channelsDone} channel(s). "${members.length}" active player(s).`,
+    ``,
+  ];
+  if (ghosts.length === 0) {
+    out.push("✅ Nobody's fully silent — every active player has chatted, played, or at least started a match.");
+  } else {
+    out.push(`🔇 **${ghosts.length} fully silent** — no chat this season, no match played or attempted:`);
+    for (const g of ghosts) out.push(`  • **${g.name}** (${g.div}) — ${fmtLast(g)}`);
+    out.push("");
+    out.push("_DM step (Still playing / I'm out buttons) is the next pass — for now this is the review list._");
+  }
+  const chunks = chunkForDiscord(out.join("\n"));
+  await interaction.editReply(chunks[0] ?? "No data.");
+  for (const c of chunks.slice(1)) await interaction.followUp({ content: c, flags: MessageFlags.Ephemeral });
+}
+
 // Lightweight "push updated copy" — re-renders the bot's pinned messages to
 // their current wording WITHOUT the channel/role/permission churn of a full
 // bootstrap. Covers the queue message, #league-info, and division welcomes.

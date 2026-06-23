@@ -961,3 +961,23 @@ model QueueEntry {
 
   @@index([seasonId])
 }
+
+// One run of the activity scan: walks the league's human channels and records
+// each Discord user's most-recent message, so admins can spot registered players
+// who've gone silent. Runs async via the activity.scan pg-boss job; the command
+// polls this row for progress. lastPostByDiscordId is { discordId: ISO string }.
+model ActivityScan {
+  id                  String    @id @default(cuid())
+  seasonId            String
+  status              String    @default("RUNNING") // RUNNING | DONE | FAILED
+  startedById         String? // discord id of who kicked it off
+  startedAt           DateTime  @default(now())
+  finishedAt          DateTime?
+  channelsTotal       Int       @default(0)
+  channelsDone        Int       @default(0)
+  messagesScanned     Int       @default(0)
+  lastPostByDiscordId Json      @default("{}")
+  error               String?
+
+  @@index([seasonId, startedAt])
+}

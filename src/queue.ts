@@ -63,6 +63,7 @@ import { formatSeasonLabel } from "./format-season.js";
 import { postPendingReport } from "./report-flow.js";
 import { autoConfirmReport } from "./report-auto-confirm.js";
 import { getLeagueSettings } from "./league-settings.js";
+import { runActivityScan } from "./activity-scan.js";
 
 let boss: PgBoss | null = null;
 
@@ -242,6 +243,17 @@ export async function initQueue(): Promise<void> {
   );
   await boss.schedule("standings.refresh", "*/15 * * * *");
   console.log("[pg-boss] scheduled standings.refresh every 15 min");
+
+  // Worker: run an activity scan (walk league channels, record who's posted).
+  // batchSize 1 — it's a long, rate-limited job; no retry (a re-run is a fresh
+  // scan the admin triggers).
+  await boss.work<{ scanId: string }>(
+    "activity.scan",
+    { batchSize: 1, pollingIntervalSeconds: 5 },
+    async (jobs: Job<{ scanId: string }>[]) => {
+      for (const job of jobs) await runActivityScan(job.data.scanId);
+    },
+  );
 
   // Worker: bootstrap one division's Discord presence. Bounded parallelism
   // (batchSize 2) so a 19-division season doesn't slam Discord all at once
@@ -498,6 +510,11 @@ export async function enqueueBootstrapDivision(job: {
 // by web actions (signup open/close, season activate/end) and by the
 // bot's own scheduled-start sweep. Coalesces if multiple fire at once —
 // retries are idempotent (we just rebuild + edit again).
+export async function enqueueActivityScan(scanId: string): Promise<void> {
+  if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
+  await boss.send("activity.scan", { scanId }, { retryLimit: 0 });
+}
+
 export async function enqueueLeagueInfoRefresh(): Promise<void> {
   if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
   await boss.send("league-info.refresh", {}, { retryLimit: 2 });
