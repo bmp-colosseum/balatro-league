@@ -10,7 +10,7 @@
 // the web subtree), the existing committed copy is used — never fail the deploy
 // because of a missing optional sync.
 
-import { copyFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -41,7 +41,16 @@ for (const { from, to } of SYNC) {
     continue;
   }
   mkdirSync(dirname(dest), { recursive: true });
-  copyFileSync(source, dest);
+  if (dest.endsWith(".ts")) {
+    // The bot's TS uses NodeNext ".js" import extensions; web uses bundler
+    // resolution, which can't resolve an explicit ".js" specifier to its ".ts"
+    // file (Turbopack build fails). Strip the extension off relative imports so
+    // the synced copy builds under Turbopack. (tsc accepted it; the bundler won't.)
+    const content = readFileSync(source, "utf8").replace(/(\bfrom\s+["'])(\.\.?\/[^"']*?)\.js(["'])/g, "$1$2$3");
+    writeFileSync(dest, content);
+  } else {
+    copyFileSync(source, dest);
+  }
   console.log(`[sync] ${from.join("/")} -> ${to.join("/")}`);
 }
 
