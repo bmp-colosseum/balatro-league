@@ -72,7 +72,7 @@ export default async function AdminDivisionsPage({
                         ({tier.divisions.length})
                       </span>
                     </h3>
-                    <div className="grid grid-3">
+                    <div className="grid grid-2">
                       {tier.divisions.map((d) => {
                         const pct = d.expectedPairingCount === 0
                           ? 0

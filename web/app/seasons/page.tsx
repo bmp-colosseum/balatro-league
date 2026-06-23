@@ -24,15 +24,8 @@ export default async function SeasonsPage() {
                 <Link
                   key={s.id}
                   href={`/seasons/${s.id}`}
-                  style={{
-                    display: "block",
-                    padding: 14,
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    color: "var(--text)",
-                    textDecoration: "none",
-                  }}
+                  className="card"
+                  style={{ display: "block", color: "var(--text)", textDecoration: "none", marginBottom: 0 }}
                 >
                   <strong style={{ fontSize: 16 }}>{s.name}</strong>{" "}
                   {s.isActive ? (

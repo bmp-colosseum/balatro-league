@@ -35,14 +35,11 @@ export default async function HallOfFamePage() {
             No champions yet — the first season&apos;s winners will be enshrined here the moment it ends. Check back!
           </div>
         ) : (
-          withChampions.map((s) => {
+          <div className="grid grid-2">
+            {withChampions.map((s) => {
             const champ = s.champion!;
             return (
-              <section
-                key={s.seasonId}
-                className="card"
-                style={{ marginBottom: 16, borderColor: "var(--accent)", borderWidth: 1, borderStyle: "solid" }}
-              >
+              <section key={s.seasonId} className="card card-accent" style={{ marginBottom: 0 }}>
                 <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
                   <strong className="pixel" style={{ fontSize: 18 }}>{s.seasonLabel}</strong>
                   <span className="muted" style={{ fontSize: 12 }}>Ended {endedLabel(s.endedAt)}</span>
@@ -86,7 +83,8 @@ export default async function HallOfFamePage() {
                 )}
               </section>
             );
-          })
+          })}
+          </div>
         )}
       </main>
     </>

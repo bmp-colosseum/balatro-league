@@ -25,9 +25,9 @@ export default async function TraitsGuidePage() {
           Fun badges you earn from how you play. No effect on standings. Start showing up after 10 games.
         </p>
 
-        <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
+        <div className="grid grid-2" style={{ marginTop: 12 }}>
           {rows.map((t) => (
-            <div key={t.key} className="card" style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+            <div key={t.key} className="card" style={{ display: "flex", gap: 14, alignItems: "flex-start", marginBottom: 0 }}>
               <div
                 style={{
                   width: 44,
