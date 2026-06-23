@@ -6,8 +6,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { auth } from "@/auth";
 import { isAdminUser } from "@/lib/admin";
-import { getShowBmpMmr, getShowUsernames } from "@/lib/preferences";
-import { toggleShowBmpMmr, toggleShowUsernames } from "@/app/preferences/actions";
+import { getShowBmpMmr, getShowUsernames, getShowDiscordIds } from "@/lib/preferences";
+import { toggleShowBmpMmr, toggleShowUsernames, toggleShowDiscordIds } from "@/app/preferences/actions";
 import { loadOpenSignupRoundId } from "@/lib/loaders/join";
 import { CommandButton } from "@/components/CommandButton";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ export async function SiteNav({ activePath }: { activePath: string }) {
   const isAdmin = isLoggedIn ? await isAdminUser() : false;
   const showingBmpMmr = await getShowBmpMmr();
   const showingUsernames = await getShowUsernames();
+  const showingDiscordIds = isAdmin ? await getShowDiscordIds() : false;
   // @username display is members-only — only offer the toggle to verified members.
   const inGuild = (session?.user as { inGuild?: boolean } | undefined)?.inGuild === true;
 
@@ -93,6 +94,20 @@ export async function SiteNav({ activePath }: { activePath: string }) {
                 >
                   <span className="text-sm">{showingUsernames ? "☑" : "☐"}</span>
                   <span>Show Discord usernames</span>
+                </Button>
+              </form>
+            )}
+            {isAdmin && (
+              <form action={toggleShowDiscordIds}>
+                <input type="hidden" name="next" value={showingDiscordIds ? "0" : "1"} />
+                <input type="hidden" name="returnTo" value={activePath || "/"} />
+                <Button
+                  type="submit"
+                  variant="ghost"
+                  className="w-full justify-start gap-2 px-1 text-[13px] text-foreground"
+                >
+                  <span className="text-sm">{showingDiscordIds ? "☑" : "☐"}</span>
+                  <span>Show Discord IDs (admin)</span>
                 </Button>
               </form>
             )}

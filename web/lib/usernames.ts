@@ -1,7 +1,8 @@
 import { cache } from "react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getShowUsernames } from "@/lib/preferences";
+import { isAdminUser } from "@/lib/admin";
+import { getShowUsernames, getShowDiscordIds } from "@/lib/preferences";
 
 // The SUBJECT-side half of the username gate: discordIds whose owner opted OUT
 // of showing their @username (Player.showUsername = false). AND'd with the
@@ -27,4 +28,12 @@ export const canSeeUsernames = cache(async (): Promise<boolean> => {
   const inGuild = (session?.user as { inGuild?: boolean } | undefined)?.inGuild === true;
   if (!inGuild) return false;
   return getShowUsernames();
+});
+
+// Whether the viewer may see numeric Discord IDs in the <DiscordId> chip:
+// ADMINS ONLY, and only when they've flipped the admin "Show Discord IDs" toggle.
+// Non-admins always get false regardless of the cookie. cache() → one check/request.
+export const canSeeDiscordIds = cache(async (): Promise<boolean> => {
+  if (!(await isAdminUser())) return false;
+  return getShowDiscordIds();
 });
