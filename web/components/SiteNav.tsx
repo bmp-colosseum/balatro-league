@@ -11,18 +11,7 @@ import { toggleShowBmpMmr, toggleShowUsernames } from "@/app/preferences/actions
 import { loadOpenSignupRoundId } from "@/lib/loaders/join";
 import { CommandButton } from "@/components/CommandButton";
 import { Button } from "@/components/ui/button";
-
-// Public nav links — all shown directly. The bar's short enough (Report dropped,
-// Join conditional) that hiding anything behind a "More" menu just makes things
-// feel "gone". Join only shows when signups are open.
-const PRIMARY_LINKS = [
-  { href: "/standings", label: "Standings" },
-  { href: "/players", label: "Players" },
-  { href: "/stats", label: "Stats" },
-  { href: "/hall-of-fame", label: "Hall of Fame" },
-  { href: "/seasons", label: "Seasons" },
-  { href: "/traits", label: "Traits" },
-] as const;
+import { PRIMARY_LINKS } from "@/lib/nav-links";
 
 export async function SiteNav({ activePath }: { activePath: string }) {
   const session = await auth();

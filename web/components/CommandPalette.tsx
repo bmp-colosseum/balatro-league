@@ -17,36 +17,31 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
+import { PRIMARY_LINKS, ADMIN_LINKS } from "@/lib/nav-links";
 
 interface Item {
   label: string;
   href: string;
 }
 
+// All three lists derive from the shared nav-links module so the palette never
+// drifts from the navs (same labels, same destinations). Palette-only extras
+// (Join, Report, the WIP draft pages) are appended explicitly.
 const PUBLIC_PAGES: Item[] = [
-  { label: "Standings", href: "/standings" },
-  { label: "Stats", href: "/stats" },
-  { label: "Traits", href: "/traits" },
-  { label: "Past seasons", href: "/seasons" },
+  ...PRIMARY_LINKS.map((l) => ({ label: l.label, href: l.href })),
   { label: "Join the league", href: "/join" },
 ];
 
 // Require a signed-in session (the pages themselves redirect otherwise).
 const AUTHED_PAGES: Item[] = [
-  { label: "Players", href: "/players" },
   { label: "Report a match", href: "/report" },
   { label: "My profile", href: "/me" },
 ];
 
+// Mirror the admin nav (minus devOps-only links the palette can't gate without
+// extra context), plus the two WIP draft pages that live only here.
 const ADMIN_PAGES: Item[] = [
-  { label: "Admin dashboard", href: "/admin" },
-  { label: "Seasons", href: "/admin/seasons" },
-  { label: "Results", href: "/admin/results" },
-  { label: "Disputes", href: "/admin/disputes" },
-  { label: "Divisions", href: "/admin/divisions" },
-  { label: "Config", href: "/admin/config" },
-  { label: "Audit log", href: "/admin/audit" },
-  // WIP draft pages — admin-only (the pages themselves 404 for non-admins).
+  ...ADMIN_LINKS.filter((l) => !l.devOpsOnly).map((l) => ({ label: l.label, href: l.href })),
   { label: "MP Changes (WIP)", href: "/changes" },
   { label: "How to play (WIP)", href: "/how-to-play" },
 ];
