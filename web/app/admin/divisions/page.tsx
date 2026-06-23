@@ -7,7 +7,8 @@ import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { SubmitButton } from "@/components/SubmitButton";
-import { resyncSchedules, regenerateSchedules, regenerateDivisionSchedule, setDivisionFormat } from "@/app/admin/seasons/actions";
+import { resyncSchedules, regenerateSchedules, regenerateDivisionSchedule, setDivisionFormat, setDivisionRelegateCount } from "@/app/admin/seasons/actions";
+import { Input } from "@/components/ui/input";
 import { Callout } from "@/components/Callout";
 
 export const dynamic = "force-dynamic";
@@ -110,6 +111,20 @@ export default async function AdminDivisionsPage({
                                   <option value="rr">🔁 Round robin (everyone)</option>
                                   <option value="graph">🎯 4 opponents</option>
                                 </select>
+                                <Button type="submit" variant="secondary" size="sm">Set</Button>
+                              </form>
+                            )}
+                            {season.scheduleLocked && (
+                              <form action={setDivisionRelegateCount} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                                <input type="hidden" name="divisionId" value={d.id} />
+                                <span
+                                  className="muted"
+                                  style={{ fontSize: 11, whiteSpace: "nowrap" }}
+                                  title="How many of this division's bottom finishers relegate to the division below at season end. The SAME number promote up from the division below (a balanced swap) — that's the ↑/↓ zones on /standings."
+                                >
+                                  ↑↓ Promote/relegate
+                                </span>
+                                <Input type="number" name="count" min={0} max={20} defaultValue={d.relegateCount} style={{ width: 46, fontSize: 11, padding: "1px 4px" }} />
                                 <Button type="submit" variant="secondary" size="sm">Set</Button>
                               </form>
                             )}

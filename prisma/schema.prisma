@@ -575,6 +575,11 @@ model Division {
   // division be intentionally larger or smaller than the season default
   // without affecting other divisions.
   targetSize       Int?
+  // How many of this division's BOTTOM finishers relegate down to the division
+  // below at season end. Mirrored: the same number promote up from the division
+  // below (a balanced swap). 0 = none. Drives BOTH the ↑/↓ zones on /standings AND
+  // the end-season rating chain swap, so display and actual movement always agree.
+  relegateCount    Int     @default(1)
   // Per-division schedule format: true = full round-robin (play everyone), false =
   // 4-opponent graph. NULL = fall back to the season's roundRobinTopDivisions rule
   // (the legacy "top N divisions are round-robin" default). Set explicitly to

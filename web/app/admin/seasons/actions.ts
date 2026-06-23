@@ -543,6 +543,32 @@ export async function setDivisionFormat(formData: FormData) {
   redirect("/admin/divisions?ok=format-saved");
 }
 
+// Set how many of a division's bottom finishers relegate to the division below at
+// season end. The same number promote up from below (a balanced swap), so this one
+// number drives BOTH the /standings ↑/↓ zones AND the end-season chain swap.
+export async function setDivisionRelegateCount(formData: FormData) {
+  const { user } = await requireAdmin();
+  const divisionId = String(formData.get("divisionId") ?? "");
+  const count = Math.max(0, Math.min(20, Number.parseInt(String(formData.get("count")), 10) || 0));
+  if (!divisionId) redirect("/admin/divisions?err=missing-fields");
+
+  const div = await prisma.division.findUnique({ where: { id: divisionId }, select: { name: true, relegateCount: true } });
+  await prisma.division.update({ where: { id: divisionId }, data: { relegateCount: count } });
+
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "division.set-relegate-count",
+    targetType: "Division",
+    targetId: divisionId,
+    summary: `Set ${div?.name ?? divisionId} relegate count: ${div?.relegateCount ?? "?"} → ${count}`,
+    metadata: { divisionId, previous: div?.relegateCount, next: count },
+  });
+
+  revalidatePath("/admin/divisions");
+  revalidatePath("/standings");
+  redirect("/admin/divisions?ok=rules-saved");
+}
+
 // Set how many TOP divisions play a full round-robin (e.g. 1 = only Legendary;
 // Rare 1 and below become 4-opponent graphs). Editable from /admin/divisions so
 // it can be changed for a live (pre-kickoff) season; pair it with Regenerate.

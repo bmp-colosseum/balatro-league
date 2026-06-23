@@ -106,6 +106,7 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
               name: true,
               groupNumber: true,
               roundRobin: true,
+              relegateCount: true,
               members: { select: { playerId: true, status: true } },
               // Resolved league games (a real result OR a void) — used to tell
               // whether the round-robin is "complete" for promo/relegation. A
@@ -197,28 +198,37 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
     opts.showBmpMmr,
   );
 
-  // Per-division promote/relegate + format, computed ONCE over the whole ladder
-  // (tier position, then group number) from the same rule the build uses.
+  // Per-division promote/relegate + format over the whole ladder (tier position,
+  // then group number). The movement is the per-division relegateCount: a division
+  // relegates its bottom-N to the division below, and that same N promote up from
+  // below (a balanced swap) — so promote[i] = the division-ABOVE's relegate. Capped
+  // to each side's size, matching computeRatingDeltas' chain swap EXACTLY, so the
+  // ↑/↓ zones shown here are precisely who actually moves at season end.
   const rules = await getPlacementRules();
   const ladder = season.tiers.flatMap((t) =>
     t.divisions.map((d) => ({
       id: d.id,
-      tierName: t.name,
       size: d.members.filter((m) => m.status === "ACTIVE").length,
       roundRobin: d.roundRobin,
+      relegateCount: Math.max(0, d.relegateCount),
     })),
   );
-  const movement = divisionMovement(ladder.map((l) => ({ tierName: l.tierName })), ladder.map((l) => l.size), rules);
   const moveById = new Map(
-    ladder.map((l, i) => [
-      l.id,
-      {
-        promote: movement[i]!.promote,
-        relegate: movement[i]!.relegate,
-        // Per-division format override, else the season default (top-N rule).
-        format: ((l.roundRobin ?? i < rules.roundRobinTopDivisions) ? "round-robin" : "graph") as "round-robin" | "graph",
-      },
-    ]),
+    ladder.map((l, i) => {
+      const above = ladder[i - 1];
+      const below = ladder[i + 1];
+      const relegate = below ? Math.min(l.relegateCount, l.size, below.size) : 0;
+      const promote = above ? Math.min(above.relegateCount, above.size, l.size) : 0;
+      return [
+        l.id,
+        {
+          promote,
+          relegate,
+          // Per-division format override, else the season default (top division = round-robin).
+          format: ((l.roundRobin ?? i < rules.roundRobinTopDivisions) ? "round-robin" : "graph") as "round-robin" | "graph",
+        },
+      ];
+    }),
   );
 
   const tiers: StandingsTierSummary[] = season.tiers.map((t) => ({

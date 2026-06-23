@@ -99,6 +99,7 @@ export async function loadEndSeasonPreview(seasonId: string): Promise<EndSeasonP
     return {
       tierPosition: d.tier.position,
       divisionGroupNumber: d.groupNumber,
+      relegateCount: d.relegateCount,
       members: d.members.map((m) => ({
         playerId: m.playerId,
         status: m.status,

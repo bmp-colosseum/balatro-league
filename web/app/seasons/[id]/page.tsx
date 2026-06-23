@@ -32,7 +32,6 @@ import {
   renameSeason,
   setSeasonPreset,
   setSeasonScheduledStart,
-  setTierPromoteRelegateCount,
 } from "@/app/admin/seasons/actions";
 import { setSeasonRulesTemplate } from "@/app/admin/settings/actions";
 import {
@@ -174,28 +173,10 @@ async function PublicSummary({
         <section key={tier.id} style={{ marginTop: 24 }}>
           <h3 style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <span>{tier.name}</span>
-            <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>
-              top {tier.promoteRelegateCount} ↑ promote · bottom {tier.promoteRelegateCount} ↓ relegate
-            </span>
             {isAdmin && (
-              <form
-                action={setTierPromoteRelegateCount}
-                style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 400 }}
-                title="How many players move up/down between divisions when the season ends: the top N of each division promote a tier, the bottom N relegate a tier."
-              >
-                <input type="hidden" name="tierId" value={tier.id} />
-                <span className="muted">Promote / relegate per division:</span>
-                <Input
-                  type="number"
-                  name="count"
-                  min={0}
-                  max={10}
-                  defaultValue={tier.promoteRelegateCount}
-                  title="How many players move up/down between divisions when the season ends."
-                  style={{ width: 48, fontSize: 11, padding: "1px 4px" }}
-                />
-                <Button type="submit" variant="secondary" size="sm">Save</Button>
-              </form>
+              <Link href="/admin/divisions" className="muted" style={{ fontSize: 11, fontWeight: 400 }}>
+                ↑↓ Set promote/relegate per division →
+              </Link>
             )}
           </h3>
           <div className="grid grid-2">

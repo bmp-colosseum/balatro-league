@@ -24,6 +24,9 @@ export interface DivisionForRating {
   // Within-tier ordering (1-based). Optional — falls back to the array
   // position in `divisions` when not supplied.
   divisionGroupNumber?: number;
+  // How many of this division's bottom finishers relegate to the division below
+  // (mirrored as that division's promotion up). The chain swap moves exactly this many.
+  relegateCount: number;
   members: Array<{ playerId: string; status: "ACTIVE" | "DROPPED"; currentRating: number | null }>;
   standings: StandingRow[];
 }
@@ -71,6 +74,9 @@ export function computeRatingDeltas(
     tiedWithPrev: boolean; // tied with the player above in their division standings
   }
   const entries: FlatEntry[] = [];
+  // (tier:group) → how many of that division's bottom finishers relegate. The chain
+  // swap reads this so the actual movement matches the /standings zones exactly.
+  const relegateByKey = new Map<string, number>();
   divisions.forEach((div, divIdx) => {
     const droppedSet = new Set(
       div.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId),
@@ -78,6 +84,7 @@ export function computeRatingDeltas(
     const oldByPlayer = new Map(div.members.map((m) => [m.playerId, m.currentRating]));
     const active = div.standings.filter((row) => !droppedSet.has(row.player.id));
     const groupNumber = div.divisionGroupNumber ?? divIdx + 1;
+    relegateByKey.set(`${div.tierPosition}:${groupNumber}`, Math.max(0, div.relegateCount));
     active.forEach((row, idx) => {
       entries.push({
         playerId: row.player.id,
@@ -117,19 +124,22 @@ export function computeRatingDeltas(
     divisionChain[idx]!.players.push(e.playerId);
   }
 
-  // For each adjacent pair (A, B) in the chain, swap A's bottom with
-  // B's top. Skip pairs where either side has <2 players — there's no
-  // meaningful "top + bottom" distinction to swap.
+  // For each adjacent pair (A above, B below) in the chain: relegate A's bottom-N
+  // and promote B's top-N — a balanced rank swap, N = A's relegateCount (mirrored
+  // as B's promotion, so display and movement agree). Pairwise: A's worst ↔ B's
+  // best, 2nd-worst ↔ 2nd-best, … Capped so we never swap more than either holds.
   for (let i = 0; i < divisionChain.length - 1; i++) {
     const a = divisionChain[i]!.players;
     const b = divisionChain[i + 1]!.players;
-    if (a.length < 2 || b.length < 2) continue;
-    const bottomA = a[a.length - 1]!;
-    const topB = b[0]!;
-    const rA = rankByPlayer.get(bottomA)!;
-    const rB = rankByPlayer.get(topB)!;
-    rankByPlayer.set(bottomA, rB);
-    rankByPlayer.set(topB, rA);
+    const n = Math.min(relegateByKey.get(divisionChain[i]!.key) ?? 1, a.length, b.length);
+    for (let k = 0; k < n; k++) {
+      const bottomA = a[a.length - 1 - k]!;
+      const topB = b[k]!;
+      const rA = rankByPlayer.get(bottomA)!;
+      const rB = rankByPlayer.get(topB)!;
+      rankByPlayer.set(bottomA, rB);
+      rankByPlayer.set(topB, rA);
+    }
   }
 
   // finalRank (the DISPLAYED placement) allows ties: walk the strict rating
@@ -275,6 +285,7 @@ export async function endSeasonCore(seasonId: string, actor: AuditActor): Promis
     return {
       tierPosition: d.tier.position,
       divisionGroupNumber: d.groupNumber,
+      relegateCount: d.relegateCount,
       members: d.members.map((m) => ({
         playerId: m.playerId,
         status: m.status,
