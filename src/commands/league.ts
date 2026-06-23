@@ -9,6 +9,7 @@ import {
   PermissionFlagsBits,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
+  type GuildBasedChannel,
   type TextChannel,
 } from "discord.js";
 import { PLAYER_COMMANDS } from "./help.js";
@@ -270,7 +271,13 @@ async function previewBootstrap(interaction: ChatInputCommandInteraction, catego
     }
   }
 
-  // Custom-named channels (devops + admin), resolved by name in the category.
+  const permDrift: string[] = [];
+  const everyoneId = guild.roles.everyone.id;
+  const everyoneOw = (c: GuildBasedChannel) =>
+    "permissionOverwrites" in c ? c.permissionOverwrites.cache.get(everyoneId) : undefined;
+
+  // Custom-named channels (devops + admin) — private, so @everyone should be
+  // DENIED ViewChannel. Flag if they exist but aren't locked down.
   for (const [label, ...aliases] of [["league-devops"], ["league-admin-chat", "league-admin", "admin-chat"]] as string[][]) {
     const found = categoryId
       ? guild.channels.cache.find((c) => c.type === ChannelType.GuildText && c.parentId === categoryId && (c.name === label || aliases.includes(c.name)))
@@ -278,16 +285,17 @@ async function previewBootstrap(interaction: ChatInputCommandInteraction, catego
     if (found) {
       if (found.name !== label) change.push(`#${found.name} → #${label} (rename)`);
       else reuseCount++;
+      if (!everyoneOw(found)?.deny.has(PermissionFlagsBits.ViewChannel)) {
+        permDrift.push(`#${found.name} — would re-hide (private; @everyone can currently view it)`);
+      }
     } else {
       create.push(`#${label}`);
     }
   }
 
-  // Posting-permission drift: for each managed channel that already exists, does
-  // @everyone's Send Messages match the intended lock? If not, re-bootstrap would
-  // reset it. (Deeper role/view overwrites + private channels aren't diffed here.)
-  const permDrift: string[] = [];
-  const everyoneId = guild.roles.everyone.id;
+  // Permission drift on the public managed channels: @everyone's Send Messages
+  // (postable vs locked) and View Channel (these should stay visible). If either
+  // differs from the canonical lock, re-bootstrap would reset it.
   for (const { name, key, postable } of ENSURED_CHANNELS) {
     const pinnedId = await getConfig(key);
     const ch =
@@ -299,6 +307,7 @@ async function previewBootstrap(interaction: ChatInputCommandInteraction, catego
     const deniesSend = ow?.deny.has(PermissionFlagsBits.SendMessages) ?? false;
     if (postable && !allowsSend) permDrift.push(`#${name} — would re-grant @everyone posting`);
     if (!postable && !deniesSend) permDrift.push(`#${name} — would lock @everyone out of posting`);
+    if (ow?.deny.has(PermissionFlagsBits.ViewChannel)) permDrift.push(`#${name} — would un-hide from @everyone`);
   }
 
   // #league-results retirement.
@@ -336,8 +345,23 @@ async function previewBootstrap(interaction: ChatInputCommandInteraction, catego
     else create.push(`role "${rn}"`);
   }
 
+  // Results webhook — only created when one isn't configured yet.
+  const webhookCfg = await prisma.leagueConfig.findUnique({ where: { key: "results_webhook_url" }, select: { value: true } });
+  if (webhookCfg?.value) reuseCount++;
+  else create.push("results webhook (on #league-results-bot, if the bot has Manage Webhooks)");
+
+  // The three pinned messages bootstrap always re-renders to their canonical
+  // content. Listed as a heads-up (not a content diff — #league-info carries live
+  // stats that change every refresh by design).
+  const refreshed = [
+    "#league-info — pinned intro / how-it-works",
+    "#league-help — pinned command list",
+    "#league-queue — pinned Queue up / Leave / Status message",
+  ];
+
   const section = (label: string, arr: string[], emoji: string) =>
     arr.length ? `${emoji} **${label} (${arr.length})**\n${arr.map((x) => `  • ${x}`).join("\n")}` : null;
+  const noStructural = !create.length && !change.length && !remove.length && !permDrift.length;
   const out = [
     `🔍 **Bootstrap dry-run** — what a re-bootstrap would change. **Nothing was modified.**`,
     ``,
@@ -345,12 +369,12 @@ async function previewBootstrap(interaction: ChatInputCommandInteraction, catego
     section("Would CHANGE in place", change, "✏️"),
     section("Would DELETE", remove, "🗑️"),
     section("Would FIX permissions", permDrift, "🔒"),
-    create.length || change.length || remove.length || permDrift.length
-      ? ``
-      : `✅ No changes — everything already exists with the right posting permissions.`,
+    noStructural ? `✅ No structural or permission changes — everything matches.` : ``,
     `✅ ${reuseCount} item(s) already exist and would be reused as-is.`,
     ``,
-    `_Checked: channels, categories, roles, the #league-results retirement, and @everyone posting perms. NOT diffed (always re-applied): private-channel/role overwrites, the pinned #league-info / #league-help / #league-queue messages, the results webhook, and channel-id config._`,
+    `ℹ️ **Always re-rendered to canonical** (re-bootstrap overwrites any manual edits to these):\n${refreshed.map((x) => `  • ${x}`).join("\n")}`,
+    ``,
+    `_Verified: channels, categories, roles, the #league-results deletion, the results webhook, and @everyone view + post permissions on every managed channel (incl. the private #league-admin-chat / #league-devops). Re-applied silently: channel-id config + role→tier bindings (idempotent)._`,
   ]
     .filter((l): l is string => l !== null)
     .join("\n");
