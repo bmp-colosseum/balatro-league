@@ -104,13 +104,13 @@ function RowBadges({
   return (
     <>
       {medal}
-      {promoting && <> <span title="Promotion spot" style={{ color: "var(--success)" }}>↑</span></>}
-      {relegating && <> <span title="Relegation spot" style={{ color: "var(--danger)" }}>↓</span></>}
+      {promoting && <> <span title="Promotion spot" style={{ color: "var(--info)" }}>↑</span></>}
+      {relegating && <> <span title="Relegation spot" style={{ color: "var(--admin)" }}>↓</span></>}
       {clinchStatus === "up" && (
-        <> <span title="Clinched — guaranteed up" style={{ color: "var(--success)" }}>🔒↑</span></>
+        <> <span title="Clinched — guaranteed up" style={{ color: "var(--info)" }}>🔒↑</span></>
       )}
       {clinchStatus === "down" && (
-        <> <span title="Locked — guaranteed down" style={{ color: "var(--danger)" }}>🔒↓</span></>
+        <> <span title="Locked — guaranteed down" style={{ color: "var(--admin)" }}>🔒↓</span></>
       )}
       {showdown && (
         <span title="Tied — play a shootout (a 1-game tiebreaker)" style={{ color: "var(--accent)", marginLeft: 4 }}>⚔</span>
@@ -133,12 +133,12 @@ function RecordCells({ r }: { r: StandingsTableRow }) {
   );
 }
 
-// Faint background band marking the promotion (green) / relegation (red) zone so
-// the stakes read at a glance. Covers the decided state (promoting/relegating,
-// set once a division is complete) and the mid-season clinch.
+// Faint background band marking the promotion (blue) / relegation (amber) zone so
+// the stakes read at a glance — kept DISTINCT from the green-win / red-loss record
+// colours. Covers the decided state (promoting/relegating) and the mid-season clinch.
 function rowTint(ex?: StandingsRowExtras): CSSProperties | undefined {
-  if (ex?.promoting || ex?.clinchStatus === "up") return { background: "rgba(46,204,113,0.08)" };
-  if (ex?.relegating || ex?.clinchStatus === "down") return { background: "rgba(231,76,60,0.08)" };
+  if (ex?.promoting || ex?.clinchStatus === "up") return { background: "rgba(118,199,255,0.10)" };
+  if (ex?.relegating || ex?.clinchStatus === "down") return { background: "rgba(230,126,34,0.10)" };
   return undefined;
 }
 
@@ -236,8 +236,8 @@ export function DivisionStandingsTable({
       </div>
       <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>
         <strong>3</strong> pts per win · <strong>1</strong> per draw · Record = wins·draws·losses ·{" "}
-        <span style={{ color: "var(--success)" }}>green = promoting</span> ·{" "}
-        <span style={{ color: "var(--danger)" }}>red = relegating</span>
+        <span style={{ color: "var(--info)" }}>↑ blue = promoting</span> ·{" "}
+        <span style={{ color: "var(--admin)" }}>↓ amber = relegating</span>
       </p>
     </>
   );

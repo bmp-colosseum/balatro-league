@@ -115,10 +115,10 @@ export default async function StandingsPage() {
               <details style={{ marginTop: 8 }}>
                 <summary className="muted" style={{ cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5, fontSize: 11 }}>Key</summary>
                 <div style={{ marginTop: 8, fontSize: 12, display: "flex", flexWrap: "wrap", gap: "4px 16px", alignItems: "center" }}>
-                  <span><span style={{ color: "var(--success)" }}>↑</span> promotion spot</span>
-                  <span><span style={{ color: "var(--danger)" }}>↓</span> relegation spot</span>
-                  <span><span style={{ color: "var(--success)" }}>🔒↑</span> clinched — guaranteed up</span>
-                  <span><span style={{ color: "var(--danger)" }}>🔒↓</span> locked — guaranteed down</span>
+                  <span><span style={{ color: "var(--info)" }}>↑</span> promotion spot</span>
+                  <span><span style={{ color: "var(--admin)" }}>↓</span> relegation spot</span>
+                  <span><span style={{ color: "var(--info)" }}>🔒↑</span> clinched — guaranteed up</span>
+                  <span><span style={{ color: "var(--admin)" }}>🔒↓</span> locked — guaranteed down</span>
                   <span><span style={{ color: "var(--accent)" }}>⚔</span> tied — needs a shootout (a 1-game tiebreaker)</span>
                   <span><s>name</s> dropped out</span>
                 </div>
@@ -247,8 +247,8 @@ export default async function StandingsPage() {
                             </span>
                           </div>
                           <div className="muted" style={{ fontSize: 11, marginTop: 2, marginBottom: 8, display: "flex", flexWrap: "wrap", gap: "2px 10px" }}>
-                            {promoteN > 0 && <span><span style={{ color: "var(--success)" }}>↑ {promoteN}</span> promote</span>}
-                            {relegateN > 0 && <span><span style={{ color: "var(--danger)" }}>↓ {relegateN}</span> relegate</span>}
+                            {promoteN > 0 && <span><span style={{ color: "var(--info)" }}>↑ {promoteN}</span> promote</span>}
+                            {relegateN > 0 && <span><span style={{ color: "var(--admin)" }}>↓ {relegateN}</span> relegate</span>}
                             <span>{div.format === "round-robin" ? "🔁 Round robin (play everyone)" : "🎯 4 assigned opponents"}</span>
                           </div>
                           <DivisionStandingsTable
