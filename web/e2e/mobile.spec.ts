@@ -27,7 +27,7 @@ test("public pages have no horizontal overflow at 375px", async ({ page }) => {
 
 test("admin pages have no horizontal overflow at 375px", async ({ page }) => {
   await page.request.post("/api/test-auth", { data: { discordId: "e2e-owner", name: "E2E Admin" } });
-  for (const p of ["/admin", "/admin/audit", "/admin/players", "/admin/results", "/admin/seasons", "/admin/config"]) {
+  for (const p of ["/admin", "/admin/audit", "/admin/results", "/admin/seasons", "/admin/config"]) {
     await expectNoHorizontalOverflow(page, p);
   }
 });

@@ -41,7 +41,6 @@ const AUTHED_PAGES: Item[] = [
 const ADMIN_PAGES: Item[] = [
   { label: "Admin dashboard", href: "/admin" },
   { label: "Seasons", href: "/admin/seasons" },
-  { label: "Players (admin)", href: "/admin/players" },
   { label: "Results", href: "/admin/results" },
   { label: "Disputes", href: "/admin/disputes" },
   { label: "Divisions", href: "/admin/divisions" },
