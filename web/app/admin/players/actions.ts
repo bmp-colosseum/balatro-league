@@ -218,27 +218,6 @@ export async function reinstatePlayer(formData: FormData) {
   revalidatePath(`/profile/${playerId}`);
 }
 
-export async function deletePlayer(formData: FormData) {
-  await requireAdmin();
-  const playerId = String(formData.get("playerId") ?? "");
-  if (!playerId) return;
-  // Collect affected divisions before the delete so we can recompute
-  // each one's standings after the player's pairings vanish.
-  const affected = await prisma.match.findMany({
-    where: { OR: [{ playerAId: playerId }, { playerBId: playerId }] },
-    select: { divisionId: true },
-    distinct: ["divisionId"],
-  });
-  await prisma.match.deleteMany({
-    where: { OR: [{ playerAId: playerId }, { playerBId: playerId }] },
-  });
-  await prisma.player.delete({ where: { id: playerId } });
-  for (const { divisionId } of affected) {
-    recomputeDivisionStandings(divisionId).catch(() => {});
-  }
-  revalidatePath("/admin/players");
-}
-
 // Manual trigger for the same fanout the daily cron does — enqueue a
 // fresh BMP MMR snapshot for every active-season member. Same scope as
 // the 12:00 UTC cron in src/queue.ts: past-season players aren't
