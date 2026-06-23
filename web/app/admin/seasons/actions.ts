@@ -543,25 +543,28 @@ export async function setDivisionFormat(formData: FormData) {
   redirect("/admin/divisions?ok=format-saved");
 }
 
-// Set how many of a division's bottom finishers relegate to the division below at
-// season end. The same number promote up from below (a balanced swap), so this one
-// number drives BOTH the /standings ↑/↓ zones AND the end-season chain swap.
-export async function setDivisionRelegateCount(formData: FormData) {
+// Set a division's promote + relegate counts INDEPENDENTLY: how many of its top
+// finishers move up a division and how many of its bottom move down. These drive BOTH
+// the /standings ↑/↓ zones AND the end-season rating reorder, so the zones are exactly
+// who moves. (Top division's promote + bottom division's relegate are ignored.)
+export async function setDivisionPromoteRelegate(formData: FormData) {
   const { user } = await requireAdmin();
   const divisionId = String(formData.get("divisionId") ?? "");
-  const count = Math.max(0, Math.min(20, Number.parseInt(String(formData.get("count")), 10) || 0));
+  const clamp = (v: string) => Math.max(0, Math.min(20, Number.parseInt(v, 10) || 0));
+  const promoteCount = clamp(String(formData.get("promote")));
+  const relegateCount = clamp(String(formData.get("relegate")));
   if (!divisionId) redirect("/admin/divisions?err=missing-fields");
 
-  const div = await prisma.division.findUnique({ where: { id: divisionId }, select: { name: true, relegateCount: true } });
-  await prisma.division.update({ where: { id: divisionId }, data: { relegateCount: count } });
+  const div = await prisma.division.findUnique({ where: { id: divisionId }, select: { name: true, promoteCount: true, relegateCount: true } });
+  await prisma.division.update({ where: { id: divisionId }, data: { promoteCount, relegateCount } });
 
   recordAudit({
     actor: actorFromAdminUser(user),
-    action: "division.set-relegate-count",
+    action: "division.set-promote-relegate",
     targetType: "Division",
     targetId: divisionId,
-    summary: `Set ${div?.name ?? divisionId} relegate count: ${div?.relegateCount ?? "?"} → ${count}`,
-    metadata: { divisionId, previous: div?.relegateCount, next: count },
+    summary: `Set ${div?.name ?? divisionId} promote/relegate: ↑${div?.promoteCount ?? "?"}→${promoteCount} · ↓${div?.relegateCount ?? "?"}→${relegateCount}`,
+    metadata: { divisionId, promoteCount, relegateCount },
   });
 
   revalidatePath("/admin/divisions");

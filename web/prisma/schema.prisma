@@ -575,10 +575,14 @@ model Division {
   // division be intentionally larger or smaller than the season default
   // without affecting other divisions.
   targetSize       Int?
-  // How many of this division's BOTTOM finishers relegate down to the division
-  // below at season end. Mirrored: the same number promote up from the division
-  // below (a balanced swap). 0 = none. Drives BOTH the ↑/↓ zones on /standings AND
-  // the end-season rating chain swap, so display and actual movement always agree.
+  // Per-division end-season movement, set independently. promoteCount = how many of
+  // this division's TOP finishers move up a division; relegateCount = how many of its
+  // BOTTOM finishers move down. They need NOT match the neighbour's count — at each
+  // boundary both groups simply cross it, and next season's rebuild re-sizes divisions.
+  // Drive BOTH the ↑/↓ zones on /standings AND the end-season rating reorder, so the
+  // displayed zones are exactly who actually moves. (Top division never promotes;
+  // bottom never relegates — those counts are ignored there.)
+  promoteCount     Int     @default(1)
   relegateCount    Int     @default(1)
   // Per-division schedule format: true = full round-robin (play everyone), false =
   // 4-opponent graph. NULL = fall back to the season's roundRobinTopDivisions rule

@@ -106,6 +106,7 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
               name: true,
               groupNumber: true,
               roundRobin: true,
+              promoteCount: true,
               relegateCount: true,
               members: { select: { playerId: true, status: true } },
               // Resolved league games (a real result OR a void) — used to tell
@@ -199,26 +200,24 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
   );
 
   // Per-division promote/relegate + format over the whole ladder (tier position,
-  // then group number). The movement is the per-division relegateCount: a division
-  // relegates its bottom-N to the division below, and that same N promote up from
-  // below (a balanced swap) — so promote[i] = the division-ABOVE's relegate. Capped
-  // to each side's size, matching computeRatingDeltas' chain swap EXACTLY, so the
-  // ↑/↓ zones shown here are precisely who actually moves at season end.
+  // then group number). promote/relegate are the division's OWN independent counts —
+  // its top promoteCount rise, its bottom relegateCount drop. Capped to the division's
+  // size; the top division never promotes, the bottom never relegates. Matches
+  // computeRatingDeltas' reorder EXACTLY, so the ↑/↓ zones are precisely who moves.
   const rules = await getPlacementRules();
   const ladder = season.tiers.flatMap((t) =>
     t.divisions.map((d) => ({
       id: d.id,
       size: d.members.filter((m) => m.status === "ACTIVE").length,
       roundRobin: d.roundRobin,
+      promoteCount: Math.max(0, d.promoteCount),
       relegateCount: Math.max(0, d.relegateCount),
     })),
   );
   const moveById = new Map(
     ladder.map((l, i) => {
-      const above = ladder[i - 1];
-      const below = ladder[i + 1];
-      const relegate = below ? Math.min(l.relegateCount, l.size, below.size) : 0;
-      const promote = above ? Math.min(above.relegateCount, above.size, l.size) : 0;
+      const promote = i > 0 ? Math.min(l.promoteCount, l.size) : 0;
+      const relegate = i < ladder.length - 1 ? Math.min(l.relegateCount, l.size) : 0;
       return [
         l.id,
         {

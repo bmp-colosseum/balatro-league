@@ -24,8 +24,9 @@ export interface DivisionForRating {
   // Within-tier ordering (1-based). Optional — falls back to the array
   // position in `divisions` when not supplied.
   divisionGroupNumber?: number;
-  // How many of this division's bottom finishers relegate to the division below
-  // (mirrored as that division's promotion up). The chain swap moves exactly this many.
+  // Per-division end-season movement (independent): promoteCount of the top move up,
+  // relegateCount of the bottom move down. The reorder moves exactly these.
+  promoteCount: number;
   relegateCount: number;
   members: Array<{ playerId: string; status: "ACTIVE" | "DROPPED"; currentRating: number | null }>;
   standings: StandingRow[];
@@ -74,9 +75,10 @@ export function computeRatingDeltas(
     tiedWithPrev: boolean; // tied with the player above in their division standings
   }
   const entries: FlatEntry[] = [];
-  // (tier:group) → how many of that division's bottom finishers relegate. The chain
-  // swap reads this so the actual movement matches the /standings zones exactly.
+  // (tier:group) → that division's promote / relegate counts (independent). The
+  // end-season reorder reads these so the actual movement matches the /standings zones.
   const relegateByKey = new Map<string, number>();
+  const promoteByKey = new Map<string, number>();
   divisions.forEach((div, divIdx) => {
     const droppedSet = new Set(
       div.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId),
@@ -85,6 +87,7 @@ export function computeRatingDeltas(
     const active = div.standings.filter((row) => !droppedSet.has(row.player.id));
     const groupNumber = div.divisionGroupNumber ?? divIdx + 1;
     relegateByKey.set(`${div.tierPosition}:${groupNumber}`, Math.max(0, div.relegateCount));
+    promoteByKey.set(`${div.tierPosition}:${groupNumber}`, Math.max(0, div.promoteCount));
     active.forEach((row, idx) => {
       entries.push({
         playerId: row.player.id,
@@ -124,22 +127,25 @@ export function computeRatingDeltas(
     divisionChain[idx]!.players.push(e.playerId);
   }
 
-  // For each adjacent pair (A above, B below) in the chain: relegate A's bottom-N
-  // and promote B's top-N — a balanced rank swap, N = A's relegateCount (mirrored
-  // as B's promotion, so display and movement agree). Pairwise: A's worst ↔ B's
-  // best, 2nd-worst ↔ 2nd-best, … Capped so we never swap more than either holds.
+  // For each adjacent pair (A above, B below): A relegates its bottom R (= A.relegate)
+  // and B promotes its top P (= B.promote) — independent counts. The crossing group is
+  // those R + P players; reorder it so the promoted (B's top) take the better ranks and
+  // the relegated (A's bottom) the worse ones, keeping the same set of ranks (a clean
+  // permutation). When R === P this is exactly the old pairwise swap.
   for (let i = 0; i < divisionChain.length - 1; i++) {
     const a = divisionChain[i]!.players;
     const b = divisionChain[i + 1]!.players;
-    const n = Math.min(relegateByKey.get(divisionChain[i]!.key) ?? 1, a.length, b.length);
-    for (let k = 0; k < n; k++) {
-      const bottomA = a[a.length - 1 - k]!;
-      const topB = b[k]!;
-      const rA = rankByPlayer.get(bottomA)!;
-      const rB = rankByPlayer.get(topB)!;
-      rankByPlayer.set(bottomA, rB);
-      rankByPlayer.set(topB, rA);
-    }
+    const r = Math.min(relegateByKey.get(divisionChain[i]!.key) ?? 1, a.length);
+    const p = Math.min(promoteByKey.get(divisionChain[i + 1]!.key) ?? 1, b.length);
+    if (r === 0 && p === 0) continue;
+    const aRelegated = a.slice(a.length - r); // A's bottom R (best→worst of the relegated)
+    const bPromoted = b.slice(0, p); // B's top P
+    // Their current ranks, ascending (A is above B, so A's ranks are all lower).
+    const blockRanks = [...aRelegated, ...bPromoted]
+      .map((pid) => rankByPlayer.get(pid)!)
+      .sort((x, y) => x - y);
+    // Reassign: promoted first → the block's better ranks, relegated → the worse ranks.
+    [...bPromoted, ...aRelegated].forEach((pid, k) => rankByPlayer.set(pid, blockRanks[k]!));
   }
 
   // finalRank (the DISPLAYED placement) allows ties: walk the strict rating
@@ -285,6 +291,7 @@ export async function endSeasonCore(seasonId: string, actor: AuditActor): Promis
     return {
       tierPosition: d.tier.position,
       divisionGroupNumber: d.groupNumber,
+      promoteCount: d.promoteCount,
       relegateCount: d.relegateCount,
       members: d.members.map((m) => ({
         playerId: m.playerId,

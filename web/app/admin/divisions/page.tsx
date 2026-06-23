@@ -7,7 +7,7 @@ import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { SubmitButton } from "@/components/SubmitButton";
-import { resyncSchedules, regenerateSchedules, regenerateDivisionSchedule, setDivisionFormat, setDivisionRelegateCount } from "@/app/admin/seasons/actions";
+import { resyncSchedules, regenerateSchedules, regenerateDivisionSchedule, setDivisionFormat, setDivisionPromoteRelegate } from "@/app/admin/seasons/actions";
 import { Input } from "@/components/ui/input";
 import { Callout } from "@/components/Callout";
 
@@ -115,16 +115,16 @@ export default async function AdminDivisionsPage({
                               </form>
                             )}
                             {season.scheduleLocked && (
-                              <form action={setDivisionRelegateCount} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                              <form action={setDivisionPromoteRelegate} style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
                                 <input type="hidden" name="divisionId" value={d.id} />
-                                <span
-                                  className="muted"
-                                  style={{ fontSize: 11, whiteSpace: "nowrap" }}
-                                  title="How many of this division's bottom finishers relegate to the division below at season end. The SAME number promote up from the division below (a balanced swap) — that's the ↑/↓ zones on /standings."
-                                >
-                                  ↑↓ Promote/relegate
+                                <span className="muted" style={{ fontSize: 11 }} title="How many of this division's TOP finishers promote up a division at season end.">
+                                  <span style={{ color: "var(--info)" }}>↑</span>&nbsp;promote
                                 </span>
-                                <Input type="number" name="count" min={0} max={20} defaultValue={d.relegateCount} style={{ width: 46, fontSize: 11, padding: "1px 4px" }} />
+                                <Input type="number" name="promote" min={0} max={20} defaultValue={d.promoteCount} style={{ width: 42, fontSize: 11, padding: "1px 4px" }} />
+                                <span className="muted" style={{ fontSize: 11 }} title="How many of this division's BOTTOM finishers relegate down a division at season end.">
+                                  <span style={{ color: "var(--admin)" }}>↓</span>&nbsp;relegate
+                                </span>
+                                <Input type="number" name="relegate" min={0} max={20} defaultValue={d.relegateCount} style={{ width: 42, fontSize: 11, padding: "1px 4px" }} />
                                 <Button type="submit" variant="secondary" size="sm">Set</Button>
                               </form>
                             )}
