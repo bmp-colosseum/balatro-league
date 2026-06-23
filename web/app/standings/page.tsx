@@ -247,6 +247,7 @@ export default async function StandingsPage() {
                             </span>
                           </div>
                           <div className="muted" style={{ fontSize: 11, marginTop: 2, marginBottom: 8, display: "flex", flexWrap: "wrap", gap: "2px 10px" }}>
+                            <span>👤 {activeCount} player{activeCount === 1 ? "" : "s"}</span>
                             {promoteN > 0 && <span><span style={{ color: "var(--info)" }}>↑ {promoteN}</span> promote</span>}
                             {relegateN > 0 && <span><span style={{ color: "var(--admin)" }}>↓ {relegateN}</span> relegate</span>}
                             <span>{div.format === "round-robin" ? "🔁 Round robin (play everyone)" : "🎯 4 assigned opponents"}</span>
