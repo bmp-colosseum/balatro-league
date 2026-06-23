@@ -53,6 +53,9 @@ export async function createLeagueMatchInvite(opts: {
   isShootout?: boolean;
   /** Context channel stored on the session (where it was triggered from). */
   channelId: string;
+  /** How the match was started — "queue" or "command" — recorded in the audit
+   * log so queue usage can be counted (kept for the keep/kill decision). */
+  source?: string;
   actor: Parameters<typeof recordAudit>[0]["actor"];
 }): Promise<CreateLeagueMatchInviteResult> {
   const { client, season, division, me, opp, channelId, actor } = opts;
@@ -201,6 +204,7 @@ export async function createLeagueMatchInvite(opts: {
       seasonId: season.id,
       opponentDiscordId: opp.discordId,
       threadId,
+      source: opts.source ?? "command",
     },
   });
 

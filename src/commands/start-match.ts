@@ -92,6 +92,7 @@ export const startMatch: SlashCommand = {
       opp,
       isShootout,
       channelId: interaction.channelId,
+      source: "command",
       actor: actorFromInteractionUser(interaction.user),
     });
     if (!result.ok) {

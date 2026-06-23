@@ -1293,6 +1293,27 @@ async function checkSetup(interaction: ChatInputCommandInteraction) {
     warn++;
   }
 
+  lines.push("\n__League queue usage__");
+  const queueSeason_ = await activePublicSeason();
+  const queueAll = await prisma.adminAuditEvent.count({
+    where: { action: "match.create", metadata: { path: ["source"], equals: "queue" } },
+  });
+  const queueThisSeason = queueSeason_
+    ? await prisma.adminAuditEvent.count({
+        where: {
+          action: "match.create",
+          AND: [
+            { metadata: { path: ["source"], equals: "queue" } },
+            { metadata: { path: ["seasonId"], equals: queueSeason_.id } },
+          ],
+        },
+      })
+    : 0;
+  lines.push(`📊 Matches started via the queue — **${queueThisSeason}** this season, **${queueAll}** all-time.`);
+  if (queueAll === 0) {
+    lines.push("   _If this stays at 0, nobody's using the queue and it can be removed._");
+  }
+
   lines.push(`\n**Summary**: ${ok} ✓ / ${warn} ⚠️`);
   await interaction.editReply(lines.join("\n"));
 }

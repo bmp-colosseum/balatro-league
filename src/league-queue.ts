@@ -169,6 +169,7 @@ export async function tryStartFromQueue(opts: {
     me: opts.me,
     opp: found.opp,
     channelId,
+    source: "queue",
     actor: opts.actor,
   });
   if (!result.ok) return { matched: false, error: result.error };
