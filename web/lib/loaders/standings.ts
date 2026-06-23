@@ -46,6 +46,10 @@ export interface StandingsDivisionSummary {
   promote: number;
   relegate: number;
   format: "round-robin" | "graph";
+  // Each active player's TOTAL scheduled league matches — their assigned-opponent
+  // count in a locked (graph) schedule, else N-1 for a full round-robin. The
+  // clinch predictor needs this so "games remaining" is right per format.
+  gamesByPlayer: Record<string, number>;
   rows: StandingsRowsForDivision;
   shootouts: StandingsShootout[];
 }
@@ -252,6 +256,21 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
       const expectedMatches = divLocked
         ? d.matches.filter(betweenActive).length
         : (activeMembers.length * (activeMembers.length - 1)) / 2;
+      // Per-player TOTAL scheduled matches: in a locked schedule (graph, or a
+      // pre-created round-robin) count each player's assigned BO2s; otherwise the
+      // full round-robin gives everyone N-1. Feeds the clinch "games remaining".
+      const gamesByPlayer: Record<string, number> = {};
+      for (const pid of activeSet) gamesByPlayer[pid] = 0;
+      if (divLocked) {
+        for (const m of d.matches) {
+          if (!betweenActive(m)) continue;
+          if (gamesByPlayer[m.playerAId] !== undefined) gamesByPlayer[m.playerAId]++;
+          if (gamesByPlayer[m.playerBId] !== undefined) gamesByPlayer[m.playerBId]++;
+        }
+      } else {
+        const rr = Math.max(0, activeMembers.length - 1);
+        for (const pid of activeSet) gamesByPlayer[pid] = rr;
+      }
       return {
         id: d.id,
         name: d.name,
@@ -263,6 +282,7 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
         promote: moveById.get(d.id)?.promote ?? 0,
         relegate: moveById.get(d.id)?.relegate ?? 0,
         format: moveById.get(d.id)?.format ?? "graph",
+        gamesByPlayer,
         rows: standingsByDivisionId.get(d.id) ?? [],
         shootouts: shootoutsByDivisionId.get(d.id) ?? [],
       };

@@ -15,7 +15,8 @@ import { type StandingRow } from "@/lib/standings";
 // standard 3/1/0 scoring. Absent from the map = not yet decided.
 function computeClinch(
   rows: Array<StandingRow & { dropped?: boolean }>,
-  activeCount: number,
+  gamesByPlayer: Record<string, number>,
+  fallbackTotal: number,
   promoteN: number,
   relegateN: number,
 ): Map<string, "up" | "down"> {
@@ -24,9 +25,11 @@ function computeClinch(
   const active = rows.filter((r) => !r.dropped);
   const n = active.length;
   if (n === 0) return result;
-  const totalGames = Math.max(0, activeCount - 1);
   const info = active.map((r) => {
-    const remaining = Math.max(0, totalGames - r.played);
+    // Per-player total scheduled games — N-1 in a round-robin, their assigned
+    // count in a graph division — so "remaining" (hence the ceiling) is right.
+    const total = gamesByPlayer[r.player.id] ?? fallbackTotal;
+    const remaining = Math.max(0, total - r.played);
     return { id: r.player.id, floor: r.points, ceil: r.points + MAX_PER_MATCH * remaining };
   });
   for (const me of info) {
@@ -185,7 +188,8 @@ export default async function StandingsPage() {
                       // promotes; bottom tier never relegates.
                       const clinch = computeClinch(
                         rows,
-                        activeCount,
+                        div.gamesByPlayer,
+                        Math.max(0, activeCount - 1),
                         promoteEff,
                         relegateEff,
                       );
