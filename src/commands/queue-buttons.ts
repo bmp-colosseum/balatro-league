@@ -9,6 +9,8 @@ import {
   refreshQueueMessage,
   queueStatusFor,
   playerInActiveMatch,
+  isInActiveDivision,
+  remainingMatchCount,
   type QueueStatus,
 } from "../league-queue.js";
 import type { ButtonHandler } from "./types.js";
@@ -73,6 +75,16 @@ export const queueButtons: ButtonHandler = {
     }
 
     if (action === "join") {
+      // League players only.
+      if (!(await isInActiveDivision(me.id, season.id))) {
+        await interaction.editReply("The queue is for league players — you're not in a division this season.");
+        return;
+      }
+      // Must have scheduled matches left to play.
+      if ((await remainingMatchCount(me.id, season.id)) === 0) {
+        await interaction.editReply("You've played all your scheduled matches this season — nothing left to queue for. 🎉");
+        return;
+      }
       // Can't queue while already in a match — finish it first, so nobody ends
       // up sitting in the queue mid-match.
       if (await playerInActiveMatch(me.id)) {

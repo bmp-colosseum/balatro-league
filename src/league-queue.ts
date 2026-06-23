@@ -78,6 +78,26 @@ export async function playerInActiveMatch(playerId: string): Promise<boolean> {
   return n > 0;
 }
 
+// Is the player an ACTIVE member of a division in this season (i.e. in the league)?
+export async function isInActiveDivision(playerId: string, seasonId: string): Promise<boolean> {
+  const n = await prisma.divisionMember.count({ where: { playerId, status: "ACTIVE", seasonId } });
+  return n > 0;
+}
+
+// How many scheduled-but-unplayed league matches the player still has this season.
+export async function remainingMatchCount(playerId: string, seasonId: string): Promise<number> {
+  return prisma.match.count({
+    where: {
+      status: "PENDING",
+      format: "LEAGUE_BO2",
+      gamesWonA: 0,
+      gamesWonB: 0,
+      division: { seasonId },
+      OR: [{ playerAId: playerId }, { playerBId: playerId }],
+    },
+  });
+}
+
 export interface QueueStatus {
   queued: boolean;
   free: Player[]; // everyone currently free (excluding the asker)
