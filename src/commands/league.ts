@@ -19,7 +19,7 @@ import { webUrl, WEB_HOST } from "../web-url.js";
 import { clearConfig, getConfig, LeagueConfigKey, setConfig } from "../league-config.js";
 import { ensureQueueMessage } from "../league-queue.js";
 import { requireOwner } from "../permissions.js";
-import { enqueueLeagueInfoRefresh, enqueueStandingsRefresh, refreshDivisionWelcomes } from "../queue.js";
+import { enqueueLeagueInfoRefresh, enqueueStandingsRefresh, refreshDivisionWelcomes, previewDivisionWelcomes } from "../queue.js";
 import { activePublicSeason } from "../active-season.js";
 import { formatSeasonLabel } from "../format-season.js";
 import type { SlashCommand } from "./types.js";
@@ -129,6 +129,11 @@ export const league: SlashCommand = {
           opt
             .setName("ping")
             .setDescription("Re-post a fresh welcome that PINGS the division (use for kickoff). Default: silent edit."),
+        )
+        .addBooleanOption((opt) =>
+          opt
+            .setName("dry-run")
+            .setDescription("Preview which divisions would be edited vs re-posted (and pinned) without changing anything."),
         ),
     ),
 
@@ -160,6 +165,18 @@ async function refreshWelcome(interaction: ChatInputCommandInteraction) {
     await interaction.editReply("No active season right now.");
     return;
   }
+  if (interaction.options.getBoolean("dry-run")) {
+    const plan = await previewDivisionWelcomes(season.id);
+    if (plan.length === 0) {
+      await interaction.editReply("🔍 Dry run — no divisions with a channel + active members to refresh. Nothing would change.");
+      return;
+    }
+    const lines = plan.map((p) => `  • **${p.name}** — ${p.action}`);
+    await interaction.editReply(
+      [`🔍 **Refresh-welcome dry run** (${plan.length} division${plan.length === 1 ? "" : "s"}). **Nothing was changed.**`, ``, ...lines].join("\n"),
+    );
+    return;
+  }
   const { edited, reposted, failed } = await refreshDivisionWelcomes(season.id, { ping });
   await interaction.editReply(
     ping
@@ -174,18 +191,25 @@ async function refreshWelcome(interaction: ChatInputCommandInteraction) {
 // The channels bootstrap ensures via ensureChannel (id-or-name-or-create). Kept
 // in sync with the ensureChannel(...) calls in bootstrapServer; used by the
 // dry-run preview to mirror the same adopt/reuse/create decision read-only.
-const ENSURED_CHANNELS: { name: string; key: LeagueConfigKey; type: ChannelType.GuildText | ChannelType.GuildAnnouncement }[] = [
-  { name: "league-info", key: LeagueConfigKey.LeagueInfoChannelId, type: ChannelType.GuildText },
-  { name: "league-signups", key: LeagueConfigKey.SignupsChannelId, type: ChannelType.GuildText },
-  { name: "league-results-bot", key: LeagueConfigKey.ResultsChannelId, type: ChannelType.GuildText },
-  { name: "league-queue", key: LeagueConfigKey.LeagueQueueChannelId, type: ChannelType.GuildText },
-  { name: "league-chat", key: LeagueConfigKey.GeneralChannelId, type: ChannelType.GuildText },
-  { name: "league-bot-commands", key: LeagueConfigKey.BotCommandsChannelId, type: ChannelType.GuildText },
-  { name: "league-standings", key: LeagueConfigKey.StandingsChannelId, type: ChannelType.GuildText },
-  { name: "league-help", key: LeagueConfigKey.HelpChannelId, type: ChannelType.GuildText },
-  { name: "league-announcements", key: LeagueConfigKey.AnnouncementsChannelId, type: ChannelType.GuildAnnouncement },
-  { name: "league-feedback", key: LeagueConfigKey.FeedbackChannelId, type: ChannelType.GuildText },
-  { name: "league-support", key: LeagueConfigKey.SupportChannelId, type: ChannelType.GuildText },
+// `postable`: true = @everyone may post (lockPostable); false = read-only / bot-
+// only (lockReadOnly). Used by the dry-run to flag posting-permission drift.
+const ENSURED_CHANNELS: {
+  name: string;
+  key: LeagueConfigKey;
+  type: ChannelType.GuildText | ChannelType.GuildAnnouncement;
+  postable: boolean;
+}[] = [
+  { name: "league-info", key: LeagueConfigKey.LeagueInfoChannelId, type: ChannelType.GuildText, postable: false },
+  { name: "league-signups", key: LeagueConfigKey.SignupsChannelId, type: ChannelType.GuildText, postable: false },
+  { name: "league-results-bot", key: LeagueConfigKey.ResultsChannelId, type: ChannelType.GuildText, postable: false },
+  { name: "league-queue", key: LeagueConfigKey.LeagueQueueChannelId, type: ChannelType.GuildText, postable: false },
+  { name: "league-chat", key: LeagueConfigKey.GeneralChannelId, type: ChannelType.GuildText, postable: true },
+  { name: "league-bot-commands", key: LeagueConfigKey.BotCommandsChannelId, type: ChannelType.GuildText, postable: true },
+  { name: "league-standings", key: LeagueConfigKey.StandingsChannelId, type: ChannelType.GuildText, postable: false },
+  { name: "league-help", key: LeagueConfigKey.HelpChannelId, type: ChannelType.GuildText, postable: false },
+  { name: "league-announcements", key: LeagueConfigKey.AnnouncementsChannelId, type: ChannelType.GuildAnnouncement, postable: false },
+  { name: "league-feedback", key: LeagueConfigKey.FeedbackChannelId, type: ChannelType.GuildText, postable: true },
+  { name: "league-support", key: LeagueConfigKey.SupportChannelId, type: ChannelType.GuildText, postable: false },
 ];
 
 // Read-only dry run: report exactly what a re-bootstrap would create / change in
@@ -247,7 +271,7 @@ async function previewBootstrap(interaction: ChatInputCommandInteraction, catego
   }
 
   // Custom-named channels (devops + admin), resolved by name in the category.
-  for (const [label, ...aliases] of [["league-devops"], ["league-admin", "admin-chat"]] as string[][]) {
+  for (const [label, ...aliases] of [["league-devops"], ["league-admin-chat", "league-admin", "admin-chat"]] as string[][]) {
     const found = categoryId
       ? guild.channels.cache.find((c) => c.type === ChannelType.GuildText && c.parentId === categoryId && (c.name === label || aliases.includes(c.name)))
       : undefined;
@@ -257,6 +281,24 @@ async function previewBootstrap(interaction: ChatInputCommandInteraction, catego
     } else {
       create.push(`#${label}`);
     }
+  }
+
+  // Posting-permission drift: for each managed channel that already exists, does
+  // @everyone's Send Messages match the intended lock? If not, re-bootstrap would
+  // reset it. (Deeper role/view overwrites + private channels aren't diffed here.)
+  const permDrift: string[] = [];
+  const everyoneId = guild.roles.everyone.id;
+  for (const { name, key, postable } of ENSURED_CHANNELS) {
+    const pinnedId = await getConfig(key);
+    const ch =
+      (pinnedId ? guild.channels.cache.find((c) => c.id === pinnedId && textish(c)) : undefined) ||
+      (categoryId ? guild.channels.cache.find((c) => textish(c) && c.name === name && c.parentId === categoryId) : undefined);
+    if (!ch || !("permissionOverwrites" in ch)) continue; // missing → created fresh with correct perms
+    const ow = ch.permissionOverwrites.cache.get(everyoneId);
+    const allowsSend = ow?.allow.has(PermissionFlagsBits.SendMessages) ?? false;
+    const deniesSend = ow?.deny.has(PermissionFlagsBits.SendMessages) ?? false;
+    if (postable && !allowsSend) permDrift.push(`#${name} — would re-grant @everyone posting`);
+    if (!postable && !deniesSend) permDrift.push(`#${name} — would lock @everyone out of posting`);
   }
 
   // #league-results retirement.
@@ -302,10 +344,13 @@ async function previewBootstrap(interaction: ChatInputCommandInteraction, catego
     section("Would CREATE", create, "➕"),
     section("Would CHANGE in place", change, "✏️"),
     section("Would DELETE", remove, "🗑️"),
-    create.length || change.length || remove.length ? `` : `✅ No structural changes — everything already exists as expected.`,
+    section("Would FIX permissions", permDrift, "🔒"),
+    create.length || change.length || remove.length || permDrift.length
+      ? ``
+      : `✅ No changes — everything already exists with the right posting permissions.`,
     `✅ ${reuseCount} item(s) already exist and would be reused as-is.`,
     ``,
-    `_Not shown (idempotent, always re-applied): channel permissions, the pinned #league-info / #league-help / #league-queue messages, the results webhook, and channel-id config._`,
+    `_Checked: channels, categories, roles, the #league-results retirement, and @everyone posting perms. NOT diffed (always re-applied): private-channel/role overwrites, the pinned #league-info / #league-help / #league-queue messages, the results webhook, and channel-id config._`,
   ]
     .filter((l): l is string => l !== null)
     .join("\n");
@@ -927,23 +972,24 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       const existing = guild.channels.cache.find(
         (c) =>
           c.type === ChannelType.GuildText &&
-          (c.name === "league-admin" || c.name === "admin-chat") &&
+          (c.name === "league-admin-chat" || c.name === "league-admin" || c.name === "admin-chat") &&
           c.parentId === categoryId,
       );
       if (existing && existing.type === ChannelType.GuildText) {
-        if (existing.name !== "league-admin") {
-          await existing.edit({ name: "league-admin" }).then(
-            () => created.push(`#admin-chat → #league-admin (renamed)`),
-            () => reused.push(`#admin-chat (couldn't rename to #league-admin — rename it manually)`),
+        if (existing.name !== "league-admin-chat") {
+          const from = existing.name;
+          await existing.edit({ name: "league-admin-chat" }).then(
+            () => created.push(`#${from} → #league-admin-chat (renamed)`),
+            () => reused.push(`#${from} (couldn't rename to #league-admin-chat — rename it manually)`),
           );
         } else {
-          reused.push(`#league-admin`);
+          reused.push(`#league-admin-chat`);
         }
         return existing;
       }
       const ownerBindings = await prisma.roleBinding.findMany({ where: { tier: "OWNER" } });
       const ch = await guild.channels.create({
-        name: "league-admin",
+        name: "league-admin-chat",
         type: ChannelType.GuildText,
         parent: categoryId,
         topic: "🛠️ League staff chat — admins & helpers coordinate here. Staff-only.",
@@ -955,7 +1001,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
           { id: interaction.client.user.id, allow: [...PERM_PRESETS.BOT_ALLOW] },
         ],
       });
-      created.push(`#league-admin (private, staff-only)`);
+      created.push(`#league-admin-chat (private, staff-only)`);
       return ch;
     }
     const adminChan = await ensureAdminChan();
@@ -1048,7 +1094,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       `🗣️ <#${feedbackChan.id}> — league-feedback (player suggestions + bug reports)`,
       `🤖 <#${botCmdChan.id}> — league-bot-commands (casual /challenge, /report)`,
       `🔧 <#${devopsChan.id}> — league-devops (DevOps-only, queue stalls + infra alerts)`,
-      `🛠️ <#${adminChan.id}> — league-admin (staff-only chat)`,
+      `🛠️ <#${adminChan.id}> — league-admin-chat (staff-only chat)`,
       `🎴 <#${challengesChan.id}> — challenges (parent for casual /challenge threads, under 🎴 Matches)`,
       ``,
       `🎭 Roles:`,

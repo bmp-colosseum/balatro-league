@@ -54,6 +54,7 @@ import {
   postChannelMessage,
   editChannelMessage,
   deleteChannelMessage,
+  pinChannelMessage,
   findWelcomeMessageId,
   removeGuildMemberRole as removeGuildMemberRoleViaBot,
 } from "./discord-helpers.js";
@@ -744,6 +745,7 @@ export async function refreshDivisionWelcomes(
       const newId = await postChannelMessage(div.discordChannelId, content, true);
       if (newId) {
         await prisma.division.update({ where: { id: div.id }, data: { welcomeMessageId: newId } });
+        await pinChannelMessage(div.discordChannelId, newId);
         reposted++;
       } else {
         failed++;
@@ -762,8 +764,38 @@ export async function refreshDivisionWelcomes(
     if (msgId !== div.welcomeMessageId) {
       await prisma.division.update({ where: { id: div.id }, data: { welcomeMessageId: msgId } });
     }
+    // Keep the welcome pinned (idempotent — covers older channels that never were).
+    if (msgId) await pinChannelMessage(div.discordChannelId, msgId);
   }
   return { edited, reposted, failed };
+}
+
+// Read-only dry run for refreshDivisionWelcomes: per division, would it edit the
+// existing welcome in place or post a fresh one — and it always (re-)pins. No
+// writes. `findWelcomeMessageId` only reads channel history.
+export async function previewDivisionWelcomes(
+  seasonId: string,
+): Promise<Array<{ name: string; action: string }>> {
+  const divisions = await prisma.division.findMany({
+    where: { seasonId, discordChannelId: { not: null } },
+    select: {
+      id: true,
+      name: true,
+      discordChannelId: true,
+      welcomeMessageId: true,
+      members: { where: { status: "ACTIVE" }, select: { playerId: true } },
+    },
+  });
+  const plan: Array<{ name: string; action: string }> = [];
+  for (const div of divisions) {
+    if (!div.discordChannelId || div.members.length === 0) continue;
+    const existingId = div.welcomeMessageId ?? (await findWelcomeMessageId(div.discordChannelId));
+    plan.push({
+      name: div.name,
+      action: existingId ? "edit existing welcome in place + ensure pinned" : "post a new welcome + pin",
+    });
+  }
+  return plan;
 }
 
 // Set up role + member-roles + private channel + welcome post for one
@@ -862,6 +894,9 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
     where: { id: div.id },
     data: { discordRoleId: roleId, discordChannelId: channelId, welcomeMessageId: welcomeMessageId ?? undefined },
   });
+
+  // Pin the welcome so it stays at the top of the division channel (idempotent).
+  if (channelId && welcomeMessageId) await pinChannelMessage(channelId, welcomeMessageId);
 
   // If this was the last division to finish, fire the season-start announcement —
   // every player now has their League Player role, so the @-ping reaches all.

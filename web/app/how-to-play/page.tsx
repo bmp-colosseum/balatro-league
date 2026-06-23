@@ -51,27 +51,19 @@ export default async function HowToPlayPage() {
             Play <strong>2 games</strong> against each of your opponents. Run <code>/schedule</code> in Discord to see who you've got, and play each whenever suits you both.
           </p>
           <p>
-            Run <code>/start-match @opponent</code> in your channel and the bot handles the ban/pick flow. Or just play in Balatro and report after.
+            Run <code>/start-match @opponent</code> in your channel and the bot walks you both through banning, picking the deck/stake, and recording each game — the result is saved automatically, so there&apos;s no separate reporting step.
           </p>
           <p className="muted">
             Each match: <strong>2-0 = 3 pts</strong>, <strong>1-1 = 1 pt</strong>, <strong>0-2 = 0 pts</strong>.
           </p>
         </Section>
 
-        <Section title="4. Report the result">
+        <Section title="4. Results & disputes">
           <p>
-            Two ways:
+            Guided matches record themselves — when the last game wraps, <code>/start-match</code> logs the set for you. If you ever played a set outside the guided flow, enter it on the <Link href="/report">web report page</Link>.
           </p>
-          <ul>
-            <li>
-              <strong>Discord:</strong> <code>/report @opponent result:2-0|1-1|0-2</code>.
-            </li>
-            <li>
-              <strong>Web:</strong> the <Link href="/report">/report page</Link>.
-            </li>
-          </ul>
           <p>
-            Either way it posts to <strong>#results</strong> and your opponent can dispute. On Discord, no reaction within <strong>2 minutes</strong> auto-confirms, so don't sweat slow opponents.
+            Results post to <strong>#results</strong> and your opponent can dispute; an admin can override if something&apos;s off.
           </p>
         </Section>
 

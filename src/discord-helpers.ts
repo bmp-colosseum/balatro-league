@@ -295,6 +295,22 @@ export async function deleteChannelMessage(channelId: string, messageId: string)
   }
 }
 
+// Pin a message we posted (best-effort, idempotent). Discord no-ops a re-pin, so
+// this is safe to call on every welcome refresh to keep it pinned.
+export async function pinChannelMessage(channelId: string, messageId: string): Promise<boolean> {
+  try {
+    const channel = await getDiscordClient().channels.fetch(channelId);
+    if (!channel || !channel.isTextBased() || !("messages" in channel)) return false;
+    const msg = await channel.messages.fetch(messageId);
+    if (msg.pinned) return true;
+    await msg.pin();
+    return true;
+  } catch (err) {
+    console.warn(`[bot] pinChannelMessage(${channelId}/${messageId}) failed:`, err);
+    return false;
+  }
+}
+
 // Find the bot's existing welcome post in a channel (by author + the "# 🃏 Welcome
 // to" header) so we can adopt its id and edit in place — for channels bootstrapped
 // before we started storing the message id. Returns the oldest match (the welcome
