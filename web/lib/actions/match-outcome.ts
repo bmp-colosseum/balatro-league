@@ -27,18 +27,31 @@ export async function setMatchOutcome(formData: FormData) {
   if (!divisionId || !p1Id || !p2Id || p1Id === p2Id) fail("Pick a matchup.");
   if ((outcome === "p1-dq" || outcome === "p2-dq") && !reason) fail("A DQ needs a reason.");
 
+  // Optional per-game detail for an outside-the-flow match (game 1 / game 2).
+  const lives = (name: string): number | null => {
+    const raw = String(formData.get(name) ?? "").trim();
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : null;
+  };
+  const str = (name: string) => String(formData.get(name) ?? "").trim() || null;
+  const games = [
+    { deck: str("deck1"), stake: str("stake1"), winnerLives: lives("livesGame1") },
+    { deck: str("deck2"), stake: str("stake2"), winnerLives: lives("livesGame2") },
+  ];
+
   // p1/p2 are the two picked players; recordResult's result string is relative
   // to playerA, so we pass p1 as A and read the result from p1's perspective.
   let r;
   switch (outcome) {
     case "p1-2-0":
-      r = await recordResult({ divisionId, playerAId: p1Id, playerBId: p2Id, result: "2-0", actor, reason: reason || undefined, announce: false });
+      r = await recordResult({ divisionId, playerAId: p1Id, playerBId: p2Id, result: "2-0", actor, reason: reason || undefined, games, announce: false });
       break;
     case "draw":
-      r = await recordResult({ divisionId, playerAId: p1Id, playerBId: p2Id, result: "1-1", actor, reason: reason || undefined, announce: false });
+      r = await recordResult({ divisionId, playerAId: p1Id, playerBId: p2Id, result: "1-1", actor, reason: reason || undefined, games, announce: false });
       break;
     case "p2-2-0":
-      r = await recordResult({ divisionId, playerAId: p1Id, playerBId: p2Id, result: "0-2", actor, reason: reason || undefined, announce: false });
+      r = await recordResult({ divisionId, playerAId: p1Id, playerBId: p2Id, result: "0-2", actor, reason: reason || undefined, games, announce: false });
       break;
     case "void":
       r = await voidGame({ divisionId, p1Id, p2Id, reason, actor });

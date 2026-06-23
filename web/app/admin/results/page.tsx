@@ -13,6 +13,7 @@ import { FlashToast } from "@/components/FlashToast";
 import { PlayerSearch } from "@/components/PlayerSearch";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { MatchActionsPanel } from "@/components/MatchActionsPanel";
+import { CANONICAL_DECKS, CANONICAL_STAKES } from "@/lib/balatro-info";
 import { resultLabelByName } from "@/lib/result-labels";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -105,6 +106,8 @@ export default async function ResultsPage({
                 <MatchActionsPanel
                   divisionId={sel.division.id}
                   returnTo={`/admin/results?division=${sel.division.id}`}
+                  decks={CANONICAL_DECKS.map((d) => d.name)}
+                  stakes={CANONICAL_STAKES.map((s) => s.name)}
                   members={sel.members.map((m) => ({ playerId: m.playerId, displayName: m.displayName }))}
                   unplayed={unplayed}
                   played={[]}

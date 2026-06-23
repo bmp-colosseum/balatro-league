@@ -21,6 +21,12 @@ import {
 import { setMatchOutcome } from "@/lib/actions/match-outcome";
 import { resultLabelByName } from "@/lib/result-labels";
 
+// Radix Select disallows empty values, so optional deck/stake use a sentinel.
+const NONE = "__none__";
+
+// Which outcomes are a played BO2 result (so per-game deck/stake/lives apply).
+const RESULT_OUTCOMES = new Set(["p1-2-0", "draw", "p2-2-0"]);
+
 export interface PanelMember {
   playerId: string;
   displayName: string;
@@ -45,6 +51,32 @@ function outcomeOptions(p1: string, p2: string, includeUndo: boolean) {
   return opts;
 }
 
+function ComboSelect({
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  placeholder: string;
+}) {
+  return (
+    <Select value={value} onValueChange={(v) => onChange(v ?? NONE)}>
+      <SelectTrigger className="min-w-[120px]">
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={NONE}>{placeholder}</SelectItem>
+        {options.map((o) => (
+          <SelectItem key={o} value={o}>{o}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 function PairForm({
   divisionId,
   returnTo,
@@ -53,6 +85,8 @@ function PairForm({
   includeUndo,
   submitLabel,
   emptyNote,
+  decks,
+  stakes,
 }: {
   divisionId: string;
   returnTo: string;
@@ -61,15 +95,26 @@ function PairForm({
   includeUndo: boolean;
   submitLabel: string;
   emptyNote: string;
+  decks: string[];
+  stakes: string[];
 }) {
   const [pairKey, setPairKey] = useState("");
   const [outcome, setOutcome] = useState("");
+  const [deck1, setDeck1] = useState(NONE);
+  const [stake1, setStake1] = useState(NONE);
+  const [deck2, setDeck2] = useState(NONE);
+  const [stake2, setStake2] = useState(NONE);
   const nameOf = (id: string) => members.find((m) => m.playerId === id)?.displayName ?? id;
   const [p1Id, p2Id] = pairKey ? pairKey.split("|") : ["", ""];
 
   if (pairs.length === 0) {
     return <div className="muted" style={{ fontSize: 12 }}>{emptyNote}</div>;
   }
+
+  const isResult = RESULT_OUTCOMES.has(outcome);
+  // Whose win is each game, given the chosen score (for the lives labels).
+  const winnerG1 = outcome === "p2-2-0" ? nameOf(p2Id!) : nameOf(p1Id!);
+  const winnerG2 = outcome === "p1-2-0" ? nameOf(p1Id!) : nameOf(p2Id!);
 
   return (
     <form action={setMatchOutcome} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -102,8 +147,12 @@ function PairForm({
       </Select>
       {pairKey && (
         <>
-          {/* Radix Select isn't a native <select name>, so mirror the value. */}
+          {/* Radix Select isn't a native <select name>, so mirror the values. */}
           <input type="hidden" name="outcome" value={outcome} />
+          <input type="hidden" name="deck1" value={deck1 === NONE ? "" : deck1} />
+          <input type="hidden" name="stake1" value={stake1 === NONE ? "" : stake1} />
+          <input type="hidden" name="deck2" value={deck2 === NONE ? "" : deck2} />
+          <input type="hidden" name="stake2" value={stake2 === NONE ? "" : stake2} />
           <Select
             items={outcomeOptions(nameOf(p1Id!), nameOf(p2Id!), includeUndo)}
             value={outcome}
@@ -124,6 +173,42 @@ function PairForm({
             placeholder="Reason (required for DQ)"
             style={{ flex: "1 1 180px" }}
           />
+
+          {/* Optional per-game deck/stake/lives — for a match played outside the
+              guided flow. Only meaningful for an actual played result. */}
+          {isResult && (
+            <div style={{ flexBasis: "100%", display: "grid", gap: 6, marginTop: 4 }}>
+              <span className="muted" style={{ fontSize: 11 }}>
+                Optional per-game detail (deck · stake · winner&apos;s lives left):
+              </span>
+              {[1, 2].map((g) => {
+                const deckVal = g === 1 ? deck1 : deck2;
+                const setDeck = g === 1 ? setDeck1 : setDeck2;
+                const stakeVal = g === 1 ? stake1 : stake2;
+                const setStake = g === 1 ? setStake1 : setStake2;
+                const winnerName = g === 1 ? winnerG1 : winnerG2;
+                return (
+                  <div key={g} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, fontSize: 12 }}>
+                    <span style={{ minWidth: 50, fontWeight: 600 }}>Game {g}</span>
+                    <ComboSelect value={deckVal} onChange={setDeck} options={decks} placeholder="deck" />
+                    <ComboSelect value={stakeVal} onChange={setStake} options={stakes} placeholder="stake" />
+                    <label className="flex items-center gap-1">
+                      <span className="muted" style={{ fontSize: 11 }}>{winnerName} lives</span>
+                      <input
+                        type="number"
+                        name={`livesGame${g}`}
+                        min={0}
+                        max={999}
+                        inputMode="numeric"
+                        className="w-16 rounded-md border border-border bg-background px-2 py-1 text-sm"
+                      />
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <Button type="submit" variant="secondary" disabled={!outcome}>{submitLabel}</Button>
         </>
       )}
@@ -137,6 +222,8 @@ export function MatchActionsPanel({
   unplayed,
   played,
   returnTo,
+  decks,
+  stakes,
   showFix = true,
 }: {
   divisionId: string;
@@ -144,6 +231,8 @@ export function MatchActionsPanel({
   unplayed: PanelPair[];
   played: PanelPair[];
   returnTo: string;
+  decks: string[];
+  stakes: string[];
   // Hide the "Fix a finished match" picker where the page already has a
   // recorded-matches table that does per-row override/undo (e.g. /admin/results).
   showFix?: boolean;
@@ -162,6 +251,8 @@ export function MatchActionsPanel({
           returnTo={returnTo}
           pairs={unplayed}
           members={members}
+          decks={decks}
+          stakes={stakes}
           includeUndo={false}
           submitLabel="Apply"
           emptyNote={
@@ -180,6 +271,8 @@ export function MatchActionsPanel({
             returnTo={returnTo}
             pairs={played}
             members={members}
+            decks={decks}
+            stakes={stakes}
             includeUndo
             submitLabel="Update"
             emptyNote="No finished matches yet."

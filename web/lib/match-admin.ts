@@ -61,6 +61,10 @@ export async function recordResult(args: {
   reason?: string;
   deck?: string | null;
   stake?: string | null;
+  // Optional per-game detail (index 0 = game 1, 1 = game 2): the deck/stake it
+  // was played on and the WINNER's leftover lives. For matches played outside the
+  // guided flow. Winners are derived from `result`. Empty entries are fine.
+  games?: Array<{ deck?: string | null; stake?: string | null; winnerLives?: number | null }>;
   announce?: boolean;
 }): Promise<MatchAdminOutcome> {
   const { divisionId, playerAId, playerBId, result, actor } = args;
@@ -110,10 +114,37 @@ export async function recordResult(args: {
     },
   });
 
-  // An admin record supplies only the aggregate score — clear any prior
-  // per-game rows (e.g. a web report's lives capture) so they can't contradict
-  // the new result or skew the life-differential tiebreaker.
+  // Clear prior per-game rows so they can't contradict the new result.
   await prisma.game.deleteMany({ where: { matchId: match.id } });
+
+  // Recreate per-game rows when the admin supplied any deck/stake/lives detail
+  // (for an outside-the-flow match). A BO2 is 2 games; winners come from result.
+  const perGame = (args.games ?? []).slice(0, 2);
+  const hasDetail = perGame.some(
+    (g) => (g?.deck && g.deck.trim()) || (g?.stake && g.stake.trim()) || g?.winnerLives != null,
+  );
+  if (hasDetail) {
+    const winners =
+      result === "2-0"
+        ? [playerAId, playerAId]
+        : result === "0-2"
+          ? [playerBId, playerBId]
+          : [playerAId, playerBId]; // 1-1: game 1 = A's win, game 2 = B's win
+    await prisma.game.createMany({
+      data: [0, 1].map((i) => {
+        const g = perGame[i] ?? {};
+        return {
+          matchId: match.id,
+          num: i + 1,
+          firstPlayerId: canonA,
+          winnerId: winners[i] ?? null,
+          winnerLives: g.winnerLives ?? null,
+          deck: g.deck?.trim() || null,
+          stake: g.stake?.trim() || null,
+        };
+      }),
+    });
+  }
 
   await recordAudit({
     actor,

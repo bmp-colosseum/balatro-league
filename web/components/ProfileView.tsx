@@ -523,6 +523,8 @@ export async function ProfileView({
             <MatchActionsPanel
               divisionId={adminCtx.divisionId}
               returnTo={`/profile/${profile.player.id}`}
+              decks={CANONICAL_DECKS.map((d) => d.name)}
+              stakes={CANONICAL_STAKES.map((s) => s.name)}
               members={adminCtx.members}
               unplayed={adminCtx.unplayed}
               played={adminCtx.played}

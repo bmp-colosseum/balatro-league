@@ -534,6 +534,8 @@ function AdminSection({
       <MatchActionsPanel
         divisionId={divisionId}
         returnTo={`/divisions/${divisionId}`}
+        decks={CANONICAL_DECKS.map((d) => d.name)}
+        stakes={CANONICAL_STAKES.map((s) => s.name)}
         members={members.filter((m) => m.status === "ACTIVE").map((m) => ({ playerId: m.playerId, displayName: m.player.displayName }))}
         unplayed={unplayed.map((u) => ({ p1Id: u.a.id, p2Id: u.b.id }))}
         played={pairings
