@@ -65,6 +65,17 @@ export async function isQueued(playerId: string): Promise<boolean> {
   return (await prisma.queueEntry.count({ where: { playerId } })) > 0;
 }
 
+// Is the player currently in a non-terminal match session (waiting/playing/paused)?
+export async function playerInActiveMatch(playerId: string): Promise<boolean> {
+  const n = await prisma.matchSession.count({
+    where: {
+      state: { notIn: ["COMPLETE", "CANCELLED"] },
+      OR: [{ playerAId: playerId }, { playerBId: playerId }],
+    },
+  });
+  return n > 0;
+}
+
 export interface QueueStatus {
   queued: boolean;
   free: Player[]; // everyone currently free (excluding the asker)

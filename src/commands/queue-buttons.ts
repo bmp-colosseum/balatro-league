@@ -8,6 +8,7 @@ import {
   tryStartFromQueue,
   refreshQueueMessage,
   queueStatusFor,
+  playerInActiveMatch,
   type QueueStatus,
 } from "../league-queue.js";
 import type { ButtonHandler } from "./types.js";
@@ -72,6 +73,12 @@ export const queueButtons: ButtonHandler = {
     }
 
     if (action === "join") {
+      // Can't queue while already in a match — finish it first, so nobody ends
+      // up sitting in the queue mid-match.
+      if (await playerInActiveMatch(me.id)) {
+        await interaction.editReply("You're already in a match — finish it before queuing up.");
+        return;
+      }
       await joinQueue(me.id, season.id);
       const outcome = await tryStartFromQueue({
         client: interaction.client,
@@ -91,7 +98,7 @@ export const queueButtons: ButtonHandler = {
       const s = await queueStatusFor(me.id, season.id);
       const head = outcome.error
         ? `You're queued, but I couldn't start a match just now: ${outcome.error}`
-        : "✅ **You're in the queue.** I'll open a match the moment a scheduled opponent is also queued. Hit **Leave queue** when you're done.";
+        : "✅ **You're in the queue.** I'll open a match the moment a scheduled opponent is also queued. Hit **Leave queue** when you're no longer free.";
       await interaction.editReply([head, "", ...statusLines(s)].join("\n"));
       return;
     }
