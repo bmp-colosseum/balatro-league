@@ -42,6 +42,9 @@ export const league: SlashCommand = {
         .setDescription("Create category + channels + roles for the league. Owner only — idempotent on re-run.")
         .addStringOption((opt) =>
           opt.setName("category-name").setDescription("Name of the category to create (default: '🃏 Balatro League')").setRequired(false),
+        )
+        .addBooleanOption((opt) =>
+          opt.setName("dry-run").setDescription("Preview the diff (create / change / delete) without modifying anything").setRequired(false),
         ),
     )
     .addSubcommand((sub) =>
@@ -168,6 +171,150 @@ async function refreshWelcome(interaction: ChatInputCommandInteraction) {
   );
 }
 
+// The channels bootstrap ensures via ensureChannel (id-or-name-or-create). Kept
+// in sync with the ensureChannel(...) calls in bootstrapServer; used by the
+// dry-run preview to mirror the same adopt/reuse/create decision read-only.
+const ENSURED_CHANNELS: { name: string; key: LeagueConfigKey; type: ChannelType.GuildText | ChannelType.GuildAnnouncement }[] = [
+  { name: "league-info", key: LeagueConfigKey.LeagueInfoChannelId, type: ChannelType.GuildText },
+  { name: "league-signups", key: LeagueConfigKey.SignupsChannelId, type: ChannelType.GuildText },
+  { name: "league-results-bot", key: LeagueConfigKey.ResultsChannelId, type: ChannelType.GuildText },
+  { name: "league-queue", key: LeagueConfigKey.LeagueQueueChannelId, type: ChannelType.GuildText },
+  { name: "league-chat", key: LeagueConfigKey.GeneralChannelId, type: ChannelType.GuildText },
+  { name: "league-bot-commands", key: LeagueConfigKey.BotCommandsChannelId, type: ChannelType.GuildText },
+  { name: "league-standings", key: LeagueConfigKey.StandingsChannelId, type: ChannelType.GuildText },
+  { name: "league-help", key: LeagueConfigKey.HelpChannelId, type: ChannelType.GuildText },
+  { name: "league-announcements", key: LeagueConfigKey.AnnouncementsChannelId, type: ChannelType.GuildAnnouncement },
+  { name: "league-feedback", key: LeagueConfigKey.FeedbackChannelId, type: ChannelType.GuildText },
+  { name: "league-support", key: LeagueConfigKey.SupportChannelId, type: ChannelType.GuildText },
+];
+
+// Read-only dry run: report exactly what a re-bootstrap would create / change in
+// place / delete, without touching anything. Mirrors the resolution logic in
+// bootstrapServer (pinned id → exact name in category → create).
+async function previewBootstrap(interaction: ChatInputCommandInteraction, categoryName: string) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const guild = interaction.guild!;
+  // Populate caches so the read is complete (bootstrap relies on cache too).
+  await guild.channels.fetch().catch(() => {});
+  await guild.roles.fetch().catch(() => {});
+
+  const create: string[] = [];
+  const change: string[] = []; // rename / move / convert in place
+  const remove: string[] = [];
+  let reuseCount = 0;
+  const textish = (c: { type: ChannelType } | null | undefined) =>
+    !!c && (c.type === ChannelType.GuildText || c.type === ChannelType.GuildAnnouncement);
+
+  // League category.
+  const configuredCatId = await getConfig(LeagueConfigKey.LeagueCategoryId);
+  let categoryId: string | null = null;
+  const catById = configuredCatId
+    ? guild.channels.cache.find((c) => c.id === configuredCatId && c.type === ChannelType.GuildCategory)
+    : undefined;
+  const catByName = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && c.name === categoryName);
+  if (catById) {
+    categoryId = catById.id;
+    reuseCount++;
+  } else if (catByName) {
+    categoryId = catByName.id;
+    reuseCount++;
+  } else {
+    create.push(`category "${categoryName}"`);
+  }
+
+  // ensureChannel-managed channels.
+  for (const { name, key, type } of ENSURED_CHANNELS) {
+    const pinnedId = await getConfig(key);
+    const pinned = pinnedId ? guild.channels.cache.find((c) => c.id === pinnedId && textish(c)) : undefined;
+    if (pinned) {
+      const edits: string[] = [];
+      if (pinned.name !== name) edits.push(`rename #${pinned.name} → #${name}`);
+      if (categoryId && pinned.parentId !== categoryId) edits.push("move into league category");
+      if (pinned.type !== type) edits.push(`convert to ${type === ChannelType.GuildAnnouncement ? "announcement" : "text"}`);
+      if (edits.length) change.push(`#${name} (${edits.join(", ")})`);
+      else reuseCount++;
+      continue;
+    }
+    const existing = categoryId
+      ? guild.channels.cache.find((c) => textish(c) && c.name === name && c.parentId === categoryId)
+      : undefined;
+    if (existing) {
+      if (existing.type !== type) change.push(`#${name} (convert to ${type === ChannelType.GuildAnnouncement ? "announcement" : "text"})`);
+      else reuseCount++;
+    } else {
+      create.push(`#${name}`);
+    }
+  }
+
+  // Custom-named channels (devops + admin), resolved by name in the category.
+  for (const [label, ...aliases] of [["league-devops"], ["league-admin", "admin-chat"]] as string[][]) {
+    const found = categoryId
+      ? guild.channels.cache.find((c) => c.type === ChannelType.GuildText && c.parentId === categoryId && (c.name === label || aliases.includes(c.name)))
+      : undefined;
+    if (found) {
+      if (found.name !== label) change.push(`#${found.name} → #${label} (rename)`);
+      else reuseCount++;
+    } else {
+      create.push(`#${label}`);
+    }
+  }
+
+  // #league-results retirement.
+  const priorHuman = await getConfig(LeagueConfigKey.ResultsHumanChannelId);
+  const humanResults =
+    (priorHuman ? guild.channels.cache.find((c) => c.id === priorHuman && textish(c)) : undefined) ||
+    (categoryId ? guild.channels.cache.find((c) => textish(c) && c.name === "league-results" && c.parentId === categoryId) : undefined);
+  if (humanResults) remove.push("#league-results (retired)");
+
+  // Matches category + #challenges.
+  const configuredMatchesId = await getConfig(LeagueConfigKey.MatchesCategoryId);
+  let matchesCatId: string | null = null;
+  const mcById = configuredMatchesId
+    ? guild.channels.cache.find((c) => c.id === configuredMatchesId && c.type === ChannelType.GuildCategory)
+    : undefined;
+  const mcByName = guild.channels.cache.find((c) => c.type === ChannelType.GuildCategory && c.name === "🎴 Matches");
+  if (mcById) {
+    matchesCatId = mcById.id;
+    reuseCount++;
+  } else if (mcByName) {
+    matchesCatId = mcByName.id;
+    reuseCount++;
+  } else {
+    create.push(`category "🎴 Matches"`);
+  }
+  const challenges = matchesCatId
+    ? guild.channels.cache.find((c) => c.type === ChannelType.GuildText && c.name === "challenges" && c.parentId === matchesCatId)
+    : undefined;
+  if (challenges) reuseCount++;
+  else create.push("#challenges (under 🎴 Matches)");
+
+  // Roles.
+  for (const rn of ["League Player", "League Admin", "League Helper", "League DevOps"]) {
+    if (guild.roles.cache.find((r) => r.name === rn)) reuseCount++;
+    else create.push(`role "${rn}"`);
+  }
+
+  const section = (label: string, arr: string[], emoji: string) =>
+    arr.length ? `${emoji} **${label} (${arr.length})**\n${arr.map((x) => `  • ${x}`).join("\n")}` : null;
+  const out = [
+    `🔍 **Bootstrap dry-run** — what a re-bootstrap would change. **Nothing was modified.**`,
+    ``,
+    section("Would CREATE", create, "➕"),
+    section("Would CHANGE in place", change, "✏️"),
+    section("Would DELETE", remove, "🗑️"),
+    create.length || change.length || remove.length ? `` : `✅ No structural changes — everything already exists as expected.`,
+    `✅ ${reuseCount} item(s) already exist and would be reused as-is.`,
+    ``,
+    `_Not shown (idempotent, always re-applied): channel permissions, the pinned #league-info / #league-help / #league-queue messages, the results webhook, and channel-id config._`,
+  ]
+    .filter((l): l is string => l !== null)
+    .join("\n");
+
+  const chunks = chunkForDiscord(out);
+  await interaction.editReply(chunks[0] ?? "No changes.");
+  for (const c of chunks.slice(1)) await interaction.followUp({ content: c, flags: MessageFlags.Ephemeral });
+}
+
 async function bootstrapServer(interaction: ChatInputCommandInteraction) {
   if (!interaction.guild) {
     await interaction.reply({
@@ -177,6 +324,12 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     return;
   }
   const categoryName = interaction.options.getString("category-name") ?? "🃏 Balatro League";
+
+  // Dry run: report the diff and change nothing.
+  if (interaction.options.getBoolean("dry-run")) {
+    await previewBootstrap(interaction, categoryName);
+    return;
+  }
 
   // Defer ephemeral so the running summary doesn't dump into a public
   // channel — the final long output goes to the runner's DMs.
