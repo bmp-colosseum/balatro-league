@@ -36,6 +36,18 @@ export async function startActivityScan() {
   revalidatePath("/admin/activity");
 }
 
+// Force-clear any RUNNING scan (e.g. one stuck because its worker never picked
+// it up). Web-only — just flips the row's status, so it works even if the bot is
+// down, and immediately unblocks starting a fresh scan.
+export async function cancelActivityScan() {
+  await requireAdmin();
+  await prisma.activityScan.updateMany({
+    where: { status: "RUNNING" },
+    data: { status: "FAILED", error: "Cancelled by admin", finishedAt: new Date() },
+  });
+  revalidatePath("/admin/activity");
+}
+
 // DM the calling admin a TEST of the check-in message, so they can see exactly
 // what players will get (and confirm the jump link is clickable in a DM). Uses
 // their own division when they're in one, else sample text.

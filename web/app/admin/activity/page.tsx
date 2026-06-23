@@ -3,7 +3,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { SubmitButton } from "@/components/SubmitButton";
 import { loadActivityData } from "@/lib/loaders/activity";
-import { startActivityScan, sendTestCheckin } from "./actions";
+import { startActivityScan, sendTestCheckin, cancelActivityScan } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +51,11 @@ export default async function ActivityPage() {
                   {running ? "Scanning…" : scan ? "Re-scan" : "Run scan"}
                 </SubmitButton>
               </form>
+              {running && (
+                <form action={cancelActivityScan}>
+                  <SubmitButton variant="secondary" pendingText="Cancelling…">✖ Cancel / clear</SubmitButton>
+                </form>
+              )}
               {scan ? (
                 <span style={{ fontSize: 14 }}>
                   <strong
