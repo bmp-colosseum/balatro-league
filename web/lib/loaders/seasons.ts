@@ -24,11 +24,11 @@ export interface SeasonIndexEntry {
 }
 
 export async function loadSeasonsIndex(): Promise<SeasonIndexEntry[]> {
-  // Past-seasons listing: only ended, non-archived seasons. The active
-  // season has its own /standings page so listing it again here is
-  // redundant — drafts must be hidden because they're not "real" yet.
+  // Every real (non-archived) season players can browse: the ACTIVE one plus all
+  // ENDED ones. Pre-start drafts (neither active nor ended) stay hidden because
+  // they're not real yet. The orderBy below puts the active season first.
   const seasons = await prisma.season.findMany({
-    where: { endedAt: { not: null }, archivedAt: null },
+    where: { archivedAt: null, OR: [{ isActive: true }, { endedAt: { not: null } }] },
     select: {
       id: true,
       number: true,
