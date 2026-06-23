@@ -114,7 +114,12 @@ export const league: SlashCommand = {
           opt
             .setName("confirmation")
             .setDescription("Type RESET DISCORD STATE to confirm. League data (seasons, players, results) is preserved.")
-            .setRequired(true),
+            .setRequired(false),
+        )
+        .addBooleanOption((opt) =>
+          opt
+            .setName("dry-run")
+            .setDescription("Preview exactly what would be cleared (counts) without changing anything. No confirmation needed."),
         ),
     )
     .addSubcommand((sub) =>
@@ -1403,7 +1408,48 @@ const RESET_CONFIRMATION_PHRASE = "RESET DISCORD STATE";
 // because those self-resolve (completed matches just stay dead-linked;
 // open signup rounds the admin will close + reopen separately).
 async function resetDiscordState(interaction: ChatInputCommandInteraction) {
-  const confirmation = interaction.options.getString("confirmation", true).trim();
+  // Dry run: count what WOULD be cleared, change nothing, no confirmation needed.
+  if (interaction.options.getBoolean("dry-run")) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const divWhere = { OR: [{ discordChannelId: { not: null } }, { discordRoleId: { not: null } }] };
+    const seasonWhere = {
+      OR: [
+        { discordCategoryId: { not: null } },
+        { resultsChannelId: { not: null } },
+        { resultsWebhookUrl: { not: null } },
+      ],
+    };
+    const configKeysIn = [LeagueConfigKey.BotCommandsChannelId, LeagueConfigKey.ResultsWebhookUrl];
+    const [divCount, seasonCount, bindingCount, configCount] = await Promise.all([
+      prisma.division.count({ where: divWhere }),
+      prisma.season.count({ where: seasonWhere }),
+      prisma.roleBinding.count(),
+      prisma.leagueConfig.count({ where: { key: { in: configKeysIn } } }),
+    ]);
+    const total = divCount + seasonCount + bindingCount + configCount;
+    await interaction.editReply(
+      [
+        `🔍 **reset-discord-state dry run** — **nothing was changed.**`,
+        ``,
+        total === 0
+          ? `✅ No stored Discord state to clear — already clean.`
+          : `Would clear:`,
+        ...(total === 0
+          ? []
+          : [
+              `  • **${divCount}** Division row(s) — discordChannelId + discordRoleId → null`,
+              `  • **${seasonCount}** Season row(s) — discordCategoryId + per-season results overrides → null`,
+              `  • **${bindingCount}** RoleBinding row(s) — deleted (you'd re-bind via bootstrap)`,
+              `  • **${configCount}** LeagueConfig key(s) — bot-commands + results-webhook`,
+            ]),
+        ``,
+        `_League data (seasons, players, results) is never touched. This only forgets the Discord IDs so bootstrap can rebuild fresh. The actual Discord channels/roles are NOT deleted — you'd remove those yourself._`,
+      ].join("\n"),
+    );
+    return;
+  }
+
+  const confirmation = (interaction.options.getString("confirmation") ?? "").trim();
   if (confirmation !== RESET_CONFIRMATION_PHRASE) {
     await interaction.reply({
       content:
