@@ -18,7 +18,7 @@ import { prisma } from "../db.js";
 import { PERM_PRESETS } from "../discord-helpers.js";
 import { webUrl, WEB_HOST } from "../web-url.js";
 import { clearConfig, getConfig, LeagueConfigKey, setConfig } from "../league-config.js";
-import { ensureQueueMessage } from "../league-queue.js";
+import { ensureQueueMessage, refreshQueueMessage } from "../league-queue.js";
 import { requireOwner } from "../permissions.js";
 import { enqueueLeagueInfoRefresh, enqueueStandingsRefresh, refreshDivisionWelcomes, previewDivisionWelcomes } from "../queue.js";
 import { activePublicSeason } from "../active-season.js";
@@ -129,6 +129,11 @@ export const league: SlashCommand = {
     )
     .addSubcommand((sub) =>
       sub
+        .setName("refresh-messages")
+        .setDescription("Re-render the bot's pinned messages (queue, #league-info, division welcomes) to current copy. Owner only."),
+    )
+    .addSubcommand((sub) =>
+      sub
         .setName("refresh-welcome")
         .setDescription("Re-render each division's welcome message. Edits in place (silent) unless you set ping.")
         .addBooleanOption((opt) =>
@@ -156,6 +161,7 @@ export const league: SlashCommand = {
     if (sub === "set-results-webhook") return setResultsWebhook(interaction);
     if (sub === "unset-results-webhook") return unsetResultsWebhook(interaction);
     if (sub === "reset-discord-state") return resetDiscordState(interaction);
+    if (sub === "refresh-messages") return refreshMessages(interaction);
     if (sub === "refresh-welcome") return refreshWelcome(interaction);
   },
 };
@@ -163,6 +169,39 @@ export const league: SlashCommand = {
 // Re-render each active-season division's welcome message in place. Edits the
 // stored message (ping-free) so updated wording/rosters reach players without a
 // new post or a re-ping. Re-posts only if the original message is gone.
+// Lightweight "push updated copy" — re-renders the bot's pinned messages to
+// their current wording WITHOUT the channel/role/permission churn of a full
+// bootstrap. Covers the queue message, #league-info, and division welcomes.
+// (#league-help — the command list — refreshes on bootstrap.)
+async function refreshMessages(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const done: string[] = [];
+
+  try {
+    await refreshQueueMessage(interaction.client);
+    done.push("#league-queue message");
+  } catch (err) {
+    console.warn("[refresh-messages] queue refresh failed:", err);
+  }
+  try {
+    await enqueueLeagueInfoRefresh();
+    done.push("#league-info message (queued)");
+  } catch (err) {
+    console.warn("[refresh-messages] league-info enqueue failed:", err);
+  }
+
+  const season = await activePublicSeason();
+  if (season) {
+    const { edited, reposted, failed } = await refreshDivisionWelcomes(season.id, { ping: false });
+    done.push(`${edited + reposted} division welcome(s)${failed ? ` (${failed} failed)` : ""}`);
+  }
+
+  await interaction.editReply(
+    (done.length ? `🔄 Refreshed: ${done.join(", ")}.` : "Nothing to refresh.") +
+      `\n_For #league-help + any channel / role / permission changes, run \`/league bootstrap-server\` (preview with \`dry-run:true\`)._`,
+  );
+}
+
 async function refreshWelcome(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const ping = interaction.options.getBoolean("ping") ?? false;

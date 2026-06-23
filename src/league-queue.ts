@@ -23,6 +23,8 @@ function renderQueueMessage(players: Player[]): BaseMessageOptions {
     "## 🎮 League Queue",
     "Hit **Queue up** when you're around to play. The moment an opponent you're scheduled against is also in the queue, I'll open a match invite for you both to accept.",
     "",
+    "⚠️ **This is a convenience, not a scheduler.** Getting your matches played is still **your responsibility** — reach out to your opponents directly. The queue only helps for the moments you both happen to be free at once.",
+    "",
     players.length
       ? `**In the queue (${players.length}):** ${players.map((p) => p.displayName).join(", ")}`
       : "_Queue is empty right now._",
