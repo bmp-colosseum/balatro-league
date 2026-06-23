@@ -163,10 +163,23 @@ export default async function MmrAdminPage({
             ) : (
               <div style={{ display: "grid", gap: 10 }}>
                 <div className="muted" style={{ fontSize: 12 }}>
-                  Replaying <strong>{preview.matchCount}</strong> confirmed game{preview.matchCount === 1 ? "" : "s"} from{" "}
-                  <strong>{preview.seasonLabel}</strong>, starting from{" "}
-                  {seedSource === "current" ? "each player's current MMR" : "BMP ×1.5"}.{" "}
-                  <strong>{moved}</strong> player{moved === 1 ? "" : "s"} would move. Nothing is saved yet.
+                  {seedSource === "current" ? (
+                    <>
+                      Applying <strong>{preview.matchCount}</strong> not-yet-counted game{preview.matchCount === 1 ? "" : "s"} from{" "}
+                      <strong>{preview.seasonLabel}</strong> on top of each player&apos;s current MMR.{" "}
+                      {preview.matchCount === 0
+                        ? "Everything this season is already applied — nothing to do."
+                        : <><strong>{moved}</strong> player{moved === 1 ? "" : "s"} would move.</>}{" "}
+                      Safe to re-run — already-counted games never apply twice. Nothing is saved yet.
+                    </>
+                  ) : (
+                    <>
+                      Full recompute of <strong>{preview.seasonLabel}</strong> from BMP ×1.5 —{" "}
+                      <strong>{preview.matchCount}</strong> game{preview.matchCount === 1 ? "" : "s"}, ignoring whatever MMR is set now.
+                      Deterministic, so this is the clean reset. <strong>{moved}</strong> player{moved === 1 ? "" : "s"} would move.
+                      Nothing is saved yet.
+                    </>
+                  )}
                 </div>
                 <div className="table-scroll" style={{ maxHeight: 360 }}>
                   <table>

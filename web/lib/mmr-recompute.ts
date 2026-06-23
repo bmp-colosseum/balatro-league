@@ -51,15 +51,22 @@ async function resolveSeason(seasonId?: string) {
   return prisma.season.findFirst({ where: { isActive: true }, select: { id: true, number: true, subtitle: true } });
 }
 
-// Pure computation: replay one season's games from the chosen seed and return
-// every player's resulting MMR. No writes. Volatility starts fresh (0) for the
-// replay so the season's early games carry their provisional swing.
+// Pure computation: replay games and return every player's resulting MMR. No
+// writes. The two seed sources mean genuinely different (but each idempotent)
+// things:
+//   • "current" → INCREMENTAL. Seed from each player's current hiddenMmr (carry
+//     volatility forward) and replay only games NOT yet applied (mmrApplied=false).
+//     Re-running can't double-count — a second pass finds nothing to apply.
+//   • "bmp" → FULL COLD-START replay from a fixed anchor (BMP ×1.5, volatility
+//     reset to 0). Replays the whole season regardless of the applied flag; same
+//     input → same output, so re-running is also idempotent. This is the reset.
+// `appliedMatchIds` is the set of matches this pass consumed (for the settle write).
 async function computeSeasonMmr(
   seasonId: string,
   seedSource: MmrSeedSource,
-): Promise<{ rows: MmrPreviewRow[]; matchCount: number }> {
+): Promise<{ rows: MmrPreviewRow[]; matchCount: number; appliedMatchIds: string[] }> {
   const players = await prisma.player.findMany({
-    select: { id: true, discordId: true, displayName: true, hiddenMmr: true },
+    select: { id: true, discordId: true, displayName: true, hiddenMmr: true, mmrVolatility: true },
   });
   const discordIds = players.map((p) => p.discordId);
   const snaps = discordIds.length
@@ -73,22 +80,39 @@ async function computeSeasonMmr(
   const peakByDiscord = new Map(snaps.map((s) => [s.discordId, s.peakMmr ?? s.rankedMmr ?? null]));
 
   const seedByPlayer = new Map<string, number>();
+  const seedVolByPlayer = new Map<string, number>();
   for (const p of players) {
     const peak = peakByDiscord.get(p.discordId);
     const bmpSeed = peak ? Math.round(peak * 1.5) : DEFAULT_SEED;
-    seedByPlayer.set(p.id, seedSource === "current" ? (p.hiddenMmr ?? bmpSeed) : bmpSeed);
+    if (seedSource === "current") {
+      seedByPlayer.set(p.id, p.hiddenMmr ?? bmpSeed);
+      seedVolByPlayer.set(p.id, p.mmrVolatility); // carry volatility (incremental)
+    } else {
+      seedByPlayer.set(p.id, bmpSeed);
+      seedVolByPlayer.set(p.id, 0); // fresh provisional swing (cold start)
+    }
   }
 
   const matches = await prisma.match.findMany({
-    where: { status: "CONFIRMED", format: "LEAGUE_BO2", division: { seasonId } },
+    where: {
+      status: "CONFIRMED",
+      format: "LEAGUE_BO2",
+      division: { seasonId },
+      // Incremental "current" only touches not-yet-applied games — that's what
+      // makes re-running safe. "bmp" replays everything from scratch.
+      ...(seedSource === "current" ? { mmrApplied: false } : {}),
+    },
     orderBy: { confirmedAt: "asc" },
-    select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true, winnerId: true },
+    select: { id: true, playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true, winnerId: true },
   });
 
   const state = new Map<string, { mmr: number; vol: number; games: number }>();
-  const get = (pid: string) => state.get(pid) ?? { mmr: seedByPlayer.get(pid) ?? DEFAULT_SEED, vol: 0, games: 0 };
+  const get = (pid: string) =>
+    state.get(pid) ?? { mmr: seedByPlayer.get(pid) ?? DEFAULT_SEED, vol: seedVolByPlayer.get(pid) ?? 0, games: 0 };
 
+  const appliedMatchIds: string[] = [];
   for (const m of matches) {
+    appliedMatchIds.push(m.id); // consumed regardless of outcome (draws settle too)
     // Derive the winner from the score whenever it's decisive — the Discord
     // confirm path never writes winnerId. Equal scores (1-1 / 0-0) → no winner.
     let winnerId = m.winnerId ?? null;
@@ -115,10 +139,10 @@ async function computeSeasonMmr(
       final,
       delta: final - seed,
       games: s?.games ?? 0,
-      volatility: s?.vol ?? 0,
+      volatility: s?.vol ?? seedVolByPlayer.get(p.id) ?? 0,
     };
   });
-  return { rows, matchCount: matches.length };
+  return { rows, matchCount: matches.length, appliedMatchIds };
 }
 
 // Preview only — compute and return, write nothing.
@@ -132,21 +156,30 @@ export async function previewSeasonMmr(opts: { seasonId?: string; seedSource: Mm
   return { rows, seasonId: season.id, seasonLabel: formatSeasonLabel(season), seedSource: opts.seedSource, matchCount };
 }
 
-// Apply — run the same computation and commit it. Writes each player's hiddenMmr
-// + volatility, and flags EVERY confirmed BO2 as mmrApplied so live MMR (once on)
-// continues cleanly from here without re-applying this season or any past one.
-export async function applySeasonMmr(opts: { seasonId?: string; seedSource: MmrSeedSource }): Promise<{ updated: number; seasonId: string | null }> {
+// Apply — run the same computation and commit it, idempotently. Writes each
+// player's hiddenMmr + volatility, then settles the matches this pass consumed:
+//   • "current" → only the games it just applied (so future games stay live).
+//   • "bmp" → every confirmed BO2 across all seasons, since a cold start accounts
+//     for the whole history; past seasons are ignored by live anyway.
+// Re-running is safe either way: "current" finds no unapplied games the second
+// time (a true no-op); "bmp" recomputes the same deterministic result.
+export async function applySeasonMmr(opts: { seasonId?: string; seedSource: MmrSeedSource }): Promise<{ updated: number; applied: number; seasonId: string | null }> {
   const season = await resolveSeason(opts.seasonId);
-  if (!season) return { updated: 0, seasonId: null };
-  const { rows } = await computeSeasonMmr(season.id, opts.seedSource);
+  if (!season) return { updated: 0, applied: 0, seasonId: null };
+  const { rows, appliedMatchIds } = await computeSeasonMmr(season.id, opts.seedSource);
   await prisma.$transaction([
     ...rows.map((r) =>
       prisma.player.update({ where: { id: r.playerId }, data: { hiddenMmr: r.final, mmrVolatility: r.volatility } }),
     ),
-    prisma.match.updateMany({
-      where: { status: "CONFIRMED", format: "LEAGUE_BO2" },
-      data: { mmrApplied: true },
-    }),
+    opts.seedSource === "bmp"
+      ? prisma.match.updateMany({
+          where: { status: "CONFIRMED", format: "LEAGUE_BO2" },
+          data: { mmrApplied: true },
+        })
+      : prisma.match.updateMany({
+          where: { id: { in: appliedMatchIds } },
+          data: { mmrApplied: true },
+        }),
   ]);
-  return { updated: rows.length, seasonId: season.id };
+  return { updated: rows.length, applied: appliedMatchIds.length, seasonId: season.id };
 }
