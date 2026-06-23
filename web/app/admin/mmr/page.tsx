@@ -91,7 +91,7 @@ export default async function MmrAdminPage({
               <Button type="submit" variant="secondary">Turn OFF</Button>
             ) : (
               <ConfirmButton
-                message="Turn league MMR live? If you haven't skipped past matches first, this will replay every past match. Make sure you've done the skip step."
+                message="Turn league MMR live? From here on, every confirmed game in the ACTIVE season updates MMR automatically (past seasons are ignored). Any of this season's games not yet applied get applied on the next sweep. To go live WITHOUT applying already-played games, use 'Skip to now' first."
                 variant="secondary"
               >
                 Turn ON (go live)
@@ -105,13 +105,13 @@ export default async function MmrAdminPage({
           </span>
           <div style={{ flexBasis: "100%", borderTop: "1px solid var(--border)", paddingTop: 8, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <form action={markMatchesSettled}>
-              <ConfirmButton message="Mark all current confirmed matches as settled without applying them? Do this before turning live MMR on so past matches are skipped and MMR only moves on new ones. It doesn't change anyone's MMR.">
-                Skip past matches (start fresh)
+              <ConfirmButton message="Mark every confirmed match as settled WITHOUT applying it, so live MMR only moves on games played from here on? Doesn't change anyone's current MMR.">
+                Skip to now (ignore played games)
               </ConfirmButton>
             </form>
             <span className="muted" style={{ fontSize: 12 }}>
-              ⚠ Do this before turning live MMR on, or it&apos;ll replay every past match. Skipping them means
-              MMR only moves on new matches, on top of your seeded values.
+              Optional. Use only if you want live MMR to start fresh from now and ignore this season&apos;s
+              already-played games. Otherwise, going live applies those on top of your seeds.
             </span>
           </div>
         </div>
