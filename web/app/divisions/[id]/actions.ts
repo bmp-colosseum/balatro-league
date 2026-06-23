@@ -114,7 +114,7 @@ export async function dropDivisionMember(formData: FormData) {
       OR: [{ playerAId: playerId }, { playerBId: playerId }],
     },
   });
-  recomputeDivisionStandings(divisionId).catch(() => {});
+  await recomputeDivisionStandings(divisionId).catch(() => {});
   revalidatePath(`/divisions/${divisionId}`);
 }
 
@@ -152,7 +152,7 @@ export async function removeDivisionMember(formData: FormData) {
   await prisma.divisionMember.deleteMany({
     where: { divisionId, playerId },
   });
-  recomputeDivisionStandings(divisionId).catch(() => {});
+  await recomputeDivisionStandings(divisionId).catch(() => {});
   revalidatePath(`/divisions/${divisionId}`);
 }
 

@@ -18,7 +18,9 @@ import { recomputeDivisionStandings, refreshStandingsCacheIfWarm } from "@/lib/s
 // legacy ?season-scoped /admin/players path for any older caller.
 function resolveReturnTo(formData: FormData): string {
   const returnTo = String(formData.get("returnTo") ?? "").trim();
-  if (returnTo.startsWith("/")) return returnTo;
+  // Must be a same-site path. Reject protocol-relative "//evil.com" (which also
+  // starts with "/") so a crafted returnTo can't become an open redirect.
+  if (returnTo.startsWith("/") && !returnTo.startsWith("//")) return returnTo;
   const seasonParam = String(formData.get("seasonParam") ?? "");
   return seasonParam ? `/admin/players?season=${seasonParam}` : "/admin/players";
 }
