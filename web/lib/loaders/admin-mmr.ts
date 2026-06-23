@@ -51,6 +51,57 @@ export async function loadMmrStatus(): Promise<MmrStatus> {
   return { ...base, totalConfirmed, applied, pending: totalConfirmed - applied };
 }
 
+export interface MmrChangeRow {
+  matchId: string;
+  confirmedAt: Date | null;
+  divisionName: string;
+  aName: string;
+  bName: string;
+  beforeA: number;
+  afterA: number;
+  beforeB: number;
+  afterB: number;
+}
+
+// Per-match MMR ledger for the active season — every confirmed BO2 that has been
+// applied (mmrBeforeA is set), newest first. The raw "what moved whom" log.
+export async function loadMmrChanges(limit = 200): Promise<MmrChangeRow[]> {
+  const season = await prisma.season.findFirst({ where: { isActive: true }, select: { id: true } });
+  if (!season) return [];
+  const matches = await prisma.match.findMany({
+    where: {
+      status: "CONFIRMED",
+      format: "LEAGUE_BO2",
+      division: { seasonId: season.id },
+      mmrBeforeA: { not: null },
+    },
+    orderBy: { confirmedAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      confirmedAt: true,
+      mmrBeforeA: true,
+      mmrAfterA: true,
+      mmrBeforeB: true,
+      mmrAfterB: true,
+      division: { select: { name: true } },
+      playerA: { select: { displayName: true } },
+      playerB: { select: { displayName: true } },
+    },
+  });
+  return matches.map((m) => ({
+    matchId: m.id,
+    confirmedAt: m.confirmedAt,
+    divisionName: m.division.name,
+    aName: m.playerA.displayName,
+    bName: m.playerB.displayName,
+    beforeA: m.mmrBeforeA!,
+    afterA: m.mmrAfterA!,
+    beforeB: m.mmrBeforeB!,
+    afterB: m.mmrAfterB!,
+  }));
+}
+
 export interface MmrSeasonOption {
   id: string;
   label: string;

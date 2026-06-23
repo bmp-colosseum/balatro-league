@@ -3,7 +3,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
 import { loadMmrAdmin } from "@/lib/mmr-admin";
-import { loadLiveMmrEnabled, loadMmrSeasons, loadMmrStatus } from "@/lib/loaders/admin-mmr";
+import { loadLiveMmrEnabled, loadMmrSeasons, loadMmrStatus, loadMmrChanges } from "@/lib/loaders/admin-mmr";
 import { previewSeasonMmr, type MmrSeedSource } from "@/lib/mmr-recompute";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { MmrLadder, type MmrLadderRow } from "@/components/MmrLadder";
@@ -64,6 +64,7 @@ export default async function MmrAdminPage({
     }));
   const liveMmr = await loadLiveMmrEnabled();
   const status = await loadMmrStatus();
+  const changes = await loadMmrChanges();
 
   return (
     <>
@@ -246,6 +247,58 @@ export default async function MmrAdminPage({
             )
           )}
         </div>
+
+        <details className="card" open={changes.length > 0}>
+          <summary style={{ cursor: "pointer" }}>
+            <strong>MMR changes this season</strong>{" "}
+            <span className="muted" style={{ fontSize: 12 }}>
+              — {changes.length === 0 ? "none recorded yet" : `${changes.length} applied match${changes.length === 1 ? "" : "es"}, newest first`}
+            </span>
+          </summary>
+          {changes.length === 0 ? (
+            <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+              Per-match MMR movement shows up here once games are applied. Only matches applied from now on
+              are recorded — to backfill the whole season at once, Preview → Apply with <strong>BMP ×1.5</strong>.
+            </p>
+          ) : (
+            <div className="table-scroll" style={{ maxHeight: 420, marginTop: 8 }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: "left" }}>When</th>
+                    <th style={{ textAlign: "left" }}>Division</th>
+                    <th style={{ textAlign: "left" }}>Match — before → after (Δ)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {changes.map((c) => {
+                    const dA = c.afterA - c.beforeA;
+                    const dB = c.afterB - c.beforeB;
+                    const cell = (name: string, before: number, after: number, d: number) => (
+                      <span>
+                        <strong>{name}</strong> {before}→{after}{" "}
+                        <span style={{ color: d > 0 ? "var(--success)" : d < 0 ? "var(--danger)" : "var(--muted)" }}>
+                          ({d > 0 ? `+${d}` : d})
+                        </span>
+                      </span>
+                    );
+                    return (
+                      <tr key={c.matchId}>
+                        <td className="muted" style={{ whiteSpace: "nowrap" }}>{c.confirmedAt ? c.confirmedAt.toISOString().slice(0, 10) : "—"}</td>
+                        <td className="muted">{c.divisionName}</td>
+                        <td style={{ fontSize: 13 }}>
+                          {cell(c.aName, c.beforeA, c.afterA, dA)}
+                          <span className="muted"> · </span>
+                          {cell(c.bName, c.beforeB, c.afterB, dB)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </details>
 
         <details className="card card-danger">
           <summary style={{ cursor: "pointer", color: "var(--danger)" }}>
