@@ -226,8 +226,8 @@ export async function ProfileView({
         )}
 
         {isAdmin && (
-          <div className="card card-admin" style={{ marginTop: 12 }}>
-            <strong style={{ color: "var(--admin)", fontSize: 13 }}>⚙ Admin · manage</strong>
+          <details className="card card-admin" style={{ marginTop: 12 }}>
+            <summary style={{ cursor: "pointer", color: "var(--admin)", fontSize: 13, fontWeight: 700 }}>⚙ Admin · manage</summary>
             {activeSeasonEntry && (
               <div style={{ marginTop: 8 }}>
                 {activeSeasonEntry.status === "ACTIVE" ? (
@@ -275,13 +275,32 @@ export async function ProfileView({
                 <ConfirmButton message={`Change ${profile.player.displayName}'s Discord ID?`} variant="secondary" style={{ fontSize: 12 }}>Save ID</ConfirmButton>
               </form>
             </div>
-          </div>
+          </details>
         )}
 
-        <div className="grid grid-2">
+        {/* Career totals — one strip so the headline numbers (seasons, points,
+            W/D/L) aren't scattered down the page. */}
+        <div className="grid grid-3" style={{ marginTop: 12 }}>
           <div className="stat"><div className="label">Seasons</div><div className="value">{t.seasons}</div></div>
           <div className="stat"><div className="label">Total points</div><div className="value">{t.points}</div></div>
+          <div className="stat" title={t.totalMatches > 0 ? `${t.wins}/${t.totalMatches} matches won 2-0` : undefined}>
+            <div className="label">Wins (2-0)</div>
+            <div className="value">{t.wins}{t.totalMatches > 0 && <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}> · {t.winRatePct}%</span>}</div>
+          </div>
+          <div className="stat" title={t.totalMatches > 0 ? `${t.draws}/${t.totalMatches} matches drew 1-1` : undefined}>
+            <div className="label">Draws (1-1)</div>
+            <div className="value">{t.draws}{t.totalMatches > 0 && <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}> · {t.drawRatePct}%</span>}</div>
+          </div>
+          <div className="stat" title={t.totalMatches > 0 ? `${t.losses}/${t.totalMatches} matches lost 0-2` : undefined}>
+            <div className="label">Losses (0-2)</div>
+            <div className="value">{t.losses}{t.totalMatches > 0 && <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}> · {t.lossRatePct}%</span>}</div>
+          </div>
         </div>
+        {t.totalGames > 0 && (
+          <div className="muted" style={{ marginTop: 6, fontSize: 12 }} title="Game-level win rate.">
+            Game win rate: <strong>{t.gameWinRatePct}%</strong> (across {t.totalGames} games)
+          </div>
+        )}
 
         {/* Fun traits derived from ban/pick behaviour — flavour only. */}
         {traits.length > 0 && (
@@ -502,30 +521,6 @@ export async function ProfileView({
             />
           </div>
         )}
-        <div className="grid grid-3" style={{ marginTop: 16 }}>
-          <div className="stat" title={t.totalMatches > 0 ? `${t.wins}/${t.totalMatches} matches won 2-0` : undefined}>
-            <div className="label">Wins (2-0)</div>
-            <div className="value">{t.wins}{t.totalMatches > 0 && <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}> · {t.winRatePct}%</span>}</div>
-          </div>
-          <div className="stat" title={t.totalMatches > 0 ? `${t.draws}/${t.totalMatches} matches drew 1-1` : undefined}>
-            <div className="label">Draws (1-1)</div>
-            <div className="value">{t.draws}{t.totalMatches > 0 && <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}> · {t.drawRatePct}%</span>}</div>
-          </div>
-          <div className="stat" title={t.totalMatches > 0 ? `${t.losses}/${t.totalMatches} matches lost 0-2` : undefined}>
-            <div className="label">Losses (0-2)</div>
-            <div className="value">{t.losses}{t.totalMatches > 0 && <span className="muted" style={{ fontSize: 14, fontWeight: 400 }}> · {t.lossRatePct}%</span>}</div>
-          </div>
-        </div>
-        {t.totalGames > 0 && (
-          <div
-            className="muted"
-            style={{ marginTop: 6, fontSize: 12 }}
-            title="Game-level win rate."
-          >
-            Game win rate: <strong>{t.gameWinRatePct}%</strong> (across {t.totalGames} games)
-          </div>
-        )}
-
         {disputeOk && (
           <Callout type="success">
             ✓ Dispute filed. A helper has been pinged in #results.
