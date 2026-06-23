@@ -548,25 +548,28 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     await lockPostable(botCmdChan, "#league-bot-commands");
     await lockPostable(feedbackChan, "#league-feedback");
 
-    // Human-facing results channel — open for manual posting if the bot's
-    // auto-post in #league-results-bot ever has an issue. Created after the
-    // bot channel so the old "league-results" was already renamed away.
-    const humanResultsChan = await ensureChannel(
-      "league-results",
-      "Post results here manually if the bot's auto-post in #league-results-bot ever misses one. Open to everyone.",
-      ChannelType.GuildText,
-      LeagueConfigKey.ResultsHumanChannelId,
-    );
-    await prisma.leagueConfig.upsert({
-      where: { key: "results_human_channel_id" },
-      create: { key: "results_human_channel_id", value: humanResultsChan.id, updatedBy: interaction.user.id },
-      update: { value: humanResultsChan.id, updatedBy: interaction.user.id },
-    });
-    // Explicitly ensure #league-results is POSTABLE by everyone — including
-    // images/links. It's the human-postable backup, but an earlier rename could
-    // have left a stale bot-only deny overwrite; lockPostable clears that and
-    // grants the full posting set.
-    await lockPostable(humanResultsChan, "#league-results");
+    // #league-results (the old human-postable backup) is retired — results
+    // auto-post to #league-results-bot and that's the only results channel now.
+    // On (re-)bootstrap, delete any existing one and drop its config so it
+    // doesn't linger.
+    const priorHumanResults = await prisma.leagueConfig.findUnique({ where: { key: "results_human_channel_id" } });
+    const humanResultsId =
+      priorHumanResults?.value ||
+      guild.channels.cache.find(
+        (c) =>
+          (c.type === ChannelType.GuildText || c.type === ChannelType.GuildAnnouncement) &&
+          c.name === "league-results" &&
+          c.parentId === categoryId,
+      )?.id;
+    if (humanResultsId) {
+      try {
+        await guild.channels.delete(humanResultsId, `Retired #league-results (by ${interaction.user.tag})`);
+        created.push("🗑️ removed #league-results (retired — use #league-results-bot)");
+      } catch {
+        reused.push("#league-results (couldn't delete — remove it manually)");
+      }
+    }
+    await prisma.leagueConfig.deleteMany({ where: { key: "results_human_channel_id" } });
 
     // Auto-create a Match Results webhook on #results so the announce
     // path uses the webhook (preferred — gives nicer formatting + no
@@ -863,7 +866,6 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       `📌 <#${infoChan.id}> — league-info`,
       `📝 <#${signupChan.id}> — league-signups`,
       `🏆 <#${resultsChan.id}> — league-results-bot (bot-only auto-post target)`,
-      `🏆 <#${humanResultsChan.id}> — league-results (humans post here manually if needed)`,
       `📣 <#${announcementsChan.id}> — league-announcements (season starts, recaps)`,
       `💬 <#${chatChan.id}> — league-chat`,
       `🗣️ <#${feedbackChan.id}> — league-feedback (player suggestions + bug reports)`,
