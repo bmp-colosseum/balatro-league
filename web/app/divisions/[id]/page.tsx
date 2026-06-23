@@ -237,6 +237,15 @@ function MatchesSections({
           </p>
         ) : (
           <>
+            <p className="muted" style={{ marginTop: 6, marginBottom: 0, fontSize: 13 }}>
+              You still play <strong>{myOpponents.length}</strong>:{" "}
+              {myOpponents.map((o, i) => (
+                <span key={o.playerId}>
+                  {i > 0 && " · "}
+                  <Link href={`/profile/${o.playerId}`} style={{ color: "var(--text)" }}>{o.displayName}</Link>
+                </span>
+              ))}
+            </p>
             <div style={{ marginTop: 8 }}>
               <ReportForm
                 action={reportFromDivisionAction}

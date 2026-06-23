@@ -222,6 +222,13 @@ export async function ProfileView({
               </span>
               <span className="muted">{activeSeason.played} played</span>
             </div>
+            {isOwnProfile && ownActiveDivision && ownActiveDivision.reportableOpponents.length > 0 && (
+              <div style={{ marginTop: 8, fontSize: 13 }}>
+                <strong>{ownActiveDivision.reportableOpponents.length}</strong>{" "}
+                {ownActiveDivision.reportableOpponents.length === 1 ? "match" : "matches"} left to play —{" "}
+                <Link href={`/divisions/${activeSeason.divisionId}`} style={{ color: "var(--info)" }}>see your matchups →</Link>
+              </div>
+            )}
           </div>
         )}
 
