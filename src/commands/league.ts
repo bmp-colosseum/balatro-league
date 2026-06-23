@@ -130,7 +130,7 @@ export const league: SlashCommand = {
     .addSubcommand((sub) =>
       sub
         .setName("refresh-messages")
-        .setDescription("Re-render the bot's pinned messages (queue, #league-info, division welcomes) to current copy. Owner only."),
+        .setDescription("Refresh the bot's pinned messages (queue, info, welcomes) to current copy. Owner only."),
     )
     .addSubcommand((sub) =>
       sub
