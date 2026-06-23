@@ -18,7 +18,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { DiscordId } from "@/components/DiscordId";
 import { FlashToast } from "@/components/FlashToast";
 import { acceptDisputeProposal, rejectDispute, setDisputeResult } from "./actions";
-import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { FormSelect } from "@/components/FormSelect";
 
 export const dynamic = "force-dynamic";
@@ -120,16 +120,22 @@ export default async function AdminDisputesPage({
                   {hasProposal && (
                     <form action={acceptDisputeProposal}>
                       <input type="hidden" name="pairingId" value={d.pairingId} />
-                      <Button type="submit" style={{ background: "var(--success)", color: "#fff" }}>
+                      <ConfirmButton
+                        message="Accept the disputed result and update standings?"
+                        style={{ background: "var(--success)", color: "#fff" }}
+                      >
                         ✓ Accept proposed
-                      </Button>
+                      </ConfirmButton>
                     </form>
                   )}
                   <form action={rejectDispute}>
                     <input type="hidden" name="pairingId" value={d.pairingId} />
-                    <Button type="submit" variant="secondary">
+                    <ConfirmButton
+                      message="Keep the original result and dismiss the dispute?"
+                      variant="secondary"
+                    >
                       Keep original
-                    </Button>
+                    </ConfirmButton>
                   </form>
                   {/* Set a different result than reported OR proposed. */}
                   <form action={setDisputeResult} style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -144,7 +150,7 @@ export default async function AdminDisputesPage({
                         { value: "0-2", label: `${d.playerB.displayName} won 2-0` },
                       ]}
                     />
-                    <Button type="submit" variant="secondary">Apply</Button>
+                    <ConfirmButton message="Apply this result and update standings?" variant="secondary">Apply</ConfirmButton>
                   </form>
                   {d.disputeThreadId && (
                     <span className="muted" style={{ fontSize: 11, alignSelf: "center" }}>

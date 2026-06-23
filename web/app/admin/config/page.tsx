@@ -12,6 +12,7 @@ import { loadAdminConfigPage } from "@/lib/loaders/admin-config";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { Input } from "@/components/ui/input";
 import { FormSelect } from "@/components/FormSelect";
 import {
@@ -153,9 +154,12 @@ export default async function AdminConfigPage() {
                   <td>
                     <form action={removeRoleBinding} style={{ display: "inline" }}>
                       <input type="hidden" name="id" value={b.id} />
-                      <Button type="submit" variant="ghost" size="sm" className="text-[#e74c3c]">
+                      <ConfirmButton
+                        message="Remove this role binding? It may change who has admin/devops access."
+                        className="text-[#e74c3c]"
+                      >
                         remove
-                      </Button>
+                      </ConfirmButton>
                     </form>
                   </td>
                 </tr>
@@ -217,9 +221,9 @@ function ConfigSection({
                   {value && (
                     <form action={clearConfigValue} style={{ display: "inline" }}>
                       <input type="hidden" name="key" value={key} />
-                      <Button type="submit" variant="ghost" size="sm" className="text-[#e74c3c]">
+                      <ConfirmButton message="Clear this config value?" className="text-[#e74c3c]">
                         clear
-                      </Button>
+                      </ConfirmButton>
                     </form>
                   )}
                 </td>

@@ -6,8 +6,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { DiscordId } from "@/components/DiscordId";
 import { AdminNav } from "@/components/AdminNav";
 import { endSeason } from "../../actions";
-import { Button } from "@/components/ui/button";
-import { SubmitButton } from "@/components/SubmitButton";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { Callout } from "@/components/Callout";
 
 export const dynamic = "force-dynamic";
@@ -123,7 +122,7 @@ export default async function EndSeasonPreviewPage({
           </p>
           <form action={endSeason} style={{ display: "flex", gap: 8 }}>
             <input type="hidden" name="id" value={season.id} />
-            <SubmitButton>End season + apply ratings</SubmitButton>
+            <ConfirmButton message="End this season and apply new ratings to every player? This rewrites all ratings and can't be cleanly undone.">End season + apply ratings</ConfirmButton>
             <Link href="/admin/seasons" className="secondary">Cancel</Link>
           </form>
         </div>

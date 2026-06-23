@@ -63,7 +63,16 @@ export default async function MmrAdminPage() {
           </strong>
           <form action={setLiveMmr}>
             <input type="hidden" name="enable" value={liveMmr ? "false" : "true"} />
-            <Button type="submit" variant="secondary">{liveMmr ? "Turn OFF" : "Turn ON (go live)"}</Button>
+            {liveMmr ? (
+              <Button type="submit" variant="secondary">Turn OFF</Button>
+            ) : (
+              <ConfirmButton
+                message="Turn league MMR live? If you haven't skipped past matches first, this will replay every past match. Make sure you've done the skip step."
+                variant="secondary"
+              >
+                Turn ON (go live)
+              </ConfirmButton>
+            )}
           </form>
           <span className="muted" style={{ fontSize: 12 }}>
             {liveMmr

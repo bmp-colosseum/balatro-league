@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/admin";
 import { loadDeckBansPage } from "@/lib/loaders/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { FormSelect } from "@/components/FormSelect";
 import { Input } from "@/components/ui/input";
 import { AdminNav } from "@/components/AdminNav";
@@ -232,9 +233,13 @@ function PresetEditor({
           </form>
           <form action={deletePreset}>
             <input type="hidden" name="id" value={preset.id} />
-            <Button type="submit" variant="secondary" className="text-[#e74c3c]">
+            <ConfirmButton
+              message="Delete this deck-ban preset? Any seasons using it will fall back to the default."
+              variant="secondary"
+              className="text-[#e74c3c]"
+            >
               Delete preset
-            </Button>
+            </ConfirmButton>
           </form>
         </div>
         <p className="muted" style={{ marginTop: 8 }}>

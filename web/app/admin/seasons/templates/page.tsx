@@ -6,6 +6,7 @@ import { AdminNav } from "@/components/AdminNav";
 import { TierEditor } from "@/components/TierEditor";
 import { saveTemplate, deleteTemplate } from "../actions";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { Input } from "@/components/ui/input";
 
 export const dynamic = "force-dynamic";
@@ -91,7 +92,7 @@ export default async function AdminTemplatesPage() {
                     </details>
                     <form action={deleteTemplate}>
                       <input type="hidden" name="id" value={t.id} />
-                      <Button type="submit" variant="destructive">Delete</Button>
+                      <ConfirmButton message="Delete this tier-layout template?" variant="destructive">Delete</ConfirmButton>
                     </form>
                   </td>
                 </tr>

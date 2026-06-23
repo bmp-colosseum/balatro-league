@@ -19,6 +19,7 @@ export function ConfirmButton({
   name,
   value,
   variant = "default",
+  size,
   pendingText = "Working…",
 }: {
   message: string;
@@ -28,6 +29,7 @@ export function ConfirmButton({
   name?: string;
   value?: string;
   variant?: "default" | "secondary" | "destructive";
+  size?: "default" | "sm";
   pendingText?: string;
 }) {
   const { pending } = useFormStatus();
@@ -35,6 +37,7 @@ export function ConfirmButton({
     <Button
       type="submit"
       variant={variant}
+      size={size}
       disabled={pending}
       className={className}
       style={style}

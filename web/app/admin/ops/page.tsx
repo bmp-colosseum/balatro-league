@@ -4,7 +4,7 @@
 
 import { requireOwnerOrDevops } from "@/lib/admin";
 import { SiteNav } from "@/components/SiteNav";
-import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { AdminNav } from "@/components/AdminNav";
 import { runMatchSweepAction } from "./actions";
 
@@ -93,7 +93,12 @@ export default async function AdminOpsPage({
             <li><strong>Orphan threads</strong> (manual-only) — scans both <em>active</em> AND <em>archived</em> threads under known match-parent channels (challenges + divisions). Any without a MatchSession row gets deleted.</li>
           </ul>
           <form action={runMatchSweepAction} style={{ marginTop: 8 }}>
-            <Button type="submit" variant="secondary">Run sweep now</Button>
+            <ConfirmButton
+              message="Run the orphan-thread sweep now? This deletes Discord threads with no active match."
+              variant="destructive"
+            >
+              Run sweep now
+            </ConfirmButton>
           </form>
         </div>
       </main>

@@ -7,6 +7,7 @@ import { DEFAULTS } from "@/lib/league-settings";
 import { loadRulesTemplates } from "@/lib/loaders/admin-settings";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { Input } from "@/components/ui/input";
 import { SiteNav } from "@/components/SiteNav";
 import { Callout } from "@/components/Callout";
@@ -110,7 +111,12 @@ export default async function AdminSettingsPage({
               {!t.isDefault && (
                 <form action={deleteRulesTemplate}>
                   <input type="hidden" name="id" value={t.id} />
-                  <Button type="submit" variant="destructive">Delete</Button>
+                  <ConfirmButton
+                    message="Delete this rules template? Seasons using it fall back to the default."
+                    variant="destructive"
+                  >
+                    Delete
+                  </ConfirmButton>
                 </form>
               )}
               {t.isDefault && (

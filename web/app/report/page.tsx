@@ -53,7 +53,8 @@ export default async function ReportPage({
           <div className="card">
             <strong>Not in the league yet</strong>
             <p className="muted">
-              You're logged in but not in the league yet. Sign up in Discord first.
+              You&apos;re logged in but not in the league yet — <Link href="/join">join here</Link>{" "}
+              to sign up when a round&apos;s open, or get a reminder for the next season.
             </p>
           </div>
         ) : !division || !tc ? (
