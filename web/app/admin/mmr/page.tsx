@@ -3,21 +3,45 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
 import { loadMmrAdmin } from "@/lib/mmr-admin";
-import { loadLiveMmrEnabled } from "@/lib/loaders/admin-mmr";
+import { loadLiveMmrEnabled, loadMmrSeasons } from "@/lib/loaders/admin-mmr";
+import { previewSeasonMmr, type MmrSeedSource } from "@/lib/mmr-recompute";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { MmrLadder, type MmrLadderRow } from "@/components/MmrLadder";
-import { applyMmrLadder, fillMissingMmr, markMatchesSettled, recomputeMmr, setLiveMmr, saveMmrs } from "./actions";
+import { applyMmrLadder, applySeasonMmrApply, fillMissingMmr, markMatchesSettled, setLiveMmr, saveMmrs } from "./actions";
 
 export const dynamic = "force-dynamic";
+
+const selectStyle = {
+  fontSize: 13,
+  padding: "5px 8px",
+  borderRadius: 6,
+  border: "1px solid var(--border, rgba(255,255,255,0.12))",
+  background: "var(--surface-2, rgba(255,255,255,0.05))",
+  color: "var(--text)",
+} as const;
 
 // Hidden-MMR onboarding screen. Seed everyone's hidden MMR from BMP (×1.5),
 // hand-tweak the ones the scrape gets wrong, save. This is the source of truth
 // the placement + schedule previews read from.
-export default async function MmrAdminPage() {
+export default async function MmrAdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mmrSeason?: string; mmrSeed?: string }>;
+}) {
   await requireAdmin();
+  const sp = await searchParams;
   const rows = await loadMmrAdmin();
   const set = rows.filter((r) => r.hiddenMmr != null).length;
   const unset = rows.length - set;
+
+  // Recompute basis picker + (when chosen) a read-only preview of the result.
+  const seasons = await loadMmrSeasons();
+  const seedSource: MmrSeedSource = sp.mmrSeed === "bmp" ? "bmp" : "current";
+  const showPreview = sp.mmrSeason !== undefined || sp.mmrSeed !== undefined;
+  const preview = showPreview
+    ? await previewSeasonMmr({ seasonId: sp.mmrSeason || undefined, seedSource })
+    : null;
+  const moved = preview ? preview.rows.filter((r) => r.delta !== 0).length : 0;
 
   // Initial ladder order: by stored MMR desc, then BMP peak desc, then name.
   // Unset players fall to a sensible spot by their BMP, ready to drag.
@@ -92,26 +116,94 @@ export default async function MmrAdminPage() {
           </div>
         </div>
 
-        <div className="card" style={{ display: "grid", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <form action={fillMissingMmr}>
-              <Button type="submit" variant="secondary">Fill missing from BMP (×1.5)</Button>
-            </form>
-            <span className="muted" style={{ fontSize: 12 }}>
-              Only fills the {unset} unset player{unset === 1 ? "" : "s"} — never overwrites a value you typed.
-            </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", margin: "4px 0" }}>
+          <form action={fillMissingMmr}>
+            <Button type="submit" variant="secondary">Fill missing from BMP (×1.5)</Button>
+          </form>
+          <span className="muted" style={{ fontSize: 12 }}>
+            Only fills the {unset} unset player{unset === 1 ? "" : "s"} — never overwrites a value you typed.
+          </span>
+        </div>
+
+        {/* Configure → preview → apply. Pick which season's games to replay and
+            what to start each player from, Preview (a GET — writes nothing), then
+            Apply commits exactly what's shown. */}
+        <div className="card" style={{ display: "grid", gap: 12 }}>
+          <div>
+            <strong>Recompute from match results</strong>
+            <p className="muted" style={{ fontSize: 12, margin: "2px 0 0" }}>
+              Choose what to base MMR on, preview the result, then apply. Nothing saves until you hit Apply.
+            </p>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <form action={recomputeMmr}>
-              <ConfirmButton message="Recompute every player's MMR from match history? This overwrites ALL current MMRs, including ones you set by hand.">
-                ↻ Recompute all from match history
-              </ConfirmButton>
-            </form>
-            <span className="muted" style={{ fontSize: 12 }}>
-              Replays every confirmed match, starting from each player&apos;s BMP MMR — so a strong player with
-              a weak BMP score climbs off their wins. Overwrites everything.
-            </span>
-          </div>
+          <form method="get" style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <label style={{ display: "grid", gap: 4, fontSize: 12 }}>
+              <span className="muted">Replay games from</span>
+              <select name="mmrSeason" defaultValue={preview?.seasonId ?? ""} style={selectStyle}>
+                {seasons.length === 0 && <option value="">No seasons</option>}
+                {seasons.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}{s.isActive ? " (active)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: "grid", gap: 4, fontSize: 12 }}>
+              <span className="muted">Starting each player from</span>
+              <select name="mmrSeed" defaultValue={seedSource} style={selectStyle}>
+                <option value="current">Current hidden MMR (keep your seeds)</option>
+                <option value="bmp">BMP MMR ×1.5 (cold start)</option>
+              </select>
+            </label>
+            <Button type="submit" variant="secondary">Preview →</Button>
+          </form>
+
+          {preview && (
+            preview.seasonId === null ? (
+              <div className="muted" style={{ fontSize: 13 }}>No season selected.</div>
+            ) : (
+              <div style={{ display: "grid", gap: 10 }}>
+                <div className="muted" style={{ fontSize: 12 }}>
+                  Replaying <strong>{preview.matchCount}</strong> confirmed game{preview.matchCount === 1 ? "" : "s"} from{" "}
+                  <strong>{preview.seasonLabel}</strong>, starting from{" "}
+                  {seedSource === "current" ? "each player's current MMR" : "BMP ×1.5"}.{" "}
+                  <strong>{moved}</strong> player{moved === 1 ? "" : "s"} would move. Nothing is saved yet.
+                </div>
+                <div className="table-scroll" style={{ maxHeight: 360 }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: "left" }}>Player</th>
+                        <th style={{ textAlign: "right" }}>Start</th>
+                        <th style={{ textAlign: "right" }}>→ MMR</th>
+                        <th style={{ textAlign: "right" }}>Δ</th>
+                        <th style={{ textAlign: "right" }}>Games</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.rows.map((r) => (
+                        <tr key={r.playerId} style={{ opacity: r.games === 0 ? 0.5 : 1 }}>
+                          <td>{r.displayName}</td>
+                          <td style={{ textAlign: "right" }}>{r.seed}</td>
+                          <td style={{ textAlign: "right", fontWeight: 600 }}>{r.final}</td>
+                          <td style={{ textAlign: "right", color: r.delta > 0 ? "var(--success)" : r.delta < 0 ? "var(--danger)" : "var(--muted)" }}>
+                            {r.delta > 0 ? `+${r.delta}` : r.delta}
+                          </td>
+                          <td style={{ textAlign: "right" }} className="muted">{r.games}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <form action={applySeasonMmrApply}>
+                  <input type="hidden" name="mmrSeason" value={preview.seasonId} />
+                  <input type="hidden" name="mmrSeed" value={seedSource} />
+                  <ConfirmButton message={`Apply these MMRs to all ${preview.rows.length} players? This overwrites everyone's current hidden MMR (including hand-set values) with the previewed numbers.`}>
+                    ✓ Apply these MMRs
+                  </ConfirmButton>
+                </form>
+              </div>
+            )
+          )}
         </div>
 
         <div className="card">

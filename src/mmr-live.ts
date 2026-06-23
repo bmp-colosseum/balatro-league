@@ -16,8 +16,16 @@ export async function applyPendingMatchMmr(): Promise<number> {
   // Off by default — MMR stays preview-only until live MMR is explicitly enabled.
   if ((await getConfig(LeagueConfigKey.LiveMmrEnabled)) !== "true") return 0;
 
+  // Active season only — hidden MMR is a per-season-fresh estimate, so past
+  // seasons (e.g. Season 1) must never move it, even if their matches are still
+  // flagged unapplied.
   const pending = await prisma.match.findMany({
-    where: { status: "CONFIRMED", format: "LEAGUE_BO2", mmrApplied: false },
+    where: {
+      status: "CONFIRMED",
+      format: "LEAGUE_BO2",
+      mmrApplied: false,
+      division: { season: { isActive: true } },
+    },
     orderBy: { confirmedAt: "asc" },
     select: { id: true, playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true, winnerId: true },
   });

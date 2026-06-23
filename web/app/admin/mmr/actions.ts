@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { seedMissingMmrFromBmp, setPlayerMmr } from "@/lib/mmr-admin";
-import { applyRecomputedMmr } from "@/lib/mmr-recompute";
+import { applySeasonMmr, type MmrSeedSource } from "@/lib/mmr-recompute";
 
 // Flip live MMR on/off. Off = preview-only (the sweep won't auto-apply matches);
 // on = hands-off (every confirmed match updates MMR via the sweep).
@@ -25,11 +25,15 @@ export async function fillMissingMmr() {
   revalidatePath("/admin/mmr");
 }
 
-// Replay every confirmed match through Elowen from a BMP seed — sets everyone's
-// MMR from their actual results. Overwrites all hidden MMRs (data-driven).
-export async function recomputeMmr() {
+// Commit a previewed recompute: replay the chosen season's games from the chosen
+// starting point and write the result. The same (season, seed-source) the user
+// previewed are passed back as hidden fields, so Apply commits exactly what was
+// shown. Overwrites hidden MMR; flags confirmed matches settled for live MMR.
+export async function applySeasonMmrApply(formData: FormData) {
   await requireAdmin();
-  await applyRecomputedMmr();
+  const seasonId = String(formData.get("mmrSeason") ?? "").trim() || undefined;
+  const seedSource: MmrSeedSource = String(formData.get("mmrSeed")) === "bmp" ? "bmp" : "current";
+  await applySeasonMmr({ seasonId, seedSource });
   revalidatePath("/admin/mmr");
 }
 
