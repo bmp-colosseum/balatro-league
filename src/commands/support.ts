@@ -61,6 +61,27 @@ export const support: SlashCommand = {
       return;
     }
 
+    // One open ticket per person — point them at the existing one instead of
+    // spawning duplicates. If its thread is gone, close the stale row so a fresh
+    // ticket can open.
+    const existingOpen = await prisma.supportTicket.findFirst({
+      where: { guildId: interaction.guild.id, requesterId: interaction.user.id, status: "OPEN" },
+      orderBy: { createdAt: "desc" },
+    });
+    if (existingOpen && existingOpen.threadId && existingOpen.threadId !== "pending") {
+      const existingThread = await interaction.client.channels.fetch(existingOpen.threadId).catch(() => null);
+      if (existingThread) {
+        await interaction.editReply(
+          `You already have an open ticket: ${existingThread.toString()} — continue there. A helper will close it once it's sorted, then you can open a new one.`,
+        );
+        return;
+      }
+      // Thread is gone but the row says OPEN — close it so a new ticket can open.
+      await prisma.supportTicket
+        .update({ where: { id: existingOpen.id }, data: { status: "CLOSED", closedAt: new Date() } })
+        .catch(() => {});
+    }
+
     // Create the tracked ticket first so it has a stable id (used in the
     // thread name + embed); fill threadId in once the thread exists.
     const ticket = await prisma.supportTicket.create({

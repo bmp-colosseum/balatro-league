@@ -9,6 +9,7 @@ export interface CheckinMessageOpts {
   divisionName: string;
   divisionChannelUrl: string | null; // jump link, or null if unknown
   queueChannelUrl: string | null;
+  supportChannelUrl: string | null; // jump link to #league-support
   seasonEndsAt?: Date | null; // when set, the message states the deadline
   /** When true, append a note that the real version carries the buttons. */
   isTest?: boolean;
@@ -18,6 +19,7 @@ export function buildCheckinMessage(o: CheckinMessageOpts): string {
   const divLink = o.divisionChannelUrl
     ? `your division channel — **${o.divisionName}**: ${o.divisionChannelUrl}`
     : `your division channel **${o.divisionName}**`;
+  const supportRef = o.supportChannelUrl ? `**#league-support** (${o.supportChannelUrl})` : "**#league-support**";
   const lines = [
     `👋 **Still playing ${o.seasonLabel}?**`,
     ``,
@@ -31,10 +33,15 @@ export function buildCheckinMessage(o: CheckinMessageOpts): string {
     );
   }
   if (o.seasonEndsAt) {
-    const dateStr = o.seasonEndsAt.toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
-    lines.push(``, `⏳ **The season ends ${dateStr}** — all your matches need to be played before then.`);
+    // Discord timestamp — renders in each viewer's local time + a relative hint.
+    const unix = Math.floor(o.seasonEndsAt.getTime() / 1000);
+    lines.push(``, `⏳ **The season ends <t:${unix}:D>** (<t:${unix}:R>) — all your matches need to be played before then.`);
   }
-  lines.push(``, `**If not,** no worries — just let us know so we can sort your spot.`);
+  lines.push(``, `**If not,** no worries — just tap **🚪 I'm out** below so we can sort your spot.`);
+  lines.push(
+    ``,
+    `_Please don't reply to this DM — it isn't monitored. Use the buttons below to answer, and if you need help with anything, run \`/support\` in ${supportRef}._`,
+  );
   if (o.isTest) {
     lines.push("", "_🧪 This is a test. The real one players get will have **✅ Still playing** / **🚪 I'm out** buttons below._");
   }

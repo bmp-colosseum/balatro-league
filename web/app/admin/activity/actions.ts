@@ -66,10 +66,10 @@ export async function sendTestCheckin() {
       player: { select: { displayName: true } },
     },
   });
-  const queueCfg = await prisma.leagueConfig.findUnique({
-    where: { key: "league_queue_channel_id" },
-    select: { value: true },
-  });
+  const [queueCfg, supportCfg] = await Promise.all([
+    prisma.leagueConfig.findUnique({ where: { key: "league_queue_channel_id" }, select: { value: true } }),
+    prisma.leagueConfig.findUnique({ where: { key: "support_channel_id" }, select: { value: true } }),
+  ]);
 
   const guildId = process.env.DISCORD_GUILD_ID;
   const jump = (channelId: string | null | undefined) =>
@@ -81,6 +81,7 @@ export async function sendTestCheckin() {
     divisionName: member?.division.name ?? "your division",
     divisionChannelUrl: jump(member?.division.discordChannelId),
     queueChannelUrl: jump(queueCfg?.value),
+    supportChannelUrl: jump(supportCfg?.value),
     seasonEndsAt: season.scheduledEndAt,
     isTest: true,
   });
