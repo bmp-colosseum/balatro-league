@@ -78,19 +78,29 @@ export async function ensureTranscriptsChannel(client: Client): Promise<TextChan
 // was said (so empty/cancelled threads don't spam the channel). Best-effort.
 export async function postTranscriptSummary(client: Client, threadId: string): Promise<void> {
   try {
+    // Ensure the staff channel exists on every match close (idempotent — only
+    // creates it once, then reuses). Doing this BEFORE the message check means
+    // the channel appears as soon as a match completes, even if that thread had
+    // no chat — so "the channel never showed up" can't be a silent no-op.
+    const channel = await ensureTranscriptsChannel(client);
+    if (!channel) {
+      console.warn("[transcript-channel] no channel (create failed / missing ManageChannels?) for thread", threadId);
+      return;
+    }
+
     const messages = await prisma.threadMessage.findMany({
       where: { threadId },
       select: { authorName: true, matchId: true, kind: true, deletedAt: true },
     });
-    if (messages.length === 0) return;
+    if (messages.length === 0) {
+      console.log(`[transcript-channel] thread ${threadId} closed with 0 captured messages — channel ensured, nothing to post.`);
+      return;
+    }
 
     const participants = [...new Set(messages.map((m) => m.authorName))];
     const deleted = messages.filter((m) => m.deletedAt).length;
     const matchId = messages.find((m) => m.matchId)?.matchId ?? null;
     const kind = messages.find((m) => m.kind === "dispute") ? "dispute" : "match";
-
-    const channel = await ensureTranscriptsChannel(client);
-    if (!channel) return;
 
     const link = webUrl(`admin/transcripts/${threadId}`);
     const embed = new EmbedBuilder()
