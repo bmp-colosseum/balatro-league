@@ -41,7 +41,6 @@ export async function runRosterCheckin(opts: { playerIds: string[]; seasonId: st
     });
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId(`roster:in:${member.id}`).setLabel("Still playing").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId(`roster:out:${member.id}`).setLabel("I'm out").setStyle(ButtonStyle.Secondary),
     );
     try {
       const user = await client.users.fetch(member.player.discordId);
