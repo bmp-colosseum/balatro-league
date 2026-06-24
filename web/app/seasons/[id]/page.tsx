@@ -13,6 +13,7 @@ import { FormSelect } from "@/components/FormSelect";
 import { DraggableDivisionsEditor, type EditorMember, type EditorTier } from "@/components/DraggableDivisionsEditor";
 import { LocalDateTimeField } from "@/components/LocalDateTimeField";
 import { LocalDateTime } from "@/components/LocalDateTime";
+import { DatePickerField } from "@/components/DatePickerField";
 import { SeasonDeckPresetPicker } from "@/components/SeasonDeckPresetPicker";
 import { tierColors } from "@/lib/tier-colors";
 import { DivisionStandingsTable, type StandingsRowExtras } from "@/components/DivisionStandingsTable";
@@ -559,25 +560,20 @@ async function AdminSeasonPanel({
           <Button type="submit" variant="secondary" size="sm">Save</Button>
           <Link href="/admin/settings" className="muted" style={{ fontSize: 11 }}>Manage templates →</Link>
         </form>
-        <div style={{ marginTop: 8 }}>
+        <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <span className="muted" style={{ fontSize: 12 }}>Planned end date</span>
-          {season.scheduledEndAt ? (
-            <span className="muted" style={{ fontSize: 11 }}>
-              {" "}· currently <LocalDateTime iso={season.scheduledEndAt.toISOString()} style="date" />{" "}
-              <form action={clearSeasonScheduledEnd} style={{ display: "inline" }}>
-                <input type="hidden" name="id" value={season.id} />
-                <button type="submit" className="link-action" style={{ color: "var(--danger)", fontSize: 11 }}>clear</button>
-              </form>
-            </span>
-          ) : (
-            <span className="muted" style={{ fontSize: 11 }}> · not set</span>
-          )}
-          <form action={setSeasonScheduledEnd} style={{ display: "flex", gap: 6, alignItems: "flex-end", flexWrap: "wrap", marginTop: 4 }}>
+          <form action={setSeasonScheduledEnd} style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <input type="hidden" name="id" value={season.id} />
-            <LocalDateTimeField name="scheduledEndAt" label="Pick a date & time (your time)" />
+            <DatePickerField name="scheduledEndAt" defaultIso={season.scheduledEndAt?.toISOString()} placeholder="Pick an end date" />
             <Button type="submit" variant="secondary" size="sm">Save</Button>
-            <span className="muted" style={{ fontSize: 11 }}>Shown to players in check-in DMs. Doesn&apos;t auto-end the season.</span>
           </form>
+          {season.scheduledEndAt && (
+            <form action={clearSeasonScheduledEnd} style={{ display: "inline" }}>
+              <input type="hidden" name="id" value={season.id} />
+              <button type="submit" className="link-action" style={{ color: "var(--danger)", fontSize: 11 }}>clear</button>
+            </form>
+          )}
+          <span className="muted" style={{ fontSize: 11 }}>Shown to players in check-in DMs. Doesn&apos;t auto-end.</span>
         </div>
         <details style={{ marginTop: 8 }}>
           <summary className="muted" style={{ cursor: "pointer", fontSize: 12 }}>Discord overrides for this season</summary>

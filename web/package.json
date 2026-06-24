@@ -29,6 +29,7 @@
     "pg-boss": "^12.18.2",
     "prisma": "^6.19.3",
     "react": "19.2.4",
+    "react-day-picker": "^10.0.1",
     "react-dom": "19.2.4",
     "recharts": "^3.8.0",
     "shadcn": "^4.11.0",
