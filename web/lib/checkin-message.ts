@@ -23,9 +23,6 @@ export function buildCheckinMessage(o: CheckinMessageOpts): string {
     ``,
     `If you are: head to ${divCh}, run \`/schedule\` to see who you play, and message them to set up games.`,
   ];
-  if (o.queueChannelUrl) {
-    lines.push(`You can also Queue up (${o.queueChannelUrl}) when you're around and I'll pair you with whoever's free.`);
-  }
   if (o.seasonEndsAt) {
     const unix = Math.floor(o.seasonEndsAt.getTime() / 1000);
     lines.push(``, `Season ends <t:${unix}:D> (<t:${unix}:R>), so get your games in before then.`);
