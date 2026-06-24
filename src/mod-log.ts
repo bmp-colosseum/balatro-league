@@ -15,6 +15,7 @@
 
 import type { Message, PartialMessage, ThreadChannel } from "discord.js";
 import { prisma } from "./db.js";
+import { ensureTranscriptsChannel } from "./transcript-channel.js";
 
 // Disclosure posted as the bot's FIRST message in each tracked thread (and
 // pinned), so players see it the moment the thread opens.
@@ -32,6 +33,12 @@ export async function postModerationNotice(thread: ThreadChannel): Promise<void>
   } catch (err) {
     console.warn("[mod-log] notice post failed:", err);
   }
+  // Provision the staff #league-transcripts channel as soon as the first tracked
+  // thread OPENS — so it exists immediately, not only after a match closes (and
+  // not dependent on anyone chatting). Idempotent + best-effort.
+  ensureTranscriptsChannel(thread.client).catch((err) =>
+    console.warn("[mod-log] ensure transcripts channel failed:", err),
+  );
 }
 
 // Only mirror image attachments, and only when small enough to be worth keeping
