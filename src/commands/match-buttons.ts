@@ -43,7 +43,7 @@ import { renderComboBuilder, renderMatch } from "../match-render.js";
 import { summonHelpers } from "./helper.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
 import { writeMatchGames } from "../match-write.js";
-import { backfillMatchId } from "../mod-log.js";
+import { backfillMatchId, postModerationNotice } from "../mod-log.js";
 import {
   emptyGameState,
   parseGame,
@@ -802,6 +802,8 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
         });
         await thread.members.add(playerA.discordId).catch(() => {});
         await thread.members.add(playerB.discordId).catch(() => {});
+        // First thing in the thread: the moderation-recording notice (pinned).
+        await postModerationNotice(thread);
         matchChannelId = thread.id;
       } catch (err) {
         console.warn("[match] failed to create private thread:", err);

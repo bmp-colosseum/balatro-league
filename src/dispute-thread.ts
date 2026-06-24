@@ -24,6 +24,7 @@ import { getConfig, LeagueConfigKey } from "./league-config.js";
 import { buildReportEmbed } from "./report-flow.js";
 import { disputeThreadButtons } from "./commands/dispute-buttons.js";
 import { webUrl } from "./web-url.js";
+import { postModerationNotice } from "./mod-log.js";
 
 export async function spawnDisputeThread(
   pairingId: string,
@@ -121,6 +122,9 @@ export async function spawnDisputeThread(
       // otherwise it spawns standalone in the channel.
       startMessage: startMessageId,
     });
+
+    // First thing in the thread: the moderation-recording notice (pinned).
+    await postModerationNotice(thread);
 
     const staffBindings = await prisma.roleBinding.findMany({
       where: { tier: { in: ["ADMIN", "HELPER"] } },

@@ -16,14 +16,24 @@
 import type { Message, PartialMessage, ThreadChannel } from "discord.js";
 import { prisma } from "./db.js";
 
-// Pinned disclosure shown at the top of every tracked thread. The marker
-// substring is how we detect we've already posted it (avoids duplicates across
-// restarts).
-const NOTICE_MARKER = "recorded for moderation";
+// Disclosure posted as the bot's FIRST message in each tracked thread (and
+// pinned), so players see it the moment the thread opens.
 const NOTICE_TEXT =
-  `🔒 **Heads up — messages in this thread are ${NOTICE_MARKER} purposes.**\n` +
+  `🔒 **Heads up — messages in this thread are recorded for moderation purposes.**\n` +
   `Keep it civil: play your match, sort out scheduling, report the result. ` +
   `Staff can review this thread if there's a dispute or a conduct report.`;
+
+// Post + pin the disclosure. Call this right after a match/dispute thread is
+// created, BEFORE any other content, so it's the first thing in the thread.
+// Best-effort — a failure here must never block opening the match.
+export async function postModerationNotice(thread: ThreadChannel): Promise<void> {
+  try {
+    const msg = await thread.send(NOTICE_TEXT);
+    await msg.pin().catch(() => {});
+  } catch (err) {
+    console.warn("[mod-log] notice post failed:", err);
+  }
+}
 
 // Only mirror image attachments, and only when small enough to be worth keeping
 // as evidence. (The CDN url is always recorded regardless; bytes are the backup
@@ -40,9 +50,6 @@ type Resolution = { kind: "match" | "dispute"; matchId: string | null; matchSess
 // for its whole life). Negative results aren't cached — a brand-new match thread
 // must never be missed because we cached "untracked" a moment too early.
 const resolved = new Map<string, Resolution>();
-// Threads we've already posted the notice in THIS process (cheap dedupe on top
-// of the pinned-message check).
-const noticed = new Set<string>();
 
 async function resolveThread(threadId: string): Promise<Resolution | null> {
   const cached = resolved.get(threadId);
@@ -95,24 +102,6 @@ async function collectAttachments(
   return out;
 }
 
-// Post + pin the disclosure once per thread. Checks existing pins so a restart
-// mid-match doesn't double-post.
-async function ensureNotice(thread: ThreadChannel): Promise<void> {
-  if (noticed.has(thread.id)) return;
-  noticed.add(thread.id);
-  try {
-    const botId = thread.client.user?.id;
-    const pinned = await thread.messages.fetchPinned().catch(() => null);
-    const already =
-      pinned?.some((m) => m.author?.id === botId && m.content.includes(NOTICE_MARKER)) ?? false;
-    if (already) return;
-    const msg = await thread.send(NOTICE_TEXT);
-    await msg.pin().catch(() => {});
-  } catch {
-    // Non-fatal — capture still works without the visible notice.
-  }
-}
-
 // messageCreate → mirror the message if it's in a tracked thread. Skips bots
 // (the bot's own embeds/notice) and non-thread channels.
 export async function captureCreate(message: Message): Promise<void> {
@@ -143,10 +132,8 @@ export async function captureCreate(message: Message): Promise<void> {
       // Already captured (re-delivered event) — leave it untouched.
       update: {},
     });
-    // Match/casual threads show the disclosure in the match-panel embed footer
-    // (always visible from the moment the thread opens). Dispute threads have no
-    // such panel, so post + pin the standalone notice there.
-    if (res.kind === "dispute") await ensureNotice(message.channel as ThreadChannel);
+    // The disclosure is posted as the thread's first message at creation
+    // (postModerationNotice), so nothing to do here.
   } catch (err) {
     console.warn("[mod-log] capture failed:", err);
   }
