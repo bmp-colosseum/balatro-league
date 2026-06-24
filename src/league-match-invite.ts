@@ -8,6 +8,7 @@ import { prisma } from "./db.js";
 import { getLeagueSettingsForSeason } from "./league-settings.js";
 import { bootstrapPresetsAndPointers, presetForSeason } from "./match-config.js";
 import { renderMatch } from "./match-render.js";
+import { postModerationNotice } from "./mod-log.js";
 import { ensureLeagueMatchesChannel } from "./league-matches-channel.js";
 import { recordAudit } from "./audit.js";
 import type { Player } from "@prisma/client";
@@ -158,6 +159,8 @@ export async function createLeagueMatchInvite(opts: {
     });
     await thread.members.add(me.discordId).catch(() => {});
     await thread.members.add(opp.discordId).catch(() => {});
+    // First thing in the thread: the moderation-recording notice (pinned).
+    await postModerationNotice(thread);
     threadId = thread.id;
   } catch (err) {
     console.warn("[league-match-invite] failed to create private thread:", err);
