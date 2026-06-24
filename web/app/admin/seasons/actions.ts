@@ -277,23 +277,46 @@ export async function setSeasonScheduledEnd(formData: FormData) {
   const { user } = await requireAdmin();
   const id = String(formData.get("id") ?? "");
   if (!id) return;
+  // LocalDateTimeField submits a UTC ISO instant. Empty = no change (clearing is
+  // a separate action, so an accidental empty Save can't wipe the date).
   const whenStr = String(formData.get("scheduledEndAt") ?? "").trim();
-  const target = await prisma.season.findUnique({ where: { id } });
-  if (!target) return;
-  const when = whenStr ? new Date(whenStr) : null;
-  if (when && Number.isNaN(when.getTime())) {
+  if (!whenStr) {
+    revalidatePath(`/seasons/${id}`);
+    return;
+  }
+  const when = new Date(whenStr);
+  if (Number.isNaN(when.getTime())) {
     redirect(`/seasons/${id}?err=${encodeURIComponent("Invalid date.")}`);
   }
+  const target = await prisma.season.findUnique({ where: { id } });
+  if (!target) return;
   await prisma.season.update({ where: { id }, data: { scheduledEndAt: when } });
   recordAudit({
     actor: actorFromAdminUser(user),
     action: "season.set-end-date",
     targetType: "Season",
     targetId: id,
-    summary: when
-      ? `Set planned end date for "${formatSeasonLabel(target)}" to ${when.toISOString().slice(0, 10)}`
-      : `Cleared planned end date for "${formatSeasonLabel(target)}"`,
-    metadata: { scheduledEndAt: when?.toISOString() ?? null },
+    summary: `Set planned end date for "${formatSeasonLabel(target)}" to ${when.toISOString()}`,
+    metadata: { scheduledEndAt: when.toISOString() },
+  });
+  revalidatePath(`/seasons/${id}`);
+  revalidatePath("/admin/seasons");
+}
+
+export async function clearSeasonScheduledEnd(formData: FormData) {
+  const { user } = await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  const target = await prisma.season.findUnique({ where: { id } });
+  if (!target) return;
+  await prisma.season.update({ where: { id }, data: { scheduledEndAt: null } });
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "season.clear-end-date",
+    targetType: "Season",
+    targetId: id,
+    summary: `Cleared planned end date for "${formatSeasonLabel(target)}"`,
+    metadata: {},
   });
   revalidatePath(`/seasons/${id}`);
   revalidatePath("/admin/seasons");

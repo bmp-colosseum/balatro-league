@@ -33,6 +33,7 @@ import {
   setSeasonPreset,
   setSeasonScheduledStart,
   setSeasonScheduledEnd,
+  clearSeasonScheduledEnd,
 } from "@/app/admin/seasons/actions";
 import { setSeasonRulesTemplate } from "@/app/admin/settings/actions";
 import {
@@ -558,18 +559,26 @@ async function AdminSeasonPanel({
           <Button type="submit" variant="secondary" size="sm">Save</Button>
           <Link href="/admin/settings" className="muted" style={{ fontSize: 11 }}>Manage templates →</Link>
         </form>
-        <form action={setSeasonScheduledEnd} style={{ marginTop: 8, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-          <input type="hidden" name="id" value={season.id} />
-          <label className="muted" style={{ fontSize: 12 }}>Planned end date:</label>
-          <Input
-            type="date"
-            name="scheduledEndAt"
-            defaultValue={season.scheduledEndAt ? season.scheduledEndAt.toISOString().slice(0, 10) : ""}
-            style={{ fontSize: 12 }}
-          />
-          <Button type="submit" variant="secondary" size="sm">Save</Button>
-          <span className="muted" style={{ fontSize: 11 }}>Informational — shown to players (check-in DMs). Doesn&apos;t auto-end the season.</span>
-        </form>
+        <div style={{ marginTop: 8 }}>
+          <span className="muted" style={{ fontSize: 12 }}>Planned end date</span>
+          {season.scheduledEndAt ? (
+            <span className="muted" style={{ fontSize: 11 }}>
+              {" "}· currently <LocalDateTime iso={season.scheduledEndAt.toISOString()} style="date" />{" "}
+              <form action={clearSeasonScheduledEnd} style={{ display: "inline" }}>
+                <input type="hidden" name="id" value={season.id} />
+                <button type="submit" className="link-action" style={{ color: "var(--danger)", fontSize: 11 }}>clear</button>
+              </form>
+            </span>
+          ) : (
+            <span className="muted" style={{ fontSize: 11 }}> · not set</span>
+          )}
+          <form action={setSeasonScheduledEnd} style={{ display: "flex", gap: 6, alignItems: "flex-end", flexWrap: "wrap", marginTop: 4 }}>
+            <input type="hidden" name="id" value={season.id} />
+            <LocalDateTimeField name="scheduledEndAt" label="Pick a date & time (your time)" />
+            <Button type="submit" variant="secondary" size="sm">Save</Button>
+            <span className="muted" style={{ fontSize: 11 }}>Shown to players in check-in DMs. Doesn&apos;t auto-end the season.</span>
+          </form>
+        </div>
         <details style={{ marginTop: 8 }}>
           <summary className="muted" style={{ cursor: "pointer", fontSize: 12 }}>Discord overrides for this season</summary>
           <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
