@@ -10,17 +10,20 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { resyncSchedules, regenerateSchedules, regenerateDivisionSchedule, setDivisionFormat, setDivisionPromoteRelegate } from "@/app/admin/seasons/actions";
 import { Input } from "@/components/ui/input";
 import { Callout } from "@/components/Callout";
+import { ReplacePlayerSection } from "@/components/ReplacePlayerSection";
+import { loadServerLeavers } from "@/lib/loaders/server-leavers";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDivisionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; err?: string }>;
+  searchParams: Promise<{ ok?: string; err?: string; serverCheck?: string }>;
 }) {
   await requireAdmin();
-  const { ok, err } = await searchParams;
+  const { ok, err, serverCheck } = await searchParams;
   const { season, tiers } = await loadAdminDivisionsIndex();
+  const leavers = season && serverCheck ? await loadServerLeavers() : null;
 
   return (
     <>
@@ -48,6 +51,17 @@ export default async function AdminDivisionsPage({
           <Callout type="danger" style={{ marginBottom: 12 }}>
             Can&apos;t regenerate — a game has already been played or reported. Regenerate only works before kickoff.
           </Callout>
+        )}
+
+        {season && (
+          <div className="card card-admin" style={{ marginBottom: 16 }}>
+            <ReplacePlayerSection
+              leavers={leavers}
+              serverChecked={!!serverCheck}
+              checkHref="/admin/divisions?serverCheck=1"
+              returnTo="/admin/divisions"
+            />
+          </div>
         )}
 
         {!season ? (

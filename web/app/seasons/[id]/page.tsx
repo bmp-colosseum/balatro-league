@@ -48,6 +48,7 @@ import {
 } from "@/app/admin/seasons/bootstrap-actions";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { DiscordId } from "@/components/DiscordId";
+import { ReplacePlayerSection } from "@/components/ReplacePlayerSection";
 import { loadServerLeavers, type ServerLeaver } from "@/lib/loaders/server-leavers";
 import { addFakePlayer, refreshActiveSeasonMmrs, replacePlayer, swapPlayers } from "@/app/admin/players/actions";
 
@@ -690,41 +691,12 @@ function SeasonRosterTools({
       )}
 
       <div style={{ marginBottom: 16 }}>
-        <strong style={{ fontSize: 13 }}>Left the server?</strong>
-        <p className="muted" style={{ fontSize: 12, margin: "2px 0 6px" }}>
-          Find active players who&apos;ve left Discord, then replace one with someone new — the replacement
-          inherits their exact schedule. Pre-play only: blocked once the departing player has a reported result.
-        </p>
-        {!serverChecked ? (
-          <Link href={checkHref} style={{ fontSize: 13 }}>🔍 Check server membership →</Link>
-        ) : !leavers || leavers.length === 0 ? (
-          <p style={{ fontSize: 13, color: "var(--success)", margin: 0 }}>✓ Everyone in the season is still in the server.</p>
-        ) : (
-          <table style={{ marginTop: 4 }}>
-            <thead><tr><th>Left the server</th><th>Division</th><th>Replace with (Discord ID)</th></tr></thead>
-            <tbody>
-              {leavers.map((l) => (
-                <tr key={l.playerId}>
-                  <td><strong>{l.displayName}</strong><DiscordId value={l.discordId} username={null} /></td>
-                  <td className="muted">{l.divisionName}</td>
-                  <td>
-                    <form action={replacePlayer} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      <input type="hidden" name="returnTo" value={returnTo} />
-                      <input type="hidden" name="departedPlayerId" value={l.playerId} />
-                      <Input name="newDiscordId" required placeholder="Discord ID" className="max-w-40" />
-                      <ConfirmButton
-                        message={`Replace ${l.displayName} with this person? They take over the exact schedule. Blocked if ${l.displayName} already has a reported result.`}
-                        variant="secondary"
-                      >
-                        Replace
-                      </ConfirmButton>
-                    </form>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        <ReplacePlayerSection
+          leavers={leavers}
+          serverChecked={serverChecked}
+          checkHref={checkHref}
+          returnTo={returnTo}
+        />
       </div>
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
