@@ -61,6 +61,8 @@ export async function listTranscripts(limit = 200): Promise<TranscriptSummary[]>
 
 export interface TranscriptMessage {
   id: string;
+  kind: string;
+  matchId: string | null;
   authorName: string;
   authorDiscordId: string;
   content: string;
@@ -71,14 +73,30 @@ export interface TranscriptMessage {
   attachments: Array<{ id: string; filename: string; contentType: string | null; sourceUrl: string }>;
 }
 
-// Full chronological transcript for one thread. Bytes are NOT loaded here (served
-// lazily by the attachment route); we only carry the metadata needed to render.
-export async function loadTranscript(threadId: string): Promise<TranscriptMessage[]> {
-  return prisma.threadMessage.findMany({
+export interface TranscriptHeader {
+  threadId: string;
+  kind: string;
+  matchId: string | null;
+  participants: string[];
+  count: number;
+  deleted: number;
+  firstAt: Date | null;
+  lastAt: Date | null;
+}
+
+// Full chronological transcript for one thread + a header summary. Bytes are NOT
+// loaded here (served lazily by the attachment route); we only carry the metadata
+// needed to render.
+export async function loadTranscript(
+  threadId: string,
+): Promise<{ header: TranscriptHeader; messages: TranscriptMessage[] }> {
+  const messages = await prisma.threadMessage.findMany({
     where: { threadId },
     orderBy: { postedAt: "asc" },
     select: {
       id: true,
+      kind: true,
+      matchId: true,
       authorName: true,
       authorDiscordId: true,
       content: true,
@@ -89,6 +107,17 @@ export async function loadTranscript(threadId: string): Promise<TranscriptMessag
       attachments: { select: { id: true, filename: true, contentType: true, sourceUrl: true } },
     },
   });
+  const header: TranscriptHeader = {
+    threadId,
+    kind: messages.find((m) => m.kind)?.kind ?? "match",
+    matchId: messages.find((m) => m.matchId)?.matchId ?? null,
+    participants: [...new Set(messages.map((m) => m.authorName))],
+    count: messages.length,
+    deleted: messages.filter((m) => m.deletedAt).length,
+    firstAt: messages[0]?.postedAt ?? null,
+    lastAt: messages[messages.length - 1]?.postedAt ?? null,
+  };
+  return { header, messages };
 }
 
 // For the attachment route: the stored bytes (if any) + how to fall back.
