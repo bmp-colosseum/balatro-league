@@ -48,6 +48,17 @@ export async function cancelActivityScan() {
   revalidatePath("/admin/activity");
 }
 
+// Admin opt-out toggle: flip a player's reminder opt-out so they're skipped by
+// the check-in send (and other nudge DMs). Reversible.
+export async function setCheckinOptOut(formData: FormData) {
+  await requireAdmin();
+  const playerId = String(formData.get("playerId") ?? "");
+  const optOut = String(formData.get("optOut")) === "true";
+  if (!playerId) return;
+  await prisma.player.update({ where: { id: playerId }, data: { signupReminderOptOut: optOut } });
+  revalidatePath("/admin/activity");
+}
+
 // Send the real check-in DMs to the flagged (silent) players. The bot worker
 // skips anyone opted out or already asked/answered, so this is safe to re-run.
 export async function sendCheckinDms() {

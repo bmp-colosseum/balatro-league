@@ -3,7 +3,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { SubmitButton } from "@/components/SubmitButton";
 import { loadActivityData } from "@/lib/loaders/activity";
-import { startActivityScan, sendTestCheckin, cancelActivityScan, sendCheckinDms } from "./actions";
+import { startActivityScan, sendTestCheckin, cancelActivityScan, sendCheckinDms, setCheckinOptOut } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -147,16 +147,26 @@ export default async function ActivityPage() {
                         <th style={{ textAlign: "left" }}>Last chat post</th>
                         <th style={{ textAlign: "left" }}>Before?</th>
                         <th style={{ textAlign: "left" }}>Check-in</th>
+                        <th style={{ textAlign: "left" }}></th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.ghosts.map((g) => (
-                        <tr key={g.playerId}>
+                        <tr key={g.playerId} style={{ opacity: g.optedOut ? 0.55 : 1 }}>
                           <td><strong>{g.name}</strong>{g.optedOut && <span className="muted" style={{ fontSize: 11 }}> · opted out</span>}</td>
                           <td className="muted">{g.division}</td>
                           <td className="muted">{ago(g.lastPostMs)}</td>
                           <td className="muted">{g.playedPrevSeason ? "↩ returning" : "new"}</td>
                           <td>{checkinBadge(g.checkinStatus)}</td>
+                          <td>
+                            <form action={setCheckinOptOut}>
+                              <input type="hidden" name="playerId" value={g.playerId} />
+                              <input type="hidden" name="optOut" value={(!g.optedOut).toString()} />
+                              <SubmitButton variant="secondary" size="sm" pendingText="…">
+                                {g.optedOut ? "Opt in" : "Opt out"}
+                              </SubmitButton>
+                            </form>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
