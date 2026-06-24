@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { SubmitButton } from "@/components/SubmitButton";
+import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { loadActivityData } from "@/lib/loaders/activity";
 import { startActivityScan, sendTestCheckin, cancelActivityScan, sendCheckinDms, setCheckinOptOut } from "./actions";
 
@@ -50,15 +51,17 @@ export default async function ActivityPage() {
           season and no match played or attempted. The bot does the scan; this page drives it.
         </p>
 
-        <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
-          <form action={sendTestCheckin}>
-            <SubmitButton variant="secondary" pendingText="Sending…">🧪 Send me a test DM</SubmitButton>
-          </form>
+        <ActionFlashForm
+          action={sendTestCheckin}
+          className="card"
+          style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}
+        >
+          <SubmitButton variant="secondary" pendingText="Sending…">🧪 Send me a test DM</SubmitButton>
           <span className="muted" style={{ fontSize: 12 }}>
             DMs you the exact check-in message players would get (uses your division if you&apos;re in one). Confirms
             the jump link works in a DM before any real send.
           </span>
-        </div>
+        </ActionFlashForm>
 
         {!data.hasSeason ? (
           <div className="card muted">No active season.</div>
@@ -127,17 +130,19 @@ export default async function ActivityPage() {
                   <strong>{data.ghosts.length}</strong> player{data.ghosts.length === 1 ? "" : "s"} — silent in their
                   division channel this season, and no match played or attempted.
                 </p>
-                <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
-                  <form action={sendCheckinDms}>
-                    <SubmitButton disabled={sendable === 0} pendingText="Sending…">
-                      📨 Send check-in DMs ({sendable})
-                    </SubmitButton>
-                  </form>
+                <ActionFlashForm
+                  action={sendCheckinDms}
+                  className="card"
+                  style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 10 }}
+                >
+                  <SubmitButton disabled={sendable === 0} pendingText="Sending…">
+                    📨 Send check-in DMs ({sendable})
+                  </SubmitButton>
                   <a href="/admin/activity/export" className="muted" style={{ fontSize: 13 }}>⬇ Export CSV</a>
                   <span className="muted" style={{ fontSize: 12 }}>
                     DMs the not-yet-asked players (skips opt-outs + anyone already asked/answered — safe to re-run).
                   </span>
-                </div>
+                </ActionFlashForm>
                 <div className="table-scroll">
                   <table>
                     <thead>
