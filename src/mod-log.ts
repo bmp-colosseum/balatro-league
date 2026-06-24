@@ -20,8 +20,7 @@ import { prisma } from "./db.js";
 // pinned), so players see it the moment the thread opens.
 const NOTICE_TEXT =
   `🔒 **Heads up — messages in this thread are recorded for moderation purposes.**\n` +
-  `Keep it civil: play your match, sort out scheduling, report the result. ` +
-  `Staff can review this thread if there's a dispute or a conduct report.`;
+  `Staff can review this thread if there is a dispute or report.`;
 
 // Post + pin the disclosure. Call this right after a match/dispute thread is
 // created, BEFORE any other content, so it's the first thing in the thread.
