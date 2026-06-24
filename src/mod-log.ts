@@ -143,7 +143,10 @@ export async function captureCreate(message: Message): Promise<void> {
       // Already captured (re-delivered event) — leave it untouched.
       update: {},
     });
-    await ensureNotice(message.channel as ThreadChannel);
+    // Match/casual threads show the disclosure in the match-panel embed footer
+    // (always visible from the moment the thread opens). Dispute threads have no
+    // such panel, so post + pin the standalone notice there.
+    if (res.kind === "dispute") await ensureNotice(message.channel as ThreadChannel);
   } catch (err) {
     console.warn("[mod-log] capture failed:", err);
   }

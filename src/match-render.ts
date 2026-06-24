@@ -315,7 +315,7 @@ function renderWaitingAccept(s: MatchSession, a: Player, b: Player) {
         `\n\n${mention(b)}, accept within 5 minutes to start.`,
     )
     .setColor(s.isCasual ? 0x95a5a6 : 0x5865f2)
-    .setFooter({ text: `Match ${s.id}` });
+    .setFooter({ text: `Match ${s.id} · 🔒 recorded for moderation` });
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId(`match:accept:${s.id}`).setLabel("Accept").setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`match:decline:${s.id}`).setLabel("Decline").setStyle(ButtonStyle.Secondary),
@@ -362,7 +362,7 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
   const embed = new EmbedBuilder()
     .setTitle(`🎮 Game ${gameNumber} — ${modeLabel}`)
     .setColor(colors[gameNumber])
-    .setFooter({ text: `Match ${s.id}` });
+    .setFooter({ text: `Match ${s.id} · 🔒 recorded for moderation` });
 
   // Game-1 ban phase: if a custom-combo proposal is in flight, replace
   // the ban dropdown UI with the proposal UI. Either player can also
@@ -650,7 +650,7 @@ function renderComplete(s: MatchSession, a: Player, b: Player, g1: GameState | n
     .setTitle("✅ Match complete")
     .setDescription(`${verdict}\n${tail}`)
     .setColor(0x2ecc71)
-    .setFooter({ text: `Match ${s.id}` });
+    .setFooter({ text: `Match ${s.id} · 🔒 recorded for moderation` });
   return { embeds: [embed], components: [] };
 }
 
@@ -659,7 +659,7 @@ function renderCancelled(s: MatchSession, a: Player, b: Player) {
     .setTitle("❌ Match cancelled")
     .setDescription(`${mention(a)} vs ${mention(b)} — match was cancelled or timed out.`)
     .setColor(0xe74c3c)
-    .setFooter({ text: `Match ${s.id}` });
+    .setFooter({ text: `Match ${s.id} · 🔒 recorded for moderation` });
   return { embeds: [embed], components: [] };
 }
 
@@ -679,7 +679,7 @@ function renderPaused(s: MatchSession, a: Player, b: Player) {
         `_Auto-cancels in 7 days if nobody resumes._`,
     )
     .setColor(0x95a5a6)
-    .setFooter({ text: `Match ${s.id}` });
+    .setFooter({ text: `Match ${s.id} · 🔒 recorded for moderation` });
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`match:resume:${s.id}`)
@@ -726,7 +726,7 @@ export function renderComboBuilder(args: {
         `Stake: ${stake ? `${stakeIcon} **${stake}**` : "_not picked_"}\n\n` +
         `Once you submit, **${responder.displayName}** can Accept, Counter, or Cancel.`,
     )
-    .setFooter({ text: `Match ${sessionId}` });
+    .setFooter({ text: `Match ${sessionId} · 🔒 recorded for moderation` });
 
   // Deck select — full canonical deck library, sorted A-Z.
   const sortedDecks = [...CANONICAL_DECKS].sort((x, y) => x.name.localeCompare(y.name));
@@ -799,7 +799,7 @@ function renderProposal(
   const embed = new EmbedBuilder()
     .setTitle("🎯 Custom combo proposal")
     .setColor(0xf1c40f)
-    .setFooter({ text: `Match ${s.id}` })
+    .setFooter({ text: `Match ${s.id} · 🔒 recorded for moderation` })
     .setDescription(
       `**${proposer.displayName}** proposes:\n\n` +
         `${icons ? `${icons}  ` : ""}**${proposal.deck} / ${proposal.stake}**\n\n` +
