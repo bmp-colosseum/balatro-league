@@ -989,3 +989,58 @@ model ActivityScan {
 
   @@index([seasonId, startedAt])
 }
+
+// Moderation transcript capture for MATCH + DISPUTE threads. Those threads are
+// DELETED when a match closes, so Discord keeps no record — if someone says
+// something abusive (then deletes it / denies it), there's no evidence. The bot
+// mirrors every message in those threads here as it's posted, KEEPING edits and
+// deletes (the content is retained even after a Discord delete — that's the point).
+// Players are told up front (a pinned notice in each thread). Short-lived: a
+// daily pg-boss job (modlog.purge) drops rows older than the retention window.
+// Staff-only — surfaced via the web transcript view, never public.
+model ThreadMessage {
+  id               String                    @id @default(cuid())
+  // Discord message id — capture is idempotent (upsert on this) so a re-delivered
+  // gateway event or a backfill can't double-insert.
+  discordMessageId String                    @unique
+  threadId         String // Discord thread the message was posted in
+  kind             String                    @default("match") // "match" | "dispute"
+  // Resolved league links when known: the in-flight session and/or the Match
+  // (pairing). Either can be null (e.g. a casual challenge thread has a session
+  // but no league Match). The transcript view keys on these.
+  matchId          String?
+  matchSessionId   String?
+  authorDiscordId  String
+  authorName       String // display-name snapshot at capture time
+  content          String                    @db.Text // message text ("" if attachments-only)
+  postedAt         DateTime // Discord message timestamp
+  capturedAt       DateTime                  @default(now())
+  // Edit/delete history — kept as evidence. editedAt + originalContent record the
+  // pre-edit text; deletedAt marks a removed message whose content we retain.
+  editedAt         DateTime?
+  originalContent  String?                   @db.Text
+  deletedAt        DateTime?
+  attachments      ThreadMessageAttachment[]
+
+  @@index([threadId, postedAt])
+  @@index([matchId])
+  @@index([capturedAt])
+}
+
+// An attachment on a captured message. We keep the filename + original Discord
+// CDN url, and (for images, best-effort, size-capped) the actual BYTES — because
+// the thread is deleted at match close and the signed CDN url then expires, so
+// the url alone wouldn't survive as evidence. Bytes live in Postgres (the bot
+// and web are separate services, so a shared disk volume isn't an option); the
+// volume is tiny and purged weekly with its message.
+model ThreadMessageAttachment {
+  id          String        @id @default(cuid())
+  messageId   String
+  message     ThreadMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  filename    String
+  contentType String?
+  sourceUrl   String        @db.Text // original Discord CDN url (may expire)
+  bytes       Bytes? // stored content for images (null if too big / not stored)
+
+  @@index([messageId])
+}

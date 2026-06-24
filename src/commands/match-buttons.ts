@@ -43,6 +43,7 @@ import { renderComboBuilder, renderMatch } from "../match-render.js";
 import { summonHelpers } from "./helper.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
 import { writeMatchGames } from "../match-write.js";
+import { backfillMatchId } from "../mod-log.js";
 import {
   emptyGameState,
   parseGame,
@@ -1674,6 +1675,7 @@ async function finalizeMatch(
     const g1state = finalGameField === "game1" ? finalGame : g1;
     await writeMatchGames(shootout.id, canonA, canonB, [g1state]);
     await prisma.matchSession.update({ where: { id: updated.id }, data: { pairingId: shootout.id } });
+    if (updated.threadId) backfillMatchId(updated.threadId, shootout.id).catch(() => {});
     await refreshMessage(interaction, updated);
     closeMatchChannel(interaction, updated.id, updated.threadId).catch(() => {});
     recomputeDivisionStandings(session.divisionId).catch(() => {});
@@ -1754,6 +1756,7 @@ async function finalizeMatch(
     where: { id: updated.id },
     data: { pairingId: pairing.id },
   });
+  if (updated.threadId) backfillMatchId(updated.threadId, pairing.id).catch(() => {});
 
   await refreshMessage(interaction, updated);
   // Lock the match channel + fire the auto-announce. Both are best-effort

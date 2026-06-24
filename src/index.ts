@@ -1,4 +1,5 @@
-import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
+import { Client, Events, GatewayIntentBits, MessageFlags, Partials } from "discord.js";
+import { captureCreate, captureDelete, captureEdit } from "./mod-log.js";
 import { ensureBalatroEmojis } from "./balatro-emojis.js";
 import { ensureCommandsRegistered } from "./commands/register.js";
 import { checkChannelScope } from "./command-channels.js";
@@ -14,7 +15,28 @@ import { initQueue } from "./queue.js";
 import { attachRateLimitLogging } from "./rate-limit-logger.js";
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  // GuildMessages + MessageContent (privileged — enable it in the Discord
+  // Developer Portal) let the bot mirror match/dispute-thread messages for the
+  // moderation transcript. Partials.Message so edits/deletes of uncached
+  // messages still fire (we capture the original, then mark it edited/deleted).
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
+  partials: [Partials.Message, Partials.Channel],
+});
+
+// Moderation capture — match + dispute threads only (mod-log.ts scopes it).
+// Fire-and-forget; capture must never disrupt the match flow.
+client.on(Events.MessageCreate, (message) => {
+  captureCreate(message).catch(() => {});
+});
+client.on(Events.MessageUpdate, (_oldMessage, newMessage) => {
+  captureEdit(newMessage).catch(() => {});
+});
+client.on(Events.MessageDelete, (message) => {
+  captureDelete(message).catch(() => {});
 });
 
 client.once(Events.ClientReady, async (c) => {

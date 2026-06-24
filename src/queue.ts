@@ -65,6 +65,7 @@ import { autoConfirmReport } from "./report-auto-confirm.js";
 import { getLeagueSettings } from "./league-settings.js";
 import { runActivityScan } from "./activity-scan.js";
 import { runRosterCheckin } from "./roster-checkin.js";
+import { MODLOG_RETENTION_DAYS } from "./mod-log.js";
 
 let boss: PgBoss | null = null;
 
@@ -109,6 +110,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("signup.reminder-tick");
   await boss.createQueue("activity.scan");
   await boss.createQueue("roster.checkin");
+  await boss.createQueue("modlog.purge");
 
   // One-shot cleanup for retired queues. Their cron schedule rows +
   // accumulated jobs (no worker listens anymore) stay in pg-boss forever
@@ -246,6 +248,18 @@ export async function initQueue(): Promise<void> {
   );
   await boss.schedule("standings.refresh", "*/15 * * * *");
   console.log("[pg-boss] scheduled standings.refresh every 15 min");
+
+  // Worker + schedule: purge moderation transcripts past the retention window.
+  // Short-lived by design — they exist to settle disputes/conduct reports while
+  // fresh, not to archive chat. Attachments cascade-delete with their message.
+  // Daily at 04:00 UTC. Idempotent schedule (upsert) keeps the cron in sync.
+  await boss.work("modlog.purge", { batchSize: 1, pollingIntervalSeconds: 30 }, async () => {
+    const cutoff = new Date(Date.now() - MODLOG_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    const { count } = await prisma.threadMessage.deleteMany({ where: { capturedAt: { lt: cutoff } } });
+    if (count > 0) console.log(`[modlog.purge] deleted ${count} transcript message(s) older than ${MODLOG_RETENTION_DAYS}d`);
+  });
+  await boss.schedule("modlog.purge", "0 4 * * *");
+  console.log("[pg-boss] scheduled modlog.purge @ 04:00 UTC daily");
 
   // Worker: run an activity scan (walk league channels, record who's posted).
   // batchSize 1 — it's a long, rate-limited job; no retry (a re-run is a fresh
