@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
-import { enqueueActivityScan, enqueueDm } from "@/lib/queue";
+import { enqueueActivityScan, enqueueDm, enqueueRosterCheckin } from "@/lib/queue";
 import { buildCheckinMessage } from "@/lib/checkin-message";
-import { formatSeasonLabel } from "@/lib/format-season";
+import { loadActivityData } from "@/lib/loaders/activity";
 
 // Start an activity scan: create the ActivityScan row and enqueue the bot's
 // activity.scan worker (which does the Discord message reads). No-op if one is
@@ -48,6 +48,18 @@ export async function cancelActivityScan() {
   revalidatePath("/admin/activity");
 }
 
+// Send the real check-in DMs to the flagged (silent) players. The bot worker
+// skips anyone opted out or already asked/answered, so this is safe to re-run.
+export async function sendCheckinDms() {
+  await requireAdmin();
+  const season = await prisma.season.findFirst({ where: { isActive: true }, select: { id: true } });
+  if (!season) return;
+  const data = await loadActivityData();
+  const ids = (data.ghosts ?? []).map((g) => g.playerId);
+  if (ids.length > 0) await enqueueRosterCheckin({ playerIds: ids, seasonId: season.id });
+  revalidatePath("/admin/activity");
+}
+
 // DM the calling admin a TEST of the check-in message, so they can see exactly
 // what players will get (and confirm the jump link is clickable in a DM). Uses
 // their own division when they're in one, else sample text.
@@ -55,7 +67,7 @@ export async function sendTestCheckin() {
   const { user } = await requireAdmin();
   const season = await prisma.season.findFirst({
     where: { isActive: true },
-    select: { id: true, number: true, subtitle: true, scheduledEndAt: true },
+    select: { id: true, scheduledEndAt: true },
   });
   if (!season) return;
 
@@ -66,10 +78,10 @@ export async function sendTestCheckin() {
       player: { select: { displayName: true } },
     },
   });
-  const [queueCfg, supportCfg] = await Promise.all([
-    prisma.leagueConfig.findUnique({ where: { key: "league_queue_channel_id" }, select: { value: true } }),
-    prisma.leagueConfig.findUnique({ where: { key: "support_channel_id" }, select: { value: true } }),
-  ]);
+  const supportCfg = await prisma.leagueConfig.findUnique({
+    where: { key: "support_channel_id" },
+    select: { value: true },
+  });
 
   const guildId = process.env.DISCORD_GUILD_ID;
   const jump = (channelId: string | null | undefined) =>
@@ -77,10 +89,8 @@ export async function sendTestCheckin() {
 
   const content = buildCheckinMessage({
     name: member?.player.displayName ?? "there",
-    seasonLabel: formatSeasonLabel(season),
     divisionName: member?.division.name ?? "your division",
     divisionChannelUrl: jump(member?.division.discordChannelId),
-    queueChannelUrl: jump(queueCfg?.value),
     supportChannelUrl: jump(supportCfg?.value),
     seasonEndsAt: season.scheduledEndAt,
     isTest: true,

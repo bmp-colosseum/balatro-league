@@ -3,7 +3,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { SubmitButton } from "@/components/SubmitButton";
 import { loadActivityData } from "@/lib/loaders/activity";
-import { startActivityScan, sendTestCheckin, cancelActivityScan } from "./actions";
+import { startActivityScan, sendTestCheckin, cancelActivityScan, sendCheckinDms } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,11 +14,30 @@ function ago(ms: number | null): string {
   return `${days}d ago`;
 }
 
+function checkinBadge(status: string | null) {
+  switch (status) {
+    case "pending":
+      return <span style={{ color: "var(--accent)" }}>⏳ asked</span>;
+    case "in":
+      return <span style={{ color: "var(--success)" }}>✅ still in</span>;
+    case "out":
+      return <span style={{ color: "var(--danger)" }}>🚪 out</span>;
+    case "dm-failed":
+      return <span style={{ color: "var(--danger)" }}>✉ DM failed</span>;
+    default:
+      return <span className="muted">—</span>;
+  }
+}
+
 export default async function ActivityPage() {
   await requireAdmin();
   const data = await loadActivityData();
   const scan = data.scan;
   const running = scan?.status === "RUNNING";
+  // Sendable = flagged players not opted out and not yet asked (or DM previously failed).
+  const sendable = (data.ghosts ?? []).filter(
+    (g) => !g.optedOut && (g.checkinStatus === null || g.checkinStatus === "dm-failed"),
+  ).length;
 
   return (
     <>
@@ -105,9 +124,20 @@ export default async function ActivityPage() {
             ) : (
               <>
                 <p className="muted" style={{ fontSize: 13 }}>
-                  <strong>{data.ghosts.length}</strong> player{data.ghosts.length === 1 ? "" : "s"} — silent in chat
-                  this season, and no match played or attempted. These are who you&apos;d check in with.
+                  <strong>{data.ghosts.length}</strong> player{data.ghosts.length === 1 ? "" : "s"} — silent in their
+                  division channel this season, and no match played or attempted.
                 </p>
+                <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
+                  <form action={sendCheckinDms}>
+                    <SubmitButton disabled={sendable === 0} pendingText="Sending…">
+                      📨 Send check-in DMs ({sendable})
+                    </SubmitButton>
+                  </form>
+                  <a href="/admin/activity/export" className="muted" style={{ fontSize: 13 }}>⬇ Export CSV</a>
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    DMs the not-yet-asked players (skips opt-outs + anyone already asked/answered — safe to re-run).
+                  </span>
+                </div>
                 <div className="table-scroll">
                   <table>
                     <thead>
@@ -115,23 +145,23 @@ export default async function ActivityPage() {
                         <th style={{ textAlign: "left" }}>Player</th>
                         <th style={{ textAlign: "left" }}>Division</th>
                         <th style={{ textAlign: "left" }}>Last chat post</th>
+                        <th style={{ textAlign: "left" }}>Before?</th>
+                        <th style={{ textAlign: "left" }}>Check-in</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.ghosts.map((g) => (
                         <tr key={g.playerId}>
-                          <td><strong>{g.name}</strong></td>
+                          <td><strong>{g.name}</strong>{g.optedOut && <span className="muted" style={{ fontSize: 11 }}> · opted out</span>}</td>
                           <td className="muted">{g.division}</td>
                           <td className="muted">{ago(g.lastPostMs)}</td>
+                          <td className="muted">{g.playedPrevSeason ? "↩ returning" : "new"}</td>
+                          <td>{checkinBadge(g.checkinStatus)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-                <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-                  Next: a &ldquo;Send check-in DMs&rdquo; step (Still-playing / I&apos;m-out buttons) — coming in the
-                  follow-up.
-                </p>
               </>
             )}
           </>

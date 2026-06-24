@@ -64,6 +64,7 @@ import { postPendingReport } from "./report-flow.js";
 import { autoConfirmReport } from "./report-auto-confirm.js";
 import { getLeagueSettings } from "./league-settings.js";
 import { runActivityScan } from "./activity-scan.js";
+import { runRosterCheckin } from "./roster-checkin.js";
 
 let boss: PgBoss | null = null;
 
@@ -107,6 +108,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("signup.ask");
   await boss.createQueue("signup.reminder-tick");
   await boss.createQueue("activity.scan");
+  await boss.createQueue("roster.checkin");
 
   // One-shot cleanup for retired queues. Their cron schedule rows +
   // accumulated jobs (no worker listens anymore) stay in pg-boss forever
@@ -253,6 +255,18 @@ export async function initQueue(): Promise<void> {
     { batchSize: 1, pollingIntervalSeconds: 5 },
     async (jobs: Job<{ scanId: string }>[]) => {
       for (const job of jobs) await runActivityScan(job.data.scanId);
+    },
+  );
+
+  // Worker: send the "still playing?" check-in DMs to a set of flagged players.
+  await boss.work<{ playerIds: string[]; seasonId: string }>(
+    "roster.checkin",
+    { batchSize: 1, pollingIntervalSeconds: 5 },
+    async (jobs: Job<{ playerIds: string[]; seasonId: string }>[]) => {
+      for (const job of jobs) {
+        const n = await runRosterCheckin(job.data);
+        if (n > 0) console.log(`[roster-checkin] sent ${n} check-in DM(s)`);
+      }
     },
   );
 
@@ -514,6 +528,11 @@ export async function enqueueBootstrapDivision(job: {
 export async function enqueueActivityScan(scanId: string): Promise<void> {
   if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
   await boss.send("activity.scan", { scanId }, { retryLimit: 0 });
+}
+
+export async function enqueueRosterCheckin(job: { playerIds: string[]; seasonId: string }): Promise<void> {
+  if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
+  await boss.send("roster.checkin", job, { retryLimit: 0 });
 }
 
 export async function enqueueLeagueInfoRefresh(): Promise<void> {

@@ -1,14 +1,15 @@
-// The "still playing?" check-in message sent to silent players. Kept here so the
-// test send (web) and the real blast (bot, phase 2) render identical copy.
-// Channel references use full jump links (https://discord.com/channels/g/c) —
-// a <#id> mention isn't reliably clickable inside a DM.
+// "Still playing?" activity check-in message. KEEP IN SYNC with
+// web/lib/checkin-message.ts (the web test-send uses that copy; the bot's real
+// blast uses this one). Pure — no imports, so it's trivially duplicated.
+// Channel references use full jump links — a <#id> mention isn't reliably
+// clickable inside a DM.
 
 export interface CheckinMessageOpts {
   name: string;
   divisionName: string;
-  divisionChannelUrl: string | null; // jump link, or null if unknown
-  supportChannelUrl: string | null; // jump link to #league-support
-  seasonEndsAt?: Date | null; // when set, the message states the deadline
+  divisionChannelUrl: string | null;
+  supportChannelUrl: string | null;
+  seasonEndsAt?: Date | null;
   /** When true, append a note that the real version carries the buttons. */
   isTest?: boolean;
 }

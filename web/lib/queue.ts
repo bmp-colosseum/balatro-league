@@ -62,6 +62,13 @@ export async function enqueueActivityScan(scanId: string): Promise<void> {
   await getBoss().send("activity.scan", { scanId }, { retryLimit: 0 });
 }
 
+// Send the "still playing?" check-in DMs to a set of players. The bot's
+// roster.checkin worker builds + sends each DM (with buttons) and stamps status.
+export async function enqueueRosterCheckin(job: { playerIds: string[]; seasonId: string }): Promise<void> {
+  await ensureStarted();
+  await getBoss().send("roster.checkin", job, { retryLimit: 0 });
+}
+
 // When an admin opens a signup round: kick off the interactive "are you in?"
 // ask blast (the bot computes the audience + DMs everyone). Replaces the old
 // silent auto-enroll + one-shot notify. Bot owns the worker (signup.ask-kickoff).

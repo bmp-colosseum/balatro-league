@@ -26,6 +26,9 @@ export interface InactiveRow {
   lastPostMs: number | null; // most recent message, or null = never (in scanned channels)
   played: boolean;
   attempted: boolean;
+  playedPrevSeason: boolean; // played a confirmed match in any earlier season (a returning player)
+  checkinStatus: string | null; // null | "pending" | "in" | "out" | "dm-failed"
+  optedOut: boolean; // signupReminderOptOut — won't be DM'd
 }
 
 export interface ActivityData {
@@ -64,7 +67,8 @@ export async function loadActivityData(): Promise<ActivityData> {
     where: { seasonId: season.id, status: "ACTIVE" },
     select: {
       playerId: true,
-      player: { select: { discordId: true, displayName: true } },
+      checkinStatus: true,
+      player: { select: { discordId: true, displayName: true, signupReminderOptOut: true } },
       division: { select: { name: true } },
     },
   });
@@ -101,7 +105,7 @@ export async function loadActivityData(): Promise<ActivityData> {
   const attemptedSet = new Set<string>();
   for (const s of sessionRows) { attemptedSet.add(s.playerAId); attemptedSet.add(s.playerBId); }
 
-  const ghosts: InactiveRow[] = members
+  const baseRows = members
     .map((m) => {
       const iso = lastPost[m.player.discordId];
       const lastPostMs = iso ? new Date(iso).getTime() : null;
@@ -113,9 +117,31 @@ export async function loadActivityData(): Promise<ActivityData> {
         lastPostMs,
         played: playedSet.has(m.playerId),
         attempted: attemptedSet.has(m.playerId),
+        checkinStatus: m.checkinStatus,
+        optedOut: m.player.signupReminderOptOut,
       };
     })
-    .filter((r) => (r.lastPostMs === null || r.lastPostMs < seasonStart) && !r.played && !r.attempted)
+    .filter((r) => (r.lastPostMs === null || r.lastPostMs < seasonStart) && !r.played && !r.attempted);
+
+  // Prev-season context — which of these ghosts played a confirmed match in an
+  // EARLIER season (a returning player vs a never-played newcomer).
+  const ghostIds = baseRows.map((r) => r.playerId);
+  const prevPlayedSet = new Set<string>();
+  if (ghostIds.length > 0) {
+    const prev = await prisma.match.findMany({
+      where: {
+        status: "CONFIRMED",
+        format: "LEAGUE_BO2",
+        division: { seasonId: { not: season.id } },
+        OR: [{ playerAId: { in: ghostIds } }, { playerBId: { in: ghostIds } }],
+      },
+      select: { playerAId: true, playerBId: true },
+    });
+    for (const m of prev) { prevPlayedSet.add(m.playerAId); prevPlayedSet.add(m.playerBId); }
+  }
+
+  const ghosts: InactiveRow[] = baseRows
+    .map((r) => ({ ...r, playedPrevSeason: prevPlayedSet.has(r.playerId) }))
     .sort((a, b) => (a.lastPostMs ?? 0) - (b.lastPostMs ?? 0));
 
   return { hasSeason: true, scan, ghosts, activeTotal };

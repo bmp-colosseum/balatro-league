@@ -680,6 +680,11 @@ model DivisionMember {
   // last-known shape. Defaults to 0; rebalanced per-division on every
   // positional move.
   draftOrder      Int                  @default(0)
+  // Activity check-in (the "still playing?" DM). null = never asked; "pending" =
+  // DM sent, awaiting reply; "in" = confirmed still playing; "out" = opted out.
+  // De-dups re-sends and lets admins see who answered what.
+  checkinStatus   String?
+  checkinAt       DateTime?
 
   division Division @relation(fields: [divisionId], references: [id], onDelete: Cascade)
   player   Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
