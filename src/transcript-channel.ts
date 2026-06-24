@@ -43,8 +43,16 @@ export async function ensureTranscriptsChannel(client: Client): Promise<TextChan
   const guild = await client.guilds.fetch(guildId).catch(() => null);
   if (!guild) return null;
 
+  // discord.js resolves each overwrite id against the role/member CACHE — an
+  // uncached or deleted id throws "not a cached User or Role" and kills the whole
+  // create. So populate the caches first, then only include ids that actually
+  // resolve.
+  await guild.roles.fetch().catch(() => {});
+  const me = await guild.members.fetchMe().catch(() => null);
+
   // Staff tiers (OWNER/ADMIN/HELPER/DEVOPS) get view access — same model as
-  // #league-admin-chat. @everyone is denied.
+  // #league-admin-chat. @everyone is denied. Skip any RoleBinding pointing at a
+  // role that no longer exists in the guild.
   const staff = await prisma.roleBinding.findMany({
     where: { tier: { in: ["OWNER", "ADMIN", "HELPER", "DEVOPS"] } },
     select: { discordRoleId: true },
@@ -53,9 +61,11 @@ export async function ensureTranscriptsChannel(client: Client): Promise<TextChan
 
   const overwrites: OverwriteResolvable[] = [
     { id: guild.roles.everyone.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-    ...staff.map((s) => ({ id: s.discordRoleId, allow: STAFF_ALLOW })),
+    ...staff
+      .filter((s) => guild.roles.cache.has(s.discordRoleId))
+      .map((s) => ({ id: s.discordRoleId, allow: STAFF_ALLOW })),
   ];
-  if (client.user) overwrites.push({ id: client.user.id, allow: BOT_ALLOW });
+  if (me) overwrites.push({ id: me.id, allow: BOT_ALLOW });
 
   try {
     const ch = await guild.channels.create({
