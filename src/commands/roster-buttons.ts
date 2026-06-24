@@ -25,7 +25,7 @@ export const rosterButtons: ButtonHandler = {
     const ack =
       action === "in"
         ? "✅ Thanks — marked you as still playing. Go get your games in!"
-        : "👍 No worries, we'll free up your spot. Thanks for letting us know.";
+        : "👍 No worries, thanks for letting us know.";
     await interaction.update({ content: `${interaction.message.content}\n\n**${ack}**`, components: [] });
   },
 };

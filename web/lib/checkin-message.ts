@@ -25,7 +25,7 @@ export function buildCheckinMessage(o: CheckinMessageOpts): string {
     const unix = Math.floor(o.seasonEndsAt.getTime() / 1000);
     lines.push(``, `Season ends <t:${unix}:D> (<t:${unix}:R>), so get your games in before then.`);
   }
-  lines.push(``, `Not playing this season? Hit "I'm out" below and we'll free up your spot.`);
+  lines.push(``, `Not playing this season? No worries, just hit "I'm out" below to let us know.`);
   lines.push(``, `Don't reply here (it's not monitored), just use the buttons. Need help? Run \`/support\` in ${supportRef}.`);
   if (o.isTest) {
     lines.push(``, `_(Test — the real one has "Still playing" / "I'm out" buttons under it.)_`);
