@@ -30,16 +30,19 @@ export async function listTranscripts(limit = 200): Promise<TranscriptSummary[]>
 
   const rows = await prisma.threadMessage.findMany({
     where: { threadId: { in: threadIds } },
-    select: { threadId: true, authorName: true, kind: true, matchId: true, deletedAt: true },
+    select: { threadId: true, authorName: true, authorDiscordId: true, kind: true, matchId: true, deletedAt: true },
   });
-  const meta = new Map<string, { kind: string; matchId: string | null; participants: Set<string>; deleted: number }>();
+  // Participants keyed by Discord ID (the actual person), not display name — a
+  // player who changed their nickname mid-thread is still ONE participant. The
+  // map value is their latest name, for display.
+  const meta = new Map<string, { kind: string; matchId: string | null; participants: Map<string, string>; deleted: number }>();
   for (const r of rows) {
     let m = meta.get(r.threadId);
     if (!m) {
-      m = { kind: r.kind, matchId: r.matchId, participants: new Set(), deleted: 0 };
+      m = { kind: r.kind, matchId: r.matchId, participants: new Map(), deleted: 0 };
       meta.set(r.threadId, m);
     }
-    m.participants.add(r.authorName);
+    m.participants.set(r.authorDiscordId, r.authorName);
     if (r.matchId) m.matchId = r.matchId;
     if (r.deletedAt) m.deleted += 1;
   }
@@ -52,7 +55,7 @@ export async function listTranscripts(limit = 200): Promise<TranscriptSummary[]>
       matchId: m?.matchId ?? null,
       count: g._count._all,
       deleted: m?.deleted ?? 0,
-      participants: [...(m?.participants ?? [])],
+      participants: [...(m?.participants.values() ?? [])],
       firstAt: g._min.postedAt,
       lastAt: g._max.postedAt,
     };
@@ -107,11 +110,14 @@ export async function loadTranscript(
       attachments: { select: { id: true, filename: true, contentType: true, sourceUrl: true } },
     },
   });
+  // Dedup participants by Discord ID (the person), not display name.
+  const byPerson = new Map<string, string>();
+  for (const m of messages) byPerson.set(m.authorDiscordId, m.authorName);
   const header: TranscriptHeader = {
     threadId,
     kind: messages.find((m) => m.kind)?.kind ?? "match",
     matchId: messages.find((m) => m.matchId)?.matchId ?? null,
-    participants: [...new Set(messages.map((m) => m.authorName))],
+    participants: [...byPerson.values()],
     count: messages.length,
     deleted: messages.filter((m) => m.deletedAt).length,
     firstAt: messages[0]?.postedAt ?? null,
