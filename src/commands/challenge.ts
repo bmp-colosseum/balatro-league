@@ -15,6 +15,7 @@ import { resolveChallengesChannelId } from "../challenges-channel.js";
 import { prisma } from "../db.js";
 import { getLeagueSettings } from "../league-settings.js";
 import { renderMatch } from "../match-render.js";
+import { postModerationNotice } from "../mod-log.js";
 import { getOrCreatePlayer, guildDisplayName } from "../players.js";
 import type { SlashCommand } from "./types.js";
 
@@ -142,6 +143,8 @@ export const challenge: SlashCommand = {
       });
       await thread.members.add(me.discordId).catch(() => {});
       await thread.members.add(opp.discordId).catch(() => {});
+      // First thing in the thread: the moderation-recording notice (pinned).
+      await postModerationNotice(thread);
       threadId = thread.id;
     } catch (err) {
       console.warn("[challenge] failed to create private thread:", err);
