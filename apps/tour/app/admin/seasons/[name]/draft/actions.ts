@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/auth";
-import { setupDraft, resetDraft } from "@/lib/services/draft";
+import { setupDraft, resetDraft, makePick } from "@/lib/services/draft";
 import type { ActionResult } from "@/lib/action-result";
 
 function rev(season: string) {
@@ -27,5 +27,20 @@ export async function resetDraftAction(formData: FormData) {
   if (!isAdmin()) return;
   const season = String(formData.get("season") ?? "");
   await resetDraft(season);
+  rev(season);
+}
+
+// Assign the on-the-clock pick to a pool player. Plain action (per-pool-player pick
+// form); makePick can throw on a race (player already drafted) — swallow it, the
+// board just re-renders unchanged.
+export async function makePickAction(formData: FormData) {
+  if (!isAdmin()) return;
+  const season = String(formData.get("season") ?? "");
+  const playerId = String(formData.get("playerId") ?? "");
+  try {
+    await makePick(season, playerId);
+  } catch {
+    /* race / already drafted — ignore */
+  }
   rev(season);
 }
