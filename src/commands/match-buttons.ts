@@ -92,16 +92,16 @@ async function updateSession(
 
 type AnyInteraction = ButtonInteraction | StringSelectMenuInteraction;
 
-// Resolve the stake list this match can use for a custom-combo proposal.
-// League matches stay locked to the season's competitive preset; casual
-// matches use the dedicated custom-combo preset (its own role, so admins can
-// offer exotic stakes here without touching the /challenge ban-pick pool —
-// falls back to the casual preset until one is configured). Decks are open to
-// the full canonical library either way.
-async function loadAllowedStakes(session: MatchSession): Promise<string[]> {
-  const preset = session.divisionId
-    ? await presetForDivision(session.divisionId)
-    : await presetForCustomCombo();
+// Resolve the stake list a custom-combo PROPOSAL can offer. Both league
+// (start-match) AND casual (/challenge) use the dedicated custom-combo preset —
+// a custom combo only happens when BOTH players agree, so there's no
+// competitive-integrity reason to lock league proposals to the white-stake
+// competitive preset (and doing so left the stake menu empty, so the proposal
+// couldn't be submitted at all). The custom-combo preset falls back to the
+// casual preset until one is configured. Decks are open to the full canonical
+// library either way; only stakes are preset-constrained.
+async function loadAllowedStakes(_session: MatchSession): Promise<string[]> {
+  const preset = await presetForCustomCombo();
   return preset?.stakes ?? [];
 }
 
