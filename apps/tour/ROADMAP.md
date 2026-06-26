@@ -192,9 +192,10 @@ the rosters everything downstream reads).
   `lib/services/signups.ts` (admin manager ✅).
 - **B3. Seeding + draft setup → draft** (A4 + refinements) — refine `setupDraft` defaults
   (who's captain, conference split, self-pick round) in `lib/services/draft.ts`.
-- **B4. Schedule generation ⬜ (engine ✅)** — admin "generate schedule" over `tour-core`
-  `schedule.ts` (round-robin + byes + Rival/Cross-Conf/Seeded weeks) writing
-  `Week`/`Matchup`; TO manual override.
+- **B4. Schedule generation ✅** — admin `/admin/seasons/[name]/schedule` over `tour-core`
+  `generateSchedule` (`lib/services/schedule.ts`): per-conference round-robin into lockstep
+  weeks → `Week`/`Matchup`, with a plan/setup view + week board + destructive reset.
+  Special weeks (Rival/Cross-Conf/Seeded) + TO manual override still ⬜.
 - **B5. Weekly ±2 pairing negotiation ⬜ (engine ✅)** — 2-captain live tool over
   `tour-core` `pairing.ts` (coinflip send-first, propose→respond, ±2 validation,
   used-player tracking, dead-end detection, TO override) → creates `TourSet`s. Flagship UX.
