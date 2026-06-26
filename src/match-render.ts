@@ -282,24 +282,6 @@ function renderWaitingAccept(s: MatchSession, a: Player, b: Player) {
   const modeLine = s.isCasual
     ? `Casual challenge · **Best of ${s.bestOf}** · not recorded to the league.`
     : `League match (2 games) · counts toward standings.`;
-  // Custom-combo invites tell the opponent what they're agreeing to up
-  // front. Accepting = both players agree to this deck/stake instead of
-  // running the ban/pick flow.
-  let comboLine = "";
-  if (s.customCombo) {
-    try {
-      const c = JSON.parse(s.customCombo) as { deck?: string; stake?: string };
-      if (c.deck && c.stake) {
-        const deckIcon = deckEmoji(c.deck) ?? "";
-        const stakeIcon = stakeEmoji(c.stake) ?? "";
-        const icons = [deckIcon, stakeIcon].filter(Boolean).join(" ");
-        comboLine =
-          `\n\n🎯 **Agreed combo** (skips ban/pick): ${icons ? `${icons} ` : ""}**${c.deck} / ${c.stake}**`;
-      }
-    } catch {
-      // ignore — malformed customCombo just doesn't render
-    }
-  }
   const guideLine = s.isCasual
     ? ""
     : `\n\n📋 You'll be walked through **2 games**:\n` +
@@ -310,7 +292,6 @@ function renderWaitingAccept(s: MatchSession, a: Player, b: Player) {
     .setDescription(
       `${mention(a)} wants to play ${mention(b)}.\n` +
         `${modeLine}` +
-        comboLine +
         guideLine +
         `\n\n${mention(b)}, accept within 5 minutes to start.`,
     )

@@ -48,7 +48,6 @@ import { postTranscriptSummary } from "../transcript-channel.js";
 import {
   emptyGameState,
   parseGame,
-  parseCustomCombo,
   parseProposal,
   parsePolicy,
   phaseFor,
@@ -726,11 +725,6 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
     return reply(interaction, "Only the challenged player can accept this match.");
   }
 
-  // Custom-combo path: skip the ban/pick flow entirely. game1 starts
-  // with the pre-agreed combo as a 1-item pool with pickedDeckIdx=0,
-  // so phaseFor immediately reads PLAYING.
-  const customCombo = session.customCombo ? parseCustomCombo(session.customCombo) : null;
-
   // League /start-match → division's preset (uses the season-default
   // pointer as fallback). Casual /challenge → the preset pointed at by
   // the casual config key. Bootstrap is a no-op once a preset+pointers
@@ -753,11 +747,7 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
   const settings = session.divisionId
     ? await getLeagueSettingsForSeason((await prisma.division.findUnique({ where: { id: session.divisionId }, select: { seasonId: true } }))!.seasonId)
     : await getLeagueSettings();
-  // For custom-combo, pool is the single agreed combo; bans don't apply
-  // but we keep the policy stamp consistent so legacy callers don't break.
-  const game1Pool = customCombo
-    ? [customCombo]
-    : generatePool(preset.decks, preset.stakes, settings.matchPolicy.poolSize);
+  const game1Pool = generatePool(preset.decks, preset.stakes, settings.matchPolicy.poolSize);
   const policySnapshot = {
     firstPlayerBans: settings.matchPolicy.firstPlayerBans,
     secondPlayerBans: settings.matchPolicy.secondPlayerBans,
@@ -816,15 +806,8 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
     }
   }
 
-  // Custom-combo skips ban/pick: game1 is initialized with pickedDeckIdx=0
-  // and state goes straight to GAME_1_PLAYING. Normal path goes through
-  // the usual GAME_1_BAN entry point.
-  const game1State: GameState = customCombo
-    ? { firstId, bans: [], pool: game1Pool, pickedDeckIdx: 0 }
-    : emptyGameState(firstId, game1Pool);
-  const initialState = customCombo
-    ? MatchSessionState.GAME_1_PLAYING
-    : MatchSessionState.GAME_1_BAN;
+  const game1State: GameState = emptyGameState(firstId, game1Pool);
+  const initialState = MatchSessionState.GAME_1_BAN;
   const updated = await updateSession(session, {
     state: initialState,
     acceptedAt: new Date(),
@@ -844,14 +827,13 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
       isCasual: session.isCasual,
       isShootout: session.isShootout,
       bestOf: session.bestOf,
-      customCombo: customCombo,
       divisionId: session.divisionId,
       playerAId: session.playerAId,
       playerBId: session.playerBId,
     },
   });
 
-  const allowedStakes = customCombo ? [] : preset.stakes;
+  const allowedStakes = preset.stakes;
   // Did the match just relocate into a NEW private thread? (start-match
   // posts the invite in the division channel, then makes a thread on
   // accept. /challenge's invite is already in the thread, so no move.)
@@ -1134,30 +1116,10 @@ async function advanceAfterGameWin(
     return count;
   };
 
-  // Custom-combo mode skips the inter-game "choose who bans first" step
-  // entirely — each subsequent game uses the same agreed combo and goes
-  // straight to PLAYING. The ChooseFirst handler isn't reachable.
-  const customCombo = session.customCombo ? parseCustomCombo(session.customCombo) : null;
-
   if (isGame1) {
     // BO1: end immediately. BO2 / BO3: go to game 2.
     if (session.bestOf === 1) {
       return finalizeMatch(interaction, session, newGame, "game1");
-    }
-    if (customCombo) {
-      // Skip CHOOSE_FIRST — start game 2 immediately with the same combo.
-      // FirstId alternates from game 1 for fairness (the player who didn't
-      // ban first in g1 plays first in g2; meaningless in custom mode but
-      // keeps the same code path for renderer assumptions).
-      const nextFirst = newGame.firstId === session.playerAId ? session.playerBId : session.playerAId;
-      const game2State: GameState = { firstId: nextFirst, bans: [], pool: [customCombo], pickedDeckIdx: 0 };
-      const updated = await updateSession(session, {
-        game1: JSON.stringify(newGame),
-        game2: JSON.stringify(game2State),
-        state: MatchSessionState.GAME_2_PLAYING,
-      });
-      if (!updated) return raceLost(interaction);
-      return refreshMessage(interaction, updated);
     }
     const updated = await updateSession(session, {
       game1: JSON.stringify(newGame),
@@ -1173,18 +1135,6 @@ async function advanceAfterGameWin(
       const aTotal = winsFor(session.playerAId, true);
       const bTotal = winsFor(session.playerBId, true);
       if (aTotal === 1 && bTotal === 1) {
-        if (customCombo) {
-          // Skip CHOOSE_FIRST for game 3 in custom-combo mode.
-          const nextFirst = newGame.firstId === session.playerAId ? session.playerBId : session.playerAId;
-          const game3State: GameState = { firstId: nextFirst, bans: [], pool: [customCombo], pickedDeckIdx: 0 };
-          const updated = await updateSession(session, {
-            game2: JSON.stringify(newGame),
-            game3: JSON.stringify(game3State),
-            state: MatchSessionState.GAME_3_PLAYING,
-          });
-          if (!updated) return raceLost(interaction);
-          return refreshMessage(interaction, updated);
-        }
         const updated = await updateSession(session, {
           game2: JSON.stringify(newGame),
           state: MatchSessionState.GAME_3_CHOOSE_FIRST,
@@ -1774,11 +1724,11 @@ async function finalizeMatch(
 }
 
 // === Custom-combo negotiation handlers ===
-// The proposal flow lives inside GAME_1_BAN — once game 1 starts the
-// custom combo is locked in for the whole match (every game uses it),
-// so re-negotiating mid-match doesn't make sense. handleProposeAccept
-// is what moves the agreed proposal into session.customCombo and jumps
-// past the ban/pick flow entirely.
+// During ANY game's ban phase, either player can propose a deck+stake; the other
+// accepts/counters/cancels. handleProposeAccept replaces THAT game's pool with
+// the agreed combo (pickedDeckIdx=0 → straight to PLAYING). It applies to that
+// one game only — the next game bans/picks as normal. To reuse a combo, just
+// propose the same one again. There is no whole-match custom combo.
 
 // Map state → 1/2/3 game number, or 0 if not in a ban phase.
 // Centralized so propose-* handlers can target the CURRENT game's

@@ -75,24 +75,11 @@ export function parseGame(json: string | null): GameState | null {
   try { return JSON.parse(json) as GameState; } catch { return null; }
 }
 
-// session.customCombo JSON → {deck, stake}; null on parse failure or missing
-// fields, so callers can treat it as "no custom combo set."
-export function parseCustomCombo(json: string | null): { deck: string; stake: string } | null {
-  if (!json) return null;
-  try {
-    const v = JSON.parse(json);
-    if (v && typeof v.deck === "string" && typeof v.stake === "string") {
-      return { deck: v.deck, stake: v.stake };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 // In-flight custom-combo negotiation, stored on session.customComboProposal:
 // one player proposes a deck+stake, the other accepts / counters / cancels.
-// Cleared once accepted (moved into session.customCombo) or cancelled.
+// A custom combo applies to ONE game only (accepting sets that game's pool to
+// the agreed combo); there's no whole-match custom combo. Cleared once the
+// proposal is accepted or cancelled.
 export type ProposalStatus = "building" | "pending";
 export interface ComboProposal {
   by: string;        // player id of the proposer
