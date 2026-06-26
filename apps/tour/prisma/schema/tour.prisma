@@ -72,6 +72,14 @@ enum PlayoffRound {
   FINAL
 }
 
+// TO roster exceptions (§B7) — each is an audit record with a reason. Also the
+// seed of the D2 season-story timeline (more kinds can be added/derived later).
+enum SeasonEventKind {
+  SUBSTITUTION // a rostered player swapped out for another, effective a week-block
+  DROP // a player left the team / season
+  DQ // disqualification (timing / conduct)
+}
+
 enum AwardKind {
   MVP
   ROOKIE
@@ -344,6 +352,25 @@ model PlayerCareerStat {
   finalsMade    Int     @default(0)
   playoffsMade  Int     @default(0)
   everCaptain   Boolean @default(false)
+}
+
+// ── Roster exceptions / season events (§B7 + D2 timeline) ──────────────────
+// A TO action (sub / drop / DQ) recorded with its reason + who did it. Players /
+// teams are referenced by id (no relation — the decoupling rule). Append-only in
+// spirit; rows can be deleted to fix a mis-entry pre-launch.
+model SeasonEvent {
+  id              String          @id @default(cuid())
+  seasonId        String
+  kind            SeasonEventKind
+  teamSeasonId    String? // affected team
+  playerId        String? // affected player (the one going OUT for a sub)
+  relatedPlayerId String? // sub: the player coming IN
+  weekBlock       String? // when it takes effect (e.g. "W5-8")
+  reason          String
+  createdBy       String? // admin discord id / name
+  createdAt       DateTime        @default(now())
+
+  @@index([seasonId])
 }
 
 // ── Web/admin permissions (Discord-role-driven, mirrors the league) ─────────
