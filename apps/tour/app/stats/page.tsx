@@ -135,7 +135,10 @@ export default async function Stats() {
       </div>
 
       <h2 className="mt-6 mb-1 text-[1.1rem]">Biggest rivalries</h2>
-      <p className="sub">The player matchups that have been played the most across every season.</p>
+      <p className="sub">
+        The player matchups that have been played the most across every season. ·{" "}
+        <Link href="/stats/h2h">Full H2H matrix →</Link>
+      </p>
       <div className="card">
         <table>
           <thead>

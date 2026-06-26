@@ -122,6 +122,52 @@ export interface Rivalry {
   bWins: number;
 }
 
+export interface H2HMatrix {
+  players: { id: string; name: string }[];
+  // records[rowId][colId] = the ROW player's record vs the COL player (set W-L).
+  records: Record<string, Record<string, { w: number; l: number }>>;
+}
+
+// Player-vs-player H2H grid for the most-active `topN` players. Cells are the row
+// player's set W-L vs the column player (sparse — TT players rarely replay across
+// seasons). Same pair-tally as getRivalries, made directional.
+export async function getH2HMatrix(topN = 16): Promise<H2HMatrix> {
+  const [sets, matches] = await Promise.all([
+    prisma.tourSet.findMany({ select: { playerAId: true, playerBId: true, matchId: true } }),
+    prisma.match.findMany({ select: { id: true, winnerId: true } }),
+  ]);
+  const winById = new Map(matches.map((m) => [m.id, m.winnerId]));
+  const dir = new Map<string, number>(); // `${x}|${y}` = x's set wins over y
+  const totalSets = new Map<string, number>();
+  for (const ts of sets) {
+    if (!ts.matchId) continue;
+    const w = winById.get(ts.matchId);
+    if (w == null) continue;
+    const { playerAId: a, playerBId: b } = ts;
+    totalSets.set(a, (totalSets.get(a) ?? 0) + 1);
+    totalSets.set(b, (totalSets.get(b) ?? 0) + 1);
+    if (w === a) dir.set(`${a}|${b}`, (dir.get(`${a}|${b}`) ?? 0) + 1);
+    else if (w === b) dir.set(`${b}|${a}`, (dir.get(`${b}|${a}`) ?? 0) + 1);
+  }
+
+  const topIds = [...totalSets.entries()].sort((x, y) => y[1] - x[1]).slice(0, topN).map((e) => e[0]);
+  const players = await prisma.player.findMany({ where: { id: { in: topIds } }, select: { id: true, displayName: true } });
+  const nameOf = new Map(players.map((p) => [p.id, p.displayName]));
+  const ordered = topIds.map((id) => ({ id, name: nameOf.get(id) ?? id }));
+
+  const records: Record<string, Record<string, { w: number; l: number }>> = {};
+  for (const r of ordered) {
+    records[r.id] = {};
+    for (const c of ordered) {
+      if (r.id === c.id) continue;
+      const w = dir.get(`${r.id}|${c.id}`) ?? 0;
+      const l = dir.get(`${c.id}|${r.id}`) ?? 0;
+      if (w || l) records[r.id][c.id] = { w, l };
+    }
+  }
+  return { players: ordered, records };
+}
+
 // All-time most-played player-vs-player matchups (sets), with the head-to-head.
 export async function getRivalries(limit = 15): Promise<Rivalry[]> {
   const [sets, matches] = await Promise.all([
