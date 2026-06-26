@@ -213,9 +213,11 @@ the rosters everything downstream reads).
 > signups → draft → schedule → ±2 pairing → result reporting → standings. What's left in
 > Phase B is the **bookends** (B8 playoffs, B9 season end) and **exceptions** (B7 subs/drops/DQ),
 > plus the player-facing/live layers that need auth (B1) + real-time (Phase C).
-- **B7. Subs / drops / DQ handling ⬜** — first-class TO actions (substitute via versioned
-  `Roster`/`RosterEntry` week-blocks, drop, timing/conduct DQ), each with **reason + audit
-  record**. Feeds the event timeline (D2).
+- **B7. Subs / drops / DQ handling ✅** — new `SeasonEvent` model (audit + D2 seed) +
+  `lib/services/roster-ops.ts` + `/admin/seasons/[name]/roster`. `substitute` mutates the
+  lineup on a **forward** week-block (clones the prior block) so past blocks + their stat
+  attribution stay intact; `recordDrop`/`recordDQ` are audit-only (each with a reason +
+  actor). Per-team sub/drop forms, season DQ, and the event log feed D2.
 - **B8. Playoffs ✅** — `lib/services/playoffs.ts` + `/admin/seasons/[name]/playoffs`:
   `startPlayoffs` qualifies (auto-berths + wildcards) + seeds the field and writes
   `PlayoffEntry` + the round-1 `PlayoffSeries` (`standardBracketPairings`); `reportSeries`
@@ -228,10 +230,13 @@ the rosters everything downstream reads).
   = crowned team / FINAL winner, run = the series they played) so live brackets AND historical
   champion-path imports both resolve. Rolling to the next season is manual (create-season ✅).
 
-> **Phase B core complete:** the full season lifecycle runs on the site end-to-end —
-> signups → draft → schedule → ±2 pairing → reporting → standings → playoffs → champion →
-> awards → DONE. No spreadsheet. Remaining Phase B: **B7 exceptions** (subs/drops/DQ) and the
-> **player-facing/live layers** gated on auth (B1) + real-time (Phase C).
+> **Phase B admin side COMPLETE:** the full season lifecycle runs on the site end-to-end —
+> signups → draft → schedule → ±2 pairing → reporting → standings → roster ops (subs/drops/DQ)
+> → playoffs → champion → awards → DONE. No spreadsheet. What remains is the
+> **player-facing/live layers** — self-serve signups (B2), the player "what do I do this week"
+> view + both-player confirm (B6), and the live two-captain pairing (B5) — all gated on **B1
+> auth** (Discord OAuth env) + **Phase C** real-time (SSE). Plus the public showcase of live
+> data (a public bracket/standings render).
 
 ---
 
