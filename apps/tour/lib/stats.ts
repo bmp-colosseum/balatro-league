@@ -193,6 +193,12 @@ export function playerIdByDiscord(discordId: string) {
   return prisma.player.findUnique({ where: { discordId }, select: { id: true } });
 }
 
+// Imported career counters (avg seed, championships/finals/playoffs made, captain).
+// null for players not in the Player Stats sheet.
+export function getPlayerCareerStat(playerId: string) {
+  return prisma.playerCareerStat.findUnique({ where: { playerId } });
+}
+
 export async function getPlayer(playerId: string): Promise<PlayerDetail | null> {
   const player = await prisma.player.findUnique({ where: { id: playerId }, select: { id: true, displayName: true, discordId: true } });
   if (!player) return null;

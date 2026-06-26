@@ -331,6 +331,20 @@ model Award {
   meta     Json? // e.g. Best-Set = the set; Biggest-Steal = draft pick #
 }
 
+// Imported career counters from the cross-season `Player Stats` sheet — the ones
+// we can't derive from our (champion-path-only) playoff data: avg seed, and
+// championships / finals / playoffs MADE. Keyed by core Player.id, one per player.
+model PlayerCareerStat {
+  id            String  @id @default(cuid())
+  playerId      String  @unique // core Player.id
+  avgSeed       Float?
+  rookieSeason  Int?
+  championships Int     @default(0)
+  finalsMade    Int     @default(0)
+  playoffsMade  Int     @default(0)
+  everCaptain   Boolean @default(false)
+}
+
 // ── Web/admin permissions (Discord-role-driven, mirrors the league) ─────────
 // A Discord role (in the Tour's own guild) → a permission tier. The web fetches
 // the logged-in user's guild roles and resolves their highest tier; OWNER is also

@@ -14,6 +14,7 @@ import { parseStandingsConferences } from "../import/parse-conferences.mjs";
 import { parseWorkMatchups } from "../import/parse-work.mjs";
 import { parseDrafts } from "../import/parse-drafts.mjs";
 import { parseAwards } from "../import/parse-awards.mjs";
+import { parsePlayerStats } from "../import/parse-player-stats.mjs";
 import { SEASON_CONFIG, DEFAULT_SEASON } from "../import/seasons-config.mjs";
 import { slug } from "../import/sheet.mjs";
 
@@ -35,6 +36,7 @@ type ChampRun = { season: number; champion: string; rounds: { round: "QUARTERFIN
 type WorkMatchup = { week: number; teamA: string; teamB: string; setsA: number; setsB: number; gamesA: number; gamesB: number };
 type DraftBlock = { season: number; teams: { captain: string; picks: string[] }[] };
 type MvpRow = { season: number; player: string; set: number; games: number; team: string; placement: number | null };
+type PlayerStatRow = { name: string; avgSeed: number | null; rookieSeason: number | null; championships: number; finalsMade: number; playoffsMade: number; everCaptain: boolean };
 
 export function sheetsDir(override?: string): string {
   return override || process.env.TOUR_SHEETS_DIR || "D:/STuffinside";
@@ -308,12 +310,51 @@ export async function importAwards(dir = sheetsDir()) {
   return { mvp: made };
 }
 
+// Import per-player career counters from `alltime/Player Stats.html` (avg seed,
+// championships / finals / playoffs MADE, captain) into PlayerCareerStat. Links to
+// EXISTING players by legacy slug only (no phantom players from the stats sheet).
+export async function importPlayerStats(dir = sheetsDir()) {
+  const rows = parsePlayerStats(join(dir, "alltime", "Player Stats.html")) as PlayerStatRow[];
+  let made = 0;
+  let missed = 0;
+  for (const s of rows) {
+    const player = await prisma.player.findUnique({ where: { discordId: `legacy:${slug(s.name)}` }, select: { id: true } });
+    if (!player) {
+      missed++;
+      continue;
+    }
+    await prisma.playerCareerStat.upsert({
+      where: { playerId: player.id },
+      create: {
+        playerId: player.id,
+        avgSeed: s.avgSeed,
+        rookieSeason: s.rookieSeason,
+        championships: s.championships,
+        finalsMade: s.finalsMade,
+        playoffsMade: s.playoffsMade,
+        everCaptain: s.everCaptain,
+      },
+      update: {
+        avgSeed: s.avgSeed,
+        rookieSeason: s.rookieSeason,
+        championships: s.championships,
+        finalsMade: s.finalsMade,
+        playoffsMade: s.playoffsMade,
+        everCaptain: s.everCaptain,
+      },
+    });
+    made++;
+  }
+  return { careerStats: made, missed };
+}
+
 export async function importHistorical(dir = sheetsDir()) {
   await importRosters(dir);
   const sets = await importResults(dir);
   const playoffSeries = await importPlayoffs(dir);
   const draftStats = await importDrafts(dir); // after rosters: links picks to teams
   const awardStats = await importAwards(dir);
+  const careerStats = await importPlayerStats(dir);
   const [players, teams, teamSeasons, conferences, matches, tourSets] = await Promise.all([
     prisma.player.count(),
     prisma.team.count(),
@@ -322,7 +363,7 @@ export async function importHistorical(dir = sheetsDir()) {
     prisma.match.count(),
     prisma.tourSet.count(),
   ]);
-  return { players, teams, teamSeasons, conferences, matches, tourSets, sets, playoffSeries, draftPicks: draftStats.picks, mvps: awardStats.mvp };
+  return { players, teams, teamSeasons, conferences, matches, tourSets, sets, playoffSeries, draftPicks: draftStats.picks, mvps: awardStats.mvp, careerStats: careerStats.careerStats };
 }
 
 /** Import the TT10 Pluto/Eris conference season (conferences ← Standings, team

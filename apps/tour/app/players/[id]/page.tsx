@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, Trophy, Award, ExternalLink } from "lucide-react";
-import { getPlayer } from "@/lib/stats";
+import { getPlayer, getPlayerCareerStat } from "@/lib/stats";
 
 const LEAGUE_URL = process.env.NEXT_PUBLIC_LEAGUE_URL || "https://balatroleague.com";
 import { getPlayerDrafts } from "@/lib/draft-history";
@@ -16,7 +16,12 @@ const shortSeason = (name: string) => name.replace(/^Team Tour\s*/i, "TT").repla
 
 export default async function PlayerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [p, drafts, awards] = await Promise.all([getPlayer(id), getPlayerDrafts(id), getPlayerAwards(id)]);
+  const [p, drafts, awards, career] = await Promise.all([
+    getPlayer(id),
+    getPlayerDrafts(id),
+    getPlayerAwards(id),
+    getPlayerCareerStat(id),
+  ]);
   const draftBySeason = new Map(drafts.map((d) => [d.season, d]));
 
   if (!p) {
@@ -80,6 +85,22 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
           <div className="value">{p.gameW}–{p.gameL}</div>
           <div className="muted">{pct(p.gameW, p.gameL)} win</div>
         </div>
+        {career && (
+          <>
+            <div className="stat">
+              <div className="label">Finals made</div>
+              <div className="value">{career.finalsMade}</div>
+            </div>
+            <div className="stat">
+              <div className="label">Playoffs made</div>
+              <div className="value">{career.playoffsMade}</div>
+            </div>
+            <div className="stat">
+              <div className="label">Avg seed</div>
+              <div className="value">{career.avgSeed != null ? career.avgSeed.toFixed(1) : "—"}</div>
+            </div>
+          </>
+        )}
       </div>
       {awards.length > 0 && (
         <div className="mb-4 flex flex-wrap gap-2">
