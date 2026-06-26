@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, X } from "lucide-react";
 import { isAdmin } from "@/lib/auth";
 import { getPairingConsole } from "@/lib/services/pairing";
+import { getMatchupReport } from "@/lib/services/report";
 import { Callout } from "@/components/Callout";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
@@ -13,6 +14,8 @@ import {
   setSendFirstAction,
   removePairAction,
   resetPairingAction,
+  reportSetAction,
+  unreportSetAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +36,7 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
 
   const { matchupId } = await params;
   const c = await getPairingConsole(matchupId);
+  const report = await getMatchupReport(matchupId);
   if (!c) {
     return (
       <main>
@@ -159,6 +163,75 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
             Available — {c.teamA.name}: {availA.map((p) => `#${p.seed} ${p.name}`).join(", ") || "none"} · {c.teamB.name}: {availB.map((p) => `#${p.seed} ${p.name}`).join(", ") || "none"}
           </p>
         </div>
+      )}
+
+      {/* Results / reporting */}
+      {report && report.sets.length > 0 && (
+        <>
+          <h2 className="mt-6 mb-1 text-[1.1rem]">Results</h2>
+          <div className="card card-accent" style={{ marginBottom: "0.75rem" }}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-semibold">{report.teamAName}</span>
+              <span className="value" style={{ fontSize: 22 }}>{report.setsWonA} – {report.setsWonB}</span>
+              <span className="font-semibold">{report.teamBName}</span>
+            </div>
+            <p className="sub mt-1" style={{ textAlign: "center" }}>
+              {report.decided
+                ? report.winnerTeamName
+                  ? `${report.winnerTeamName} wins the week`
+                  : "Drawn"
+                : `First to ${report.setsToWin} set wins · in progress`}
+            </p>
+          </div>
+          <div className="card">
+            <table>
+              <thead>
+                <tr>
+                  <th>{report.teamAName}</th>
+                  <th>{report.teamBName}</th>
+                  <th className="num">Bo</th>
+                  <th>Report (games {report.teamAName}–{report.teamBName})</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.sets.map((s) => (
+                  <tr key={s.setId}>
+                    <td style={{ fontWeight: s.winner === "A" ? 700 : undefined }}>#{s.aSeed} {s.aName}</td>
+                    <td style={{ fontWeight: s.winner === "B" ? 700 : undefined }}>#{s.bSeed} {s.bName}</td>
+                    <td className="num">{s.bestOf}</td>
+                    <td>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ActionFlashForm action={reportSetAction}>
+                          <input type="hidden" name="matchupId" value={matchupId} />
+                          <input type="hidden" name="setId" value={s.setId} />
+                          <span className="inline-flex items-center gap-1">
+                            <input
+                              type="number" name="gamesA" min={0} defaultValue={s.teamAGames ?? undefined}
+                              className="w-12 rounded border border-[var(--border)] bg-[var(--surface-2)] px-1 py-0.5 text-center"
+                            />
+                            <span className="sub">–</span>
+                            <input
+                              type="number" name="gamesB" min={0} defaultValue={s.teamBGames ?? undefined}
+                              className="w-12 rounded border border-[var(--border)] bg-[var(--surface-2)] px-1 py-0.5 text-center"
+                            />
+                            <SubmitButton size="sm" variant="secondary" pendingText="…">{s.reported ? "Update" : "Report"}</SubmitButton>
+                          </span>
+                        </ActionFlashForm>
+                        {s.reported && (
+                          <form action={unreportSetAction}>
+                            <input type="hidden" name="matchupId" value={matchupId} />
+                            <input type="hidden" name="setId" value={s.setId} />
+                            <SubmitButton size="sm" variant="secondary" pendingText="…">Clear</SubmitButton>
+                          </form>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </main>
   );

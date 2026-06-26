@@ -189,10 +189,17 @@ export async function setSendFirst(matchupId: string, team: "A" | "B") {
   });
 }
 
+// Deleting a TourSet doesn't cascade its core Match (Match is referenced by plain
+// id, no relation — the decoupling rule), so drop any linked Match too.
 export async function removePair(setId: string) {
+  const s = await prisma.tourSet.findUnique({ where: { id: setId }, select: { matchId: true } });
   await prisma.tourSet.delete({ where: { id: setId } });
+  if (s?.matchId) await prisma.match.delete({ where: { id: s.matchId } });
 }
 
 export async function resetPairing(matchupId: string) {
+  const sets = await prisma.tourSet.findMany({ where: { matchupId }, select: { matchId: true } });
   await prisma.tourSet.deleteMany({ where: { matchupId } });
+  const matchIds = sets.map((s) => s.matchId).filter((x): x is string => !!x);
+  if (matchIds.length) await prisma.match.deleteMany({ where: { id: { in: matchIds } } });
 }

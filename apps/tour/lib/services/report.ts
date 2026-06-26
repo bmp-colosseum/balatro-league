@@ -1,0 +1,156 @@
+// Result reporting service (B6). A set's per-game score is entered (admin
+// authority → CONFIRMED for now; the both-players-confirm flow lands with captain
+// auth), which writes a canonical core Match and links it to the TourSet. The
+// matchup's team result is rolled up ONLY once it's decided (a team reaches
+// setsToWin, or every set is in) — so derive-on-read standings count only
+// completed matchups, exactly like the imported team-only seasons.
+import { prisma } from "../db";
+
+export async function reportSet(setId: string, gamesTeamA: number, gamesTeamB: number) {
+  const set = await prisma.tourSet.findUnique({ where: { id: setId } });
+  if (!set) throw new Error("No such set.");
+  if (!Number.isInteger(gamesTeamA) || !Number.isInteger(gamesTeamB) || gamesTeamA < 0 || gamesTeamB < 0) {
+    throw new Error("Scores must be whole numbers ≥ 0.");
+  }
+  if (gamesTeamA === 0 && gamesTeamB === 0) throw new Error("Enter at least one game won.");
+
+  const a = set.playerAId; // team A's player
+  const b = set.playerBId; // team B's player
+  // Core Match is canonical: playerA.id < playerB.id. Map the team scores onto it.
+  const swap = b < a;
+  const winnerId = gamesTeamA > gamesTeamB ? a : gamesTeamB > gamesTeamA ? b : null;
+
+  const data = {
+    playerAId: swap ? b : a,
+    playerBId: swap ? a : b,
+    format: `BO${set.bestOf}`,
+    gamesWonA: swap ? gamesTeamB : gamesTeamA,
+    gamesWonB: swap ? gamesTeamA : gamesTeamB,
+    winnerId,
+    status: "CONFIRMED" as const,
+    confirmedAt: new Date(),
+  };
+
+  let matchId = set.matchId;
+  if (matchId) {
+    await prisma.match.update({ where: { id: matchId }, data });
+  } else {
+    const m = await prisma.match.create({ data });
+    matchId = m.id;
+  }
+  await prisma.tourSet.update({ where: { id: setId }, data: { matchId, status: "CONFIRMED" } });
+  if (set.matchupId) await rollupMatchup(set.matchupId);
+  return { ok: true };
+}
+
+// Undo a report: drop the Match, unlink the set, recompute the matchup.
+export async function unreportSet(setId: string) {
+  const set = await prisma.tourSet.findUnique({ where: { id: setId } });
+  if (!set) throw new Error("No such set.");
+  if (set.matchId) await prisma.match.delete({ where: { id: set.matchId } });
+  await prisma.tourSet.update({ where: { id: setId }, data: { matchId: null, status: "PROPOSED" } });
+  if (set.matchupId) await rollupMatchup(set.matchupId);
+}
+
+// Recompute the matchup's team result from its CONFIRMED sets. Persists it only
+// when the matchup is decided; otherwise clears it so standings ignore the
+// in-progress matchup (derive-on-read counts only completed matchups).
+export async function rollupMatchup(matchupId: string) {
+  const matchup = await prisma.matchup.findUnique({
+    where: { id: matchupId },
+    include: { week: { include: { season: { select: { setsToWin: true } } } }, sets: true },
+  });
+  if (!matchup) return;
+  const setsToWin = matchup.week.season.setsToWin;
+
+  const matchIds = matchup.sets.map((s) => s.matchId).filter((x): x is string => !!x);
+  const matches = await prisma.match.findMany({
+    where: { id: { in: matchIds } },
+    select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true, winnerId: true },
+  });
+  const mById = new Map(matches.map((m) => [m.id, m]));
+
+  let setsA = 0, setsB = 0, gamesA = 0, gamesB = 0, confirmed = 0;
+  for (const s of matchup.sets) {
+    if (s.status !== "CONFIRMED" || !s.matchId) continue;
+    const m = mById.get(s.matchId);
+    if (!m) continue;
+    confirmed++;
+    gamesA += m.playerAId === s.playerAId ? m.gamesWonA : m.gamesWonB;
+    gamesB += m.playerAId === s.playerAId ? m.gamesWonB : m.gamesWonA;
+    if (m.winnerId === s.playerAId) setsA++;
+    else if (m.winnerId === s.playerBId) setsB++;
+  }
+
+  const total = matchup.sets.length;
+  const decided = setsA >= setsToWin || setsB >= setsToWin || (total > 0 && confirmed === total);
+  if (decided) {
+    const winnerTeamSeasonId = setsA > setsB ? matchup.teamSeasonAId : setsB > setsA ? matchup.teamSeasonBId : null;
+    await prisma.matchup.update({
+      where: { id: matchupId },
+      data: { setsWonA: setsA, setsWonB: setsB, gamesWonA: gamesA, gamesWonB: gamesB, winnerTeamSeasonId },
+    });
+  } else {
+    await prisma.matchup.update({
+      where: { id: matchupId },
+      data: { setsWonA: null, setsWonB: null, gamesWonA: null, gamesWonB: null, winnerTeamSeasonId: null },
+    });
+  }
+}
+
+// Per-set results view for the matchup console: each set's score + winner, plus
+// the rolled-up team result (decided or the running tally).
+export async function getMatchupReport(matchupId: string) {
+  const matchup = await prisma.matchup.findUnique({
+    where: { id: matchupId },
+    include: { week: { include: { season: { select: { setsToWin: true } } } }, sets: { orderBy: { seedA: "asc" } } },
+  });
+  if (!matchup) return null;
+
+  const matchIds = matchup.sets.map((s) => s.matchId).filter((x): x is string => !!x);
+  const playerIds = [...new Set(matchup.sets.flatMap((s) => [s.playerAId, s.playerBId]))];
+  const [matches, players, teamSeasons] = await Promise.all([
+    prisma.match.findMany({ where: { id: { in: matchIds } }, select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true, winnerId: true } }),
+    prisma.player.findMany({ where: { id: { in: playerIds } }, select: { id: true, displayName: true } }),
+    prisma.teamSeason.findMany({ where: { id: { in: [matchup.teamSeasonAId, matchup.teamSeasonBId] } }, include: { team: true } }),
+  ]);
+  const mById = new Map(matches.map((m) => [m.id, m]));
+  const nameOf = new Map(players.map((p) => [p.id, p.displayName]));
+  const teamName = new Map(teamSeasons.map((t) => [t.id, t.team.name]));
+
+  let liveA = 0, liveB = 0;
+  const sets = matchup.sets.map((s) => {
+    const m = s.matchId ? mById.get(s.matchId) : undefined;
+    const teamAGames = m ? (m.playerAId === s.playerAId ? m.gamesWonA : m.gamesWonB) : null;
+    const teamBGames = m ? (m.playerAId === s.playerAId ? m.gamesWonB : m.gamesWonA) : null;
+    const winner = m?.winnerId === s.playerAId ? "A" : m?.winnerId === s.playerBId ? "B" : null;
+    if (s.status === "CONFIRMED" && winner === "A") liveA++;
+    if (s.status === "CONFIRMED" && winner === "B") liveB++;
+    return {
+      setId: s.id,
+      aName: nameOf.get(s.playerAId) ?? s.playerAId,
+      bName: nameOf.get(s.playerBId) ?? s.playerBId,
+      aSeed: s.seedA,
+      bSeed: s.seedB,
+      bestOf: s.bestOf,
+      status: s.status,
+      reported: s.status === "CONFIRMED",
+      teamAGames,
+      teamBGames,
+      winner,
+    };
+  });
+
+  return {
+    matchupId,
+    teamAName: teamName.get(matchup.teamSeasonAId) ?? "Team A",
+    teamBName: teamName.get(matchup.teamSeasonBId) ?? "Team B",
+    setsToWin: matchup.week.season.setsToWin,
+    decided: matchup.setsWonA != null,
+    setsWonA: matchup.setsWonA ?? liveA,
+    setsWonB: matchup.setsWonB ?? liveB,
+    winnerTeamSeasonId: matchup.winnerTeamSeasonId,
+    winnerTeamName: matchup.winnerTeamSeasonId ? teamName.get(matchup.winnerTeamSeasonId) ?? null : null,
+    sets,
+  };
+}

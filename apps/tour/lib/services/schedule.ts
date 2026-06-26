@@ -122,10 +122,17 @@ export async function getSchedule(seasonName: string) {
   };
 }
 
-// Wipe the schedule so it can be regenerated. Cascades Week → Matchup → TourSet.
-// Pre-launch, destructive resets are fine ([[feedback_no_backcompat]]).
+// Wipe the schedule so it can be regenerated. Cascades Week → Matchup → TourSet;
+// the per-set core Matches aren't cascaded (referenced by plain id), so drop them
+// too. Pre-launch, destructive resets are fine ([[feedback_no_backcompat]]).
 export async function resetSchedule(seasonName: string) {
   const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true } });
   if (!season) throw new Error(`No season "${seasonName}"`);
+  const sets = await prisma.tourSet.findMany({
+    where: { matchup: { week: { seasonId: season.id } } },
+    select: { matchId: true },
+  });
   await prisma.week.deleteMany({ where: { seasonId: season.id } });
+  const matchIds = sets.map((s) => s.matchId).filter((x): x is string => !!x);
+  if (matchIds.length) await prisma.match.deleteMany({ where: { id: { in: matchIds } } });
 }
