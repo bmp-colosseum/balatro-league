@@ -216,13 +216,22 @@ the rosters everything downstream reads).
 - **B7. Subs / drops / DQ handling ⬜** — first-class TO actions (substitute via versioned
   `Roster`/`RosterEntry` week-blocks, drop, timing/conduct DQ), each with **reason + audit
   record**. Feeds the event timeline (D2).
-- **B8. Playoffs ⬜ (engine ✅)** — qualify top-N per conference (+ wildcards) over
-  `competition-core` `qualify`; seed by the chain (game win-rate); single-elim QF→SF→Final
-  via `standardBracketPairings`; writes `PlayoffEntry`/`PlayoffSeries` (bracket render ✅).
-- **B9. Season end ⬜** — crown champion (`Championship`), enter awards (all 7 kinds),
-  advance to DONE, roll to next season.
+- **B8. Playoffs ✅** — `lib/services/playoffs.ts` + `/admin/seasons/[name]/playoffs`:
+  `startPlayoffs` qualifies (auto-berths + wildcards) + seeds the field and writes
+  `PlayoffEntry` + the round-1 `PlayoffSeries` (`standardBracketPairings`); `reportSeries`
+  records results and auto-advances winners (`advanceWinners`) QF→SF→Final to a champion.
+  Added `PlayoffSeries.bracketIndex` for stable bracket order. Single-elim field of 2/4/8;
+  re-seed-by-choice ceremony (§6.5) still ⬜.
+- **B9. Season end ✅** — `lib/services/season-end.ts` + `/admin/seasons/[name]/end`:
+  `crownChampion` writes the `Championship` from the FINAL winner → DONE (uncrown reverses);
+  awards editor for all 7 kinds (player/team). `getChampionRun` is now bracket-aware (champion
+  = crowned team / FINAL winner, run = the series they played) so live brackets AND historical
+  champion-path imports both resolve. Rolling to the next season is manual (create-season ✅).
 
-**Phase B exit:** a full season runs on the site end-to-end without spreadsheets.
+> **Phase B core complete:** the full season lifecycle runs on the site end-to-end —
+> signups → draft → schedule → ±2 pairing → reporting → standings → playoffs → champion →
+> awards → DONE. No spreadsheet. Remaining Phase B: **B7 exceptions** (subs/drops/DQ) and the
+> **player-facing/live layers** gated on auth (B1) + real-time (Phase C).
 
 ---
 
