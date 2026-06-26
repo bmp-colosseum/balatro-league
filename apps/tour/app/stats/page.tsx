@@ -1,18 +1,20 @@
 import Link from "next/link";
-import { getDraftSteals, getDraftValueByRound } from "@/lib/draft-stats";
+import { getCaptainDraftGrades, getDraftSteals, getDraftValueByRound } from "@/lib/draft-stats";
 import { getRecords, getRivalries, getRookieRankings } from "@/lib/records";
 
 export const dynamic = "force-dynamic";
 
 const pctStr = (x: number) => `${(x * 100).toFixed(1)}%`;
+const signedPts = (x: number) => `${x >= 0 ? "+" : "−"}${(Math.abs(x) * 100).toFixed(1)}`;
 
 export default async function Stats() {
-  const [steals, byRound, records, rivalries, rookies] = await Promise.all([
+  const [steals, byRound, records, rivalries, rookies, grades] = await Promise.all([
     getDraftSteals(),
     getDraftValueByRound(),
     getRecords(),
     getRivalries(),
     getRookieRankings(),
+    getCaptainDraftGrades(),
   ]);
   const maxPct = Math.max(0.01, ...byRound.map((r) => r.pct));
 
@@ -130,6 +132,47 @@ export default async function Stats() {
                 </td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h2 className="mt-6 mb-1 text-[1.1rem]">Best drafters</h2>
+      <p className="sub">
+        Captains ranked by how much their picks beat the field — average set% of each drafted player vs the
+        league-wide average for that draft round (in points). Excludes the captain&apos;s own slot; min 4 graded picks.
+      </p>
+      <div className="card">
+        <table>
+          <thead>
+            <tr>
+              <th className="rank">#</th>
+              <th>Captain</th>
+              <th className="num">Seasons</th>
+              <th className="num">Picks</th>
+              <th className="num">Drafted W–L</th>
+              <th className="num">Value added</th>
+              <th>Best pick</th>
+            </tr>
+          </thead>
+          <tbody>
+            {grades.map((g, i) => (
+              <tr key={g.captainId}>
+                <td className="rank">{i + 1}</td>
+                <td><Link href={`/players/${g.captainId}`}>{g.name}</Link></td>
+                <td className="num">{g.seasons}</td>
+                <td className="num">{g.picks}</td>
+                <td className="num">{g.setW}–{g.setL}</td>
+                <td className="num" style={{ color: g.avgDelta >= 0 ? "var(--success)" : "var(--danger)" }}>
+                  {signedPts(g.avgDelta)}
+                </td>
+                <td className="sub">
+                  {g.best ? `${g.best.name} (${g.best.season} R${g.best.round}, ${signedPts(g.best.delta)})` : "—"}
+                </td>
+              </tr>
+            ))}
+            {grades.length === 0 && (
+              <tr><td colSpan={7} className="sub">No draft data yet — run the import.</td></tr>
+            )}
           </tbody>
         </table>
       </div>

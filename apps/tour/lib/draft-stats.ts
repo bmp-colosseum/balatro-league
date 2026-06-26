@@ -175,6 +175,85 @@ export async function getDraftHeatmap(seasonName: string) {
   return { seasonName: season.name, maxRound, teams };
 }
 
+export interface CaptainGradeRow {
+  captainId: string;
+  name: string;
+  seasons: number; // distinct seasons captained (with a draft)
+  picks: number; // graded picks (drafted players with >= minSets that season)
+  setW: number; // aggregate set record of the players they drafted
+  setL: number;
+  avgDelta: number; // mean (player set% − expected-for-round) across graded picks
+  best: { name: string; season: string; round: number; delta: number } | null;
+}
+
+// Captain draft grades: did a captain's picks beat the expected set% for the slot
+// they spent? For every pick a captain made (their team's picks, minus the captain
+// themselves), delta = the player's set% that season − the global average set% for
+// that round. avgDelta is the captain's mean value-added per pick. Reuses the same
+// expected-by-round baseline as the heatmap. min gates filter small samples.
+export async function getCaptainDraftGrades(minSetsPerPick = 4, minPicks = 4): Promise<CaptainGradeRow[]> {
+  const [picks, teamSeasons, rec, expected, players] = await Promise.all([
+    prisma.draftPick.findMany({
+      where: { NOT: { playerId: null } },
+      include: { draft: { select: { seasonId: true, season: { select: { name: true } } } } },
+    }),
+    prisma.teamSeason.findMany({ select: { id: true, captainPlayerId: true } }),
+    seasonPlayerSetRecords(),
+    expectedByRound(),
+    prisma.player.findMany({ select: { id: true, displayName: true } }),
+  ]);
+  const captainOf = new Map(teamSeasons.map((t) => [t.id, t.captainPlayerId]));
+  const nameOf = new Map(players.map((p) => [p.id, p.displayName]));
+
+  interface Acc {
+    setW: number;
+    setL: number;
+    deltas: number[];
+    seasons: Set<string>;
+    best: { name: string; season: string; round: number; delta: number } | null;
+  }
+  const byCaptain = new Map<string, Acc>();
+
+  for (const pk of picks) {
+    const captainId = captainOf.get(pk.teamSeasonId);
+    if (!captainId) continue;
+    if (pk.playerId === captainId) continue; // skip the captain's own (self) slot
+    const r = rec.get(`${pk.draft.seasonId}:${pk.playerId}`) ?? { setW: 0, setL: 0 };
+    const total = r.setW + r.setL;
+    if (total < minSetsPerPick) continue;
+    const exp = expected.get(pk.round);
+    if (exp == null) continue;
+    const delta = r.setW / total - exp;
+
+    const a = byCaptain.get(captainId) ?? { setW: 0, setL: 0, deltas: [], seasons: new Set<string>(), best: null };
+    a.setW += r.setW;
+    a.setL += r.setL;
+    a.deltas.push(delta);
+    a.seasons.add(pk.draft.seasonId);
+    if (!a.best || delta > a.best.delta) {
+      a.best = { name: nameOf.get(pk.playerId!) ?? "?", season: pk.draft.season.name, round: pk.round, delta };
+    }
+    byCaptain.set(captainId, a);
+  }
+
+  const rows: CaptainGradeRow[] = [];
+  for (const [captainId, a] of byCaptain) {
+    if (a.deltas.length < minPicks) continue;
+    rows.push({
+      captainId,
+      name: nameOf.get(captainId) ?? captainId,
+      seasons: a.seasons.size,
+      picks: a.deltas.length,
+      setW: a.setW,
+      setL: a.setL,
+      avgDelta: a.deltas.reduce((s, d) => s + d, 0) / a.deltas.length,
+      best: a.best,
+    });
+  }
+  rows.sort((a, b) => b.avgDelta - a.avgDelta);
+  return rows;
+}
+
 // Which seasons have an imported draft (for the heatmap season switcher).
 export async function seasonsWithDraft(): Promise<string[]> {
   const drafts = await prisma.draft.findMany({ include: { season: { select: { name: true } } } });
