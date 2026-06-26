@@ -196,13 +196,23 @@ the rosters everything downstream reads).
   `generateSchedule` (`lib/services/schedule.ts`): per-conference round-robin into lockstep
   weeks → `Week`/`Matchup`, with a plan/setup view + week board + destructive reset.
   Special weeks (Rival/Cross-Conf/Seeded) + TO manual override still ⬜.
-- **B5. Weekly ±2 pairing negotiation ⬜ (engine ✅)** — 2-captain live tool over
-  `tour-core` `pairing.ts` (coinflip send-first, propose→respond, ±2 validation,
-  used-player tracking, dead-end detection, TO override) → creates `TourSet`s. Flagship UX.
-- **B6. Set hub + result reporting ⬜** — player "what do I do this week" view; report flow
-  via `match-core` `LEAGUE_POLICY` (the real policy — see C1) **or** manual `/report`; post
-  to `#results`; **both players confirm** → `CONFIRMED` → standings recompute. DC ruleset
-  (design §8) configurable.
+- **B5. Weekly ±2 pairing negotiation 🟡 (TO console ✅)** — `lib/services/pairing.ts` +
+  `/admin/matchups/[matchupId]`: a TO-driven console over `tour-core` `pairing.ts` (coinflip
+  send-first, propose→respond, ±2 validation, dead-end → TO override) writing PROPOSED
+  `TourSet`s; state reconstructs from the persisted sets. The **live two-captain** version
+  (captain auth + SSE turns) still ⬜ — layers on top once B1 + Phase C land.
+- **B6. Set hub + result reporting 🟡 (TO reporting ✅)** — `lib/services/report.ts` +
+  the matchup console: `reportSet` writes a canonical core `Match` (admin → CONFIRMED) and
+  links the `TourSet`; `rollupMatchup` persists the team result **only when decided**, so
+  derive-on-read standings count only completed matchups (matches imported seasons). Resets
+  now drop linked `Match`es (no orphans). Still ⬜: a **player-facing** "what do I do this
+  week" view, the **both-players-confirm** flow (needs auth), the `match-core`
+  `LEAGUE_POLICY` ban/pick report path, `#results` posting, DC ruleset.
+
+> **Milestone:** the core play loop runs on the site end-to-end —
+> signups → draft → schedule → ±2 pairing → result reporting → standings. What's left in
+> Phase B is the **bookends** (B8 playoffs, B9 season end) and **exceptions** (B7 subs/drops/DQ),
+> plus the player-facing/live layers that need auth (B1) + real-time (Phase C).
 - **B7. Subs / drops / DQ handling ⬜** — first-class TO actions (substitute via versioned
   `Roster`/`RosterEntry` week-blocks, drop, timing/conduct DQ), each with **reason + audit
   record**. Feeds the event timeline (D2).
