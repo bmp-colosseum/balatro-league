@@ -1,13 +1,12 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "NIXPACKS",
-    "//": "Build from the REPO ROOT so npm workspaces link @balatro/* packages, then build only the Tour. (npm run build triggers prebuild = prisma generate.)",
-    "buildCommand": "npm ci && npm run build -w @balatro/tour"
+    "//": "Use the portable Dockerfile (build context = repo root so workspaces link). Set the service Root Directory to `/`.",
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "apps/tour/Dockerfile"
   },
   "deploy": {
-    "//": "Push the schema to the Tour's own Postgres, then start Next on $PORT.",
-    "startCommand": "npm run start:prod -w @balatro/tour",
+    "//": "Build + start (prisma db push → next start on $PORT) live in the Dockerfile.",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }

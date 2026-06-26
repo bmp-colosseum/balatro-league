@@ -19,13 +19,23 @@ Same dashboard + same Discord app + auto-deploy on push, its **own** Postgres
 both. Vercel would host the Next app fine too, but then the DB + league live
 elsewhere — Railway wins here *because the league is already on it*.
 
-## Build wrinkle this repo handles for you
-The Tour is an **npm-workspace member** (depends on `@balatro/match-core` etc.), so the
-install must run at the **repo root** to link those packages — not inside `apps/tour`.
-`apps/tour/railway.json` encodes exactly that:
-- **build:** `npm ci && npm run build -w @balatro/tour` (root install → `prebuild`
-  runs `prisma generate` → `next build`)
-- **start:** `npm run start:prod -w @balatro/tour` (`prisma db push` → `next start` on `$PORT`)
+## Built from a portable Dockerfile (not Nixpacks)
+The build + start are defined in **`apps/tour/Dockerfile`** — a normal multi-stage image,
+so the deploy is **host-agnostic** (Railway, Fly, Render, a VPS, anything that runs a
+container) with no platform-specific build magic. It handles the one wrinkle for you: the
+Tour is an **npm-workspace member** (depends on `@balatro/*`), so the image's build
+context is the **repo root** and `npm ci` runs there to link the packages.
+
+- **build (in the image):** `npm ci` at root → `npm run build -w @balatro/tour` (`prebuild`
+  = `prisma generate`, custom client output → `next build`)
+- **start (CMD):** `prisma db push` → `next start` on `$PORT`
+
+`apps/tour/railway.json` just tells Railway to use that Dockerfile
+(`builder: DOCKERFILE`, `dockerfilePath: apps/tour/Dockerfile`). To run it anywhere else:
+```
+docker build -f apps/tour/Dockerfile -t team-tour .     # from the repo root
+docker run -p 3000:3000 --env-file apps/tour/.env team-tour
+```
 
 ## One-time setup
 
@@ -33,9 +43,9 @@ install must run at the **repo root** to link those packages — not inside `app
    `DATABASE_URL`.
 
 2. **New service (tour-web)** — New → GitHub Repo → this repo. Then in its **Settings**:
-   - **Root Directory:** `/` (repo root — required so workspaces link)
-   - **Config-as-code path:** `apps/tour/railway.json`
-     *(or skip the file and paste the build/start commands above into Settings)*
+   - **Root Directory:** `/` (repo root — the Docker build context, so workspaces link)
+   - **Config-as-code path:** `apps/tour/railway.json` (selects the Dockerfile)
+     *(or just set Builder → Dockerfile, path `apps/tour/Dockerfile`, in Settings)*
 
 3. **Env vars** on the service:
    ```

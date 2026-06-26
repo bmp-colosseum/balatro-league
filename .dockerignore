@@ -1,0 +1,23 @@
+# Build context = repo root (for the Team Tour Dockerfile). Keep installs clean,
+# images lean, and secrets / local artifacts out of the image.
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+.git
+.github
+
+# Secrets + local-only data (never bake into an image)
+**/.env
+**/.env.*
+!**/.env.example
+apps/tour/.dev-db
+apps/tour/prisma/generated
+
+# Mapping files contain real Discord IDs — never in an image
+**/*.csv
+
+# Misc
+*.log
+**/*.tsbuildinfo
+.claude
