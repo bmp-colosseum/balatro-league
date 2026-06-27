@@ -14,6 +14,21 @@ import { bootstrapPresetsAndPointers } from "./match-config.js";
 import { initQueue } from "./queue.js";
 import { attachRateLimitLogging } from "./rate-limit-logger.js";
 
+// Time an interaction handler and log it if it exceeds SLOW_OP_MS (default 1.5s)
+// — surfaces user-facing slowness (which command/button is dragging) without any
+// external tooling. Always awaits the work; logging is in a finally so a thrown
+// handler is still timed. Tune the threshold via env, no redeploy.
+const SLOW_OP_MS = Number(process.env.SLOW_OP_MS ?? 1500);
+async function timed(label: string, fn: () => Promise<void>): Promise<void> {
+  const start = Date.now();
+  try {
+    await fn();
+  } finally {
+    const ms = Date.now() - start;
+    if (ms >= SLOW_OP_MS) console.warn(`[slow-op] ${label} took ${ms}ms`);
+  }
+}
+
 // FULL intents include the privileged MessageContent (for moderation transcript
 // capture). If that intent isn't enabled in the Developer Portal, login throws
 // "disallowed intents" — which would otherwise crash-loop the ENTIRE bot (no
@@ -148,7 +163,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
         return;
       }
-      await command.execute(interaction);
+      await timed(`cmd:${interaction.commandName}`, () => command.execute(interaction));
       return;
     }
 
@@ -171,7 +186,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
         return;
       }
-      await handler.execute(interaction);
+      await timed(`btn:${interaction.customId}`, () => handler.execute(interaction));
       return;
     }
 
@@ -184,7 +199,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
         return;
       }
-      await handler.execute(interaction);
+      await timed(`menu:${interaction.customId}`, () => handler.execute(interaction));
       return;
     }
 
@@ -197,7 +212,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
         return;
       }
-      await handler.execute(interaction);
+      await timed(`modal:${interaction.customId}`, () => handler.execute(interaction));
       return;
     }
   } catch (err) {

@@ -30,8 +30,25 @@ function pooledDbUrl(limit: number): string {
 export const prisma = globalThis.__botPrisma ??
   new PrismaClient({
     datasourceUrl: pooledDbUrl(5),
-    log: process.env.NODE_ENV === "production" ? ["error"] : ["error", "warn"],
+    // Emit query events so we can surface SLOW queries (unindexed scans, heavy
+    // joins) in the logs — the cheapest way to find DB-side latency. Errors/warns
+    // still print as before.
+    log: [
+      { emit: "event", level: "query" },
+      { emit: "stdout", level: "error" },
+      ...(process.env.NODE_ENV === "production" ? [] : [{ emit: "stdout", level: "warn" } as const]),
+    ],
   });
+
+// Log any query slower than SLOW_QUERY_MS (default 150ms). Tune via env without a
+// redeploy. Query text only (no params) to avoid logging personal data.
+const SLOW_QUERY_MS = Number(process.env.SLOW_QUERY_MS ?? 150);
+type PrismaQueryEvent = { duration: number; query: string; target: string };
+(prisma as unknown as { $on(e: "query", cb: (ev: PrismaQueryEvent) => void): void }).$on("query", (ev) => {
+  if (ev.duration >= SLOW_QUERY_MS) {
+    console.warn(`[slow-query] ${ev.duration}ms — ${ev.query.slice(0, 240)}`);
+  }
+});
 
 if (process.env.NODE_ENV !== "production") {
   globalThis.__botPrisma = prisma;

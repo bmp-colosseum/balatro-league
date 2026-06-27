@@ -25,8 +25,23 @@ export const prisma =
   globalThis.__prisma ??
   new PrismaClient({
     datasourceUrl: pooledDbUrl(5),
-    log: process.env.NODE_ENV === "production" ? ["error"] : ["error", "warn"],
+    // Emit query events to surface SLOW queries (unindexed scans / heavy loads)
+    // in the logs — cheapest way to spot page-load DB latency.
+    log: [
+      { emit: "event", level: "query" },
+      { emit: "stdout", level: "error" },
+      ...(process.env.NODE_ENV === "production" ? [] : [{ emit: "stdout", level: "warn" } as const]),
+    ],
   });
+
+// Log any query slower than SLOW_QUERY_MS (default 150ms). Query text only.
+const SLOW_QUERY_MS = Number(process.env.SLOW_QUERY_MS ?? 150);
+type PrismaQueryEvent = { duration: number; query: string; target: string };
+(prisma as unknown as { $on(e: "query", cb: (ev: PrismaQueryEvent) => void): void }).$on("query", (ev) => {
+  if (ev.duration >= SLOW_QUERY_MS) {
+    console.warn(`[slow-query] ${ev.duration}ms — ${ev.query.slice(0, 240)}`);
+  }
+});
 
 if (process.env.NODE_ENV !== "production") {
   globalThis.__prisma = prisma;
