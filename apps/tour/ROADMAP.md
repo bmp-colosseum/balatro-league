@@ -207,13 +207,14 @@ the rosters everything downstream reads).
   send-first, propose→respond, ±2 validation, dead-end → TO override) writing PROPOSED
   `TourSet`s; state reconstructs from the persisted sets. The **live two-captain** version
   (captain auth + SSE turns) still ⬜ — layers on top once B1 + Phase C land.
-- **B6. Set hub + result reporting 🟡 (TO reporting ✅)** — `lib/services/report.ts` +
-  the matchup console: `reportSet` writes a canonical core `Match` (admin → CONFIRMED) and
-  links the `TourSet`; `rollupMatchup` persists the team result **only when decided**, so
-  derive-on-read standings count only completed matchups (matches imported seasons). Resets
-  now drop linked `Match`es (no orphans). Still ⬜: a **player-facing** "what do I do this
-  week" view, the **both-players-confirm** flow (needs auth), the `match-core`
-  `LEAGUE_POLICY` ban/pick report path, `#results` posting, DC ruleset.
+- **B6. Set hub + result reporting ✅ (TO + player)** — TO path: `lib/services/report.ts` +
+  the matchup console (`reportSet` → canonical `Match` → `rollupMatchup`, persisted only when
+  decided so standings count only completed matchups). **Player path** (`lib/services/player-report.ts`
+  + `/me`): a player self-reports their set from their own perspective → REPORTED; the
+  **opponent confirms** (→ CONFIRMED → rollup → standings) or **disputes** (→ DISPUTED, a TO
+  resolves via the admin report path). `getPlayerHome` drives the per-set control; the actor is
+  always the signed-in viewer (can only touch their own sets, can't self-confirm). Still ⬜: the
+  `match-core` `LEAGUE_POLICY` ban/pick report flow, `#results` posting, DC ruleset.
 
 > **Milestone:** the core play loop runs on the site end-to-end —
 > signups → draft → schedule → ±2 pairing → result reporting → standings. What's left in
