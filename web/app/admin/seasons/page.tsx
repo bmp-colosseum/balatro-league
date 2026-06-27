@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { FormSelect } from "@/components/FormSelect";
 import { AdminNav } from "@/components/AdminNav";
 import { LocalDateTimeField } from "@/components/LocalDateTimeField";
+import { DatePickerField } from "@/components/DatePickerField";
 import { Callout } from "@/components/Callout";
 import {
   activateSeason,
@@ -531,12 +532,18 @@ function LifecycleActions({
           options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))}
         />
         <LocalDateTimeField name="closesAt" label="Signups close (your time, optional)" />
-        <LocalDateTimeField name="seasonStartsAt" label="Season starts (your time, optional)" />
-        <LocalDateTimeField name="seasonEndsAt" label="Season ends (your time, optional)" />
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span className="muted" style={{ fontSize: 12 }}>📅 Season starts <span style={{ color: "var(--accent-2)" }}>(shown in the signup message)</span></span>
+          <DatePickerField name="seasonStartsAt" placeholder="Pick a start date & time" />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span className="muted" style={{ fontSize: 12 }}>🏁 Season ends <span style={{ color: "var(--accent-2)" }}>(shown in the signup message)</span></span>
+          <DatePickerField name="seasonEndsAt" placeholder="Pick an end date & time" />
+        </div>
         <SubmitButton disabled={channels.length === 0}>Open signups</SubmitButton>
       </form>
       <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-        Posts a signup message in the channel. Players click Sign Up; close signups when ready, then build the divisions from them.
+        Posts a signup message in the channel showing the <strong>start → end</strong> window so players know the dates up front. They click Sign Up; close signups when ready, then build the divisions from them.
       </div>
     </details>
   );

@@ -196,6 +196,24 @@ export async function createGuildRole(
   }
 }
 
+// Flip a role's @-mentionable flag. Used to make season roles (League Player,
+// division roles) non-pingable so members can't mass-@ the league. The bot can
+// still ping a non-mentionable role via allowedMentions (e.g. the one season-
+// start announcement), so this only blocks human pings.
+export async function setRoleMentionable(
+  guildId: string,
+  roleId: string,
+  mentionable: boolean,
+): Promise<boolean> {
+  try {
+    await rest().patch(Routes.guildRole(guildId, roleId), { body: { mentionable } });
+    return true;
+  } catch (err) {
+    console.warn(`Discord setRoleMentionable(${roleId}, ${mentionable}) failed:`, err);
+    return false;
+  }
+}
+
 export async function addGuildMemberRole(guildId: string, userId: string, roleId: string): Promise<boolean> {
   try {
     await rest().put(Routes.guildMemberRole(guildId, userId, roleId));

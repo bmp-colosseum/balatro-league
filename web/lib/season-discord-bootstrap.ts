@@ -12,7 +12,7 @@
 // of bootstrap jobs queued, or null when the guild/season context is missing.
 
 import { prisma } from "@/lib/prisma";
-import { ensureGuildCategory, createGuildRole } from "@/lib/discord";
+import { ensureGuildCategory, createGuildRole, setRoleMentionable } from "@/lib/discord";
 import { enqueueBootstrapDivision } from "@/lib/queue";
 import { formatSeasonLabel } from "@/lib/format-season";
 
@@ -54,15 +54,27 @@ export async function runSeasonDiscordBootstrap(
     }
   }
 
-  // Create the per-season "League Player" role once (mentionable, so the start
-  // announcement can @ it). Created here at the season level — not in the
-  // per-division jobs, which run 2-at-a-time and would race to create it. The
-  // division jobs (enqueued below) assign it to their members.
+  // Create the per-season "League Player" role once, NON-mentionable so members
+  // can't mass-@ the whole league. The bot's one season-start announcement still
+  // pings it via allowedMentions (which overrides the flag), so non-mentionable
+  // costs us nothing. Created here at the season level — not in the per-division
+  // jobs, which run 2-at-a-time and would race to create it. The division jobs
+  // (enqueued below) assign it to their members.
   if (!season.leaguePlayerRoleId) {
-    const role = await createGuildRole(guildId, `League Player — ${seasonLabel}`, { mentionable: true });
+    const role = await createGuildRole(guildId, `League Player — ${seasonLabel}`, { mentionable: false });
     if (role) {
       await prisma.season.update({ where: { id: season.id }, data: { leaguePlayerRoleId: role.id } });
     }
+  } else {
+    // Existing role (re-activation, or one created before this was enforced):
+    // make sure it's non-mentionable now.
+    await setRoleMentionable(guildId, season.leaguePlayerRoleId, false);
+  }
+  // Belt-and-suspenders: force every already-created division role for this
+  // season non-mentionable too (new ones are created non-mentionable by the
+  // bootstrap.division job). Covers roles created before this was enforced.
+  for (const div of season.divisions) {
+    if (div.discordRoleId) await setRoleMentionable(guildId, div.discordRoleId, false);
   }
 
   let queued = 0;
