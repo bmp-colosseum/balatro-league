@@ -213,11 +213,15 @@ the rosters everything downstream reads).
 > signups → draft → schedule → ±2 pairing → result reporting → standings. What's left in
 > Phase B is the **bookends** (B8 playoffs, B9 season end) and **exceptions** (B7 subs/drops/DQ),
 > plus the player-facing/live layers that need auth (B1) + real-time (Phase C).
-- **B7. Subs / drops / DQ handling ✅** — new `SeasonEvent` model (audit + D2 seed) +
-  `lib/services/roster-ops.ts` + `/admin/seasons/[name]/roster`. `substitute` mutates the
-  lineup on a **forward** week-block (clones the prior block) so past blocks + their stat
-  attribution stay intact; `recordDrop`/`recordDQ` are audit-only (each with a reason +
-  actor). Per-team sub/drop forms, season DQ, and the event log feed D2.
+- **B7. Subs / drops / bans — weekly roster model ✅** — append-only `RosterMove` log
+  (`DRAFTED · ADDED · SUB · QUIT · BANNED · REINSTATED`, each with `effectiveWeek` /
+  `untilWeek`, reason, actor). The lineup for any week is **derived** (`deriveLineup` /
+  `rosterForWeek`) by folding the log — never stored, never deleted, so history is total and
+  the log IS the D2 timeline. Stat attribution stays in `RosterEntry` (untouched → historical
+  team stats unchanged). The draft emits `DRAFTED` moves (`backfillDraftedMoves` migrated 448
+  existing picks); the pairing tool pairs the **derived weekly lineup**. `/admin/seasons/[name]/roster`
+  has a week selector, per-team sub/quit-ban/replace forms, and the timeline (with reinstate).
+  *Deploy note: run `backfillDraftedMoves()` once on prod for pre-existing drafts.*
 - **B8. Playoffs ✅** — `lib/services/playoffs.ts` + `/admin/seasons/[name]/playoffs`:
   `startPlayoffs` qualifies (auto-berths + wildcards) + seeds the field and writes
   `PlayoffEntry` + the round-1 `PlayoffSeries` (`standardBracketPairings`); `reportSeries`

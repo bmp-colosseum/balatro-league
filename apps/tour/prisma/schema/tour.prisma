@@ -72,12 +72,16 @@ enum PlayoffRound {
   FINAL
 }
 
-// TO roster exceptions (§B7) — each is an audit record with a reason. Also the
-// seed of the D2 season-story timeline (more kinds can be added/derived later).
-enum SeasonEventKind {
-  SUBSTITUTION // a rostered player swapped out for another, effective a week-block
-  DROP // a player left the team / season
-  DQ // disqualification (timing / conduct)
+// Roster-change log kinds (§B7 / weekly roster model). Every change to a team's
+// lineup is an append-only RosterMove; the active lineup for any week is DERIVED
+// by folding the log (derive-on-read). Nothing is ever deleted → full history.
+enum RosterMoveKind {
+  DRAFTED // initial slot from the draft (effectiveWeek = 1)
+  ADDED // permanent addition / replacement arrival into a slot
+  SUB // temporary fill-in covering [effectiveWeek, untilWeek]
+  QUIT // voluntary permanent departure from effectiveWeek
+  BANNED // disciplinary permanent departure (ban / DQ) from effectiveWeek
+  REINSTATED // reverses a prior QUIT/BANNED from effectiveWeek
 }
 
 enum AwardKind {
@@ -354,23 +358,28 @@ model PlayerCareerStat {
   everCaptain   Boolean @default(false)
 }
 
-// ── Roster exceptions / season events (§B7 + D2 timeline) ──────────────────
-// A TO action (sub / drop / DQ) recorded with its reason + who did it. Players /
-// teams are referenced by id (no relation — the decoupling rule). Append-only in
-// spirit; rows can be deleted to fix a mis-entry pre-launch.
-model SeasonEvent {
-  id              String          @id @default(cuid())
-  seasonId        String
-  kind            SeasonEventKind
-  teamSeasonId    String? // affected team
-  playerId        String? // affected player (the one going OUT for a sub)
-  relatedPlayerId String? // sub: the player coming IN
-  weekBlock       String? // when it takes effect (e.g. "W5-8")
-  reason          String
-  createdBy       String? // admin discord id / name
-  createdAt       DateTime        @default(now())
+// ── Roster moves — the weekly roster change log (§B7 + D2 timeline) ─────────
+// One append-only row per change. The active lineup for any week is DERIVED by
+// folding these (see lib/services/roster-ops.ts rosterForWeek); the timeline is
+// the log itself. Players/teams referenced by id (decoupling rule). Membership
+// for stat attribution lives in RosterEntry; this layer is lineup-over-time.
+model RosterMove {
+  id               String         @id @default(cuid())
+  seasonId         String
+  teamSeasonId     String
+  playerId         String // the player this move concerns (SUB: the one coming IN)
+  outPlayerId      String? // SUB: the player going OUT for the covered weeks
+  replacesPlayerId String? // ADDED: the departed player whose slot this fills
+  kind             RosterMoveKind
+  effectiveWeek    Int // schedule week number this takes effect
+  untilWeek        Int? // SUB: last covered week (null = single week)
+  seed             Int? // DRAFTED/ADDED: the intra-team seed slot
+  reason           String?
+  createdBy        String? // admin discord id / name
+  createdAt        DateTime       @default(now())
 
   @@index([seasonId])
+  @@index([teamSeasonId])
 }
 
 // ── Web/admin permissions (Discord-role-driven, mirrors the league) ─────────

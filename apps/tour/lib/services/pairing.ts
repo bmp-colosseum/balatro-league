@@ -19,14 +19,7 @@ import {
   type RosterPlayer,
   type PairingState,
 } from "@balatro/tour-core";
-
-// Which roster week-block applies to a given week number. Roster blocks are
-// "W1-4" / "W5-8" / … (4-week bands); subs create later blocks (B7). Falls back to
-// the earliest block that exists for the team.
-function weekBlockFor(weekNumber: number): string {
-  const band = Math.floor((weekNumber - 1) / 4);
-  return `W${band * 4 + 1}-${band * 4 + 4}`;
-}
+import { rosterForWeek } from "./roster-ops";
 
 interface LoadedMatchup {
   matchup: {
@@ -53,23 +46,23 @@ async function load(matchupId: string): Promise<LoadedMatchup | null> {
   if (!matchup) return null;
 
   const season = matchup.week.season;
-  const block = weekBlockFor(matchup.week.number);
 
   const teamSeasons = await prisma.teamSeason.findMany({
     where: { id: { in: [matchup.teamSeasonAId, matchup.teamSeasonBId] } },
-    include: { team: true, rosters: { include: { entries: true } } },
+    include: { team: true },
   });
   const tsById = new Map(teamSeasons.map((t) => [t.id, t]));
 
-  const rosterFor = (teamSeasonId: string): RosterPlayer[] => {
-    const ts = tsById.get(teamSeasonId);
-    if (!ts || ts.rosters.length === 0) return [];
-    const roster = ts.rosters.find((r) => r.weekBlock === block) ?? [...ts.rosters].sort((a, b) => a.weekBlock.localeCompare(b.weekBlock))[0]!;
-    return roster.entries.map((e) => ({ playerId: e.playerId, seed: e.seed })).sort((a, b) => a.seed - b.seed);
-  };
+  // The lineup is DERIVED for this matchup's week from the roster-move log, so subs
+  // / departures that apply to this week are reflected in who can be paired.
+  const [lineA, lineB] = await Promise.all([
+    rosterForWeek(matchup.teamSeasonAId, matchup.week.number),
+    rosterForWeek(matchup.teamSeasonBId, matchup.week.number),
+  ]);
+  const toRoster = (line: { playerId: string; seed: number }[]): RosterPlayer[] => line.map((p) => ({ playerId: p.playerId, seed: p.seed }));
 
-  const teamA = { id: matchup.teamSeasonAId, name: tsById.get(matchup.teamSeasonAId)?.team.name ?? "?", roster: rosterFor(matchup.teamSeasonAId) };
-  const teamB = { id: matchup.teamSeasonBId, name: tsById.get(matchup.teamSeasonBId)?.team.name ?? "?", roster: rosterFor(matchup.teamSeasonBId) };
+  const teamA = { id: matchup.teamSeasonAId, name: tsById.get(matchup.teamSeasonAId)?.team.name ?? "?", roster: toRoster(lineA) };
+  const teamB = { id: matchup.teamSeasonBId, name: tsById.get(matchup.teamSeasonBId)?.team.name ?? "?", roster: toRoster(lineB) };
 
   const ids = [...new Set([...teamA.roster, ...teamB.roster].map((p) => p.playerId))];
   const players = await prisma.player.findMany({ where: { id: { in: ids } }, select: { id: true, displayName: true } });

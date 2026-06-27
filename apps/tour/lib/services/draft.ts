@@ -231,6 +231,14 @@ async function materializeRosters(seasonId: string, draftId: string) {
         create: { rosterId: roster.id, playerId: p.playerId!, seed: p.round, isCaptain: capOf.get(ts.id) === p.playerId },
         update: { seed: p.round, isCaptain: capOf.get(ts.id) === p.playerId },
       });
+      // Seed the weekly roster log: every drafted player is a DRAFTED move at week 1
+      // (the lineup-over-time derivation + timeline read this; see roster-ops.ts).
+      const exists = await prisma.rosterMove.findFirst({ where: { teamSeasonId: ts.id, playerId: p.playerId!, kind: "DRAFTED" } });
+      if (!exists) {
+        await prisma.rosterMove.create({
+          data: { seasonId, teamSeasonId: ts.id, kind: "DRAFTED", playerId: p.playerId!, effectiveWeek: 1, seed: p.round },
+        });
+      }
     }
   }
 }
