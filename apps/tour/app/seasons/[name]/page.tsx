@@ -43,7 +43,8 @@ export default async function SeasonPage({ params }: { params: Promise<{ name: s
       <p className="sub">
         Standings derived from {data.setCount} sets · §5 tiebreakers ·{" "}
         <Link href={`/seasons/${encodeURIComponent(seasonName)}/draft`}>Draft board →</Link> ·{" "}
-        <Link href={`/seasons/${encodeURIComponent(seasonName)}/timeline`}>Season timeline →</Link>
+        <Link href={`/seasons/${encodeURIComponent(seasonName)}/timeline`}>Season timeline →</Link> ·{" "}
+        <Link href={`/seasons/${encodeURIComponent(seasonName)}/bracket`}>Playoff bracket →</Link>
       </p>
       {mvp && mvp.player && (
         <p className="flex items-center gap-1.5">

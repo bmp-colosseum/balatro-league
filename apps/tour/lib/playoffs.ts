@@ -13,6 +13,71 @@ const ROUND_LABEL: Record<string, string> = {
   FINAL: "Final",
 };
 
+export interface BracketSeries {
+  round: string;
+  label: string;
+  aSeed: number | null;
+  aName: string;
+  bSeed: number | null;
+  bName: string;
+  scoreA: number | null;
+  scoreB: number | null;
+  winner: "A" | "B" | null;
+  decided: boolean;
+}
+
+export interface PublicBracket {
+  champion: string | null;
+  rounds: { round: string; label: string; series: BracketSeries[] }[];
+}
+
+// The full single-elim bracket for a season — only for live B8 seasons (which have
+// PlayoffEntry seeds + the complete set of series). Historical champion-path imports
+// (no entries) return null; the page falls back to the champion run / projection.
+export async function getPublicBracket(seasonName: string): Promise<PublicBracket | null> {
+  const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true } });
+  if (!season) return null;
+  const entries = await prisma.playoffEntry.findMany({ where: { seasonId: season.id } });
+  if (entries.length === 0) return null;
+
+  const series = await prisma.playoffSeries.findMany({ where: { seasonId: season.id }, orderBy: { bracketIndex: "asc" } });
+  const tsIds = [...new Set([...entries.map((e) => e.teamSeasonId), ...series.flatMap((s) => [s.teamSeasonAId, s.teamSeasonBId])].filter((x): x is string => !!x))];
+  const teamSeasons = await prisma.teamSeason.findMany({ where: { id: { in: tsIds } }, include: { team: true } });
+  const nameOf = new Map(teamSeasons.map((t) => [t.id, t.team.name]));
+  const seedOf = new Map(entries.map((e) => [e.teamSeasonId, e.seed]));
+
+  const byRound = new Map<string, typeof series>();
+  for (const s of series) {
+    const arr = byRound.get(s.round) ?? [];
+    arr.push(s);
+    byRound.set(s.round, arr);
+  }
+  const rounds = [...byRound.entries()]
+    .sort((a, b) => (ROUND_ORDER[a[0]] ?? 9) - (ROUND_ORDER[b[0]] ?? 9))
+    .map(([round, ss]) => ({
+      round,
+      label: ROUND_LABEL[round] ?? round,
+      series: ss
+        .sort((a, b) => a.bracketIndex - b.bracketIndex)
+        .map((s): BracketSeries => ({
+          round,
+          label: ROUND_LABEL[round] ?? round,
+          aSeed: s.teamSeasonAId ? seedOf.get(s.teamSeasonAId) ?? null : null,
+          aName: s.teamSeasonAId ? nameOf.get(s.teamSeasonAId) ?? "?" : "TBD",
+          bSeed: s.teamSeasonBId ? seedOf.get(s.teamSeasonBId) ?? null : null,
+          bName: s.teamSeasonBId ? nameOf.get(s.teamSeasonBId) ?? "?" : "TBD",
+          scoreA: s.scoreA,
+          scoreB: s.scoreB,
+          winner: s.winnerTeamSeasonId === s.teamSeasonAId ? "A" : s.winnerTeamSeasonId === s.teamSeasonBId ? "B" : null,
+          decided: !!s.winnerTeamSeasonId,
+        })),
+    }));
+
+  const finalS = series.find((s) => s.round === "FINAL");
+  const champion = finalS?.winnerTeamSeasonId ? nameOf.get(finalS.winnerTeamSeasonId) ?? null : null;
+  return { champion, rounds };
+}
+
 export interface RunRound {
   round: string;
   label: string;
