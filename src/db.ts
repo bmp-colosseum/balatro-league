@@ -27,28 +27,31 @@ function pooledDbUrl(limit: number): string {
   return `${base}${sep}connection_limit=${limit}&pool_timeout=20`;
 }
 
-export const prisma = globalThis.__botPrisma ??
-  new PrismaClient({
-    datasourceUrl: pooledDbUrl(5),
-    // Emit query events so we can surface SLOW queries (unindexed scans, heavy
-    // joins) in the logs — the cheapest way to find DB-side latency. Errors/warns
-    // still print as before.
-    log: [
-      { emit: "event", level: "query" },
-      { emit: "stdout", level: "error" },
-      ...(process.env.NODE_ENV === "production" ? [] : [{ emit: "stdout", level: "warn" } as const]),
-    ],
-  });
-
-// Log any query slower than SLOW_QUERY_MS (default 150ms). Tune via env without a
-// redeploy. Query text only (no params) to avoid logging personal data.
+// Slow-query logging is OPT-IN (LOG_SLOW_QUERIES=true). Prisma's query-event
+// emission adds per-query overhead, so it's off by default; flip the env var on
+// only while investigating DB latency. Query text only (no params).
+const LOG_SLOW_QUERIES = process.env.LOG_SLOW_QUERIES === "true";
 const SLOW_QUERY_MS = Number(process.env.SLOW_QUERY_MS ?? 150);
 type PrismaQueryEvent = { duration: number; query: string; target: string };
-(prisma as unknown as { $on(e: "query", cb: (ev: PrismaQueryEvent) => void): void }).$on("query", (ev) => {
-  if (ev.duration >= SLOW_QUERY_MS) {
-    console.warn(`[slow-query] ${ev.duration}ms — ${ev.query.slice(0, 240)}`);
+
+function makePrisma(): PrismaClient {
+  const client = new PrismaClient({
+    datasourceUrl: pooledDbUrl(5),
+    log: LOG_SLOW_QUERIES
+      ? [{ emit: "event", level: "query" }, { emit: "stdout", level: "error" }]
+      : process.env.NODE_ENV === "production"
+        ? ["error"]
+        : ["error", "warn"],
+  });
+  if (LOG_SLOW_QUERIES) {
+    (client as unknown as { $on(e: "query", cb: (ev: PrismaQueryEvent) => void): void }).$on("query", (ev) => {
+      if (ev.duration >= SLOW_QUERY_MS) console.warn(`[slow-query] ${ev.duration}ms — ${ev.query.slice(0, 240)}`);
+    });
   }
-});
+  return client;
+}
+
+export const prisma = globalThis.__botPrisma ?? makePrisma();
 
 if (process.env.NODE_ENV !== "production") {
   globalThis.__botPrisma = prisma;

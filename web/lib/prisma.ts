@@ -21,27 +21,31 @@ function pooledDbUrl(limit: number): string | undefined {
   return `${base}${sep}connection_limit=${limit}&pool_timeout=20`;
 }
 
-export const prisma =
-  globalThis.__prisma ??
-  new PrismaClient({
-    datasourceUrl: pooledDbUrl(5),
-    // Emit query events to surface SLOW queries (unindexed scans / heavy loads)
-    // in the logs — cheapest way to spot page-load DB latency.
-    log: [
-      { emit: "event", level: "query" },
-      { emit: "stdout", level: "error" },
-      ...(process.env.NODE_ENV === "production" ? [] : [{ emit: "stdout", level: "warn" } as const]),
-    ],
-  });
-
-// Log any query slower than SLOW_QUERY_MS (default 150ms). Query text only.
+// Slow-query logging is OPT-IN (LOG_SLOW_QUERIES=true) — Prisma's query-event
+// emission has per-query overhead, so we DON'T want it on by default for every
+// page load. Flip the env var on only when actively investigating DB latency.
+const LOG_SLOW_QUERIES = process.env.LOG_SLOW_QUERIES === "true";
 const SLOW_QUERY_MS = Number(process.env.SLOW_QUERY_MS ?? 150);
 type PrismaQueryEvent = { duration: number; query: string; target: string };
-(prisma as unknown as { $on(e: "query", cb: (ev: PrismaQueryEvent) => void): void }).$on("query", (ev) => {
-  if (ev.duration >= SLOW_QUERY_MS) {
-    console.warn(`[slow-query] ${ev.duration}ms — ${ev.query.slice(0, 240)}`);
+
+function makePrisma(): PrismaClient {
+  const client = new PrismaClient({
+    datasourceUrl: pooledDbUrl(5),
+    log: LOG_SLOW_QUERIES
+      ? [{ emit: "event", level: "query" }, { emit: "stdout", level: "error" }]
+      : process.env.NODE_ENV === "production"
+        ? ["error"]
+        : ["error", "warn"],
+  });
+  if (LOG_SLOW_QUERIES) {
+    (client as unknown as { $on(e: "query", cb: (ev: PrismaQueryEvent) => void): void }).$on("query", (ev) => {
+      if (ev.duration >= SLOW_QUERY_MS) console.warn(`[slow-query] ${ev.duration}ms — ${ev.query.slice(0, 240)}`);
+    });
   }
-});
+  return client;
+}
+
+export const prisma = globalThis.__prisma ?? makePrisma();
 
 if (process.env.NODE_ENV !== "production") {
   globalThis.__prisma = prisma;
