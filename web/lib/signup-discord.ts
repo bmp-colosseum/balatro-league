@@ -72,6 +72,37 @@ export function buildSignupPayload(
   return { embeds: [embed], components: [row] };
 }
 
+// Preview of the "are you in?" DM blasted to past players when signups open —
+// the one they can sign up from directly. MIRRORS askContent()'s initial variant
+// in src/signup/signup-reminders.ts (keep in sync). The Sign-up buttons are shown
+// DISABLED here (it's a preview to the admin, not a live ask).
+export function buildSignupAskDmPreview(
+  round: { name: string; closesAt: Date | null; seasonStartsAt: Date | null; seasonEndsAt: Date | null },
+  lengthDays: number = DEFAULT_SEASON_LENGTH_DAYS,
+): { content: string; components: ComponentActionRow[] } {
+  const window = playWindowValue(round, lengthDays);
+  const lines = [
+    `🃏 **${round.name}** — sign-ups are open!`,
+    "",
+    "A new season is starting and I want to know if you're in.",
+    "",
+  ];
+  if (window) lines.push(`**Play window:** ${window}`, "");
+  lines.push(
+    "**Tapping ✅ Sign me up signs you up right now** and puts you on the roster — so only do it if you're sure you can play the whole season. Dropping out mid-season throws off everyone's schedule.",
+  );
+  const row: ComponentActionRow = {
+    type: 1,
+    components: [
+      { type: 2, custom_id: "season-ask:preview:1", style: 3, label: "✅ Sign me up", disabled: true },
+      { type: 2, custom_id: "season-ask:preview:2", style: 2, label: "❌ Not this season", disabled: true },
+      { type: 2, custom_id: "season-ask:preview:3", style: 2, label: "💤 Remind me later", disabled: true },
+      { type: 2, custom_id: "season-ask:preview:4", style: 2, label: "🔕 Stop asking", disabled: true },
+    ],
+  };
+  return { content: lines.join("\n"), components: [row] };
+}
+
 export function buildClosedSignupPayload(
   round: { id: string; name: string },
   signups: Array<{ discordId: string }>,

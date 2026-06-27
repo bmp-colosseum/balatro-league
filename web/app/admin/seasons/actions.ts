@@ -18,7 +18,7 @@ import {
   sendDirectMessage,
 } from "@/lib/discord";
 import { enqueueLeagueInfoRefresh, enqueueMmrSnapshot, enqueueSignupAskKickoff, enqueueWelcomeRefresh } from "@/lib/queue";
-import { buildSignupPayload, buildClosedSignupPayload, getSeasonLengthDays } from "@/lib/signup-discord";
+import { buildSignupPayload, buildClosedSignupPayload, buildSignupAskDmPreview, getSeasonLengthDays } from "@/lib/signup-discord";
 import { endSeasonCore } from "@/lib/end-season";
 
 interface TierConfig {
@@ -682,16 +682,25 @@ export async function sendSignupTestMessage(formData: FormData) {
   const seasonEndsAt = parseDate("seasonEndsAt");
 
   // Fake round (id "preview") so buildSignupPayload renders identically to a real
-  // post. Drop the components — the Sign Up / Withdraw buttons wouldn't resolve
-  // for a non-existent round, and a preview shouldn't be clickable anyway.
+  // post. Drop the channel-post components — the Sign Up / Withdraw buttons
+  // wouldn't resolve for a non-existent round, and a preview shouldn't be
+  // clickable anyway.
   const round = { id: "preview", name: `${seasonLabel} Signups`, closesAt, seasonStartsAt, seasonEndsAt };
-  const { embeds } = buildSignupPayload(round, 0, await getSeasonLengthDays());
+  const lengthDays = await getSeasonLengthDays();
+  const { embeds } = buildSignupPayload(round, 0, lengthDays);
 
-  const ok = await sendDirectMessage(user.discordId, {
-    content: "🧪 **Preview** — this is what your signup message will look like (buttons omitted):",
+  // DM 1: the channel signup post.
+  const ok1 = await sendDirectMessage(user.discordId, {
+    content: "🧪 **Preview 1/2 — the signup post** (this gets posted in the signups channel; buttons omitted):",
     embeds,
   });
-  redirect(`${back}?${ok ? "signupTestOk=1" : "signupTestErr=1"}`);
+  // DM 2: the direct-sign-up invite DM that goes to past players.
+  const askPreview = buildSignupAskDmPreview(round, lengthDays);
+  const ok2 = await sendDirectMessage(user.discordId, {
+    content: `🧪 **Preview 2/2 — the sign-up invite DM** (this is DM'd to past players; they sign up right from it):\n\n${askPreview.content}`,
+    components: askPreview.components,
+  });
+  redirect(`${back}?${ok1 && ok2 ? "signupTestOk=1" : "signupTestErr=1"}`);
 }
 
 export async function openSignupsForSeason(formData: FormData) {

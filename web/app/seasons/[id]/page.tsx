@@ -95,7 +95,7 @@ export default async function SeasonDetailPage({
       <SiteNav activePath="/seasons" />
       <main>
         {signupTestOk && (
-          <Callout type="success">✓ Sent you a preview DM of the signup message — check your Discord DMs.</Callout>
+          <Callout type="success">✓ Sent you two preview DMs — the signup post + the sign-up invite DM. Check your Discord DMs.</Callout>
         )}
         {signupTestErr && (
           <Callout type="danger">Couldn&apos;t DM the preview — make sure your DMs are open and you share a server with the bot.</Callout>
