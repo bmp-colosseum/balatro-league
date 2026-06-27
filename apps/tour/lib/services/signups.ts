@@ -60,6 +60,22 @@ export async function addSignup(seasonName: string, input: SignupInput) {
   });
 }
 
+// The season currently accepting self-serve signups (SIGNUPS state), if any.
+export async function getOpenSignupSeason() {
+  return prisma.tourSeason.findFirst({ where: { state: "SIGNUPS" }, orderBy: { createdAt: "desc" } });
+}
+
+export async function getMySignup(seasonId: string, discordId: string) {
+  return prisma.signup.findUnique({ where: { seasonId_discordId: { seasonId, discordId } } });
+}
+
+// A player withdraws themselves (keeps the row + history; just flips status).
+export async function withdrawSignup(seasonName: string, discordId: string) {
+  const seasonId = await seasonIdByName(seasonName);
+  const s = await prisma.signup.findUnique({ where: { seasonId_discordId: { seasonId, discordId } } });
+  if (s) await prisma.signup.update({ where: { id: s.id }, data: { status: "WITHDRAWN" } });
+}
+
 export async function setSignupStatus(signupId: string, status: SignupStatus) {
   return prisma.signup.update({ where: { id: signupId }, data: { status } });
 }

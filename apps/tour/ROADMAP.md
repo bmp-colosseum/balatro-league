@@ -191,9 +191,11 @@ the rosters everything downstream reads).
   migrated to `await isAdmin()`. Header `UserMenu` (sign in / out + tier badge) + the shared-SSO
   `auth.ts`. *Owner provides the Discord OAuth creds + their owner id (DEPLOY.md / .env.example).*
   Captain/player gates from season data still to come (with the player-facing views).
-- **B2. Signups (self-serve) 🟡** — public signup page (Discord OAuth → form: tz,
-  availability, willing-to-captain, BMP handle) writing `Signup` via
-  `lib/services/signups.ts` (admin manager ✅).
+- **B2. Signups (self-serve) ✅** — public `/signup` (Discord OAuth → form: tz,
+  availability, willing-to-captain, BMP handle) writing `Signup`. Identity is the
+  AUTHENTICATED viewer's discordId (never a form field), so a player can only sign up /
+  edit / withdraw themselves; re-signing after withdrawal re-enters the pool. Home-page CTA
+  when a season is in SIGNUPS. Admin curation (PENDING→APPROVED) already ✅.
 - **B3. Seeding + draft setup → draft** (A4 + refinements) — refine `setupDraft` defaults
   (who's captain, conference split, self-pick round) in `lib/services/draft.ts`.
 - **B4. Schedule generation ✅** — admin `/admin/seasons/[name]/schedule` over `tour-core`

@@ -1,16 +1,24 @@
 import Link from "next/link";
-import { Trophy, ArrowRight } from "lucide-react";
+import { Trophy, ArrowRight, ClipboardList } from "lucide-react";
 import { getSeasonsOverview } from "@/lib/home";
+import { getOpenSignupSeason } from "@/lib/services/signups";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const seasons = await getSeasonsOverview();
+  const [seasons, openSeason] = await Promise.all([getSeasonsOverview(), getOpenSignupSeason()]);
 
   return (
     <main>
       <h1>Pizza Power — Team Tour</h1>
       <p className="sub">Standings, brackets, rosters, and all-time history.</p>
+
+      {openSeason && (
+        <Link href="/signup" className="card card-accent flex items-center gap-2 hover:no-underline" style={{ marginBottom: "1rem" }}>
+          <ClipboardList className="size-4 text-[var(--accent-2)]" />
+          <span><strong>{openSeason.name}</strong> signups are open — register now <ArrowRight className="inline size-3.5" /></span>
+        </Link>
+      )}
 
       <div className="season-grid">
         {seasons.map((s) => (
