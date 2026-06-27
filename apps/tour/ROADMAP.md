@@ -260,9 +260,11 @@ the rosters everything downstream reads).
 
 - **D1. League ↔ Tour deep link 🔒(web)** — league-side `/u/[discordId]` mirror + return
   nav link (touches `web/`).
-- **D2. Event timeline ⬜** — scrollable week-by-week season feed (draft done, subs, drops,
-  DQs, results, standings shifts) derived from `Week`/`Matchup`/`TourSet` status + the
-  sub/drop/DQ audit (B7). Flagship "season story" surface.
+- **D2. Event timeline ✅ (v1)** — public `/seasons/[name]/timeline` + `lib/season-timeline.ts`
+  (`getSeasonTimeline`): one chronological feed merging the `RosterMove` log (subs/quits/bans/
+  replacements), decided matchup results, and milestones (draft done · playoffs began · playoff
+  results · champion crowned). Grouped by week, fully derive-on-read. Linked from the season
+  page. Later: standings-shift events, richer per-event links.
 - **D3. Shared cross-app stats ⬜** — hub-level combined league+tour player view joined by
   `discordId`. Tour can already read the league DB
   (`web/scripts/export-league-players.mjs`); a cross-DB read service + "all-Balatro"
