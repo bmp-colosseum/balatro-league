@@ -5,10 +5,27 @@
 import { requireOwnerOrDevops } from "@/lib/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { SubmitButton } from "@/components/SubmitButton";
+import { Callout } from "@/components/Callout";
 import { AdminNav } from "@/components/AdminNav";
-import { runMatchSweepAction } from "./actions";
+import { loadQueueSummaries, loadFailedJobs } from "@/lib/loaders/queue-status";
+import { runMatchSweepAction, retryFailedJob, dismissFailedJob, clearQueuePending } from "./actions";
 
 export const dynamic = "force-dynamic";
+
+// Match the bot's stall detector threshold (jobs 'created' > 300s = flagged).
+const STALL_THRESHOLD_MS = 300_000;
+
+function ago(d: Date | null): string {
+  if (!d) return "—";
+  const ms = Date.now() - new Date(d).getTime();
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
 
 type SweepDiag = {
   expiredInvitesCancelled?: number;
@@ -36,11 +53,12 @@ function parseDiag(raw: string | undefined): SweepDiag | null {
 export default async function AdminOpsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ sweepDiag?: string }>;
+  searchParams: Promise<{ sweepDiag?: string; queueOk?: string; queueErr?: string }>;
 }) {
   await requireOwnerOrDevops();
-  const { sweepDiag } = await searchParams;
+  const { sweepDiag, queueOk, queueErr } = await searchParams;
   const diag = parseDiag(sweepDiag);
+  const [queues, failed] = await Promise.all([loadQueueSummaries(), loadFailedJobs(50)]);
 
   return (
     <>
@@ -101,6 +119,102 @@ export default async function AdminOpsPage({
             </ConfirmButton>
           </form>
         </div>
+
+        {/* ── Job queue (pg-boss) ────────────────────────────────────── */}
+        <h3 style={{ marginTop: 28 }}>Job queue</h3>
+        <p className="muted" style={{ fontSize: 12 }}>
+          Background work (DMs, announcements, bootstraps, signup asks…). A queue whose oldest pending job is
+          older than <strong>5 min</strong> is flagged — that&apos;s what trips the DevOps stall alert.
+        </p>
+        {queueOk && <Callout type="success">✓ {queueOk.replace(/-/g, " ")}.</Callout>}
+        {queueErr && <Callout type="danger">{queueErr.replace(/-/g, " ")}</Callout>}
+
+        <div className="card" style={{ overflowX: "auto" }}>
+          {queues.length === 0 ? (
+            <span className="muted">No jobs in any queue right now.</span>
+          ) : (
+            <table className="table-dense" style={{ width: "100%" }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left" }}>Queue</th>
+                  <th>Pending</th>
+                  <th>Retry</th>
+                  <th>Active</th>
+                  <th>Failed</th>
+                  <th>Oldest pending</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {queues.map((q) => {
+                  const stalled = q.oldestPending != null && Date.now() - new Date(q.oldestPending).getTime() > STALL_THRESHOLD_MS;
+                  const pending = q.created + q.retry;
+                  return (
+                    <tr key={q.name}>
+                      <td><code style={{ fontSize: 12 }}>{q.name}</code></td>
+                      <td style={{ textAlign: "center" }}>{q.created || ""}</td>
+                      <td style={{ textAlign: "center", color: q.retry ? "var(--admin)" : undefined }}>{q.retry || ""}</td>
+                      <td style={{ textAlign: "center" }}>{q.active || ""}</td>
+                      <td style={{ textAlign: "center", color: q.failed ? "var(--danger)" : undefined }}>{q.failed || ""}</td>
+                      <td style={{ textAlign: "center", color: stalled ? "var(--danger)" : "var(--muted)", fontWeight: stalled ? 700 : 400 }}>
+                        {q.oldestPending ? `${ago(q.oldestPending)}${stalled ? " ⚠" : ""}` : "—"}
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        {pending > 0 && (
+                          <form action={clearQueuePending} style={{ display: "inline" }}>
+                            <input type="hidden" name="queueName" value={q.name} />
+                            <ConfirmButton
+                              message={`Delete all ${pending} pending job(s) in "${q.name}"? This drops queued work (e.g. unsent DMs) — it does NOT cancel jobs already running.`}
+                              variant="secondary"
+                              size="sm"
+                            >
+                              Clear pending
+                            </ConfirmButton>
+                          </form>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <h3 style={{ marginTop: 20 }}>
+          Recent failures{failed.length > 0 && <span className="muted" style={{ fontWeight: "normal", fontSize: 14 }}> · {failed.length}</span>}
+        </h3>
+        <p className="muted" style={{ fontSize: 12 }}>
+          Jobs that exhausted their retries, newest first, with the actual error. <strong>Retry</strong> re-queues it;
+          <strong> dismiss</strong> drops it. (Older failures age out of the queue automatically.)
+        </p>
+        {failed.length === 0 ? (
+          <div className="card" style={{ color: "var(--success)" }}>✓ No failed jobs.</div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {failed.map((j) => (
+              <div key={j.id} className="card card-danger">
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                  <code style={{ fontSize: 12 }}>{j.name}</code>
+                  <span className="muted" style={{ fontSize: 11 }}>failed {ago(j.failedAt)} ago · {j.retryCount} retries</span>
+                  <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                    <form action={retryFailedJob} style={{ display: "inline" }}>
+                      <input type="hidden" name="jobId" value={j.id} />
+                      <SubmitButton variant="secondary" size="sm">Retry</SubmitButton>
+                    </form>
+                    <form action={dismissFailedJob} style={{ display: "inline" }}>
+                      <input type="hidden" name="jobId" value={j.id} />
+                      <SubmitButton variant="secondary" size="sm">Dismiss</SubmitButton>
+                    </form>
+                  </span>
+                </div>
+                <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 12, margin: "6px 0 0", color: "var(--danger)" }}>
+                  {j.error}
+                </pre>
+              </div>
+            ))}
+          </div>
+        )}
       </main>
     </>
   );

@@ -9,6 +9,76 @@ import { revalidatePath } from "next/cache";
 import { requireOwnerOrDevops } from "@/lib/admin";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { runMatchSweep } from "@/lib/match-sweep";
+import { prisma } from "@/lib/prisma";
+
+// Re-queue a FAILED pg-boss job by flipping it back to 'created' so a worker
+// picks it up again (full retries restored). Same-row retry — keeps the job id.
+export async function retryFailedJob(formData: FormData) {
+  const { user } = await requireOwnerOrDevops();
+  const id = String(formData.get("jobId") ?? "").trim();
+  if (!id) redirect("/admin/ops?queueErr=missing-id");
+  const n = await prisma.$executeRawUnsafe(
+    `UPDATE pgboss.job
+        SET state = 'created', start_after = now(), started_on = NULL, completed_on = NULL,
+            retry_count = 0, output = NULL
+      WHERE id = $1::uuid AND state = 'failed'`,
+    id,
+  );
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "queue.retry-job",
+    targetType: "Queue",
+    targetId: id,
+    summary: `Retried failed job ${id}`,
+    metadata: { jobId: id, affected: n },
+  });
+  revalidatePath("/admin/ops");
+  redirect(`/admin/ops?queueOk=${n > 0 ? "retried" : "nothing"}`);
+}
+
+// Delete a single FAILED job (dismiss it from the list).
+export async function dismissFailedJob(formData: FormData) {
+  const { user } = await requireOwnerOrDevops();
+  const id = String(formData.get("jobId") ?? "").trim();
+  if (!id) redirect("/admin/ops?queueErr=missing-id");
+  const n = await prisma.$executeRawUnsafe(
+    `DELETE FROM pgboss.job WHERE id = $1::uuid AND state = 'failed'`,
+    id,
+  );
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "queue.dismiss-job",
+    targetType: "Queue",
+    targetId: id,
+    summary: `Dismissed failed job ${id}`,
+    metadata: { jobId: id, affected: n },
+  });
+  revalidatePath("/admin/ops");
+  redirect(`/admin/ops?queueOk=dismissed`);
+}
+
+// Clear a queue's PENDING backlog (created + retry) — e.g. drop a pile of stuck
+// jobs that built up during an outage so the stall alert stops firing. Does NOT
+// touch active/completed/failed jobs.
+export async function clearQueuePending(formData: FormData) {
+  const { user } = await requireOwnerOrDevops();
+  const name = String(formData.get("queueName") ?? "").trim();
+  if (!name) redirect("/admin/ops?queueErr=missing-queue");
+  const n = await prisma.$executeRawUnsafe(
+    `DELETE FROM pgboss.job WHERE name = $1 AND state IN ('created', 'retry')`,
+    name,
+  );
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "queue.clear-pending",
+    targetType: "Queue",
+    targetId: name,
+    summary: `Cleared ${n} pending job(s) from queue "${name}"`,
+    metadata: { queueName: name, deleted: n },
+  });
+  revalidatePath("/admin/ops");
+  redirect(`/admin/ops?queueOk=cleared-${n}`);
+}
 
 // Manual trigger for the match-thread sweep. Runs the same three
 // passes the bot's 1-minute cron does, PLUS a fourth orphan-thread
