@@ -24,7 +24,7 @@ export async function UserMenu() {
   return (
     <span className="flex items-center gap-2">
       <Link
-        href={v.playerId ? `/players/${v.playerId}` : "/auth/signin"}
+        href="/me"
         className="flex items-center gap-1.5 text-foreground hover:no-underline"
         title={`Signed in as ${v.name ?? v.discordId} · ${v.tier}`}
       >
