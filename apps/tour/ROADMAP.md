@@ -202,11 +202,12 @@ the rosters everything downstream reads).
   `generateSchedule` (`lib/services/schedule.ts`): per-conference round-robin into lockstep
   weeks → `Week`/`Matchup`, with a plan/setup view + week board + destructive reset.
   Special weeks (Rival/Cross-Conf/Seeded) + TO manual override still ⬜.
-- **B5. Weekly ±2 pairing negotiation 🟡 (TO console ✅)** — `lib/services/pairing.ts` +
-  `/admin/matchups/[matchupId]`: a TO-driven console over `tour-core` `pairing.ts` (coinflip
-  send-first, propose→respond, ±2 validation, dead-end → TO override) writing PROPOSED
-  `TourSet`s; state reconstructs from the persisted sets. The **live two-captain** version
-  (captain auth + SSE turns) still ⬜ — layers on top once B1 + Phase C land.
+- **B5. Weekly ±2 pairing negotiation ✅ (TO + captains)** — TO console at
+  `/admin/matchups/[matchupId]` (atomic propose+respond, dead-end → override). **Live
+  two-captain** at `/matchups/[matchupId]`: real propose→respond with the proposal persisted
+  on `Matchup.pendingProposalPlayerId` between turns; each captain acts only for their
+  (week-derived) side, engine enforces turn order + ±2. `/me` lists a captain's matchups.
+  Only the live SSE auto-refresh (no manual reload) is left for Phase C.
 - **B6. Set hub + result reporting ✅ (TO + player)** — TO path: `lib/services/report.ts` +
   the matchup console (`reportSet` → canonical `Match` → `rollupMatchup`, persisted only when
   decided so standings count only completed matchups). **Player path** (`lib/services/player-report.ts`
