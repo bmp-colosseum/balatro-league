@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Download, Database, Plus, Fingerprint } from "lucide-react";
+import { ArrowLeft, Download, Database, Plus, Fingerprint, Activity } from "lucide-react";
 import { isAdmin } from "@/lib/auth";
 import { listSeasons } from "@/lib/services/seasons";
 import { Callout } from "@/components/Callout";
@@ -34,6 +34,8 @@ export default async function Admin() {
         <Link href="/admin/seasons/new" className="inline-flex items-center gap-1"><Plus className="size-3.5" /> New season</Link>
         {" "}·{" "}
         <Link href="/admin/identity" className="inline-flex items-center gap-1"><Fingerprint className="size-3.5" /> Identity manager</Link>
+        {" "}·{" "}
+        <Link href="/admin/env-health" className="inline-flex items-center gap-1"><Activity className="size-3.5" /> Env health</Link>
       </p>
 
       <div className="card">
