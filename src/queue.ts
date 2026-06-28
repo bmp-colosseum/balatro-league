@@ -149,7 +149,7 @@ export async function initQueue(): Promise<void> {
   // marked done so we don't retry a send that can never succeed.
   await boss.work<DmJob>(
     "notify.dm",
-    { batchSize: 1, pollingIntervalSeconds: 2 },
+    { batchSize: 1, pollingIntervalSeconds: 5 },
     async (jobs: Job<DmJob>[]) => {
       for (const job of jobs) {
         const { discordId, content } = job.data;
@@ -189,7 +189,7 @@ export async function initQueue(): Promise<void> {
   // Per-job catch so one bad announce doesn't fail/retry the whole batch.
   await boss.work<AnnounceResultJob>(
     "notify.announce-result",
-    { batchSize: 50, pollingIntervalSeconds: 1 },
+    { batchSize: 50, pollingIntervalSeconds: 5 },
     async (jobs: Job<AnnounceResultJob>[]) => {
       // PREFLIGHT: no results destination configured → don't drop or fire a
       // flood of 404s (invalid-request ban risk). Alert devops (throttled),
@@ -227,7 +227,7 @@ export async function initQueue(): Promise<void> {
   // running it 3x in succession produces the same content.
   await boss.work(
     "league-info.refresh",
-    { batchSize: 1, pollingIntervalSeconds: 2 },
+    { batchSize: 1, pollingIntervalSeconds: 15 },
     async () => {
       await refreshLeagueInfoPinned();
     },
@@ -238,7 +238,7 @@ export async function initQueue(): Promise<void> {
   // current without an admin running /league refresh-welcome. Never pings.
   await boss.work<WelcomeRefreshJob>(
     "welcome.refresh",
-    { batchSize: 1, pollingIntervalSeconds: 3 },
+    { batchSize: 1, pollingIntervalSeconds: 15 },
     async (jobs: Job<WelcomeRefreshJob>[]) => {
       for (const job of jobs) {
         const r = await refreshDivisionWelcomes(job.data.seasonId, { ping: false });
@@ -253,7 +253,7 @@ export async function initQueue(): Promise<void> {
   // (e.g. right after /league setup or a season start).
   await boss.work(
     "standings.refresh",
-    { batchSize: 1, pollingIntervalSeconds: 5 },
+    { batchSize: 1, pollingIntervalSeconds: 15 },
     async () => {
       await refreshStandingsMessages();
     },
@@ -265,7 +265,7 @@ export async function initQueue(): Promise<void> {
   // Short-lived by design — they exist to settle disputes/conduct reports while
   // fresh, not to archive chat. Attachments cascade-delete with their message.
   // Daily at 04:00 UTC. Idempotent schedule (upsert) keeps the cron in sync.
-  await boss.work("modlog.purge", { batchSize: 1, pollingIntervalSeconds: 30 }, async () => {
+  await boss.work("modlog.purge", { batchSize: 1, pollingIntervalSeconds: 60 }, async () => {
     const cutoff = new Date(Date.now() - MODLOG_RETENTION_DAYS * 24 * 60 * 60 * 1000);
     const { count } = await prisma.threadMessage.deleteMany({ where: { capturedAt: { lt: cutoff } } });
     if (count > 0) console.log(`[modlog.purge] deleted ${count} transcript message(s) older than ${MODLOG_RETENTION_DAYS}d`);
@@ -278,7 +278,7 @@ export async function initQueue(): Promise<void> {
   // so a transient failure retries just that DM, never double-DMs the others.
   await boss.work<ScheduleChangeJob>(
     "notify.schedule-change",
-    { batchSize: 1, pollingIntervalSeconds: 3 },
+    { batchSize: 1, pollingIntervalSeconds: 15 },
     async (jobs: Job<ScheduleChangeJob>[]) => {
       for (const job of jobs) {
         const client = tryGetDiscordClient();
@@ -312,7 +312,7 @@ export async function initQueue(): Promise<void> {
   // scan the admin triggers).
   await boss.work<{ scanId: string }>(
     "activity.scan",
-    { batchSize: 1, pollingIntervalSeconds: 5 },
+    { batchSize: 1, pollingIntervalSeconds: 15 },
     async (jobs: Job<{ scanId: string }>[]) => {
       for (const job of jobs) await runActivityScan(job.data.scanId);
     },
@@ -321,7 +321,7 @@ export async function initQueue(): Promise<void> {
   // Worker: send the "still playing?" check-in DMs to a set of flagged players.
   await boss.work<{ playerIds: string[]; seasonId: string }>(
     "roster.checkin",
-    { batchSize: 1, pollingIntervalSeconds: 5 },
+    { batchSize: 1, pollingIntervalSeconds: 15 },
     async (jobs: Job<{ playerIds: string[]; seasonId: string }>[]) => {
       for (const job of jobs) {
         const n = await runRosterCheckin(job.data);
@@ -335,7 +335,7 @@ export async function initQueue(): Promise<void> {
   // but still finishes in seconds, not minutes.
   await boss.work<BootstrapDivisionJob>(
     "bootstrap.division",
-    { batchSize: 2, pollingIntervalSeconds: 2 },
+    { batchSize: 2, pollingIntervalSeconds: 15 },
     async (jobs: Job<BootstrapDivisionJob>[]) => {
       for (const job of jobs) {
         await bootstrapDivision(job.data);
@@ -351,7 +351,7 @@ export async function initQueue(): Promise<void> {
   // changed" vs "timeout".
   await boss.work<MmrSnapshotJob>(
     "snapshot.mmr",
-    { batchSize: 1, pollingIntervalSeconds: 3 },
+    { batchSize: 1, pollingIntervalSeconds: 60 },
     async (jobs: Job<MmrSnapshotJob>[]) => {
       for (const job of jobs) {
         // Per-job logging so a backlog reads as "slow but draining" rather than
@@ -374,7 +374,7 @@ export async function initQueue(): Promise<void> {
   // purpose for historical reference, so we never re-fetch them.
   await boss.work(
     "refresh.active-mmrs",
-    { batchSize: 1 },
+    { batchSize: 1, pollingIntervalSeconds: 60 },
     async () => {
       // Refresh BMP current-season detection before fanning out snapshots
       // so the per-player captures use the latest 'current' label without
@@ -401,7 +401,7 @@ export async function initQueue(): Promise<void> {
   // (guild) display name — so the league shows their nickname, and tracks
   // changes. Daily is plenty (no live nickname hook). Players who set a
   // custom name (hasCustomDisplayName) are left alone.
-  await boss.work("refresh.display-names", { batchSize: 1 }, async () => {
+  await boss.work("refresh.display-names", { batchSize: 1, pollingIntervalSeconds: 60 }, async () => {
     await runDisplayNameRefresh();
   });
   await boss.schedule("refresh.display-names", "0 7 * * *");
@@ -412,7 +412,7 @@ export async function initQueue(): Promise<void> {
   // /report posts inline so it normally bypasses this queue.
   await boss.work<{ pairingId: string }>(
     "report.post-pending",
-    { batchSize: 5 },
+    { batchSize: 5, pollingIntervalSeconds: 5 },
     async (jobs) => {
       for (const job of jobs) {
         await postPendingReport(job.data.pairingId).catch((err) =>
@@ -428,7 +428,7 @@ export async function initQueue(): Promise<void> {
   // admin overrode, etc).
   await boss.work<{ pairingId: string }>(
     "report.auto-confirm",
-    { batchSize: 5 },
+    { batchSize: 5, pollingIntervalSeconds: 60 },
     async (jobs) => {
       for (const job of jobs) {
         await autoConfirmReport(job.data.pairingId).catch((err) =>
@@ -450,7 +450,7 @@ export async function initQueue(): Promise<void> {
   // swallows.
   await boss.work<StripRoleJob>(
     "cleanup.strip-role",
-    { batchSize: 3, pollingIntervalSeconds: 2 },
+    { batchSize: 3, pollingIntervalSeconds: 15 },
     async (jobs: Job<StripRoleJob>[]) => {
       for (const job of jobs) {
         const { guildId, discordId, roleId } = job.data;
@@ -466,7 +466,7 @@ export async function initQueue(): Promise<void> {
   // ping the role to flex.
   await boss.work<AwardChampionRoleJob>(
     "award.champion-role",
-    { batchSize: 2, pollingIntervalSeconds: 2 },
+    { batchSize: 2, pollingIntervalSeconds: 15 },
     async (jobs: Job<AwardChampionRoleJob>[]) => {
       for (const job of jobs) {
         await awardChampionRole(job.data);
@@ -479,7 +479,7 @@ export async function initQueue(): Promise<void> {
   // league admin/helper. Hooking it as a pg-boss job means if pg-boss
   // itself is unhealthy enough that this check can't run, we'd notice
   // the check itself stops firing (silence = also a signal).
-  await boss.work("devops.queue-stall-check", { batchSize: 1 }, async () => {
+  await boss.work("devops.queue-stall-check", { batchSize: 1, pollingIntervalSeconds: 60 }, async () => {
     await checkQueueStalls();
   });
   // Every 5 minutes. Threshold is 5min so first alert lands 5–10min
@@ -494,7 +494,7 @@ export async function initQueue(): Promise<void> {
   // Pairing.disputeThreadId — re-runs no-op once a thread exists.
   await boss.work<{ pairingId: string }>(
     "dispute.spawn-thread",
-    { batchSize: 3 },
+    { batchSize: 3, pollingIntervalSeconds: 5 },
     async (jobs) => {
       for (const job of jobs) {
         await spawnDisputeThread(job.data.pairingId).catch((err) =>
@@ -509,7 +509,7 @@ export async function initQueue(): Promise<void> {
   // audience + creates the PENDING ask rows, then enqueues one send per person.
   await boss.work<{ roundId: string }>(
     "signup.ask-kickoff",
-    { batchSize: 1 },
+    { batchSize: 1, pollingIntervalSeconds: 15 },
     async (jobs: Job<{ roundId: string }>[]) => {
       for (const job of jobs) {
         const ids = await planSignupAskKickoff(job.data.roundId);
@@ -539,7 +539,7 @@ export async function initQueue(): Promise<void> {
   // Worker + schedule: hourly reminder tick. Finds who's due for a mid-window
   // nudge or a last call on the open round and enqueues their re-send. The
   // cadence math lives in planReminderTick(); this just fans out the result.
-  await boss.work("signup.reminder-tick", { batchSize: 1 }, async () => {
+  await boss.work("signup.reminder-tick", { batchSize: 1, pollingIntervalSeconds: 60 }, async () => {
     const due = await planReminderTick();
     for (const d of due) {
       await enqueueSignupAsk(d);
