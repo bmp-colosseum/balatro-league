@@ -70,8 +70,14 @@ docker run -p 3000:3000 --env-file apps/tour/.env team-tour
 
 6. **First deploy** runs automatically. On boot, `prisma db push` creates the schema on
    the tour DB. Then **import the data once** — Admin → Import (or
-   `POST /api/admin/import?type=historical` + `?type=tt10`), then apply the
-   `discordId` mapping / use the Identity manager.
+   `POST /api/admin/import?type=historical` then `?type=tt10`). The historical import
+   now also **seeds the weekly roster-move log** (`backfillDraftedMoves`, idempotent) so
+   the roster timeline + per-week lineups work for imported seasons — no separate step.
+   Finally apply the `discordId` mapping / use the Identity manager.
+
+   *Verify after import:* a season page (200), `/seasons/<name>/timeline` shows the
+   draft + results, `/admin/seasons/<name>/roster` shows derived lineups, and signing in
+   as a `TOUR_OWNER_DISCORD_IDS` user gives admin (the dev bypass is off in prod).
 
 ## "Hidden" while you work on it
 The app already sends `robots: noindex, nofollow` (in `app/layout.tsx`), so the

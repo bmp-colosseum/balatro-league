@@ -17,6 +17,7 @@ import { parseAwards } from "../import/parse-awards.mjs";
 import { parsePlayerStats } from "../import/parse-player-stats.mjs";
 import { SEASON_CONFIG, DEFAULT_SEASON } from "../import/seasons-config.mjs";
 import { slug } from "../import/sheet.mjs";
+import { backfillDraftedMoves } from "./roster-ops";
 
 const majority = (n: number) => Math.floor(n / 2) + 1;
 
@@ -355,6 +356,9 @@ export async function importHistorical(dir = sheetsDir()) {
   const draftStats = await importDrafts(dir); // after rosters: links picks to teams
   const awardStats = await importAwards(dir);
   const careerStats = await importPlayerStats(dir);
+  // Seed the weekly roster-move log from the imported drafts (idempotent) so the
+  // roster timeline + per-week lineup derivation work for historical seasons.
+  const rosterMoves = await backfillDraftedMoves();
   const [players, teams, teamSeasons, conferences, matches, tourSets] = await Promise.all([
     prisma.player.count(),
     prisma.team.count(),
@@ -363,7 +367,7 @@ export async function importHistorical(dir = sheetsDir()) {
     prisma.match.count(),
     prisma.tourSet.count(),
   ]);
-  return { players, teams, teamSeasons, conferences, matches, tourSets, sets, playoffSeries, draftPicks: draftStats.picks, mvps: awardStats.mvp, careerStats: careerStats.careerStats };
+  return { players, teams, teamSeasons, conferences, matches, tourSets, sets, playoffSeries, draftPicks: draftStats.picks, mvps: awardStats.mvp, careerStats: careerStats.careerStats, rosterMoves: rosterMoves.created };
 }
 
 /** Import the TT10 Pluto/Eris conference season (conferences ← Standings, team
