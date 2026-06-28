@@ -3,6 +3,7 @@ import { LogIn, Crown, ArrowRight } from "lucide-react";
 import { getViewer } from "@/lib/auth";
 import { getPlayerHome } from "@/lib/player-home";
 import { getPlayerStrikes } from "@/lib/services/strikes";
+import { getCaptainMatchups } from "@/lib/services/pairing";
 import { Callout } from "@/components/Callout";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -49,6 +50,7 @@ export default async function MyTour() {
 
   const [home, strikes] = await Promise.all([getPlayerHome(viewer.playerId), getPlayerStrikes(viewer.playerId)]);
   const focusTeam = home.teams.find((t) => t.seasonName === home.focusSeason);
+  const captainMatchups = focusTeam?.isCaptain && home.focusSeason ? await getCaptainMatchups(home.focusSeason, viewer.playerId) : [];
 
   return (
     <main>
@@ -82,6 +84,29 @@ export default async function MyTour() {
                     <td className="num">{t.seed}</td>
                     <td className="sub">{t.isCaptain ? <span className="inline-flex items-center gap-1"><Crown className="size-3.5 text-[var(--accent)]" /> Captain</span> : "Player"}</td>
                     <td style={{ textAlign: "right" }}><Link href={`/seasons/${encodeURIComponent(t.seasonName)}`}>Season →</Link></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {captainMatchups.length > 0 && (
+        <>
+          <h2 className="mt-6 mb-1 text-[1.1rem]">Captain — pair your weeks</h2>
+          <div className="card">
+            <table>
+              <thead><tr><th className="num">Wk</th><th>Opponent</th><th>Status</th><th></th></tr></thead>
+              <tbody>
+                {captainMatchups.map((mu) => (
+                  <tr key={mu.matchupId}>
+                    <td className="num">W{mu.week}</td>
+                    <td>vs {mu.opponent}</td>
+                    <td className="sub">{mu.status}</td>
+                    <td style={{ textAlign: "right" }}>
+                      {mu.decided ? <span className="sub">done</span> : <Link href={`/matchups/${mu.matchupId}`}>Pair →</Link>}
+                    </td>
                   </tr>
                 ))}
               </tbody>

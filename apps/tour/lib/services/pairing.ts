@@ -13,13 +13,14 @@ import {
   propose,
   respond,
   whoseProposeTurn,
+  eligibleResponses,
   isComplete,
   isDeadlocked,
   SEED_WINDOW,
   type RosterPlayer,
   type PairingState,
 } from "@balatro/tour-core";
-import { rosterForWeek, ensureMembership } from "./roster-ops";
+import { rosterForWeek, ensureMembership, captainAtWeek } from "./roster-ops";
 
 interface LoadedMatchup {
   matchup: {
@@ -27,14 +28,15 @@ interface LoadedMatchup {
     teamSeasonAId: string;
     teamSeasonBId: string;
     sendFirstTeamSeasonId: string | null;
+    pendingProposalPlayerId: string | null;
     sets: { id: string; playerAId: string; playerBId: string; seedA: number; seedB: number; bestOf: number; status: string }[];
   };
   weekNumber: number;
   seasonId: string;
   seasonName: string;
   defaultBestOf: number;
-  teamA: { id: string; name: string; roster: RosterPlayer[] };
-  teamB: { id: string; name: string; roster: RosterPlayer[] };
+  teamA: { id: string; name: string; roster: RosterPlayer[]; captainId: string };
+  teamB: { id: string; name: string; roster: RosterPlayer[]; captainId: string };
   nameOf: Map<string, string>;
 }
 
@@ -54,15 +56,20 @@ async function load(matchupId: string): Promise<LoadedMatchup | null> {
   const tsById = new Map(teamSeasons.map((t) => [t.id, t]));
 
   // The lineup is DERIVED for this matchup's week from the roster-move log, so subs
-  // / departures that apply to this week are reflected in who can be paired.
-  const [lineA, lineB] = await Promise.all([
+  // / departures that apply to this week are reflected in who can be paired. The
+  // captain is also week-derived (succession via the move log).
+  const [lineA, lineB, movesA, movesB] = await Promise.all([
     rosterForWeek(matchup.teamSeasonAId, matchup.week.number),
     rosterForWeek(matchup.teamSeasonBId, matchup.week.number),
+    prisma.rosterMove.findMany({ where: { teamSeasonId: matchup.teamSeasonAId }, orderBy: [{ effectiveWeek: "asc" }, { createdAt: "asc" }] }),
+    prisma.rosterMove.findMany({ where: { teamSeasonId: matchup.teamSeasonBId }, orderBy: [{ effectiveWeek: "asc" }, { createdAt: "asc" }] }),
   ]);
   const toRoster = (line: { playerId: string; seed: number }[]): RosterPlayer[] => line.map((p) => ({ playerId: p.playerId, seed: p.seed }));
+  const capA = captainAtWeek(movesA, matchup.week.number, tsById.get(matchup.teamSeasonAId)?.captainPlayerId ?? "");
+  const capB = captainAtWeek(movesB, matchup.week.number, tsById.get(matchup.teamSeasonBId)?.captainPlayerId ?? "");
 
-  const teamA = { id: matchup.teamSeasonAId, name: tsById.get(matchup.teamSeasonAId)?.team.name ?? "?", roster: toRoster(lineA) };
-  const teamB = { id: matchup.teamSeasonBId, name: tsById.get(matchup.teamSeasonBId)?.team.name ?? "?", roster: toRoster(lineB) };
+  const teamA = { id: matchup.teamSeasonAId, name: tsById.get(matchup.teamSeasonAId)?.team.name ?? "?", roster: toRoster(lineA), captainId: capA };
+  const teamB = { id: matchup.teamSeasonBId, name: tsById.get(matchup.teamSeasonBId)?.team.name ?? "?", roster: toRoster(lineB), captainId: capB };
 
   const ids = [...new Set([...teamA.roster, ...teamB.roster].map((p) => p.playerId))];
   const players = await prisma.player.findMany({ where: { id: { in: ids } }, select: { id: true, displayName: true } });
@@ -80,11 +87,20 @@ async function load(matchupId: string): Promise<LoadedMatchup | null> {
   };
 }
 
-// Reconstruct the engine state from the matchup's persisted pairs (TourSets).
+// Reconstruct the engine state from the matchup's persisted pairs (TourSets) + any
+// in-flight proposal (the live two-captain flow persists it on the Matchup).
 function stateFrom(m: LoadedMatchup): PairingState {
   const sendFirst: "A" | "B" = m.matchup.sendFirstTeamSeasonId === m.matchup.teamSeasonBId ? "B" : "A";
   const base = initPairing(m.teamA.roster, m.teamB.roster, sendFirst);
-  return { ...base, pairs: m.matchup.sets.map((s) => ({ aPlayerId: s.playerAId, bPlayerId: s.playerBId })) };
+  const state: PairingState = { ...base, pairs: m.matchup.sets.map((s) => ({ aPlayerId: s.playerAId, bPlayerId: s.playerBId })) };
+  const pendId = m.matchup.pendingProposalPlayerId;
+  if (pendId) {
+    const inA = m.teamA.roster.find((p) => p.playerId === pendId);
+    const inB = m.teamB.roster.find((p) => p.playerId === pendId);
+    if (inA) state.pending = { by: "A", playerId: pendId, seed: inA.seed };
+    else if (inB) state.pending = { by: "B", playerId: pendId, seed: inB.seed };
+  }
+  return state;
 }
 
 export async function getPairingConsole(matchupId: string) {
@@ -231,6 +247,146 @@ export async function reassignSetPlayer(setId: string, side: "A" | "B", inPlayer
     },
   });
   return { ok: true };
+}
+
+// ── Live two-captain pairing ────────────────────────────────────────────────
+// Each captain acts only for their own team; turn order + the ±2 window are
+// enforced by the engine. A proposal persists on the Matchup until the other
+// captain responds (→ pair) — so the two halves can happen at different times.
+
+// Which side this viewer captains in this matchup (or null if not a captain here).
+function captainSide(m: LoadedMatchup, viewerPlayerId: string): "A" | "B" | null {
+  if (viewerPlayerId && m.teamA.captainId === viewerPlayerId) return "A";
+  if (viewerPlayerId && m.teamB.captainId === viewerPlayerId) return "B";
+  return null;
+}
+
+// The captain's view of one matchup: the board, whose turn it is, what THIS captain
+// can do right now (propose / respond / wait), and the eligible options.
+export async function getCaptainPairing(matchupId: string, viewerPlayerId: string) {
+  const m = await load(matchupId);
+  if (!m) return null;
+  const side = captainSide(m, viewerPlayerId);
+  if (!side) return { authorized: false as const, seasonName: m.seasonName };
+
+  const state = stateFrom(m);
+  const paired = new Set(state.pairs.flatMap((p) => [p.aPlayerId, p.bPlayerId]));
+  const complete = isComplete(state);
+  const deadlocked = isDeadlocked(state);
+  const myTeam = side === "A" ? m.teamA : m.teamB;
+  const oppTeam = side === "A" ? m.teamB : m.teamA;
+
+  const pend = state.pending ?? null;
+  const myTurnToPropose = !pend && !complete && whoseProposeTurn(state) === side;
+  const myTurnToRespond = !!pend && pend.by !== side;
+  const waitingOnOpp = (!!pend && pend.by === side) || (!pend && !complete && whoseProposeTurn(state) !== side);
+
+  const avail = (team: { roster: RosterPlayer[] }) =>
+    team.roster.filter((p) => !paired.has(p.playerId) && p.playerId !== pend?.playerId).map((p) => ({ playerId: p.playerId, name: m.nameOf.get(p.playerId) ?? p.playerId, seed: p.seed }));
+
+  const decorate = (team: typeof m.teamA) => ({
+    name: team.name,
+    captainName: m.nameOf.get(team.captainId) ?? "—",
+    players: team.roster.map((p) => ({ name: m.nameOf.get(p.playerId) ?? p.playerId, seed: p.seed, paired: paired.has(p.playerId), pending: p.playerId === pend?.playerId })),
+  });
+
+  return {
+    authorized: true as const,
+    matchupId,
+    seasonName: m.seasonName,
+    weekNumber: m.weekNumber,
+    side,
+    myTeamName: myTeam.name,
+    oppTeamName: oppTeam.name,
+    teamA: decorate(m.teamA),
+    teamB: decorate(m.teamB),
+    windowSize: SEED_WINDOW,
+    complete,
+    deadlocked,
+    pending: pend ? { byMe: pend.by === side, playerName: m.nameOf.get(pend.playerId) ?? pend.playerId, seed: pend.seed } : null,
+    myTurnToPropose,
+    myTurnToRespond,
+    waitingOnOpp,
+    proposeOptions: myTurnToPropose ? avail(myTeam) : [],
+    respondOptions: myTurnToRespond ? eligibleResponses(state).map((p) => ({ playerId: p.playerId, name: m.nameOf.get(p.playerId) ?? p.playerId, seed: p.seed })) : [],
+    pairs: m.matchup.sets.map((s) => ({
+      aName: m.nameOf.get(s.playerAId) ?? s.playerAId,
+      aSeed: s.seedA,
+      bName: m.nameOf.get(s.playerBId) ?? s.playerBId,
+      bSeed: s.seedB,
+      status: s.status,
+    })),
+  };
+}
+
+// A captain proposes a player from their team (when it's their turn). Persists the
+// proposal on the Matchup; the opposing captain responds next.
+export async function captainPropose(matchupId: string, viewerPlayerId: string, playerId: string) {
+  const m = await load(matchupId);
+  if (!m) throw new Error("No such matchup.");
+  const side = captainSide(m, viewerPlayerId);
+  if (!side) throw new Error("You're not a captain in this matchup.");
+  const state = stateFrom(m);
+  const r = propose(state, side, playerId);
+  if (!r.ok) throw new Error(r.reason);
+  await prisma.matchup.update({ where: { id: matchupId }, data: { pendingProposalPlayerId: playerId } });
+  return { ok: true };
+}
+
+// The opposing captain responds with a player within ±2 → persists the pair and
+// clears the proposal.
+export async function captainRespond(matchupId: string, viewerPlayerId: string, playerId: string) {
+  const m = await load(matchupId);
+  if (!m) throw new Error("No such matchup.");
+  const side = captainSide(m, viewerPlayerId);
+  if (!side) throw new Error("You're not a captain in this matchup.");
+  const state = stateFrom(m);
+  if (!state.pending) throw new Error("There's no proposal to respond to.");
+  if (state.pending.by === side) throw new Error("You proposed — the other captain responds.");
+  const r = respond(state, playerId);
+  if (!r.ok) throw new Error(r.reason);
+  await persistPair(m, r.pair.aPlayerId, r.pair.bPlayerId);
+  await prisma.matchup.update({ where: { id: matchupId }, data: { pendingProposalPlayerId: null } });
+  return { ok: true };
+}
+
+// A captain retracts their own pending proposal (before it's answered).
+export async function captainCancelProposal(matchupId: string, viewerPlayerId: string) {
+  const m = await load(matchupId);
+  if (!m) throw new Error("No such matchup.");
+  const side = captainSide(m, viewerPlayerId);
+  if (!side) throw new Error("You're not a captain in this matchup.");
+  const state = stateFrom(m);
+  if (!state.pending || state.pending.by !== side) throw new Error("You have no pending proposal to cancel.");
+  await prisma.matchup.update({ where: { id: matchupId }, data: { pendingProposalPlayerId: null } });
+  return { ok: true };
+}
+
+// The captain's matchups in a season (for the /me 'pair this week' list).
+export async function getCaptainMatchups(seasonName: string, viewerPlayerId: string) {
+  const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true } });
+  if (!season || !viewerPlayerId) return [];
+  // Teams this player currently captains.
+  const teams = await prisma.teamSeason.findMany({ where: { seasonId: season.id, captainPlayerId: viewerPlayerId }, select: { id: true } });
+  const teamIds = new Set(teams.map((t) => t.id));
+  if (teamIds.size === 0) return [];
+
+  const matchups = await prisma.matchup.findMany({
+    where: { week: { seasonId: season.id }, OR: [{ teamSeasonAId: { in: [...teamIds] } }, { teamSeasonBId: { in: [...teamIds] } }] },
+    include: { week: { select: { number: true } } },
+  });
+  const tsIds = [...new Set(matchups.flatMap((mu) => [mu.teamSeasonAId, mu.teamSeasonBId]))];
+  const ts = await prisma.teamSeason.findMany({ where: { id: { in: tsIds } }, include: { team: true } });
+  const nameOf = new Map(ts.map((t) => [t.id, t.team.name]));
+
+  return matchups
+    .map((mu) => {
+      const mine = teamIds.has(mu.teamSeasonAId) ? "A" : "B";
+      const oppId = mine === "A" ? mu.teamSeasonBId : mu.teamSeasonAId;
+      const setCount = mu.setsWonA != null ? "done" : mu.pendingProposalPlayerId ? "proposal pending" : "to pair";
+      return { matchupId: mu.id, week: mu.week.number, opponent: nameOf.get(oppId) ?? "?", status: setCount, decided: mu.setsWonA != null };
+    })
+    .sort((a, b) => a.week - b.week);
 }
 
 // Substitute options for a matchup's two teams — each team's full season membership

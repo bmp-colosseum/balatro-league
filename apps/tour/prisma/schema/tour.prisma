@@ -227,6 +227,10 @@ model Matchup {
   teamSeasonAId         String
   teamSeasonBId         String
   sendFirstTeamSeasonId String? // coinflip winner (higher seed auto in playoffs)
+  // Live two-captain pairing: the in-flight proposal awaiting the other captain's
+  // response (cleared once they respond → a pair is persisted). Null = no proposal
+  // pending. TO console doesn't use this (it does propose+respond atomically).
+  pendingProposalPlayerId String?
   officialPlayerId      String? // assigned caster/official ("Advantages") — Phase 3
   // Team-level result. Derived from the matchup's TourSets in live play; stored
   // directly for imported team-only seasons (no per-set data).
