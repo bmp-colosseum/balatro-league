@@ -214,8 +214,12 @@ the rosters everything downstream reads).
   + `/me`): a player self-reports their set from their own perspective → REPORTED; the
   **opponent confirms** (→ CONFIRMED → rollup → standings) or **disputes** (→ DISPUTED, a TO
   resolves via the admin report path). `getPlayerHome` drives the per-set control; the actor is
-  always the signed-in viewer (can only touch their own sets, can't self-confirm). Still ⬜: the
-  `match-core` `LEAGUE_POLICY` ban/pick report flow, `#results` posting, DC ruleset.
+  always the signed-in viewer (can only touch their own sets, can't self-confirm).
+  **+ Per-game deck/stake capture:** reporting a set on `/me` can optionally log each game's
+  deck + stake + winner (score derives from it), writing core `Game` rows → a `/stats` Decks &
+  stakes section (`getDeckStats`). The full **interactive ban/pick negotiation** (`LEAGUE_POLICY`
+  live flow) + `#results` posting + DC ruleset are Phase C (real-time) — this is the data rail
+  they write into.
 
 > **Milestone:** the core play loop runs on the site end-to-end —
 > signups → draft → schedule → ±2 pairing → result reporting → standings. What's left in
