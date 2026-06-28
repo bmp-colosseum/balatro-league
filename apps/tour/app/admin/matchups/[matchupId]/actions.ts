@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/auth";
 import { makePair, overridePair, setSendFirst, removePair, resetPairing } from "@/lib/services/pairing";
-import { reportSet, unreportSet } from "@/lib/services/report";
+import { reportSet, unreportSet, forfeitSet } from "@/lib/services/report";
 import type { ActionResult } from "@/lib/action-result";
 
 function rev(matchupId: string) {
@@ -81,5 +81,14 @@ export async function unreportSetAction(formData: FormData) {
   const matchupId = String(formData.get("matchupId") ?? "");
   const setId = String(formData.get("setId") ?? "");
   await unreportSet(setId);
+  rev(matchupId);
+}
+
+export async function forfeitSetAction(formData: FormData) {
+  if (!(await isAdmin())) return;
+  const matchupId = String(formData.get("matchupId") ?? "");
+  const setId = String(formData.get("setId") ?? "");
+  const team = formData.get("forfeitTeam") === "B" ? "B" : "A";
+  await forfeitSet(setId, team);
   rev(matchupId);
 }

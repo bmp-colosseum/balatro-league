@@ -10,6 +10,7 @@ export type TimelineKind =
   | "BANNED"
   | "REINSTATED"
   | "ADDED"
+  | "CAPTAIN"
   | "RESULT"
   | "PLAYOFFS"
   | "PLAYOFF_RESULT"
@@ -75,6 +76,8 @@ export async function getSeasonTimeline(seasonName: string): Promise<SeasonTimel
       events.push({ week: m.effectiveWeek, order: 0, kind: "ADDED", title: `${pName(m.playerId)} joined ${tn}${m.replacesPlayerId ? `, replacing ${pName(m.replacesPlayerId)}` : ""}`, detail: m.reason ?? undefined });
     } else if (m.kind === "REINSTATED") {
       events.push({ week: m.effectiveWeek, order: 0, kind: "REINSTATED", title: `${pName(m.playerId)} reinstated`, detail: `${tn}${m.reason ? ` — ${m.reason}` : ""}` });
+    } else if (m.kind === "CAPTAIN_CHANGE") {
+      events.push({ week: m.effectiveWeek, order: 0, kind: "CAPTAIN", title: `${pName(m.playerId)} took over as captain of ${tn}${m.replacesPlayerId ? ` (from ${pName(m.replacesPlayerId)})` : ""}`, detail: m.reason ?? undefined });
     }
   }
 

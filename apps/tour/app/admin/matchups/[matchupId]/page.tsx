@@ -16,6 +16,7 @@ import {
   resetPairingAction,
   reportSetAction,
   unreportSetAction,
+  forfeitSetAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -224,6 +225,17 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
                             <SubmitButton size="sm" variant="secondary" pendingText="…">Clear</SubmitButton>
                           </form>
                         )}
+                        <span className="sub" title="0–2 set loss (rules: no reasonable scheduling effort)">FF:</span>
+                        {(["A", "B"] as const).map((side) => (
+                          <form key={side} action={forfeitSetAction}>
+                            <input type="hidden" name="matchupId" value={matchupId} />
+                            <input type="hidden" name="setId" value={s.setId} />
+                            <input type="hidden" name="forfeitTeam" value={side} />
+                            <SubmitButton size="sm" variant="secondary" pendingText="…" title={`${side === "A" ? report.teamAName : report.teamBName} forfeits`}>
+                              {(side === "A" ? report.teamAName : report.teamBName).slice(0, 10)}
+                            </SubmitButton>
+                          </form>
+                        ))}
                       </div>
                     </td>
                   </tr>

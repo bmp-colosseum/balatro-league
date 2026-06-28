@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Shuffle, RefreshCw, UserMinus, Ban, Undo2, UserPlus, Swords, Trophy, Crown } from "lucide-react";
+import { ArrowLeft, Shuffle, RefreshCw, UserMinus, Ban, Undo2, UserPlus, Crown, Swords, Trophy } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { getSeasonTimeline, type TimelineEvent, type TimelineKind } from "@/lib/season-timeline";
 
@@ -12,6 +12,7 @@ const ICON: Record<TimelineKind, LucideIcon> = {
   BANNED: Ban,
   REINSTATED: Undo2,
   ADDED: UserPlus,
+  CAPTAIN: Crown,
   RESULT: Swords,
   PLAYOFFS: Trophy,
   PLAYOFF_RESULT: Trophy,
@@ -24,6 +25,7 @@ const COLOR: Record<TimelineKind, string> = {
   BANNED: "var(--danger)",
   REINSTATED: "var(--success)",
   ADDED: "var(--success)",
+  CAPTAIN: "var(--accent)",
   RESULT: "var(--muted)",
   PLAYOFFS: "var(--accent)",
   PLAYOFF_RESULT: "var(--accent)",

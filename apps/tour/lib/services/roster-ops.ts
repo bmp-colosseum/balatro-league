@@ -4,6 +4,7 @@
 // for the season) stays in RosterEntry, which is left untouched; this layer is
 // purely lineup-over-time. One team per season, so a player is on at most one team.
 import { prisma } from "../db";
+import { getSeasonStrikeCounts, getCareerStrikeCounts, getSeasonStrikeLog, AT_RISK_THRESHOLD } from "./strikes";
 
 export const KIND_LABEL: Record<string, string> = {
   DRAFTED: "Drafted",
@@ -12,6 +13,7 @@ export const KIND_LABEL: Record<string, string> = {
   QUIT: "Quit",
   BANNED: "Banned",
   REINSTATED: "Reinstated",
+  CAPTAIN_CHANGE: "Captain",
 };
 
 export interface LineupPlayer {
@@ -68,12 +70,41 @@ export function deriveLineup(moves: MoveRow[], week: number, captainId: string):
   return [...lineup.values()].sort((a, b) => a.seed - b.seed);
 }
 
+// Who is captain in a given week — folds CAPTAIN_CHANGE moves (latest ≤ week),
+// falling back to the captain before the first change, else the current pointer.
+export function captainAtWeek(moves: MoveRow[], week: number, currentCaptain: string): string {
+  const changes = moves.filter((m) => m.kind === "CAPTAIN_CHANGE").sort((a, b) => a.effectiveWeek - b.effectiveWeek || +a.createdAt - +b.createdAt);
+  if (changes.length === 0) return currentCaptain;
+  let cap = changes[0]!.replacesPlayerId ?? currentCaptain;
+  for (const c of changes) {
+    if (c.effectiveWeek <= week) cap = c.playerId;
+    else break;
+  }
+  return cap ?? currentCaptain;
+}
+
 // The derived lineup for one team in one week (used by the pairing tool).
 export async function rosterForWeek(teamSeasonId: string, week: number): Promise<LineupPlayer[]> {
   const ts = await prisma.teamSeason.findUnique({ where: { id: teamSeasonId }, select: { captainPlayerId: true } });
   if (!ts) return [];
   const moves = await prisma.rosterMove.findMany({ where: { teamSeasonId }, orderBy: [{ effectiveWeek: "asc" }, { createdAt: "asc" }] });
-  return deriveLineup(moves, week, ts.captainPlayerId);
+  return deriveLineup(moves, week, captainAtWeek(moves, week, ts.captainPlayerId));
+}
+
+// Captaincy passes to a rostered player, effective a week. Logs a CAPTAIN_CHANGE
+// (for the timeline) and updates the current-captain pointer. TO-assigned.
+export async function changeCaptain(seasonName: string, teamSeasonId: string, newCaptainPlayerId: string, effectiveWeek: number, reason: string, by?: string) {
+  const seasonId = await seasonIdOf(seasonName);
+  if (!newCaptainPlayerId) throw new Error("Pick the new captain.");
+  if (!effectiveWeek || effectiveWeek < 1) throw new Error("Pick the week it takes effect.");
+  const ts = await prisma.teamSeason.findUnique({ where: { id: teamSeasonId }, select: { captainPlayerId: true } });
+  if (!ts) throw new Error("No such team.");
+  if (ts.captainPlayerId === newCaptainPlayerId) throw new Error("That player is already the captain.");
+  await prisma.rosterMove.create({
+    data: { seasonId, teamSeasonId, kind: "CAPTAIN_CHANGE", playerId: newCaptainPlayerId, replacesPlayerId: ts.captainPlayerId, effectiveWeek, reason: reason.trim() || "captain change", createdBy: by },
+  });
+  await prisma.teamSeason.update({ where: { id: teamSeasonId }, data: { captainPlayerId: newCaptainPlayerId } });
+  return { ok: true };
 }
 
 // ── Membership (stat attribution) — add a player to the team's roster so their
@@ -213,8 +244,8 @@ export async function getRosterOps(seasonName: string, week?: number) {
   const teams = teamSeasons.map((t) => ({
     teamSeasonId: t.id,
     name: t.team.name,
-    captainPlayerId: t.captainPlayerId,
-    lineup: deriveLineup(movesByTeam.get(t.id) ?? [], selectedWeek, t.captainPlayerId).map((p) => ({
+    captainPlayerId: captainAtWeek(movesByTeam.get(t.id) ?? [], selectedWeek, t.captainPlayerId),
+    lineup: deriveLineup(movesByTeam.get(t.id) ?? [], selectedWeek, captainAtWeek(movesByTeam.get(t.id) ?? [], selectedWeek, t.captainPlayerId)).map((p) => ({
       playerId: p.playerId,
       name: nameOf.get(p.playerId) ?? p.playerId,
       seed: p.seed,
@@ -222,6 +253,19 @@ export async function getRosterOps(seasonName: string, week?: number) {
       viaSub: p.viaSub,
     })),
   }));
+
+  // Strikes (TO aid): per-rostered-player season + career counts + the season log.
+  const lineupIds = [...new Set(teams.flatMap((t) => t.lineup.map((p) => p.playerId)))];
+  const [seasonStrikes, careerStrikes, strikeLog] = await Promise.all([
+    getSeasonStrikeCounts(season.id),
+    getCareerStrikeCounts(lineupIds),
+    getSeasonStrikeLog(season.id),
+  ]);
+  const strikeOf: Record<string, { season: number; career: number; atRisk: boolean }> = {};
+  for (const id of lineupIds) {
+    const career = careerStrikes.get(id) ?? 0;
+    strikeOf[id] = { season: seasonStrikes.get(id) ?? 0, career, atRisk: career >= AT_RISK_THRESHOLD };
+  }
 
   const timeline = [...moves]
     .sort((a, b) => a.effectiveWeek - b.effectiveWeek || +a.createdAt - +b.createdAt)
@@ -249,5 +293,7 @@ export async function getRosterOps(seasonName: string, week?: number) {
     teams,
     freeAgents: freeAgents.map((p) => ({ id: p.id, name: p.displayName })),
     timeline,
+    strikeOf,
+    strikeLog,
   };
 }

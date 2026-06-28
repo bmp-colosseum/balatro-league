@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { ArrowLeft, Crown, X, RefreshCw, UserMinus, UserPlus, Undo2 } from "lucide-react";
+import { ArrowLeft, Crown, X, RefreshCw, UserMinus, UserPlus, Undo2, ShieldAlert, AlertTriangle } from "lucide-react";
 import { isAdmin } from "@/lib/auth";
 import { getRosterOps } from "@/lib/services/roster-ops";
+import { STRIKE_KINDS, STRIKE_LABEL } from "@/lib/services/strikes";
 import { Callout } from "@/components/Callout";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
-import { substituteAction, departureAction, replaceAction, reinstateAction, removeMoveAction } from "./actions";
+import { substituteAction, departureAction, replaceAction, reinstateAction, removeMoveAction, changeCaptainAction, addStrikeAction, removeStrikeAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,7 @@ export default async function RosterOpsAdmin({
   }
 
   const faOpts = data.freeAgents.map((p) => ({ value: p.id, label: p.name }));
+  const allLineup = data.teams.flatMap((t) => t.lineup.map((p) => ({ value: p.playerId, label: `${p.name} (${t.name})` })));
   const weekTabs = data.weeks.length ? data.weeks : [1];
 
   return (
@@ -91,16 +93,37 @@ export default async function RosterOpsAdmin({
                 <span className="badge">W{data.selectedWeek} · {t.lineup.length} active</span>
               </div>
               <ol className="mt-2 list-none p-0" style={{ margin: 0 }}>
-                {t.lineup.map((p) => (
-                  <li key={p.playerId} className="flex items-baseline gap-2 py-0.5">
-                    <span className="rank" style={{ width: "1.4rem" }}>{p.seed}</span>
-                    {p.isCaptain && <Crown className="size-3.5 shrink-0 text-[var(--accent)]" />}
-                    <span>{p.name}</span>
-                    {p.viaSub && <span className="badge">sub</span>}
-                  </li>
-                ))}
+                {t.lineup.map((p) => {
+                  const st = data.strikeOf[p.playerId];
+                  return (
+                    <li key={p.playerId} className="flex items-baseline gap-2 py-0.5">
+                      <span className="rank" style={{ width: "1.4rem" }}>{p.seed}</span>
+                      {p.isCaptain && <Crown className="size-3.5 shrink-0 text-[var(--accent)]" />}
+                      <span>{p.name}</span>
+                      {p.viaSub && <span className="badge">sub</span>}
+                      {st && st.season > 0 && (
+                        <span className="badge inline-flex items-center gap-1" style={{ color: st.atRisk ? "var(--danger)" : "var(--accent-2)" }} title={`${st.season} this season · ${st.career} career${st.atRisk ? " · at risk" : ""}`}>
+                          {st.atRisk && <AlertTriangle className="size-3" />}{st.season}⚑
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
                 {t.lineup.length === 0 && <li className="sub">No active players this week.</li>}
               </ol>
+
+              {/* Change captain */}
+              <div className="bracket-title mt-3">Captain</div>
+              <ActionFlashForm action={changeCaptainAction}>
+                <input type="hidden" name="season" value={seasonName} />
+                <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="block"><span className="sub">New captain</span><FormSelect name="newCaptainPlayerId" options={opt(lineupOpts)} /></label>
+                  <label className="block"><span className="sub">From week</span><input type="number" name="effectiveWeek" min={1} defaultValue={data.selectedWeek} className={`${inputCls} w-16`} /></label>
+                  <input name="reason" placeholder="reason" className={`${inputCls} w-36`} />
+                  <SubmitButton size="sm" variant="secondary" pendingText="…"><Crown className="size-3.5" /> Set captain</SubmitButton>
+                </div>
+              </ActionFlashForm>
 
               {/* Substitute (temporary) */}
               <div className="bracket-title mt-3">Substitute (temporary)</div>
@@ -149,6 +172,44 @@ export default async function RosterOpsAdmin({
         })}
       </div>
 
+      {/* Strikes (TO aid — informational) */}
+      <h2 className="mt-6 mb-1 text-[1.1rem] inline-flex items-center gap-1.5"><ShieldAlert className="size-4" /> Strikes</h2>
+      <p className="sub">Reliability / conduct notes to help the TO — they don&apos;t auto-penalize. ⚑ on a player = season count; ⚠ = at risk (career ≥ 3).</p>
+      <div className="card">
+        <ActionFlashForm action={addStrikeAction}>
+          <input type="hidden" name="season" value={seasonName} />
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="block"><span className="sub">Player</span><FormSelect name="playerId" options={opt(allLineup)} /></label>
+            <label className="block"><span className="sub">Kind</span><FormSelect name="kind" options={STRIKE_KINDS.map((k) => ({ value: k, label: STRIKE_LABEL[k] ?? k }))} defaultValue="SCHEDULING" /></label>
+            <label className="block"><span className="sub">Week</span><input type="number" name="week" min={1} placeholder="opt" className={`${inputCls} w-16`} /></label>
+            <input name="reason" placeholder="reason" className={`${inputCls} w-44`} />
+            <SubmitButton size="sm" variant="secondary" pendingText="…">Add strike</SubmitButton>
+          </div>
+        </ActionFlashForm>
+        {data.strikeLog.length > 0 && (
+          <table className="mt-3">
+            <thead><tr><th>Player</th><th>Kind</th><th>Reason</th><th className="num">Wk</th><th></th></tr></thead>
+            <tbody>
+              {data.strikeLog.map((s) => (
+                <tr key={s.id}>
+                  <td>{s.player}</td>
+                  <td><span className="badge">{s.kindLabel}</span></td>
+                  <td className="sub">{s.reason}</td>
+                  <td className="num">{s.week ? `W${s.week}` : "—"}</td>
+                  <td style={{ textAlign: "right" }}>
+                    <form action={removeStrikeAction}>
+                      <input type="hidden" name="season" value={seasonName} />
+                      <input type="hidden" name="strikeId" value={s.id} />
+                      <SubmitButton size="sm" variant="secondary" pendingText="…"><X className="size-3.5" /></SubmitButton>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
       {/* Timeline */}
       <h2 className="mt-6 mb-1 text-[1.1rem]">Timeline ({data.timeline.length})</h2>
       <div className="card">
@@ -167,7 +228,9 @@ export default async function RosterOpsAdmin({
                       ? <>{m.outPlayer} <span className="muted">→</span> {m.player} <span className="sub">({m.team})</span></>
                       : m.kind === "ADDED"
                         ? <>{m.player}{m.replaces ? <> <span className="muted">replaces</span> {m.replaces}</> : null} <span className="sub">({m.team})</span></>
-                        : <>{m.player} <span className="sub">({m.team})</span></>}
+                        : m.kind === "CAPTAIN_CHANGE"
+                          ? <>{m.player} <span className="muted">becomes captain{m.replaces ? <> (was {m.replaces})</> : null}</span> <span className="sub">({m.team})</span></>
+                          : <>{m.player} <span className="sub">({m.team})</span></>}
                   </td>
                   <td className="sub">{m.reason}</td>
                   <td style={{ textAlign: "right" }}>

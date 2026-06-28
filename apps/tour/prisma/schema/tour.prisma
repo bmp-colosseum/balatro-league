@@ -82,6 +82,17 @@ enum RosterMoveKind {
   QUIT // voluntary permanent departure from effectiveWeek
   BANNED // disciplinary permanent departure (ban / DQ) from effectiveWeek
   REINSTATED // reverses a prior QUIT/BANNED from effectiveWeek
+  CAPTAIN_CHANGE // captaincy passes to playerId (replacesPlayerId = the old captain)
+}
+
+// A recorded reliability/conduct mark against a player (§Sportsmanship + Scheduling).
+// Per the rules these are TO-discretion AIDS — they inform the TO, they do NOT
+// auto-penalize. Career-spanning (seasonId optional) with a per-season breakdown.
+enum StrikeKind {
+  SCHEDULING // no reasonable effort to schedule / chronically late
+  NO_SHOW // didn't show for a scheduled set
+  CONDUCT // sportsmanship / behaviour
+  OTHER
 }
 
 enum AwardKind {
@@ -380,6 +391,23 @@ model RosterMove {
 
   @@index([seasonId])
   @@index([teamSeasonId])
+}
+
+// Reliability/conduct strikes — append-only, TO-issued. Informational (the TO
+// decides consequences case-by-case); surfaced as a count + an "at risk" flag on
+// admin views and a gentle heads-up to the player. Player/season referenced by id.
+model Strike {
+  id        String     @id @default(cuid())
+  playerId  String // core Player.id
+  seasonId  String? // the season it occurred in (career view aggregates across)
+  week      Int? // optional week number
+  kind      StrikeKind @default(SCHEDULING)
+  reason    String
+  issuedBy  String? // TO discord id / name
+  createdAt DateTime   @default(now())
+
+  @@index([playerId])
+  @@index([seasonId])
 }
 
 // ── Web/admin permissions (Discord-role-driven, mirrors the league) ─────────

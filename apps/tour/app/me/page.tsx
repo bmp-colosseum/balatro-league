@@ -2,6 +2,7 @@ import Link from "next/link";
 import { LogIn, Crown, ArrowRight } from "lucide-react";
 import { getViewer } from "@/lib/auth";
 import { getPlayerHome } from "@/lib/player-home";
+import { getPlayerStrikes } from "@/lib/services/strikes";
 import { Callout } from "@/components/Callout";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -46,7 +47,7 @@ export default async function MyTour() {
     );
   }
 
-  const home = await getPlayerHome(viewer.playerId);
+  const [home, strikes] = await Promise.all([getPlayerHome(viewer.playerId), getPlayerStrikes(viewer.playerId)]);
   const focusTeam = home.teams.find((t) => t.seasonName === home.focusSeason);
 
   return (
@@ -56,6 +57,14 @@ export default async function MyTour() {
         Signed in as <strong>{viewer.name ?? viewer.discordId}</strong> ·{" "}
         <Link href={`/players/${viewer.playerId}`}>public profile <ArrowRight className="inline size-3.5" /></Link>
       </p>
+
+      {strikes.total > 0 && (
+        <Callout type={strikes.atRisk ? "danger" : "admin"}>
+          You have <strong>{strikes.total}</strong> reliability note{strikes.total === 1 ? "" : "s"} on record
+          {strikes.atRisk ? " — please make sure you're communicating and scheduling on time." : "."} A TO logs these to keep
+          weeks moving; reach out if anything looks off.
+        </Callout>
+      )}
 
       {home.teams.length === 0 ? (
         <Callout type="info">You&apos;re not on a roster yet.</Callout>

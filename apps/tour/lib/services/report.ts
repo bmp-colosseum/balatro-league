@@ -43,6 +43,37 @@ export async function reportSet(setId: string, gamesTeamA: number, gamesTeamB: n
   return { ok: true };
 }
 
+// TO assigns a forfeit (rules: a 0–2 set loss for no reasonable scheduling effort).
+// The forfeiting team gets 0; the other takes the set by the majority game count.
+export async function forfeitSet(setId: string, forfeitTeam: "A" | "B") {
+  const set = await prisma.tourSet.findUnique({ where: { id: setId } });
+  if (!set) throw new Error("No such set.");
+  const win = Math.max(1, Math.ceil(set.bestOf / 2)); // 2 for BO3
+  const gamesTeamA = forfeitTeam === "A" ? 0 : win;
+  const gamesTeamB = forfeitTeam === "B" ? 0 : win;
+  const a = set.playerAId;
+  const b = set.playerBId;
+  const swap = b < a;
+  const winnerId = gamesTeamA > gamesTeamB ? a : b;
+  const data = {
+    playerAId: swap ? b : a,
+    playerBId: swap ? a : b,
+    format: `BO${set.bestOf}`,
+    gamesWonA: swap ? gamesTeamB : gamesTeamA,
+    gamesWonB: swap ? gamesTeamA : gamesTeamB,
+    winnerId,
+    status: "CONFIRMED" as const,
+    forfeit: true,
+    confirmedAt: new Date(),
+  };
+  let matchId = set.matchId;
+  if (matchId) await prisma.match.update({ where: { id: matchId }, data });
+  else matchId = (await prisma.match.create({ data })).id;
+  await prisma.tourSet.update({ where: { id: setId }, data: { matchId, status: "FORFEIT" } });
+  if (set.matchupId) await rollupMatchup(set.matchupId);
+  return { ok: true };
+}
+
 // Undo a report: drop the Match, unlink the set, recompute the matchup.
 export async function unreportSet(setId: string) {
   const set = await prisma.tourSet.findUnique({ where: { id: setId } });
@@ -72,7 +103,7 @@ export async function rollupMatchup(matchupId: string) {
 
   let setsA = 0, setsB = 0, gamesA = 0, gamesB = 0, confirmed = 0;
   for (const s of matchup.sets) {
-    if (s.status !== "CONFIRMED" || !s.matchId) continue;
+    if ((s.status !== "CONFIRMED" && s.status !== "FORFEIT") || !s.matchId) continue;
     const m = mById.get(s.matchId);
     if (!m) continue;
     confirmed++;

@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/auth";
-import { substitute, recordDeparture, reinstate, replacePlayer, removeMove } from "@/lib/services/roster-ops";
+import { substitute, recordDeparture, reinstate, replacePlayer, removeMove, changeCaptain } from "@/lib/services/roster-ops";
+import { addStrike, removeStrike } from "@/lib/services/strikes";
 import type { ActionResult } from "@/lib/action-result";
 
 function rev(season: string) {
@@ -77,5 +78,36 @@ export async function removeMoveAction(formData: FormData) {
   if (!(await isAdmin())) return;
   const season = String(formData.get("season") ?? "");
   await removeMove(String(formData.get("moveId") ?? ""));
+  rev(season);
+}
+
+export async function changeCaptainAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
+  const season = String(formData.get("season") ?? "");
+  try {
+    await changeCaptain(season, String(formData.get("teamSeasonId") ?? ""), String(formData.get("newCaptainPlayerId") ?? ""), wk(formData, "effectiveWeek"), String(formData.get("reason") ?? ""));
+    rev(season);
+    return { ok: true, message: "Captain updated." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Could not change captain." };
+  }
+}
+
+export async function addStrikeAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
+  const season = String(formData.get("season") ?? "");
+  try {
+    await addStrike(String(formData.get("playerId") ?? ""), season, wk(formData, "week") || null, String(formData.get("kind") ?? "SCHEDULING"), String(formData.get("reason") ?? ""));
+    rev(season);
+    return { ok: true, message: "Strike recorded." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Could not record strike." };
+  }
+}
+
+export async function removeStrikeAction(formData: FormData) {
+  if (!(await isAdmin())) return;
+  const season = String(formData.get("season") ?? "");
+  await removeStrike(String(formData.get("strikeId") ?? ""));
   rev(season);
 }
