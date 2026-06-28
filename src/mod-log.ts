@@ -41,11 +41,6 @@ export async function postModerationNotice(thread: ThreadChannel): Promise<void>
   );
 }
 
-// Only mirror image attachments, and only when small enough to be worth keeping
-// as evidence. (The CDN url is always recorded regardless; bytes are the backup
-// for when the thread — and its signed url — disappear.)
-const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
-
 // How long captured transcripts are kept before the daily modlog.purge drops
 // them. Short on purpose — long enough to settle a fresh dispute, not an archive.
 export const MODLOG_RETENTION_DAYS = 7;
@@ -103,28 +98,18 @@ async function resolveThread(threadId: string): Promise<Resolution | null> {
   return null;
 }
 
-// Pull image attachments down as bytes (best-effort), plus always record the
-// url/filename/type so even a skipped/oversized file is on the record.
-async function collectAttachments(
+// Record each attachment's url/filename/type. We deliberately DON'T download the
+// bytes anymore: doing it inline on every message added latency to the hot path
+// and bloated Postgres with binary. Text is what matters for moderation; the
+// Discord CDN url is kept so staff can still open an image while the thread lives
+// (it may 404 after the thread is deleted — an accepted tradeoff). `bytes` stays
+// null; the column is retained so re-enabling capture later needs no migration.
+function collectAttachments(
   message: Message,
-): Promise<Array<{ filename: string; contentType: string | null; sourceUrl: string; bytes: Uint8Array<ArrayBuffer> | null }>> {
-  const out: Array<{ filename: string; contentType: string | null; sourceUrl: string; bytes: Uint8Array<ArrayBuffer> | null }> = [];
+): Array<{ filename: string; contentType: string | null; sourceUrl: string; bytes: null }> {
+  const out: Array<{ filename: string; contentType: string | null; sourceUrl: string; bytes: null }> = [];
   for (const att of message.attachments.values()) {
-    const contentType = att.contentType ?? null;
-    let bytes: Uint8Array<ArrayBuffer> | null = null;
-    const isImage = !!contentType && contentType.startsWith("image/");
-    if (isImage && att.size <= MAX_ATTACHMENT_BYTES) {
-      try {
-        const res = await fetch(att.url);
-        if (res.ok) {
-          const buf = new Uint8Array(await res.arrayBuffer());
-          if (buf.length <= MAX_ATTACHMENT_BYTES) bytes = buf;
-        }
-      } catch {
-        // Keep the url even if the download fails.
-      }
-    }
-    out.push({ filename: att.name ?? "attachment", contentType, sourceUrl: att.url, bytes });
+    out.push({ filename: att.name ?? "attachment", contentType: att.contentType ?? null, sourceUrl: att.url, bytes: null });
   }
   return out;
 }
@@ -138,7 +123,7 @@ export async function captureCreate(message: Message): Promise<void> {
     const res = await resolveThread(message.channelId);
     if (!res) return;
 
-    const attachments = await collectAttachments(message);
+    const attachments = collectAttachments(message);
     const authorName = message.member?.displayName ?? message.author.username;
     await prisma.threadMessage.upsert({
       where: { discordMessageId: message.id },

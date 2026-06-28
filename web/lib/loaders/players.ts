@@ -2,6 +2,7 @@
 // (test data marker) and pulls each player's active-season membership
 // for the badge column.
 
+import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { isMockPlayer } from "@/lib/mock";
 
@@ -49,7 +50,7 @@ export interface PlayersListEntry {
   } | null;
 }
 
-export async function loadPlayersList(): Promise<PlayersListEntry[]> {
+async function computePlayersList(): Promise<PlayersListEntry[]> {
   const allPlayers = await prisma.player.findMany({
     select: {
       id: true,
@@ -96,3 +97,11 @@ export async function loadPlayersList(): Promise<PlayersListEntry[]> {
       };
     });
 }
+
+// The /players roster changes only when rosters change (signup/build/drop) —
+// cache the list so repeat visitors don't each re-query every player + their
+// membership. Returns plain objects (no Maps), so it serializes cleanly.
+export const loadPlayersList = unstable_cache(computePlayersList, ["players-list-v1"], {
+  revalidate: 120,
+  tags: ["players"],
+});
