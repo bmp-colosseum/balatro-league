@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Users, Shield, Shuffle, CalendarDays, UserCog, Trophy, Flag, ExternalLink } from "lucide-react";
+import { ArrowLeft, Users, Shield, Shuffle, CalendarDays, UserCog, Trophy, Flag, Hash, ExternalLink } from "lucide-react";
 import { isAdmin } from "@/lib/auth";
 import { getSeasonAdmin } from "@/lib/services/seasons";
 import { Callout } from "@/components/Callout";
@@ -45,6 +45,7 @@ export default async function SeasonAdmin({ params }: { params: Promise<{ name: 
     { key: "roster", label: "Roster ops", icon: UserCog, href: `/admin/seasons/${enc}/roster`, count: "subs · drops · DQs", ready: true },
     { key: "playoffs", label: "Playoffs", icon: Trophy, href: `/admin/seasons/${enc}/playoffs`, count: season.state === "PLAYOFFS" || season.state === "DONE" ? `bracket · ${season.state}` : `field of ${season.playoffTeams}`, ready: true },
     { key: "end", label: "Season end", icon: Flag, href: `/admin/seasons/${enc}/end`, count: season.state === "DONE" ? "crowned · awards" : "crown + awards", ready: true },
+    { key: "discord", label: "Discord roles", icon: Hash, href: `/admin/seasons/${enc}/discord`, count: season.playerRoleId ? "synced" : "preview", ready: true },
   ];
 
   return (
