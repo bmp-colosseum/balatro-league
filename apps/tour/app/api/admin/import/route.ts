@@ -9,7 +9,7 @@ import { importHistorical, importTT10 } from "@/lib/services/import";
 export const maxDuration = 300;
 
 export async function POST(req: Request) {
-  if (!isApiAdmin(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!(await isApiAdmin(req))) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const type = new URL(req.url).searchParams.get("type") ?? "historical";
   try {
     const result = type === "tt10" ? await importTT10() : await importHistorical();

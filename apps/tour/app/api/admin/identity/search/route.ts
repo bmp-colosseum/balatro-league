@@ -7,7 +7,7 @@ import { searchLeagueRef, listTourPlayers } from "@/lib/services/identity";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
-  if (!isAdmin()) return NextResponse.json({ results: [] }, { status: 403 });
+  if (!(await isAdmin())) return NextResponse.json({ results: [] }, { status: 403 });
   const url = new URL(req.url);
   const type = url.searchParams.get("type");
   const q = url.searchParams.get("q") ?? "";

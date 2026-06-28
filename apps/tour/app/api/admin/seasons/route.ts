@@ -5,12 +5,12 @@ import { isApiAdmin } from "@/lib/auth";
 import { listSeasons, createSeason, deleteSeason } from "@/lib/services/seasons";
 
 export async function GET(req: Request) {
-  if (!isApiAdmin(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!(await isApiAdmin(req))) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   return NextResponse.json(await listSeasons());
 }
 
 export async function POST(req: Request) {
-  if (!isApiAdmin(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!(await isApiAdmin(req))) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   try {
     const season = await createSeason(await req.json());
     return NextResponse.json(season, { status: 201 });
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  if (!isApiAdmin(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!(await isApiAdmin(req))) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const name = new URL(req.url).searchParams.get("name");
   if (!name) return NextResponse.json({ error: "name query param required" }, { status: 400 });
   try {
