@@ -479,22 +479,23 @@ export async function applyConferenceData(dir = sheetsDir()) {
   return { teamsSet, missed };
 }
 
-// Read the signup preferred-name → @username pairs from the season xlsx in `dir` and
-// resolve them to real Discord ids (via the league username map) into LeagueRef. Run
-// AFTER the league reference is loaded so usernames resolve. Returns resolved totals.
+// Read the signup preferred-name ↔ @username pairs from the season xlsx in `dir` and
+// store them RAW (SignupRef). They resolve to real Discord ids LIVE later, against the
+// league ref + a Discord member sync — so no import ordering dependency. Returns the
+// number stored (deduped by the preferred-name/username pair).
 export async function applySignupRefsFromDir(dir = sheetsDir()) {
   const configs = await seasonXlsxConfigs(dir);
   const all: { preferredName: string; username: string }[] = [];
   const seen = new Set<string>();
   for (const cfg of Object.values(configs)) {
     for (const s of cfg.signups ?? []) {
-      const key = s.preferredName.toLowerCase();
+      const key = `${s.preferredName.toLowerCase()}|${s.username.toLowerCase()}`;
       if (seen.has(key)) continue;
       seen.add(key);
       all.push(s);
     }
   }
-  if (!all.length) return { resolved: 0, unresolved: 0 };
+  if (!all.length) return { stored: 0 };
   return applySignupRefs(all);
 }
 

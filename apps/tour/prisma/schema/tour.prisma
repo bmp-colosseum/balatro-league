@@ -403,20 +403,34 @@ model RosterMove {
   @@index([teamSeasonId])
 }
 
-// League/identity name → Discord id reference, for LINKING Tour players to a real
-// Discord id. Holds MULTIPLE name rows per person (display name, Discord @username,
-// signup "preferred name") so any of them can match a Tour player's name. Populated
-// at import time from the league CSV + the season xlsx signups tabs (resolved
-// through the league username→id), so linking works in prod without baked data.
+// Name → Discord id reference, for LINKING Tour players to a real Discord id. Holds
+// MULTIPLE name rows per person (display name, @username, global/nick) so any can
+// match a Tour player's name. Sources: the league CSV / live league DB, and a sync
+// of the Tour Discord guild's MEMBER LIST (the complete username→id map — everyone
+// who signed up is in the server). Populated without baked data.
 model LeagueRef {
   id        String @id @default(cuid())
   discordId String
   name      String
-  source    String @default("league") // league | signup — provenance
+  source    String @default("league") // league | discord — provenance
 
   @@unique([discordId, name])
   @@index([name])
   @@index([discordId])
+}
+
+// Raw signup handle: a spreadsheet "preferred name" ↔ the Discord @username the
+// person typed. Stored UNRESOLVED so it re-resolves live against the current id
+// sources (LeagueRef league + Discord guild rows) — no re-import needed when a new
+// id source (e.g. a Discord member sync) arrives. The chain preferred name →
+// @username → numeric id is what auto-links most historical players.
+model SignupRef {
+  id            String @id @default(cuid())
+  preferredName String
+  username      String
+
+  @@unique([preferredName, username])
+  @@index([username])
 }
 
 // Reliability/conduct strikes — append-only, TO-issued. Informational (the TO

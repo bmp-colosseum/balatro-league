@@ -36,7 +36,7 @@ export interface UploadImportResult {
   historical?: Awaited<ReturnType<typeof importHistorical>>;
   conference?: Awaited<ReturnType<typeof importConferenceSeason>>;
   leagueRef?: number; // league name→discordId rows loaded (for identity linking)
-  signups?: { resolved: number; unresolved: number }; // xlsx signups resolved to Discord ids
+  signups?: { stored: number }; // raw xlsx signup handles stored (resolve live later)
   ran: string[];
   errors: { which: string; message: string }[];
 }
@@ -92,10 +92,10 @@ export async function importFromZip(zipBuffer: Buffer): Promise<UploadImportResu
     // After the league reference is loaded, resolve the xlsx signups (preferred name
     // → @username → real Discord id) into LeagueRef so identity suggestions cover
     // people the league display names alone wouldn't match.
-    let signups: { resolved: number; unresolved: number } | undefined;
+    let signups: { stored: number } | undefined;
     try {
       signups = await applySignupRefsFromDir(tmp);
-      if (signups.resolved > 0) ran.push("signups");
+      if (signups.stored > 0) ran.push("signups");
     } catch (e) {
       errors.push({ which: "signups", message: e instanceof Error ? e.message : String(e) });
     }

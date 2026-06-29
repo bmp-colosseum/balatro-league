@@ -77,6 +77,13 @@ export default async function EnvHealth() {
               ? <span style={{ color: "var(--success)" }}><Check className="inline size-4 align-text-bottom" /> League DB live — {h.leagueDb.players} players for identity linking.</span>
               : <span style={{ color: "var(--danger)" }}><X className="inline size-4 align-text-bottom" /> League DB configured but unreachable (check the read-only string).</span>}
         </p>
+        <p className="mt-1">
+          {!h.discordGuild.configured
+            ? <span className="sub"><Info className="inline size-3.5 align-text-bottom" /> Discord member sync off — set <code>TOUR_DISCORD_TOKEN</code> + <code>TOUR_GUILD_ID</code> (Server Members Intent) to bulk-resolve signup @usernames → real ids.</span>
+            : h.discordGuild.reachable
+              ? <span style={{ color: "var(--success)" }}><Check className="inline size-4 align-text-bottom" /> Discord guild reachable — &ldquo;Sync Discord members&rdquo; can resolve @usernames.</span>
+              : <span style={{ color: "var(--danger)" }}><X className="inline size-4 align-text-bottom" /> Discord token/guild set but unreachable — check the bot token + Server Members Intent.</span>}
+        </p>
       </div>
 
       {/* You */}
