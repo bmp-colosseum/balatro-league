@@ -22,6 +22,12 @@ model Player {
   discordId            String   @unique
   displayName          String
   hasCustomDisplayName Boolean  @default(false)
+  // Past identity keys this player has answered to — chiefly the original
+  // `legacy:<slug>` id from before they were linked/merged to a real Discord id.
+  // The historical importer resolves sheet names through these, so a RE-IMPORT
+  // re-attaches data to the SAME (already-linked) player instead of spawning a
+  // duplicate. Linking/merging append here; the importer reads via `has`.
+  aliases              String[] @default([])
   createdAt            DateTime @default(now())
 
   matchesAsA      Match[] @relation("MatchPlayerA")

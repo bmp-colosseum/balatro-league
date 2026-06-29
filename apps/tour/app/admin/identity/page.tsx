@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Search } from "lucide-react";
+import { ArrowLeft, Search, Wrench } from "lucide-react";
 import { isAdmin } from "@/lib/auth";
 import { listTourPlayers, identityCounts } from "@/lib/services/identity";
 import { Callout } from "@/components/Callout";
@@ -42,7 +42,8 @@ export default async function Identity({ searchParams }: { searchParams: Promise
 
       <Callout type="info" className="mb-3">
         Linking sets a player&apos;s real Discord id (which lights up cross-site profile links). Merging is for the same
-        person appearing twice — it moves all their history onto one player and deletes the dupe.
+        person appearing twice — it moves all their history onto one player and deletes the dupe. Duplicates from a
+        re-import? <Link href="/admin/identity/recover" className="inline-flex items-center gap-1"><Wrench className="size-3.5" /> Recover duplicates</Link>.
       </Callout>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">

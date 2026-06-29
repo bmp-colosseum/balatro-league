@@ -24,6 +24,25 @@ import { applySignupRefs } from "./identity";
 
 const majority = (n: number) => Math.floor(n / 2) + 1;
 
+// Resolve a sheet player name → a Player.id, IDENTITY-AWARE. Players are imported
+// under a `legacy:<slug>` id, but once an admin links/merges them to a real Discord
+// id that key stops matching — so a naive re-import would orphan them and create a
+// duplicate (which is exactly the bug that detached linked players' data). We resolve
+// in order: (1) a player who still holds `legacy:<slug>`, (2) a player carrying it in
+// `aliases` (linked/merged but remembers the slug), (3) create a new legacy player
+// (recording the slug as a self-alias) when `create` is set. `null` if not found and
+// not creating. NOTHING here overwrites a linked player's id or display name.
+async function resolvePlayerId(name: string, create: boolean): Promise<string | null> {
+  const legacy = `legacy:${slug(name)}`;
+  const direct = await prisma.player.findUnique({ where: { discordId: legacy }, select: { id: true } });
+  if (direct) return direct.id;
+  const aliased = await prisma.player.findFirst({ where: { aliases: { has: legacy } }, select: { id: true } });
+  if (aliased) return aliased.id;
+  if (!create) return null;
+  const made = await prisma.player.create({ data: { discordId: legacy, displayName: name, aliases: [legacy] }, select: { id: true } });
+  return made.id;
+}
+
 type SeasonCfg = {
   format: "SWISS" | "CONFERENCES";
   conferences?: Record<string, string[]>;
@@ -84,12 +103,7 @@ async function importRosters(dir: string) {
     for (const t of seasonTeams) {
       const playerId = new Map<string, string>();
       for (const p of t.players) {
-        const player = await prisma.player.upsert({
-          where: { discordId: `legacy:${slug(p.name)}` },
-          create: { discordId: `legacy:${slug(p.name)}`, displayName: p.name },
-          update: { displayName: p.name },
-        });
-        playerId.set(p.name, player.id);
+        playerId.set(p.name, (await resolvePlayerId(p.name, true))!);
       }
       const captain = t.players.find((p) => p.isCaptain) ?? t.players[0];
       const team = await prisma.team.upsert({ where: { name: t.name }, create: { name: t.name }, update: {} });
@@ -131,12 +145,7 @@ async function importResults(dir: string) {
   const names = [...new Set(sets.flatMap((s) => [s.p1, s.p2]))];
   const idByName = new Map<string, string>();
   for (const name of names) {
-    const p = await prisma.player.upsert({
-      where: { discordId: `legacy:${slug(name)}` },
-      create: { discordId: `legacy:${slug(name)}`, displayName: name },
-      update: {},
-    });
-    idByName.set(name, p.id);
+    idByName.set(name, (await resolvePlayerId(name, true))!);
   }
 
   let made = 0;
@@ -268,14 +277,9 @@ export async function importDrafts(dir = sheetsDir()) {
       used.add(tsId);
       teamsMatched++;
       for (let r = 0; r < team.picks.length; r++) {
-        const player = await prisma.player.upsert({
-          where: { discordId: `legacy:${slug(team.picks[r])}` },
-          create: { discordId: `legacy:${slug(team.picks[r])}`, displayName: team.picks[r] },
-          update: {},
-          select: { id: true },
-        });
+        const playerId = (await resolvePlayerId(team.picks[r], true))!;
         await prisma.draftPick.create({
-          data: { draftId: draft.id, round: r + 1, pickIndex: pickIndex++, teamSeasonId: tsId, playerId: player.id, pickedAt: new Date() },
+          data: { draftId: draft.id, round: r + 1, pickIndex: pickIndex++, teamSeasonId: tsId, playerId, pickedAt: new Date() },
         });
         picks++;
       }
@@ -294,18 +298,13 @@ export async function importAwards(dir = sheetsDir()) {
   for (const m of mvp) {
     const season = await prisma.tourSeason.findUnique({ where: { name: `Team Tour ${m.season}` }, select: { id: true } });
     if (!season) continue;
-    const player = await prisma.player.upsert({
-      where: { discordId: `legacy:${slug(m.player)}` },
-      create: { discordId: `legacy:${slug(m.player)}`, displayName: m.player },
-      update: {},
-      select: { id: true },
-    });
+    const playerId = (await resolvePlayerId(m.player, true))!;
     await prisma.award.deleteMany({ where: { seasonId: season.id, kind: "MVP" } });
     await prisma.award.create({
       data: {
         seasonId: season.id,
         kind: "MVP",
-        playerId: player.id,
+        playerId,
         meta: { set: m.set, games: m.games, team: m.team, placement: m.placement },
       },
     });
@@ -322,15 +321,15 @@ export async function importPlayerStats(dir = sheetsDir()) {
   let made = 0;
   let missed = 0;
   for (const s of rows) {
-    const player = await prisma.player.findUnique({ where: { discordId: `legacy:${slug(s.name)}` }, select: { id: true } });
-    if (!player) {
+    const playerId = await resolvePlayerId(s.name, false);
+    if (!playerId) {
       missed++;
       continue;
     }
     await prisma.playerCareerStat.upsert({
-      where: { playerId: player.id },
+      where: { playerId },
       create: {
-        playerId: player.id,
+        playerId,
         avgSeed: s.avgSeed,
         rookieSeason: s.rookieSeason,
         championships: s.championships,
