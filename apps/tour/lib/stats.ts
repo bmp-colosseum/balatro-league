@@ -125,7 +125,7 @@ export interface SeasonLeader {
 }
 
 // Top players in one season by set win % (min sets). Empty for team-only seasons
-// (no per-player sets, e.g. TT10).
+// (no per-player sets, e.g. Team Tour 4).
 export async function getSeasonLeaders(seasonName: string, limit = 10, minSets = 5): Promise<SeasonLeader[]> {
   const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true } });
   if (!season) return [];

@@ -47,7 +47,7 @@ export async function getSeasonStandings(seasonName: string): Promise<SeasonStan
   }
 
   // Prefer stored team-level matchup results (imported team-only seasons, e.g.
-  // TT10); otherwise derive from per-set player data grouped into team matchups.
+  // the conference season); otherwise derive from per-set player data grouped into team matchups.
   const storedMatchups = await prisma.matchup.findMany({
     where: { week: { seasonId: season.id }, setsWonA: { not: null } },
     select: {

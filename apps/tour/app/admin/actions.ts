@@ -37,7 +37,7 @@ export async function uploadImportAction(_prev: ActionResult, formData: FormData
     revalidatePath("/");
     const parts: string[] = [];
     if (r.historical) parts.push(`${r.historical.players} players · ${r.historical.teamSeasons} team-seasons · ${r.historical.tourSets} sets`);
-    if (r.tt10) parts.push(`conference: ${r.tt10.teams} teams · ${r.tt10.matchups} matchups`);
+    if (r.conference) parts.push(`conference: ${r.conference.teams} teams · ${r.conference.matchups} matchups`);
     const skipped = r.errors.length ? ` (skipped ${r.errors.map((e) => e.which).join(", ")})` : "";
     return { ok: true, message: `Imported ${r.ran.join(" + ")} — ${parts.join("; ")}${skipped}.` };
   } catch (e) {

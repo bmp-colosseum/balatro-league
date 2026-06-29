@@ -370,12 +370,13 @@ export async function importHistorical(dir = sheetsDir()) {
   return { players, teams, teamSeasons, conferences, matches, tourSets, sets, playoffSeries, draftPicks: draftStats.picks, mvps: awardStats.mvp, careerStats: careerStats.careerStats, rosterMoves: rosterMoves.created };
 }
 
-/** Import the TT10 Pluto/Eris conference season (conferences ← Standings, team
- * matchups ← Work block 1). Team-level only. */
-export async function importTT10(dir = sheetsDir()) {
+/** Import the conference season — Team Tour 4, the first Pluto/Eris conferences
+ * format (Tours 1–3 were Swiss). Conferences ← Standings, team matchups ← Work
+ * block 1. Team-level only. */
+export async function importConferenceSeason(dir = sheetsDir()) {
   const confs = parseStandingsConferences(join(dir, "Standings.html")) as Record<string, string[]>;
   const matchups = parseWorkMatchups(join(dir, "Work.html")) as WorkMatchup[];
-  const NAME = "Team Tour 10";
+  const NAME = "Team Tour 4";
   const teamSize = 11;
 
   const season = await prisma.tourSeason.upsert({

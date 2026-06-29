@@ -1,13 +1,13 @@
 // Import from an uploaded zip of the Google-Sheets exports — so production (where
 // the sheets aren't on disk) can be populated by an admin uploading the data,
 // instead of relying on a local TOUR_SHEETS_DIR. Extracts to a temp dir, locates
-// the sheets root, runs the same importHistorical + importTT10 services against it,
+// the sheets root, runs the same importHistorical + importConferenceSeason services against it,
 // and cleans up. Thin orchestration — the parsing/writing lives in import.ts.
 import AdmZip from "adm-zip";
 import { mkdtemp, rm, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { importHistorical, importTT10 } from "./import";
+import { importHistorical, importConferenceSeason } from "./import";
 
 // Walk the extracted tree to find the directory that looks like the sheets root:
 // one that contains an `alltime/` subfolder (historical) or `Standings.html` (the
@@ -33,7 +33,7 @@ async function findSheetsRoot(dir: string, depth = 0): Promise<string | null> {
 
 export interface UploadImportResult {
   historical?: Awaited<ReturnType<typeof importHistorical>>;
-  tt10?: Awaited<ReturnType<typeof importTT10>>;
+  conference?: Awaited<ReturnType<typeof importConferenceSeason>>;
   ran: string[];
   errors: { which: string; message: string }[];
 }
@@ -43,7 +43,7 @@ export async function importFromZip(zipBuffer: Buffer): Promise<UploadImportResu
   const ran: string[] = [];
   const errors: { which: string; message: string }[] = [];
   let historical: UploadImportResult["historical"];
-  let tt10: UploadImportResult["tt10"];
+  let conference: UploadImportResult["conference"];
 
   try {
     new AdmZip(zipBuffer).extractAllTo(tmp, true);
@@ -58,14 +58,14 @@ export async function importFromZip(zipBuffer: Buffer): Promise<UploadImportResu
       errors.push({ which: "historical", message: e instanceof Error ? e.message : String(e) });
     }
     try {
-      tt10 = await importTT10(root);
+      conference = await importConferenceSeason(root);
       ran.push("conference");
     } catch (e) {
       errors.push({ which: "conference", message: e instanceof Error ? e.message : String(e) });
     }
 
     if (ran.length === 0) throw new Error(errors.map((x) => `${x.which}: ${x.message}`).join(" · ") || "Nothing imported.");
-    return { historical, tt10, ran, errors };
+    return { historical, conference, ran, errors };
   } finally {
     await rm(tmp, { recursive: true, force: true }).catch(() => {});
   }
