@@ -167,7 +167,7 @@ export const admin: SlashCommand = {
     .addSubcommand((sub) =>
       sub
         .setName("sync-members")
-        .setDescription("Sync the full guild member roster (username -> id) for Team Tour resolution. Runs daily + on boot automatically."),
+        .setDescription("Sync the full guild member roster (username -> id) for Team Tour resolution."),
     )
     .addSubcommand((sub) =>
       sub
