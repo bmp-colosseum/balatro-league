@@ -418,8 +418,9 @@ export async function initQueue(): Promise<void> {
   await boss.schedule("sync.guild-members", "30 7 * * *");
   // Also run once shortly after boot so a fresh deploy populates without waiting for
   // the daily slot (the worker picks it up after the client is ready; no-ops if the
-  // GuildMembers intent isn't granted yet).
-  await boss.send("sync.guild-members", {});
+  // GuildMembers intent isn't granted yet). singletonKey dedupes so repeated restarts
+  // can't pile up overlapping runs.
+  await boss.send("sync.guild-members", {}, { singletonKey: "sync.guild-members.boot" });
   console.log("[pg-boss] scheduled sync.guild-members @ 07:30 UTC daily (+ once on boot)");
 
   // Worker: post the public PENDING report embed to #results. Used by

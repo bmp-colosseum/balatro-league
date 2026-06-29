@@ -356,7 +356,11 @@ async function syncNames(interaction: ChatInputCommandInteraction) {
 async function syncMembers(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   try {
-    const { synced, removed } = await runGuildMemberSync();
+    const { synced, removed, skipped } = await runGuildMemberSync();
+    if (skipped) {
+      await interaction.editReply("⏳ A member sync is already running (boot/daily) — give it a moment, the roster is updating.");
+      return;
+    }
     if (synced === 0) {
       await interaction.editReply(
         "⚠️ Nothing synced — the GuildMembers (Server Members) privileged intent isn't enabled. Turn it on in the Discord Developer Portal, then it syncs automatically.",

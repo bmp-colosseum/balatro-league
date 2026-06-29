@@ -13,7 +13,16 @@ import { prisma } from "./db.js";
 import { tryGetDiscordClient } from "./discord.js";
 import { env } from "./env.js";
 
-export async function runGuildMemberSync(): Promise<{ synced: number; removed: number }> {
+// In-process lock: bulk member fetch uses gateway opcode 8, which is rate limited.
+// The boot trigger, daily cron, and /admin command all call this, so serialize them —
+// overlapping fetches trip "Request with opcode 8 was rate limited".
+let syncing = false;
+
+export async function runGuildMemberSync(): Promise<{ synced: number; removed: number; skipped?: boolean }> {
+  if (syncing) {
+    console.warn("[sync.guild-members] a sync is already running — skipping this overlap");
+    return { synced: 0, removed: 0, skipped: true };
+  }
   const guildId = env.DISCORD_GUILD_ID;
   if (!guildId) {
     console.warn("[sync.guild-members] no DISCORD_GUILD_ID — skipping");
@@ -37,30 +46,35 @@ export async function runGuildMemberSync(): Promise<{ synced: number; removed: n
     return { synced: 0, removed: 0 };
   }
 
-  // One bulk fetch of every member (needs the GuildMembers privileged intent).
-  const members = await guild.members.fetch();
-  const seen = new Set<string>();
-  let synced = 0;
-  for (const m of members.values()) {
-    seen.add(m.id);
-    const data = {
-      username: m.user.username ?? null,
-      globalName: m.user.globalName ?? null,
-      nickname: m.nickname ?? null,
-    };
-    await prisma.guildMember.upsert({
-      where: { discordId: m.id },
-      create: { discordId: m.id, ...data },
-      update: data,
-    });
-    synced++;
+  syncing = true;
+  try {
+    // One bulk fetch of every member (needs the GuildMembers privileged intent).
+    const members = await guild.members.fetch();
+    const seen = new Set<string>();
+    let synced = 0;
+    for (const m of members.values()) {
+      seen.add(m.id);
+      const data = {
+        username: m.user.username ?? null,
+        globalName: m.user.globalName ?? null,
+        nickname: m.nickname ?? null,
+      };
+      await prisma.guildMember.upsert({
+        where: { discordId: m.id },
+        create: { discordId: m.id, ...data },
+        update: data,
+      });
+      synced++;
+    }
+
+    // Prune rows for anyone who left, so the roster stays current.
+    const existing = await prisma.guildMember.findMany({ select: { discordId: true } });
+    const stale = existing.filter((e) => !seen.has(e.discordId)).map((e) => e.discordId);
+    if (stale.length) await prisma.guildMember.deleteMany({ where: { discordId: { in: stale } } });
+
+    console.log(`[sync.guild-members] synced ${synced}, removed ${stale.length}`);
+    return { synced, removed: stale.length };
+  } finally {
+    syncing = false;
   }
-
-  // Prune rows for anyone who left, so the roster stays current.
-  const existing = await prisma.guildMember.findMany({ select: { discordId: true } });
-  const stale = existing.filter((e) => !seen.has(e.discordId)).map((e) => e.discordId);
-  if (stale.length) await prisma.guildMember.deleteMany({ where: { discordId: { in: stale } } });
-
-  console.log(`[sync.guild-members] synced ${synced}, removed ${stale.length}`);
-  return { synced, removed: stale.length };
 }
