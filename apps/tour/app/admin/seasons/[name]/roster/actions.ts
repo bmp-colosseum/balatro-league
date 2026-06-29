@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/auth";
-import { substitute, recordDeparture, reinstate, replacePlayer, removeMove, changeCaptain } from "@/lib/services/roster-ops";
+import { substitute, recordDeparture, reinstate, replacePlayer, removeMove, changeCaptain, reseed } from "@/lib/services/roster-ops";
 import { addStrike, removeStrike } from "@/lib/services/strikes";
 import type { ActionResult } from "@/lib/action-result";
 
@@ -90,6 +90,18 @@ export async function changeCaptainAction(_prev: ActionResult, formData: FormDat
     return { ok: true, message: "Captain updated." };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Could not change captain." };
+  }
+}
+
+export async function reseedAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
+  const season = String(formData.get("season") ?? "");
+  try {
+    await reseed(season, String(formData.get("teamSeasonId") ?? ""), String(formData.get("playerId") ?? ""), Number(formData.get("newSeed")), wk(formData, "effectiveWeek"), String(formData.get("reason") ?? ""));
+    rev(season);
+    return { ok: true, message: "Player re-seeded." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Could not re-seed." };
   }
 }
 

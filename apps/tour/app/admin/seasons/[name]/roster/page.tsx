@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Crown, X, RefreshCw, UserMinus, UserPlus, Undo2, ShieldAlert, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Crown, X, RefreshCw, UserMinus, UserPlus, Undo2, ShieldAlert, AlertTriangle, ArrowUpDown } from "lucide-react";
 import { isAdmin } from "@/lib/auth";
 import { getRosterOps } from "@/lib/services/roster-ops";
 import { STRIKE_KINDS, STRIKE_LABEL } from "@/lib/services/strikes";
@@ -7,7 +7,7 @@ import { Callout } from "@/components/Callout";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
-import { substituteAction, departureAction, replaceAction, reinstateAction, removeMoveAction, changeCaptainAction, addStrikeAction, removeStrikeAction } from "./actions";
+import { substituteAction, departureAction, replaceAction, reinstateAction, removeMoveAction, changeCaptainAction, reseedAction, addStrikeAction, removeStrikeAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -125,6 +125,20 @@ export default async function RosterOpsAdmin({
                 </div>
               </ActionFlashForm>
 
+              {/* Re-seed a player */}
+              <div className="bracket-title mt-3">Re-seed</div>
+              <ActionFlashForm action={reseedAction}>
+                <input type="hidden" name="season" value={seasonName} />
+                <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="block"><span className="sub">Player</span><FormSelect name="playerId" options={opt(lineupOpts)} /></label>
+                  <label className="block"><span className="sub">New seed</span><input type="number" name="newSeed" min={1} className={`${inputCls} w-16`} /></label>
+                  <label className="block"><span className="sub">From week</span><input type="number" name="effectiveWeek" min={1} defaultValue={data.selectedWeek} className={`${inputCls} w-16`} /></label>
+                  <input name="reason" placeholder="reason" className={`${inputCls} w-32`} />
+                  <SubmitButton size="sm" variant="secondary" pendingText="…"><ArrowUpDown className="size-3.5" /> Re-seed</SubmitButton>
+                </div>
+              </ActionFlashForm>
+
               {/* Substitute (temporary) */}
               <div className="bracket-title mt-3">Substitute (temporary)</div>
               <ActionFlashForm action={substituteAction}>
@@ -230,7 +244,9 @@ export default async function RosterOpsAdmin({
                         ? <>{m.player}{m.replaces ? <> <span className="muted">replaces</span> {m.replaces}</> : null} <span className="sub">({m.team})</span></>
                         : m.kind === "CAPTAIN_CHANGE"
                           ? <>{m.player} <span className="muted">becomes captain{m.replaces ? <> (was {m.replaces})</> : null}</span> <span className="sub">({m.team})</span></>
-                          : <>{m.player} <span className="sub">({m.team})</span></>}
+                          : m.kind === "RESEED"
+                            ? <>{m.player} <span className="muted">→ seed #{m.seed}</span> <span className="sub">({m.team})</span></>
+                            : <>{m.player} <span className="sub">({m.team})</span></>}
                   </td>
                   <td className="sub">{m.reason}</td>
                   <td style={{ textAlign: "right" }}>

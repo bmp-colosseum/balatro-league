@@ -14,6 +14,7 @@ export const KIND_LABEL: Record<string, string> = {
   BANNED: "Banned",
   REINSTATED: "Reinstated",
   CAPTAIN_CHANGE: "Captain",
+  RESEED: "Re-seed",
 };
 
 export interface LineupPlayer {
@@ -49,15 +50,17 @@ export function deriveLineup(moves: MoveRow[], week: number, captainId: string):
     }
   }
   const gone = new Map<string, boolean>();
+  const reseed = new Map<string, number>(); // playerId → latest seed (RESEED ≤ week)
   for (const m of [...moves].sort((a, b) => a.effectiveWeek - b.effectiveWeek || +a.createdAt - +b.createdAt)) {
     if (m.effectiveWeek > week) continue;
     if (m.kind === "QUIT" || m.kind === "BANNED") gone.set(m.playerId, true);
     else if (m.kind === "REINSTATED") gone.set(m.playerId, false);
+    else if (m.kind === "RESEED" && m.seed != null) reseed.set(m.playerId, m.seed);
   }
 
   const lineup = new Map<string, LineupPlayer>();
   for (const [pid, js] of joinSeed) {
-    if (js.week <= week && !gone.get(pid)) lineup.set(pid, { playerId: pid, seed: js.seed, isCaptain: pid === captainId, viaSub: false });
+    if (js.week <= week && !gone.get(pid)) lineup.set(pid, { playerId: pid, seed: reseed.get(pid) ?? js.seed, isCaptain: pid === captainId, viaSub: false });
   }
   for (const m of [...moves].filter((x) => x.kind === "SUB").sort((a, b) => a.effectiveWeek - b.effectiveWeek || +a.createdAt - +b.createdAt)) {
     const last = m.untilWeek ?? m.effectiveWeek;
@@ -104,6 +107,20 @@ export async function changeCaptain(seasonName: string, teamSeasonId: string, ne
     data: { seasonId, teamSeasonId, kind: "CAPTAIN_CHANGE", playerId: newCaptainPlayerId, replacesPlayerId: ts.captainPlayerId, effectiveWeek, reason: reason.trim() || "captain change", createdBy: by },
   });
   await prisma.teamSeason.update({ where: { id: teamSeasonId }, data: { captainPlayerId: newCaptainPlayerId } });
+  return { ok: true };
+}
+
+// Change a rostered player's intra-team seed, effective a week. Logs a RESEED move;
+// the weekly derivation overrides their seed from that week on (the ±2 pairing uses
+// the seed of the matchup's week, so it picks up the new value automatically).
+export async function reseed(seasonName: string, teamSeasonId: string, playerId: string, newSeed: number, effectiveWeek: number, reason: string, by?: string) {
+  const seasonId = await seasonIdOf(seasonName);
+  if (!playerId) throw new Error("Pick the player to re-seed.");
+  if (!Number.isInteger(newSeed) || newSeed < 1) throw new Error("Seed must be a whole number ≥ 1.");
+  if (!effectiveWeek || effectiveWeek < 1) throw new Error("Pick the week it takes effect.");
+  await prisma.rosterMove.create({
+    data: { seasonId, teamSeasonId, kind: "RESEED", playerId, seed: newSeed, effectiveWeek, reason: reason.trim() || `re-seed to #${newSeed}`, createdBy: by },
+  });
   return { ok: true };
 }
 
@@ -275,6 +292,7 @@ export async function getRosterOps(seasonName: string, week?: number) {
       kindLabel: KIND_LABEL[m.kind] ?? m.kind,
       week: m.effectiveWeek,
       untilWeek: m.untilWeek,
+      seed: m.seed,
       teamSeasonId: m.teamSeasonId,
       playerId: m.playerId,
       team: teamNameOf.get(m.teamSeasonId) ?? null,

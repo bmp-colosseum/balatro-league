@@ -83,6 +83,7 @@ enum RosterMoveKind {
   BANNED // disciplinary permanent departure (ban / DQ) from effectiveWeek
   REINSTATED // reverses a prior QUIT/BANNED from effectiveWeek
   CAPTAIN_CHANGE // captaincy passes to playerId (replacesPlayerId = the old captain)
+  RESEED // playerId's intra-team seed changes to `seed` from effectiveWeek
 }
 
 // A recorded reliability/conduct mark against a player (§Sportsmanship + Scheduling).
