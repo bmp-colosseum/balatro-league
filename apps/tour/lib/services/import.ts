@@ -589,8 +589,13 @@ export async function importConferenceResults(dir = sheetsDir()) {
     const season = await prisma.tourSeason.findUnique({ where: { name: `Team Tour ${num}` }, select: { id: true } });
     if (!season) continue;
     if (await prisma.tourSet.count({ where: { seasonId: season.id } })) continue; // already has results (TT1-3)
-    const results = await readSeasonResults(path);
+    let results = await readSeasonResults(path);
     if (!results.length) continue;
+    // The Swiss parser includes team-header rows — drop any matchup whose BOTH sides
+    // are team names (a team-vs-team row), leaving only player sets.
+    const teamN = new Set((await prisma.team.findMany({ select: { name: true } })).map((t) => t.name.toLowerCase().replace(/[^a-z0-9]/g, "")));
+    const nrm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+    results = results.filter((r) => !(teamN.has(nrm(r.p1)) && teamN.has(nrm(r.p2))));
 
     // Re-runnable: clear any prior xlsx-sourced results for this season first.
     const prior = await prisma.tourSet.findMany({ where: { importKey: { startsWith: `xlsxresult:s${num}:` } }, select: { matchId: true } });

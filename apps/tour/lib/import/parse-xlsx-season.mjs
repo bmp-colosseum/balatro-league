@@ -170,15 +170,42 @@ export function conferenceResultsFromGrid(rows) {
   return sets;
 }
 
-// Read a season xlsx's player results from its conference tabs (every tab named
-// "<X> Conference"). [{ conference, week, p1, p1g, p2, p2g }].
+// A Swiss-season results tab (TT3) → player sets. Layout differs from the conference
+// tabs: the "Week N" label is in col 0 of EVERY row (not a separator), and matchup
+// blocks [nameA, scoreA, scoreB, nameB] run across with a gap column between, team-
+// header rows interleaved with player rows. Scores may be blank (= 0). Returns every
+// block (team headers included); the importer drops team-vs-team rows by name.
+export function swissResultsFromGrid(rows) {
+  const isNum = (v) => /^\d+$/.test((v ?? "").trim());
+  const num = (v) => (isNum(v) ? Number((v ?? "").trim()) : 0);
+  const sets = [];
+  for (const row of rows) {
+    const wk = (row[0] ?? "").trim().match(/^Week\s+(\d+)/i);
+    if (!wk) continue;
+    const week = Number(wk[1]);
+    for (let c = 2; c < row.length - 3; c++) {
+      const a = (row[c] ?? "").trim(), b = (row[c + 3] ?? "").trim();
+      if (a && b && !isNum(row[c]) && !isNum(row[c + 3]) && (isNum(row[c + 1]) || isNum(row[c + 2]))) {
+        sets.push({ week, p1: a, p1g: num(row[c + 1]), p2: b, p2g: num(row[c + 2]) });
+        c += 3;
+      }
+    }
+  }
+  return sets;
+}
+
+// Read a season xlsx's player results: conference tabs ("<X> Conference") for the
+// conference seasons, or the "Swiss" tab for the Swiss season (TT3). Returns
+// [{ source, week, p1, p1g, p2, p2g }]. Team-header rows are filtered by the importer.
 export async function readSeasonResults(path) {
   const wb = await loadWorkbook(path);
   const out = [];
   for (const ws of wb.worksheets) {
-    if (!/\sConference$/i.test(ws.name) || /^Conference\b/i.test(ws.name)) continue;
-    const grid = tabGrid(wb, ws.name);
-    for (const s of conferenceResultsFromGrid(grid)) out.push({ conference: ws.name, ...s });
+    if (/\sConference$/i.test(ws.name) && !/^Conference\b/i.test(ws.name)) {
+      for (const s of conferenceResultsFromGrid(tabGrid(wb, ws.name))) out.push({ source: ws.name, ...s });
+    } else if (/^Swiss$/i.test(ws.name)) {
+      for (const s of swissResultsFromGrid(tabGrid(wb, ws.name))) out.push({ source: "Swiss", ...s });
+    }
   }
   return out;
 }
