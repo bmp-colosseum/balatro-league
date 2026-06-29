@@ -140,28 +140,28 @@ export function conferenceResultsFromGrid(rows) {
   const isNum = (v) => /^\d+$/.test((v ?? "").trim());
   const sets = [];
   let week = 0;
-  let blocks = null; // [[aCol, saCol, sbCol, bCol], ...] for the current week
+  let blocks = null; // [{a, sa, sb, b, teamA, teamB}, ...] for the current week
   for (const row of rows) {
     const wk = (row[1] ?? "").trim().match(/^Week\s+(\d+)/i);
     if (wk) { week = Number(wk[1]); blocks = null; continue; }
     if (!blocks) {
-      // Find the team-matchup HEADER row: groups of [name, int, int, name].
+      // Team-matchup HEADER row: groups of [teamA, int, int, teamB]. Remember the teams.
       const found = [];
       for (let c = 0; c < row.length - 3; c++) {
         if ((row[c] ?? "").trim() && !isNum(row[c]) && isNum(row[c + 1]) && isNum(row[c + 2]) && (row[c + 3] ?? "").trim() && !isNum(row[c + 3])) {
-          found.push([c, c + 1, c + 2, c + 3]);
+          found.push({ a: c, sa: c + 1, sb: c + 2, b: c + 3, teamA: (row[c] ?? "").trim(), teamB: (row[c + 3] ?? "").trim() });
           c += 3;
         }
       }
       if (found.length) blocks = found; // header found; the player rows follow it
       continue;
     }
-    // Player rows: same columns as the header blocks.
+    // Player rows: same columns as the header blocks; carry each player's team.
     let any = false;
-    for (const [a, sa, sb, b] of blocks) {
-      const pa = (row[a] ?? "").trim(), pb = (row[b] ?? "").trim();
-      if (pa && pb && isNum(row[sa]) && isNum(row[sb])) {
-        sets.push({ week, p1: pa, p1g: Number(row[sa]), p2: pb, p2g: Number(row[sb]) });
+    for (const bl of blocks) {
+      const pa = (row[bl.a] ?? "").trim(), pb = (row[bl.b] ?? "").trim();
+      if (pa && pb && isNum(row[bl.sa]) && isNum(row[bl.sb])) {
+        sets.push({ week, teamA: bl.teamA, p1: pa, p1g: Number(row[bl.sa]), p2: pb, p2g: Number(row[bl.sb]), teamB: bl.teamB });
         any = true;
       }
     }
@@ -178,17 +178,29 @@ export function conferenceResultsFromGrid(rows) {
 export function swissResultsFromGrid(rows) {
   const isNum = (v) => /^\d+$/.test((v ?? "").trim());
   const num = (v) => (isNum(v) ? Number((v ?? "").trim()) : 0);
-  const sets = [];
-  for (const row of rows) {
-    const wk = (row[0] ?? "").trim().match(/^Week\s+(\d+)/i);
-    if (!wk) continue;
-    const week = Number(wk[1]);
+  const findBlocks = (row) => {
+    const out = [];
     for (let c = 2; c < row.length - 3; c++) {
       const a = (row[c] ?? "").trim(), b = (row[c + 3] ?? "").trim();
       if (a && b && !isNum(row[c]) && !isNum(row[c + 3]) && (isNum(row[c + 1]) || isNum(row[c + 2]))) {
-        sets.push({ week, p1: a, p1g: num(row[c + 1]), p2: b, p2g: num(row[c + 2]) });
-        c += 3;
+        out.push({ a, sa: c + 1, sb: c + 2, b, c }); c += 3;
       }
+    }
+    return out;
+  };
+  const sets = [];
+  let header = null; // current group's team-matchup header: [{ c, teamA, teamB }]
+  let week = 0;
+  for (const row of rows) {
+    const wk = (row[0] ?? "").trim().match(/^Week\s+(\d+)/i);
+    if (wk) week = Number(wk[1]);
+    const found = findBlocks(row);
+    if (!found.length) { header = null; continue; } // no matchups → group separator
+    if (!header) { header = found.map((f) => ({ c: f.c, teamA: f.a, teamB: f.b })); continue; } // team-header row
+    for (const f of found) {
+      const hdr = header.find((h) => h.c === f.c);
+      if (!hdr) continue;
+      sets.push({ week, teamA: hdr.teamA, p1: f.a, p1g: num(row[f.sa]), p2: f.b, p2g: num(row[f.sb]), teamB: hdr.teamB });
     }
   }
   return sets;

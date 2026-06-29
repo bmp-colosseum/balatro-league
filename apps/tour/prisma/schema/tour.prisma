@@ -250,6 +250,12 @@ model TourSet {
   id          String    @id @default(cuid())
   matchupId   String? // null for historical/standalone imports (no matchup)
   seasonId    String? // direct season link when there's no matchup (historical)
+  week        Int? // season week this set was played (for week-by-week rebuild)
+  // The teamSeason each player represented in THIS set — lets a player be on a team by
+  // virtue of having PLAYED (subs included), and lets us derive each team's week-by-week
+  // lineup from results. By plain id (decoupling rule), no relation.
+  teamSeasonAId String?
+  teamSeasonBId String?
   bracket     String? // historical marker (e.g. "REGULAR" / playoff round)
   importKey   String?   @unique // idempotent import id, e.g. "gamelog:s1:42"
   matchId     String?   @unique // core Match.id (null until played; by id, no relation)

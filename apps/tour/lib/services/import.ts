@@ -584,12 +584,14 @@ export async function importConferenceResults(dir = sheetsDir()) {
   };
   for (const d of [dir, process.env.TOUR_XLSX_DIR].filter(Boolean) as string[]) walk(d, 0);
 
-  let made = 0;
+  let made = 0, subsTotal = 0;
   for (const [num, path] of mains) {
     const season = await prisma.tourSeason.findUnique({ where: { name: `Team Tour ${num}` }, select: { id: true } });
     if (!season) continue;
     if (await prisma.tourSet.count({ where: { seasonId: season.id } })) continue; // already has results (TT1-3)
-    let results = await readSeasonResults(path);
+    let results = (await readSeasonResults(path)) as {
+      week?: number; teamA?: string; teamB?: string; p1: string; p1g: number; p2: string; p2g: number; bracket?: string;
+    }[];
     if (!results.length) continue;
     // The Swiss parser includes team-header rows — drop any matchup whose BOTH sides
     // are team names (a team-vs-team row), leaving only player sets.
@@ -608,18 +610,49 @@ export async function importConferenceResults(dir = sheetsDir()) {
     const idByName = new Map<string, string>();
     for (const n of names) idByName.set(n, (await resolvePlayerId(n, true))!);
 
-    // Each player's intra-team seed (from the rosters imported just before this), so
-    // the result sets carry real seeds — not 0 — for the ±2 view / stats.
-    const tss = await prisma.teamSeason.findMany({ where: { seasonId: season.id }, select: { id: true } });
-    const rosters = await prisma.roster.findMany({ where: { teamSeasonId: { in: tss.map((t) => t.id) } }, select: { id: true } });
-    const entries = await prisma.rosterEntry.findMany({ where: { rosterId: { in: rosters.map((r) => r.id) } }, select: { playerId: true, seed: true } });
-    const seedByPlayer = new Map(entries.map((e) => [e.playerId, e.seed]));
+    // Team name → teamSeason (fuzzy), and each teamSeason's FULL roster + current members
+    // + max seed — so a player who PLAYED for a team becomes a roster member (subs too).
+    const teamSeasons = await prisma.teamSeason.findMany({ where: { seasonId: season.id }, include: { team: true } });
+    const tsByName = new Map(teamSeasons.map((t) => [nrm(t.team.name), t.id]));
+    const matchTs = (name?: string): string | null => {
+      if (!name) return null;
+      const n = nrm(name);
+      return tsByName.get(n) ?? teamSeasons.find((t) => { const tn = nrm(t.team.name); return tn.startsWith(n) || n.startsWith(tn); })?.id ?? null;
+    };
+    const rosterByTs = new Map<string, string>();
+    const membersByTs = new Map<string, Set<string>>();
+    const seedByPlayer = new Map<string, number>();
+    const maxSeedByTs = new Map<string, number>();
+    for (const t of teamSeasons) {
+      const roster = await prisma.roster.upsert({ where: { teamSeasonId_weekBlock: { teamSeasonId: t.id, weekBlock: "FULL" } }, create: { teamSeasonId: t.id, weekBlock: "FULL" }, update: {} });
+      rosterByTs.set(t.id, roster.id);
+      const es = await prisma.rosterEntry.findMany({ where: { rosterId: roster.id }, select: { playerId: true, seed: true } });
+      membersByTs.set(t.id, new Set(es.map((e) => e.playerId)));
+      maxSeedByTs.set(t.id, es.reduce((m, e) => Math.max(m, e.seed), 0));
+      for (const e of es) seedByPlayer.set(e.playerId, e.seed);
+    }
+    let subsAdded = 0;
+    const ensureMember = async (tsId: string | null, playerId: string) => {
+      if (!tsId) return;
+      const members = membersByTs.get(tsId)!;
+      if (members.has(playerId)) return;
+      const seed = (maxSeedByTs.get(tsId) ?? 0) + 1;
+      maxSeedByTs.set(tsId, seed);
+      members.add(playerId);
+      seedByPlayer.set(playerId, seedByPlayer.get(playerId) ?? seed);
+      await prisma.rosterEntry.create({ data: { rosterId: rosterByTs.get(tsId)!, playerId, seed, isCaptain: false } });
+      subsAdded++;
+    };
 
     let i = 0;
     for (const r of results) {
       const aId = idByName.get(r.p1)!;
       const bId = idByName.get(r.p2)!;
       if (aId === bId) { i++; continue; }
+      const tsA = matchTs(r.teamA);
+      const tsB = matchTs(r.teamB);
+      await ensureMember(tsA, aId);
+      await ensureMember(tsB, bId);
       const [mA, mB] = aId < bId ? [aId, bId] : [bId, aId];
       const gwA = mA === aId ? r.p1g : r.p2g;
       const gwB = mA === aId ? r.p2g : r.p1g;
@@ -632,6 +665,9 @@ export async function importConferenceResults(dir = sheetsDir()) {
         data: {
           importKey: `xlsxresult:s${num}:${i++}`,
           seasonId: season.id,
+          week: r.week ?? null,
+          teamSeasonAId: tsA,
+          teamSeasonBId: tsB,
           bracket: r.bracket === "PLAYOFF" ? "PLAYOFF" : "REGULAR",
           matchId: match.id,
           playerAId: aId,
@@ -644,8 +680,9 @@ export async function importConferenceResults(dir = sheetsDir()) {
       });
       made++;
     }
+    subsTotal += subsAdded;
   }
-  return { sets: made };
+  return { sets: made, subsAdded: subsTotal };
 }
 
 // Create the season + team SHELLS for every TT<n>.xlsx (so seasons/teams come from the
