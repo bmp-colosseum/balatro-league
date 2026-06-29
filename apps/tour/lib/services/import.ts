@@ -632,7 +632,7 @@ export async function importConferenceResults(dir = sheetsDir()) {
         data: {
           importKey: `xlsxresult:s${num}:${i++}`,
           seasonId: season.id,
-          bracket: "REGULAR",
+          bracket: r.bracket === "PLAYOFF" ? "PLAYOFF" : "REGULAR",
           matchId: match.id,
           playerAId: aId,
           playerBId: bId,

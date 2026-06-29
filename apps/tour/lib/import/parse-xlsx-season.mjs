@@ -194,17 +194,38 @@ export function swissResultsFromGrid(rows) {
   return sets;
 }
 
-// Read a season xlsx's player results: conference tabs ("<X> Conference") for the
-// conference seasons, or the "Swiss" tab for the Swiss season (TT3). Returns
-// [{ source, week, p1, p1g, p2, p2g }]. Team-header rows are filtered by the importer.
+// Playoffs tab → player sets. Same [name, sA, sB, name] blocks as the Swiss tab
+// (round headers like "Quarterfinal 1" are single cells, never match). Scores may be
+// blank (= 0). Team-header rows included; the importer filters them by team name.
+export function playoffResultsFromGrid(rows) {
+  const isNum = (v) => /^\d+$/.test((v ?? "").trim());
+  const num = (v) => (isNum(v) ? Number((v ?? "").trim()) : 0);
+  const sets = [];
+  for (const row of rows) {
+    for (let c = 0; c < row.length - 3; c++) {
+      const a = (row[c] ?? "").trim(), b = (row[c + 3] ?? "").trim();
+      if (a && b && !isNum(row[c]) && !isNum(row[c + 3]) && (isNum(row[c + 1]) || isNum(row[c + 2]))) {
+        sets.push({ p1: a, p1g: num(row[c + 1]), p2: b, p2g: num(row[c + 2]) });
+        c += 3;
+      }
+    }
+  }
+  return sets;
+}
+
+// Read a season xlsx's player results — regular (conference tabs for conference
+// seasons, or the "Swiss" tab for TT3) + playoff (Playoffs tab). Each row carries a
+// `bracket` ("REGULAR" | "PLAYOFF"). Team-header rows are filtered by the importer.
 export async function readSeasonResults(path) {
   const wb = await loadWorkbook(path);
   const out = [];
   for (const ws of wb.worksheets) {
     if (/\sConference$/i.test(ws.name) && !/^Conference\b/i.test(ws.name)) {
-      for (const s of conferenceResultsFromGrid(tabGrid(wb, ws.name))) out.push({ source: ws.name, ...s });
+      for (const s of conferenceResultsFromGrid(tabGrid(wb, ws.name))) out.push({ source: ws.name, bracket: "REGULAR", ...s });
     } else if (/^Swiss$/i.test(ws.name)) {
-      for (const s of swissResultsFromGrid(tabGrid(wb, ws.name))) out.push({ source: "Swiss", ...s });
+      for (const s of swissResultsFromGrid(tabGrid(wb, ws.name))) out.push({ source: "Swiss", bracket: "REGULAR", ...s });
+    } else if (/^Playoffs?$/i.test(ws.name)) {
+      for (const s of playoffResultsFromGrid(tabGrid(wb, ws.name))) out.push({ source: "Playoffs", bracket: "PLAYOFF", ...s });
     }
   }
   return out;
