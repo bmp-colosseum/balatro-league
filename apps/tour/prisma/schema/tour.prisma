@@ -403,16 +403,15 @@ model RosterMove {
   @@index([teamSeasonId])
 }
 
-// Name → Discord id reference, for LINKING Tour players to a real Discord id. Holds
-// MULTIPLE name rows per person (display name, @username, global/nick) so any can
-// match a Tour player's name. Sources: the league CSV / live league DB, and a sync
-// of the Tour Discord guild's MEMBER LIST (the complete username→id map — everyone
-// who signed up is in the server). Populated without baked data.
+// Name -> Discord id reference (from the uploaded league CSV), for LINKING Tour
+// players to a real Discord id when the live league DB isn't connected. Holds multiple
+// name rows per person (display name + @username). The live league DB and the Tour
+// Discord guild roster are read directly (not stored here) as additional id sources.
 model LeagueRef {
   id        String @id @default(cuid())
   discordId String
   name      String
-  source    String @default("league") // league | discord — provenance
+  source    String @default("league") // provenance (currently always "league")
 
   @@unique([discordId, name])
   @@index([name])

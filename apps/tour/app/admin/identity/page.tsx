@@ -2,10 +2,8 @@ import Link from "next/link";
 import { ArrowLeft, Search, Wrench, Wand2 } from "lucide-react";
 import { isAdmin } from "@/lib/auth";
 import { listTourPlayers, identityCounts } from "@/lib/services/identity";
-import { discordGuildConfigured } from "@/lib/discord-guild";
 import { Callout } from "@/components/Callout";
 import { IdentityRow } from "@/components/IdentityRow";
-import { SyncDiscordButton } from "@/components/SyncDiscordButton";
 
 export const dynamic = "force-dynamic";
 
@@ -43,14 +41,12 @@ export default async function Identity({ searchParams }: { searchParams: Promise
       </p>
 
       <Callout type="info" className="mb-3">
-        <strong>Don&apos;t link 300 by hand.</strong> Step 1: <strong>Sync Discord members</strong> below pulls the Tour server&apos;s
-        whole member list (@username → real id) — that&apos;s what turns the signup usernames into linkable ids. Step 2:{" "}
-        <Link href="/admin/identity/auto-link" className="inline-flex items-center gap-1"><Wand2 className="size-3.5" /> Auto-link from signups</Link> matches everyone it
-        can confidently for one-click bulk approval. Then mop up stragglers below. Duplicates from a re-import?{" "}
+        <strong>Don&apos;t link 300 by hand.</strong>{" "}
+        <Link href="/admin/identity/auto-link" className="inline-flex items-center gap-1"><Wand2 className="size-3.5" /> Auto-link from signups</Link> matches everyone it can
+        confidently resolve (signup @username -&gt; real id, via the league DB and a live, in-memory read of the Tour Discord
+        roster) for one-click bulk approval. Then mop up stragglers below. Duplicates from a re-import?{" "}
         <Link href="/admin/identity/recover" className="inline-flex items-center gap-1"><Wrench className="size-3.5" /> Recover duplicates</Link>.
       </Callout>
-
-      <div className="mb-3"><SyncDiscordButton configured={discordGuildConfigured()} /></div>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {FILTERS.map((f) => (

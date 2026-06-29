@@ -13,8 +13,26 @@ export interface GuildMember {
   names: string[]; // username, global display name, server nickname — any may match a sheet name
 }
 
+// IN-MEMORY ONLY cache (process-local, short TTL). The guild roster is used
+// TRANSIENTLY to resolve usernames → ids during identity linking; it is never
+// written to the database and never exposed. Only the ids of players an admin
+// actually approves get persisted (on those Player rows). Clears on restart.
+let cache: { at: number; members: GuildMember[] } | null = null;
+const TTL_MS = 10 * 60 * 1000;
+
+// Name → numeric id rows from the live guild roster (each username/global/nick),
+// for transient identity resolution. [] when the bot isn't configured.
+export async function guildNameRows(): Promise<{ discordId: string; name: string }[]> {
+  const members = await fetchGuildMembers();
+  const out: { discordId: string; name: string }[] = [];
+  for (const m of members) for (const name of m.names) out.push({ discordId: m.id, name });
+  return out;
+}
+
 // Page through every guild member (1000 at a time, ordered by id via `after`).
+// Cached in memory only.
 export async function fetchGuildMembers(): Promise<GuildMember[]> {
+  if (cache && Date.now() - cache.at < TTL_MS) return cache.members;
   const token = process.env.TOUR_DISCORD_TOKEN;
   const guild = process.env.TOUR_GUILD_ID;
   if (!token || !guild) return [];
@@ -44,6 +62,7 @@ export async function fetchGuildMembers(): Promise<GuildMember[]> {
     }
     if (members.length < 1000) break;
   }
+  cache = { at: Date.now(), members: out };
   return out;
 }
 

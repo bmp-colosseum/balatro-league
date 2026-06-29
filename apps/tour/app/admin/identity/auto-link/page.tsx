@@ -29,10 +29,10 @@ export default async function AutoLink() {
       </p>
       <h1>Auto-link from signups</h1>
       <p className="sub">
-        Every unlinked player whose name resolves to <strong>exactly one</strong> Discord id — chained through the signup
-        sheets (preferred name → @username) and the league reference. Checked rows below get applied; <strong>uncheck</strong>
-        any you don&apos;t trust, then approve. Names that map to several different people are listed separately for manual
-        handling.
+        Every unlinked player whose name resolves to <strong>exactly one</strong> Discord id — chained from the signup
+        @username through the league reference and a live, in-memory read of the Tour Discord roster (that roster is never
+        stored; only the ids you approve are saved). Checked rows below get applied; <strong>uncheck</strong> any you
+        don&apos;t trust, then approve. Names that map to several different people are listed separately for manual handling.
       </p>
 
       {total === 0 && ambiguous.length === 0 && (

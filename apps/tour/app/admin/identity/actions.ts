@@ -2,24 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/auth";
-import { linkPlayer, mergePlayers, applyIdentityRecovery, applyAutoLink, syncDiscordMembers } from "@/lib/services/identity";
-import { discordGuildConfigured } from "@/lib/discord-guild";
+import { linkPlayer, mergePlayers, applyIdentityRecovery, applyAutoLink } from "@/lib/services/identity";
 import type { ActionResult } from "@/lib/action-result";
-
-// Pull the Tour Discord guild's member list into the id reference (username → numeric
-// id), so the signup @usernames resolve and the auto-link can link them.
-export async function syncDiscordMembersAction(_prev: ActionResult | null, _formData: FormData): Promise<ActionResult> {
-  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
-  if (!discordGuildConfigured()) return { ok: false, message: "Set TOUR_DISCORD_TOKEN + TOUR_GUILD_ID (with the Server Members Intent) first." };
-  try {
-    const r = await syncDiscordMembers();
-    revalidatePath("/admin/identity");
-    revalidatePath("/admin/identity/auto-link");
-    return { ok: true, message: `Synced ${r.members} Discord members (${r.rows} name rows). Re-open Auto-link to see new matches.` };
-  } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : "Discord sync failed." };
-  }
-}
 
 export async function linkPlayerAction(playerId: string, discordId: string): Promise<ActionResult> {
   if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
