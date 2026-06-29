@@ -7,7 +7,13 @@ import { IdentityRow } from "@/components/IdentityRow";
 
 export const dynamic = "force-dynamic";
 
-export default async function Identity({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+const FILTERS = [
+  { key: "unlinked", label: "Unlinked" },
+  { key: "linked", label: "Linked" },
+  { key: "all", label: "All" },
+] as const;
+
+export default async function Identity({ searchParams }: { searchParams: Promise<{ q?: string; filter?: string }> }) {
   if (!(await isAdmin())) {
     return (
       <main>
@@ -17,8 +23,10 @@ export default async function Identity({ searchParams }: { searchParams: Promise
     );
   }
 
-  const { q } = await searchParams;
-  const [players, counts] = await Promise.all([listTourPlayers(q ?? "", 80), identityCounts()]);
+  const { q, filter: rawFilter } = await searchParams;
+  const filter = (FILTERS.find((f) => f.key === rawFilter)?.key ?? "unlinked") as "unlinked" | "linked" | "all";
+  const [players, counts] = await Promise.all([listTourPlayers(q ?? "", 1000, filter), identityCounts()]);
+  const filterCount = { unlinked: counts.unlinked, linked: counts.linked, all: counts.total };
 
   return (
     <main>
@@ -37,16 +45,33 @@ export default async function Identity({ searchParams }: { searchParams: Promise
         person appearing twice — it moves all their history onto one player and deletes the dupe.
       </Callout>
 
-      <form className="mb-3 flex items-center gap-2" action="/admin/identity">
-        <input name="q" defaultValue={q ?? ""} placeholder="Search players…" className="search" style={{ marginBottom: 0 }} />
-        <button type="submit" className="inline-flex items-center gap-1"><Search className="size-3.5" /> Search</button>
-      </form>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {FILTERS.map((f) => (
+          <Link
+            key={f.key}
+            href={`/admin/identity?filter=${f.key}${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+            className="pill hover:no-underline"
+            style={{
+              background: f.key === filter ? "var(--accent-2)" : "var(--surface-2)",
+              color: f.key === filter ? "#fff" : "var(--muted)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            {f.label} ({filterCount[f.key]})
+          </Link>
+        ))}
+        <form className="ml-auto flex items-center gap-2" action="/admin/identity">
+          <input type="hidden" name="filter" value={filter} />
+          <input name="q" defaultValue={q ?? ""} placeholder="Search players…" className="search" style={{ marginBottom: 0 }} />
+          <button type="submit" className="inline-flex items-center gap-1"><Search className="size-3.5" /> Search</button>
+        </form>
+      </div>
 
       {players.map((p) => (
         <IdentityRow key={p.id} player={p} />
       ))}
-      {players.length === 0 && <p className="sub">No players match.</p>}
-      {!q && <p className="sub mt-2">Showing the 80 most active players — search to find anyone.</p>}
+      {players.length === 0 && <p className="sub">{filter === "unlinked" ? "No unlinked players — everyone's mapped 🎉" : "No players match."}</p>}
+      {players.length >= 1000 && <p className="sub mt-2">Showing the first 1000 — narrow with search.</p>}
     </main>
   );
 }

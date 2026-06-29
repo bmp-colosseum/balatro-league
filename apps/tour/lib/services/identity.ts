@@ -105,7 +105,9 @@ export interface TourPlayerRow {
   suggestions?: LeagueRefRow[]; // likely league matches (unlinked players only)
 }
 
-export async function listTourPlayers(q = "", limit = 60): Promise<TourPlayerRow[]> {
+export type IdentityFilter = "all" | "unlinked" | "linked";
+
+export async function listTourPlayers(q = "", limit = 60, filter: IdentityFilter = "all"): Promise<TourPlayerRow[]> {
   const [players, sets] = await Promise.all([
     prisma.player.findMany({ select: { id: true, displayName: true, discordId: true } }),
     prisma.tourSet.findMany({ select: { playerAId: true, playerBId: true, seasonId: true } }),
@@ -132,6 +134,8 @@ export async function listTourPlayers(q = "", limit = 60): Promise<TourPlayerRow
     seasons: seasons.get(p.id)?.size ?? 0,
   }));
   if (needle) rows = rows.filter((r) => norm(r.name).includes(needle));
+  if (filter === "unlinked") rows = rows.filter((r) => !r.linked);
+  else if (filter === "linked") rows = rows.filter((r) => r.linked);
   rows.sort((a, b) => b.sets - a.sets || a.name.localeCompare(b.name));
   const out = rows.slice(0, limit);
 
