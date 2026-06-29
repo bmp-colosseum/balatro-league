@@ -648,6 +648,57 @@ export async function importConferenceResults(dir = sheetsDir()) {
   return { sets: made };
 }
 
+// Create the season + team SHELLS for every TT<n>.xlsx (so seasons/teams come from the
+// workbook, not the HTML). Teams from the Draft Results tab; conferences/seeds applied
+// after by applyConferenceData. Swiss seasons get a single "Swiss" conference.
+export async function importSeasonShellsFromXlsx(dir = sheetsDir()) {
+  const configs = await seasonXlsxConfigs(dir);
+  let seasons = 0, teams = 0;
+  for (const [numStr, cfg] of Object.entries(configs)) {
+    const num = Number(numStr);
+    const draftTeams = cfg.draftTeams ?? [];
+    if (!draftTeams.length) continue;
+    const isConf = Object.keys(cfg.conferences ?? {}).length > 0;
+    const teamSize = Math.max(11, ...draftTeams.map((t) => 1 + t.players.length + t.subs.length));
+    const season = await prisma.tourSeason.upsert({
+      where: { name: `Team Tour ${num}` },
+      create: { name: `Team Tour ${num}`, teamSize, setsToWin: majority(teamSize), defaultBestOf: 5, state: "DONE", format: isConf ? "CONFERENCES" : "SWISS" },
+      update: { format: isConf ? "CONFERENCES" : "SWISS" },
+    });
+    const placeholder = await prisma.conference.upsert({
+      where: { seasonId_name: { seasonId: season.id, name: isConf ? "Unassigned" : "Swiss" } },
+      create: { seasonId: season.id, name: isConf ? "Unassigned" : "Swiss" },
+      update: {},
+    });
+    for (const dt of draftTeams) {
+      const team = await prisma.team.upsert({ where: { name: dt.team }, create: { name: dt.team }, update: {} });
+      await prisma.teamSeason.upsert({
+        where: { seasonId_teamId: { seasonId: season.id, teamId: team.id } },
+        create: { seasonId: season.id, teamId: team.id, conferenceId: placeholder.id, captainPlayerId: "legacy:unknown", seed: 0 },
+        update: {},
+      });
+      teams++;
+    }
+    seasons++;
+  }
+  return { seasons, teams };
+}
+
+// THE all-xlsx import: build every season fully from its workbook — shells, then
+// conferences/seeds, rosters/draft/seeds/captains, and player results (regular +
+// playoff). Replaces importHistorical + importConferenceSeason (HTML). On a fresh DB
+// the "fill if empty" guards in the roster/result importers fill everything.
+export async function importAllFromXlsx(dir = sheetsDir()) {
+  const shells = await importSeasonShellsFromXlsx(dir);
+  const conferences = await applyConferenceData(dir);
+  const rosters = await importConferenceRosters(dir);
+  const results = await importConferenceResults(dir);
+  const roster_moves = await backfillDraftedMoves();
+  await pruneOrphanPlayers();
+  const [players, tourSets] = await Promise.all([prisma.player.count(), prisma.tourSet.count()]);
+  return { ...shells, conferencesSet: conferences.teamsSet, rosters: rosters.rostersFilled, players: rosters.playersAdded, sets: results.sets, rosterMoves: roster_moves.created, totalPlayers: players, totalSets: tourSets };
+}
+
 export async function importHistorical(dir = sheetsDir()) {
   await importRosters(dir);
   const sets = await importResults(dir);

@@ -231,15 +231,63 @@ export async function readSeasonResults(path) {
   return out;
 }
 
+// Team Rosters tab → [{ team, captain, players, subs }] for the MULTI-BAND layout
+// (TT3): teams are blocks stacked in rows; the label column ("Team", "Captain",
+// "Player N", "Backup") repeats per band; team names + roster cells share a column.
+// Used when a season has no "Draft Results" tab.
+export function rosterBandsFromGrid(rows) {
+  const norm = (s) => (s ?? "").trim().toLowerCase();
+  // Label column = the column where "captain" appears (col 0 or 1).
+  let labelCol = -1;
+  for (let r = 0; r < rows.length && labelCol < 0; r++) {
+    for (let c = 0; c < 3; c++) if (norm(rows[r][c]) === "captain") { labelCol = c; break; }
+  }
+  if (labelCol < 0) return [];
+
+  const teams = [];
+  let cols = null, cur = null; // current band's team columns + team objects
+  for (const row of rows) {
+    const label = norm(row[labelCol]);
+    if (label === "team") {
+      cols = [];
+      for (let c = labelCol + 1; c < row.length; c++) {
+        const v = (row[c] ?? "").trim();
+        if (v && !(row[c - 1] ?? "").trim()) cols.push(c);
+      }
+      cur = cols.map((c) => ({ team: (row[c] ?? "").trim(), captain: null, players: [], subs: [] }));
+      cur.forEach((t) => teams.push(t));
+      continue;
+    }
+    if (!cols) continue;
+    const isCap = label === "captain", isPlayer = /^player\s*\d+$/.test(label), isSub = /^(sub|backup)/.test(label);
+    if (!isCap && !isPlayer && !isSub) continue;
+    cols.forEach((c, i) => {
+      const nm = (row[c] ?? "").trim();
+      if (!nm || nm.startsWith("#")) return;
+      if (isCap) cur[i].captain = cur[i].captain ?? nm;
+      else if (isSub) { if (!cur[i].subs.includes(nm)) cur[i].subs.push(nm); }
+      else if (!cur[i].players.includes(nm)) cur[i].players.push(nm);
+    });
+  }
+  return teams.filter((t) => t.team && (t.captain || t.players.length));
+}
+
 // Load one season xlsx → its conference + signup + draft-roster data (each empty if absent).
 export async function readSeasonXlsx(path) {
   const wb = await loadWorkbook(path);
   const standings = tabGrid(wb, "Standings");
   const signups = tabGrid(wb, "signups");
+  // Rosters: the single-band "Draft Results" tab (TT1/2/4) if present, else the
+  // multi-band "Team Rosters" tab (TT3).
   const draft = tabGrid(wb, "Draft Results ") ?? tabGrid(wb, "Draft Results");
+  let draftTeams = draft ? draftTeamsFromGrid(draft) : [];
+  if (!draftTeams.length) {
+    const tr = tabGrid(wb, "Team Rosters");
+    if (tr) draftTeams = rosterBandsFromGrid(tr);
+  }
   return {
     conferences: standings ? conferencesFromStandingsGrid(standings) : {},
     signups: signups ? signupsFromGrid(signups) : [],
-    draftTeams: draft ? draftTeamsFromGrid(draft) : [],
+    draftTeams,
   };
 }
