@@ -44,9 +44,7 @@ export default async function Admin() {
             <SubmitButton variant="secondary" pendingText="Importing…"><Database /> Import TT10 (Pluto/Eris)</SubmitButton>
           </ActionFlashForm>
         </div>
-        <p className="sub px-0.5 pb-1">
-          Idempotent. Reads <code>TOUR_SHEETS_DIR</code> (default <code>D:/STuffinside</code>).
-        </p>
+        <p className="sub px-0.5 pb-1">Imports the historical seasons from the bundled data. Idempotent — safe to re-run.</p>
       </div>
 
       <div className="card">

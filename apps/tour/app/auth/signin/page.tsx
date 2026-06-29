@@ -1,6 +1,5 @@
 import { signIn } from "@/auth";
 import { Button } from "@/components/ui/button";
-import { Callout } from "@/components/Callout";
 
 export const metadata = { title: "Sign in · Team Tour" };
 
@@ -8,14 +7,7 @@ export default function SignIn() {
   return (
     <main>
       <h1>Sign in</h1>
-      <p className="sub">
-        Sign in with Discord to access your Team Tour profile, captain tools, and admin.
-      </p>
-      <Callout type="info">
-        Shared login with the league: sign in once on either site. Requires the Discord OAuth credentials
-        (<code>DISCORD_CLIENT_ID</code> / <code>DISCORD_CLIENT_SECRET</code> / <code>AUTH_SECRET</code>) in{" "}
-        <code>apps/tour/.env</code> — see <code>.env.example</code>.
-      </Callout>
+      <p className="sub">Sign in with Discord to see your team, report your sets, and manage the Tour.</p>
       <form
         action={async () => {
           "use server";

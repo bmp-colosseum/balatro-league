@@ -39,7 +39,7 @@ export default async function EnvHealth() {
         ) : (
           <Callout type="admin">
             You&apos;re signed in as <code>{v.discordId ?? "?"}</code> · tier <strong>{v.tier}</strong> — not an admin.
-            An OWNER must add your Discord ID to <code>TOUR_OWNER_DISCORD_IDS</code>.
+            If you should have access, an owner needs to grant it to that Discord ID.
           </Callout>
         )}
       </main>
