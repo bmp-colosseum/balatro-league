@@ -20,6 +20,7 @@ import { PgBoss, type Job } from "pg-boss";
 import { announceResult } from "./announce.js";
 import { snapshotPlayerMmr, ensureBmpCurrentSeasonDetected, type MmrSnapshotJob } from "./mmr-snapshots.js";
 import { runDisplayNameRefresh } from "./display-name-refresh.js";
+import { runGuildMemberSync } from "./guild-member-sync.js";
 import { spawnDisputeThread } from "./dispute-thread.js";
 import { webUrl } from "./web-url.js";
 import { prisma } from "./db.js";
@@ -116,6 +117,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("welcome.refresh");
   await boss.createQueue("standings.refresh");
   await boss.createQueue("refresh.display-names");
+  await boss.createQueue("sync.guild-members");
   await boss.createQueue("signup.ask-kickoff");
   await boss.createQueue("signup.ask");
   await boss.createQueue("signup.reminder-tick");
@@ -406,6 +408,19 @@ export async function initQueue(): Promise<void> {
   });
   await boss.schedule("refresh.display-names", "0 7 * * *");
   console.log("[pg-boss] scheduled refresh.display-names @ 07:00 UTC daily");
+
+  // Worker + schedule: sync the full guild member roster (GuildMember table) for
+  // username->id resolution by tools sharing this server (Team Tour). Inert unless
+  // GUILD_MEMBER_SYNC=1 (the sync itself no-ops otherwise).
+  await boss.work("sync.guild-members", { batchSize: 1, pollingIntervalSeconds: 60 }, async () => {
+    await runGuildMemberSync();
+  });
+  await boss.schedule("sync.guild-members", "30 7 * * *");
+  // Also run once shortly after boot so a fresh deploy populates without waiting for
+  // the daily slot (the worker picks it up after the client is ready; no-ops if the
+  // GuildMembers intent isn't granted yet).
+  await boss.send("sync.guild-members", {});
+  console.log("[pg-boss] scheduled sync.guild-members @ 07:30 UTC daily (+ once on boot)");
 
   // Worker: post the public PENDING report embed to #results. Used by
   // the web-side /me report flow which can't post directly. Discord

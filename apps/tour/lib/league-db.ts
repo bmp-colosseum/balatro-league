@@ -55,6 +55,44 @@ export async function leaguePlayersLive(): Promise<LeaguePlayer[] | null> {
   return rows;
 }
 
+let memberCache: { at: number; rows: LeaguePlayer[] } | null = null;
+
+// The league's FULL Discord guild roster (the GuildMember table the league bot syncs),
+// as name->id rows (username / global name / nickname). This is how we resolve people
+// who AREN'T registered league players (tour-only members) — Discord has no public
+// username->id lookup, so the shared guild's roster is the only source. Null when the
+// league DB isn't configured; throws (caught by callers) if the table/permission isn't
+// there yet, so the Tour degrades gracefully until the league side is deployed.
+export async function leagueGuildMembers(): Promise<LeaguePlayer[] | null> {
+  const p = leaguePool();
+  if (!p) return null;
+  const now = Date.now();
+  if (memberCache && now - memberCache.at < TTL_MS) return memberCache.rows;
+  const res = await p.query<{ discordId: string; username: string | null; globalName: string | null; nickname: string | null }>(
+    'SELECT "discordId", "username", "globalName", "nickname" FROM "GuildMember"',
+  );
+  const rows: LeaguePlayer[] = [];
+  for (const r of res.rows) {
+    const discordId = String(r.discordId);
+    if (!/^\d+$/.test(discordId)) continue;
+    for (const n of [r.username, r.globalName, r.nickname]) if (n) rows.push({ discordId, name: String(n) });
+  }
+  memberCache = { at: now, rows };
+  return rows;
+}
+
+// True if the league guild roster (GuildMember) is readable + populated. For diagnostics.
+export async function leagueGuildMemberCount(): Promise<number | null> {
+  const p = leaguePool();
+  if (!p) return null;
+  try {
+    const res = await p.query<{ n: string }>('SELECT COUNT(*)::text AS n FROM "GuildMember"');
+    return Number(res.rows[0]?.n ?? 0);
+  } catch {
+    return null; // table/permission not there yet
+  }
+}
+
 // Cheap connectivity check for diagnostics (true/false; never throws).
 export async function leagueDbReachable(): Promise<boolean> {
   const p = leaguePool();

@@ -5,8 +5,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { prisma } from "../db";
-import { leaguePlayersLive } from "../league-db";
-import { guildNameRows } from "../discord-guild";
+import { leaguePlayersLive, leagueGuildMembers } from "../league-db";
 
 const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]/g, "");
 export interface LeagueRefRow { discordId: string; name: string }
@@ -76,8 +75,6 @@ export async function applySignupRefs(signups: { preferredName: string; username
   return { stored };
 }
 
-// (The Discord guild roster is read TRANSIENTLY in getSuggestRef via guildNameRows()
-// and is never written to the DB. Only the ids of players an admin approves persist.)
 
 export async function leagueRefCount(): Promise<number> {
   return new Set((await getLeagueRef()).map((r) => r.discordId)).size;
@@ -111,13 +108,14 @@ function rankMatches(name: string, all: LeagueRefRow[], limit: number): LeagueRe
 }
 
 // The reference used for suggestions/search: every name-to-id row we have, from
-//   - the live league DB (display names + usernames),
-//   - the LeagueRef table (uploaded league CSV),
-//   - the Tour Discord guild roster, read LIVE and held only in memory (never stored),
+//   - the live league DB Player table (registered players: display names + usernames),
+//   - the league GuildMember table (the FULL shared-guild roster the league bot syncs,
+//     read-only over the league DB - this is how tour-only people resolve),
+//   - the LeagueRef table (uploaded league CSV fallback),
 // PLUS the signup chain resolved LIVE: each raw signup's @username is looked up against
-// all of the above to turn its preferred name into a real id. Because the guild roster
-// is transient, nothing about non-players is persisted; only the ids of players an
-// admin actually approves get written. rankMatches dedups winners by id.
+// all of the above to turn its preferred name into a real id. Nothing about non-players
+// is stored Tour-side; only the ids of players an admin approves get written.
+// rankMatches dedups winners by id.
 async function getSuggestRef(): Promise<LeagueRefRow[]> {
   const out: LeagueRefRow[] = [];
   try {
@@ -126,16 +124,17 @@ async function getSuggestRef(): Promise<LeagueRefRow[]> {
   } catch {
     /* live league DB unreachable - table rows below still cover it */
   }
+  // The full shared-guild roster from the league (resolves tour-only members).
+  try {
+    const members = await leagueGuildMembers();
+    if (members?.length) out.push(...members);
+  } catch {
+    /* GuildMember table not deployed/granted yet - league + signups still resolve */
+  }
   out.push(...(await prisma.leagueRef.findMany({ select: { discordId: true, name: true } })));
   if (out.length === 0) {
     const path = join(process.cwd(), "league-players.csv");
     if (existsSync(path)) out.push(...parseLeagueCsv(readFileSync(path, "utf8")));
-  }
-  // Transient, in-memory only - the Tour server roster, used to resolve usernames now.
-  try {
-    out.push(...(await guildNameRows()));
-  } catch {
-    /* guild unreachable or not configured - league + signups still resolve */
   }
 
   // Chain raw signups: preferred name -> @username -> id (against everything above).

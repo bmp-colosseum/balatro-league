@@ -17,6 +17,7 @@ import {
 import { MatchSessionState } from "@prisma/client";
 import { enqueueAnnounceResult } from "../queue.js";
 import { runDisplayNameRefresh } from "../display-name-refresh.js";
+import { runGuildMemberSync } from "../guild-member-sync.js";
 import { actorFromInteractionUser, recordAudit } from "../audit.js";
 import { purgeBotAccounts } from "../bot-purge.js";
 import { activeSeasonMemberAutocomplete } from "./autocomplete.js";
@@ -165,6 +166,11 @@ export const admin: SlashCommand = {
     )
     .addSubcommand((sub) =>
       sub
+        .setName("sync-members")
+        .setDescription("Sync the full guild member roster (username -> id) for Team Tour resolution. Runs daily + on boot automatically."),
+    )
+    .addSubcommand((sub) =>
+      sub
         .setName("scan-bots")
         .setDescription("Check every signup/player against Discord's bot flag and remove any bot accounts from the league."),
     )
@@ -231,6 +237,7 @@ export const admin: SlashCommand = {
     if (sub === "strikes") return listStrikes(interaction);
     if (sub === "reload-emojis") return reloadEmojis(interaction);
     if (sub === "sync-names") return syncNames(interaction);
+    if (sub === "sync-members") return syncMembers(interaction);
     if (sub === "scan-bots") return scanBots(interaction);
     if (sub === "cancel-match") return cancelMatch(interaction);
   },
@@ -339,6 +346,32 @@ async function syncNames(interaction: ChatInputCommandInteraction) {
   } catch (err) {
     console.warn("[admin sync-names] failed:", err);
     await interaction.editReply("❌ Name sync failed — check the bot logs.");
+  }
+}
+
+// Sync the full guild member roster into the GuildMember table (username -> id), the
+// source the Team Tour app reads to resolve people who aren't registered league
+// players. Runs daily on its own; this is the manual "do it now" trigger. Requires
+// GUILD_MEMBER_SYNC=1 + the GuildMembers privileged intent.
+async function syncMembers(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  try {
+    const { synced, removed } = await runGuildMemberSync();
+    if (synced === 0) {
+      await interaction.editReply(
+        "⚠️ Nothing synced — the GuildMembers (Server Members) privileged intent isn't enabled. Turn it on in the Discord Developer Portal, then it syncs automatically.",
+      );
+      return;
+    }
+    await interaction.editReply(`✅ Synced **${synced}** guild members (${removed} departed members pruned).`);
+    recordAudit({
+      actor: actorFromInteractionUser(interaction.user),
+      action: "guild.sync-members",
+      summary: `Manual guild-member sync: ${synced} synced, ${removed} pruned`,
+    });
+  } catch (err) {
+    console.warn("[admin sync-members] failed:", err);
+    await interaction.editReply("❌ Member sync failed — check the bot logs (is the GuildMembers intent enabled?).");
   }
 }
 

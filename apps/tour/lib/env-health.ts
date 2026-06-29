@@ -4,8 +4,7 @@
 // and "login won't work" are debuggable in the browser, not just the Railway logs.
 import { prisma } from "./db";
 import { getViewer } from "./auth";
-import { leagueDbConfigured, leaguePlayersLive } from "./league-db";
-import { discordGuildConfigured, discordGuildReachable } from "./discord-guild";
+import { leagueDbConfigured, leaguePlayersLive, leagueGuildMemberCount } from "./league-db";
 
 type Level = "ok" | "warn" | "error" | "info";
 
@@ -34,8 +33,8 @@ export async function getEnvHealth() {
     { key: "AUTH_COOKIE_DOMAIN", set: present("AUTH_COOKIE_DOMAIN"), level: present("AUTH_COOKIE_DOMAIN") ? "ok" : "info", note: "set to .balatroleague.com for shared SSO; unset = standalone login (fine for first test)" },
     { key: "TOUR_OWNER_DISCORD_IDS", set: ownerListSet, level: ownerListSet || devAdmin ? "ok" : "warn", note: "your Discord id → OWNER admin (without it + no dev bypass, NOBODY is admin)" },
     { key: "TOUR_DEV_ADMIN", set: devAdmin, level: prod && devAdmin ? "error" : "info", note: prod ? "MUST be unset in prod (it bypasses auth)" : "local dev admin bypass" },
-    { key: "TOUR_GUILD_ID", set: present("TOUR_GUILD_ID"), level: "info", note: "the Tour server id — enables 'Sync Discord members' for identity linking + role tiers" },
-    { key: "TOUR_DISCORD_TOKEN", set: present("TOUR_DISCORD_TOKEN"), level: "info", note: "bot token (Server Members Intent) — powers 'Sync Discord members' (@username → real id)" },
+    { key: "TOUR_GUILD_ID", set: present("TOUR_GUILD_ID"), level: "info", note: "optional — resolves tiers via Discord roles (identity uses the league's shared-guild roster instead)" },
+    { key: "TOUR_DISCORD_TOKEN", set: present("TOUR_DISCORD_TOKEN"), level: "info", note: "optional — only the bot needs it (Phase C)" },
     { key: "NEXT_PUBLIC_LEAGUE_URL", set: present("NEXT_PUBLIC_LEAGUE_URL"), level: "info", note: "optional — defaults to https://balatroleague.com" },
   ];
 
@@ -77,23 +76,16 @@ export async function getEnvHealth() {
     leagueDb = { configured: false, reachable: false, players: null };
   }
 
-  // Discord guild member sync (optional) — the @username → numeric id resolver used
-  // to bulk-link signup players.
-  let discordGuild: { configured: boolean; reachable: boolean };
-  if (discordGuildConfigured()) {
-    const reachable = await discordGuildReachable();
-    discordGuild = { configured: true, reachable };
-    if (!reachable) warnings.push("TOUR_DISCORD_TOKEN/TOUR_GUILD_ID set but the guild member read failed — check the token + enable the Server Members Intent.");
-  } else {
-    discordGuild = { configured: false, reachable: false };
-  }
+  // Shared-guild roster from the league (GuildMember table) — the username->id source
+  // for resolving tour-only members. null count = table/grant not there yet.
+  const guildRoster = { members: leagueDbConfigured() ? await leagueGuildMemberCount() : null };
 
   return {
     nodeEnv: process.env.NODE_ENV ?? "(unset)",
     vars,
     db,
     leagueDb,
-    discordGuild,
+    guildRoster,
     viewer: { authenticated: viewer.authenticated, discordId: myId, tier: viewer.tier, inOwnerList, playerId: viewer.playerId },
     warnings,
   };

@@ -78,11 +78,11 @@ export default async function EnvHealth() {
               : <span style={{ color: "var(--danger)" }}><X className="inline size-4 align-text-bottom" /> League DB configured but unreachable (check the read-only string).</span>}
         </p>
         <p className="mt-1">
-          {!h.discordGuild.configured
-            ? <span className="sub"><Info className="inline size-3.5 align-text-bottom" /> Discord member sync off — set <code>TOUR_DISCORD_TOKEN</code> + <code>TOUR_GUILD_ID</code> (Server Members Intent) to bulk-resolve signup @usernames → real ids.</span>
-            : h.discordGuild.reachable
-              ? <span style={{ color: "var(--success)" }}><Check className="inline size-4 align-text-bottom" /> Discord guild reachable — &ldquo;Sync Discord members&rdquo; can resolve @usernames.</span>
-              : <span style={{ color: "var(--danger)" }}><X className="inline size-4 align-text-bottom" /> Discord token/guild set but unreachable — check the bot token + Server Members Intent.</span>}
+          {h.guildRoster.members === null
+            ? <span className="sub"><Info className="inline size-3.5 align-text-bottom" /> Shared-guild roster not available yet — enable the league bot&apos;s Server Members intent (it then syncs automatically) and make sure the read-only role can read <code>GuildMember</code>.</span>
+            : h.guildRoster.members > 0
+              ? <span style={{ color: "var(--success)" }}><Check className="inline size-4 align-text-bottom" /> Shared-guild roster live — {h.guildRoster.members} members for username resolution.</span>
+              : <span className="sub"><Info className="inline size-3.5 align-text-bottom" /> Shared-guild roster table is empty — run <code>/admin sync-members</code> on the league bot.</span>}
         </p>
       </div>
 

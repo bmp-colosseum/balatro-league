@@ -40,6 +40,15 @@ const INTENTS_FULL = [
   GatewayIntentBits.Guilds,
   GatewayIntentBits.GuildMessages,
   GatewayIntentBits.MessageContent,
+  // Privileged: the full-member-roster sync. If this one isn't enabled in the portal,
+  // the login ladder below drops to INTENTS_MESSAGES (keeping MessageContent) so adding
+  // it can NEVER cost us moderation capture — the sync just no-ops until it's on.
+  GatewayIntentBits.GuildMembers,
+];
+const INTENTS_MESSAGES = [
+  GatewayIntentBits.Guilds,
+  GatewayIntentBits.GuildMessages,
+  GatewayIntentBits.MessageContent,
 ];
 const INTENTS_CORE = [GatewayIntentBits.Guilds];
 
@@ -237,24 +246,43 @@ client.on(Events.InteractionCreate, async (interaction) => {
 // keeps running. Crucially this stops the crash-LOOP that a fatal login error
 // would cause — repeated restarts hammer Discord's gateway and trip a long
 // connection rate-limit (429 on /gateway/bot) that locks the bot out entirely.
-let client = createClient(INTENTS_FULL);
-try {
-  await client.login(env.DISCORD_TOKEN);
-} catch (err) {
-  const msg = String((err as Error)?.message ?? err);
-  if (/disallowed intents/i.test(msg)) {
-    console.error(
-      "[boot] ⚠ MessageContent intent is DISABLED in the Discord Developer Portal — " +
-        "moderation transcript capture is OFF. Booting with core intents so signups/matches keep working. " +
-        "Enable Bot → Privileged Gateway Intents → Message Content to restore capture.",
-    );
-    try { client.destroy(); } catch { /* ignore */ }
-    client = createClient(INTENTS_CORE);
-    await client.login(env.DISCORD_TOKEN);
-  } else {
-    throw err;
+async function loginWithFallback(): Promise<Client> {
+  // Ladder: full (members + message capture) -> messages-only (drop GuildMembers,
+  // KEEP MessageContent) -> core. Each rung is tried only on a "disallowed intents"
+  // error, so we always run with the most capability the portal actually grants.
+  const rungs: { intents: GatewayIntentBits[]; warn?: string }[] = [
+    { intents: INTENTS_FULL },
+    {
+      intents: INTENTS_MESSAGES,
+      warn:
+        "[boot] ⚠ GuildMembers intent is DISABLED in the Discord Developer Portal — the " +
+        "full-member roster sync (for Team Tour id resolution) is OFF. Everything else works. " +
+        "Enable Bot → Privileged Gateway Intents → Server Members to turn it on.",
+    },
+    {
+      intents: INTENTS_CORE,
+      warn:
+        "[boot] ⚠ MessageContent intent is DISABLED — moderation transcript capture is OFF. " +
+        "Booting core intents so signups/matches keep working. Enable Message Content to restore.",
+    },
+  ];
+  let lastErr: unknown;
+  for (const rung of rungs) {
+    const c = createClient(rung.intents);
+    try {
+      await c.login(env.DISCORD_TOKEN);
+      if (rung.warn) console.error(rung.warn);
+      return c;
+    } catch (err) {
+      lastErr = err;
+      try { c.destroy(); } catch { /* ignore */ }
+      if (!/disallowed intents/i.test(String((err as Error)?.message ?? err))) throw err;
+    }
   }
+  throw lastErr;
 }
+
+let client = await loginWithFallback();
 
 setDiscordClient(client);
 attachRateLimitLogging(client);
