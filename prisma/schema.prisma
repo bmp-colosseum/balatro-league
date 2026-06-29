@@ -84,11 +84,11 @@ model Player {
 }
 
 // A snapshot of EVERY current member of the Discord guild (not just registered
-// league players), synced periodically by the bot via the privileged GuildMembers
-// intent. Its sole purpose is username -> numeric-id resolution for tooling that
-// shares this server (e.g. the Team Tour app, which reads this table read-only):
-// Discord has no public username->id lookup, so the guild roster is the only source.
-// Backend-only; not shown anywhere. Keyed by the numeric Discord id.
+// league players), synced by the bot (daily + on boot) via the privileged
+// GuildMembers intent. Its sole purpose is username -> numeric-id resolution for
+// tooling that shares this server (e.g. the Team Tour app, which reads this table
+// read-only): Discord has no public username->id lookup, so the guild roster is the
+// only source. Backend-only; not shown anywhere. Keyed by the numeric Discord id.
 model GuildMember {
   discordId  String   @id
   username   String? // Discord @handle, e.g. "coolguy"

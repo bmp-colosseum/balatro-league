@@ -15,3 +15,12 @@ CREATE TABLE "GuildMember" (
 
 -- CreateIndex
 CREATE INDEX "GuildMember_username_idx" ON "GuildMember"("username");
+
+-- Let the Team Tour read-only role read this table (it already has SELECT on the
+-- rest). No-ops if the role isn't named "tour_ro" / doesn't exist — grant manually then.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tour_ro') THEN
+    GRANT SELECT ON "GuildMember" TO tour_ro;
+  END IF;
+END $$;

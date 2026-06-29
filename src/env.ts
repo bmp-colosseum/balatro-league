@@ -33,15 +33,6 @@ const schema = z.object({
   // category on startup if unset.
   ANNOUNCEMENTS_CHANNEL_ID: z.string().optional(),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
-  // Opt-in: request the privileged GuildMembers intent and sync the FULL guild
-  // member roster (GuildMember table) for username->id resolution by tools that
-  // share this server (Team Tour). Off by default so deploying this code can't
-  // degrade the bot — only flip it AFTER enabling the GuildMembers intent in the
-  // Discord Developer Portal, or the gateway login falls back to core intents.
-  GUILD_MEMBER_SYNC: z
-    .enum(["0", "1"])
-    .optional()
-    .transform((v) => v === "1"),
   // Base URL of the web dashboard THIS bot instance should link to. Defaults
   // to prod; the TEST bot service sets this to its own web URL so links it
   // posts in the test Discord (division schedules, /league info, disputes)

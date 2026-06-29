@@ -416,7 +416,11 @@ export async function initQueue(): Promise<void> {
     await runGuildMemberSync();
   });
   await boss.schedule("sync.guild-members", "30 7 * * *");
-  console.log("[pg-boss] scheduled sync.guild-members @ 07:30 UTC daily");
+  // Also run once shortly after boot so a fresh deploy populates without waiting for
+  // the daily slot (the worker picks it up after the client is ready; no-ops if the
+  // GuildMembers intent isn't granted yet).
+  await boss.send("sync.guild-members", {});
+  console.log("[pg-boss] scheduled sync.guild-members @ 07:30 UTC daily (+ once on boot)");
 
   // Worker: post the public PENDING report embed to #results. Used by
   // the web-side /me report flow which can't post directly. Discord

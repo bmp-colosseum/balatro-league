@@ -8,15 +8,12 @@
 // Gated by env.GUILD_MEMBER_SYNC so it's inert until the intent is enabled. Runs from
 // a daily cron AND an /admin sync-members command.
 
+import { GatewayIntentBits } from "discord.js";
 import { prisma } from "./db.js";
 import { tryGetDiscordClient } from "./discord.js";
 import { env } from "./env.js";
 
 export async function runGuildMemberSync(): Promise<{ synced: number; removed: number }> {
-  if (!env.GUILD_MEMBER_SYNC) {
-    console.warn("[sync.guild-members] GUILD_MEMBER_SYNC not enabled — skipping");
-    return { synced: 0, removed: 0 };
-  }
   const guildId = env.DISCORD_GUILD_ID;
   if (!guildId) {
     console.warn("[sync.guild-members] no DISCORD_GUILD_ID — skipping");
@@ -25,6 +22,13 @@ export async function runGuildMemberSync(): Promise<{ synced: number; removed: n
   const client = tryGetDiscordClient();
   if (!client) {
     console.warn("[sync.guild-members] Discord client not ready — skipping");
+    return { synced: 0, removed: 0 };
+  }
+  // Auto-skip (no env flag) when the privileged intent isn't actually granted — the
+  // boot ladder drops it if the portal toggle is off, and bulk-fetching without it
+  // would just hang. The sync starts working on its own once the intent is enabled.
+  if (!client.options.intents.has(GatewayIntentBits.GuildMembers)) {
+    console.warn("[sync.guild-members] GuildMembers intent not active — enable Server Members in the portal; skipping");
     return { synced: 0, removed: 0 };
   }
   const guild = await client.guilds.fetch(guildId).catch(() => null);

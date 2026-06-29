@@ -79,7 +79,7 @@ export default async function EnvHealth() {
         </p>
         <p className="mt-1">
           {h.guildRoster.members === null
-            ? <span className="sub"><Info className="inline size-3.5 align-text-bottom" /> Shared-guild roster not available yet — deploy the league&apos;s member sync (GUILD_MEMBER_SYNC=1) and grant the read-only role SELECT on <code>GuildMember</code> to resolve tour-only members.</span>
+            ? <span className="sub"><Info className="inline size-3.5 align-text-bottom" /> Shared-guild roster not available yet — enable the league bot&apos;s Server Members intent (it then syncs automatically) and make sure the read-only role can read <code>GuildMember</code>.</span>
             : h.guildRoster.members > 0
               ? <span style={{ color: "var(--success)" }}><Check className="inline size-4 align-text-bottom" /> Shared-guild roster live — {h.guildRoster.members} members for username resolution.</span>
               : <span className="sub"><Info className="inline size-3.5 align-text-bottom" /> Shared-guild roster table is empty — run <code>/admin sync-members</code> on the league bot.</span>}

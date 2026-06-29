@@ -167,7 +167,7 @@ export const admin: SlashCommand = {
     .addSubcommand((sub) =>
       sub
         .setName("sync-members")
-        .setDescription("Sync the full guild member roster (username -> id) for Team Tour resolution. Needs GUILD_MEMBER_SYNC=1."),
+        .setDescription("Sync the full guild member roster (username -> id) for Team Tour resolution. Runs daily + on boot automatically."),
     )
     .addSubcommand((sub) =>
       sub
@@ -359,7 +359,7 @@ async function syncMembers(interaction: ChatInputCommandInteraction) {
     const { synced, removed } = await runGuildMemberSync();
     if (synced === 0) {
       await interaction.editReply(
-        "⚠️ Nothing synced. Enable `GUILD_MEMBER_SYNC=1` and the GuildMembers privileged intent, then redeploy.",
+        "⚠️ Nothing synced — the GuildMembers (Server Members) privileged intent isn't enabled. Turn it on in the Discord Developer Portal, then it syncs automatically.",
       );
       return;
     }
