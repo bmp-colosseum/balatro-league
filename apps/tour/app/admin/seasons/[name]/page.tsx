@@ -16,7 +16,7 @@ export default async function SeasonAdmin({ params }: { params: Promise<{ name: 
     return (
       <main>
         <h1>Admin</h1>
-        <Callout type="admin">Not authorized. Set <code>TOUR_DEV_ADMIN=1</code> in <code>apps/tour/.env</code>.</Callout>
+        <Callout type="admin">Admins only — you don&apos;t have access.in <code>apps/tour/.env</code>.</Callout>
       </main>
     );
   }

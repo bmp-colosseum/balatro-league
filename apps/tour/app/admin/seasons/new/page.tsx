@@ -11,8 +11,8 @@ export default async function NewSeason() {
   if (!(await isAdmin())) {
     return (
       <main>
-        <h1>Not authorized</h1>
-        <p className="sub">Set TOUR_DEV_ADMIN=1 in apps/tour/.env.</p>
+        <h1>Admins only</h1>
+        <p className="sub">You don&apos;t have access to this page.</p>
       </main>
     );
   }

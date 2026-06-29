@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { Check, X, AlertTriangle, Info } from "lucide-react";
 import { getEnvHealth, type VarRow } from "@/lib/env-health";
+import { getViewer, isAdmin } from "@/lib/auth";
 import { Callout } from "@/components/Callout";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Env health · Team Tour" };
+export const metadata = { title: "Env health · Team Tour", robots: { index: false } };
 
-// Diagnostics page — shows env-var PRESENCE (never values), live DB reachability, and
-// the signed-in viewer's resolved tier. Intentionally readable without admin so the
-// "I deployed but I'm not admin" bootstrap case is debuggable; full view needs sign-in.
+// Diagnostics — env-var PRESENCE (never values) + DB reachability, ADMIN-ONLY. A
+// signed-in non-admin sees only their OWN identity + tier (so the "I signed in but
+// I'm not admin" bootstrap is self-diagnosable without leaking any infra config).
 const ICON = { ok: Check, warn: AlertTriangle, error: X, info: Info } as const;
 const COLOR = { ok: "var(--success)", warn: "var(--accent-2)", error: "var(--danger)", info: "var(--muted)" } as const;
 
@@ -25,6 +26,26 @@ function Row({ v }: { v: VarRow }) {
 }
 
 export default async function EnvHealth() {
+  // Infra diagnostics are ADMIN-ONLY. Non-admins get only their own identity so they
+  // can self-diagnose "why am I not admin" without seeing any env/DB config.
+  if (!(await isAdmin())) {
+    const v = await getViewer();
+    return (
+      <main>
+        <p><Link href="/" className="inline-flex items-center gap-1">← home</Link></p>
+        <h1>Access</h1>
+        {!v.authenticated ? (
+          <Callout type="admin">Admins only. <Link href="/auth/signin">Sign in</Link>.</Callout>
+        ) : (
+          <Callout type="admin">
+            You&apos;re signed in as <code>{v.discordId ?? "?"}</code> · tier <strong>{v.tier}</strong> — not an admin.
+            An OWNER must add your Discord ID to <code>TOUR_OWNER_DISCORD_IDS</code>.
+          </Callout>
+        )}
+      </main>
+    );
+  }
+
   const h = await getEnvHealth();
   const loginVars = h.vars.filter((v) => ["DATABASE_URL", "DISCORD_CLIENT_ID", "DISCORD_CLIENT_SECRET", "AUTH_SECRET"].includes(v.key));
 

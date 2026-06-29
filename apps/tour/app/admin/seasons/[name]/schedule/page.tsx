@@ -15,7 +15,7 @@ export default async function ScheduleAdmin({ params }: { params: Promise<{ name
     return (
       <main>
         <h1>Admin</h1>
-        <Callout type="admin">Not authorized. Set <code>TOUR_DEV_ADMIN=1</code>.</Callout>
+        <Callout type="admin">Admins only — you don&apos;t have access.</Callout>
       </main>
     );
   }

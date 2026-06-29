@@ -17,10 +17,7 @@ export default async function Admin() {
           <Link href="/" className="inline-flex items-center gap-1"><ArrowLeft className="size-3.5" /> home</Link>
         </p>
         <h1>Admin</h1>
-        <Callout type="admin">
-          Not authorized. Set <code>TOUR_DEV_ADMIN=1</code> in <code>apps/tour/.env</code> for local dev (real auth =
-          Discord OAuth + role tiers, wired when the Tour Discord app exists).
-        </Callout>
+        <Callout type="admin">Admins only — you don&apos;t have access.</Callout>
       </main>
     );
   }
@@ -30,7 +27,6 @@ export default async function Admin() {
     <main>
       <h1>Admin</h1>
       <p className="sub flex items-center gap-1.5">
-        Dev-admin mode ·{" "}
         <Link href="/admin/seasons/new" className="inline-flex items-center gap-1"><Plus className="size-3.5" /> New season</Link>
         {" "}·{" "}
         <Link href="/admin/identity" className="inline-flex items-center gap-1"><Fingerprint className="size-3.5" /> Identity manager</Link>
