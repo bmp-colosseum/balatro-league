@@ -341,11 +341,17 @@ export async function mergePlayers(keepId: string, dropId: string) {
       if (keepRosters.has(e.rosterId)) await tx.rosterEntry.delete({ where: { id: e.id } });
       else await tx.rosterEntry.update({ where: { id: e.id }, data: { playerId: keepId } });
     }
-    // Fold the dropped identity into keep's aliases so a re-import finds keep.
+    // Preserve the REAL identity: the survivor keeps a real Discord id if EITHER
+    // side has one — so "merge in" never accidentally UNLINKS a linked player just
+    // because the merge was run from the duplicate's row. Any retired legacy id
+    // becomes an alias so a re-import still re-attaches.
     const aliases = new Set([...keep.aliases, ...drop.aliases]);
-    if (drop.discordId.startsWith("legacy:")) aliases.add(drop.discordId);
-    await tx.player.update({ where: { id: keepId }, data: { aliases: [...aliases] } });
-    await tx.player.delete({ where: { id: dropId } });
+    for (const did of [keep.discordId, drop.discordId]) if (did.startsWith("legacy:")) aliases.add(did);
+    const keepLegacy = keep.discordId.startsWith("legacy:");
+    const dropLegacy = drop.discordId.startsWith("legacy:");
+    const survivingDiscordId = !keepLegacy ? keep.discordId : !dropLegacy ? drop.discordId : keep.discordId;
+    await tx.player.delete({ where: { id: dropId } }); // frees drop's discordId for adoption
+    await tx.player.update({ where: { id: keepId }, data: { aliases: [...aliases], discordId: survivingDiscordId } });
   });
 
   return { keep: keep.displayName, dropped: drop.displayName };

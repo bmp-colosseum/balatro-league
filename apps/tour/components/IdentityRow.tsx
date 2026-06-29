@@ -37,7 +37,7 @@ export function IdentityRow({ player }: { player: IdPlayer }) {
     setResults([]);
   }
   async function pick(r: Result) {
-    if (mode === "merge" && !confirm(`Merge "${r.label}" INTO "${player.name}"?\n\nThis deletes "${r.label}" and moves all of its history (sets, picks, awards) to "${player.name}". Cannot be undone.`)) return;
+    if (mode === "merge" && !confirm(`Merge "${r.label}" INTO "${player.name}"?\n\nAll history (sets, picks, awards) ends up on one player. A real Discord link from EITHER side is always kept, so this won't unlink anyone. Cannot be undone.`)) return;
     setBusy(true);
     const res = mode === "link" ? await linkPlayerAction(player.id, r.value) : await mergePlayerAction(player.id, r.value);
     setBusy(false);
