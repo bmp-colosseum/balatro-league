@@ -34,9 +34,18 @@ const clean = (v: string | undefined) => {
   return t || null;
 };
 
+// Phases where adding a signup makes sense (the pool is still forming). After the
+// draft builds rosters (REGULAR onward) there's no pool to add to.
+const SIGNUP_OPEN_STATES = ["SIGNUPS", "DRAFTING"] as const;
+
 // Upsert by (season, discordId) — idempotent, so re-submitting updates the row.
 export async function addSignup(seasonName: string, input: SignupInput) {
-  const seasonId = await seasonIdByName(seasonName);
+  const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true, state: true } });
+  if (!season) throw new Error(`No season "${seasonName}"`);
+  if (!(SIGNUP_OPEN_STATES as readonly string[]).includes(season.state)) {
+    throw new Error(`Signups are closed for ${seasonName} (it's ${season.state.toLowerCase()}).`);
+  }
+  const seasonId = season.id;
   const discordId = (input.discordId ?? "").trim();
   if (!discordId) throw new Error("Discord ID is required");
   return prisma.signup.upsert({

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { linkPlayerAction, mergePlayerAction } from "@/app/admin/identity/actions";
 
 type Result = { value: string; label: string; detail: string };
-export type IdPlayer = { id: string; name: string; discordId: string; linked: boolean; sets: number; seasons: number };
+export type IdPlayer = { id: string; name: string; discordId: string; linked: boolean; sets: number; seasons: number; suggestions?: { discordId: string; name: string }[] };
 
 export function IdentityRow({ player }: { player: IdPlayer }) {
   const [mode, setMode] = useState<null | "link" | "merge">(null);
@@ -48,6 +48,14 @@ export function IdentityRow({ player }: { player: IdPlayer }) {
       alert(res?.message ?? "Failed.");
     }
   }
+  // One-click link to a suggested league match.
+  async function linkSuggested(discordId: string) {
+    setBusy(true);
+    const res = await linkPlayerAction(player.id, discordId);
+    setBusy(false);
+    if (res?.ok) router.refresh();
+    else alert(res?.message ?? "Failed.");
+  }
 
   return (
     <div className="card" style={{ marginBottom: 8 }}>
@@ -68,6 +76,18 @@ export function IdentityRow({ player }: { player: IdPlayer }) {
           <GitMerge className="size-3.5" /> Merge in
         </Button>
       </div>
+
+      {/* Auto-suggested league matches — one click to link (unlinked players only) */}
+      {!player.linked && !mode && player.suggestions && player.suggestions.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <span className="sub">Likely:</span>
+          {player.suggestions.map((s) => (
+            <Button key={s.discordId} size="sm" variant="secondary" disabled={busy} onClick={() => linkSuggested(s.discordId)} title={`Link to ${s.name} (${s.discordId})`}>
+              <Link2 className="size-3.5" /> {s.name}
+            </Button>
+          ))}
+        </div>
+      )}
 
       {mode && (
         <div className="mt-2">

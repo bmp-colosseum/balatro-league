@@ -7,32 +7,76 @@ import { join } from "node:path";
 import { prisma } from "../db";
 
 const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]/g, "");
+export interface LeagueRefRow { discordId: string; name: string }
 
-// League players exported to apps/tour/league-players.csv (name,discordId — both
-// displayName and @username rows). The picker for linking a Tour player to their
-// league identity. (Prod would sync this to a table; CSV is fine for now.)
-export function searchLeagueRef(q: string, limit = 25): { discordId: string; name: string }[] {
+// The league name→Discord-id reference. Reads the LeagueRef DB table (works in
+// prod); falls back to a local `league-players.csv` if the table is empty (dev
+// convenience). Parse `name,discordId` lines.
+async function getLeagueRef(): Promise<LeagueRefRow[]> {
+  const rows = await prisma.leagueRef.findMany({ select: { discordId: true, name: true } });
+  if (rows.length > 0) return rows;
   const path = join(process.cwd(), "league-players.csv");
   if (!existsSync(path)) return [];
-  const lines = readFileSync(path, "utf8").replace(/\r/g, "").split("\n").filter(Boolean);
-  lines.shift(); // header
-  const all = lines
+  return parseLeagueCsv(readFileSync(path, "utf8"));
+}
+
+function parseLeagueCsv(csv: string): LeagueRefRow[] {
+  const lines = csv.replace(/\r/g, "").split("\n").filter(Boolean);
+  if (lines[0]?.toLowerCase().startsWith("name")) lines.shift(); // header
+  return lines
     .map((line) => {
       const last = line.lastIndexOf(",");
-      return { name: line.slice(0, last), discordId: line.slice(last + 1).trim() };
+      return { name: line.slice(0, last).trim(), discordId: line.slice(last + 1).trim() };
     })
-    .filter((r) => r.discordId);
-  const needle = norm(q);
-  const matched = needle ? all.filter((r) => norm(r.name).includes(needle)) : all;
+    .filter((r) => r.discordId && /^\d+$/.test(r.discordId));
+}
+
+// Populate/refresh the LeagueRef table from a CSV string. Idempotent (upsert by id).
+export async function loadLeagueRefFromCsv(csv: string): Promise<{ count: number }> {
+  const byId = new Map<string, string>();
+  for (const r of parseLeagueCsv(csv)) byId.set(r.discordId, r.name); // dedup, keep last name
+  for (const [discordId, name] of byId) {
+    await prisma.leagueRef.upsert({ where: { discordId }, create: { discordId, name }, update: { name } });
+  }
+  return { count: byId.size };
+}
+
+export async function leagueRefCount(): Promise<number> {
+  return (await getLeagueRef()).length;
+}
+
+// Dedup-by-id + cap.
+function dedup(rows: LeagueRefRow[], limit: number): LeagueRefRow[] {
   const seen = new Set<string>();
-  const out: { discordId: string; name: string }[] = [];
-  for (const r of matched) {
+  const out: LeagueRefRow[] = [];
+  for (const r of rows) {
     if (seen.has(r.discordId)) continue;
     seen.add(r.discordId);
     out.push(r);
     if (out.length >= limit) break;
   }
   return out;
+}
+
+// Rank league rows by how well they match a name: exact → starts-with → contains.
+function rankMatches(name: string, all: LeagueRefRow[], limit: number): LeagueRefRow[] {
+  const t = norm(name);
+  if (!t) return [];
+  const exact: LeagueRefRow[] = [], starts: LeagueRefRow[] = [], incl: LeagueRefRow[] = [];
+  for (const r of all) {
+    const n = norm(r.name);
+    if (n === t) exact.push(r);
+    else if (n.startsWith(t) || t.startsWith(n)) starts.push(r);
+    else if (n.includes(t) || t.includes(n)) incl.push(r);
+  }
+  return dedup([...exact, ...starts, ...incl], limit);
+}
+
+// The link picker (free-text search of the league list).
+export async function searchLeagueRef(q: string, limit = 25): Promise<LeagueRefRow[]> {
+  const all = await getLeagueRef();
+  const needle = norm(q);
+  return dedup(needle ? all.filter((r) => norm(r.name).includes(needle)) : all, limit);
 }
 
 export async function identityCounts() {
@@ -50,6 +94,7 @@ export interface TourPlayerRow {
   linked: boolean;
   sets: number;
   seasons: number;
+  suggestions?: LeagueRefRow[]; // likely league matches (unlinked players only)
 }
 
 export async function listTourPlayers(q = "", limit = 60): Promise<TourPlayerRow[]> {
@@ -70,7 +115,7 @@ export async function listTourPlayers(q = "", limit = 60): Promise<TourPlayerRow
     }
   }
   const needle = norm(q);
-  let rows = players.map((p) => ({
+  let rows: TourPlayerRow[] = players.map((p) => ({
     id: p.id,
     name: p.displayName,
     discordId: p.discordId,
@@ -80,7 +125,14 @@ export async function listTourPlayers(q = "", limit = 60): Promise<TourPlayerRow
   }));
   if (needle) rows = rows.filter((r) => norm(r.name).includes(needle));
   rows.sort((a, b) => b.sets - a.sets || a.name.localeCompare(b.name));
-  return rows.slice(0, limit);
+  const out = rows.slice(0, limit);
+
+  // Auto-suggest a league match for each UNLINKED player (one-click linking).
+  const leagueRef = await getLeagueRef();
+  if (leagueRef.length) {
+    for (const r of out) if (!r.linked) r.suggestions = rankMatches(r.name, leagueRef, 2);
+  }
+  return out;
 }
 
 // Set a Tour player's discordId to a real one. If that id already belongs to a

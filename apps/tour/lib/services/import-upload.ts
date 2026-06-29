@@ -4,10 +4,11 @@
 // the sheets root, runs the same importHistorical + importConferenceSeason services against it,
 // and cleans up. Thin orchestration — the parsing/writing lives in import.ts.
 import AdmZip from "adm-zip";
-import { mkdtemp, rm, readdir } from "node:fs/promises";
+import { mkdtemp, rm, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { importHistorical, importConferenceSeason } from "./import";
+import { loadLeagueRefFromCsv } from "./identity";
 
 // Walk the extracted tree to find the directory that looks like the sheets root:
 // one that contains an `alltime/` subfolder (historical) or `Standings.html` (the
@@ -34,6 +35,7 @@ async function findSheetsRoot(dir: string, depth = 0): Promise<string | null> {
 export interface UploadImportResult {
   historical?: Awaited<ReturnType<typeof importHistorical>>;
   conference?: Awaited<ReturnType<typeof importConferenceSeason>>;
+  leagueRef?: number; // league name→discordId rows loaded (for identity linking)
   ran: string[];
   errors: { which: string; message: string }[];
 }
@@ -64,8 +66,22 @@ export async function importFromZip(zipBuffer: Buffer): Promise<UploadImportResu
       errors.push({ which: "conference", message: e instanceof Error ? e.message : String(e) });
     }
 
+    // Optional: a `league-players.csv` (name,discordId) in the zip → populate the
+    // LeagueRef table so identity-linking works in prod (not just from a local file).
+    let leagueRef: number | undefined;
+    const csvPath = join(root, "league-players.csv");
+    const csv = await readFile(csvPath, "utf8").catch(() => null);
+    if (csv) {
+      try {
+        leagueRef = (await loadLeagueRefFromCsv(csv)).count;
+        if (leagueRef > 0) ran.push("league-ref");
+      } catch (e) {
+        errors.push({ which: "league-ref", message: e instanceof Error ? e.message : String(e) });
+      }
+    }
+
     if (ran.length === 0) throw new Error(errors.map((x) => `${x.which}: ${x.message}`).join(" · ") || "Nothing imported.");
-    return { historical, conference, ran, errors };
+    return { historical, conference, leagueRef, ran, errors };
   } finally {
     await rm(tmp, { recursive: true, force: true }).catch(() => {});
   }

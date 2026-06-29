@@ -13,7 +13,8 @@ export async function GET(req: Request) {
   const q = url.searchParams.get("q") ?? "";
 
   if (type === "league") {
-    return NextResponse.json({ results: searchLeagueRef(q).map((r) => ({ value: r.discordId, label: r.name, detail: r.discordId })) });
+    const league = await searchLeagueRef(q);
+    return NextResponse.json({ results: league.map((r) => ({ value: r.discordId, label: r.name, detail: r.discordId })) });
   }
   const rows = await listTourPlayers(q, 20);
   return NextResponse.json({
