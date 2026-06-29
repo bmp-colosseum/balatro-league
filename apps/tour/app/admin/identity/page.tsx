@@ -4,6 +4,7 @@ import { isAdmin } from "@/lib/auth";
 import { listTourPlayers, identityCounts } from "@/lib/services/identity";
 import { Callout } from "@/components/Callout";
 import { IdentityRow } from "@/components/IdentityRow";
+import { PrunePhantomsButton } from "@/components/PrunePhantomsButton";
 
 export const dynamic = "force-dynamic";
 
@@ -43,10 +44,12 @@ export default async function Identity({ searchParams }: { searchParams: Promise
       <Callout type="info" className="mb-3">
         <strong>Don&apos;t link 300 by hand.</strong>{" "}
         <Link href="/admin/identity/auto-link" className="inline-flex items-center gap-1"><Wand2 className="size-3.5" /> Auto-link from signups</Link> matches everyone it can
-        confidently resolve (signup @username -&gt; real id, via the league DB and a live, in-memory read of the Tour Discord
-        roster) for one-click bulk approval. Then mop up stragglers below. Duplicates from a re-import?{" "}
+        confidently resolve (signup @username -&gt; real id, via the league DB + shared-guild roster) for one-click bulk
+        approval. Then mop up stragglers below. Duplicates from a re-import?{" "}
         <Link href="/admin/identity/recover" className="inline-flex items-center gap-1"><Wrench className="size-3.5" /> Recover duplicates</Link>.
       </Callout>
+
+      <div className="mb-3"><PrunePhantomsButton /></div>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {FILTERS.map((f) => (

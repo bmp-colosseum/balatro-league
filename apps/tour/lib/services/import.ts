@@ -133,7 +133,15 @@ async function importRosters(dir: string) {
 }
 
 async function importResults(dir: string) {
-  const sets = parseGameLog(dir) as GameLogSet[];
+  const rawSets = parseGameLog(dir) as GameLogSet[];
+  // Some seasons' Game Log records TEAM matchups, not player matches (e.g. TT3). A row
+  // whose BOTH sides are team names is a team-vs-team result — skip it so team names
+  // never get turned into "players". (One side matching a team can be a real-player
+  // coincidence, so require both.) Teams already exist here (importRosters ran first).
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const teamNames = new Set((await prisma.team.findMany({ select: { name: true } })).map((t) => norm(t.name)));
+  const sets = rawSets.filter((s) => !(teamNames.has(norm(s.p1)) && teamNames.has(norm(s.p2))));
+
   const seasonRows = await prisma.tourSeason.findMany({ select: { id: true, name: true } });
   const seasonId = new Map(seasonRows.map((s) => [Number(s.name.replace(/\D/g, "")), s.id]));
 
@@ -499,6 +507,48 @@ export async function applySignupRefsFromDir(dir = sheetsDir()) {
   return applySignupRefs(all);
 }
 
+// Remove phantom "players" that are actually team names — created by older imports that
+// turned team-vs-team Game Log rows into player matches (e.g. TT3). Deletes the bogus
+// team-vs-team sets + their matches, then any team-named legacy player left with no real
+// footprint (no sets, draft picks, or roster entries). Never touches a linked player or
+// a real player. Idempotent — safe to run anytime; runs at the end of importHistorical.
+export async function pruneTeamNamePlayers(): Promise<{ removed: number; names: string[]; setsDeleted: number }> {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const teamNames = new Set((await prisma.team.findMany({ select: { name: true } })).map((t) => norm(t.name)));
+  const players = await prisma.player.findMany({ select: { id: true, displayName: true, discordId: true } });
+  const phantomIds = new Set(
+    players.filter((p) => p.discordId.startsWith("legacy:") && teamNames.has(norm(p.displayName))).map((p) => p.id),
+  );
+  if (phantomIds.size === 0) return { removed: 0, names: [], setsDeleted: 0 };
+
+  // Delete sets (and their matches) where BOTH sides are phantom team-players.
+  const teamSets = await prisma.tourSet.findMany({
+    where: { AND: [{ playerAId: { in: [...phantomIds] } }, { playerBId: { in: [...phantomIds] } }] },
+    select: { id: true, matchId: true },
+  });
+  if (teamSets.length) {
+    await prisma.tourSet.deleteMany({ where: { id: { in: teamSets.map((s) => s.id) } } });
+    const matchIds = teamSets.map((s) => s.matchId).filter((x): x is string => !!x);
+    if (matchIds.length) await prisma.match.deleteMany({ where: { id: { in: matchIds } } });
+  }
+
+  // Delete phantom players left with no real footprint.
+  const removed: string[] = [];
+  for (const p of players) {
+    if (!phantomIds.has(p.id)) continue;
+    const [sets, picks, rosters] = await Promise.all([
+      prisma.tourSet.count({ where: { OR: [{ playerAId: p.id }, { playerBId: p.id }] } }),
+      prisma.draftPick.count({ where: { playerId: p.id } }),
+      prisma.rosterEntry.count({ where: { playerId: p.id } }),
+    ]);
+    if (sets === 0 && picks === 0 && rosters === 0) {
+      await prisma.player.delete({ where: { id: p.id } });
+      removed.push(p.displayName);
+    }
+  }
+  return { removed: removed.length, names: removed, setsDeleted: teamSets.length };
+}
+
 export async function importHistorical(dir = sheetsDir()) {
   await importRosters(dir);
   const sets = await importResults(dir);
@@ -510,6 +560,7 @@ export async function importHistorical(dir = sheetsDir()) {
   // Seed the weekly roster-move log from the imported drafts (idempotent) so the
   // roster timeline + per-week lineup derivation work for historical seasons.
   const rosterMoves = await backfillDraftedMoves();
+  await pruneTeamNamePlayers(); // drop any team-vs-team phantom "players" (e.g. older TT3 rows)
   const [players, teams, teamSeasons, conferences, matches, tourSets] = await Promise.all([
     prisma.player.count(),
     prisma.team.count(),

@@ -3,7 +3,28 @@
 import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/auth";
 import { linkPlayer, mergePlayers, applyIdentityRecovery, applyAutoLink } from "@/lib/services/identity";
+import { pruneTeamNamePlayers } from "@/lib/services/import";
 import type { ActionResult } from "@/lib/action-result";
+
+// Remove phantom "players" that are actually team names (team-vs-team Game Log rows
+// older imports turned into players). Also clears their bogus sets.
+export async function prunePhantomsAction(_prev: ActionResult | null, _formData: FormData): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
+  try {
+    const r = await pruneTeamNamePlayers();
+    revalidatePath("/admin/identity");
+    revalidatePath("/admin/identity/auto-link");
+    revalidatePath("/players");
+    return {
+      ok: true,
+      message: r.removed === 0
+        ? "No phantom team-players found — already clean."
+        : `Removed ${r.removed} team-named phantom player${r.removed === 1 ? "" : "s"} and ${r.setsDeleted} bogus set${r.setsDeleted === 1 ? "" : "s"}.`,
+    };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Cleanup failed." };
+  }
+}
 
 export async function linkPlayerAction(playerId: string, discordId: string): Promise<ActionResult> {
   if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
