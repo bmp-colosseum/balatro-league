@@ -15,6 +15,36 @@ async function closeDisputeThread(disputeThreadId: string | null): Promise<void>
   if (disputeThreadId) await deleteChannel(disputeThreadId).catch(() => {});
 }
 
+// Carry a resolved dispute's per-game detail onto the Game rows WITHOUT wiping
+// deck/stake: each game's winner is updated from the corrected score, and its
+// winnerLives only when a value was given — everything else (deck, stake) is
+// preserved. Creates rows only if none exist AND lives were given. Game 1/2
+// winners: 2-0 → A both, 0-2 → B both, 1-1 → A then B.
+async function applyResolvedGames(
+  pairing: { id: string; playerAId: string; playerBId: string },
+  gamesWonA: number,
+  gamesWonB: number,
+  livesG1: number | null,
+  livesG2: number | null,
+): Promise<void> {
+  const existing = await prisma.game.count({ where: { matchId: pairing.id } });
+  const hasLives = livesG1 != null || livesG2 != null;
+  if (existing === 0 && !hasLives) return; // nothing to carry, nothing to fix
+  const [w1, w2] =
+    gamesWonA > gamesWonB ? [pairing.playerAId, pairing.playerAId]
+      : gamesWonB > gamesWonA ? [pairing.playerBId, pairing.playerBId]
+      : [pairing.playerAId, pairing.playerBId];
+  const upsert = (num: number, winnerId: string, lives: number | null) =>
+    prisma.game.upsert({
+      where: { matchId_num: { matchId: pairing.id, num } },
+      // Preserve deck/stake — only set the winner, and lives when provided.
+      update: { winnerId, ...(lives != null ? { winnerLives: lives } : {}) },
+      create: { matchId: pairing.id, num, firstPlayerId: pairing.playerAId, winnerId, winnerLives: lives },
+    });
+  await upsert(1, w1, livesG1);
+  await upsert(2, w2, livesG2);
+}
+
 // Accept the disputer's proposed correction wholesale. One-click path
 // when the helper agrees with what the disputer says it should have
 // been. Writes the proposed games as the new result, flips to
@@ -56,24 +86,9 @@ export async function acceptDisputeProposal(formData: FormData) {
     },
   });
 
-  // Carry the disputer's per-game lives onto real Game rows (same fidelity as a
-  // normal report) when they gave them. Each game's winner comes from the
-  // accepted score: 2-0 → A both, 0-2 → B both, 1-1 → A then B.
-  const g1 = pairing.disputeProposedLivesG1;
-  const g2 = pairing.disputeProposedLivesG2;
-  if (g1 != null || g2 != null) {
-    const [w1, w2] =
-      acceptedA! > acceptedB! ? [pairing.playerAId, pairing.playerAId]
-        : acceptedB! > acceptedA! ? [pairing.playerBId, pairing.playerBId]
-        : [pairing.playerAId, pairing.playerBId];
-    await prisma.game.deleteMany({ where: { matchId: pairingId } });
-    await prisma.game.createMany({
-      data: [
-        { matchId: pairingId, num: 1, firstPlayerId: pairing.playerAId, winnerId: w1, winnerLives: g1 },
-        { matchId: pairingId, num: 2, firstPlayerId: pairing.playerAId, winnerId: w2, winnerLives: g2 },
-      ],
-    });
-  }
+  // Carry the disputer's per-game lives onto the Game rows (keeping any deck/stake
+  // already recorded).
+  await applyResolvedGames(pairing, acceptedA!, acceptedB!, pairing.disputeProposedLivesG1, pairing.disputeProposedLivesG2);
   await closeDisputeThread(pairing.disputeThreadId);
   // Re-announce the corrected result so the channel sees the final
   // numbers — admin's accept-the-proposal flow effectively re-posts
@@ -191,21 +206,8 @@ export async function setDisputeResult(formData: FormData) {
     },
   });
 
-  // Carry the helper's per-game lives onto Game rows. Winner of each game from
-  // the chosen result (2-0 → A both, 0-2 → B both, 1-1 → A then B).
-  if (livesG1 != null || livesG2 != null) {
-    const [w1, w2] =
-      games![0] > games![1] ? [pairing.playerAId, pairing.playerAId]
-        : games![1] > games![0] ? [pairing.playerBId, pairing.playerBId]
-        : [pairing.playerAId, pairing.playerBId];
-    await prisma.game.deleteMany({ where: { matchId: pairingId } });
-    await prisma.game.createMany({
-      data: [
-        { matchId: pairingId, num: 1, firstPlayerId: pairing.playerAId, winnerId: w1, winnerLives: livesG1 },
-        { matchId: pairingId, num: 2, firstPlayerId: pairing.playerAId, winnerId: w2, winnerLives: livesG2 },
-      ],
-    });
-  }
+  // Carry the helper's per-game lives onto the Game rows (keeping any deck/stake).
+  await applyResolvedGames(pairing, games![0], games![1], livesG1, livesG2);
   await closeDisputeThread(pairing.disputeThreadId);
   enqueueAnnounceResult(pairingId).catch((err) => console.warn("[dispute.custom] announceResult failed:", err));
   recomputeDivisionStandings(pairing.divisionId).catch(() => {});
