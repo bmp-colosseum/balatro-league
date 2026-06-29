@@ -7,7 +7,7 @@ import AdmZip from "adm-zip";
 import { mkdtemp, rm, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { importHistorical, importConferenceSeason, applyConferenceData, importConferenceRosters, applySignupRefsFromDir } from "./import";
+import { importHistorical, importConferenceSeason, applyConferenceData, importConferenceRosters, importConferenceResults, applySignupRefsFromDir } from "./import";
 import { loadLeagueRefFromCsv } from "./identity";
 
 // Walk the extracted tree to find the directory that looks like the sheets root:
@@ -82,6 +82,13 @@ export async function importFromZip(zipBuffer: Buffer): Promise<UploadImportResu
       if (r.rostersFilled > 0) ran.push("conference-rosters");
     } catch (e) {
       errors.push({ which: "conference-rosters", message: e instanceof Error ? e.message : String(e) });
+    }
+    // Player-level results for conference seasons (e.g. TT4) from the xlsx conference tabs.
+    try {
+      const r = await importConferenceResults(tmp);
+      if (r.sets > 0) ran.push("conference-results");
+    } catch (e) {
+      errors.push({ which: "conference-results", message: e instanceof Error ? e.message : String(e) });
     }
 
     // Optional: a `league-players.csv` (name,discordId) in the zip → populate the

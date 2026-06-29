@@ -132,6 +132,57 @@ export function draftTeamsFromGrid(rows) {
   return teams.filter((t) => t.captain || t.players.length);
 }
 
+// A conference results tab → player sets. Weeks are stacked vertically; each week has
+// team-matchup blocks [teamA, setsA, setsB, teamB] side-by-side, then player rows
+// [playerA, gamesA, gamesB, playerB] under each block until a blank row. Returns
+// [{ week, p1, p1g, p2, p2g }] — one per player matchup (the actual played set).
+export function conferenceResultsFromGrid(rows) {
+  const isNum = (v) => /^\d+$/.test((v ?? "").trim());
+  const sets = [];
+  let week = 0;
+  let blocks = null; // [[aCol, saCol, sbCol, bCol], ...] for the current week
+  for (const row of rows) {
+    const wk = (row[1] ?? "").trim().match(/^Week\s+(\d+)/i);
+    if (wk) { week = Number(wk[1]); blocks = null; continue; }
+    if (!blocks) {
+      // Find the team-matchup HEADER row: groups of [name, int, int, name].
+      const found = [];
+      for (let c = 0; c < row.length - 3; c++) {
+        if ((row[c] ?? "").trim() && !isNum(row[c]) && isNum(row[c + 1]) && isNum(row[c + 2]) && (row[c + 3] ?? "").trim() && !isNum(row[c + 3])) {
+          found.push([c, c + 1, c + 2, c + 3]);
+          c += 3;
+        }
+      }
+      if (found.length) blocks = found; // header found; the player rows follow it
+      continue;
+    }
+    // Player rows: same columns as the header blocks.
+    let any = false;
+    for (const [a, sa, sb, b] of blocks) {
+      const pa = (row[a] ?? "").trim(), pb = (row[b] ?? "").trim();
+      if (pa && pb && isNum(row[sa]) && isNum(row[sb])) {
+        sets.push({ week, p1: pa, p1g: Number(row[sa]), p2: pb, p2g: Number(row[sb]) });
+        any = true;
+      }
+    }
+    if (!any) blocks = null; // blank row ends this week's matchups
+  }
+  return sets;
+}
+
+// Read a season xlsx's player results from its conference tabs (every tab named
+// "<X> Conference"). [{ conference, week, p1, p1g, p2, p2g }].
+export async function readSeasonResults(path) {
+  const wb = await loadWorkbook(path);
+  const out = [];
+  for (const ws of wb.worksheets) {
+    if (!/\sConference$/i.test(ws.name) || /^Conference\b/i.test(ws.name)) continue;
+    const grid = tabGrid(wb, ws.name);
+    for (const s of conferenceResultsFromGrid(grid)) out.push({ conference: ws.name, ...s });
+  }
+  return out;
+}
+
 // Load one season xlsx → its conference + signup + draft-roster data (each empty if absent).
 export async function readSeasonXlsx(path) {
   const wb = await loadWorkbook(path);

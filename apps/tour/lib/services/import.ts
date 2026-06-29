@@ -17,7 +17,7 @@ import { parseDrafts } from "../import/parse-drafts.mjs";
 import { parseAwards } from "../import/parse-awards.mjs";
 import { parsePlayerStats } from "../import/parse-player-stats.mjs";
 import { SEASON_CONFIG, DEFAULT_SEASON } from "../import/seasons-config.mjs";
-import { readSeasonXlsx } from "../import/parse-xlsx-season.mjs";
+import { readSeasonXlsx, readSeasonResults } from "../import/parse-xlsx-season.mjs";
 import { slug } from "../import/sheet.mjs";
 import { backfillDraftedMoves } from "./roster-ops";
 import { applySignupRefs } from "./identity";
@@ -561,6 +561,86 @@ export async function pruneOrphanPlayers(): Promise<{ removed: number; names: st
     }
   }
   return { removed: removed.length, names: removed, setsDeleted };
+}
+
+// Import PLAYER-level match results for conference seasons (e.g. TT4) from the season
+// xlsx conference tabs (player-vs-player rows). The alltime HTML Game Log only covers
+// TT1-3, so without this TT4 has team results but no player sets (so no player stats /
+// H2H). Only fills seasons that have no player sets yet. Idempotent (keyed import).
+export async function importConferenceResults(dir = sheetsDir()) {
+  // Locate each season's main workbook (TT<n>.xlsx).
+  const mains = new Map<number, string>();
+  const walk = (d: string, depth: number) => {
+    if (depth > 4) return;
+    let entries: string[];
+    try { entries = readdirSync(d); } catch { return; }
+    for (const name of entries) {
+      const full = join(d, name);
+      let st: ReturnType<typeof statSync>;
+      try { st = statSync(full); } catch { continue; }
+      if (st.isDirectory()) walk(full, depth + 1);
+      else { const m = /^TT(\d+)\.xlsx$/i.exec(name); if (m && !mains.has(Number(m[1]))) mains.set(Number(m[1]), full); }
+    }
+  };
+  for (const d of [dir, process.env.TOUR_XLSX_DIR].filter(Boolean) as string[]) walk(d, 0);
+
+  let made = 0;
+  for (const [num, path] of mains) {
+    const season = await prisma.tourSeason.findUnique({ where: { name: `Team Tour ${num}` }, select: { id: true } });
+    if (!season) continue;
+    if (await prisma.tourSet.count({ where: { seasonId: season.id } })) continue; // already has results (TT1-3)
+    const results = await readSeasonResults(path);
+    if (!results.length) continue;
+
+    // Re-runnable: clear any prior xlsx-sourced results for this season first.
+    const prior = await prisma.tourSet.findMany({ where: { importKey: { startsWith: `xlsxresult:s${num}:` } }, select: { matchId: true } });
+    await prisma.tourSet.deleteMany({ where: { importKey: { startsWith: `xlsxresult:s${num}:` } } });
+    const priorMatchIds = prior.map((p) => p.matchId).filter((x): x is string => !!x);
+    if (priorMatchIds.length) await prisma.match.deleteMany({ where: { id: { in: priorMatchIds } } });
+
+    // Resolve every player once.
+    const names = [...new Set(results.flatMap((r) => [r.p1, r.p2]))];
+    const idByName = new Map<string, string>();
+    for (const n of names) idByName.set(n, (await resolvePlayerId(n, true))!);
+
+    // Each player's intra-team seed (from the rosters imported just before this), so
+    // the result sets carry real seeds — not 0 — for the ±2 view / stats.
+    const tss = await prisma.teamSeason.findMany({ where: { seasonId: season.id }, select: { id: true } });
+    const rosters = await prisma.roster.findMany({ where: { teamSeasonId: { in: tss.map((t) => t.id) } }, select: { id: true } });
+    const entries = await prisma.rosterEntry.findMany({ where: { rosterId: { in: rosters.map((r) => r.id) } }, select: { playerId: true, seed: true } });
+    const seedByPlayer = new Map(entries.map((e) => [e.playerId, e.seed]));
+
+    let i = 0;
+    for (const r of results) {
+      const aId = idByName.get(r.p1)!;
+      const bId = idByName.get(r.p2)!;
+      if (aId === bId) { i++; continue; }
+      const [mA, mB] = aId < bId ? [aId, bId] : [bId, aId];
+      const gwA = mA === aId ? r.p1g : r.p2g;
+      const gwB = mA === aId ? r.p2g : r.p1g;
+      const winnerId = gwA > gwB ? mA : gwB > gwA ? mB : null;
+      const bestOf = Math.max(1, 2 * Math.max(r.p1g, r.p2g) - 1);
+      const match = await prisma.match.create({
+        data: { playerAId: mA, playerBId: mB, format: "HISTORICAL", gamesWonA: gwA, gamesWonB: gwB, winnerId, status: "CONFIRMED" },
+      });
+      await prisma.tourSet.create({
+        data: {
+          importKey: `xlsxresult:s${num}:${i++}`,
+          seasonId: season.id,
+          bracket: "REGULAR",
+          matchId: match.id,
+          playerAId: aId,
+          playerBId: bId,
+          seedA: seedByPlayer.get(aId) ?? 0,
+          seedB: seedByPlayer.get(bId) ?? 0,
+          bestOf,
+          status: "CONFIRMED",
+        },
+      });
+      made++;
+    }
+  }
+  return { sets: made };
 }
 
 export async function importHistorical(dir = sheetsDir()) {

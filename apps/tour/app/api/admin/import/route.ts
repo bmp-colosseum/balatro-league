@@ -4,7 +4,7 @@
 //   POST /api/admin/import?type=tt10          → Team Tour 4 conference season
 import { NextResponse } from "next/server";
 import { isApiAdmin } from "@/lib/auth";
-import { importHistorical, importConferenceSeason, applyConferenceData, importConferenceRosters } from "@/lib/services/import";
+import { importHistorical, importConferenceSeason, applyConferenceData, importConferenceRosters, importConferenceResults } from "@/lib/services/import";
 
 export const maxDuration = 300;
 
@@ -17,7 +17,8 @@ export async function POST(req: Request) {
       const conference = await importConferenceSeason();
       await applyConferenceData();
       const rosters = await importConferenceRosters();
-      result = { conference, rosters };
+      const results = await importConferenceResults();
+      result = { conference, rosters, results };
     } else {
       result = await importHistorical();
     }
