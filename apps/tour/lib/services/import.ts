@@ -16,6 +16,7 @@ import { parseDrafts } from "../import/parse-drafts.mjs";
 import { parseAwards } from "../import/parse-awards.mjs";
 import { parsePlayerStats } from "../import/parse-player-stats.mjs";
 import { SEASON_CONFIG, DEFAULT_SEASON } from "../import/seasons-config.mjs";
+import { SEASON_CONFERENCES } from "../import/conferences-config.mjs";
 import { slug } from "../import/sheet.mjs";
 import { backfillDraftedMoves } from "./roster-ops";
 
@@ -349,6 +350,65 @@ export async function importPlayerStats(dir = sheetsDir()) {
   return { careerStats: made, missed };
 }
 
+// Apply the per-season conference + seed assignments (from conferences-config) to
+// the imported teams: set the season format to CONFERENCES, create the real
+// conferences, and assign each team to its conference + seed via fuzzy name match
+// (sheet names can be truncated). Idempotent; skips seasons not yet imported.
+export async function applyConferenceData() {
+  const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]/g, "");
+  let teamsSet = 0;
+  const missed: string[] = [];
+
+  for (const [num, confs] of Object.entries(SEASON_CONFERENCES)) {
+    const season = await prisma.tourSeason.findUnique({
+      where: { name: `Team Tour ${num}` },
+      include: { teamSeasons: { include: { team: true } } },
+    });
+    if (!season) continue;
+
+    await prisma.tourSeason.update({ where: { id: season.id }, data: { format: "CONFERENCES", conferenceCount: Object.keys(confs).length } });
+
+    const confId = new Map<string, string>();
+    for (const cn of Object.keys(confs)) {
+      const c = await prisma.conference.upsert({
+        where: { seasonId_name: { seasonId: season.id, name: cn } },
+        create: { seasonId: season.id, name: cn },
+        update: {},
+      });
+      confId.set(cn, c.id);
+    }
+
+    const match = (hint: string) => {
+      const h = norm(hint);
+      let ts = season.teamSeasons.find((t) => norm(t.team.name) === h);
+      if (ts) return ts;
+      if (hint.includes("...")) {
+        const parts = hint.split("...").map(norm).filter(Boolean);
+        ts = season.teamSeasons.find((t) => { const n = norm(t.team.name); return parts.every((p) => n.includes(p)) && n.startsWith(parts[0]); });
+        if (ts) return ts;
+      }
+      return season.teamSeasons.find((t) => { const n = norm(t.team.name); return n.startsWith(h) || h.startsWith(n); });
+    };
+
+    for (const [cn, teams] of Object.entries(confs) as [string, [string, number][]][]) {
+      for (const [teamHint, seed] of teams) {
+        const ts = match(teamHint);
+        if (ts) {
+          await prisma.teamSeason.update({ where: { id: ts.id }, data: { conferenceId: confId.get(cn)!, seed } });
+          teamsSet++;
+        } else missed.push(`TT${num}: ${teamHint}`);
+      }
+    }
+
+    // Drop now-empty placeholder conferences (e.g. the "Swiss"/"Unassigned" one
+    // importRosters made before we knew the format).
+    const real = new Set(Object.keys(confs));
+    const all = await prisma.conference.findMany({ where: { seasonId: season.id }, include: { _count: { select: { teamSeasons: true } } } });
+    for (const c of all) if (!real.has(c.name) && c._count.teamSeasons === 0) await prisma.conference.delete({ where: { id: c.id } });
+  }
+  return { teamsSet, missed };
+}
+
 export async function importHistorical(dir = sheetsDir()) {
   await importRosters(dir);
   const sets = await importResults(dir);
@@ -356,6 +416,7 @@ export async function importHistorical(dir = sheetsDir()) {
   const draftStats = await importDrafts(dir); // after rosters: links picks to teams
   const awardStats = await importAwards(dir);
   const careerStats = await importPlayerStats(dir);
+  await applyConferenceData(); // TT1/TT2 → conferences + real seeds (TT4 done after its import)
   // Seed the weekly roster-move log from the imported drafts (idempotent) so the
   // roster timeline + per-week lineup derivation work for historical seasons.
   const rosterMoves = await backfillDraftedMoves();
@@ -370,9 +431,9 @@ export async function importHistorical(dir = sheetsDir()) {
   return { players, teams, teamSeasons, conferences, matches, tourSets, sets, playoffSeries, draftPicks: draftStats.picks, mvps: awardStats.mvp, careerStats: careerStats.careerStats, rosterMoves: rosterMoves.created };
 }
 
-/** Import the conference season — Team Tour 4, the first Pluto/Eris conferences
- * format (Tours 1–3 were Swiss). Conferences ← Standings, team matchups ← Work
- * block 1. Team-level only. */
+/** Import the conference season — Team Tour 4 (Pluto/Eris). Tours 1, 2 and 4 used
+ * conferences; only Tour 3 was Swiss. Conferences ← Standings, team matchups ←
+ * Work block 1. Team-level only. */
 export async function importConferenceSeason(dir = sheetsDir()) {
   const confs = parseStandingsConferences(join(dir, "Standings.html")) as Record<string, string[]>;
   const matchups = parseWorkMatchups(join(dir, "Work.html")) as WorkMatchup[];

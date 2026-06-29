@@ -7,7 +7,7 @@ import AdmZip from "adm-zip";
 import { mkdtemp, rm, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { importHistorical, importConferenceSeason } from "./import";
+import { importHistorical, importConferenceSeason, applyConferenceData } from "./import";
 import { loadLeagueRefFromCsv } from "./identity";
 
 // Walk the extracted tree to find the directory that looks like the sheets root:
@@ -64,6 +64,12 @@ export async function importFromZip(zipBuffer: Buffer): Promise<UploadImportResu
       ran.push("conference");
     } catch (e) {
       errors.push({ which: "conference", message: e instanceof Error ? e.message : String(e) });
+    }
+    // Set conferences + real seeds for TT1/TT2/TT4 (after their teams exist).
+    try {
+      await applyConferenceData();
+    } catch (e) {
+      errors.push({ which: "conferences", message: e instanceof Error ? e.message : String(e) });
     }
 
     // Optional: a `league-players.csv` (name,discordId) in the zip → populate the
