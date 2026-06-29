@@ -144,8 +144,9 @@ export default async function AdminDisputesPage({
                       Keep original
                     </ConfirmButton>
                   </form>
-                  {/* Set a different result than reported OR proposed. */}
-                  <form action={setDisputeResult} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                  {/* Set a different result than reported OR proposed — with
+                      optional per-game winner's lives, same as a normal record. */}
+                  <form action={setDisputeResult} style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
                     <input type="hidden" name="pairingId" value={d.pairingId} />
                     <FormSelect
                       name="result"
@@ -157,6 +158,14 @@ export default async function AdminDisputesPage({
                         { value: "0-2", label: `${d.playerB.displayName} won 2-0` },
                       ]}
                     />
+                    <label style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11 }} className="muted" title="Winner's lives left, game 1 (optional)">
+                      G1<input type="number" name="livesGame1" min={0} max={999} inputMode="numeric"
+                        style={{ width: 46, borderRadius: 6, border: "1px solid var(--border)", background: "var(--background)", padding: "2px 5px", fontSize: 12 }} />
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11 }} className="muted" title="Winner's lives left, game 2 (optional)">
+                      G2<input type="number" name="livesGame2" min={0} max={999} inputMode="numeric"
+                        style={{ width: 46, borderRadius: 6, border: "1px solid var(--border)", background: "var(--background)", padding: "2px 5px", fontSize: 12 }} />
+                    </label>
                     <ConfirmButton message="Apply this result and update standings?" variant="secondary">Apply</ConfirmButton>
                   </form>
                   {d.disputeThreadId && (

@@ -158,6 +158,17 @@ export async function setDisputeResult(formData: FormData) {
   const games = map[resultStr];
   if (!games) redirect(`/admin/disputes?err=${encodeURIComponent("Pick a result")}`);
 
+  // Optional per-game winner's lives the helper can enter with the corrected
+  // result (same fidelity as a normal record).
+  const parseLives = (name: string): number | null => {
+    const raw = String(formData.get(name) ?? "").trim();
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isInteger(n) && n >= 0 && n <= 999 ? n : null;
+  };
+  const livesG1 = parseLives("livesGame1");
+  const livesG2 = parseLives("livesGame2");
+
   const pairing = await prisma.match.findUnique({ where: { id: pairingId } });
   if (!pairing) redirect("/admin/disputes?err=not-found");
   if (pairing.status !== "DISPUTED") {
@@ -179,6 +190,22 @@ export async function setDisputeResult(formData: FormData) {
       disputeProposedLivesG2: null,
     },
   });
+
+  // Carry the helper's per-game lives onto Game rows. Winner of each game from
+  // the chosen result (2-0 → A both, 0-2 → B both, 1-1 → A then B).
+  if (livesG1 != null || livesG2 != null) {
+    const [w1, w2] =
+      games![0] > games![1] ? [pairing.playerAId, pairing.playerAId]
+        : games![1] > games![0] ? [pairing.playerBId, pairing.playerBId]
+        : [pairing.playerAId, pairing.playerBId];
+    await prisma.game.deleteMany({ where: { matchId: pairingId } });
+    await prisma.game.createMany({
+      data: [
+        { matchId: pairingId, num: 1, firstPlayerId: pairing.playerAId, winnerId: w1, winnerLives: livesG1 },
+        { matchId: pairingId, num: 2, firstPlayerId: pairing.playerAId, winnerId: w2, winnerLives: livesG2 },
+      ],
+    });
+  }
   await closeDisputeThread(pairing.disputeThreadId);
   enqueueAnnounceResult(pairingId).catch((err) => console.warn("[dispute.custom] announceResult failed:", err));
   recomputeDivisionStandings(pairing.divisionId).catch(() => {});
