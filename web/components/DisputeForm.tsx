@@ -51,6 +51,21 @@ export function DisputeForm({
             { value: "0-2", label: resultLabelBySelf("0-2", opponentName) },
           ]}
         />
+        {/* Optional per-game lives — only used when a specific result is proposed
+            (not "unsure"); the backend attributes each to that game's winner. */}
+        <label style={{ fontSize: 11 }} className="muted">Winner&apos;s lives left per game (optional):</label>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11 }} className="muted">
+            G1
+            <input type="number" name="livesGame1" min={0} max={999} inputMode="numeric"
+              style={{ width: 52, borderRadius: 6, border: "1px solid var(--border)", background: "var(--background)", padding: "2px 6px", fontSize: 12 }} />
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11 }} className="muted">
+            G2
+            <input type="number" name="livesGame2" min={0} max={999} inputMode="numeric"
+              style={{ width: 52, borderRadius: 6, border: "1px solid var(--border)", background: "var(--background)", padding: "2px 6px", fontSize: 12 }} />
+          </label>
+        </div>
         <Textarea
           name="reason"
           rows={2}

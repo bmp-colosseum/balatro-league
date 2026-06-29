@@ -8,7 +8,7 @@ import {
   reportSetFromWeb,
   type DisputeResultStr,
 } from "@/lib/report";
-import { parseReportForm } from "@/lib/report-form";
+import { parseReportForm, parseDisputeLives } from "@/lib/report-form";
 
 async function currentDiscordId(): Promise<string | null> {
   const session = await auth();
@@ -41,6 +41,7 @@ export async function submitReportPageDispute(formData: FormData) {
   const pairingId = String(formData.get("pairingId") ?? "").trim();
   const proposedRaw = String(formData.get("proposed") ?? "").trim();
   const reason = String(formData.get("reason") ?? "").trim() || null;
+  const lives = parseDisputeLives(formData);
 
   if (!pairingId) {
     redirect(`/report?disputeErr=${encodeURIComponent("Missing match id")}`);
@@ -50,7 +51,7 @@ export async function submitReportPageDispute(formData: FormData) {
       ? proposedRaw
       : "unsure";
 
-  const r = await disputeMatchFromWeb(disputerDiscordId!, pairingId, proposed, reason);
+  const r = await disputeMatchFromWeb(disputerDiscordId!, pairingId, proposed, reason, lives);
   if (!r.ok) {
     redirect(`/report?disputeErr=${encodeURIComponent(r.reason)}`);
   }

@@ -28,6 +28,15 @@ function str(formData: FormData, name: string): string | null {
   return String(formData.get(name) ?? "").trim() || null;
 }
 
+// Per-game winner's-lives from a dispute form (same field names as the report
+// form). Shared so the /report and /profile dispute actions parse identically.
+export function parseDisputeLives(formData: FormData): { game1: number | null; game2: number | null } {
+  return {
+    game1: parseLivesField(formData, "livesGame1"),
+    game2: parseLivesField(formData, "livesGame2"),
+  };
+}
+
 export function parseReportForm(formData: FormData): ParsedReportForm {
   const opponentId = String(formData.get("opponentId") ?? "").trim();
   const result = String(formData.get("result") ?? "") as ReportResultStr;

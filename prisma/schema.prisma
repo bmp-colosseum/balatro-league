@@ -740,6 +740,12 @@ model Match {
   disputedById             String?
   disputeProposedGamesWonA Int?
   disputeProposedGamesWonB Int?
+  // Disputer's proposed per-game "winner's lives left" — same detail a normal
+  // report carries, so accepting a dispute can write the per-game Game rows
+  // (feeds the standings life-differential tiebreaker) instead of only the score.
+  // Attributed to each game's winner per the proposed result; null = not given.
+  disputeProposedLivesG1   Int?
+  disputeProposedLivesG2   Int?
   disputeReason            String?
   disputedAt               DateTime?
   disputeThreadId          String?

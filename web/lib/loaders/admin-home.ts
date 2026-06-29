@@ -30,6 +30,8 @@ export interface AdminDisputeRow {
   reporter: { id: string; displayName: string; discordId: string; username: string | null } | null;
   disputeProposedGamesWonA: number | null;
   disputeProposedGamesWonB: number | null;
+  disputeProposedLivesG1: number | null;
+  disputeProposedLivesG2: number | null;
   disputeReason: string | null;
   disputeThreadId: string | null;
 }
@@ -45,6 +47,8 @@ export async function loadAdminDisputes(): Promise<AdminDisputeRow[]> {
       disputedAt: true,
       disputeProposedGamesWonA: true,
       disputeProposedGamesWonB: true,
+      disputeProposedLivesG1: true,
+      disputeProposedLivesG2: true,
       disputeReason: true,
       disputeThreadId: true,
       playerA: { select: { id: true, displayName: true, discordId: true, username: true } },
@@ -74,6 +78,8 @@ export async function loadAdminDisputes(): Promise<AdminDisputeRow[]> {
     reporter: r.reporter,
     disputeProposedGamesWonA: r.disputeProposedGamesWonA,
     disputeProposedGamesWonB: r.disputeProposedGamesWonB,
+    disputeProposedLivesG1: r.disputeProposedLivesG1,
+    disputeProposedLivesG2: r.disputeProposedLivesG2,
     disputeReason: r.disputeReason,
     disputeThreadId: r.disputeThreadId,
   }));

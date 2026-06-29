@@ -36,11 +36,13 @@ export async function acceptDisputeProposal(formData: FormData) {
     redirect(`/admin/disputes?err=${encodeURIComponent("No proposed result to accept — use Custom Edit instead")}`);
   }
 
+  const acceptedA = pairing.disputeProposedGamesWonA;
+  const acceptedB = pairing.disputeProposedGamesWonB;
   await prisma.match.update({
     where: { id: pairingId },
     data: {
-      gamesWonA: pairing.disputeProposedGamesWonA,
-      gamesWonB: pairing.disputeProposedGamesWonB,
+      gamesWonA: acceptedA,
+      gamesWonB: acceptedB,
       status: "CONFIRMED",
       confirmedAt: new Date(),
       adminOverrideBy: user.discordId,
@@ -49,8 +51,29 @@ export async function acceptDisputeProposal(formData: FormData) {
         : "Accepted disputer's proposal",
       disputeProposedGamesWonA: null,
       disputeProposedGamesWonB: null,
+      disputeProposedLivesG1: null,
+      disputeProposedLivesG2: null,
     },
   });
+
+  // Carry the disputer's per-game lives onto real Game rows (same fidelity as a
+  // normal report) when they gave them. Each game's winner comes from the
+  // accepted score: 2-0 → A both, 0-2 → B both, 1-1 → A then B.
+  const g1 = pairing.disputeProposedLivesG1;
+  const g2 = pairing.disputeProposedLivesG2;
+  if (g1 != null || g2 != null) {
+    const [w1, w2] =
+      acceptedA! > acceptedB! ? [pairing.playerAId, pairing.playerAId]
+        : acceptedB! > acceptedA! ? [pairing.playerBId, pairing.playerBId]
+        : [pairing.playerAId, pairing.playerBId];
+    await prisma.game.deleteMany({ where: { matchId: pairingId } });
+    await prisma.game.createMany({
+      data: [
+        { matchId: pairingId, num: 1, firstPlayerId: pairing.playerAId, winnerId: w1, winnerLives: g1 },
+        { matchId: pairingId, num: 2, firstPlayerId: pairing.playerAId, winnerId: w2, winnerLives: g2 },
+      ],
+    });
+  }
   await closeDisputeThread(pairing.disputeThreadId);
   // Re-announce the corrected result so the channel sees the final
   // numbers — admin's accept-the-proposal flow effectively re-posts
@@ -98,6 +121,8 @@ export async function rejectDispute(formData: FormData) {
       adminOverrideReason: "Dispute rejected, original result kept",
       disputeProposedGamesWonA: null,
       disputeProposedGamesWonB: null,
+      disputeProposedLivesG1: null,
+      disputeProposedLivesG2: null,
     },
   });
   await closeDisputeThread(pairing.disputeThreadId);
@@ -150,6 +175,8 @@ export async function setDisputeResult(formData: FormData) {
       adminOverrideReason: "Dispute resolved — admin set a corrected result",
       disputeProposedGamesWonA: null,
       disputeProposedGamesWonB: null,
+      disputeProposedLivesG1: null,
+      disputeProposedLivesG2: null,
     },
   });
   await closeDisputeThread(pairing.disputeThreadId);

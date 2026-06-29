@@ -286,6 +286,10 @@ export async function disputeMatchFromWeb(
   pairingId: string,
   proposed: DisputeResultStr,
   reason: string | null,
+  // Optional per-game winner's lives — same detail a report carries. Per GAME
+  // (game order is POV-independent), so stored as-is; attributed to each game's
+  // winner only if/when a helper accepts the proposal.
+  lives?: { game1?: number | null; game2?: number | null },
 ): Promise<DisputeOutcome> {
   const player = await prisma.player.findUnique({ where: { discordId: disputerDiscordId } });
   if (!player) return { ok: false, reason: "You don't have a Player record." };
@@ -320,6 +324,12 @@ export async function disputeMatchFromWeb(
     proposedGamesWonB = disputerIsA ? opp : self;
   }
   const cleanReason = reason?.trim().slice(0, 500) || null;
+  // Lives only make sense alongside a concrete proposed result — drop them for
+  // an "unsure" dispute (no winners to attribute them to).
+  const cleanLives = (v: number | null | undefined): number | null =>
+    v != null && Number.isInteger(v) && v >= 0 && v <= 999 ? v : null;
+  const livesG1 = proposed === "unsure" ? null : cleanLives(lives?.game1);
+  const livesG2 = proposed === "unsure" ? null : cleanLives(lives?.game2);
 
   await prisma.match.update({
     where: { id: pairingId },
@@ -329,6 +339,8 @@ export async function disputeMatchFromWeb(
       disputedAt: new Date(),
       disputeProposedGamesWonA: proposedGamesWonA,
       disputeProposedGamesWonB: proposedGamesWonB,
+      disputeProposedLivesG1: livesG1,
+      disputeProposedLivesG2: livesG2,
       disputeReason: cleanReason,
       // Clear so spawnDisputeThread acts even if a prior thread existed.
       disputeThreadId: null,

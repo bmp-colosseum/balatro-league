@@ -101,9 +101,16 @@ export default async function AdminDisputesPage({
                   <div style={{ padding: 8, background: hasProposal ? "rgba(46,204,113,0.08)" : "var(--surface-2)", borderRadius: 4, borderLeft: hasProposal ? "3px solid #2ecc71" : undefined }}>
                     <div className="muted" style={{ fontSize: 11 }}>Disputer says it should be</div>
                     {hasProposal ? (
-                      <div style={{ fontSize: 18, fontWeight: 600 }}>
-                        {d.playerA.displayName} <strong>{d.disputeProposedGamesWonA}-{d.disputeProposedGamesWonB}</strong> {d.playerB.displayName}
-                      </div>
+                      <>
+                        <div style={{ fontSize: 18, fontWeight: 600 }}>
+                          {d.playerA.displayName} <strong>{d.disputeProposedGamesWonA}-{d.disputeProposedGamesWonB}</strong> {d.playerB.displayName}
+                        </div>
+                        {(d.disputeProposedLivesG1 != null || d.disputeProposedLivesG2 != null) && (
+                          <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+                            winner&apos;s lives — G1: {d.disputeProposedLivesG1 ?? "—"} · G2: {d.disputeProposedLivesG2 ?? "—"} (applied on Accept)
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div className="muted">— no specific proposal —</div>
                     )}

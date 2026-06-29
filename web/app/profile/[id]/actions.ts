@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { disputeMatchFromWeb, reportSetFromWeb, type DisputeResultStr } from "@/lib/report";
-import { parseReportForm } from "@/lib/report-form";
+import { parseReportForm, parseDisputeLives } from "@/lib/report-form";
 
 // Server action backing the per-match Dispute button on /profile/[id].
 // Only the player themself can dispute their own matches — the action
@@ -20,6 +20,7 @@ export async function submitProfileDispute(formData: FormData) {
   const proposedRaw = String(formData.get("proposed") ?? "").trim();
   const reason = String(formData.get("reason") ?? "").trim() || null;
   const profileId = String(formData.get("profileId") ?? "").trim();
+  const lives = parseDisputeLives(formData);
 
   if (!pairingId) {
     redirect(`/profile/${profileId}?disputeErr=${encodeURIComponent("Missing match id")}`);
@@ -29,7 +30,7 @@ export async function submitProfileDispute(formData: FormData) {
       ? proposedRaw
       : "unsure";
 
-  const r = await disputeMatchFromWeb(disputerDiscordId!, pairingId, proposed, reason);
+  const r = await disputeMatchFromWeb(disputerDiscordId!, pairingId, proposed, reason, lives);
   if (!r.ok) {
     redirect(`/profile/${profileId}?disputeErr=${encodeURIComponent(r.reason)}`);
   }
