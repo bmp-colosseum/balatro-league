@@ -11,6 +11,11 @@ const nextConfig: NextConfig = {
   // The shared domain packages ship TypeScript source (internal-packages
   // pattern), so Next must transpile them.
   transpilePackages: ["@balatro/competition-core", "@balatro/tour-core", "@balatro/match-core"],
+  // The admin "import history" upload (a ~30MB zip of the sheets) goes through a
+  // server action; raise the default 1MB body cap for it.
+  experimental: {
+    serverActions: { bodySizeLimit: "64mb" },
+  },
 };
 
 export default nextConfig;

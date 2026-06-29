@@ -29,6 +29,7 @@
     "@balatro/tour-core": "file:../../packages/tour-core",
     "@base-ui/react": "^1.5.0",
     "@prisma/client": "^6.19.3",
+    "adm-zip": "^0.5.18",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -44,6 +45,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/adm-zip": "^0.5.8",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

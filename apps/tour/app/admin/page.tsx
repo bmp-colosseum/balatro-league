@@ -1,11 +1,9 @@
 import Link from "next/link";
-import { ArrowLeft, Download, Database, Plus, Fingerprint, Activity } from "lucide-react";
+import { ArrowLeft, Plus, Fingerprint, Activity } from "lucide-react";
 import { isAdmin } from "@/lib/auth";
 import { listSeasons } from "@/lib/services/seasons";
 import { Callout } from "@/components/Callout";
-import { ActionFlashForm } from "@/components/ActionFlashForm";
-import { SubmitButton } from "@/components/SubmitButton";
-import { importHistoricalAction, importTT10Action } from "./actions";
+import { ImportUpload } from "@/components/ImportUpload";
 
 export const dynamic = "force-dynamic";
 
@@ -35,16 +33,12 @@ export default async function Admin() {
       </p>
 
       <div className="card">
-        <div className="bracket-title">Data import (from the sheets)</div>
-        <div className="flex flex-wrap items-start gap-3 px-0.5 py-1">
-          <ActionFlashForm action={importHistoricalAction}>
-            <SubmitButton pendingText="Importing…"><Download /> Import alltime (S1–3)</SubmitButton>
-          </ActionFlashForm>
-          <ActionFlashForm action={importTT10Action}>
-            <SubmitButton variant="secondary" pendingText="Importing…"><Database /> Import TT10 (Pluto/Eris)</SubmitButton>
-          </ActionFlashForm>
-        </div>
-        <p className="sub px-0.5 pb-1">Imports the historical seasons from the bundled data. Idempotent — safe to re-run.</p>
+        <div className="bracket-title">Import history</div>
+        <p className="sub px-0.5">
+          Upload a <strong>.zip</strong> of the Google-Sheets exports (the folder with <code>Standings.html</code> +
+          an <code>alltime/</code> subfolder). Imports the Swiss seasons and the conference season. Idempotent — safe to re-run.
+        </p>
+        <div className="px-0.5 py-1"><ImportUpload /></div>
       </div>
 
       <div className="card">

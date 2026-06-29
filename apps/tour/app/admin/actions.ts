@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { assertAdmin, isAdmin } from "@/lib/auth";
 import { createSeason, updateSeason } from "@/lib/services/seasons";
-import { importHistorical, importTT10 } from "@/lib/services/import";
+import { importFromZip } from "@/lib/services/import-upload";
 import type { ActionResult } from "@/lib/action-result";
 
 // Server actions = thin form wrappers over the same services the API route calls.
@@ -23,32 +23,23 @@ export async function createSeasonAction(formData: FormData) {
   redirect("/admin");
 }
 
-// ActionResult-returning so they drive <ActionFlashForm> (pending + result flash).
-export async function importHistoricalAction(_prev: ActionResult, _formData: FormData): Promise<ActionResult> {
+// Import history from an uploaded .zip of the sheets (works in prod — no local
+// folder dependency). ActionResult-returning so the upload UI shows the outcome.
+export async function uploadImportAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
+  const file = formData.get("file");
+  if (!(file instanceof File)) return { ok: false, message: "Pick a .zip of the sheets folder." };
+  if (!file.name.toLowerCase().endsWith(".zip")) return { ok: false, message: "That's not a .zip." };
   try {
-    const r = await importHistorical();
+    const buf = Buffer.from(await file.arrayBuffer());
+    const r = await importFromZip(buf);
     revalidatePath("/admin");
     revalidatePath("/");
-    return {
-      ok: true,
-      message: `Imported all-time: ${r.players} players, ${r.teams} teams, ${r.tourSets} sets, ${r.playoffSeries} playoff series.`,
-    };
-  } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : "Import failed." };
-  }
-}
-
-export async function importTT10Action(_prev: ActionResult, _formData: FormData): Promise<ActionResult> {
-  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
-  try {
-    const r = await importTT10();
-    revalidatePath("/admin");
-    revalidatePath("/");
-    return {
-      ok: true,
-      message: `Imported TT10: ${r.conferences} conferences, ${r.teams} teams, ${r.matchups} matchups.`,
-    };
+    const parts: string[] = [];
+    if (r.historical) parts.push(`${r.historical.players} players · ${r.historical.teamSeasons} team-seasons · ${r.historical.tourSets} sets`);
+    if (r.tt10) parts.push(`conference: ${r.tt10.teams} teams · ${r.tt10.matchups} matchups`);
+    const skipped = r.errors.length ? ` (skipped ${r.errors.map((e) => e.which).join(", ")})` : "";
+    return { ok: true, message: `Imported ${r.ran.join(" + ")} — ${parts.join("; ")}${skipped}.` };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Import failed." };
   }

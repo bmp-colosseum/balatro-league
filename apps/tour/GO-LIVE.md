@@ -57,9 +57,10 @@ TOUR_OWNER_DISCORD_IDS = <your Discord user id>      # → OWNER admin (comma-se
 ## 6. First deploy + load data
 - [ ] Deploy runs automatically. On boot the container runs `prisma db push` (creates the
       schema) then `next start`. Watch the deploy logs for a clean boot.
-- [ ] **Import the history once:** sign in (you're OWNER) → **Admin → Import**, or
-      `POST https://tour.balatroleague.com/api/admin/import?type=historical` then `?type=tt10`.
-      *(The import also auto-seeds the weekly roster-move log — no extra step.)*
+- [ ] **Import the history once:** on your machine, **zip the sheets folder** (the one with
+      `Standings.html` + an `alltime/` subfolder). Then sign in on the site (you're OWNER) →
+      **Admin → Import history → upload the .zip**. It imports the Swiss + conference seasons and
+      auto-seeds the weekly roster-move log — no local-path/server-side files needed.
 - [ ] **Verify:** a season page returns 200, `/seasons/<name>/timeline` shows the draft +
       results, `/admin/seasons/<name>/roster` shows derived lineups, and **you have admin**
       (the dev bypass is off in prod — admin comes from `TOUR_OWNER_DISCORD_IDS`).

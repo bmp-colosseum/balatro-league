@@ -10,6 +10,7 @@
 //   • TOUR_DEV_ADMIN=1 forces OWNER locally.
 //
 // Services in lib/services/ stay auth-agnostic; the CALLER (route/action/page) gates.
+import type { Session } from "next-auth";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 
@@ -56,7 +57,15 @@ export async function resolveTier(discordId: string | null, roleIds: string[]): 
 // anywhere on the server; returns a GUEST when not signed in.
 export async function getViewer(): Promise<Viewer> {
   const devOwner = process.env.TOUR_DEV_ADMIN === "1";
-  const session = await auth().catch(() => null);
+  // auth() can THROW synchronously (e.g. a misconfigured/missing AUTH_SECRET), which
+  // a trailing .catch() wouldn't trap — so wrap it. A failed session = a GUEST, never
+  // a crashed page.
+  let session: Session | null = null;
+  try {
+    session = (await auth()) as Session | null;
+  } catch {
+    session = null;
+  }
   const user = session?.user as { discordId?: string; name?: string | null; avatar?: string | null } | undefined;
   const discordId = user?.discordId ?? null;
   const roleIds = (session as { roleIds?: string[] } | null)?.roleIds ?? [];
