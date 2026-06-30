@@ -269,7 +269,7 @@ export async function importConferenceResults(dir = sheetsDir()) {
   for (const [num, path] of mains) {
     const season = await prisma.tourSeason.findUnique({ where: { name: `Team Tour ${num}` }, select: { id: true } });
     if (!season) continue;
-    if (await prisma.tourSet.count({ where: { seasonId: season.id } })) continue; // already has results (TT1-3)
+    // (rebuild — the prior xlsx sets for this season are cleared below before re-creating)
     let results = (await readSeasonResults(path)) as {
       week?: number; teamA?: string; teamB?: string; p1: string; p1g: number; p2: string; p2g: number; bracket?: string;
     }[];
@@ -281,8 +281,10 @@ export async function importConferenceResults(dir = sheetsDir()) {
     results = results.filter((r) => !(teamN.has(nrm(r.p1)) && teamN.has(nrm(r.p2))));
 
     // Re-runnable: clear any prior xlsx-sourced results for this season first.
-    const prior = await prisma.tourSet.findMany({ where: { importKey: { startsWith: `xlsxresult:s${num}:` } }, select: { matchId: true } });
-    await prisma.tourSet.deleteMany({ where: { importKey: { startsWith: `xlsxresult:s${num}:` } } });
+    // Clean rebuild: clear ALL of this season's sets + their matches (covers old
+    // gamelog-keyed sets from a prior HTML import, not just xlsx-keyed ones).
+    const prior = await prisma.tourSet.findMany({ where: { seasonId: season.id }, select: { matchId: true } });
+    await prisma.tourSet.deleteMany({ where: { seasonId: season.id } });
     const priorMatchIds = prior.map((p) => p.matchId).filter((x): x is string => !!x);
     if (priorMatchIds.length) await prisma.match.deleteMany({ where: { id: { in: priorMatchIds } } });
 
@@ -383,6 +385,10 @@ export async function importSeasonShellsFromXlsx(dir = sheetsDir()) {
       create: { name: `Team Tour ${num}`, teamSize, setsToWin: majority(teamSize), defaultBestOf: 5, state: "DONE", format: isConf ? "CONFERENCES" : "SWISS" },
       update: { format: isConf ? "CONFERENCES" : "SWISS" },
     });
+    // Clean rebuild: drop the season's old team-level schedule (Week/Matchup from a prior
+    // HTML conference import) — the all-xlsx import is player-set based, not Matchup based.
+    await prisma.matchup.deleteMany({ where: { week: { seasonId: season.id } } });
+    await prisma.week.deleteMany({ where: { seasonId: season.id } });
     const placeholder = await prisma.conference.upsert({
       where: { seasonId_name: { seasonId: season.id, name: isConf ? "Unassigned" : "Swiss" } },
       create: { seasonId: season.id, name: isConf ? "Unassigned" : "Swiss" },
@@ -624,8 +630,11 @@ export async function importConferenceRosters(dir = sheetsDir()) {
       include: { teamSeasons: { include: { team: true } } },
     });
     if (!season) continue;
-    const existing = await prisma.roster.count({ where: { teamSeasonId: { in: season.teamSeasons.map((t) => t.id) } } });
-    if (existing > 0) continue; // already has player data (TT1-3 from HTML) — leave it
+    // Clean rebuild: clear the season's existing roster entries (drafted + subs) so a
+    // re-import reflects the current xlsx rather than skipping or stacking. The Roster
+    // rows themselves are reused via upsert below; players persist (identity-aware).
+    const rosterIds = (await prisma.roster.findMany({ where: { teamSeasonId: { in: season.teamSeasons.map((t) => t.id) } }, select: { id: true } })).map((r) => r.id);
+    if (rosterIds.length) await prisma.rosterEntry.deleteMany({ where: { rosterId: { in: rosterIds } } });
 
     const tsByName = new Map(season.teamSeasons.map((t) => [norm(t.team.name), t]));
     const matchTeam = (name: string) => {
