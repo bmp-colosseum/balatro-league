@@ -7,8 +7,19 @@ import AdmZip from "adm-zip";
 import { mkdtemp, rm, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { importAllFromXlsx, applySignupRefsFromDir } from "./import";
+import { importAllFromXlsx, previewImport, applySignupRefsFromDir } from "./import";
 import { loadLeagueRefFromCsv } from "./identity";
+
+// DRY-RUN: extract the zip and report what an import would produce, writing nothing.
+export async function previewFromZip(zipBuffer: Buffer): Promise<Awaited<ReturnType<typeof previewImport>>> {
+  const tmp = await mkdtemp(join(tmpdir(), "tt-preview-"));
+  try {
+    new AdmZip(zipBuffer).extractAllTo(tmp, true);
+    return await previewImport(tmp);
+  } finally {
+    await rm(tmp, { recursive: true, force: true }).catch(() => {});
+  }
+}
 
 // Find a file by name anywhere under `dir` (the zip may nest its contents).
 async function findFile(dir: string, name: string, depth = 0): Promise<string | null> {

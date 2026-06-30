@@ -18,6 +18,8 @@ export function SubmitButton({
   style,
   title,
   disabled,
+  name,
+  value,
 }: {
   children: ReactNode;
   pendingText?: string;
@@ -27,10 +29,12 @@ export function SubmitButton({
   style?: CSSProperties;
   title?: string;
   disabled?: boolean;
+  name?: string; // submit-button name/value → posted in the form data (e.g. preview=1)
+  value?: string;
 }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending || disabled} className={className} variant={variant} size={size} style={style} title={title}>
+    <Button type="submit" name={name} value={value} disabled={pending || disabled} className={className} variant={variant} size={size} style={style} title={title}>
       {pending ? pendingText : children}
     </Button>
   );

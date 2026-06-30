@@ -532,6 +532,59 @@ export async function deriveCareerStats() {
   return { players: made };
 }
 
+// Find every TT<n>.xlsx under `dir` (walked) + optional TOUR_XLSX_DIR. Map num -> path.
+function seasonXlsxPaths(dir: string): Map<number, string> {
+  const mains = new Map<number, string>();
+  const walk = (d: string, depth: number) => {
+    if (depth > 4) return;
+    let entries: string[];
+    try { entries = readdirSync(d); } catch { return; }
+    for (const name of entries) {
+      const full = join(d, name);
+      let st: ReturnType<typeof statSync>;
+      try { st = statSync(full); } catch { continue; }
+      if (st.isDirectory()) walk(full, depth + 1);
+      else { const m = /^TT(\d+)\.xlsx$/i.exec(name); if (m && !mains.has(Number(m[1]))) mains.set(Number(m[1]), full); }
+    }
+  };
+  for (const d of [dir, process.env.TOUR_XLSX_DIR].filter(Boolean) as string[]) walk(d, 0);
+  return mains;
+}
+
+// DRY-RUN: parse the xlsx and report what an import WOULD produce per season, writing
+// nothing. Lets an admin preview before the (destructive on a populated DB) re-import.
+export async function previewImport(dir = sheetsDir()) {
+  const nrm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]/g, "");
+  const out: { season: number; format: string; teams: number; players: number; regularSets: number; playoffSets: number; champion: string | null }[] = [];
+  for (const [num, path] of seasonXlsxPaths(dir)) {
+    const cfg = await readSeasonXlsx(path);
+    const draftTeams = cfg.draftTeams ?? [];
+    if (!draftTeams.length) continue;
+    const teamN = new Set(draftTeams.map((t) => nrm(t.team)));
+    const notTeams = (a: string, b: string) => !(teamN.has(nrm(a)) && teamN.has(nrm(b)));
+    const results = (await readSeasonResults(path)) as { p1: string; p2: string; bracket: string }[];
+    const regularSets = results.filter((r) => r.bracket === "REGULAR" && notTeams(r.p1, r.p2)).length;
+    const playoffSets = results.filter((r) => r.bracket === "PLAYOFF" && notTeams(r.p1, r.p2)).length;
+    const bracket = ((await readSeasonPlayoffs(path)) as { teamA: string; scoreA: number; scoreB: number; teamB: string }[])
+      .filter((s) => teamN.has(nrm(s.teamA)) && teamN.has(nrm(s.teamB)));
+    const winners = new Set<string>(), losers = new Set<string>();
+    for (const s of bracket) { const aw = s.scoreA >= s.scoreB; winners.add(nrm(aw ? s.teamA : s.teamB)); losers.add(nrm(aw ? s.teamB : s.teamA)); }
+    const champKey = [...winners].find((w) => !losers.has(w));
+    const players = new Set<string>();
+    for (const t of draftTeams) for (const n of [t.captain, ...t.players, ...t.subs]) if (n) players.add(nrm(n));
+    out.push({
+      season: num,
+      format: Object.keys(cfg.conferences ?? {}).length ? "CONFERENCES" : "SWISS",
+      teams: draftTeams.length,
+      players: players.size,
+      regularSets,
+      playoffSets,
+      champion: champKey ? draftTeams.find((t) => nrm(t.team) === champKey)?.team ?? null : null,
+    });
+  }
+  return { seasons: out.sort((a, b) => a.season - b.season) };
+}
+
 // THE all-xlsx import: build every season fully from its workbook — shells, then
 // conferences/seeds, rosters/draft/seeds/captains, player results (regular + playoff),
 // and the playoff bracket + champion. Replaces importHistorical + importConferenceSeason
