@@ -85,10 +85,11 @@ export function ContinuityPreview({
           anyone, build it and drag on the season page. Nothing here is saved.
         </p>
         <p style={{ fontSize: 11, margin: "6px 0 0", color: "var(--accent-2)" }}>
-          🔒 <strong>Floor:</strong> the size-balancer (which fills out divisions to even their counts)
-          <strong> only moves newcomers</strong> — it never bumps a returner. Returners are tagged 🔒 below.
-          <strong> They still promote ↑ / relegate ↓ by their finish</strong>, so a bottom finisher can still drop
-          one division — that&apos;s normal ladder movement, not the balancer.
+          🔒 <strong>A returner only ever moves down by relegation</strong> — i.e. by actually finishing in the
+          bottom of their division. If the people who finished below them just didn&apos;t sign up again, they are
+          <strong> not</strong> the new bottom and they <strong>hold</strong> (tagged 🔒). The size-balancer (which
+          evens out division counts) <strong>only moves newcomers</strong>, never a returner. Gaps from no-shows are
+          filled by hand, not by auto-dropping someone who didn&apos;t earn it.
         </p>
       </div>
 
@@ -131,10 +132,10 @@ export function ContinuityPreview({
                   </span>
                   <span style={{ flex: "1 1 160px", fontWeight: 500 }}>
                     {m.displayName}
-                    {!m.isRookie && (
+                    {!m.isRookie && !relegated && (
                       <span
                         style={{ fontSize: 10, marginLeft: 5, opacity: 0.65 }}
-                        title="Floor-protected: a returner can't be dropped below their finish by size-balancing — only by relegation (one division)."
+                        title="Held: this player kept their division. A returner only moves down by relegation (finishing in the bottom of their division) — never by size-balancing."
                       >
                         🔒
                       </span>

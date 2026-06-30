@@ -124,12 +124,13 @@ export function divisionMovement(
   const groupOf = computeGroups(divisions);
   const o = { tightenTopTiers, swapThreshold, baseSwap, bigSwap };
   const n = divisions.length;
+  // The MAX that can move at each boundary under the rule. The actual build only
+  // moves players who finished in those top/bottom positions, so fewer may move
+  // (e.g. nobody relegates if the real bottom finishers didn't return) — this is
+  // the ceiling shown as a summary, not a guarantee everyone moves.
   return divisions.map((_, i) => ({
     promote: i >= 1 ? boundaryAt(i - 1, groupOf, sizes, o).up : 0,
-    // Relegation is capped by the division below — you can't relegate more than
-    // the lower division can swap up (mirrors buildOwenPlacement). An empty
-    // division below ⇒ 0 relegate.
-    relegate: i <= n - 2 ? Math.min(boundaryAt(i, groupOf, sizes, o).down, sizes[i + 1] ?? 0) : 0,
+    relegate: i <= n - 2 ? boundaryAt(i, groupOf, sizes, o).down : 0,
   }));
 }
 
@@ -144,15 +145,18 @@ export function buildOwenPlacement(
   const n = divisions.length;
   const divs: PlacementDivision[] = divisions.map((d) => ({ tierName: d.tierName, name: d.name, members: [] }));
 
-  // 1. Returners start in their finish division, then PAIRWISE boundary
-  //    promotion/relegation (Owen's rule):
-  //    - Count-based boundaries (Rare 3↔Rare 4 and below): swap K, where K = 2
-  //      when BOTH divisions have ≥ 8 finishers, else 1 (symmetric).
-  //    - Top boundaries tighten the elite: Legendary↔Rare 1 = 1 up / 1 down;
-  //      Rare 1↔Rare 2 and Rare 2↔Rare 3 = 1 up / 2 down.
-  //    Promotions = the top of the LOWER division by finish; relegations = the
-  //    bottom of the UPPER division by finish. Selection uses original finish
-  //    membership, so no cascades.
+  // 1. Returners start in their finish division, then promotion/relegation keyed
+  //    to ACTUAL finish position (Owen's rule):
+  //    - You PROMOTE only if you finished in the top `up` of your real division.
+  //    - You RELEGATE only if you finished in the bottom `down` of your real
+  //      division. `up`/`down` per boundary: Legendary = 1 up / 1 down; every
+  //      other boundary = K (= 2 when BOTH divisions have ≥ 8 finishers, else 1).
+  //    Crucially "top/bottom" is measured against the FULL division you played in
+  //    (standingRank out of divSize), NOT against the subset that signed up again.
+  //    So if the people who finished below you didn't return, you are NOT the new
+  //    bottom — you HOLD. Only a genuine bottom-K finisher ever drops; gaps left
+  //    by no-shows are filled by hand, never by auto-relegating someone who
+  //    didn't earn it.
   const finishers: ReturnerInput[][] = Array.from({ length: n }, () => []);
   for (const r of returners) {
     const di = Math.max(0, Math.min(n - 1, r.divIndex));
@@ -165,24 +169,19 @@ export function buildOwenPlacement(
   const groupOf = computeGroups(divisions);
   const boundaryK = (i: number) => boundaryAt(i, groupOf, counts, { tightenTopTiers, swapThreshold, baseSwap, bigSwap });
 
-  // Each division's top `up` promote (via the boundary above), bottom `down`
-  // relegate (via the boundary below); capped so the same finisher isn't both.
   const targetOf = new Map<string, number>();
   for (let i = 0; i < n; i++) {
-    const arr = finishers[i]!;
-    const size = arr.length;
-    const up = Math.min(size, i >= 1 ? boundaryK(i - 1).up : 0);
-    let down = i <= n - 2 ? boundaryK(i).down : 0;
-    // Relegation is a SWAP, so cap it by how many the division BELOW can send up.
-    // If the lower division is empty/sparse (few returners), there's no one to
-    // promote into the vacated spot — so a bottom finisher must NOT be dropped
-    // into a ghost division. e.g. Rare 1 with 6 finishers and an empty Rare 2
-    // relegates 0, not 1. (counts[i+1] = returners finishing in the lower div.)
-    if (i <= n - 2) down = Math.min(down, counts[i + 1] ?? 0);
-    if (up + down > size) down = Math.max(0, size - up);
-    arr.forEach((r) => targetOf.set(r.discordId, i)); // default: hold finish
-    for (let k = 0; k < up; k++) targetOf.set(arr[k]!.discordId, i - 1); // promote
-    for (let k = 0; k < down; k++) targetOf.set(arr[size - 1 - k]!.discordId, i + 1); // relegate
+    const up = i >= 1 ? boundaryK(i - 1).up : 0; // # of top finish positions that promote
+    const down = i <= n - 2 ? boundaryK(i).down : 0; // # of bottom finish positions that relegate
+    for (const r of finishers[i]!) {
+      let target = i; // hold finish division
+      if (up > 0 && r.standingRank <= up) {
+        target = i - 1; // finished in the top `up` of their real division → promote
+      } else if (down > 0 && r.divSize > 1 && r.standingRank > r.divSize - down) {
+        target = i + 1; // finished in the bottom `down` of their real division → relegate
+      }
+      targetOf.set(r.discordId, target);
+    }
   }
 
   for (const r of returners) {
