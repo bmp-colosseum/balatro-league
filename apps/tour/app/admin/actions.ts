@@ -36,8 +36,7 @@ export async function uploadImportAction(_prev: ActionResult, formData: FormData
     revalidatePath("/admin");
     revalidatePath("/");
     const parts: string[] = [];
-    if (r.historical) parts.push(`${r.historical.players} players · ${r.historical.teamSeasons} team-seasons · ${r.historical.tourSets} sets`);
-    if (r.conference) parts.push(`conference: ${r.conference.teams} teams · ${r.conference.matchups} matchups`);
+    if (r.imported) parts.push(`${r.imported.seasons} seasons · ${r.imported.teams} teams · ${r.imported.totalPlayers} players · ${r.imported.totalSets} sets · ${r.imported.champions} champions`);
     if (r.leagueRef) parts.push(`${r.leagueRef} league refs (for identity linking)`);
     if (r.signups?.stored) parts.push(`${r.signups.stored} signup handles`);
     const skipped = r.errors.length ? ` (skipped ${r.errors.map((e) => e.which).join(", ")})` : "";

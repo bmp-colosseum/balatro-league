@@ -1,19 +1,17 @@
-// Import from an uploaded zip of the Google-Sheets exports — so production (where
-// the sheets aren't on disk) can be populated by an admin uploading the data,
-// instead of relying on a local TOUR_SHEETS_DIR. Extracts to a temp dir, locates
-// the sheets root, runs the same importHistorical + importConferenceSeason services against it,
-// and cleans up. Thin orchestration — the parsing/writing lives in import.ts.
+// Import from an uploaded zip of the per-season xlsx workbooks. Production (where the
+// files aren't on disk) is populated by an admin uploading the zip. Extracts to a temp
+// dir and runs the all-xlsx import against it. Thin orchestration — the parsing/writing
+// lives in import.ts. The zip just needs the `TT*.xlsx` workbooks (+ TT*Signups.xlsx)
+// and optionally `league-players.csv`; no HTML sheets anymore.
 import AdmZip from "adm-zip";
 import { mkdtemp, rm, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { importHistorical, importConferenceSeason, applyConferenceData, importConferenceRosters, importConferenceResults, applySignupRefsFromDir } from "./import";
+import { importAllFromXlsx, applySignupRefsFromDir } from "./import";
 import { loadLeagueRefFromCsv } from "./identity";
 
-// Walk the extracted tree to find the directory that looks like the sheets root:
-// one that contains an `alltime/` subfolder (historical) or `Standings.html` (the
-// conference season). Handles a zip with or without a wrapping top-level folder.
-async function findSheetsRoot(dir: string, depth = 0): Promise<string | null> {
+// Find a file by name anywhere under `dir` (the zip may nest its contents).
+async function findFile(dir: string, name: string, depth = 0): Promise<string | null> {
   if (depth > 4) return null;
   let entries;
   try {
@@ -21,11 +19,10 @@ async function findSheetsRoot(dir: string, depth = 0): Promise<string | null> {
   } catch {
     return null;
   }
-  const names = new Set(entries.map((e) => e.name));
-  if (names.has("alltime") || names.has("Standings.html")) return dir;
+  for (const e of entries) if (!e.isDirectory() && e.name === name) return join(dir, e.name);
   for (const e of entries) {
     if (e.isDirectory()) {
-      const found = await findSheetsRoot(join(dir, e.name), depth + 1);
+      const found = await findFile(join(dir, e.name), name, depth + 1);
       if (found) return found;
     }
   }
@@ -33,8 +30,7 @@ async function findSheetsRoot(dir: string, depth = 0): Promise<string | null> {
 }
 
 export interface UploadImportResult {
-  historical?: Awaited<ReturnType<typeof importHistorical>>;
-  conference?: Awaited<ReturnType<typeof importConferenceSeason>>;
+  imported?: Awaited<ReturnType<typeof importAllFromXlsx>>;
   leagueRef?: number; // league name→discordId rows loaded (for identity linking)
   signups?: { stored: number }; // raw xlsx signup handles stored (resolve live later)
   ran: string[];
@@ -45,57 +41,26 @@ export async function importFromZip(zipBuffer: Buffer): Promise<UploadImportResu
   const tmp = await mkdtemp(join(tmpdir(), "tt-import-"));
   const ran: string[] = [];
   const errors: { which: string; message: string }[] = [];
-  let historical: UploadImportResult["historical"];
-  let conference: UploadImportResult["conference"];
+  let imported: UploadImportResult["imported"];
 
   try {
     new AdmZip(zipBuffer).extractAllTo(tmp, true);
-    const root = await findSheetsRoot(tmp);
-    if (!root) throw new Error("Couldn't find the sheets in the zip — expected an `alltime/` folder and/or `Standings.html` inside it.");
 
-    // Run each import independently so a partial upload still lands what it can.
+    // The whole import: seasons, conferences/seeds, rosters/draft/seeds, regular +
+    // playoff results, bracket/champion, career stats — all from the TT*.xlsx workbooks.
     try {
-      historical = await importHistorical(root);
-      ran.push("historical");
+      imported = await importAllFromXlsx(tmp);
+      if (imported.seasons > 0) ran.push(`seasons(${imported.seasons})`);
+      else throw new Error("No TT<n>.xlsx workbooks found in the zip.");
     } catch (e) {
-      errors.push({ which: "historical", message: e instanceof Error ? e.message : String(e) });
-    }
-    try {
-      conference = await importConferenceSeason(root);
-      ran.push("conference");
-    } catch (e) {
-      errors.push({ which: "conference", message: e instanceof Error ? e.message : String(e) });
-    }
-    // Set conferences + real seeds for TT1/TT2/TT4 (after their teams exist), read
-    // from the season xlsx (TT<n>.xlsx) included in the upload — scanned across the
-    // whole extraction, not just the HTML sheets root.
-    try {
-      await applyConferenceData(tmp);
-    } catch (e) {
-      errors.push({ which: "conferences", message: e instanceof Error ? e.message : String(e) });
-    }
-    // Import the conference season's PLAYER rosters (e.g. TT4) from the xlsx Draft
-    // Results tab — the alltime HTML only covers TT1-3, so this is what gives TT4 its
-    // players + teams instead of empty teams.
-    try {
-      const r = await importConferenceRosters(tmp);
-      if (r.rostersFilled > 0) ran.push("conference-rosters");
-    } catch (e) {
-      errors.push({ which: "conference-rosters", message: e instanceof Error ? e.message : String(e) });
-    }
-    // Player-level results for conference seasons (e.g. TT4) from the xlsx conference tabs.
-    try {
-      const r = await importConferenceResults(tmp);
-      if (r.sets > 0) ran.push("conference-results");
-    } catch (e) {
-      errors.push({ which: "conference-results", message: e instanceof Error ? e.message : String(e) });
+      errors.push({ which: "import", message: e instanceof Error ? e.message : String(e) });
     }
 
-    // Optional: a `league-players.csv` (name,discordId) in the zip → populate the
-    // LeagueRef table so identity-linking works in prod (not just from a local file).
+    // Optional: a `league-players.csv` (name,discordId) → populate the LeagueRef table so
+    // identity-linking works in prod (not just from a local file).
     let leagueRef: number | undefined;
-    const csvPath = join(root, "league-players.csv");
-    const csv = await readFile(csvPath, "utf8").catch(() => null);
+    const csvPath = await findFile(tmp, "league-players.csv");
+    const csv = csvPath ? await readFile(csvPath, "utf8").catch(() => null) : null;
     if (csv) {
       try {
         leagueRef = (await loadLeagueRefFromCsv(csv)).count;
@@ -105,9 +70,8 @@ export async function importFromZip(zipBuffer: Buffer): Promise<UploadImportResu
       }
     }
 
-    // After the league reference is loaded, resolve the xlsx signups (preferred name
-    // → @username → real Discord id) into LeagueRef so identity suggestions cover
-    // people the league display names alone wouldn't match.
+    // Store the xlsx signups (preferred name ↔ @username) so identity resolution can
+    // chain them to real Discord ids.
     let signups: { stored: number } | undefined;
     try {
       signups = await applySignupRefsFromDir(tmp);
@@ -117,7 +81,7 @@ export async function importFromZip(zipBuffer: Buffer): Promise<UploadImportResu
     }
 
     if (ran.length === 0) throw new Error(errors.map((x) => `${x.which}: ${x.message}`).join(" · ") || "Nothing imported.");
-    return { historical, conference, leagueRef, signups, ran, errors };
+    return { imported, leagueRef, signups, ran, errors };
   } finally {
     await rm(tmp, { recursive: true, force: true }).catch(() => {});
   }

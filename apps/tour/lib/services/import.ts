@@ -988,6 +988,17 @@ export async function importConferenceRosters(dir = sheetsDir()) {
       );
     };
 
+    // A Draft + DraftPick per season (draft order = Player 1..N per team) so the draft
+    // pages + the drafted roster-move backfill work without the HTML drafts import.
+    const draft = await prisma.draft.upsert({
+      where: { seasonId: season.id },
+      create: { seasonId: season.id, state: "DONE", orderJson: JSON.stringify(season.teamSeasons.map((t) => t.id)) },
+      update: { state: "DONE" },
+      select: { id: true },
+    });
+    await prisma.draftPick.deleteMany({ where: { draftId: draft.id } });
+    let pickIndex = 0;
+
     for (const dt of draftTeams) {
       const ts = matchTeam(dt.team);
       if (!ts) { missed.push(`TT${num}: ${dt.team}`); continue; }
@@ -1018,6 +1029,11 @@ export async function importConferenceRosters(dir = sheetsDir()) {
         playersAdded++;
       }
       if (captainId) await prisma.teamSeason.update({ where: { id: ts.id }, data: { captainPlayerId: captainId } });
+      // Draft picks = the drafted players in order (captain/subs aren't picks).
+      for (let r = 0; r < dt.players.length; r++) {
+        const pid = (await resolvePlayerId(dt.players[r], true))!;
+        await prisma.draftPick.create({ data: { draftId: draft.id, round: r + 1, pickIndex: pickIndex++, teamSeasonId: ts.id, playerId: pid, pickedAt: new Date() } });
+      }
       rostersFilled++;
     }
   }

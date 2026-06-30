@@ -35,10 +35,10 @@ export default async function Admin() {
       <div className="card">
         <div className="bracket-title">Import history</div>
         <p className="sub px-0.5">
-          Upload a <strong>.zip</strong> of the Google-Sheets exports — the HTML folder (with <code>Standings.html</code> +
-          an <code>alltime/</code> subfolder), the per-season workbooks (<code>TT1.xlsx</code>, <code>TT2.xlsx</code>,
-          <code>TT4.xlsx</code> — read for conferences, seeds &amp; signups), and optionally <code>league-players.csv</code>
-          for identity linking. Idempotent — safe to re-run.
+          Upload a <strong>.zip</strong> of the per-season workbooks — <code>TT1.xlsx</code>, <code>TT2.xlsx</code>,
+          <code>TT3.xlsx</code>, <code>TT4.xlsx</code> (+ any <code>TT*Signups.xlsx</code>), and optionally{" "}
+          <code>league-players.csv</code> for identity linking. Everything (rosters, draft, seeds, regular + playoff results,
+          bracket, champions, career stats) is read from the workbooks. Idempotent — safe to re-run.
         </p>
         <div className="px-0.5 py-1"><ImportUpload /></div>
       </div>
