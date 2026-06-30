@@ -40,7 +40,11 @@ export default async function PlacementPreviewPage({
   await requireAdmin();
   const { id } = await params;
   const { basis, err } = await searchParams;
-  const mode = basis === "current" ? "current" : "fresh";
+  // Default to the current-season basis (returners keep their finish, new
+  // signups slot in by MMR). The old "fresh sort" view was confusing now that
+  // the league has history; it's still reachable via ?basis=fresh as an escape
+  // hatch (e.g. a literal first season) but isn't surfaced in the UI.
+  const mode = basis === "fresh" ? "fresh" : "current";
 
   const round = await loadPreviewRound(id);
   if (!round) notFound();
@@ -85,7 +89,7 @@ export default async function PlacementPreviewPage({
     pill = <span className="pill" style={{ background: "rgba(118,199,255,0.2)", color: "var(--info)" }}>{count} signups · dry run</span>;
     body =
       continuity === "NO_SEASON" ? (
-        <div className="card">No active season to base this on — use the fresh sort, or start a season first.</div>
+        <div className="card">No active season to base this on — start a season first.</div>
       ) : !ok ? (
         <div className="card">Couldn&apos;t load the round.</div>
       ) : count === 0 ? (
@@ -171,38 +175,15 @@ export default async function PlacementPreviewPage({
             </form>
           </div>
         )}
-        {/* Basis toggle */}
-        <div style={{ display: "flex", gap: 8, margin: "8px 0 4px" }}>
-          <Link
-            href={`/admin/signups/${round.id}/preview`}
-            className={mode === "fresh" ? "" : "muted"}
-            style={{ fontSize: 13, fontWeight: mode === "fresh" ? 600 : 400, textDecoration: mode === "fresh" ? "underline" : "none" }}
-          >
-            Fresh sort (Owen&apos;s ladder)
-          </Link>
-          <span className="muted">·</span>
-          <Link
-            href={`/admin/signups/${round.id}/preview?basis=current`}
-            className={mode === "current" ? "" : "muted"}
-            style={{ fontSize: 13, fontWeight: mode === "current" ? 600 : 400, textDecoration: mode === "current" ? "underline" : "none" }}
-          >
-            Based on current season
-          </Link>
-        </div>
         <p className="muted">
-          {mode === "current" && editorSeasonId ? (
+          {editorSeasonId ? (
             <>
               This is the draft for next season — <strong>drag players between divisions, it saves automatically</strong>.
               Share this page with whoever&apos;s arranging. Nothing goes live until you start the season.
             </>
-          ) : mode === "fresh" ? (
-            <>
-              Everyone sorted fresh into Owen&apos;s ladder by MMR — how a <strong>first</strong> season builds.
-              Tweak the structure; turn on <strong>Show schedules</strong> to see opponents and strength of schedule. Nothing is saved.
-            </>
           ) : (
             <>
-              How a <strong>returning</strong> season builds: returners keep their finish, new signups slot in by MMR.
+              How next season builds from the current one: returners keep their finish, new signups slot in by MMR.
               Click <strong>Edit these groupings</strong> to turn it into an editable draft. Nothing is saved until you do.
             </>
           )}

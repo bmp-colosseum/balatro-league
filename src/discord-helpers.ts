@@ -94,6 +94,19 @@ export function isDiscordSnowflake(id: string): boolean {
   return SNOWFLAKE_RE.test(id);
 }
 
+// True when a DM send failed for a PERMANENT reason — the recipient can't be
+// DM'd at all (DMs off, blocked the bot, no shared server / "no mutual guilds"),
+// or isn't a real user. These must NOT be retried: a retry can never succeed and
+// the job just sits as a failure. Matches both the numeric code (50007 = can't
+// DM, 10013 = unknown user) AND the message text, since the "no mutual guilds"
+// variant doesn't always surface a parseable code.
+export function isUndeliverableDm(err: unknown): boolean {
+  const code = (err as { code?: number })?.code;
+  if (code === 50007 || code === 10013) return true;
+  const msg = String((err as { message?: unknown })?.message ?? "");
+  return /no mutual guilds|cannot send messages to this user/i.test(msg);
+}
+
 export async function addGuildMemberRole(
   guildId: string,
   userId: string,

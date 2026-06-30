@@ -57,6 +57,7 @@ import {
   deleteChannelMessage,
   pinChannelMessage,
   findWelcomeMessageId,
+  isUndeliverableDm,
   removeGuildMemberRole as removeGuildMemberRoleViaBot,
 } from "./discord-helpers.js";
 import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
@@ -165,16 +166,13 @@ export async function initQueue(): Promise<void> {
           const user = await client.users.fetch(discordId);
           await user.send({ content });
         } catch (err) {
-          const code = (err as { code?: number })?.code;
-          // Permanently undeliverable — skip silently, don't retry:
-          //   50007 = DMs disabled / bot blocked / no shared server
-          //   10013 = Unknown User (left the server, deleted account, or a fake
-          //           seeded ID in a test run)
-          if (code === 50007 || code === 10013) {
-            console.warn(`[notify.dm] ${discordId} undeliverable (code ${code}) — skipping.`);
+          // Permanently undeliverable (DMs off / blocked / no mutual guilds /
+          // unknown user) — skip silently, don't retry (a retry can't succeed).
+          if (isUndeliverableDm(err)) {
+            console.warn(`[notify.dm] ${discordId} undeliverable — skipping:`, (err as Error)?.message);
             return;
           }
-          console.warn(`[notify.dm] send to ${discordId} failed (code ${code ?? "?"}) — will retry:`, err);
+          console.warn(`[notify.dm] send to ${discordId} failed — will retry:`, err);
           throw err;
         }
       }
@@ -297,12 +295,11 @@ export async function initQueue(): Promise<void> {
           const user = await client.users.fetch(player.discordId);
           await user.send(embed ? { content, embeds: [embed] } : { content });
         } catch (err) {
-          const code = (err as { code?: number })?.code;
-          if (code === 50007 || code === 10013) {
-            console.warn(`[notify.schedule-change] ${player.discordId} undeliverable (code ${code}) — skipping.`);
+          if (isUndeliverableDm(err)) {
+            console.warn(`[notify.schedule-change] ${player.discordId} undeliverable — skipping:`, (err as Error)?.message);
             return;
           }
-          console.warn(`[notify.schedule-change] send to ${player.discordId} failed (code ${code ?? "?"}) — will retry:`, err);
+          console.warn(`[notify.schedule-change] send to ${player.discordId} failed — will retry:`, err);
           throw err;
         }
       }

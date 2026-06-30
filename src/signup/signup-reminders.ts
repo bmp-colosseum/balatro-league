@@ -21,7 +21,7 @@ import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import type { SignupRound } from "@prisma/client";
 import { prisma } from "../db.js";
 import { tryGetDiscordClient } from "../discord.js";
-import { deleteChannelMessage } from "../discord-helpers.js";
+import { deleteChannelMessage, isUndeliverableDm } from "../discord-helpers.js";
 import { getConfig, LeagueConfigKey } from "../league-config.js";
 import { DEFAULT_SEASON_LENGTH_DAYS, playWindow, seasonWindowValue, signupEmbed, signupButtons } from "./signup.js";
 
@@ -144,11 +144,11 @@ export async function sendOrRefreshAsk(roundId: string, discordId: string): Prom
   try {
     sent = await user.send({ content, components: [askButtons(roundId)] });
   } catch (err) {
-    const code = (err as { code?: number })?.code;
-    // 50007 = DMs off / blocked / no shared server, 10013 = unknown user.
-    // Permanently undeliverable — leave PENDING (the next tick just skips again).
-    if (code === 50007 || code === 10013) {
-      console.warn(`[signup-ask] ${discordId} undeliverable (code ${code}) — skipping.`);
+    // Permanently undeliverable (DMs off / blocked / no mutual guilds / unknown
+    // user) — leave PENDING (the next tick just skips again). Don't throw, or the
+    // job retries forever and sits as a failure.
+    if (isUndeliverableDm(err)) {
+      console.warn(`[signup-ask] ${discordId} undeliverable — skipping:`, (err as Error)?.message);
       return;
     }
     throw err; // transient — let pg-boss retry
