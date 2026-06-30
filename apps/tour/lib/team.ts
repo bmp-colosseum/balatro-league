@@ -89,7 +89,7 @@ export async function getAllTimeTeams(): Promise<TeamSeasonRow[]> {
   }
 
   const sets = await prisma.tourSet.findMany({
-    where: { seasonId: { not: null } },
+    where: { seasonId: { not: null }, bracket: "REGULAR" }, // all-time team records = regular season
     select: { playerAId: true, playerBId: true, matchId: true, seasonId: true },
   });
   const matches = await prisma.match.findMany({
@@ -157,7 +157,7 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
   const [players, sets] = await Promise.all([
     prisma.player.findMany({ where: { id: { in: playerIds } }, select: { id: true, displayName: true } }),
     prisma.tourSet.findMany({
-      where: { seasonId: ts.seasonId, OR: [{ playerAId: { in: playerIds } }, { playerBId: { in: playerIds } }] },
+      where: { seasonId: ts.seasonId, bracket: "REGULAR", OR: [{ playerAId: { in: playerIds } }, { playerBId: { in: playerIds } }] },
       select: { playerAId: true, playerBId: true, matchId: true },
     }),
   ]);

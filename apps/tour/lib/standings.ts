@@ -82,7 +82,7 @@ export async function getSeasonStandings(seasonName: string): Promise<SeasonStan
     }
   } else {
     const sets = await prisma.tourSet.findMany({
-      where: { seasonId: season.id },
+      where: { seasonId: season.id, bracket: "REGULAR" }, // standings = regular season only
       select: { playerAId: true, playerBId: true, matchId: true },
     });
     setCount = sets.length;

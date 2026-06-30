@@ -67,7 +67,7 @@ async function ringHolders(): Promise<Map<string, number>> {
 export async function getAllTimePlayers(): Promise<PlayerCareer[]> {
   const [players, sets, matches, rings] = await Promise.all([
     prisma.player.findMany({ select: { id: true, displayName: true } }),
-    prisma.tourSet.findMany({ select: { playerAId: true, playerBId: true, matchId: true, seasonId: true } }),
+    prisma.tourSet.findMany({ where: { bracket: "REGULAR" }, select: { playerAId: true, playerBId: true, matchId: true, seasonId: true } }),
     prisma.match.findMany({ select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true, winnerId: true } }),
     ringHolders(),
   ]);
@@ -130,7 +130,7 @@ export async function getSeasonLeaders(seasonName: string, limit = 10, minSets =
   const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true } });
   if (!season) return [];
   const sets = await prisma.tourSet.findMany({
-    where: { seasonId: season.id },
+    where: { seasonId: season.id, bracket: "REGULAR" }, // season leaders = regular season
     select: { playerAId: true, matchId: true },
   });
   if (sets.length === 0) return [];
@@ -183,6 +183,7 @@ export interface H2HLine {
 }
 export interface PlayerDetail extends PlayerCareer {
   discordId: string; // "legacy:<slug>" until mapped to a real Discord id
+  playoff: { setW: number; setL: number; gameW: number; gameL: number }; // post-season record (regular is the default)
   perSeason: PlayerSeasonLine[];
   h2h: H2HLine[];
 }
@@ -211,7 +212,7 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
     }),
     prisma.tourSet.findMany({
       where: { OR: [{ playerAId: playerId }, { playerBId: playerId }] },
-      select: { playerAId: true, playerBId: true, matchId: true, seasonId: true },
+      select: { playerAId: true, playerBId: true, matchId: true, seasonId: true, bracket: true },
     }),
     prisma.match.findMany({ select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true, winnerId: true } }),
     ringHolders(),
@@ -224,6 +225,7 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
   for (const e of entries) teamForSeason.set(e.roster.teamSeason.season.id, e.roster.teamSeason.team.name);
 
   const career = newAcc();
+  const playoff = newAcc(); // regular season is the default record; playoffs tracked apart
   const bySeason = new Map<string, Acc>();
   const getS = (sid: string) => {
     let a = bySeason.get(sid);
@@ -237,6 +239,7 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
   for (const ts of sets) {
     const m = ts.matchId ? matchById.get(ts.matchId) : undefined;
     if (!m) continue;
+    if (ts.bracket === "PLAYOFF") { applySet(playoff, playerId, m, ts.playerAId, ts.seasonId); continue; }
     applySet(career, playerId, m, ts.playerAId, ts.seasonId);
     if (ts.seasonId) applySet(getS(ts.seasonId), playerId, m, ts.playerAId, ts.seasonId);
     const oppId = ts.playerAId === playerId ? ts.playerBId : ts.playerAId;
@@ -280,6 +283,7 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
     gameW: career.gameW,
     gameL: career.gameL,
     rings: rings.get(playerId) ?? 0,
+    playoff: { setW: playoff.setW, setL: playoff.setL, gameW: playoff.gameW, gameL: playoff.gameL },
     perSeason,
     h2h,
   };

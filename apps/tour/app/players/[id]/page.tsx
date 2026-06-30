@@ -78,13 +78,20 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         <div className="stat">
           <div className="label">Set record</div>
           <div className="value">{p.setW}–{p.setL}</div>
-          <div className="muted">{pct(p.setW, p.setL)} win</div>
+          <div className="muted">{pct(p.setW, p.setL)} win · regular season</div>
         </div>
         <div className="stat">
           <div className="label">Game record</div>
           <div className="value">{p.gameW}–{p.gameL}</div>
-          <div className="muted">{pct(p.gameW, p.gameL)} win</div>
+          <div className="muted">{pct(p.gameW, p.gameL)} win · regular season</div>
         </div>
+        {(p.playoff.setW + p.playoff.setL) > 0 && (
+          <div className="stat">
+            <div className="label">Playoffs</div>
+            <div className="value">{p.playoff.setW}–{p.playoff.setL}</div>
+            <div className="muted">{pct(p.playoff.setW, p.playoff.setL)} win · {p.playoff.gameW}–{p.playoff.gameL} games</div>
+          </div>
+        )}
         {career && (
           <>
             <div className="stat">

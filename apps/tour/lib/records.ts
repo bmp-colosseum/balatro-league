@@ -53,7 +53,7 @@ export interface RookieRow {
 // ranked by their set-win% that season. "Rookie" = first season we have data for.
 export async function getRookieRankings(minSets = 6, limit = 20): Promise<RookieRow[]> {
   const [sets, matches, players, seasons] = await Promise.all([
-    prisma.tourSet.findMany({ select: { playerAId: true, playerBId: true, matchId: true, seasonId: true } }),
+    prisma.tourSet.findMany({ where: { bracket: "REGULAR" }, select: { playerAId: true, playerBId: true, matchId: true, seasonId: true } }),
     prisma.match.findMany({ select: { id: true, winnerId: true } }),
     prisma.player.findMany({ select: { id: true, displayName: true } }),
     prisma.tourSeason.findMany({ select: { id: true, name: true } }),
@@ -133,7 +133,7 @@ export interface H2HMatrix {
 // seasons). Same pair-tally as getRivalries, made directional.
 export async function getH2HMatrix(topN = 16): Promise<H2HMatrix> {
   const [sets, matches] = await Promise.all([
-    prisma.tourSet.findMany({ select: { playerAId: true, playerBId: true, matchId: true } }),
+    prisma.tourSet.findMany({ where: { bracket: "REGULAR" }, select: { playerAId: true, playerBId: true, matchId: true } }),
     prisma.match.findMany({ select: { id: true, winnerId: true } }),
   ]);
   const winById = new Map(matches.map((m) => [m.id, m.winnerId]));
@@ -171,7 +171,7 @@ export async function getH2HMatrix(topN = 16): Promise<H2HMatrix> {
 // All-time most-played player-vs-player matchups (sets), with the head-to-head.
 export async function getRivalries(limit = 15): Promise<Rivalry[]> {
   const [sets, matches] = await Promise.all([
-    prisma.tourSet.findMany({ select: { playerAId: true, playerBId: true, matchId: true } }),
+    prisma.tourSet.findMany({ where: { bracket: "REGULAR" }, select: { playerAId: true, playerBId: true, matchId: true } }),
     prisma.match.findMany({ select: { id: true, winnerId: true } }),
   ]);
   const winById = new Map(matches.map((m) => [m.id, m.winnerId]));
