@@ -32,15 +32,17 @@ describe("pairwise boundary promotion/relegation — top tiers", () => {
     expect(idsIn(out, 1)).toContain("leg6");
   });
 
-  it("Rare 1 ↔ Rare 2 is matched (no asymmetric tighten): 1/1 when both are small", () => {
-    const rare1 = [1, 2, 3, 4, 5, 6].map((r) => returner(`r1-${r}`, 1, r, 1800));
-    const rare2 = [1, 2, 3, 4, 5, 6].map((r) => returner(`r2-${r}`, 2, r, 1600));
+  it("Rare 1 ↔ Rare 2 is ALWAYS 1/1 — even when both are big (Rare 1 is outside the 2-swap)", () => {
+    // 8 in each (≥ threshold), so the size rule WOULD say 2 — but Rare 1 is
+    // excluded, so only its single bottom finisher relegates and only Rare 2's
+    // top one promotes. A Rare 1 player who isn't dead last never drops.
+    const rare1 = [1, 2, 3, 4, 5, 6, 7, 8].map((r) => returner(`r1-${r}`, 1, r, 1800));
+    const rare2 = [1, 2, 3, 4, 5, 6, 7, 8].map((r) => returner(`r2-${r}`, 2, r, 1600));
     const out = buildOwenPlacement(DIVS, [...rare1, ...rare2], [], 100);
-    // Both divisions are < 8, so the matched count-based rule is 1 down / 1 up —
-    // NOT the old 1-up/2-down. Only Rare 1's bottom one relegates.
-    expect(idsIn(out, 2)).toContain("r1-6");
-    expect(idsIn(out, 2)).not.toContain("r1-5"); // 2nd-from-bottom stays (no tighten)
-    expect(idsIn(out, 1)).toContain("r2-1"); // Rare 2's top promotes
+    expect(idsIn(out, 2)).toContain("r1-8"); // only the bottom one relegates
+    expect(idsIn(out, 2)).not.toContain("r1-7"); // 2nd-from-bottom STAYS in Rare 1
+    expect(idsIn(out, 1)).toContain("r2-1"); // only Rare 2's top promotes
+    expect(idsIn(out, 1)).not.toContain("r2-2"); // 2nd does NOT
   });
 });
 
@@ -106,24 +108,25 @@ describe("divisionMovement — per-division promote/relegate (display = reality)
   const RULES = { tightenTopTiers: false, swapThreshold: 8, baseSwap: 2, bigSwap: 2 };
   const sizes = DIVS.map(() => 10); // sizes irrelevant when baseSwap === bigSwap
 
-  it("Legendary ↓1, Rare 1 ↑1/↓2, everywhere else ↑2/↓2, bottom ↓0", () => {
+  it("Legendary ↓1, Rare 1 ↑1/↓1 (outside the 2-swap), everywhere else ↑2/↓2, bottom ↓0", () => {
     const m = divisionMovement(DIVS, sizes, RULES);
     expect(m[0]).toEqual({ promote: 0, relegate: 1 }); // Legendary (top)
-    expect(m[1]).toEqual({ promote: 1, relegate: 2 }); // Rare 1
-    expect(m[2]).toEqual({ promote: 2, relegate: 2 }); // Rare 2
+    expect(m[1]).toEqual({ promote: 1, relegate: 1 }); // Rare 1 — 1 up (Leg) / 1 down (Rare 2)
+    expect(m[2]).toEqual({ promote: 1, relegate: 2 }); // Rare 2 — 1 up (matches Rare 1's 1 down) / 2 down
     expect(m[3]).toEqual({ promote: 2, relegate: 2 }); // Rare 3
     expect(m[5]).toEqual({ promote: 2, relegate: 2 }); // Uncommon 1
     expect(m[6]).toEqual({ promote: 2, relegate: 0 }); // Uncommon 2 (bottom)
   });
 
   it("matches what buildOwenPlacement actually does (no drift)", () => {
-    // Under these rules Rare 1 relegates exactly 2 (→ Rare 2) and Rare 2 promotes 2.
+    // Rare 1 is outside the 2-swap, so even with 8 each it relegates exactly 1
+    // (→ Rare 2) and Rare 2 promotes exactly 1 back up — matched at 1.
     const rare1 = [1, 2, 3, 4, 5, 6, 7, 8].map((r) => returner(`r1-${r}`, 1, r, 1800));
     const rare2 = [1, 2, 3, 4, 5, 6, 7, 8].map((r) => returner(`r2-${r}`, 2, r, 1600));
     const out = buildOwenPlacement(DIVS, [...rare1, ...rare2], [], 100, RULES);
     const movedDownFromRare1 = rare1.filter((r) => divisionOf(out, r.discordId) === 2).length;
     const movedUpFromRare2 = rare2.filter((r) => divisionOf(out, r.discordId) === 1).length;
-    expect(movedDownFromRare1).toBe(2);
-    expect(movedUpFromRare2).toBe(2);
+    expect(movedDownFromRare1).toBe(1);
+    expect(movedUpFromRare2).toBe(1);
   });
 });

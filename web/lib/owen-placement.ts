@@ -101,12 +101,16 @@ function boundaryAt(
 ): { up: number; down: number } {
   const upper = groupOf[i]!;
   // Legendary is the fixed elite: always exactly 1 down / 1 up (= the 1 up from
-  // Rare 1). Every OTHER boundary is matched + size-based: the same K up and down,
-  // and K = bigSwap only when BOTH adjacent divisions are big enough (≥ threshold)
-  // to support it — so what relegates down always equals what promotes up. (No
-  // asymmetric "tighten top tiers" rule any more; it broke the above/below match
-  // and dropped 2 from Rare 1 instead of 1.)
+  // Rare 1).
   if (upper.tier === "Legendary") return { up: 1, down: 1 };
+  // Rare 1 sits just below the elite and is OUTSIDE the size-based 2-swap: its
+  // boundary with Rare 2 is always 1 up / 1 down (matched), even when both
+  // divisions are big. So ONLY Rare 1's single bottom finisher relegates — a
+  // Rare 1 player who isn't the very bottom never drops to Rare 2.
+  if (upper.tier === "Rare" && upper.group === 1) return { up: 1, down: 1 };
+  // Every other boundary is matched + size-based: the same K up and down, and
+  // K = bigSwap only when BOTH adjacent divisions are big enough (≥ threshold) —
+  // so what relegates down always equals what promotes up.
   const k = (counts[i] ?? 0) >= opts.swapThreshold && (counts[i + 1] ?? 0) >= opts.swapThreshold ? opts.bigSwap : opts.baseSwap;
   return { up: k, down: k };
 }
