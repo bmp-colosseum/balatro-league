@@ -162,6 +162,33 @@ export async function identityCounts() {
   return { total, linked, unlinked: total - linked };
 }
 
+// Force-delete a player and everything that references them (sets + matches, roster
+// entries, draft picks, career stat, awards, strikes, roster moves; nulls out sub/replace
+// pointers). Blocks if they're a team captain (reassign first) to avoid a dangling captain.
+export async function deletePlayer(playerId: string): Promise<{ name: string; setsDeleted: number }> {
+  const p = await prisma.player.findUnique({ where: { id: playerId }, select: { displayName: true } });
+  if (!p) throw new Error("No such player.");
+  if (await prisma.teamSeason.count({ where: { captainPlayerId: playerId } }))
+    throw new Error("This player is a team captain — change that team's captain first, then delete.");
+  const sets = await prisma.tourSet.findMany({ where: { OR: [{ playerAId: playerId }, { playerBId: playerId }] }, select: { id: true, matchId: true } });
+  if (sets.length) {
+    await prisma.tourSet.deleteMany({ where: { id: { in: sets.map((s) => s.id) } } });
+    const matchIds = sets.map((s) => s.matchId).filter((x): x is string => !!x);
+    if (matchIds.length) await prisma.match.deleteMany({ where: { id: { in: matchIds } } });
+  }
+  await prisma.match.deleteMany({ where: { OR: [{ playerAId: playerId }, { playerBId: playerId }] } });
+  await prisma.rosterEntry.deleteMany({ where: { playerId } });
+  await prisma.draftPick.deleteMany({ where: { playerId } });
+  await prisma.playerCareerStat.deleteMany({ where: { playerId } });
+  await prisma.award.deleteMany({ where: { playerId } });
+  await prisma.strike.deleteMany({ where: { playerId } });
+  await prisma.rosterMove.deleteMany({ where: { playerId } });
+  await prisma.rosterMove.updateMany({ where: { outPlayerId: playerId }, data: { outPlayerId: null } });
+  await prisma.rosterMove.updateMany({ where: { replacesPlayerId: playerId }, data: { replacesPlayerId: null } });
+  await prisma.player.delete({ where: { id: playerId } });
+  return { name: p.displayName, setsDeleted: sets.length };
+}
+
 export interface TourPlayerRow {
   id: string;
   name: string;

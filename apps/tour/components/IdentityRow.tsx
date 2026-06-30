@@ -3,10 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Link2, GitMerge, X } from "lucide-react";
+import { Link2, GitMerge, X, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { linkPlayerAction, mergePlayerAction } from "@/app/admin/identity/actions";
+import { linkPlayerAction, mergePlayerAction, deletePlayerAction } from "@/app/admin/identity/actions";
 
 type Result = { value: string; label: string; detail: string };
 export type IdPlayer = { id: string; name: string; discordId: string; linked: boolean; sets: number; seasons: number; suggestions?: { discordId: string; name: string }[]; signupHandle?: string };
@@ -48,6 +48,14 @@ export function IdentityRow({ player }: { player: IdPlayer }) {
       alert(res?.message ?? "Failed.");
     }
   }
+  async function del() {
+    if (!confirm(`Delete "${player.name}"? This removes the player and ${player.sets} set(s), their roster spots, picks, awards and stats. Cannot be undone.`)) return;
+    setBusy(true);
+    const res = await deletePlayerAction(player.id);
+    setBusy(false);
+    if (res?.ok) router.refresh();
+    else alert(res?.message ?? "Failed.");
+  }
   // One-click link to a suggested league match.
   async function linkSuggested(discordId: string) {
     setBusy(true);
@@ -77,6 +85,9 @@ export function IdentityRow({ player }: { player: IdPlayer }) {
         </Button>
         <Button size="sm" variant={mode === "merge" ? "default" : "secondary"} onClick={() => (mode === "merge" ? close() : open("merge"))}>
           <GitMerge className="size-3.5" /> Merge in
+        </Button>
+        <Button size="sm" variant="destructive" disabled={busy} onClick={del} title="Delete this player and all their data">
+          <Trash2 className="size-3.5" />
         </Button>
       </div>
 

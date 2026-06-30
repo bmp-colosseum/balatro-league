@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/auth";
-import { linkPlayer, mergePlayers, applyIdentityRecovery, applyAutoLink } from "@/lib/services/identity";
+import { linkPlayer, mergePlayers, applyIdentityRecovery, applyAutoLink, deletePlayer } from "@/lib/services/identity";
 import { pruneOrphanPlayers } from "@/lib/services/import";
 import type { ActionResult } from "@/lib/action-result";
 
@@ -34,6 +34,18 @@ export async function linkPlayerAction(playerId: string, discordId: string): Pro
     return { ok: true, message: "Linked." };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Link failed." };
+  }
+}
+
+export async function deletePlayerAction(playerId: string): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
+  try {
+    const r = await deletePlayer(playerId);
+    revalidatePath("/admin/identity");
+    revalidatePath("/players");
+    return { ok: true, message: `Deleted ${r.name}${r.setsDeleted ? ` (+${r.setsDeleted} sets)` : ""}.` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Delete failed." };
   }
 }
 
