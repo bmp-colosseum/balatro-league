@@ -794,6 +794,63 @@ export async function importPlayoffsFromXlsx(dir = sheetsDir()) {
   return { series: created, champions };
 }
 
+// Derive each player's career counters (PlayerCareerStat) from already-imported data —
+// replaces the HTML Player Stats parse. avgSeed from roster seeds; championships/finals
+// from the FINAL PlayoffSeries (winner + the two finalists); playoffsMade from PLAYOFF
+// TourSets; everCaptain from roster/captain; rookieSeason from the earliest season.
+export async function deriveCareerStats() {
+  const [entries, rosters, teamSeasons, seasons, finals, playoffSets] = await Promise.all([
+    prisma.rosterEntry.findMany({ select: { rosterId: true, playerId: true, seed: true, isCaptain: true } }),
+    prisma.roster.findMany({ select: { id: true, teamSeasonId: true } }),
+    prisma.teamSeason.findMany({ select: { id: true, seasonId: true, captainPlayerId: true } }),
+    prisma.tourSeason.findMany({ select: { id: true, name: true } }),
+    prisma.playoffSeries.findMany({ where: { round: "FINAL" as never }, select: { teamSeasonAId: true, teamSeasonBId: true, winnerTeamSeasonId: true } }),
+    prisma.tourSet.findMany({ where: { bracket: "PLAYOFF" }, select: { playerAId: true, playerBId: true, seasonId: true } }),
+  ]);
+  const rosterTs = new Map(rosters.map((r) => [r.id, r.teamSeasonId]));
+  const tsSeason = new Map(teamSeasons.map((t) => [t.id, t.seasonId]));
+  const seasonNum = new Map(seasons.map((s) => [s.id, Number(s.name.replace(/\D/g, ""))]));
+  const captainOf = new Map(teamSeasons.filter((t) => t.captainPlayerId).map((t) => [t.id, t.captainPlayerId!]));
+  const champTs = new Set(finals.map((f) => f.winnerTeamSeasonId).filter((x): x is string => !!x));
+  const finalistTs = new Set(finals.flatMap((f) => [f.teamSeasonAId, f.teamSeasonBId]).filter((x): x is string => !!x));
+
+  const playoffSeasons = new Map<string, Set<string>>();
+  for (const s of playoffSets) for (const pid of [s.playerAId, s.playerBId]) {
+    if (!s.seasonId) continue;
+    (playoffSeasons.get(pid) ?? playoffSeasons.set(pid, new Set()).get(pid)!).add(s.seasonId);
+  }
+
+  type Agg = { seeds: number[]; tsIds: Set<string>; seasonNums: Set<number>; captain: boolean };
+  const byPlayer = new Map<string, Agg>();
+  for (const e of entries) {
+    const tsId = rosterTs.get(e.rosterId);
+    if (!tsId) continue;
+    const a = byPlayer.get(e.playerId) ?? { seeds: [], tsIds: new Set<string>(), seasonNums: new Set<number>(), captain: false };
+    a.seeds.push(e.seed);
+    a.tsIds.add(tsId);
+    const sid = tsSeason.get(tsId);
+    const n = sid ? seasonNum.get(sid) : undefined;
+    if (n != null) a.seasonNums.add(n);
+    if (e.isCaptain || captainOf.get(tsId) === e.playerId) a.captain = true;
+    byPlayer.set(e.playerId, a);
+  }
+
+  let made = 0;
+  for (const [playerId, a] of byPlayer) {
+    const data = {
+      avgSeed: a.seeds.length ? a.seeds.reduce((x, y) => x + y, 0) / a.seeds.length : null,
+      rookieSeason: a.seasonNums.size ? Math.min(...a.seasonNums) : null,
+      championships: [...a.tsIds].filter((t) => champTs.has(t)).length,
+      finalsMade: [...a.tsIds].filter((t) => finalistTs.has(t)).length,
+      playoffsMade: playoffSeasons.get(playerId)?.size ?? 0,
+      everCaptain: a.captain,
+    };
+    await prisma.playerCareerStat.upsert({ where: { playerId }, create: { playerId, ...data }, update: data });
+    made++;
+  }
+  return { players: made };
+}
+
 // THE all-xlsx import: build every season fully from its workbook — shells, then
 // conferences/seeds, rosters/draft/seeds/captains, player results (regular + playoff),
 // and the playoff bracket + champion. Replaces importHistorical + importConferenceSeason
@@ -807,8 +864,9 @@ export async function importAllFromXlsx(dir = sheetsDir()) {
   const playoffs = await importPlayoffsFromXlsx(dir);
   const roster_moves = await backfillDraftedMoves();
   await pruneOrphanPlayers();
+  const career = await deriveCareerStats();
   const [players, tourSets] = await Promise.all([prisma.player.count(), prisma.tourSet.count()]);
-  return { ...shells, conferencesSet: conferences.teamsSet, rosters: rosters.rostersFilled, players: rosters.playersAdded, sets: results.sets, playoffSeries: playoffs.series, champions: playoffs.champions, rosterMoves: roster_moves.created, totalPlayers: players, totalSets: tourSets };
+  return { ...shells, conferencesSet: conferences.teamsSet, rosters: rosters.rostersFilled, players: rosters.playersAdded, sets: results.sets, playoffSeries: playoffs.series, champions: playoffs.champions, careerStats: career.players, rosterMoves: roster_moves.created, totalPlayers: players, totalSets: tourSets };
 }
 
 export async function importHistorical(dir = sheetsDir()) {
