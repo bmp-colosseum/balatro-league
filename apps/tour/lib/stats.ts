@@ -65,11 +65,14 @@ async function ringHolders(): Promise<Map<string, number>> {
 }
 
 export async function getAllTimePlayers(): Promise<PlayerCareer[]> {
-  const [players, sets, matches, rings] = await Promise.all([
+  const [players, sets, matches, rings, rosterEntries] = await Promise.all([
     prisma.player.findMany({ select: { id: true, displayName: true } }),
     prisma.tourSet.findMany({ where: { bracket: "REGULAR" }, select: { playerAId: true, playerBId: true, matchId: true, seasonId: true } }),
     prisma.match.findMany({ select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true, winnerId: true } }),
     ringHolders(),
+    // Roster membership = "seasons" truth: a drafted player who never finished a game is
+    // still on a team that season. Including these makes them visible (to drop/sub them).
+    prisma.rosterEntry.findMany({ select: { playerId: true, roster: { select: { teamSeason: { select: { seasonId: true } } } } } }),
   ]);
   const nameById = new Map(players.map((p) => [p.id, p.displayName]));
   const matchById = new Map(matches.map((m) => [m.id, m]));
@@ -89,6 +92,7 @@ export async function getAllTimePlayers(): Promise<PlayerCareer[]> {
     applySet(get(ts.playerAId), ts.playerAId, m, ts.playerAId, ts.seasonId);
     applySet(get(ts.playerBId), ts.playerBId, m, ts.playerAId, ts.seasonId);
   }
+  for (const e of rosterEntries) get(e.playerId).seasons.add(e.roster.teamSeason.seasonId);
   for (const [pid, n] of rings) get(pid).rings = n;
 
   const out: PlayerCareer[] = [];
