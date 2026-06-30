@@ -6,11 +6,12 @@
 // D:/STuffinside). Idempotent (upserts + keyed re-imports).
 import { join } from "node:path";
 import { readdirSync, statSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { prisma } from "../db";
 // Pure parsers (framework-agnostic utilities).
 import { readSeasonXlsx, readSeasonResults, readSeasonPlayoffs, readSeasonRankings } from "../import/parse-xlsx-season.mjs";
 import { slug } from "../import/sheet.mjs";
-import { backfillDraftedMoves, ensureMembership } from "./roster-ops";
+import { backfillDraftedMoves } from "./roster-ops";
 import { applySignupRefs } from "./identity";
 
 const majority = (n: number) => Math.floor(n / 2) + 1;
@@ -23,14 +24,22 @@ const majority = (n: number) => Math.floor(n / 2) + 1;
 // `aliases` (linked/merged but remembers the slug), (3) create a new legacy player
 // (recording the slug as a self-alias) when `create` is set. `null` if not found and
 // not creating. NOTHING here overwrites a linked player's id or display name.
+// Name→id cache: resolvePlayerId is called thousands of times across rosters/rankings/
+// results, each doing 2-3 queries. A name resolves to the same id for a whole import run,
+// so memoize it. Cleared at the start of importAllFromXlsx so a merge between runs is seen.
+const _resolveCache = new Map<string, string>();
+function clearResolveCache() { _resolveCache.clear(); }
 async function resolvePlayerId(name: string, create: boolean): Promise<string | null> {
+  const cached = _resolveCache.get(name);
+  if (cached) return cached;
   const legacy = `legacy:${slug(name)}`;
   const direct = await prisma.player.findUnique({ where: { discordId: legacy }, select: { id: true } });
-  if (direct) return direct.id;
+  if (direct) { _resolveCache.set(name, direct.id); return direct.id; }
   const aliased = await prisma.player.findFirst({ where: { aliases: { has: legacy } }, select: { id: true } });
-  if (aliased) return aliased.id;
+  if (aliased) { _resolveCache.set(name, aliased.id); return aliased.id; }
   if (!create) return null;
   const made = await prisma.player.create({ data: { discordId: legacy, displayName: name, aliases: [legacy] }, select: { id: true } });
+  _resolveCache.set(name, made.id);
   return made.id;
 }
 
@@ -224,23 +233,32 @@ export async function pruneOrphanPlayers(): Promise<{ removed: number; names: st
     }
   }
 
-  // 2. Delete legacy players with zero footprint.
-  const removed: string[] = [];
-  for (const p of players) {
-    if (!p.discordId.startsWith("legacy:")) continue;
-    const [sets, picks, rosters, career, awards, captain] = await Promise.all([
-      prisma.tourSet.count({ where: { OR: [{ playerAId: p.id }, { playerBId: p.id }] } }),
-      prisma.draftPick.count({ where: { playerId: p.id } }),
-      prisma.rosterEntry.count({ where: { playerId: p.id } }),
-      prisma.playerCareerStat.count({ where: { playerId: p.id } }),
-      prisma.award.count({ where: { playerId: p.id } }),
-      prisma.teamSeason.count({ where: { captainPlayerId: p.id } }),
+  // 2. Delete legacy players with zero footprint. Compute footprints in BULK (6 queries
+  // total) instead of 6 counts per player — the per-player loop was thousands of serial
+  // round-trips. A legacy player NOT in any footprint set is an orphan.
+  const legacyIds = players.filter((p) => p.discordId.startsWith("legacy:")).map((p) => p.id);
+  const footprint = new Set<string>();
+  if (legacyIds.length) {
+    const idSet = { in: legacyIds };
+    const [setRows, picks, rosters, career, awards, captains] = await Promise.all([
+      prisma.tourSet.findMany({ where: { OR: [{ playerAId: idSet }, { playerBId: idSet }] }, select: { playerAId: true, playerBId: true } }),
+      prisma.draftPick.findMany({ where: { playerId: idSet }, select: { playerId: true } }),
+      prisma.rosterEntry.findMany({ where: { playerId: idSet }, select: { playerId: true } }),
+      prisma.playerCareerStat.findMany({ where: { playerId: idSet }, select: { playerId: true } }),
+      prisma.award.findMany({ where: { playerId: idSet }, select: { playerId: true } }),
+      prisma.teamSeason.findMany({ where: { captainPlayerId: idSet }, select: { captainPlayerId: true } }),
     ]);
-    if (sets + picks + rosters + career + awards + captain === 0) {
-      await prisma.player.delete({ where: { id: p.id } });
-      removed.push(p.displayName);
-    }
+    for (const s of setRows) { footprint.add(s.playerAId); footprint.add(s.playerBId); }
+    for (const x of picks) if (x.playerId) footprint.add(x.playerId);
+    for (const x of rosters) footprint.add(x.playerId);
+    for (const x of career) footprint.add(x.playerId);
+    for (const x of awards) if (x.playerId) footprint.add(x.playerId);
+    for (const x of captains) footprint.add(x.captainPlayerId);
   }
+  const nameById = new Map(players.map((p) => [p.id, p.displayName]));
+  const orphanIds = legacyIds.filter((id) => !footprint.has(id));
+  if (orphanIds.length) await prisma.player.deleteMany({ where: { id: { in: orphanIds } } });
+  const removed = orphanIds.map((id) => nameById.get(id) ?? id);
   return { removed: removed.length, names: removed, setsDeleted };
 }
 
@@ -250,30 +268,31 @@ export async function pruneOrphanPlayers(): Promise<{ removed: number; names: st
 // delete it (cascades its rosters), then delete any Team with no team-seasons left.
 export async function pruneOrphanTeams(): Promise<{ teamSeasonsRemoved: number; teamsRemoved: number; names: string[] }> {
   const names: string[] = [];
-  const tss = await prisma.teamSeason.findMany({ select: { id: true, team: { select: { name: true } } } });
-  let teamSeasonsRemoved = 0;
-  for (const ts of tss) {
-    const [entries, sets, series, picks] = await Promise.all([
-      prisma.rosterEntry.count({ where: { roster: { teamSeasonId: ts.id } } }),
-      prisma.tourSet.count({ where: { OR: [{ teamSeasonAId: ts.id }, { teamSeasonBId: ts.id }] } }),
-      prisma.playoffSeries.count({ where: { OR: [{ teamSeasonAId: ts.id }, { teamSeasonBId: ts.id }] } }),
-      prisma.draftPick.count({ where: { teamSeasonId: ts.id } }),
-    ]);
-    if (entries + sets + series + picks === 0) {
-      await prisma.teamSeason.delete({ where: { id: ts.id } });
-      names.push(ts.team.name);
-      teamSeasonsRemoved++;
-    }
-  }
-  let teamsRemoved = 0;
+  const tss = await prisma.teamSeason.findMany({ select: { id: true, teamId: true, team: { select: { name: true } } } });
+  // Bulk footprint: a team-season id appearing in any of these has real data.
+  const [rosters, sets, series, picks] = await Promise.all([
+    prisma.roster.findMany({ where: { entries: { some: {} } }, select: { teamSeasonId: true } }),
+    prisma.tourSet.findMany({ select: { teamSeasonAId: true, teamSeasonBId: true } }),
+    prisma.playoffSeries.findMany({ select: { teamSeasonAId: true, teamSeasonBId: true } }),
+    prisma.draftPick.findMany({ select: { teamSeasonId: true } }),
+  ]);
+  const live = new Set<string>();
+  for (const r of rosters) live.add(r.teamSeasonId);
+  for (const s of sets) { if (s.teamSeasonAId) live.add(s.teamSeasonAId); if (s.teamSeasonBId) live.add(s.teamSeasonBId); }
+  for (const s of series) { if (s.teamSeasonAId) live.add(s.teamSeasonAId); if (s.teamSeasonBId) live.add(s.teamSeasonBId); }
+  for (const p of picks) live.add(p.teamSeasonId);
+
+  const orphanTs = tss.filter((ts) => !live.has(ts.id));
+  if (orphanTs.length) await prisma.teamSeason.deleteMany({ where: { id: { in: orphanTs.map((t) => t.id) } } }); // cascades rosters
+  for (const ts of orphanTs) names.push(ts.team.name);
+
+  // Teams with no team-seasons left.
   const teams = await prisma.team.findMany({ select: { id: true, name: true, _count: { select: { teamSeasons: true } } } });
-  for (const t of teams) {
-    if (t._count.teamSeasons > 0) continue;
-    await prisma.team.delete({ where: { id: t.id } });
-    teamsRemoved++;
-    if (!names.includes(t.name)) names.push(t.name);
-  }
-  return { teamSeasonsRemoved, teamsRemoved, names };
+  const orphanTeams = teams.filter((t) => t._count.teamSeasons === 0);
+  if (orphanTeams.length) await prisma.team.deleteMany({ where: { id: { in: orphanTeams.map((t) => t.id) } } });
+  for (const t of orphanTeams) if (!names.includes(t.name)) names.push(t.name);
+
+  return { teamSeasonsRemoved: orphanTs.length, teamsRemoved: orphanTeams.length, names };
 }
 
 // Import PLAYER-level match results for conference seasons (e.g. TT4) from the season
@@ -346,8 +365,11 @@ export async function importConferenceResults(dir = sheetsDir()) {
       maxSeedByTs.set(t.id, es.reduce((m, e) => Math.max(m, e.seed), 0));
       for (const e of es) seedByPlayer.set(e.playerId, e.seed);
     }
+    // Subs/results are built in memory then written in 3 bulk createMany calls (instead of
+    // ~5k sequential creates) — the per-row round-trips dominated wall-clock on a remote DB.
     let subsAdded = 0;
-    const ensureMember = async (tsId: string | null, playerId: string) => {
+    const newMembers: { rosterId: string; playerId: string; seed: number; isCaptain: boolean }[] = [];
+    const ensureMember = (tsId: string | null, playerId: string) => {
       if (!tsId) return;
       const members = membersByTs.get(tsId)!;
       if (members.has(playerId)) return;
@@ -355,7 +377,7 @@ export async function importConferenceResults(dir = sheetsDir()) {
       maxSeedByTs.set(tsId, seed);
       members.add(playerId);
       seedByPlayer.set(playerId, seedByPlayer.get(playerId) ?? seed);
-      await prisma.rosterEntry.create({ data: { rosterId: rosterByTs.get(tsId)!, playerId, seed, isCaptain: false } });
+      newMembers.push({ rosterId: rosterByTs.get(tsId)!, playerId, seed, isCaptain: false });
       subsAdded++;
     };
 
@@ -364,6 +386,11 @@ export async function importConferenceResults(dir = sheetsDir()) {
     // (week, unordered pair). Playoffs (no week) are left alone: a pair can recur across
     // rounds there.
     const seenPair = new Set<string>();
+    const matchRows: { id: string; playerAId: string; playerBId: string; format: "HISTORICAL"; gamesWonA: number; gamesWonB: number; winnerId: string | null; status: "CONFIRMED" }[] = [];
+    const setRows: {
+      importKey: string; seasonId: string; week: number | null; teamSeasonAId: string | null; teamSeasonBId: string | null;
+      bracket: string; matchId: string; playerAId: string; playerBId: string; seedA: number; seedB: number; bestOf: number; status: "CONFIRMED";
+    }[] = [];
     let i = 0;
     for (const r of results) {
       const aId = idByName.get(r.p1)!;
@@ -377,35 +404,35 @@ export async function importConferenceResults(dir = sheetsDir()) {
       }
       const tsA = matchTs(r.teamA);
       const tsB = matchTs(r.teamB);
-      await ensureMember(tsA, aId);
-      await ensureMember(tsB, bId);
+      ensureMember(tsA, aId);
+      ensureMember(tsB, bId);
       const [mA, mB] = aId < bId ? [aId, bId] : [bId, aId];
       const gwA = mA === aId ? r.p1g : r.p2g;
       const gwB = mA === aId ? r.p2g : r.p1g;
       const winnerId = gwA > gwB ? mA : gwB > gwA ? mB : null;
       const bestOf = Math.max(1, 2 * Math.max(r.p1g, r.p2g) - 1);
-      const match = await prisma.match.create({
-        data: { playerAId: mA, playerBId: mB, format: "HISTORICAL", gamesWonA: gwA, gamesWonB: gwB, winnerId, status: "CONFIRMED" },
-      });
-      await prisma.tourSet.create({
-        data: {
-          importKey: `xlsxresult:s${num}:${i++}`,
-          seasonId: season.id,
-          week: r.week ?? null,
-          teamSeasonAId: tsA,
-          teamSeasonBId: tsB,
-          bracket: r.bracket === "PLAYOFF" ? "PLAYOFF" : "REGULAR",
-          matchId: match.id,
-          playerAId: aId,
-          playerBId: bId,
-          seedA: seedByPlayer.get(aId) ?? 0,
-          seedB: seedByPlayer.get(bId) ?? 0,
-          bestOf,
-          status: "CONFIRMED",
-        },
+      const matchId = randomUUID();
+      matchRows.push({ id: matchId, playerAId: mA, playerBId: mB, format: "HISTORICAL", gamesWonA: gwA, gamesWonB: gwB, winnerId, status: "CONFIRMED" });
+      setRows.push({
+        importKey: `xlsxresult:s${num}:${i++}`,
+        seasonId: season.id,
+        week: r.week ?? null,
+        teamSeasonAId: tsA,
+        teamSeasonBId: tsB,
+        bracket: r.bracket === "PLAYOFF" ? "PLAYOFF" : "REGULAR",
+        matchId,
+        playerAId: aId,
+        playerBId: bId,
+        seedA: seedByPlayer.get(aId) ?? 0,
+        seedB: seedByPlayer.get(bId) ?? 0,
+        bestOf,
+        status: "CONFIRMED",
       });
       made++;
     }
+    if (newMembers.length) await prisma.rosterEntry.createMany({ data: newMembers });
+    if (matchRows.length) await prisma.match.createMany({ data: matchRows });
+    if (setRows.length) await prisma.tourSet.createMany({ data: setRows });
     subsTotal += subsAdded;
   }
   return { sets: made, subsAdded: subsTotal };
@@ -643,6 +670,7 @@ export async function previewImport(dir = sheetsDir()) {
 // (HTML). On a fresh DB the "fill if empty" guards in the roster/result importers fill
 // everything.
 export async function importAllFromXlsx(dir = sheetsDir()) {
+  clearResolveCache();
   const shells = await importSeasonShellsFromXlsx(dir);
   const conferences = await applyConferenceData(dir);
   const rosters = await importConferenceRosters(dir);
@@ -679,9 +707,26 @@ export async function applySeedRankings(dir = sheetsDir()) {
     // Idempotent: drop prior ranking-derived re-seeds (keep manual ones).
     await prisma.rosterMove.deleteMany({ where: { seasonId: season.id, kind: "RESEED", createdBy: "import:rankings" } });
 
+    // Preload each team's roster + members once (avoids a findFirst per player).
+    const tsIds = season.teamSeasons.map((t) => t.id);
+    const rosters = await prisma.roster.findMany({ where: { teamSeasonId: { in: tsIds } }, select: { id: true, teamSeasonId: true, weekBlock: true, entries: { select: { playerId: true } } } });
+    const rosterByTs = new Map<string, string>();
+    const membersByTs = new Map<string, Set<string>>();
+    for (const r of rosters) {
+      if (!membersByTs.has(r.teamSeasonId)) membersByTs.set(r.teamSeasonId, new Set());
+      for (const e of r.entries) membersByTs.get(r.teamSeasonId)!.add(e.playerId);
+      if (r.weekBlock === "FULL" || !rosterByTs.has(r.teamSeasonId)) rosterByTs.set(r.teamSeasonId, r.id);
+    }
+
     const ordered = [...blocks].sort((a, b) => (a.weeks[0] ?? 99) - (b.weeks[0] ?? 99));
     const lastRegEnd = Math.max(0, ...ordered.flatMap((b: { weeks: number[] }) => b.weeks));
     const prevSeed = new Map<string, number>(); // `${tsId}|${pid}` -> last seed
+
+    // Collect all writes, then flush in 3 batched ops (insert members, update base seeds,
+    // insert re-seed moves) instead of thousands of sequential round-trips.
+    const newEntries: { rosterId: string; playerId: string; seed: number; isCaptain: boolean }[] = [];
+    const baseUpdates: { tsId: string; playerId: string; seed: number }[] = [];
+    const reseedMoves: { seasonId: string; teamSeasonId: string; kind: "RESEED"; playerId: string; seed: number; effectiveWeek: number; reason: string; createdBy: string }[] = [];
 
     for (let bi = 0; bi < ordered.length; bi++) {
       const b = ordered[bi] as { label: string; weeks: number[]; teams: { team: string; seeds: { player: string; seed: number }[] }[] };
@@ -690,24 +735,29 @@ export async function applySeedRankings(dir = sheetsDir()) {
       for (const t of b.teams) {
         const tsId = matchTs(t.team);
         if (!tsId) continue;
+        const rosterId = rosterByTs.get(tsId);
+        const members = membersByTs.get(tsId) ?? membersByTs.set(tsId, new Set()).get(tsId)!;
         for (const { player, seed } of t.seeds) {
           const pid = await resolvePlayerId(player, true);
           if (!pid) continue;
           const key = `${tsId}|${pid}`;
+          const isMember = members.has(pid);
+          if (!isMember && rosterId) { newEntries.push({ rosterId, playerId: pid, seed, isCaptain: false }); members.add(pid); }
           if (bi === 0) {
-            await ensureMembership(tsId, pid, seed);
-            await prisma.rosterEntry.updateMany({ where: { playerId: pid, roster: { teamSeasonId: tsId } }, data: { seed } });
+            if (isMember) baseUpdates.push({ tsId, playerId: pid, seed });
             prevSeed.set(key, seed);
             baseSet++;
           } else if (prevSeed.get(key) !== seed) {
-            await ensureMembership(tsId, pid, seed);
-            await prisma.rosterMove.create({ data: { seasonId: season.id, teamSeasonId: tsId, kind: "RESEED", playerId: pid, seed, effectiveWeek: effWeek, reason: `ranking ${b.label}`, createdBy: "import:rankings" } });
+            reseedMoves.push({ seasonId: season.id, teamSeasonId: tsId, kind: "RESEED", playerId: pid, seed, effectiveWeek: effWeek, reason: `ranking ${b.label}`, createdBy: "import:rankings" });
             prevSeed.set(key, seed);
             reseeds++;
           }
         }
       }
     }
+    if (newEntries.length) await prisma.rosterEntry.createMany({ data: newEntries, skipDuplicates: true });
+    if (baseUpdates.length) await prisma.$transaction(baseUpdates.map((u) => prisma.rosterEntry.updateMany({ where: { playerId: u.playerId, roster: { teamSeasonId: u.tsId } }, data: { seed: u.seed } })));
+    if (reseedMoves.length) await prisma.rosterMove.createMany({ data: reseedMoves });
     seasonsApplied++;
   }
   return { seasonsApplied, baseSet, reseeds };
@@ -758,16 +808,28 @@ export async function importConferenceRosters(dir = sheetsDir()) {
       select: { id: true },
     });
     await prisma.draftPick.deleteMany({ where: { draftId: draft.id } });
-    let pickIndex = 0;
 
-    for (const dt of draftTeams) {
-      const ts = matchTeam(dt.team);
-      if (!ts) { missed.push(`TT${num}: ${dt.team}`); continue; }
-      const roster = await prisma.roster.upsert({
-        where: { teamSeasonId_weekBlock: { teamSeasonId: ts.id, weekBlock: "FULL" } },
-        create: { teamSeasonId: ts.id, weekBlock: "FULL" },
-        update: {},
-      });
+    const matched = draftTeams.map((dt) => ({ dt, ts: matchTeam(dt.team) }));
+    for (const m of matched) if (!m.ts) missed.push(`TT${num}: ${m.dt.team}`);
+    const ok = matched.filter((m): m is { dt: typeof m.dt; ts: NonNullable<typeof m.ts> } => !!m.ts);
+
+    // Ensure a FULL roster per team (reuse existing, bulk-create the missing).
+    const existing = await prisma.roster.findMany({ where: { teamSeasonId: { in: ok.map((m) => m.ts.id) }, weekBlock: "FULL" }, select: { id: true, teamSeasonId: true } });
+    const rosterByTs = new Map(existing.map((r) => [r.teamSeasonId, r.id]));
+    const toCreate = ok.filter((m) => !rosterByTs.has(m.ts.id)).map((m) => ({ teamSeasonId: m.ts.id, weekBlock: "FULL" }));
+    if (toCreate.length) {
+      const made = await prisma.roster.createManyAndReturn({ data: toCreate, select: { id: true, teamSeasonId: true } });
+      for (const r of made) rosterByTs.set(r.teamSeasonId, r.id);
+    }
+
+    // Collect all rows, then write in batches (createMany + one transaction).
+    const entryRows: { rosterId: string; playerId: string; seed: number; isCaptain: boolean }[] = [];
+    const captainUpdates: { tsId: string; captainId: string }[] = [];
+    const pickRows: { draftId: string; round: number; pickIndex: number; teamSeasonId: string; playerId: string; pickedAt: Date }[] = [];
+    let pickIndex = 0;
+    const now = new Date();
+    for (const { dt, ts } of ok) {
+      const rosterId = rosterByTs.get(ts.id)!;
       const ordered = [
         ...(dt.captain ? [{ name: dt.captain, isCaptain: true }] : []),
         ...dt.players.map((name: string) => ({ name, isCaptain: false })),
@@ -781,22 +843,20 @@ export async function importConferenceRosters(dir = sheetsDir()) {
         if (seen.has(pid)) continue;
         seen.add(pid);
         if (m.isCaptain && !captainId) captainId = pid;
-        await prisma.rosterEntry.upsert({
-          where: { rosterId_playerId: { rosterId: roster.id, playerId: pid } },
-          create: { rosterId: roster.id, playerId: pid, seed, isCaptain: m.isCaptain },
-          update: { seed, isCaptain: m.isCaptain },
-        });
+        entryRows.push({ rosterId, playerId: pid, seed, isCaptain: m.isCaptain });
         seed++;
         playersAdded++;
       }
-      if (captainId) await prisma.teamSeason.update({ where: { id: ts.id }, data: { captainPlayerId: captainId } });
-      // Draft picks = the drafted players in order (captain/subs aren't picks).
+      if (captainId) captainUpdates.push({ tsId: ts.id, captainId });
       for (let r = 0; r < dt.players.length; r++) {
         const pid = (await resolvePlayerId(dt.players[r], true))!;
-        await prisma.draftPick.create({ data: { draftId: draft.id, round: r + 1, pickIndex: pickIndex++, teamSeasonId: ts.id, playerId: pid, pickedAt: new Date() } });
+        pickRows.push({ draftId: draft.id, round: r + 1, pickIndex: pickIndex++, teamSeasonId: ts.id, playerId: pid, pickedAt: now });
       }
       rostersFilled++;
     }
+    if (entryRows.length) await prisma.rosterEntry.createMany({ data: entryRows, skipDuplicates: true });
+    if (captainUpdates.length) await prisma.$transaction(captainUpdates.map((u) => prisma.teamSeason.update({ where: { id: u.tsId }, data: { captainPlayerId: u.captainId } })));
+    if (pickRows.length) await prisma.draftPick.createMany({ data: pickRows });
   }
   return { rostersFilled, playersAdded, missed };
 }
