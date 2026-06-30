@@ -93,7 +93,9 @@ export async function getAllTimePlayers(): Promise<PlayerCareer[]> {
     applySet(get(ts.playerBId), ts.playerBId, m, ts.playerAId, ts.seasonId);
   }
   for (const e of rosterEntries) get(e.playerId).seasons.add(e.roster.teamSeason.seasonId);
-  for (const [pid, n] of rings) get(pid).rings = n;
+  // Rings only ANNOTATE players already in the list (on a roster / played). A stale ring
+  // credit with no roster + no games must NOT conjure a teamless 0/0 entry.
+  for (const [pid, n] of rings) { const a = acc.get(pid); if (a) a.rings = n; }
 
   const out: PlayerCareer[] = [];
   for (const [id, a] of acc) {
