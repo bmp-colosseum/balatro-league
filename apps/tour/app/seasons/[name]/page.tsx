@@ -42,6 +42,7 @@ export default async function SeasonPage({ params }: { params: Promise<{ name: s
       <h1>{data.seasonName}</h1>
       <p className="sub">
         Standings derived from {data.setCount} sets · §5 tiebreakers ·{" "}
+        <Link href={`/seasons/${encodeURIComponent(seasonName)}/weeks`}>Week by week →</Link> ·{" "}
         <Link href={`/seasons/${encodeURIComponent(seasonName)}/draft`}>Draft board →</Link> ·{" "}
         <Link href={`/seasons/${encodeURIComponent(seasonName)}/timeline`}>Season timeline →</Link> ·{" "}
         <Link href={`/seasons/${encodeURIComponent(seasonName)}/bracket`}>Playoff bracket →</Link>

@@ -1,0 +1,113 @@
+// Week-by-week read model for a season — derived purely from the imported result sets
+// (TourSet carries week + the team each player played for). Steps through each week's
+// team matchups + the player sets within them, and surfaces mid-season roster moves
+// (a player whose first appearance is after the opening week = an add/sub). No writes.
+import { prisma } from "./db";
+
+export interface WeekSet {
+  playerA: string;
+  playerB: string;
+  scoreA: number;
+  scoreB: number;
+}
+export interface WeekMatchup {
+  teamA: string;
+  teamB: string;
+  setsA: number;
+  setsB: number;
+  sets: WeekSet[];
+}
+export interface WeekMove {
+  team: string;
+  player: string;
+  drafted: boolean; // false = a true outside sub/add; true = a drafted player debuting late
+}
+export interface SeasonWeek {
+  week: number;
+  matchups: WeekMatchup[];
+  moves: WeekMove[];
+}
+
+export async function getSeasonWeeks(seasonName: string): Promise<SeasonWeek[]> {
+  const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true } });
+  if (!season) return [];
+  const sets = await prisma.tourSet.findMany({
+    where: { seasonId: season.id, bracket: "REGULAR", week: { not: null }, teamSeasonAId: { not: null }, teamSeasonBId: { not: null } },
+    select: { week: true, teamSeasonAId: true, teamSeasonBId: true, playerAId: true, playerBId: true, matchId: true },
+  });
+  if (!sets.length) return [];
+
+  const matchIds = sets.map((s) => s.matchId).filter((x): x is string => !!x);
+  const tsIds = [...new Set(sets.flatMap((s) => [s.teamSeasonAId!, s.teamSeasonBId!]))];
+  const playerIds = [...new Set(sets.flatMap((s) => [s.playerAId, s.playerBId]))];
+  const [matches, tss, players, picks] = await Promise.all([
+    prisma.match.findMany({ where: { id: { in: matchIds } }, select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true, winnerId: true } }),
+    prisma.teamSeason.findMany({ where: { id: { in: tsIds } }, include: { team: true } }),
+    prisma.player.findMany({ where: { id: { in: playerIds } }, select: { id: true, displayName: true } }),
+    prisma.draftPick.findMany({ where: { teamSeasonId: { in: tsIds } }, select: { teamSeasonId: true, playerId: true } }),
+  ]);
+  const matchById = new Map(matches.map((m) => [m.id, m]));
+  const teamName = new Map(tss.map((t) => [t.id, t.team.name]));
+  const captainOf = new Map(tss.map((t) => [t.id, t.captainPlayerId]));
+  const pName = new Map(players.map((p) => [p.id, p.displayName]));
+  const draftedByTeam = new Map<string, Set<string>>();
+  for (const p of picks) {
+    if (!p.playerId) continue;
+    (draftedByTeam.get(p.teamSeasonId) ?? draftedByTeam.set(p.teamSeasonId, new Set()).get(p.teamSeasonId)!).add(p.playerId);
+  }
+
+  // First week each (team, player) appears — for mid-season add/sub detection.
+  const firstWeek = new Map<string, number>(); // `${teamId}|${playerId}` -> earliest week
+  const seenWeek = (tsId: string, pid: string, wk: number) => {
+    const k = `${tsId}|${pid}`;
+    const cur = firstWeek.get(k);
+    if (cur == null || wk < cur) firstWeek.set(k, wk);
+  };
+  let openingWeek = Infinity;
+  for (const s of sets) {
+    seenWeek(s.teamSeasonAId!, s.playerAId, s.week!);
+    seenWeek(s.teamSeasonBId!, s.playerBId, s.week!);
+    if (s.week! < openingWeek) openingWeek = s.week!;
+  }
+
+  // Group sets by week → team matchup (playerA is on teamA, playerB on teamB — consistent
+  // per matchup from the import).
+  const byWeek = new Map<number, Map<string, WeekMatchup>>();
+  for (const s of sets) {
+    const m = s.matchId ? matchById.get(s.matchId) : undefined;
+    if (!m) continue;
+    const gA = m.playerAId === s.playerAId ? m.gamesWonA : m.gamesWonB;
+    const gB = m.playerAId === s.playerAId ? m.gamesWonB : m.gamesWonA;
+    const wm = byWeek.get(s.week!) ?? byWeek.set(s.week!, new Map()).get(s.week!)!;
+    const key = `${s.teamSeasonAId}|${s.teamSeasonBId}`;
+    let mu = wm.get(key);
+    if (!mu) {
+      mu = { teamA: teamName.get(s.teamSeasonAId!) ?? "?", teamB: teamName.get(s.teamSeasonBId!) ?? "?", setsA: 0, setsB: 0, sets: [] };
+      wm.set(key, mu);
+    }
+    mu.sets.push({ playerA: pName.get(s.playerAId) ?? "?", playerB: pName.get(s.playerBId) ?? "?", scoreA: gA, scoreB: gB });
+    if (m.winnerId === s.playerAId) mu.setsA++;
+    else if (m.winnerId === s.playerBId) mu.setsB++;
+  }
+
+  // Moves: a (team, player) whose first week is after the opening week.
+  const movesByWeek = new Map<number, WeekMove[]>();
+  for (const [k, wk] of firstWeek) {
+    if (wk <= openingWeek) continue;
+    const [tsId, pid] = k.split("|");
+    if (captainOf.get(tsId) === pid) continue; // captain isn't an add
+    (movesByWeek.get(wk) ?? movesByWeek.set(wk, []).get(wk)!).push({
+      team: teamName.get(tsId) ?? "?",
+      player: pName.get(pid) ?? "?",
+      drafted: draftedByTeam.get(tsId)?.has(pid) ?? false,
+    });
+  }
+
+  return [...byWeek.keys()]
+    .sort((a, b) => a - b)
+    .map((week) => ({
+      week,
+      matchups: [...byWeek.get(week)!.values()].sort((a, b) => a.teamA.localeCompare(b.teamA)),
+      moves: (movesByWeek.get(week) ?? []).sort((a, b) => a.team.localeCompare(b.team)),
+    }));
+}
