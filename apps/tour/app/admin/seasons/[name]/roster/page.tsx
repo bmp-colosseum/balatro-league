@@ -7,7 +7,7 @@ import { Callout } from "@/components/Callout";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
-import { substituteAction, departureAction, replaceAction, reinstateAction, removeMoveAction, changeCaptainAction, reseedAction, addStrikeAction, removeStrikeAction } from "./actions";
+import { substituteAction, departureAction, replaceAction, reinstateAction, removeMoveAction, changeCaptainAction, reseedAction, swapSeedsAction, addStrikeAction, removeStrikeAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -136,6 +136,20 @@ export default async function RosterOpsAdmin({
                   <label className="block"><span className="sub">From week</span><input type="number" name="effectiveWeek" min={1} defaultValue={data.selectedWeek} className={`${inputCls} w-16`} /></label>
                   <input name="reason" placeholder="reason" className={`${inputCls} w-32`} />
                   <SubmitButton size="sm" variant="secondary" pendingText="…"><ArrowUpDown className="size-3.5" /> Re-seed</SubmitButton>
+                </div>
+              </ActionFlashForm>
+
+              {/* Swap two players' seeds (the common one-up-one-down re-seed) */}
+              <div className="bracket-title mt-3">Swap seeds</div>
+              <ActionFlashForm action={swapSeedsAction}>
+                <input type="hidden" name="season" value={seasonName} />
+                <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="block"><span className="sub">Player A</span><FormSelect name="playerAId" options={opt(lineupOpts)} /></label>
+                  <label className="block"><span className="sub">Player B</span><FormSelect name="playerBId" options={opt(lineupOpts)} /></label>
+                  <label className="block"><span className="sub">From week</span><input type="number" name="effectiveWeek" min={1} defaultValue={data.selectedWeek} className={`${inputCls} w-16`} /></label>
+                  <input name="reason" placeholder="reason" className={`${inputCls} w-32`} />
+                  <SubmitButton size="sm" variant="secondary" pendingText="…"><ArrowUpDown className="size-3.5" /> Swap</SubmitButton>
                 </div>
               </ActionFlashForm>
 

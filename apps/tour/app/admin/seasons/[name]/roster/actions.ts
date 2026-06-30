@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/auth";
-import { substitute, recordDeparture, reinstate, replacePlayer, removeMove, changeCaptain, reseed } from "@/lib/services/roster-ops";
+import { substitute, recordDeparture, reinstate, replacePlayer, removeMove, changeCaptain, reseed, swapSeeds } from "@/lib/services/roster-ops";
 import { addStrike, removeStrike } from "@/lib/services/strikes";
 import type { ActionResult } from "@/lib/action-result";
 
@@ -102,6 +102,18 @@ export async function reseedAction(_prev: ActionResult, formData: FormData): Pro
     return { ok: true, message: "Player re-seeded." };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Could not re-seed." };
+  }
+}
+
+export async function swapSeedsAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
+  const season = String(formData.get("season") ?? "");
+  try {
+    await swapSeeds(season, String(formData.get("teamSeasonId") ?? ""), String(formData.get("playerAId") ?? ""), String(formData.get("playerBId") ?? ""), wk(formData, "effectiveWeek"), String(formData.get("reason") ?? ""));
+    rev(season);
+    return { ok: true, message: "Seeds swapped." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Could not swap seeds." };
   }
 }
 

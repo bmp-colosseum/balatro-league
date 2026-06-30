@@ -124,6 +124,28 @@ export async function reseed(seasonName: string, teamSeasonId: string, playerId:
   return { ok: true };
 }
 
+// Swap two rostered players' seeds, effective a week — the common re-seed (one up, one
+// down). Reads their CURRENT seeds for that week and logs a RESEED for each, trading
+// them, so seeds stay unique and the matchup view picks up the new values from that week.
+export async function swapSeeds(seasonName: string, teamSeasonId: string, playerAId: string, playerBId: string, effectiveWeek: number, reason: string, by?: string) {
+  const seasonId = await seasonIdOf(seasonName);
+  if (!playerAId || !playerBId) throw new Error("Pick both players to swap.");
+  if (playerAId === playerBId) throw new Error("Pick two different players.");
+  if (!effectiveWeek || effectiveWeek < 1) throw new Error("Pick the week it takes effect.");
+  const lineup = await rosterForWeek(teamSeasonId, effectiveWeek); // their seeds as they stand that week
+  const seedOf = new Map(lineup.map((l) => [l.playerId, l.seed]));
+  const sa = seedOf.get(playerAId), sb = seedOf.get(playerBId);
+  if (sa == null || sb == null) throw new Error("Both players must be in the lineup that week.");
+  const why = reason.trim() || `swap seeds #${sa} <-> #${sb}`;
+  await prisma.rosterMove.createMany({
+    data: [
+      { seasonId, teamSeasonId, kind: "RESEED", playerId: playerAId, seed: sb, effectiveWeek, reason: why, createdBy: by },
+      { seasonId, teamSeasonId, kind: "RESEED", playerId: playerBId, seed: sa, effectiveWeek, reason: why, createdBy: by },
+    ],
+  });
+  return { ok: true };
+}
+
 // ── Membership (stat attribution) — add a player to the team's roster so their
 // sets attribute. RosterEntry is the season membership; never removed on departure.
 export async function ensureMembership(teamSeasonId: string, playerId: string, seed: number) {
