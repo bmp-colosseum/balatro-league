@@ -244,6 +244,38 @@ export async function pruneOrphanPlayers(): Promise<{ removed: number; names: st
   return { removed: removed.length, names: removed, setsDeleted };
 }
 
+// Drop teams left behind by older/broken imports. The import only UPSERTS teams by name,
+// so a team that's no longer in the sheet (e.g. a mis-parsed name) lingers forever. A
+// team-season with no roster, no sets, no playoff series and no draft picks isn't real —
+// delete it (cascades its rosters), then delete any Team with no team-seasons left.
+export async function pruneOrphanTeams(): Promise<{ teamSeasonsRemoved: number; teamsRemoved: number; names: string[] }> {
+  const names: string[] = [];
+  const tss = await prisma.teamSeason.findMany({ select: { id: true, team: { select: { name: true } } } });
+  let teamSeasonsRemoved = 0;
+  for (const ts of tss) {
+    const [entries, sets, series, picks] = await Promise.all([
+      prisma.rosterEntry.count({ where: { roster: { teamSeasonId: ts.id } } }),
+      prisma.tourSet.count({ where: { OR: [{ teamSeasonAId: ts.id }, { teamSeasonBId: ts.id }] } }),
+      prisma.playoffSeries.count({ where: { OR: [{ teamSeasonAId: ts.id }, { teamSeasonBId: ts.id }] } }),
+      prisma.draftPick.count({ where: { teamSeasonId: ts.id } }),
+    ]);
+    if (entries + sets + series + picks === 0) {
+      await prisma.teamSeason.delete({ where: { id: ts.id } });
+      names.push(ts.team.name);
+      teamSeasonsRemoved++;
+    }
+  }
+  let teamsRemoved = 0;
+  const teams = await prisma.team.findMany({ select: { id: true, name: true, _count: { select: { teamSeasons: true } } } });
+  for (const t of teams) {
+    if (t._count.teamSeasons > 0) continue;
+    await prisma.team.delete({ where: { id: t.id } });
+    teamsRemoved++;
+    if (!names.includes(t.name)) names.push(t.name);
+  }
+  return { teamSeasonsRemoved, teamsRemoved, names };
+}
+
 // Import PLAYER-level match results for conference seasons (e.g. TT4) from the season
 // xlsx conference tabs (player-vs-player rows). The alltime HTML Game Log only covers
 // TT1-3, so without this TT4 has team results but no player sets (so no player stats /
@@ -619,9 +651,10 @@ export async function importAllFromXlsx(dir = sheetsDir()) {
   const playoffs = await importPlayoffsFromXlsx(dir);
   const roster_moves = await backfillDraftedMoves();
   await pruneOrphanPlayers();
+  const prunedTeams = await pruneOrphanTeams();
   const career = await deriveCareerStats();
   const [players, tourSets] = await Promise.all([prisma.player.count(), prisma.tourSet.count()]);
-  return { ...shells, conferencesSet: conferences.teamsSet, rosters: rosters.rostersFilled, players: rosters.playersAdded, sets: results.sets, playoffSeries: playoffs.series, champions: playoffs.champions, careerStats: career.players, rosterMoves: roster_moves.created, seedRankings: rankings, totalPlayers: players, totalSets: tourSets };
+  return { ...shells, conferencesSet: conferences.teamsSet, rosters: rosters.rostersFilled, players: rosters.playersAdded, sets: results.sets, playoffSeries: playoffs.series, champions: playoffs.champions, careerStats: career.players, rosterMoves: roster_moves.created, seedRankings: rankings, prunedTeams, totalPlayers: players, totalSets: tourSets };
 }
 
 // Apply the "Team Rankings" bands (TT1/TT2/TT4) as the canonical seeds: the first
