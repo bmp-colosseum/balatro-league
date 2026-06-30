@@ -90,12 +90,15 @@ describe("buildOwenPlacement — rookies", () => {
 });
 
 describe("buildOwenPlacement — fixed top division", () => {
-  it("hard-caps Legendary at topTarget", () => {
-    // 8 Legendary finishers, nothing in Rare 1 to backfill → after the 1-down
-    // boundary it's 7, then the cap trims to 6.
+  it("never cap-drops Legendary HOLDERS (they only leave via relegation)", () => {
+    // 8 Legendary finishers, nothing in Rare 1 to backfill → the 1-down boundary
+    // relegates exactly ONE, leaving 7. The cap does NOT trim a finisher down to
+    // 6 — holders are never dropped by the size-cap, only by relegation.
     const leg = Array.from({ length: 8 }, (_, i) => returner(`leg${i + 1}`, 0, i + 1, 2000 - i * 10));
     const out = buildOwenPlacement(DIVS, leg, [], 100, { topTarget: 6 });
-    expect(out[0]!.members).toHaveLength(6);
+    expect(out[0]!.members).toHaveLength(7); // 8 − 1 relegated; cap leaves holders
+    expect(out[1]!.members.map((m) => m.discordId)).toContain("leg8"); // only the bottom finisher dropped
+    expect(out[0]!.members.every((m) => !m.isRookie)).toBe(true); // everyone left is a finisher
   });
 });
 

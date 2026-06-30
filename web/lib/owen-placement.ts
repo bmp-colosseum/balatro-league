@@ -260,8 +260,16 @@ export function buildOwenPlacement(
     };
     while (divs[0]!.members.length > topTarget) {
       const m = divs[0]!.members;
-      let worst = 0;
-      for (let i = 1; i < m.length; i++) if (weaker(m[i]!, m[worst]!)) worst = i;
+      // NEVER cap-drop a Legendary HOLDER (a returner who finished in Legendary).
+      // They only ever leave via the 1-down boundary relegation. The cap can only
+      // shed rookies / promotees that floated UP into Legendary (fromIndex > 0).
+      let worst = -1;
+      for (let i = 0; i < m.length; i++) {
+        const isHolder = !m[i]!.isRookie && (m[i]!.fromIndex ?? 0) === 0;
+        if (isHolder) continue;
+        if (worst === -1 || weaker(m[i]!, m[worst]!)) worst = i;
+      }
+      if (worst === -1) break; // only holders left — leave Legendary over-size
       const [moved] = m.splice(worst, 1);
       divs[1]!.members.push(moved!);
     }
