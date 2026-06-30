@@ -136,8 +136,8 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
               const d = draftBySeason.get(s.seasonName);
               return (
               <tr key={s.seasonName}>
-                <td>{s.seasonName}</td>
-                <td>{s.teamName}</td>
+                <td><Link href={`/seasons/${encodeURIComponent(s.seasonName)}`}>{s.seasonName}</Link></td>
+                <td>{s.teamSeasonId ? <Link href={`/teams/${s.teamSeasonId}`}>{s.teamName}</Link> : s.teamName}</td>
                 <td className="num">
                   {d ? (d.isCaptain ? <span className="text-[var(--accent)]" title="Captain">C</span> : `R${d.round}`) : "—"}
                 </td>

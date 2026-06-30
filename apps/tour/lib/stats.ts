@@ -116,6 +116,7 @@ export async function getAllTimePlayers(): Promise<PlayerCareer[]> {
 export interface PlayerSeasonLine {
   seasonName: string;
   teamName: string;
+  teamSeasonId: string;
   setW: number;
   setL: number;
   gameW: number;
@@ -228,7 +229,11 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
   const seasonName = new Map(seasons.map((s) => [s.id, s.name]));
   const matchById = new Map(matches.map((m) => [m.id, m]));
   const teamForSeason = new Map<string, string>();
-  for (const e of entries) teamForSeason.set(e.roster.teamSeason.season.id, e.roster.teamSeason.team.name);
+  const teamSeasonForSeason = new Map<string, string>();
+  for (const e of entries) {
+    teamForSeason.set(e.roster.teamSeason.season.id, e.roster.teamSeason.team.name);
+    teamSeasonForSeason.set(e.roster.teamSeason.season.id, e.roster.teamSeason.id);
+  }
 
   const career = newAcc();
   const playoff = newAcc(); // regular season is the default record; playoffs tracked apart
@@ -272,6 +277,7 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
     .map(([sid, a]) => ({
       seasonName: seasonName.get(sid) ?? sid,
       teamName: teamForSeason.get(sid) ?? "—",
+      teamSeasonId: teamSeasonForSeason.get(sid) ?? "",
       setW: a.setW,
       setL: a.setL,
       gameW: a.gameW,

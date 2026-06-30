@@ -90,7 +90,7 @@ export default async function DraftHeatmap({ searchParams }: { searchParams: Pro
                   </td>
                   <td>
                     <div style={{ ...cellBox, background: "var(--surface-2)" }} title={`${t.captain.name} (captain) · ${pctStr(t.captain.pct)} sets`}>
-                      <div style={nameLine}>{t.captain.name}</div>
+                      <div style={nameLine}><Link href={`/players/${t.captain.captainId}`}>{t.captain.name}</Link></div>
                       <div style={{ fontSize: 11, color: "var(--muted)" }}>{pctStr(t.captain.pct)} · C</div>
                     </div>
                   </td>
@@ -101,7 +101,7 @@ export default async function DraftHeatmap({ searchParams }: { searchParams: Pro
                           style={{ ...cellBox, ...heat(c.delta) }}
                           title={`${c.name}: ${pctStr(c.pct)} sets (${c.sets} played) · ${fmtDelta(c.delta)} vs R${c.round} avg`}
                         >
-                          <div style={nameLine}>{c.name}</div>
+                          <div style={nameLine}><Link href={`/players/${c.playerId}`}>{c.name}</Link></div>
                           <div style={{ fontSize: 11, opacity: 0.9 }}>
                             {pctStr(c.pct)} {c.delta != null && <span style={{ color: "var(--muted)" }}>{fmtDelta(c.delta)}</span>}
                           </div>

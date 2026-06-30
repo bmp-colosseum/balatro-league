@@ -42,7 +42,7 @@ export default async function Teams() {
                   <Link href={`/teams/${t.teamSeasonId}`}>{t.teamName}</Link>
                   {t.isChampion && <Trophy className="ml-1 inline size-3.5 align-text-bottom text-[var(--accent)]" aria-label="Champion" />}
                 </td>
-                <td className="sub">{t.seasonName}</td>
+                <td className="sub"><Link href={`/seasons/${encodeURIComponent(t.seasonName)}`}>{t.seasonName}</Link></td>
                 <td className="sub">{place ? `${ordinal(place.placement)} · ${place.conference}` : "—"}</td>
                 <td className="num">{place ? `${place.matchupsW}–${place.matchupsL}` : "—"}</td>
                 <td className="num">

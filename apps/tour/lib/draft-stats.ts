@@ -110,6 +110,7 @@ async function expectedByRound(): Promise<Map<number, number>> {
 
 export interface HeatCell {
   name: string;
+  playerId: string;
   round: number;
   pct: number | null; // player's set-win% that season (null = no sets)
   delta: number | null; // pct − expected[round]; >0 = steal, <0 = bust
@@ -119,7 +120,7 @@ export interface HeatTeam {
   teamSeasonId: string;
   name: string;
   seed: number;
-  captain: { name: string; pct: number | null; sets: number };
+  captain: { name: string; captainId: string; pct: number | null; sets: number };
   cells: (HeatCell | null)[];
 }
 
@@ -161,13 +162,13 @@ export async function getDraftHeatmap(seasonName: string) {
       const pct = total ? r.setW / total : null;
       const exp = expected.get(round) ?? null;
       const delta = pct != null && exp != null ? pct - exp : null;
-      cells.push({ name: nameOf.get(pick.playerId!) ?? "?", round, pct, delta, sets: total });
+      cells.push({ name: nameOf.get(pick.playerId!) ?? "?", playerId: pick.playerId!, round, pct, delta, sets: total });
     }
     return {
       teamSeasonId: ts.id,
       name: ts.team.name,
       seed: ts.seed,
-      captain: { name: nameOf.get(ts.captainPlayerId) ?? "?", pct: cTotal ? cr.setW / cTotal : null, sets: cTotal },
+      captain: { name: nameOf.get(ts.captainPlayerId) ?? "?", captainId: ts.captainPlayerId, pct: cTotal ? cr.setW / cTotal : null, sets: cTotal },
       cells,
     };
   });

@@ -83,7 +83,7 @@ export default async function MyTour() {
               <tbody>
                 {home.teams.map((t) => (
                   <tr key={t.teamSeasonId}>
-                    <td>{t.seasonName}{t.active && <span className="badge" style={{ marginLeft: 6 }}>active</span>}</td>
+                    <td><Link href={`/seasons/${encodeURIComponent(t.seasonName)}`}>{t.seasonName}</Link>{t.active && <span className="badge" style={{ marginLeft: 6 }}>active</span>}</td>
                     <td><Link href={`/teams/${t.teamSeasonId}`}>{t.teamName}</Link></td>
                     <td className="num">{t.seed}</td>
                     <td className="sub">{t.isCaptain ? <span className="inline-flex items-center gap-1"><Crown className="size-3.5 text-[var(--accent)]" /> Captain</span> : "Player"}</td>
@@ -121,7 +121,7 @@ export default async function MyTour() {
 
       {focusTeam && (
         <>
-          <h2 className="mt-6 mb-1 text-[1.1rem]">Your sets — {focusTeam.seasonName}</h2>
+          <h2 className="mt-6 mb-1 text-[1.1rem]">Your sets — <Link href={`/seasons/${encodeURIComponent(focusTeam.seasonName)}`}>{focusTeam.seasonName}</Link></h2>
           {home.sets.length === 0 ? (
             <div className="card"><p className="sub">No sets assigned yet. When your captain pairs the week&apos;s lineup, your matchups show up here.</p></div>
           ) : (
