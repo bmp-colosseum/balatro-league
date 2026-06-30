@@ -126,7 +126,10 @@ export function divisionMovement(
   const n = divisions.length;
   return divisions.map((_, i) => ({
     promote: i >= 1 ? boundaryAt(i - 1, groupOf, sizes, o).up : 0,
-    relegate: i <= n - 2 ? boundaryAt(i, groupOf, sizes, o).down : 0,
+    // Relegation is capped by the division below — you can't relegate more than
+    // the lower division can swap up (mirrors buildOwenPlacement). An empty
+    // division below ⇒ 0 relegate.
+    relegate: i <= n - 2 ? Math.min(boundaryAt(i, groupOf, sizes, o).down, sizes[i + 1] ?? 0) : 0,
   }));
 }
 
@@ -170,6 +173,12 @@ export function buildOwenPlacement(
     const size = arr.length;
     const up = Math.min(size, i >= 1 ? boundaryK(i - 1).up : 0);
     let down = i <= n - 2 ? boundaryK(i).down : 0;
+    // Relegation is a SWAP, so cap it by how many the division BELOW can send up.
+    // If the lower division is empty/sparse (few returners), there's no one to
+    // promote into the vacated spot — so a bottom finisher must NOT be dropped
+    // into a ghost division. e.g. Rare 1 with 6 finishers and an empty Rare 2
+    // relegates 0, not 1. (counts[i+1] = returners finishing in the lower div.)
+    if (i <= n - 2) down = Math.min(down, counts[i + 1] ?? 0);
     if (up + down > size) down = Math.max(0, size - up);
     arr.forEach((r) => targetOf.set(r.discordId, i)); // default: hold finish
     for (let k = 0; k < up; k++) targetOf.set(arr[k]!.discordId, i - 1); // promote

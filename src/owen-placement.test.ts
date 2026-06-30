@@ -91,13 +91,23 @@ describe("buildOwenPlacement — rookies", () => {
 
 describe("buildOwenPlacement — top division is never auto-trimmed", () => {
   it("leaves Legendary OVER the cap rather than dropping anyone", () => {
-    // 8 Legendary finishers, nothing in Rare 1 to backfill → the 1-down boundary
-    // relegates exactly ONE (the bottom), leaving 7. Even though topTarget is 6,
-    // NOBODY is dropped to hit the cap — Legendary is left over-size at 7.
+    // 8 Legendary finishers, EMPTY Rare 1. Relegation is a swap, so with no one
+    // in Rare 1 to promote up, nobody relegates — Legendary stays at 8. Even
+    // though topTarget is 6, NOBODY is dropped to hit the cap.
     const leg = Array.from({ length: 8 }, (_, i) => returner(`leg${i + 1}`, 0, i + 1, 2000 - i * 10));
     const out = buildOwenPlacement(DIVS, leg, [], 100, { topTarget: 6 });
-    expect(out[0]!.members).toHaveLength(7); // 8 − 1 relegated; left over the cap, not trimmed
-    expect(out[1]!.members.map((m) => m.discordId)).toContain("leg8"); // only the bottom finisher relegated
+    expect(out[0]!.members).toHaveLength(8); // empty Rare 1 → no swap → no relegation, left over the cap
+    expect(out[1]!.members).toHaveLength(0); // nothing dropped into an empty division
+  });
+
+  it("relegates the bottom finisher once there IS someone below to swap up", () => {
+    // 8 Legendary + 1 Rare 1: now there's a swap partner, so Legendary's bottom
+    // relegates and Rare 1's one player promotes. Legendary holds at 8 (1 out, 1 in).
+    const leg = Array.from({ length: 8 }, (_, i) => returner(`leg${i + 1}`, 0, i + 1, 2000 - i * 10));
+    const out = buildOwenPlacement(DIVS, [...leg, returner("r1-1", 1, 1, 1800)], [], 100, { topTarget: 6 });
+    expect(out[0]!.members.map((m) => m.discordId)).toContain("r1-1"); // promoted up
+    expect(out[0]!.members.map((m) => m.discordId)).not.toContain("leg8"); // bottom relegated
+    expect(out[1]!.members.map((m) => m.discordId)).toContain("leg8");
   });
 });
 
