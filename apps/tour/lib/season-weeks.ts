@@ -3,10 +3,13 @@
 // team matchups + the player sets within them, and surfaces mid-season roster moves
 // (a player whose first appearance is after the opening week = an add/sub). No writes.
 import { prisma } from "./db";
+import { seedAtWeekResolver } from "./services/roster-ops";
 
 export interface WeekSet {
   playerA: string;
   playerB: string;
+  seedA: number | null;  // effective seed that week (folds re-seeds)
+  seedB: number | null;
   scoreA: number;
   scoreB: number;
 }
@@ -46,6 +49,7 @@ export async function getSeasonWeeks(seasonName: string): Promise<SeasonWeek[]> 
     prisma.player.findMany({ where: { id: { in: playerIds } }, select: { id: true, displayName: true } }),
     prisma.draftPick.findMany({ where: { teamSeasonId: { in: tsIds } }, select: { teamSeasonId: true, playerId: true } }),
   ]);
+  const seedAt = await seedAtWeekResolver(tsIds);
   const matchById = new Map(matches.map((m) => [m.id, m]));
   const teamName = new Map(tss.map((t) => [t.id, t.team.name]));
   const captainOf = new Map(tss.map((t) => [t.id, t.captainPlayerId]));
@@ -85,7 +89,14 @@ export async function getSeasonWeeks(seasonName: string): Promise<SeasonWeek[]> 
       mu = { teamA: teamName.get(s.teamSeasonAId!) ?? "?", teamB: teamName.get(s.teamSeasonBId!) ?? "?", setsA: 0, setsB: 0, sets: [] };
       wm.set(key, mu);
     }
-    mu.sets.push({ playerA: pName.get(s.playerAId) ?? "?", playerB: pName.get(s.playerBId) ?? "?", scoreA: gA, scoreB: gB });
+    mu.sets.push({
+      playerA: pName.get(s.playerAId) ?? "?",
+      playerB: pName.get(s.playerBId) ?? "?",
+      seedA: seedAt(s.teamSeasonAId, s.week!, s.playerAId),
+      seedB: seedAt(s.teamSeasonBId, s.week!, s.playerBId),
+      scoreA: gA,
+      scoreB: gB,
+    });
     if (m.winnerId === s.playerAId) mu.setsA++;
     else if (m.winnerId === s.playerBId) mu.setsB++;
   }

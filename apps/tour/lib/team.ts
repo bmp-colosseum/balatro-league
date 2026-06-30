@@ -2,7 +2,7 @@
 // that season, with team totals. Derived from the imported sets.
 import { prisma } from "./db";
 import { getSeasonStandings } from "./standings";
-import { deriveLineup, captainAtWeek } from "./services/roster-ops";
+import { seedAtWeekResolver } from "./services/roster-ops";
 
 export interface TeamPlacement {
   placement: number; // 1-based rank within its conference group
@@ -260,37 +260,9 @@ export async function getTeamWeeks(teamSeasonId: string): Promise<TeamWeek[]> {
   const oppName = new Map(oppTeams.map((t) => [t.id, t.team.name]));
   const pName = new Map(players.map((p) => [p.id, p.displayName]));
 
-  // Static roster (draft) seed — the fallback when a player isn't in the derived lineup.
-  const entries = await prisma.rosterEntry.findMany({
-    where: { roster: { teamSeasonId: { in: [teamSeasonId, ...oppTsIds] } } },
-    select: { playerId: true, seed: true, roster: { select: { teamSeasonId: true } } },
-  });
-  const seedBy = new Map<string, number>();
-  for (const e of entries) seedBy.set(`${e.roster.teamSeasonId}|${e.playerId}`, e.seed);
-
   // Effective seed AS OF the matchup's week — folds the RosterMove log (RESEED moves,
   // subs) so a mid-season re-seed shows the right number for the weeks it applies to.
-  const involved = [teamSeasonId, ...oppTsIds];
-  const [moveRows, capRows] = await Promise.all([
-    prisma.rosterMove.findMany({ where: { teamSeasonId: { in: involved } }, orderBy: [{ effectiveWeek: "asc" }, { createdAt: "asc" }] }),
-    prisma.teamSeason.findMany({ where: { id: { in: involved } }, select: { id: true, captainPlayerId: true } }),
-  ]);
-  const movesByTs = new Map<string, typeof moveRows>();
-  for (const m of moveRows) (movesByTs.get(m.teamSeasonId) ?? movesByTs.set(m.teamSeasonId, []).get(m.teamSeasonId)!).push(m);
-  const capByTs = new Map(capRows.map((c) => [c.id, c.captainPlayerId]));
-  const lineupCache = new Map<string, Map<string, number>>(); // `${tsId}|${week}` → playerId→seed
-  const effSeed = (tsId: string | null, week: number, pid: string): number | null => {
-    if (!tsId) return null;
-    const k = `${tsId}|${week}`;
-    let lm = lineupCache.get(k);
-    if (!lm) {
-      const moves = movesByTs.get(tsId) ?? [];
-      const lineup = deriveLineup(moves, week, captainAtWeek(moves, week, capByTs.get(tsId) ?? ""));
-      lm = new Map(lineup.map((l) => [l.playerId, l.seed]));
-      lineupCache.set(k, lm);
-    }
-    return lm.get(pid) ?? seedBy.get(`${tsId}|${pid}`) ?? null;
-  };
+  const effSeed = await seedAtWeekResolver([teamSeasonId, ...oppTsIds]);
 
   // Key by week + opponent: a team usually plays one opponent per week, but this keeps
   // two distinct matchups in the same week from being merged into one row.

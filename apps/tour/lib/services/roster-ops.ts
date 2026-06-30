@@ -94,6 +94,37 @@ export async function rosterForWeek(teamSeasonId: string, week: number): Promise
   return deriveLineup(moves, week, captainAtWeek(moves, week, ts.captainPlayerId));
 }
 
+// Build a reusable resolver for a player's EFFECTIVE seed as of a given week across many
+// team-seasons — folds the RosterMove log (RESEED / subs) and falls back to the static
+// draft seed. Loads everything once; deriveLineup results are cached per team+week.
+export async function seedAtWeekResolver(teamSeasonIds: string[]): Promise<(teamSeasonId: string | null, week: number, playerId: string) => number | null> {
+  const ids = [...new Set(teamSeasonIds)].filter(Boolean);
+  if (!ids.length) return () => null;
+  const [moveRows, capRows, entries] = await Promise.all([
+    prisma.rosterMove.findMany({ where: { teamSeasonId: { in: ids } }, orderBy: [{ effectiveWeek: "asc" }, { createdAt: "asc" }] }),
+    prisma.teamSeason.findMany({ where: { id: { in: ids } }, select: { id: true, captainPlayerId: true } }),
+    prisma.rosterEntry.findMany({ where: { roster: { teamSeasonId: { in: ids } } }, select: { playerId: true, seed: true, roster: { select: { teamSeasonId: true } } } }),
+  ]);
+  const movesByTs = new Map<string, typeof moveRows>();
+  for (const m of moveRows) (movesByTs.get(m.teamSeasonId) ?? movesByTs.set(m.teamSeasonId, []).get(m.teamSeasonId)!).push(m);
+  const capByTs = new Map(capRows.map((c) => [c.id, c.captainPlayerId]));
+  const staticSeed = new Map<string, number>();
+  for (const e of entries) staticSeed.set(`${e.roster.teamSeasonId}|${e.playerId}`, e.seed);
+  const cache = new Map<string, Map<string, number>>();
+  return (teamSeasonId, week, playerId) => {
+    if (!teamSeasonId) return null;
+    const k = `${teamSeasonId}|${week}`;
+    let lm = cache.get(k);
+    if (!lm) {
+      const moves = movesByTs.get(teamSeasonId) ?? [];
+      const lineup = deriveLineup(moves, week, captainAtWeek(moves, week, capByTs.get(teamSeasonId) ?? ""));
+      lm = new Map(lineup.map((l) => [l.playerId, l.seed]));
+      cache.set(k, lm);
+    }
+    return lm.get(playerId) ?? staticSeed.get(`${teamSeasonId}|${playerId}`) ?? null;
+  };
+}
+
 // Captaincy passes to a rostered player, effective a week. Logs a CAPTAIN_CHANGE
 // (for the timeline) and updates the current-captain pointer. TO-assigned.
 export async function changeCaptain(seasonName: string, teamSeasonId: string, newCaptainPlayerId: string, effectiveWeek: number, reason: string, by?: string) {
@@ -222,16 +253,26 @@ export async function removeMove(moveId: string) {
   await prisma.rosterMove.delete({ where: { id: moveId } });
 }
 
-// One-time backfill: turn existing draft picks into DRAFTED moves so seasons drafted
-// before this model still derive + show their initial rosters. Idempotent.
+// One-time backfill: seed DRAFTED moves so seasons drafted before this model still derive
+// + show their initial rosters. Sourced from RosterEntry (the canonical intra-team seed:
+// captain = 1, drafted players = 2..N, unique) — NOT DraftPick.round, which omits the
+// captain and would make Player 1 collide with the captain at seed 1. Idempotent.
 export async function backfillDraftedMoves(): Promise<{ created: number }> {
-  const drafts = await prisma.draft.findMany({ include: { picks: { where: { NOT: { playerId: null } } } } });
+  // DRAFTED moves are fully derived from the roster (week-1 baseline) — never hand-edited —
+  // so refresh them: drop the old ones and rebuild from current RosterEntry seeds. This
+  // keeps a re-import in sync without touching manual RESEED / SUB / ADDED moves.
+  await prisma.rosterMove.deleteMany({ where: { kind: "DRAFTED" } });
+  const rosters = await prisma.roster.findMany({
+    include: { entries: { select: { playerId: true, seed: true } }, teamSeason: { select: { id: true, seasonId: true } } },
+  });
   let created = 0;
-  for (const d of drafts) {
-    for (const p of d.picks) {
-      const exists = await prisma.rosterMove.findFirst({ where: { teamSeasonId: p.teamSeasonId, playerId: p.playerId!, kind: "DRAFTED" } });
-      if (exists) continue;
-      await prisma.rosterMove.create({ data: { seasonId: d.seasonId, teamSeasonId: p.teamSeasonId, kind: "DRAFTED", playerId: p.playerId!, effectiveWeek: 1, seed: p.round } });
+  const seen = new Set<string>(); // a teamSeason may have >1 roster block; one DRAFTED per (ts, player)
+  for (const r of rosters) {
+    for (const e of r.entries) {
+      const k = `${r.teamSeason.id}|${e.playerId}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      await prisma.rosterMove.create({ data: { seasonId: r.teamSeason.seasonId, teamSeasonId: r.teamSeason.id, kind: "DRAFTED", playerId: e.playerId, effectiveWeek: 1, seed: e.seed } });
       created++;
     }
   }

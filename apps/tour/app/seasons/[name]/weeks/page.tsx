@@ -6,6 +6,20 @@ import { getSeasonWeeks } from "@/lib/season-weeks";
 
 export const dynamic = "force-dynamic";
 
+// A player's seed in a set, with an arrow when they played off-seed (the +-2 rule):
+// up = faced a better (lower-numbered) seed, down = faced a worse one.
+function SeedTag({ self, opp }: { self: number | null; opp: number | null }) {
+  if (self == null) return null;
+  const diff = opp == null ? 0 : self - opp;
+  const arrow = diff > 0 ? `↑${diff}` : diff < 0 ? `↓${-diff}` : "";
+  return (
+    <span className="num" style={{ fontSize: "0.85em" }}>
+      <span className="muted">{self}</span>
+      {arrow && <span style={{ color: diff > 0 ? "var(--accent-2)" : "var(--muted)", marginLeft: 2 }}>{arrow}</span>}
+    </span>
+  );
+}
+
 export default async function SeasonWeeks({ params }: { params: Promise<{ name: string }> }) {
   const name = decodeURIComponent((await params).name);
   const season = await prisma.tourSeason.findUnique({ where: { name }, select: { id: true } });
@@ -50,9 +64,11 @@ export default async function SeasonWeeks({ params }: { params: Promise<{ name: 
                   <tbody>
                     {mu.sets.map((s, j) => (
                       <tr key={j}>
+                        <td className="num" style={{ width: 34 }}><SeedTag self={s.seedA} opp={s.seedB} /></td>
                         <td>{s.playerA}</td>
                         <td className="num" style={{ width: 48, textAlign: "center", color: s.scoreA > s.scoreB ? "var(--success)" : undefined }}>{s.scoreA}–{s.scoreB}</td>
                         <td style={{ textAlign: "right" }}>{s.playerB}</td>
+                        <td className="num" style={{ width: 34, textAlign: "right" }}><SeedTag self={s.seedB} opp={s.seedA} /></td>
                       </tr>
                     ))}
                   </tbody>
