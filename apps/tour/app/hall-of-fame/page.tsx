@@ -17,7 +17,7 @@ export default async function HallOfFame() {
           <div className="bracket-title flex items-center gap-2">
             <Link href={`/seasons/${encodeURIComponent(c.season)}`}>{c.season}</Link>
             <span className="text-[var(--muted)]">—</span>
-            <Trophy className="size-4" /> {c.champion}
+            <Trophy className="size-4" /> <Link href={`/teams/${c.championTeamSeasonId}`}>{c.champion}</Link>
           </div>
           <div className="bracket">
             {c.rounds.map((r) => (
@@ -25,11 +25,11 @@ export default async function HallOfFame() {
                 <div className="bracket-label">{r.label}</div>
                 <div className="bracket-match">
                   <div className="bracket-team win">
-                    <span>{c.champion}</span>
+                    <span><Link href={`/teams/${c.championTeamSeasonId}`}>{c.champion}</Link></span>
                     <span className="score">{r.champScore}</span>
                   </div>
                   <div className="bracket-team">
-                    <span>{r.opponent ?? "—"}</span>
+                    <span>{r.opponentTeamSeasonId ? <Link href={`/teams/${r.opponentTeamSeasonId}`}>{r.opponent}</Link> : (r.opponent ?? "—")}</span>
                     <span className="score">{r.oppScore}</span>
                   </div>
                 </div>
@@ -38,7 +38,7 @@ export default async function HallOfFame() {
             <div className="bracket-round">
               <div className="bracket-label">Champion</div>
               <div className="bracket-champion flex items-center justify-center gap-1.5">
-                <Trophy className="size-4" /> {c.champion}
+                <Trophy className="size-4" /> <Link href={`/teams/${c.championTeamSeasonId}`}>{c.champion}</Link>
               </div>
             </div>
           </div>

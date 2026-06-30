@@ -10,8 +10,8 @@ const isPow2 = (n: number) => n >= 2 && (n & (n - 1)) === 0;
 
 export interface PlayoffPicture {
   perGroup: number;
-  qualifiers: { name: string; conference: string; seed: number }[];
-  quarterfinals: { a: string; b: string }[];
+  qualifiers: { name: string; teamSeasonId: string; conference: string; seed: number }[];
+  quarterfinals: { a: string; aTeamSeasonId: string; b: string; bTeamSeasonId: string }[];
 }
 
 export async function getPlayoffPicture(seasonName: string): Promise<PlayoffPicture | null> {
@@ -48,7 +48,7 @@ export async function getPlayoffPicture(seasonName: string): Promise<PlayoffPict
   if (!isPow2(seeded.length)) {
     return {
       perGroup,
-      qualifiers: seeded.map((id, i) => ({ name: nameById.get(id) ?? id, conference: confById.get(id) ?? "", seed: i + 1 })),
+      qualifiers: seeded.map((id, i) => ({ name: nameById.get(id) ?? id, teamSeasonId: id, conference: confById.get(id) ?? "", seed: i + 1 })),
       quarterfinals: [],
     };
   }
@@ -56,10 +56,12 @@ export async function getPlayoffPicture(seasonName: string): Promise<PlayoffPict
   const qf = standardBracketPairings(seeded);
   return {
     perGroup,
-    qualifiers: seeded.map((id, i) => ({ name: nameById.get(id) ?? id, conference: confById.get(id) ?? "", seed: i + 1 })),
+    qualifiers: seeded.map((id, i) => ({ name: nameById.get(id) ?? id, teamSeasonId: id, conference: confById.get(id) ?? "", seed: i + 1 })),
     quarterfinals: qf.map(([a, b]) => ({
       a: `#${seedOf.get(a)} ${nameById.get(a) ?? a}`,
+      aTeamSeasonId: a,
       b: `#${seedOf.get(b)} ${nameById.get(b) ?? b}`,
+      bTeamSeasonId: b,
     })),
   };
 }

@@ -45,7 +45,7 @@ export default async function SeasonWeeks({ params }: { params: Promise<{ name: 
               <span className="inline-flex items-center gap-1"><ArrowRightLeft className="size-3.5" /> Roster moves:</span>
               {wk.moves.map((m, i) => (
                 <span key={i}>
-                  <strong>{m.player}</strong> → {m.team}
+                  <strong><Link href={`/players/${m.playerId}`}>{m.player}</Link></strong> → <Link href={`/teams/${m.teamSeasonId}`}>{m.team}</Link>
                   {!m.drafted && <span style={{ color: "var(--accent-2)" }}> · sub</span>}
                 </span>
               ))}
@@ -56,18 +56,18 @@ export default async function SeasonWeeks({ params }: { params: Promise<{ name: 
             {wk.matchups.map((mu, i) => (
               <div key={i}>
                 <div className="flex items-baseline justify-between font-semibold">
-                  <span>{mu.teamA}</span>
+                  <span><Link href={`/teams/${mu.teamAId}`}>{mu.teamA}</Link></span>
                   <span className="num">{mu.setsA}–{mu.setsB}</span>
-                  <span>{mu.teamB}</span>
+                  <span><Link href={`/teams/${mu.teamBId}`}>{mu.teamB}</Link></span>
                 </div>
                 <table style={{ marginTop: 4 }}>
                   <tbody>
                     {mu.sets.map((s, j) => (
                       <tr key={j}>
                         <td className="num" style={{ width: 34 }}><SeedTag self={s.seedA} opp={s.seedB} /></td>
-                        <td>{s.playerA}</td>
+                        <td><Link href={`/players/${s.playerAId}`}>{s.playerA}</Link></td>
                         <td className="num" style={{ width: 48, textAlign: "center", color: s.scoreA > s.scoreB ? "var(--success)" : undefined }}>{s.scoreA}–{s.scoreB}</td>
-                        <td style={{ textAlign: "right" }}>{s.playerB}</td>
+                        <td style={{ textAlign: "right" }}><Link href={`/players/${s.playerBId}`}>{s.playerB}</Link></td>
                         <td className="num" style={{ width: 34, textAlign: "right" }}><SeedTag self={s.seedB} opp={s.seedA} /></td>
                       </tr>
                     ))}

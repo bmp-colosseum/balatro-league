@@ -57,18 +57,18 @@ export default async function SeasonPage({ params }: { params: Promise<{ name: s
       )}
       {run && (
         <div className="card">
-          <div className="bracket-title flex items-center gap-2"><Trophy className="size-4" /> Championship Run — {run.champion}</div>
+          <div className="bracket-title flex items-center gap-2"><Trophy className="size-4" /> Championship Run — <Link href={`/teams/${run.championTeamSeasonId}`}>{run.champion}</Link></div>
           <div className="bracket">
             {run.rounds.map((r) => (
               <div className="bracket-round" key={r.round}>
                 <div className="bracket-label">{r.label}</div>
                 <div className="bracket-match">
                   <div className="bracket-team win">
-                    <span>{run.champion}</span>
+                    <span><Link href={`/teams/${run.championTeamSeasonId}`}>{run.champion}</Link></span>
                     <span className="score">{r.champScore}</span>
                   </div>
                   <div className="bracket-team">
-                    <span>{r.opponent ?? "—"}</span>
+                    <span>{r.opponentTeamSeasonId ? <Link href={`/teams/${r.opponentTeamSeasonId}`}>{r.opponent}</Link> : (r.opponent ?? "—")}</span>
                     <span className="score">{r.oppScore}</span>
                   </div>
                 </div>
@@ -76,7 +76,7 @@ export default async function SeasonPage({ params }: { params: Promise<{ name: s
             ))}
             <div className="bracket-round">
               <div className="bracket-label">Champion</div>
-              <div className="bracket-champion flex items-center justify-center gap-1.5"><Trophy className="size-4" /> {run.champion}</div>
+              <div className="bracket-champion flex items-center justify-center gap-1.5"><Trophy className="size-4" /> <Link href={`/teams/${run.championTeamSeasonId}`}>{run.champion}</Link></div>
             </div>
           </div>
         </div>
@@ -92,10 +92,10 @@ export default async function SeasonPage({ params }: { params: Promise<{ name: s
               {picture.quarterfinals.map((qf, i) => (
                 <div className="bracket-match" key={i}>
                   <div className="bracket-team">
-                    <span>{qf.a}</span>
+                    <span><Link href={`/teams/${qf.aTeamSeasonId}`}>{qf.a}</Link></span>
                   </div>
                   <div className="bracket-team">
-                    <span>{qf.b}</span>
+                    <span><Link href={`/teams/${qf.bTeamSeasonId}`}>{qf.b}</Link></span>
                   </div>
                 </div>
               ))}

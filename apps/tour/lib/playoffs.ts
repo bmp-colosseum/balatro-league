@@ -18,8 +18,10 @@ export interface BracketSeries {
   label: string;
   aSeed: number | null;
   aName: string;
+  aTeamSeasonId: string | null;
   bSeed: number | null;
   bName: string;
+  bTeamSeasonId: string | null;
   scoreA: number | null;
   scoreB: number | null;
   winner: "A" | "B" | null;
@@ -28,6 +30,7 @@ export interface BracketSeries {
 
 export interface PublicBracket {
   champion: string | null;
+  championTeamSeasonId: string | null;
   rounds: { round: string; label: string; series: BracketSeries[] }[];
 }
 
@@ -64,8 +67,10 @@ export async function getPublicBracket(seasonName: string): Promise<PublicBracke
           label: ROUND_LABEL[round] ?? round,
           aSeed: s.teamSeasonAId ? seedOf.get(s.teamSeasonAId) ?? null : null,
           aName: s.teamSeasonAId ? nameOf.get(s.teamSeasonAId) ?? "?" : "TBD",
+          aTeamSeasonId: s.teamSeasonAId ?? null,
           bSeed: s.teamSeasonBId ? seedOf.get(s.teamSeasonBId) ?? null : null,
           bName: s.teamSeasonBId ? nameOf.get(s.teamSeasonBId) ?? "?" : "TBD",
+          bTeamSeasonId: s.teamSeasonBId ?? null,
           scoreA: s.scoreA,
           scoreB: s.scoreB,
           winner: s.winnerTeamSeasonId === s.teamSeasonAId ? "A" : s.winnerTeamSeasonId === s.teamSeasonBId ? "B" : null,
@@ -74,20 +79,23 @@ export async function getPublicBracket(seasonName: string): Promise<PublicBracke
     }));
 
   const finalS = series.find((s) => s.round === "FINAL");
-  const champion = finalS?.winnerTeamSeasonId ? nameOf.get(finalS.winnerTeamSeasonId) ?? null : null;
-  return { champion, rounds };
+  const championTeamSeasonId = finalS?.winnerTeamSeasonId ?? null;
+  const champion = championTeamSeasonId ? nameOf.get(championTeamSeasonId) ?? null : null;
+  return { champion, championTeamSeasonId, rounds };
 }
 
 export interface RunRound {
   round: string;
   label: string;
   opponent: string | null;
+  opponentTeamSeasonId: string | null;
   champScore: number;
   oppScore: number;
 }
 
 export interface ChampionRun {
   champion: string;
+  championTeamSeasonId: string;
   rounds: RunRound[];
 }
 
@@ -128,6 +136,7 @@ export async function getChampionRun(seasonName: string): Promise<ChampionRun | 
 
   return {
     champion: nameById.get(championTsId) ?? "Champion",
+    championTeamSeasonId: championTsId,
     rounds: path.map((s) => {
       const champIsA = s.teamSeasonAId === championTsId;
       const oppId = champIsA ? s.teamSeasonBId : s.teamSeasonAId;
@@ -135,6 +144,7 @@ export async function getChampionRun(seasonName: string): Promise<ChampionRun | 
         round: s.round,
         label: ROUND_LABEL[s.round] ?? s.round,
         opponent: oppId ? nameById.get(oppId) ?? "—" : null,
+        opponentTeamSeasonId: oppId ?? null,
         champScore: (champIsA ? s.scoreA : s.scoreB) ?? 0,
         oppScore: (champIsA ? s.scoreB : s.scoreA) ?? 0,
       };

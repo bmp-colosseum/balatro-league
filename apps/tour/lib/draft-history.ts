@@ -8,6 +8,7 @@ export interface DraftTeam {
   conference: string;
   seed: number;
   captainName: string;
+  captainId: string;
   picks: { round: number; playerId: string; name: string }[];
 }
 
@@ -42,6 +43,7 @@ export async function getSeasonDraft(seasonName: string) {
     conference: ts.conference.name,
     seed: ts.seed,
     captainName: nameOf.get(ts.captainPlayerId) ?? ts.captainPlayerId,
+    captainId: ts.captainPlayerId,
     picks: picks
       .filter((p) => p.teamSeasonId === ts.id && p.playerId)
       .sort((a, b) => a.round - b.round)

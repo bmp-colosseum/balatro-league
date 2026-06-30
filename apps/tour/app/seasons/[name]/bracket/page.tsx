@@ -31,7 +31,7 @@ export default async function BracketPage({ params }: { params: Promise<{ name: 
         {bracket.champion && (
           <p className="flex items-center gap-1.5">
             <Trophy className="size-4 text-[var(--accent)]" />
-            <span className="muted">Champion:</span> <strong>{bracket.champion}</strong>
+            <span className="muted">Champion:</span> <strong>{bracket.championTeamSeasonId ? <Link href={`/teams/${bracket.championTeamSeasonId}`}>{bracket.champion}</Link> : bracket.champion}</strong>
           </p>
         )}
         <div className="card" style={{ overflowX: "auto" }}>
@@ -42,11 +42,11 @@ export default async function BracketPage({ params }: { params: Promise<{ name: 
                 {r.series.map((s, i) => (
                   <div className="bracket-match" key={i}>
                     <div className={`bracket-team${s.winner === "A" ? " win" : ""}`}>
-                      <span>{s.aSeed ? `#${s.aSeed} ` : ""}{s.aName}</span>
+                      <span>{s.aSeed ? `#${s.aSeed} ` : ""}{s.aTeamSeasonId ? <Link href={`/teams/${s.aTeamSeasonId}`}>{s.aName}</Link> : s.aName}</span>
                       <span className="score">{s.scoreA ?? "—"}</span>
                     </div>
                     <div className={`bracket-team${s.winner === "B" ? " win" : ""}`}>
-                      <span>{s.bSeed ? `#${s.bSeed} ` : ""}{s.bName}</span>
+                      <span>{s.bSeed ? `#${s.bSeed} ` : ""}{s.bTeamSeasonId ? <Link href={`/teams/${s.bTeamSeasonId}`}>{s.bName}</Link> : s.bName}</span>
                       <span className="score">{s.scoreB ?? "—"}</span>
                     </div>
                   </div>
@@ -67,18 +67,18 @@ export default async function BracketPage({ params }: { params: Promise<{ name: 
         <h1>Playoff bracket</h1>
         <p className="sub">Only the champion&apos;s run was recorded for this season.</p>
         <div className="card">
-          <div className="bracket-title flex items-center gap-2"><Trophy className="size-4" /> {run.champion}</div>
+          <div className="bracket-title flex items-center gap-2"><Trophy className="size-4" /> <Link href={`/teams/${run.championTeamSeasonId}`}>{run.champion}</Link></div>
           <div className="bracket">
             {run.rounds.map((r) => (
               <div className="bracket-round" key={r.round}>
                 <div className="bracket-label">{r.label}</div>
                 <div className="bracket-match">
                   <div className="bracket-team win">
-                    <span>{run.champion}</span>
+                    <span><Link href={`/teams/${run.championTeamSeasonId}`}>{run.champion}</Link></span>
                     <span className="score">{r.champScore}</span>
                   </div>
                   <div className="bracket-team">
-                    <span>{r.opponent ?? "—"}</span>
+                    <span>{r.opponentTeamSeasonId ? <Link href={`/teams/${r.opponentTeamSeasonId}`}>{r.opponent}</Link> : (r.opponent ?? "—")}</span>
                     <span className="score">{r.oppScore}</span>
                   </div>
                 </div>
@@ -103,7 +103,7 @@ export default async function BracketPage({ params }: { params: Promise<{ name: 
             <thead><tr><th className="rank">Seed</th><th>Team</th><th>Conference</th></tr></thead>
             <tbody>
               {picture.qualifiers.map((q) => (
-                <tr key={q.seed}><td className="rank">{q.seed}</td><td>{q.name}</td><td className="sub">{q.conference}</td></tr>
+                <tr key={q.seed}><td className="rank">{q.seed}</td><td><Link href={`/teams/${q.teamSeasonId}`}>{q.name}</Link></td><td className="sub">{q.conference}</td></tr>
               ))}
             </tbody>
           </table>
@@ -113,7 +113,7 @@ export default async function BracketPage({ params }: { params: Promise<{ name: 
             <div className="bracket-title">Projected first round</div>
             <ul className="list-none p-0" style={{ margin: 0 }}>
               {picture.quarterfinals.map((m, i) => (
-                <li key={i} className="py-0.5">{m.a} <span className="muted">vs</span> {m.b}</li>
+                <li key={i} className="py-0.5"><Link href={`/teams/${m.aTeamSeasonId}`}>{m.a}</Link> <span className="muted">vs</span> <Link href={`/teams/${m.bTeamSeasonId}`}>{m.b}</Link></li>
               ))}
             </ul>
           </div>

@@ -7,7 +7,9 @@ import { seedAtWeekResolver } from "./services/roster-ops";
 
 export interface WeekSet {
   playerA: string;
+  playerAId: string;
   playerB: string;
+  playerBId: string;
   seedA: number | null;  // effective seed that week (folds re-seeds)
   seedB: number | null;
   scoreA: number;
@@ -15,14 +17,18 @@ export interface WeekSet {
 }
 export interface WeekMatchup {
   teamA: string;
+  teamAId: string;
   teamB: string;
+  teamBId: string;
   setsA: number;
   setsB: number;
   sets: WeekSet[];
 }
 export interface WeekMove {
   team: string;
+  teamSeasonId: string;
   player: string;
+  playerId: string;
   drafted: boolean; // false = a true outside sub/add; true = a drafted player debuting late
 }
 export interface SeasonWeek {
@@ -86,12 +92,14 @@ export async function getSeasonWeeks(seasonName: string): Promise<SeasonWeek[]> 
     const key = `${s.teamSeasonAId}|${s.teamSeasonBId}`;
     let mu = wm.get(key);
     if (!mu) {
-      mu = { teamA: teamName.get(s.teamSeasonAId!) ?? "?", teamB: teamName.get(s.teamSeasonBId!) ?? "?", setsA: 0, setsB: 0, sets: [] };
+      mu = { teamA: teamName.get(s.teamSeasonAId!) ?? "?", teamAId: s.teamSeasonAId!, teamB: teamName.get(s.teamSeasonBId!) ?? "?", teamBId: s.teamSeasonBId!, setsA: 0, setsB: 0, sets: [] };
       wm.set(key, mu);
     }
     mu.sets.push({
       playerA: pName.get(s.playerAId) ?? "?",
+      playerAId: s.playerAId,
       playerB: pName.get(s.playerBId) ?? "?",
+      playerBId: s.playerBId,
       seedA: seedAt(s.teamSeasonAId, s.week!, s.playerAId),
       seedB: seedAt(s.teamSeasonBId, s.week!, s.playerBId),
       scoreA: gA,
@@ -109,7 +117,9 @@ export async function getSeasonWeeks(seasonName: string): Promise<SeasonWeek[]> 
     if (captainOf.get(tsId) === pid) continue; // captain isn't an add
     (movesByWeek.get(wk) ?? movesByWeek.set(wk, []).get(wk)!).push({
       team: teamName.get(tsId) ?? "?",
+      teamSeasonId: tsId,
       player: pName.get(pid) ?? "?",
+      playerId: pid,
       drafted: draftedByTeam.get(tsId)?.has(pid) ?? false,
     });
   }

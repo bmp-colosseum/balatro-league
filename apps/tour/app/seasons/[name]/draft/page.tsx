@@ -37,7 +37,7 @@ export default async function SeasonDraft({ params }: { params: Promise<{ name: 
               <li className="flex items-baseline gap-2 py-0.5">
                 <span className="rank" style={{ width: "1.4rem" }}>C</span>
                 <Crown className="size-3.5 shrink-0 text-[var(--accent)]" />
-                <span className="font-semibold">{t.captainName}</span>
+                <span className="font-semibold"><Link href={`/players/${t.captainId}`}>{t.captainName}</Link></span>
               </li>
               {t.picks.map((p) => (
                 <li key={p.round} className="flex items-baseline gap-2 py-0.5">

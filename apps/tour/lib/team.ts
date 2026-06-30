@@ -218,7 +218,9 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
 
 export interface TeamWeekSet {
   player: string;       // this team's player in the set
+  playerId: string;
   oppPlayer: string;
+  oppPlayerId: string;
   seed: number | null;      // this team's player's roster seed
   oppSeed: number | null;   // opponent player's roster seed
   scoreFor: number;     // this team's player's games won
@@ -285,7 +287,9 @@ export async function getTeamWeeks(teamSeasonId: string): Promise<TeamWeek[]> {
     }
     wk.sets.push({
       player: pName.get(usPid) ?? "?",
+      playerId: usPid,
       oppPlayer: pName.get(oppPid) ?? "?",
+      oppPlayerId: oppPid,
       seed: effSeed(teamSeasonId, s.week!, usPid),
       oppSeed: effSeed(oppTsId, s.week!, oppPid),
       scoreFor: ourGames,
