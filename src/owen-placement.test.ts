@@ -32,14 +32,15 @@ describe("pairwise boundary promotion/relegation — top tiers", () => {
     expect(idsIn(out, 1)).toContain("leg6");
   });
 
-  it("Rare 1 ↔ Rare 2 swaps 1 up / 2 down", () => {
+  it("Rare 1 ↔ Rare 2 is matched (no asymmetric tighten): 1/1 when both are small", () => {
     const rare1 = [1, 2, 3, 4, 5, 6].map((r) => returner(`r1-${r}`, 1, r, 1800));
     const rare2 = [1, 2, 3, 4, 5, 6].map((r) => returner(`r2-${r}`, 2, r, 1600));
     const out = buildOwenPlacement(DIVS, [...rare1, ...rare2], [], 100);
-    // 2 relegated from Rare 1 (its bottom two) → Rare 2.
-    expect(idsIn(out, 2)).toEqual(expect.arrayContaining(["r1-5", "r1-6"]));
-    // 1 promoted from Rare 2 (its top) → Rare 1.
-    expect(idsIn(out, 1)).toContain("r2-1");
+    // Both divisions are < 8, so the matched count-based rule is 1 down / 1 up —
+    // NOT the old 1-up/2-down. Only Rare 1's bottom one relegates.
+    expect(idsIn(out, 2)).toContain("r1-6");
+    expect(idsIn(out, 2)).not.toContain("r1-5"); // 2nd-from-bottom stays (no tighten)
+    expect(idsIn(out, 1)).toContain("r2-1"); // Rare 2's top promotes
   });
 });
 

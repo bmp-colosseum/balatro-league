@@ -194,7 +194,7 @@ export default async function PlacementPreviewPage({
             <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
               ⚙ Promotion &amp; relegation rules
               <span className="muted" style={{ fontWeight: 400, marginLeft: 8, fontSize: 12 }}>
-                top {rules.topFixedSize || "—"} · {rules.roundRobinTopDivisions} round-robin · swap {rules.baseSwap}/{rules.bigSwap}@≥{rules.swapThreshold} · {rules.tightenTopTiers ? "tightened top" : "symmetric top"}
+                top {rules.topFixedSize || "—"} · {rules.roundRobinTopDivisions} round-robin · swap {rules.baseSwap}/{rules.bigSwap}@≥{rules.swapThreshold}
               </span>
             </summary>
             <form action={savePlacementRules} style={{ display: "flex", gap: 16, alignItems: "flex-end", flexWrap: "wrap", marginTop: 10 }}>
@@ -219,16 +219,13 @@ export default async function PlacementPreviewPage({
                 Big swap (≥ threshold)
                 <Input type="number" name="bigSwap" defaultValue={rules.bigSwap} min={0} max={20} style={{ width: 70 }} />
               </label>
-              <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
-                <input type="checkbox" name="tightenTopTiers" defaultChecked={rules.tightenTopTiers} />
-                Tighten top tiers (1 up / 2 down on Rare 1↔2, 2↔3)
-              </label>
               <Button type="submit" variant="secondary" size="sm">Save rules</Button>
             </form>
             <p className="muted" style={{ fontSize: 11, margin: "8px 0 0" }}>
               Saved league-wide. The projection above + the next build + the schedule lock at activation all use these.
-              Lower boundaries swap <strong>{rules.bigSwap}</strong> when both divisions have ≥{rules.swapThreshold} finishers,
-              else <strong>{rules.baseSwap}</strong>.
+              <strong> Legendary is always 1 down / 1 up.</strong> Every other boundary is matched: it swaps
+              <strong> {rules.bigSwap}</strong> up/down when both divisions have ≥{rules.swapThreshold} players, else
+              <strong> {rules.baseSwap}</strong> — so what relegates down always equals what promotes up.
             </p>
           </details>
         )}

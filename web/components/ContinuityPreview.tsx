@@ -85,9 +85,10 @@ export function ContinuityPreview({
           anyone, build it and drag on the season page. Nothing here is saved.
         </p>
         <p style={{ fontSize: 11, margin: "6px 0 0", color: "var(--accent-2)" }}>
-          🔒 <strong>Floor (minimum placement):</strong> a returner can only drop by <strong>one division</strong>
-          (relegation) — the size-balancer that fills out divisions <strong>only moves newcomers</strong>, never
-          a returner below their finish. Locked returners are tagged 🔒 below.
+          🔒 <strong>Floor:</strong> the size-balancer (which fills out divisions to even their counts)
+          <strong> only moves newcomers</strong> — it never bumps a returner. Returners are tagged 🔒 below.
+          <strong> They still promote ↑ / relegate ↓ by their finish</strong>, so a bottom finisher can still drop
+          one division — that&apos;s normal ladder movement, not the balancer.
         </p>
       </div>
 
