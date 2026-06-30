@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { linkPlayerAction, mergePlayerAction } from "@/app/admin/identity/actions";
 
 type Result = { value: string; label: string; detail: string };
-export type IdPlayer = { id: string; name: string; discordId: string; linked: boolean; sets: number; seasons: number; suggestions?: { discordId: string; name: string }[] };
+export type IdPlayer = { id: string; name: string; discordId: string; linked: boolean; sets: number; seasons: number; suggestions?: { discordId: string; name: string }[]; signupHandle?: string };
 
 export function IdentityRow({ player }: { player: IdPlayer }) {
   const [mode, setMode] = useState<null | "link" | "merge">(null);
@@ -62,6 +62,9 @@ export function IdentityRow({ player }: { player: IdPlayer }) {
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <Link href={`/players/${player.id}`} className="font-semibold">{player.name}</Link>
         <span className="sub">{player.seasons} sns · {player.sets} sets</span>
+        {!player.linked && player.signupHandle && (
+          <span className="sub" title="Discord handle from this player's signup — search/link by it">signup: <strong>@{player.signupHandle}</strong></span>
+        )}
         <span className="ml-auto">
           {player.linked ? (
             <span className="badge" style={{ color: "var(--success)", borderColor: "var(--success)" }}>linked · {player.discordId}</span>

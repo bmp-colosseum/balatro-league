@@ -170,6 +170,8 @@ export interface TourPlayerRow {
   sets: number;
   seasons: number;
   suggestions?: LeagueRefRow[]; // likely league matches (unlinked players only)
+  signupHandle?: string; // Discord @username this player gave on their signup (even if it
+                         // can't be resolved to an id yet) — a hint for manual linking
 }
 
 export type IdentityFilter = "all" | "unlinked" | "linked";
@@ -211,6 +213,16 @@ export async function listTourPlayers(q = "", limit = 60, filter: IdentityFilter
   const ref = await getSuggestRef();
   if (ref.length) {
     for (const r of out) if (!r.linked) r.suggestions = rankMatches(r.name, ref, 2);
+  }
+
+  // Even when a handle can't be resolved to an id, surface the @username the player gave on
+  // their signup (matched by preferred name) so an admin can link them by hand.
+  const unlinked = out.filter((r) => !r.linked);
+  if (unlinked.length) {
+    const signups = await prisma.signupRef.findMany({ select: { preferredName: true, username: true } });
+    const byName = new Map<string, string>();
+    for (const s of signups) { const k = norm(s.preferredName); if (s.username.trim() && !byName.has(k)) byName.set(k, s.username.trim()); }
+    for (const r of unlinked) { const h = byName.get(norm(r.name)); if (h) r.signupHandle = h; }
   }
   return out;
 }
