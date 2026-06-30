@@ -114,6 +114,10 @@ export async function getSeasonWeeks(seasonName: string): Promise<SeasonWeek[]> 
     });
   }
 
+  // Sets within a matchup always run seed 1 first (by teamA's seed, then teamB's).
+  const bySeed = (a: WeekSet, b: WeekSet) => (a.seedA ?? 99) - (b.seedA ?? 99) || (a.seedB ?? 99) - (b.seedB ?? 99);
+  for (const wm of byWeek.values()) for (const mu of wm.values()) mu.sets.sort(bySeed);
+
   return [...byWeek.keys()]
     .sort((a, b) => a - b)
     .map((week) => ({

@@ -296,5 +296,7 @@ export async function getTeamWeeks(teamSeasonId: string): Promise<TeamWeek[]> {
     else if (m.winnerId != null) wk.setsAgainst++;
   }
 
+  // Sets run seed 1 first (this team's player seed).
+  for (const wk of byWeek.values()) wk.sets.sort((a, b) => (a.seed ?? 99) - (b.seed ?? 99));
   return [...byWeek.values()].sort((a, b) => a.week - b.week);
 }
