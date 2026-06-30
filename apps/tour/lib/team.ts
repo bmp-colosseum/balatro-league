@@ -214,3 +214,78 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
     players: playerLines,
   };
 }
+
+export interface TeamWeekSet {
+  player: string;       // this team's player in the set
+  oppPlayer: string;
+  scoreFor: number;     // this team's player's games won
+  scoreAgainst: number;
+  win: boolean | null;  // null = tie
+}
+export interface TeamWeek {
+  week: number;
+  opponent: string;
+  opponentTeamSeasonId: string | null;
+  setsFor: number;      // sets this team won that week
+  setsAgainst: number;
+  sets: TeamWeekSet[];
+}
+
+// This team's regular-season schedule, week by week: each week's opponent, the team
+// set score, and every player set within it (from this team's perspective). Derived
+// from TourSet (week + the team each player played for) — same source as getSeasonWeeks.
+export async function getTeamWeeks(teamSeasonId: string): Promise<TeamWeek[]> {
+  const sets = await prisma.tourSet.findMany({
+    where: {
+      bracket: "REGULAR",
+      week: { not: null },
+      OR: [{ teamSeasonAId: teamSeasonId }, { teamSeasonBId: teamSeasonId }],
+    },
+    select: { week: true, teamSeasonAId: true, teamSeasonBId: true, playerAId: true, playerBId: true, matchId: true },
+  });
+  if (!sets.length) return [];
+
+  const matchIds = sets.map((s) => s.matchId).filter((x): x is string => !!x);
+  const oppTsIds = [...new Set(sets.map((s) => (s.teamSeasonAId === teamSeasonId ? s.teamSeasonBId : s.teamSeasonAId)).filter((x): x is string => !!x))];
+  const playerIds = [...new Set(sets.flatMap((s) => [s.playerAId, s.playerBId]))];
+  const [matches, oppTeams, players] = await Promise.all([
+    prisma.match.findMany({ where: { id: { in: matchIds } }, select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true, winnerId: true } }),
+    prisma.teamSeason.findMany({ where: { id: { in: oppTsIds } }, include: { team: true } }),
+    prisma.player.findMany({ where: { id: { in: playerIds } }, select: { id: true, displayName: true } }),
+  ]);
+  const matchById = new Map(matches.map((m) => [m.id, m]));
+  const oppName = new Map(oppTeams.map((t) => [t.id, t.team.name]));
+  const pName = new Map(players.map((p) => [p.id, p.displayName]));
+
+  // Key by week + opponent: a team usually plays one opponent per week, but this keeps
+  // two distinct matchups in the same week from being merged into one row.
+  const byWeek = new Map<string, TeamWeek>();
+  for (const s of sets) {
+    const m = s.matchId ? matchById.get(s.matchId) : undefined;
+    if (!m) continue;
+    const usIsA = s.teamSeasonAId === teamSeasonId;
+    const oppTsId = usIsA ? s.teamSeasonBId : s.teamSeasonAId;
+    const usPid = usIsA ? s.playerAId : s.playerBId;
+    const oppPid = usIsA ? s.playerBId : s.playerAId;
+    // games from our player's perspective
+    const ourGames = m.playerAId === usPid ? m.gamesWonA : m.gamesWonB;
+    const oppGames = m.playerAId === usPid ? m.gamesWonB : m.gamesWonA;
+    const key = `${s.week}|${oppTsId ?? "?"}`;
+    let wk = byWeek.get(key);
+    if (!wk) {
+      wk = { week: s.week!, opponent: oppTsId ? oppName.get(oppTsId) ?? "?" : "?", opponentTeamSeasonId: oppTsId ?? null, setsFor: 0, setsAgainst: 0, sets: [] };
+      byWeek.set(key, wk);
+    }
+    wk.sets.push({
+      player: pName.get(usPid) ?? "?",
+      oppPlayer: pName.get(oppPid) ?? "?",
+      scoreFor: ourGames,
+      scoreAgainst: oppGames,
+      win: m.winnerId == null ? null : m.winnerId === usPid,
+    });
+    if (m.winnerId === usPid) wk.setsFor++;
+    else if (m.winnerId != null) wk.setsAgainst++;
+  }
+
+  return [...byWeek.values()].sort((a, b) => a.week - b.week);
+}

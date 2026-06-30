@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { getTeamSeason, getTeamPlacement } from "@/lib/team";
+import { getTeamSeason, getTeamPlacement, getTeamWeeks } from "@/lib/team";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +27,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
   }
 
   const place = await getTeamPlacement(id, t.seasonName);
+  const weeks = await getTeamWeeks(id);
 
   return (
     <main>
@@ -101,6 +102,43 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
           </tbody>
         </table>
       </div>
+
+      {weeks.length > 0 && (
+        <>
+          <h2 style={{ fontSize: "1.1rem", margin: "1.5rem 0 0.5rem" }}>Week by week</h2>
+          <div className="card">
+            {weeks.map((w) => {
+              const res = w.setsFor > w.setsAgainst ? "W" : w.setsFor < w.setsAgainst ? "L" : "T";
+              return (
+                <details key={w.week} className="week-row">
+                  <summary className="flex items-center gap-2" style={{ cursor: "pointer", padding: "0.4rem 0" }}>
+                    <span className="muted" style={{ width: 64 }}>Week {w.week}</span>
+                    <span style={{ width: 18, fontWeight: 600, color: res === "W" ? "var(--success)" : res === "L" ? "var(--accent-2)" : undefined }}>{res}</span>
+                    <span className="num" style={{ width: 44 }}>{w.setsFor}–{w.setsAgainst}</span>
+                    <span className="muted">vs</span>
+                    {w.opponentTeamSeasonId ? (
+                      <Link href={`/teams/${w.opponentTeamSeasonId}`}>{w.opponent}</Link>
+                    ) : (
+                      <span>{w.opponent}</span>
+                    )}
+                  </summary>
+                  <table style={{ margin: "0.25rem 0 0.5rem" }}>
+                    <tbody>
+                      {w.sets.map((s, j) => (
+                        <tr key={j}>
+                          <td>{s.player}</td>
+                          <td className="num" style={{ width: 56, textAlign: "center", color: s.win ? "var(--success)" : s.win === false ? "var(--accent-2)" : undefined }}>{s.scoreFor}–{s.scoreAgainst}</td>
+                          <td style={{ textAlign: "right" }} className="muted">{s.oppPlayer}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </details>
+              );
+            })}
+          </div>
+        </>
+      )}
     </main>
   );
 }
