@@ -561,15 +561,17 @@ function seasonXlsxPaths(dir: string): Map<number, string> {
 // nothing. Lets an admin preview before the (destructive on a populated DB) re-import.
 export async function previewImport(dir = sheetsDir()) {
   const nrm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]/g, "");
-  const out: { season: number; format: string; teams: number; players: number; regularSets: number; playoffSets: number; champion: string | null }[] = [];
+  const out: { season: number; format: string; teams: number; players: number; regularSets: number; playoffSets: number; weeks: number; champion: string | null }[] = [];
   for (const [num, path] of seasonXlsxPaths(dir)) {
     const cfg = await readSeasonXlsx(path);
     const draftTeams = cfg.draftTeams ?? [];
     if (!draftTeams.length) continue;
     const teamN = new Set(draftTeams.map((t) => nrm(t.team)));
     const notTeams = (a: string, b: string) => !(teamN.has(nrm(a)) && teamN.has(nrm(b)));
-    const results = (await readSeasonResults(path)) as { p1: string; p2: string; bracket: string }[];
-    const regularSets = results.filter((r) => r.bracket === "REGULAR" && notTeams(r.p1, r.p2)).length;
+    const results = (await readSeasonResults(path)) as { p1: string; p2: string; bracket: string; week?: number }[];
+    const reg = results.filter((r) => r.bracket === "REGULAR" && notTeams(r.p1, r.p2));
+    const regularSets = reg.length;
+    const weeks = new Set(reg.map((r) => r.week).filter((w) => w != null)).size;
     const playoffSets = results.filter((r) => r.bracket === "PLAYOFF" && notTeams(r.p1, r.p2)).length;
     const bracket = ((await readSeasonPlayoffs(path)) as { teamA: string; scoreA: number; scoreB: number; teamB: string }[])
       .filter((s) => teamN.has(nrm(s.teamA)) && teamN.has(nrm(s.teamB)));
@@ -585,6 +587,7 @@ export async function previewImport(dir = sheetsDir()) {
       players: players.size,
       regularSets,
       playoffSets,
+      weeks,
       champion: champKey ? draftTeams.find((t) => nrm(t.team) === champKey)?.team ?? null : null,
     });
   }

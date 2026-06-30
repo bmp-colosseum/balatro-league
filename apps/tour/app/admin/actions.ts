@@ -36,7 +36,7 @@ export async function uploadImportAction(_prev: ActionResult, formData: FormData
     if (formData.get("preview") === "1") {
       const p = await previewFromZip(buf);
       if (!p.seasons.length) return { ok: false, message: "No TT<n>.xlsx workbooks found in the zip." };
-      const lines = p.seasons.map((s) => `TT${s.season} (${s.format}): ${s.teams} teams, ${s.players} players, ${s.regularSets} regular + ${s.playoffSets} playoff sets${s.champion ? `, champion ${s.champion}` : ""}`);
+      const lines = p.seasons.map((s) => `TT${s.season} (${s.format}): ${s.teams} teams, ${s.players} players, ${s.weeks} weeks, ${s.regularSets} regular + ${s.playoffSets} playoff sets${s.champion ? `, champion ${s.champion}` : ""}`);
       return { ok: true, message: `Preview — nothing imported:\n${lines.join("\n")}` };
     }
     const r = await importFromZip(buf);
