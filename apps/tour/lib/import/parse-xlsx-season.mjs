@@ -144,11 +144,20 @@ export function conferenceResultsFromGrid(rows) {
   for (const row of rows) {
     const wk = (row[1] ?? "").trim().match(/^Week\s+(\d+)/i);
     if (wk) { week = Number(wk[1]); blocks = null; continue; }
+    // A fully-empty row is the real week separator. A row with names but blank scores is
+    // just an unplayed matchup WITHIN the week — it must NOT reset the team header (else the
+    // next player row gets mistaken for a header and players are tagged as teams).
+    if (row.every((c) => !(c ?? "").toString().trim())) { blocks = null; continue; }
     if (!blocks) {
-      // Team-matchup HEADER row: groups of [teamA, int, int, teamB]. Remember the teams.
+      // Team-matchup HEADER row: groups of [teamA, score, score, teamB]. Remember the teams.
+      // Scores may be numeric (played) OR both blank (a matchup not yet played that week) —
+      // a blank-score header must still register so its player rows resolve the right team.
+      // The conference-name row above has TEXT in the score cells, so it never qualifies.
       const found = [];
       for (let c = 0; c < row.length - 3; c++) {
-        if ((row[c] ?? "").trim() && !isNum(row[c]) && isNum(row[c + 1]) && isNum(row[c + 2]) && (row[c + 3] ?? "").trim() && !isNum(row[c + 3])) {
+        const s1 = (row[c + 1] ?? "").trim(), s2 = (row[c + 2] ?? "").trim();
+        const scoresOk = (isNum(row[c + 1]) && isNum(row[c + 2])) || (!s1 && !s2);
+        if ((row[c] ?? "").trim() && !isNum(row[c]) && (row[c + 3] ?? "").trim() && !isNum(row[c + 3]) && scoresOk) {
           found.push({ a: c, sa: c + 1, sb: c + 2, b: c + 3, teamA: (row[c] ?? "").trim(), teamB: (row[c + 3] ?? "").trim() });
           c += 3;
         }
@@ -157,15 +166,13 @@ export function conferenceResultsFromGrid(rows) {
       continue;
     }
     // Player rows: same columns as the header blocks; carry each player's team.
-    let any = false;
+    // Blank-score cells = an unplayed matchup; skip just that block, keep the header.
     for (const bl of blocks) {
       const pa = (row[bl.a] ?? "").trim(), pb = (row[bl.b] ?? "").trim();
       if (pa && pb && isNum(row[bl.sa]) && isNum(row[bl.sb])) {
         sets.push({ week, teamA: bl.teamA, p1: pa, p1g: Number(row[bl.sa]), p2: pb, p2g: Number(row[bl.sb]), teamB: bl.teamB });
-        any = true;
       }
     }
-    if (!any) blocks = null; // blank row ends this week's matchups
   }
   return sets;
 }
