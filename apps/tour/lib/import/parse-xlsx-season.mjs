@@ -329,6 +329,61 @@ export function rosterBandsFromGrid(rows) {
   return teams.filter((t) => t.team && (t.captain || t.players.length));
 }
 
+// "Team Rankings" bands inside the Team Rosters tab (TT1/TT2/TT4) = the CANONICAL player
+// seeds, given per week-block ("Weeks 1-3" / "Weeks 4-7" / "Playoffs"). Unlike the draft
+// order, the captain sits at their real seed here, and the later blocks are the re-seeds.
+// Layout: a "Team Rankings <label>" header row, then a team-name row (each name merged
+// across two cells), a "Team N" sub-label row, then player rows where each team column
+// holds [playerName, seed]. Returns [{ label, weeks:[start,end], teams:[{ team, seeds:
+// [{player, seed}] }] }] in sheet order.
+export function teamRankingsFromGrid(rows) {
+  const isNum = (v) => v != null && v !== "" && !isNaN(Number(v));
+  const txt = (v) => (v ?? "").toString().trim();
+  const blocks = [];
+  for (let i = 0; i < rows.length; i++) {
+    if (!/team rankings/i.test(txt(rows[i][1]))) continue;
+    const label = txt(rows[i][2]);
+    const weeks = (label.match(/\d+/g) ?? []).map(Number);
+    // Team-name row: first row below the header with adjacent duplicated cells (merged
+    // team names), excluding the "Team N" rank sub-label.
+    let tn = -1;
+    for (let r = i + 1; r < Math.min(rows.length, i + 6); r++) {
+      const row = rows[r];
+      for (let c = 2; c < row.length - 1; c++) {
+        const a = txt(row[c]);
+        if (a && a === txt(row[c + 1]) && !/^team\s*\d+$/i.test(a)) { tn = r; break; }
+      }
+      if (tn >= 0) break;
+    }
+    if (tn < 0) continue;
+    const cols = [];
+    for (let c = 2; c < rows[tn].length - 1; c++) {
+      const a = txt(rows[tn][c]);
+      if (a && a === txt(rows[tn][c + 1]) && !/^team\s*\d+$/i.test(a)) { cols.push({ col: c, team: a }); c++; }
+    }
+    const teams = cols.map((t) => ({ team: t.team, col: t.col, seeds: [] }));
+    for (let r = tn + 1; r < rows.length; r++) {
+      const row = rows[r];
+      if (/team rankings/i.test(txt(row[1]))) break;
+      if (row.every((c) => !txt(c))) break;
+      for (const t of teams) {
+        const name = txt(row[t.col]);
+        const seed = row[t.col + 1];
+        if (name && isNum(seed) && !/^team\s*\d+$/i.test(name)) t.seeds.push({ player: name, seed: Number(seed) });
+      }
+    }
+    blocks.push({ label, weeks, teams: teams.filter((t) => t.seeds.length).map((t) => ({ team: t.team, seeds: t.seeds })) });
+  }
+  return blocks;
+}
+
+// Read the Team Rankings (canonical seeds + re-seeds) for a season, if present.
+export async function readSeasonRankings(path) {
+  const wb = await loadWorkbook(path);
+  const tr = tabGrid(wb, "Team Rosters");
+  return tr ? teamRankingsFromGrid(tr) : [];
+}
+
 // Load one season xlsx → its conference + signup + draft-roster data (each empty if absent).
 export async function readSeasonXlsx(path) {
   const wb = await loadWorkbook(path);

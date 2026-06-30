@@ -8,9 +8,9 @@ import { join } from "node:path";
 import { readdirSync, statSync } from "node:fs";
 import { prisma } from "../db";
 // Pure parsers (framework-agnostic utilities).
-import { readSeasonXlsx, readSeasonResults, readSeasonPlayoffs } from "../import/parse-xlsx-season.mjs";
+import { readSeasonXlsx, readSeasonResults, readSeasonPlayoffs, readSeasonRankings } from "../import/parse-xlsx-season.mjs";
 import { slug } from "../import/sheet.mjs";
-import { backfillDraftedMoves } from "./roster-ops";
+import { backfillDraftedMoves, ensureMembership } from "./roster-ops";
 import { applySignupRefs } from "./identity";
 
 const majority = (n: number) => Math.floor(n / 2) + 1;
@@ -614,13 +614,70 @@ export async function importAllFromXlsx(dir = sheetsDir()) {
   const shells = await importSeasonShellsFromXlsx(dir);
   const conferences = await applyConferenceData(dir);
   const rosters = await importConferenceRosters(dir);
+  const rankings = await applySeedRankings(dir);
   const results = await importConferenceResults(dir);
   const playoffs = await importPlayoffsFromXlsx(dir);
   const roster_moves = await backfillDraftedMoves();
   await pruneOrphanPlayers();
   const career = await deriveCareerStats();
   const [players, tourSets] = await Promise.all([prisma.player.count(), prisma.tourSet.count()]);
-  return { ...shells, conferencesSet: conferences.teamsSet, rosters: rosters.rostersFilled, players: rosters.playersAdded, sets: results.sets, playoffSeries: playoffs.series, champions: playoffs.champions, careerStats: career.players, rosterMoves: roster_moves.created, totalPlayers: players, totalSets: tourSets };
+  return { ...shells, conferencesSet: conferences.teamsSet, rosters: rosters.rostersFilled, players: rosters.playersAdded, sets: results.sets, playoffSeries: playoffs.series, champions: playoffs.champions, careerStats: career.players, rosterMoves: roster_moves.created, seedRankings: rankings, totalPlayers: players, totalSets: tourSets };
+}
+
+// Apply the "Team Rankings" bands (TT1/TT2/TT4) as the canonical seeds: the first
+// week-block sets each player's base seed (captain at their real position, NOT forced to
+// 1), and each later block becomes RESEED moves at its start week (the playoff block at
+// the week after the regular season). Idempotent: clears its own prior ranking RESEEDs
+// (tagged createdBy="import:rankings") but never touches manual re-seeds. Seasons without
+// a Team Rankings section (TT3) are skipped, keeping their roster-order seeds.
+export async function applySeedRankings(dir = sheetsDir()) {
+  const nrm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]/g, "");
+  let baseSet = 0, reseeds = 0, seasonsApplied = 0;
+  for (const [num, path] of seasonXlsxPaths(dir)) {
+    const blocks = await readSeasonRankings(path);
+    if (!blocks.length) continue;
+    const season = await prisma.tourSeason.findUnique({ where: { name: `Team Tour ${num}` }, include: { teamSeasons: { include: { team: true } } } });
+    if (!season) continue;
+    const tsByName = new Map(season.teamSeasons.map((t) => [nrm(t.team.name), t.id]));
+    const matchTs = (name: string) => {
+      const n = nrm(name);
+      return tsByName.get(n) ?? season.teamSeasons.find((t) => { const tn = nrm(t.team.name); return tn.startsWith(n) || n.startsWith(tn); })?.id ?? null;
+    };
+    // Idempotent: drop prior ranking-derived re-seeds (keep manual ones).
+    await prisma.rosterMove.deleteMany({ where: { seasonId: season.id, kind: "RESEED", createdBy: "import:rankings" } });
+
+    const ordered = [...blocks].sort((a, b) => (a.weeks[0] ?? 99) - (b.weeks[0] ?? 99));
+    const lastRegEnd = Math.max(0, ...ordered.flatMap((b: { weeks: number[] }) => b.weeks));
+    const prevSeed = new Map<string, number>(); // `${tsId}|${pid}` -> last seed
+
+    for (let bi = 0; bi < ordered.length; bi++) {
+      const b = ordered[bi] as { label: string; weeks: number[]; teams: { team: string; seeds: { player: string; seed: number }[] }[] };
+      const isPlayoff = b.weeks.length === 0;
+      const effWeek = isPlayoff ? lastRegEnd + 1 : b.weeks[0];
+      for (const t of b.teams) {
+        const tsId = matchTs(t.team);
+        if (!tsId) continue;
+        for (const { player, seed } of t.seeds) {
+          const pid = await resolvePlayerId(player, true);
+          if (!pid) continue;
+          const key = `${tsId}|${pid}`;
+          if (bi === 0) {
+            await ensureMembership(tsId, pid, seed);
+            await prisma.rosterEntry.updateMany({ where: { playerId: pid, roster: { teamSeasonId: tsId } }, data: { seed } });
+            prevSeed.set(key, seed);
+            baseSet++;
+          } else if (prevSeed.get(key) !== seed) {
+            await ensureMembership(tsId, pid, seed);
+            await prisma.rosterMove.create({ data: { seasonId: season.id, teamSeasonId: tsId, kind: "RESEED", playerId: pid, seed, effectiveWeek: effWeek, reason: `ranking ${b.label}`, createdBy: "import:rankings" } });
+            prevSeed.set(key, seed);
+            reseeds++;
+          }
+        }
+      }
+    }
+    seasonsApplied++;
+  }
+  return { seasonsApplied, baseSet, reseeds };
 }
 
 
