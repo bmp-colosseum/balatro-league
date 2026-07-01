@@ -249,9 +249,11 @@ export async function getTeamMoves(teamSeasonId: string): Promise<TeamMove[]> {
       const from = seedNow.get(m.playerId);
       if (m.seed != null) { detail = from != null ? `#${from} → #${m.seed}` : `→ #${m.seed}`; seedNow.set(m.playerId, m.seed); }
     } else if (m.kind === "SUB" && m.outPlayerId) {
-      detail = `for ${pName.get(m.outPlayerId) ?? "?"}${m.untilWeek ? ` · thru W${m.untilWeek}` : ""}`;
+      detail = `for ${pName.get(m.outPlayerId) ?? "?"}${m.seed != null ? ` at seed #${m.seed}` : ""}${m.untilWeek ? ` · thru W${m.untilWeek}` : ""}`;
     } else if (m.kind === "ADDED" && m.replacesPlayerId) {
-      detail = `for ${pName.get(m.replacesPlayerId) ?? "?"}`;
+      detail = `for ${pName.get(m.replacesPlayerId) ?? "?"}${m.seed != null ? ` at seed #${m.seed}` : ""}`;
+    } else if (m.kind === "ADDED" && m.seed != null) {
+      detail = `seed #${m.seed}`;
     } else if (m.reason && !m.reason.startsWith("roster change") && !m.reason.startsWith("ranking")) {
       detail = m.reason;
     }

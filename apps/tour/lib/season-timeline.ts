@@ -65,28 +65,33 @@ export async function getSeasonTimeline(seasonName: string): Promise<SeasonTimel
     events.push({ week: 0, order: 0, kind: "DRAFT", title: [T("Draft completed")], detail: `${teamSeasons.length} teams set` });
   }
 
+  // Internal ranking-block labels ("roster change (Weeks 4-7)", "ranking ...") are noise in
+  // the feed — the week already conveys when — so don't surface them as a detail.
+  const reasonClean = (r: string | null) => (r && !r.startsWith("roster change") && !r.startsWith("ranking") ? r : undefined);
+
   // Roster exceptions (the move log, minus the bulk DRAFTED rows).
   for (const m of moves) {
     const ts = m.teamSeasonId;
     const tn = teamName.get(m.teamSeasonId) ?? "";
+    const seedTxt = m.seed != null ? [T(` at seed #${m.seed}`)] : [];
     if (m.kind === "SUB") {
       events.push({
         week: m.effectiveWeek,
         order: 0,
         kind: "SUB",
-        title: [PL(m.playerId), T(" subbed in for "), PL(m.outPlayerId)],
-        detail: `${tn}${m.untilWeek ? ` · through W${m.untilWeek}` : ""}${m.reason ? ` — ${m.reason}` : ""}`,
+        title: [PL(m.playerId), T(" subbed in for "), PL(m.outPlayerId), ...seedTxt],
+        detail: `${tn}${m.untilWeek ? ` · through W${m.untilWeek}` : ""}${reasonClean(m.reason) ? ` — ${reasonClean(m.reason)}` : ""}`,
       });
     } else if (m.kind === "QUIT") {
-      events.push({ week: m.effectiveWeek, order: 0, kind: "QUIT", title: [PL(m.playerId), T(" left "), TL(ts)], detail: m.reason ?? undefined });
+      events.push({ week: m.effectiveWeek, order: 0, kind: "QUIT", title: [PL(m.playerId), T(" left "), TL(ts)], detail: reasonClean(m.reason) });
     } else if (m.kind === "BANNED") {
-      events.push({ week: m.effectiveWeek, order: 0, kind: "BANNED", title: [PL(m.playerId), T(" banned")], detail: `${tn}${m.reason ? ` — ${m.reason}` : ""}` });
+      events.push({ week: m.effectiveWeek, order: 0, kind: "BANNED", title: [PL(m.playerId), T(" banned")], detail: `${tn}${reasonClean(m.reason) ? ` — ${reasonClean(m.reason)}` : ""}` });
     } else if (m.kind === "ADDED") {
-      events.push({ week: m.effectiveWeek, order: 0, kind: "ADDED", title: [PL(m.playerId), T(" joined "), TL(ts), ...(m.replacesPlayerId ? [T(", replacing "), PL(m.replacesPlayerId)] : [])], detail: m.reason ?? undefined });
+      events.push({ week: m.effectiveWeek, order: 0, kind: "ADDED", title: [PL(m.playerId), T(" joined "), TL(ts), ...(m.replacesPlayerId ? [T(", for "), PL(m.replacesPlayerId)] : []), ...seedTxt], detail: reasonClean(m.reason) });
     } else if (m.kind === "REINSTATED") {
-      events.push({ week: m.effectiveWeek, order: 0, kind: "REINSTATED", title: [PL(m.playerId), T(" reinstated")], detail: `${tn}${m.reason ? ` — ${m.reason}` : ""}` });
+      events.push({ week: m.effectiveWeek, order: 0, kind: "REINSTATED", title: [PL(m.playerId), T(" reinstated")], detail: `${tn}${reasonClean(m.reason) ? ` — ${reasonClean(m.reason)}` : ""}` });
     } else if (m.kind === "CAPTAIN_CHANGE") {
-      events.push({ week: m.effectiveWeek, order: 0, kind: "CAPTAIN", title: [PL(m.playerId), T(" took over as captain of "), TL(ts), ...(m.replacesPlayerId ? [T(" (from "), PL(m.replacesPlayerId), T(")")] : [])], detail: m.reason ?? undefined });
+      events.push({ week: m.effectiveWeek, order: 0, kind: "CAPTAIN", title: [PL(m.playerId), T(" took over as captain of "), TL(ts), ...(m.replacesPlayerId ? [T(" (from "), PL(m.replacesPlayerId), T(")")] : [])], detail: reasonClean(m.reason) });
     }
   }
 
