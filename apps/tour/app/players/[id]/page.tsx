@@ -166,12 +166,10 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
 
       <SetPctChart data={chartData} />
 
-      {p.h2h.length > 0 && (
+      {(p.h2hSets.length > 0 || p.h2h.length > 0) && (
         <>
-          <h2 className="mt-6 mb-2 text-[1.1rem]">
-            Head-to-head <span className="sub">· {p.h2h.length} opponents</span>
-          </h2>
-          <H2HTable rows={p.h2h} />
+          <h2 className="mt-6 mb-2 text-[1.1rem]">Head-to-head</h2>
+          <H2HTable rows={p.h2h} sets={p.h2hSets} />
         </>
       )}
     </main>

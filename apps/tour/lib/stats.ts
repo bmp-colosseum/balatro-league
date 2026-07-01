@@ -3,6 +3,7 @@
 // teams, PlayoffSeries finals for rings). Data is small — compute in memory.
 import { prisma } from "./db";
 import { expectedByRound } from "./draft-stats";
+import { seedAtWeekResolver } from "./services/roster-ops";
 
 export interface PlayerCareer {
   playerId: string;
@@ -191,11 +192,30 @@ export interface H2HLine {
   gameW: number;
   gameL: number;
 }
+// One row per set actually played — the detailed head-to-head: which season, the
+// opponent's team that season, and both players' effective seeds at that week.
+export interface H2HSetLine {
+  opponentId: string;
+  name: string;
+  seasonName: string;
+  seasonShort: string;
+  seasonNum: number;
+  week: number | null;
+  bracket: "REGULAR" | "PLAYOFF";
+  opponentTeamName: string | null;
+  opponentTeamSeasonId: string | null;
+  selfSeed: number | null;
+  opponentSeed: number | null;
+  gamesFor: number;
+  gamesAgainst: number;
+  won: boolean | null;
+}
 export interface PlayerDetail extends PlayerCareer {
   discordId: string; // "legacy:<slug>" until mapped to a real Discord id
   playoff: { setW: number; setL: number; gameW: number; gameL: number }; // post-season record (regular is the default)
   perSeason: PlayerSeasonLine[];
-  h2h: H2HLine[];
+  h2h: H2HLine[]; // aggregate per opponent (the "ignore team/season" view)
+  h2hSets: H2HSetLine[]; // one row per set — the default detailed view
 }
 
 // Resolve a player by their Discord id — the cross-site join key (used by the
@@ -222,7 +242,7 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
     }),
     prisma.tourSet.findMany({
       where: { OR: [{ playerAId: playerId }, { playerBId: playerId }] },
-      select: { playerAId: true, playerBId: true, matchId: true, seasonId: true, bracket: true },
+      select: { playerAId: true, playerBId: true, matchId: true, seasonId: true, bracket: true, week: true },
     }),
     prisma.match.findMany({ select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true, winnerId: true } }),
     ringHolders(),
@@ -253,31 +273,82 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
     return a;
   };
   const h2hAcc = new Map<string, { setW: number; setL: number; gameW: number; gameL: number }>();
+  // Raw per-set rows for the detailed head-to-head (opponent team + seeds filled in below).
+  const rawDetail: { oppId: string; seasonId: string | null; week: number | null; bracket: "REGULAR" | "PLAYOFF"; gamesFor: number; gamesAgainst: number; won: boolean | null }[] = [];
   for (const ts of sets) {
     const m = ts.matchId ? matchById.get(ts.matchId) : undefined;
     if (!m) continue;
+    const oppId = ts.playerAId === playerId ? ts.playerBId : ts.playerAId;
+    // Games for/against the player, orientation matches applySet.
+    const gA = m.playerAId === ts.playerAId ? m.gamesWonA : m.gamesWonB;
+    const gB = m.playerAId === ts.playerAId ? m.gamesWonB : m.gamesWonA;
+    const isSetA = playerId === ts.playerAId;
+    const gamesFor = isSetA ? gA : gB;
+    const gamesAgainst = isSetA ? gB : gA;
+    const won = m.winnerId === playerId ? true : m.winnerId ? false : null;
+    rawDetail.push({ oppId, seasonId: ts.seasonId, week: ts.week, bracket: ts.bracket === "PLAYOFF" ? "PLAYOFF" : "REGULAR", gamesFor, gamesAgainst, won });
+
     if (ts.bracket === "PLAYOFF") { applySet(playoff, playerId, m, ts.playerAId, ts.seasonId); continue; }
     applySet(career, playerId, m, ts.playerAId, ts.seasonId);
     if (ts.seasonId) applySet(getS(ts.seasonId), playerId, m, ts.playerAId, ts.seasonId);
-    const oppId = ts.playerAId === playerId ? ts.playerBId : ts.playerAId;
     let h = h2hAcc.get(oppId);
     if (!h) {
       h = { setW: 0, setL: 0, gameW: 0, gameL: 0 };
       h2hAcc.set(oppId, h);
     }
-    // Per-opponent game tally, same orientation logic as applySet.
-    const gFor = m.playerAId === ts.playerAId ? m.gamesWonA : m.gamesWonB;
-    const gAgainst = m.playerAId === ts.playerAId ? m.gamesWonB : m.gamesWonA;
-    const isSetA = playerId === ts.playerAId;
-    h.gameW += isSetA ? gFor : gAgainst;
-    h.gameL += isSetA ? gAgainst : gFor;
-    if (m.winnerId === playerId) h.setW++;
-    else if (m.winnerId) h.setL++;
+    h.gameW += gamesFor;
+    h.gameL += gamesAgainst;
+    if (won === true) h.setW++;
+    else if (won === false) h.setL++;
   }
   // Full opponent list; the client table re-sorts. Default: most sets played.
   const h2h: H2HLine[] = [...h2hAcc.entries()]
     .map(([opponentId, r]) => ({ opponentId, name: nameOf.get(opponentId) ?? opponentId, ...r }))
     .sort((a, b) => b.setW + b.setL - (a.setW + a.setL));
+
+  // Detailed head-to-head: resolve each opponent's team that season + both effective seeds.
+  const seasonNumOf = (name: string) => Number(name.match(/(\d+)/)?.[1] ?? 0);
+  const seasonShortOf = (name: string) => name.replace(/^Team Tour\s*/i, "TT").replace(/\s+/g, " ").trim();
+  const detailOppIds = [...new Set(rawDetail.map((d) => d.oppId))];
+  const detailSeasonIds = [...new Set(rawDetail.map((d) => d.seasonId).filter((x): x is string => !!x))];
+  const oppEntries = detailOppIds.length
+    ? await prisma.rosterEntry.findMany({
+        where: { playerId: { in: detailOppIds }, roster: { teamSeason: { seasonId: { in: detailSeasonIds } } } },
+        include: { roster: { include: { teamSeason: { include: { team: true } } } } },
+      })
+    : [];
+  const oppTeamBySeason = new Map<string, { teamSeasonId: string; teamName: string }>();
+  for (const e of oppEntries) {
+    const key = `${e.playerId}|${e.roster.teamSeason.seasonId}`;
+    if (!oppTeamBySeason.has(key)) oppTeamBySeason.set(key, { teamSeasonId: e.roster.teamSeason.id, teamName: e.roster.teamSeason.team.name });
+  }
+  const seedResolver = await seedAtWeekResolver([
+    ...new Set([...teamSeasonForSeason.values(), ...oppEntries.map((e) => e.roster.teamSeason.id)]),
+  ]);
+  const h2hSets: H2HSetLine[] = rawDetail
+    .map((d) => {
+      const sName = d.seasonId ? seasonName.get(d.seasonId) ?? d.seasonId : "—";
+      const selfTs = d.seasonId ? teamSeasonForSeason.get(d.seasonId) ?? null : null;
+      const opp = d.seasonId ? oppTeamBySeason.get(`${d.oppId}|${d.seasonId}`) ?? null : null;
+      const wk = d.week ?? 1; // sets without a recorded week fall back to base seeds (week 1)
+      return {
+        opponentId: d.oppId,
+        name: nameOf.get(d.oppId) ?? d.oppId,
+        seasonName: sName,
+        seasonShort: seasonShortOf(sName),
+        seasonNum: seasonNumOf(sName),
+        week: d.week,
+        bracket: d.bracket,
+        opponentTeamName: opp?.teamName ?? null,
+        opponentTeamSeasonId: opp?.teamSeasonId ?? null,
+        selfSeed: seedResolver(selfTs, wk, playerId),
+        opponentSeed: seedResolver(opp?.teamSeasonId ?? null, wk, d.oppId),
+        gamesFor: d.gamesFor,
+        gamesAgainst: d.gamesAgainst,
+        won: d.won,
+      };
+    })
+    .sort((a, b) => b.seasonNum - a.seasonNum || (b.week ?? 0) - (a.week ?? 0) || a.name.localeCompare(b.name));
 
   const perSeason: PlayerSeasonLine[] = [...bySeason.entries()]
     .map(([sid, a]) => ({
@@ -311,5 +382,6 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
     playoff: { setW: playoff.setW, setL: playoff.setL, gameW: playoff.gameW, gameL: playoff.gameL },
     perSeason,
     h2h,
+    h2hSets,
   };
 }
