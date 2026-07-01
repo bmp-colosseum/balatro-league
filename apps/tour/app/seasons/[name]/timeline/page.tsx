@@ -87,7 +87,9 @@ export default async function SeasonTimelinePage({ params }: { params: Promise<{
                   <li key={i} className="flex items-start gap-2 py-1" style={{ borderTop: i ? "1px solid var(--border)" : undefined }}>
                     <Icon className="mt-0.5 size-4 shrink-0" style={{ color: COLOR[e.kind] }} />
                     <div>
-                      <div>{e.title}</div>
+                      <div>
+                        {e.title.map((part, j) => (part.href ? <Link key={j} href={part.href}>{part.text}</Link> : <span key={j}>{part.text}</span>))}
+                      </div>
                       {e.detail && <div className="sub">{e.detail}</div>}
                     </div>
                   </li>

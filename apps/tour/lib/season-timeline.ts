@@ -16,11 +16,15 @@ export type TimelineKind =
   | "PLAYOFF_RESULT"
   | "CHAMPION";
 
+// A title is a sequence of parts so player/team names can be links (href set) while the
+// connecting prose stays plain text.
+export type TimelinePart = { text: string; href?: string };
+
 export interface TimelineEvent {
   week: number; // 0 = pre-season (draft); regular weeks; then playoffs/champion after the last week
   order: number; // tiebreak within a week (roster moves first, then results)
   kind: TimelineKind;
-  title: string;
+  title: TimelinePart[];
   detail?: string;
 }
 
@@ -48,36 +52,41 @@ export async function getSeasonTimeline(seasonName: string): Promise<SeasonTimel
   const pids = [...new Set(moves.flatMap((m) => [m.playerId, m.outPlayerId, m.replacesPlayerId]).filter((x): x is string => !!x))];
   const players = await prisma.player.findMany({ where: { id: { in: pids } }, select: { id: true, displayName: true } });
   const pName = (id: string | null) => (id ? players.find((p) => p.id === id)?.displayName ?? "?" : "?");
+  // Title-part builders: T = plain text, PL = player link, TL = team link.
+  const T = (text: string): TimelinePart => ({ text });
+  const PL = (id: string | null): TimelinePart => ({ text: pName(id), href: id ? `/players/${id}` : undefined });
+  const TL = (tsId: string | null): TimelinePart => ({ text: tsId ? teamName.get(tsId) ?? "?" : "?", href: tsId ? `/teams/${tsId}` : undefined });
 
   const events: TimelineEvent[] = [];
   const maxWeek = weeks.length ? Math.max(...weeks.map((w) => w.number)) : 0;
 
   // Draft milestone (pre-season).
   if (teamSeasons.length > 0) {
-    events.push({ week: 0, order: 0, kind: "DRAFT", title: "Draft completed", detail: `${teamSeasons.length} teams set` });
+    events.push({ week: 0, order: 0, kind: "DRAFT", title: [T("Draft completed")], detail: `${teamSeasons.length} teams set` });
   }
 
   // Roster exceptions (the move log, minus the bulk DRAFTED rows).
   for (const m of moves) {
+    const ts = m.teamSeasonId;
     const tn = teamName.get(m.teamSeasonId) ?? "";
     if (m.kind === "SUB") {
       events.push({
         week: m.effectiveWeek,
         order: 0,
         kind: "SUB",
-        title: `${pName(m.playerId)} subbed in for ${pName(m.outPlayerId)}`,
+        title: [PL(m.playerId), T(" subbed in for "), PL(m.outPlayerId)],
         detail: `${tn}${m.untilWeek ? ` · through W${m.untilWeek}` : ""}${m.reason ? ` — ${m.reason}` : ""}`,
       });
     } else if (m.kind === "QUIT") {
-      events.push({ week: m.effectiveWeek, order: 0, kind: "QUIT", title: `${pName(m.playerId)} left ${tn}`, detail: m.reason ?? undefined });
+      events.push({ week: m.effectiveWeek, order: 0, kind: "QUIT", title: [PL(m.playerId), T(" left "), TL(ts)], detail: m.reason ?? undefined });
     } else if (m.kind === "BANNED") {
-      events.push({ week: m.effectiveWeek, order: 0, kind: "BANNED", title: `${pName(m.playerId)} banned`, detail: `${tn}${m.reason ? ` — ${m.reason}` : ""}` });
+      events.push({ week: m.effectiveWeek, order: 0, kind: "BANNED", title: [PL(m.playerId), T(" banned")], detail: `${tn}${m.reason ? ` — ${m.reason}` : ""}` });
     } else if (m.kind === "ADDED") {
-      events.push({ week: m.effectiveWeek, order: 0, kind: "ADDED", title: `${pName(m.playerId)} joined ${tn}${m.replacesPlayerId ? `, replacing ${pName(m.replacesPlayerId)}` : ""}`, detail: m.reason ?? undefined });
+      events.push({ week: m.effectiveWeek, order: 0, kind: "ADDED", title: [PL(m.playerId), T(" joined "), TL(ts), ...(m.replacesPlayerId ? [T(", replacing "), PL(m.replacesPlayerId)] : [])], detail: m.reason ?? undefined });
     } else if (m.kind === "REINSTATED") {
-      events.push({ week: m.effectiveWeek, order: 0, kind: "REINSTATED", title: `${pName(m.playerId)} reinstated`, detail: `${tn}${m.reason ? ` — ${m.reason}` : ""}` });
+      events.push({ week: m.effectiveWeek, order: 0, kind: "REINSTATED", title: [PL(m.playerId), T(" reinstated")], detail: `${tn}${m.reason ? ` — ${m.reason}` : ""}` });
     } else if (m.kind === "CAPTAIN_CHANGE") {
-      events.push({ week: m.effectiveWeek, order: 0, kind: "CAPTAIN", title: `${pName(m.playerId)} took over as captain of ${tn}${m.replacesPlayerId ? ` (from ${pName(m.replacesPlayerId)})` : ""}`, detail: m.reason ?? undefined });
+      events.push({ week: m.effectiveWeek, order: 0, kind: "CAPTAIN", title: [PL(m.playerId), T(" took over as captain of "), TL(ts), ...(m.replacesPlayerId ? [T(" (from "), PL(m.replacesPlayerId), T(")")] : [])], detail: m.reason ?? undefined });
     }
   }
 
@@ -85,24 +94,21 @@ export async function getSeasonTimeline(seasonName: string): Promise<SeasonTimel
   for (const w of weeks) {
     for (const mu of w.matchups) {
       if (mu.setsWonA == null || mu.setsWonB == null) continue;
-      const a = teamName.get(mu.teamSeasonAId) ?? "?";
-      const b = teamName.get(mu.teamSeasonBId) ?? "?";
-      let title: string;
-      if (mu.winnerTeamSeasonId === mu.teamSeasonAId) title = `${a} def. ${b} ${mu.setsWonA}–${mu.setsWonB}`;
-      else if (mu.winnerTeamSeasonId === mu.teamSeasonBId) title = `${b} def. ${a} ${mu.setsWonB}–${mu.setsWonA}`;
-      else title = `${a} ${mu.setsWonA}–${mu.setsWonB} ${b} (tie)`;
+      const A = mu.teamSeasonAId, B = mu.teamSeasonBId;
+      let title: TimelinePart[];
+      if (mu.winnerTeamSeasonId === mu.teamSeasonAId) title = [TL(A), T(" def. "), TL(B), T(` ${mu.setsWonA}–${mu.setsWonB}`)];
+      else if (mu.winnerTeamSeasonId === mu.teamSeasonBId) title = [TL(B), T(" def. "), TL(A), T(` ${mu.setsWonB}–${mu.setsWonA}`)];
+      else title = [TL(A), T(` ${mu.setsWonA}–${mu.setsWonB} `), TL(B), T(" (tie)")];
       events.push({ week: w.number, order: 1, kind: "RESULT", title });
     }
   }
 
   // Playoffs.
   if (playoffSeries.length > 0) {
-    events.push({ week: maxWeek + 1, order: 0, kind: "PLAYOFFS", title: "Playoffs began" });
+    events.push({ week: maxWeek + 1, order: 0, kind: "PLAYOFFS", title: [T("Playoffs began")] });
     for (const s of playoffSeries) {
       const winnerId = s.winnerTeamSeasonId ?? (s.scoreA != null && s.scoreB != null ? (s.scoreA >= s.scoreB ? s.teamSeasonAId : s.teamSeasonBId) : null);
       if (!winnerId || s.scoreA == null || s.scoreB == null) continue;
-      const a = teamName.get(s.teamSeasonAId ?? "") ?? "?";
-      const b = teamName.get(s.teamSeasonBId ?? "") ?? "?";
       const aWon = winnerId === s.teamSeasonAId;
       const hi = Math.max(s.scoreA, s.scoreB);
       const lo = Math.min(s.scoreA, s.scoreB);
@@ -110,15 +116,15 @@ export async function getSeasonTimeline(seasonName: string): Promise<SeasonTimel
         week: maxWeek + 1,
         order: 1 + (ROUND_ORDER[s.round] ?? 0),
         kind: "PLAYOFF_RESULT",
-        title: `${ROUND_LABEL[s.round] ?? s.round}: ${aWon ? a : b} def. ${aWon ? b : a} ${hi}–${lo}`,
+        title: [T(`${ROUND_LABEL[s.round] ?? s.round}: `), TL(aWon ? s.teamSeasonAId : s.teamSeasonBId), T(" def. "), TL(aWon ? s.teamSeasonBId : s.teamSeasonAId), T(` ${hi}–${lo}`)],
       });
     }
   }
 
   // Champion.
   if (championship) {
-    const tn = teamSeasons.find((t) => t.teamId === championship.teamId)?.team.name ?? "Champion";
-    events.push({ week: maxWeek + 2, order: 0, kind: "CHAMPION", title: `${tn} crowned champion` });
+    const champTs = teamSeasons.find((t) => t.teamId === championship.teamId);
+    events.push({ week: maxWeek + 2, order: 0, kind: "CHAMPION", title: [TL(champTs?.id ?? null), T(" crowned champion")] });
   }
 
   events.sort((x, y) => x.week - y.week || x.order - y.order);
