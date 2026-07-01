@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { listSeasonNews } from "@/lib/services/news";
 import { rankingPool } from "@/lib/services/rankings";
 import { buildNameLinker, type Segment } from "@/lib/linkify";
+import { renderPostMarkdown } from "@/lib/markdown";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +21,11 @@ export default async function SeasonNews({ params }: { params: Promise<{ name: s
   const season = await prisma.tourSeason.findUnique({ where: { name }, select: { id: true } });
   if (!season) notFound();
   const [posts, pool] = await Promise.all([listSeasonNews(name), rankingPool(name)]);
-  const linker = buildNameLinker([
+  const entities = [
     ...pool.teams.map((t) => ({ name: t.name, href: `/teams/${t.id}` })),
     ...pool.players.map((p) => ({ name: p.name, href: `/players/${p.id}` })),
-  ]);
+  ];
+  const linker = buildNameLinker(entities);
 
   return (
     <main>
@@ -43,7 +45,7 @@ export default async function SeasonNews({ params }: { params: Promise<{ name: s
               <h2 style={{ fontSize: "1.15rem", margin: 0 }}><Linked parts={linker(p.title)} /></h2>
             </div>
             <p className="sub" style={{ marginTop: 2 }}>{fmtDate(p.createdAt)}{p.createdBy ? ` · ${p.createdBy}` : ""}</p>
-            <div style={{ whiteSpace: "pre-wrap", marginTop: 8, lineHeight: 1.5 }}><Linked parts={linker(p.body)} /></div>
+            <div className="post-body" dangerouslySetInnerHTML={{ __html: renderPostMarkdown(p.body, entities) }} />
           </article>
         ))
       )}

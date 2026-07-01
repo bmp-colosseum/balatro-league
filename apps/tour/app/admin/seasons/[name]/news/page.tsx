@@ -31,7 +31,8 @@ export default async function NewsAdmin({ params }: { params: Promise<{ name: st
             <label className="block"><span className="sub">Week (optional)</span><input type="number" name="week" min={1} className={`${inputCls} w-20`} /></label>
             <label className="block flex-1" style={{ minWidth: 240 }}><span className="sub">Title</span><input name="title" placeholder="Week 3 previews — Sock Conference" className={inputCls} /></label>
           </div>
-          <label className="block mb-2"><span className="sub">Body</span><textarea name="body" rows={10} className={inputCls} placeholder="Paste the writeup here…" /></label>
+          <label className="block mb-1"><span className="sub">Body</span><textarea name="body" rows={10} className={inputCls} placeholder="Paste the writeup here (Markdown supported)" /></label>
+          <p className="sub mb-2" style={{ fontSize: "0.8rem" }}>Markdown supported: **bold**, *italic*, ~~strike~~, `code`, &gt; quotes, and - lists. Paste straight from Discord. Team and player names auto-link.</p>
           <SubmitButton pendingText="Posting…">Post</SubmitButton>
         </ActionFlashForm>
       </div>
