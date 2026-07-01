@@ -229,22 +229,35 @@ export interface TeamMove {
 // the append-only move log — DRAFTED (the initial roster) and RESEED (seeds are shown in
 // the weekly view) are excluded. Ordered by week.
 export async function getTeamMoves(teamSeasonId: string): Promise<TeamMove[]> {
+  // Fetch ALL moves (incl. DRAFTED) so re-seeds can show "#from -> #to"; DRAFTED itself is
+  // the initial roster and isn't listed.
   const moves = await prisma.rosterMove.findMany({
-    where: { teamSeasonId, kind: { notIn: ["DRAFTED", "RESEED"] } },
+    where: { teamSeasonId },
     orderBy: [{ effectiveWeek: "asc" }, { createdAt: "asc" }],
   });
   if (!moves.length) return [];
   const pids = [...new Set(moves.flatMap((m) => [m.playerId, m.outPlayerId, m.replacesPlayerId]).filter((x): x is string => !!x))];
   const players = await prisma.player.findMany({ where: { id: { in: pids } }, select: { id: true, displayName: true } });
   const pName = new Map(players.map((p) => [p.id, p.displayName]));
-  const LABEL: Record<string, string> = { ADDED: "Added", QUIT: "Left", BANNED: "Banned", REINSTATED: "Reinstated", SUB: "Sub", CAPTAIN_CHANGE: "Captain" };
-  return moves.map((m) => {
+  const LABEL: Record<string, string> = { ADDED: "Added", QUIT: "Left", BANNED: "Banned", REINSTATED: "Reinstated", SUB: "Sub", CAPTAIN_CHANGE: "Captain", RESEED: "Re-seed" };
+  const seedNow = new Map<string, number>(); // running seed per player, for re-seed from->to
+  const out: TeamMove[] = [];
+  for (const m of moves) {
+    if (m.kind === "DRAFTED") { if (m.seed != null) seedNow.set(m.playerId, m.seed); continue; }
     let detail: string | undefined;
-    if (m.kind === "SUB" && m.outPlayerId) detail = `for ${pName.get(m.outPlayerId) ?? "?"}${m.untilWeek ? ` · thru W${m.untilWeek}` : ""}`;
-    else if (m.kind === "ADDED" && m.replacesPlayerId) detail = `replacing ${pName.get(m.replacesPlayerId) ?? "?"}`;
-    if (m.reason && !detail) detail = m.reason;
-    return { week: m.effectiveWeek, kind: m.kind, label: LABEL[m.kind] ?? m.kind, player: pName.get(m.playerId) ?? "?", playerId: m.playerId, detail };
-  });
+    if (m.kind === "RESEED") {
+      const from = seedNow.get(m.playerId);
+      if (m.seed != null) { detail = from != null ? `#${from} → #${m.seed}` : `→ #${m.seed}`; seedNow.set(m.playerId, m.seed); }
+    } else if (m.kind === "SUB" && m.outPlayerId) {
+      detail = `for ${pName.get(m.outPlayerId) ?? "?"}${m.untilWeek ? ` · thru W${m.untilWeek}` : ""}`;
+    } else if (m.kind === "ADDED" && m.replacesPlayerId) {
+      detail = `for ${pName.get(m.replacesPlayerId) ?? "?"}`;
+    } else if (m.reason && !m.reason.startsWith("roster change") && !m.reason.startsWith("ranking")) {
+      detail = m.reason;
+    }
+    out.push({ week: m.effectiveWeek, kind: m.kind, label: LABEL[m.kind] ?? m.kind, player: pName.get(m.playerId) ?? "?", playerId: m.playerId, detail });
+  }
+  return out;
 }
 
 export interface TeamWeekSet {

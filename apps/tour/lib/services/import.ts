@@ -727,7 +727,7 @@ export async function applySeedRankings(dir = sheetsDir()) {
     const newEntries: { rosterId: string; playerId: string; seed: number; isCaptain: boolean }[] = [];
     const baseUpdates: { tsId: string; playerId: string; seed: number }[] = [];
     const reseedMoves: { seasonId: string; teamSeasonId: string; kind: "RESEED"; playerId: string; seed: number; effectiveWeek: number; reason: string; createdBy: string }[] = [];
-    const addedMoves: { seasonId: string; teamSeasonId: string; kind: "ADDED"; playerId: string; seed: number; effectiveWeek: number; reason: string; createdBy: string }[] = [];
+    const addedMoves: { seasonId: string; teamSeasonId: string; kind: "ADDED"; playerId: string; seed: number; effectiveWeek: number; reason: string; createdBy: string; replacesPlayerId: string | null }[] = [];
     const quitMoves: { seasonId: string; teamSeasonId: string; kind: "QUIT"; playerId: string; effectiveWeek: number; reason: string; createdBy: string }[] = [];
 
     for (let bi = 0; bi < ordered.length; bi++) {
@@ -754,17 +754,32 @@ export async function applySeedRankings(dir = sheetsDir()) {
             if (isMember) baseUpdates.push({ tsId, playerId: pid, seed });
             prevSeed.set(key, seed);
             baseSet++;
-          } else if (prevSeed.get(key) !== seed) {
-            reseedMoves.push({ seasonId: season.id, teamSeasonId: tsId, kind: "RESEED", playerId: pid, seed, effectiveWeek: effWeek, reason: `ranking ${b.label}`, createdBy: "import:rankings" });
+          } else {
+            // A re-seed only for a player who was ALREADY on this team and whose seed moved;
+            // a brand-new player this block is an add (handled below), not a re-seed.
+            const known = prevSeed.get(key);
+            if (known != null && known !== seed) {
+              reseedMoves.push({ seasonId: season.id, teamSeasonId: tsId, kind: "RESEED", playerId: pid, seed, effectiveWeek: effWeek, reason: `ranking ${b.label}`, createdBy: "import:rankings" });
+              reseeds++;
+            }
             prevSeed.set(key, seed);
-            reseeds++;
           }
         }
-        // Add/drop = who appeared/disappeared vs this team's previous block.
+        // Add/drop vs this team's previous block. Pair an incoming player with an outgoing
+        // one (by seed slot) so it reads as a substitution — "X joined, replacing Y" —
+        // instead of two disconnected events. Extra adds/drops (unpaired) stand alone.
         const prev = prevTeamPlayers.get(tsId);
         if (bi > 0 && prev) {
-          for (const pid of cur) if (!prev.has(pid)) addedMoves.push({ seasonId: season.id, teamSeasonId: tsId, kind: "ADDED", playerId: pid, seed: seedOf.get(pid) ?? 99, effectiveWeek: effWeek, reason: `roster change (${period})`, createdBy: "import:rankings" });
-          for (const pid of prev) if (!cur.has(pid)) quitMoves.push({ seasonId: season.id, teamSeasonId: tsId, kind: "QUIT", playerId: pid, effectiveWeek: effWeek, reason: `roster change (${period})`, createdBy: "import:rankings" });
+          const added = [...cur].filter((pid) => !prev.has(pid)).map((pid) => ({ pid, seed: seedOf.get(pid) ?? 99 })).sort((a, b) => a.seed - b.seed);
+          const dropped = [...prev].filter((pid) => !cur.has(pid)).map((pid) => ({ pid, seed: prevSeed.get(`${tsId}|${pid}`) ?? 99 })).sort((a, b) => a.seed - b.seed);
+          for (let k = 0; k < added.length; k++) {
+            const replaced = k < dropped.length ? dropped[k].pid : null;
+            addedMoves.push({ seasonId: season.id, teamSeasonId: tsId, kind: "ADDED", playerId: added[k].pid, seed: added[k].seed, effectiveWeek: effWeek, reason: `roster change (${period})`, createdBy: "import:rankings", replacesPlayerId: replaced });
+          }
+          // Drops with no incoming replacement = a straight departure.
+          for (let k = added.length; k < dropped.length; k++) {
+            quitMoves.push({ seasonId: season.id, teamSeasonId: tsId, kind: "QUIT", playerId: dropped[k].pid, effectiveWeek: effWeek, reason: `roster change (${period})`, createdBy: "import:rankings" });
+          }
         }
         prevTeamPlayers.set(tsId, cur);
       }
