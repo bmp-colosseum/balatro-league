@@ -8,6 +8,7 @@ import { seedAtWeekResolver } from "./services/roster-ops";
 export interface PlayerCareer {
   playerId: string;
   name: string;
+  discordId: string | null;
   seasons: number;
   setW: number;
   setL: number;
@@ -68,7 +69,7 @@ async function ringHolders(): Promise<Map<string, number>> {
 
 export async function getAllTimePlayers(): Promise<PlayerCareer[]> {
   const [players, sets, matches, rings, rosterEntries] = await Promise.all([
-    prisma.player.findMany({ select: { id: true, displayName: true } }),
+    prisma.player.findMany({ select: { id: true, displayName: true, discordId: true } }),
     prisma.tourSet.findMany({ where: { bracket: "REGULAR" }, select: { playerAId: true, playerBId: true, matchId: true, seasonId: true } }),
     prisma.match.findMany({ select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true, winnerId: true } }),
     ringHolders(),
@@ -77,6 +78,7 @@ export async function getAllTimePlayers(): Promise<PlayerCareer[]> {
     prisma.rosterEntry.findMany({ select: { playerId: true, roster: { select: { teamSeason: { select: { seasonId: true } } } } } }),
   ]);
   const nameById = new Map(players.map((p) => [p.id, p.displayName]));
+  const didById = new Map(players.map((p) => [p.id, p.discordId]));
   const matchById = new Map(matches.map((m) => [m.id, m]));
   const acc = new Map<string, Acc>();
   const get = (id: string) => {
@@ -104,6 +106,7 @@ export async function getAllTimePlayers(): Promise<PlayerCareer[]> {
     out.push({
       playerId: id,
       name: nameById.get(id) ?? id,
+      discordId: didById.get(id) ?? null,
       seasons: a.seasons.size,
       setW: a.setW,
       setL: a.setL,
@@ -129,6 +132,7 @@ export interface PlayerSeasonLine {
 export interface SeasonLeader {
   playerId: string;
   name: string;
+  discordId: string | null;
   setW: number;
   setL: number;
   gameW: number;
@@ -174,12 +178,13 @@ export async function getSeasonLeaders(seasonName: string, limit = 10, minSets =
     }
   }
 
-  const players = await prisma.player.findMany({ where: { id: { in: [...acc.keys()] } }, select: { id: true, displayName: true } });
+  const players = await prisma.player.findMany({ where: { id: { in: [...acc.keys()] } }, select: { id: true, displayName: true, discordId: true } });
   const nameById = new Map(players.map((p) => [p.id, p.displayName]));
+  const didById = new Map(players.map((p) => [p.id, p.discordId]));
   const rate = (w: number, l: number) => (w + l ? w / (w + l) : 0);
   return [...acc.entries()]
     .filter(([, a]) => a.setW + a.setL >= minSets)
-    .map(([id, a]) => ({ playerId: id, name: nameById.get(id) ?? id, ...a }))
+    .map(([id, a]) => ({ playerId: id, name: nameById.get(id) ?? id, discordId: didById.get(id) ?? null, ...a }))
     .sort((x, y) => rate(y.setW, y.setL) - rate(x.setW, x.setL) || y.setW - x.setW)
     .slice(0, limit);
 }
@@ -187,6 +192,7 @@ export async function getSeasonLeaders(seasonName: string, limit = 10, minSets =
 export interface H2HLine {
   opponentId: string;
   name: string;
+  discordId: string | null;
   setW: number;
   setL: number;
   gameW: number;
@@ -197,6 +203,7 @@ export interface H2HLine {
 export interface H2HSetLine {
   opponentId: string;
   name: string;
+  discordId: string | null;
   seasonName: string;
   seasonShort: string;
   seasonNum: number;
@@ -246,9 +253,10 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
     }),
     prisma.match.findMany({ select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true, winnerId: true } }),
     ringHolders(),
-    prisma.player.findMany({ select: { id: true, displayName: true } }),
+    prisma.player.findMany({ select: { id: true, displayName: true, discordId: true } }),
   ]);
   const nameOf = new Map(allPlayers.map((p) => [p.id, p.displayName]));
+  const didOf = new Map(allPlayers.map((p) => [p.id, p.discordId]));
   const seasonName = new Map(seasons.map((s) => [s.id, s.name]));
   const matchById = new Map(matches.map((m) => [m.id, m]));
   const teamForSeason = new Map<string, string>();
@@ -303,7 +311,7 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
   }
   // Full opponent list; the client table re-sorts. Default: most sets played.
   const h2h: H2HLine[] = [...h2hAcc.entries()]
-    .map(([opponentId, r]) => ({ opponentId, name: nameOf.get(opponentId) ?? opponentId, ...r }))
+    .map(([opponentId, r]) => ({ opponentId, name: nameOf.get(opponentId) ?? opponentId, discordId: didOf.get(opponentId) ?? null, ...r }))
     .sort((a, b) => b.setW + b.setL - (a.setW + a.setL));
 
   // Detailed head-to-head: resolve each opponent's team that season + both effective seeds.
@@ -334,6 +342,7 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
       return {
         opponentId: d.oppId,
         name: nameOf.get(d.oppId) ?? d.oppId,
+        discordId: didOf.get(d.oppId) ?? null,
         seasonName: sName,
         seasonShort: seasonShortOf(sName),
         seasonNum: seasonNumOf(sName),

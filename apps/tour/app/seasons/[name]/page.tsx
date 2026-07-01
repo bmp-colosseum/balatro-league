@@ -6,6 +6,8 @@ import { getChampionRun } from "@/lib/playoffs";
 import { getPlayoffPicture } from "@/lib/playoff-picture";
 import { getSeasonLeaders } from "@/lib/stats";
 import { getSeasonAwards } from "@/lib/awards";
+import { canSeeDiscordIds } from "@/lib/discord-id";
+import { DiscordIdTag } from "@/components/DiscordIdTag";
 
 export const dynamic = "force-dynamic";
 
@@ -14,12 +16,13 @@ const pctOf = (w: number, l: number) => (w + l ? `${((100 * w) / (w + l)).toFixe
 export default async function SeasonPage({ params }: { params: Promise<{ name: string }> }) {
   const { name } = await params;
   const seasonName = decodeURIComponent(name);
-  const [data, run, picture, leaders, awards] = await Promise.all([
+  const [data, run, picture, leaders, awards, showIds] = await Promise.all([
     getSeasonStandings(seasonName),
     getChampionRun(seasonName),
     getPlayoffPicture(seasonName),
     getSeasonLeaders(seasonName),
     getSeasonAwards(seasonName),
+    canSeeDiscordIds(),
   ]);
   const mvp = awards.find((a) => a.kind === "MVP");
 
@@ -146,6 +149,7 @@ export default async function SeasonPage({ params }: { params: Promise<{ name: s
                     <td className="rank">{i + 1}</td>
                     <td>
                       <Link href={`/players/${p.playerId}`}>{p.name}</Link>
+                      <DiscordIdTag discordId={p.discordId} show={showIds} />
                     </td>
                     <td className="num">
                       {p.setW}–{p.setL}

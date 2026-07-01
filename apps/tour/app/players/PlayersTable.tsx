@@ -4,6 +4,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Trophy } from "lucide-react";
 import type { PlayerCareer } from "@/lib/stats";
+import { DiscordIdTag } from "@/components/DiscordIdTag";
 
 const pctStr = (w: number, l: number) => (w + l ? `${((100 * w) / (w + l)).toFixed(1)}%` : "—");
 const rate = (w: number, l: number) => (w + l ? w / (w + l) : 0);
@@ -22,7 +23,7 @@ const valueOf = (p: PlayerCareer, k: Key): number | string => {
   }
 };
 
-export function PlayersTable({ players }: { players: PlayerCareer[] }) {
+export function PlayersTable({ players, showIds = false }: { players: PlayerCareer[]; showIds?: boolean }) {
   const [q, setQ] = useState("");
   const [sortKey, setSortKey] = useState<Key>("setPct");
   const [asc, setAsc] = useState(false);
@@ -78,6 +79,7 @@ export function PlayersTable({ players }: { players: PlayerCareer[] }) {
                 <td className="rank">{i + 1}</td>
                 <td>
                   <Link href={`/players/${p.playerId}`}>{p.name}</Link>
+                  <DiscordIdTag discordId={p.discordId} show={showIds} />
                 </td>
                 <td className="num">{p.seasons}</td>
                 <td className="num">{p.rings || ""}</td>

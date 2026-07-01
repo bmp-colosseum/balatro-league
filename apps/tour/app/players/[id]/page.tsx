@@ -7,7 +7,7 @@ import { getPlayerDrafts } from "@/lib/draft-history";
 import { getPlayerAwards } from "@/lib/awards";
 import { SetPctChart, type SetPctPoint } from "@/components/SetPctChart";
 import { H2HTable } from "@/components/H2HTable";
-import { DiscordIdTag } from "@/components/PlayerName";
+import { DiscordIdTag } from "@/components/DiscordIdTag";
 import { canSeeDiscordIds } from "@/lib/discord-id";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +43,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
     );
   }
 
+  const showIds = await canSeeDiscordIds();
   const chartData: SetPctPoint[] = [...p.perSeason]
     .sort((a, b) => seasonNum(a.seasonName) - seasonNum(b.seasonName))
     .map((s) => ({
@@ -59,7 +60,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
       </p>
       <h1 className="flex items-center gap-2">
         {p.name}
-        <DiscordIdTag discordId={p.discordId} show={await canSeeDiscordIds()} />
+        <DiscordIdTag discordId={p.discordId} show={showIds} />
         {p.rings > 0 && (
           <span className="inline-flex items-center gap-0.5 text-[var(--accent)]" title={`${p.rings}× champion`}>
             {Array.from({ length: p.rings }).map((_, i) => (
@@ -172,7 +173,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
       {(p.h2hSets.length > 0 || p.h2h.length > 0) && (
         <>
           <h2 className="mt-6 mb-2 text-[1.1rem]">Head-to-head</h2>
-          <H2HTable rows={p.h2h} sets={p.h2hSets} />
+          <H2HTable rows={p.h2h} sets={p.h2hSets} showIds={showIds} />
         </>
       )}
     </main>

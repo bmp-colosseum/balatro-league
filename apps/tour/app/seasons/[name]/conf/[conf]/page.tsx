@@ -3,6 +3,8 @@ import { ArrowLeft } from "lucide-react";
 import { StandingsTable } from "@/components/StandingsTable";
 import { getSeasonStandings } from "@/lib/standings";
 import { getSeasonLeaders } from "@/lib/stats";
+import { canSeeDiscordIds } from "@/lib/discord-id";
+import { DiscordIdTag } from "@/components/DiscordIdTag";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -30,9 +32,10 @@ export default async function ConferencePage({ params }: { params: Promise<{ nam
 
   // Leaders scoped to this conference (players on its teams).
   const teamSeasonIds = group.rows.map((r) => r.teamSeasonId);
-  const [entries, leaders] = await Promise.all([
+  const [entries, leaders, showIds] = await Promise.all([
     prisma.rosterEntry.findMany({ where: { roster: { teamSeasonId: { in: teamSeasonIds } } }, select: { playerId: true } }),
     getSeasonLeaders(seasonName),
+    canSeeDiscordIds(),
   ]);
   const confPlayers = new Set(entries.map((e) => e.playerId));
   const confLeaders = leaders.filter((p) => confPlayers.has(p.playerId)).slice(0, 15);
@@ -59,7 +62,7 @@ export default async function ConferencePage({ params }: { params: Promise<{ nam
                 {confLeaders.map((p, i) => (
                   <tr key={p.playerId}>
                     <td className="rank">{i + 1}</td>
-                    <td><Link href={`/players/${p.playerId}`}>{p.name}</Link></td>
+                    <td><Link href={`/players/${p.playerId}`}>{p.name}</Link><DiscordIdTag discordId={p.discordId} show={showIds} /></td>
                     <td className="num">{p.setW}–{p.setL}</td>
                     <td className="num">{pct(p.setW, p.setL)}</td>
                     <td className="num">{p.gameW}–{p.gameL}</td>

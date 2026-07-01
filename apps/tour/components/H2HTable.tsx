@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { H2HLine, H2HSetLine } from "@/lib/stats";
+import { DiscordIdTag } from "@/components/DiscordIdTag";
 
 const pctStr = (w: number, l: number) => (w + l ? `${((100 * w) / (w + l)).toFixed(1)}%` : "—");
 const rate = (w: number, l: number) => (w + l ? w / (w + l) : 0);
@@ -19,7 +20,7 @@ const aggValue = (h: H2HLine, k: AggKey): number | string => {
   }
 };
 
-function AggregateTable({ rows, q }: { rows: H2HLine[]; q: string }) {
+function AggregateTable({ rows, q, showIds }: { rows: H2HLine[]; q: string; showIds: boolean }) {
   const [sortKey, setSortKey] = useState<AggKey>("sets");
   const [asc, setAsc] = useState(false);
   const sorted = useMemo(() => {
@@ -45,7 +46,7 @@ function AggregateTable({ rows, q }: { rows: H2HLine[]; q: string }) {
         <tbody>
           {sorted.map((h) => (
             <tr key={h.opponentId}>
-              <td><Link href={`/players/${h.opponentId}`}>{h.name}</Link></td>
+              <td><Link href={`/players/${h.opponentId}`}>{h.name}</Link><DiscordIdTag discordId={h.discordId} show={showIds} /></td>
               <td className="num">{h.setW}–{h.setL}</td>
               <td className="num">{pctStr(h.setW, h.setL)}</td>
               <td className="num">{h.gameW}–{h.gameL}</td>
@@ -62,7 +63,7 @@ function AggregateTable({ rows, q }: { rows: H2HLine[]; q: string }) {
 // ── Detailed view (one row per set: season · opponent team · seeds) ─────────
 const Seed = ({ n }: { n: number | null }) => (n == null ? <span className="muted">—</span> : <span className="num muted">{n}</span>);
 
-function DetailTable({ sets, q }: { sets: H2HSetLine[]; q: string }) {
+function DetailTable({ sets, q, showIds }: { sets: H2HSetLine[]; q: string; showIds: boolean }) {
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return needle ? sets.filter((s) => s.name.toLowerCase().includes(needle) || (s.opponentTeamName ?? "").toLowerCase().includes(needle) || s.seasonName.toLowerCase().includes(needle)) : sets;
@@ -88,7 +89,7 @@ function DetailTable({ sets, q }: { sets: H2HSetLine[]; q: string }) {
                 {s.bracket === "PLAYOFF" && <span className="badge" style={{ marginLeft: 4 }}>PO</span>}
               </td>
               <td className="num"><Seed n={s.selfSeed} /></td>
-              <td><Link href={`/players/${s.opponentId}`}>{s.name}</Link></td>
+              <td><Link href={`/players/${s.opponentId}`}>{s.name}</Link><DiscordIdTag discordId={s.discordId} show={showIds} /></td>
               <td className="num" style={{ color: s.won ? "var(--success)" : s.won === false ? "var(--accent-2)" : undefined, fontWeight: 600 }}>{s.gamesFor}–{s.gamesAgainst}</td>
               <td>{s.opponentTeamSeasonId ? <Link href={`/teams/${s.opponentTeamSeasonId}`}>{s.opponentTeamName}</Link> : <span className="muted">{s.opponentTeamName ?? "—"}</span>}</td>
               <td className="num"><Seed n={s.opponentSeed} /></td>
@@ -101,7 +102,7 @@ function DetailTable({ sets, q }: { sets: H2HSetLine[]; q: string }) {
   );
 }
 
-export function H2HTable({ rows, sets }: { rows: H2HLine[]; sets: H2HSetLine[] }) {
+export function H2HTable({ rows, sets, showIds = false }: { rows: H2HLine[]; sets: H2HSetLine[]; showIds?: boolean }) {
   const [mode, setMode] = useState<"detail" | "aggregate">("detail");
   const [q, setQ] = useState("");
   const hasDetail = sets.length > 0;
@@ -130,7 +131,7 @@ export function H2HTable({ rows, sets }: { rows: H2HLine[]; sets: H2HSetLine[] }
           <input className="search" type="search" placeholder={showMode === "detail" ? "Filter by opponent / team / season…" : "Filter opponents…"} value={q} onChange={(e) => setQ(e.target.value)} style={{ marginLeft: "auto" }} />
         )}
       </div>
-      {showMode === "detail" ? <DetailTable sets={sets} q={q} /> : <AggregateTable rows={rows} q={q} />}
+      {showMode === "detail" ? <DetailTable sets={sets} q={q} showIds={showIds} /> : <AggregateTable rows={rows} q={q} showIds={showIds} />}
     </>
   );
 }

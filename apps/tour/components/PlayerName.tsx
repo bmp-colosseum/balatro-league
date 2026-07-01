@@ -1,14 +1,9 @@
-// Shared player-name renderer: the linked (global) display name, optionally followed by the
-// raw Discord id in parens for admins (gated by lib/discord-id). Use <PlayerName> in server
-// components (it resolves the gate itself); in client components pass a precomputed `showIds`
-// flag + the row's discordId and use <DiscordIdTag>.
+// Shared player-name renderer (server component): the linked (global) display name, followed
+// by the raw Discord id in parens for admins (gate resolved via lib/discord-id). In client
+// components, pass a precomputed `showIds` flag + the row's discordId and use <DiscordIdTag>.
 import Link from "next/link";
-import { canSeeDiscordIds, isRealDiscordId } from "@/lib/discord-id";
-
-export function DiscordIdTag({ discordId, show }: { discordId?: string | null; show: boolean }) {
-  if (!show || !isRealDiscordId(discordId)) return null;
-  return <span className="discord-username"> ({discordId})</span>;
-}
+import { canSeeDiscordIds } from "@/lib/discord-id";
+import { DiscordIdTag } from "@/components/DiscordIdTag";
 
 export async function PlayerName({
   id,

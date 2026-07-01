@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getAllTimePlayers } from "@/lib/stats";
+import { canSeeDiscordIds } from "@/lib/discord-id";
 import { PlayersTable } from "./PlayersTable";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +10,7 @@ const rate = (w: number, l: number) => (w + l ? w / (w + l) : 0);
 const MIN_SETS = 10;
 
 export default async function Players() {
-  const all = await getAllTimePlayers();
+  const [all, showIds] = await Promise.all([getAllTimePlayers(), canSeeDiscordIds()]);
   const ranked = all
     .filter((p) => p.setW + p.setL >= MIN_SETS)
     .sort((a, b) => rate(b.setW, b.setL) - rate(a.setW, a.setL) || b.setW - a.setW);
@@ -23,7 +24,7 @@ export default async function Players() {
       <p className="sub">
         By set win % · min {MIN_SETS} sets · {ranked.length} of {all.length} players.
       </p>
-      <PlayersTable players={ranked} />
+      <PlayersTable players={ranked} showIds={showIds} />
     </main>
   );
 }
