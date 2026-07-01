@@ -522,31 +522,33 @@ export async function importPlayoffsFromXlsx(dir = sheetsDir()) {
       losers.add(nrm(aWon ? s.teamB : s.teamA));
     }
     const champion = [...winners].find((w) => !losers.has(w));
-    if (!champion) continue;
 
+    // Store the ENTIRE bracket (every team series), not just the champion's path. Round =
+    // the parsed label; an unlabeled series is the final. getChampionRun still derives the
+    // champion's run from these; getPublicBracket renders the whole thing.
     await prisma.playoffSeries.deleteMany({ where: { seasonId: season.id } });
-    const champPath = series
-      .filter((s) => nrm(s.teamA) === champion || nrm(s.teamB) === champion)
-      .map((s) => ({ ...s, round: (s.round ?? "FINAL") as string })) // champion's unlabeled series = the final
+    const withRound = series
+      .map((s) => ({ ...s, round: (s.round ?? "FINAL") as string }))
       .sort((a, b) => (roundRank[a.round] ?? 9) - (roundRank[b.round] ?? 9));
-    let idx = 0;
-    for (const s of champPath) {
-      const champIsA = nrm(s.teamA) === champion;
-      await prisma.playoffSeries.create({
-        data: {
-          seasonId: season.id,
-          round: s.round as never,
-          bracketIndex: idx++,
-          teamSeasonAId: matchTs(champIsA ? s.teamA : s.teamB),
-          teamSeasonBId: matchTs(champIsA ? s.teamB : s.teamA),
-          scoreA: champIsA ? s.scoreA : s.scoreB,
-          scoreB: champIsA ? s.scoreB : s.scoreA,
-          winnerTeamSeasonId: matchTs(champIsA ? s.teamA : s.teamB),
-        },
-      });
-      created++;
-    }
-    champions++;
+    const idxByRound: Record<string, number> = {};
+    const rows = withRound.map((s) => {
+      const tsA = matchTs(s.teamA), tsB = matchTs(s.teamB);
+      const aWon = s.scoreA >= s.scoreB;
+      idxByRound[s.round] = idxByRound[s.round] ?? 0;
+      return {
+        seasonId: season.id,
+        round: s.round as never,
+        bracketIndex: idxByRound[s.round]++,
+        teamSeasonAId: tsA,
+        teamSeasonBId: tsB,
+        scoreA: s.scoreA,
+        scoreB: s.scoreB,
+        winnerTeamSeasonId: aWon ? tsA : tsB,
+      };
+    });
+    if (rows.length) await prisma.playoffSeries.createMany({ data: rows });
+    created += rows.length;
+    if (champion) champions++;
   }
   return { series: created, champions };
 }
