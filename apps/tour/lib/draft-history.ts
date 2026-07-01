@@ -9,7 +9,8 @@ export interface DraftTeam {
   seed: number;
   captainName: string;
   captainId: string;
-  picks: { round: number; playerId: string; name: string }[];
+  captainDiscordId: string | null;
+  picks: { round: number; playerId: string; name: string; discordId: string | null }[];
 }
 
 export async function getSeasonDraft(seasonName: string) {
@@ -34,8 +35,9 @@ export async function getSeasonDraft(seasonName: string) {
       ...teamSeasons.map((t) => t.captainPlayerId),
     ]),
   ];
-  const players = await prisma.player.findMany({ where: { id: { in: playerIds } }, select: { id: true, displayName: true } });
+  const players = await prisma.player.findMany({ where: { id: { in: playerIds } }, select: { id: true, displayName: true, discordId: true } });
   const nameOf = new Map(players.map((p) => [p.id, p.displayName]));
+  const didOf = new Map(players.map((p) => [p.id, p.discordId]));
 
   const teams: DraftTeam[] = teamSeasons.map((ts) => ({
     teamSeasonId: ts.id,
@@ -44,10 +46,11 @@ export async function getSeasonDraft(seasonName: string) {
     seed: ts.seed,
     captainName: nameOf.get(ts.captainPlayerId) ?? ts.captainPlayerId,
     captainId: ts.captainPlayerId,
+    captainDiscordId: didOf.get(ts.captainPlayerId) ?? null,
     picks: picks
       .filter((p) => p.teamSeasonId === ts.id && p.playerId)
       .sort((a, b) => a.round - b.round)
-      .map((p) => ({ round: p.round, playerId: p.playerId!, name: nameOf.get(p.playerId!) ?? p.playerId! })),
+      .map((p) => ({ round: p.round, playerId: p.playerId!, name: nameOf.get(p.playerId!) ?? p.playerId!, discordId: didOf.get(p.playerId!) ?? null })),
   }));
 
   const conferences = [...new Set(teams.map((t) => t.conference))];

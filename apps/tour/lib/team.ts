@@ -46,6 +46,7 @@ export async function getTeamPlacements(): Promise<Map<string, TeamPlacement>> {
 export interface TeamPlayerLine {
   playerId: string;
   name: string;
+  discordId: string | null;
   seed: number; // effective seed at the end of the regular season (reflects re-seeds)
   draftSeed: number; // base draft seed
   reseeded: boolean; // true when the effective seed differs from the draft seed
@@ -160,13 +161,14 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
   const playerIds = [...entryByPlayer.keys()];
 
   const [players, sets] = await Promise.all([
-    prisma.player.findMany({ where: { id: { in: playerIds } }, select: { id: true, displayName: true } }),
+    prisma.player.findMany({ where: { id: { in: playerIds } }, select: { id: true, displayName: true, discordId: true } }),
     prisma.tourSet.findMany({
       where: { seasonId: ts.seasonId, bracket: "REGULAR", OR: [{ playerAId: { in: playerIds } }, { playerBId: { in: playerIds } }] },
       select: { playerAId: true, playerBId: true, matchId: true, week: true },
     }),
   ]);
   const nameById = new Map(players.map((p) => [p.id, p.displayName]));
+  const didById = new Map(players.map((p) => [p.id, p.discordId]));
   const matches = await prisma.match.findMany({
     where: { id: { in: sets.map((s) => s.matchId).filter((x): x is string => !!x) } },
     select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true, winnerId: true },
@@ -224,7 +226,7 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
       const eff = seedAt(id, lastWeek, pid) ?? e.seed;
       const chain = (chainOf.get(pid) ?? [e.seed]).slice();
       if (chain[chain.length - 1] !== eff) chain.push(eff);
-      return { playerId: pid, name: nameById.get(pid) ?? pid, seed: eff, draftSeed: e.seed, reseeded: eff !== e.seed, seedChain: chain, isCaptain: e.isCaptain, ...a };
+      return { playerId: pid, name: nameById.get(pid) ?? pid, discordId: didById.get(pid) ?? null, seed: eff, draftSeed: e.seed, reseeded: eff !== e.seed, seedChain: chain, isCaptain: e.isCaptain, ...a };
     })
     .sort((x, y) => x.seed - y.seed);
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getTeamSeason, getTeamPlacement, getTeamWeeks, getTeamMoves } from "@/lib/team";
+import { PlayerName } from "@/components/PlayerName";
 
 export const dynamic = "force-dynamic";
 
@@ -101,7 +102,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
                   )}
                 </td>
                 <td>
-                  <Link href={`/players/${p.playerId}`}>{p.name}</Link>
+                  <PlayerName id={p.playerId} name={p.name} discordId={p.discordId} />
                   {p.isCaptain && <span className="sub"> (C)</span>}
                 </td>
                 <td className="num">

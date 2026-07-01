@@ -7,6 +7,8 @@ import { getPlayerDrafts } from "@/lib/draft-history";
 import { getPlayerAwards } from "@/lib/awards";
 import { SetPctChart, type SetPctPoint } from "@/components/SetPctChart";
 import { H2HTable } from "@/components/H2HTable";
+import { DiscordIdTag } from "@/components/PlayerName";
+import { canSeeDiscordIds } from "@/lib/discord-id";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +59,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
       </p>
       <h1 className="flex items-center gap-2">
         {p.name}
+        <DiscordIdTag discordId={p.discordId} show={await canSeeDiscordIds()} />
         {p.rings > 0 && (
           <span className="inline-flex items-center gap-0.5 text-[var(--accent)]" title={`${p.rings}× champion`}>
             {Array.from({ length: p.rings }).map((_, i) => (

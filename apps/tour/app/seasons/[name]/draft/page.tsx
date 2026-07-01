@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, Crown } from "lucide-react";
 import { getSeasonDraft } from "@/lib/draft-history";
+import { PlayerName } from "@/components/PlayerName";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,7 @@ export default async function SeasonDraft({ params }: { params: Promise<{ name: 
                   <div className="sub" style={{ fontWeight: 400 }}>{t.conference}</div>
                 </td>
                 <td style={{ ...td, background: "rgba(241, 196, 15, 0.06)" }}>
-                  <Link href={`/players/${t.captainId}`} className="font-semibold">{t.captainName}</Link>
+                  <PlayerName id={t.captainId} name={t.captainName} discordId={t.captainDiscordId} className="font-semibold" />
                 </td>
                 {rounds.map((r) => {
                   const pick = t.picks.find((p) => p.round === r);
@@ -69,7 +70,7 @@ export default async function SeasonDraft({ params }: { params: Promise<{ name: 
                       {pick ? (
                         <span className="inline-flex items-baseline">
                           <span style={pickNo}>{overall(ti, r)}</span>
-                          <Link href={`/players/${pick.playerId}`}>{pick.name}</Link>
+                          <PlayerName id={pick.playerId} name={pick.name} discordId={pick.discordId} />
                         </span>
                       ) : (
                         <span className="muted">—</span>
