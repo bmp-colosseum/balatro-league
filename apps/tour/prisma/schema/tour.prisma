@@ -470,3 +470,20 @@ model RoleBinding {
 
   @@index([tier])
 }
+
+// ── Team Tour News Network ──────────────────────────────────────────────────
+// Editorial posts (previews / recaps / power rankings) tied to a season and,
+// optionally, a specific week. Body is free text (pasted from Discord), rendered
+// with its line breaks preserved. seasonId is a plain id (like captainPlayerId).
+model NewsPost {
+  id        String   @id @default(cuid())
+  seasonId  String
+  week      Int? // optional — a week-specific preview/recap
+  title     String
+  body      String // free text; line breaks preserved on render
+  createdBy String? // author (discord id / name)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([seasonId])
+}

@@ -48,6 +48,7 @@ export default async function SeasonPage({ params }: { params: Promise<{ name: s
           { href: `/seasons/${encodeURIComponent(seasonName)}/timeline`, label: "Timeline" },
           { href: `/seasons/${encodeURIComponent(seasonName)}/bracket`, label: "Playoff bracket" },
           { href: `/stats/draft-heatmap?season=${encodeURIComponent(seasonName)}`, label: "Draft heatmap" },
+          { href: `/seasons/${encodeURIComponent(seasonName)}/news`, label: "News" },
         ].map((t) => (
           <Link key={t.href} href={t.href} className="pill hover:no-underline" style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text)" }}>
             {t.label}
