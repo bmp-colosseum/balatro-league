@@ -34,40 +34,53 @@ export default async function BracketPage({ params }: { params: Promise<{ name: 
             <span className="muted">Champion:</span> <strong>{bracket.championTeamSeasonId ? <Link href={`/teams/${bracket.championTeamSeasonId}`}>{bracket.champion}</Link> : bracket.champion}</strong>
           </p>
         )}
+        <p className="sub">Click a series to see the player-by-player sets.</p>
         <div className="card" style={{ overflowX: "auto" }}>
           <div className="bracket">
             {bracket.rounds.map((r) => (
               <div className="bracket-round" key={r.round}>
                 <div className="bracket-label">{r.label}</div>
-                {r.series.map((s, i) => (
-                  <details className="bracket-match" key={i} style={{ cursor: s.sets.length ? "pointer" : "default" }}>
-                    <summary style={{ listStyle: "none" }}>
-                      <div className={`bracket-team${s.winner === "A" ? " win" : ""}`}>
-                        <span>{s.aSeed ? `#${s.aSeed} ` : ""}{s.aTeamSeasonId ? <Link href={`/teams/${s.aTeamSeasonId}`}>{s.aName}</Link> : s.aName}</span>
-                        <span className="score">{s.scoreA ?? "—"}</span>
-                      </div>
-                      <div className={`bracket-team${s.winner === "B" ? " win" : ""}`}>
-                        <span>{s.bSeed ? `#${s.bSeed} ` : ""}{s.bTeamSeasonId ? <Link href={`/teams/${s.bTeamSeasonId}`}>{s.bName}</Link> : s.bName}</span>
-                        <span className="score">{s.scoreB ?? "—"}</span>
-                      </div>
-                    </summary>
-                    {s.sets.length > 0 && (
-                      <table style={{ margin: "0.25rem 0 0.5rem", fontSize: "0.85em" }}>
-                        <tbody>
-                          {s.sets.map((st, j) => (
-                            <tr key={j}>
-                              <td style={{ color: st.winner === "A" ? "var(--success)" : undefined }}><Link href={`/players/${st.playerAId}`}>{st.playerA}</Link></td>
-                              <td className="num" style={{ width: 44, textAlign: "center" }}>{st.scoreA}–{st.scoreB}</td>
-                              <td style={{ textAlign: "right", color: st.winner === "B" ? "var(--success)" : undefined }}><Link href={`/players/${st.playerBId}`}>{st.playerB}</Link></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </details>
-                ))}
+                <div className="bracket-matches">
+                  {r.series.map((s, i) => (
+                    <details className="bracket-match" key={i} style={{ cursor: s.sets.length ? "pointer" : "default" }}>
+                      <summary style={{ listStyle: "none" }}>
+                        <div className={`bracket-team${s.winner === "A" ? " win" : ""}`}>
+                          <span>{s.aSeed ? `#${s.aSeed} ` : ""}{s.aTeamSeasonId ? <Link href={`/teams/${s.aTeamSeasonId}`}>{s.aName}</Link> : s.aName}</span>
+                          <span className="score">{s.scoreA ?? "—"}</span>
+                        </div>
+                        <div className={`bracket-team${s.winner === "B" ? " win" : ""}`}>
+                          <span>{s.bSeed ? `#${s.bSeed} ` : ""}{s.bTeamSeasonId ? <Link href={`/teams/${s.bTeamSeasonId}`}>{s.bName}</Link> : s.bName}</span>
+                          <span className="score">{s.scoreB ?? "—"}</span>
+                        </div>
+                      </summary>
+                      {s.sets.length > 0 && (
+                        <table style={{ margin: "0.25rem 0.5rem 0.5rem", fontSize: "0.85em" }}>
+                          <tbody>
+                            {s.sets.map((st, j) => (
+                              <tr key={j}>
+                                <td style={{ color: st.winner === "A" ? "var(--success)" : undefined }}><Link href={`/players/${st.playerAId}`}>{st.playerA}</Link></td>
+                                <td className="num" style={{ width: 44, textAlign: "center" }}>{st.scoreA}–{st.scoreB}</td>
+                                <td style={{ textAlign: "right", color: st.winner === "B" ? "var(--success)" : undefined }}><Link href={`/players/${st.playerBId}`}>{st.playerB}</Link></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </details>
+                  ))}
+                </div>
               </div>
             ))}
+            {bracket.championTeamSeasonId && (
+              <div className="bracket-round">
+                <div className="bracket-label">Champion</div>
+                <div className="bracket-matches">
+                  <div className="bracket-champion flex items-center justify-center gap-1.5">
+                    <Trophy className="size-4" /> <Link href={`/teams/${bracket.championTeamSeasonId}`}>{bracket.champion}</Link>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </main>

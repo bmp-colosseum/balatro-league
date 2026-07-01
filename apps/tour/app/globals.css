@@ -255,9 +255,14 @@ th.sortable:hover { color: var(--accent); }
 
 /* championship-run bracket */
 .bracket-title { font-weight: 700; color: var(--accent); padding: 6px 2px 12px; }
-.bracket { display: flex; gap: 16px; align-items: center; overflow-x: auto; padding-bottom: 8px; }
-.bracket-round { display: flex; flex-direction: column; gap: 6px; min-width: 190px; }
+.bracket { display: flex; gap: 16px; align-items: stretch; overflow-x: auto; padding-bottom: 8px; }
+.bracket-round { display: flex; flex-direction: column; gap: 6px; min-width: 210px; }
+/* Distribute a round's matches so each pair vertically centers on the next round's single
+   match — the classic bracket tree (when matches are collapsed). */
+.bracket-matches { display: flex; flex-direction: column; justify-content: space-around; gap: 6px; flex: 1; }
 .bracket-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.bracket-match > summary::-webkit-details-marker { display: none; }
+.bracket-match[open] { border-color: var(--accent-2); }
 .bracket-match { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 .bracket-team { display: flex; justify-content: space-between; gap: 8px; padding: 7px 10px; font-size: 13px; }
 .bracket-team + .bracket-team { border-top: 1px solid var(--border); }
