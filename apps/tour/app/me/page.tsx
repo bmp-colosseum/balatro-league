@@ -106,7 +106,7 @@ export default async function MyTour() {
                 {captainMatchups.map((mu) => (
                   <tr key={mu.matchupId}>
                     <td className="num">W{mu.week}</td>
-                    <td>vs {mu.opponent}</td>
+                    <td>vs <Link href={`/teams/${mu.oppTeamSeasonId}`}>{mu.opponent}</Link></td>
                     <td className="sub">{mu.status}</td>
                     <td style={{ textAlign: "right" }}>
                       {mu.decided ? <span className="sub">done</span> : <Link href={`/matchups/${mu.matchupId}`}>Pair →</Link>}
@@ -132,7 +132,7 @@ export default async function MyTour() {
                   {home.sets.map((s) => (
                     <tr key={s.setId}>
                       <td className="num">W{s.week}</td>
-                      <td style={{ fontWeight: s.result === "won" ? 700 : undefined }}>vs {s.opponentName}</td>
+                      <td style={{ fontWeight: s.result === "won" ? 700 : undefined }}>vs <Link href={`/players/${s.opponentId}`}>{s.opponentName}</Link></td>
                       <td>
                         {s.status === "CONFIRMED" ? (
                           <span>
@@ -157,7 +157,7 @@ export default async function MyTour() {
                             </ActionFlashForm>
                           </div>
                         ) : s.awaitingOpponent ? (
-                          <span className="sub">Reported <strong>{s.myGames}–{s.oppGames}</strong> — waiting for {s.opponentName} to confirm.</span>
+                          <span className="sub">Reported <strong>{s.myGames}–{s.oppGames}</strong> — waiting for <Link href={`/players/${s.opponentId}`}>{s.opponentName}</Link> to confirm.</span>
                         ) : s.canReport ? (
                           <ActionFlashForm action={reportSetAction}>
                             <input type="hidden" name="setId" value={s.setId} />

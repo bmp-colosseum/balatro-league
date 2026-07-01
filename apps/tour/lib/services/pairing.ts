@@ -384,7 +384,7 @@ export async function getCaptainMatchups(seasonName: string, viewerPlayerId: str
       const mine = teamIds.has(mu.teamSeasonAId) ? "A" : "B";
       const oppId = mine === "A" ? mu.teamSeasonBId : mu.teamSeasonAId;
       const setCount = mu.setsWonA != null ? "done" : mu.pendingProposalPlayerId ? "proposal pending" : "to pair";
-      return { matchupId: mu.id, week: mu.week.number, opponent: nameOf.get(oppId) ?? "?", status: setCount, decided: mu.setsWonA != null };
+      return { matchupId: mu.id, week: mu.week.number, opponent: nameOf.get(oppId) ?? "?", oppTeamSeasonId: oppId, status: setCount, decided: mu.setsWonA != null };
     })
     .sort((a, b) => a.week - b.week);
 }

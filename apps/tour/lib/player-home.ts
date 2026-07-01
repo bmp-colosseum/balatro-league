@@ -10,6 +10,7 @@ export interface MySet {
   setId: string;
   week: number;
   opponentName: string;
+  opponentId: string;
   status: string;
   myGames: number | null;
   oppGames: number | null;
@@ -93,7 +94,7 @@ export async function getPlayerHome(playerId: string): Promise<PlayerHome> {
         const canReport = r.status === "PROPOSED" || r.status === "SCHEDULED" || r.status === "DISPUTED";
         const awaitingMyConfirm = r.status === "REPORTED" && reporterId !== playerId;
         const awaitingOpponent = r.status === "REPORTED" && reporterId === playerId;
-        return { setId: r.id, week: r.matchup?.week.number ?? 0, opponentName: nameOf.get(oppId) ?? "?", status: r.status, myGames, oppGames, result, canReport, awaitingMyConfirm, awaitingOpponent, bestOf: r.bestOf };
+        return { setId: r.id, week: r.matchup?.week.number ?? 0, opponentName: nameOf.get(oppId) ?? "?", opponentId: oppId, status: r.status, myGames, oppGames, result, canReport, awaitingMyConfirm, awaitingOpponent, bestOf: r.bestOf };
       })
       .sort((a, b) => a.week - b.week);
   }
