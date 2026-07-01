@@ -57,13 +57,20 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
         <div className="stat">
           <div className="label">Set record</div>
           <div className="value">{t.setW}–{t.setL}</div>
-          <div className="muted">{pct(t.setW, t.setL)} win</div>
+          <div className="muted">{pct(t.setW, t.setL)} win · regular season</div>
         </div>
         <div className="stat">
           <div className="label">Game record</div>
           <div className="value">{t.gameW}–{t.gameL}</div>
-          <div className="muted">{pct(t.gameW, t.gameL)} win</div>
+          <div className="muted">{pct(t.gameW, t.gameL)} win · regular season</div>
         </div>
+        {(t.playoff.setW + t.playoff.setL) > 0 && (
+          <div className="stat">
+            <div className="label">Playoffs</div>
+            <div className="value">{t.playoff.setW}–{t.playoff.setL}</div>
+            <div className="muted">{pct(t.playoff.setW, t.playoff.setL)} win · {t.playoff.gameW}–{t.playoff.gameL} games</div>
+          </div>
+        )}
         <div className="stat">
           <div className="label">Roster</div>
           <div className="value">{t.players.length}</div>
@@ -85,7 +92,10 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
           <tbody>
             {t.players.map((p) => (
               <tr key={p.playerId}>
-                <td className="rank">{p.seed}</td>
+                <td className="rank">
+                  {p.seed}
+                  {p.reseeded && <span className="sub" title={`Drafted at seed ${p.draftSeed}, re-seeded to ${p.seed}`} style={{ fontWeight: 400 }}> (was {p.draftSeed})</span>}
+                </td>
                 <td>
                   <Link href={`/players/${p.playerId}`}>{p.name}</Link>
                   {p.isCaptain && <span className="sub"> (C)</span>}

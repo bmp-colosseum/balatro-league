@@ -46,7 +46,9 @@ export async function getTeamPlacements(): Promise<Map<string, TeamPlacement>> {
 export interface TeamPlayerLine {
   playerId: string;
   name: string;
-  seed: number;
+  seed: number; // effective seed at the end of the regular season (reflects re-seeds)
+  draftSeed: number; // base draft seed
+  reseeded: boolean; // true when the effective seed differs from the draft seed
   isCaptain: boolean;
   setW: number;
   setL: number;
@@ -63,6 +65,7 @@ export interface TeamSeasonView {
   setL: number;
   gameW: number;
   gameL: number;
+  playoff: { setW: number; setL: number; gameW: number; gameL: number }; // post-season (regular is the default)
   players: TeamPlayerLine[];
 }
 
@@ -159,7 +162,7 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
     prisma.player.findMany({ where: { id: { in: playerIds } }, select: { id: true, displayName: true } }),
     prisma.tourSet.findMany({
       where: { seasonId: ts.seasonId, bracket: "REGULAR", OR: [{ playerAId: { in: playerIds } }, { playerBId: { in: playerIds } }] },
-      select: { playerAId: true, playerBId: true, matchId: true },
+      select: { playerAId: true, playerBId: true, matchId: true, week: true },
     }),
   ]);
   const nameById = new Map(players.map((p) => [p.id, p.displayName]));
@@ -193,11 +196,15 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
     }
   }
 
+  // Effective seed reflects mid-season re-seeds (RESEED moves), read at the last regular week.
+  const seedAt = await seedAtWeekResolver([id]);
+  const lastWeek = Math.max(1, ...sets.map((s) => s.week ?? 0));
   const playerLines: TeamPlayerLine[] = playerIds
     .map((pid) => {
       const e = entryByPlayer.get(pid)!;
       const a = acc.get(pid) ?? { setW: 0, setL: 0, gameW: 0, gameL: 0 };
-      return { playerId: pid, name: nameById.get(pid) ?? pid, seed: e.seed, isCaptain: e.isCaptain, ...a };
+      const eff = seedAt(id, lastWeek, pid) ?? e.seed;
+      return { playerId: pid, name: nameById.get(pid) ?? pid, seed: eff, draftSeed: e.seed, reseeded: eff !== e.seed, isCaptain: e.isCaptain, ...a };
     })
     .sort((x, y) => x.seed - y.seed);
 
@@ -206,12 +213,35 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
     { setW: 0, setL: 0, gameW: 0, gameL: 0 },
   );
 
+  // Post-season record — the roster's playoff sets that season (regular is the default above).
+  const poSets = await prisma.tourSet.findMany({
+    where: { seasonId: ts.seasonId, bracket: "PLAYOFF", OR: [{ playerAId: { in: playerIds } }, { playerBId: { in: playerIds } }] },
+    select: { playerAId: true, playerBId: true, matchId: true },
+  });
+  const poMatches = await prisma.match.findMany({
+    where: { id: { in: poSets.map((s) => s.matchId).filter((x): x is string => !!x) } },
+    select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true, winnerId: true },
+  });
+  const poById = new Map(poMatches.map((m) => [m.id, m]));
+  const playoff = { setW: 0, setL: 0, gameW: 0, gameL: 0 };
+  for (const s of poSets) {
+    const m = s.matchId ? poById.get(s.matchId) : undefined;
+    if (!m) continue;
+    // Count once from the rostered player's side (the opponent isn't on this team).
+    const pid = playerIds.includes(s.playerAId) ? s.playerAId : s.playerBId;
+    playoff.gameW += m.playerAId === pid ? m.gamesWonA : m.gamesWonB;
+    playoff.gameL += m.playerAId === pid ? m.gamesWonB : m.gamesWonA;
+    if (m.winnerId === pid) playoff.setW++;
+    else if (m.winnerId) playoff.setL++;
+  }
+
   return {
     teamSeasonId: ts.id,
     teamName: ts.team.name,
     seasonName: ts.season.name,
     conferenceName: ts.conference.name,
     ...tot,
+    playoff,
     players: playerLines,
   };
 }
