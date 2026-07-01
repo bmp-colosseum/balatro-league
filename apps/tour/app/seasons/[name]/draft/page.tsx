@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Crown, ArrowRight, ArrowLeft as ArrowLeftIcon } from "lucide-react";
+import { ArrowLeft, Crown } from "lucide-react";
 import { getSeasonDraft } from "@/lib/draft-history";
 
 export const dynamic = "force-dynamic";
@@ -20,78 +20,65 @@ export default async function SeasonDraft({ params }: { params: Promise<{ name: 
     );
   }
 
-  // Columns = teams in draft order (by seed). Snake: odd rounds L→R, even rounds reverse,
-  // so the overall pick number zig-zags down the board.
+  // Teams are rows (in draft order = seed); rounds are columns. Snake order: odd rounds pick
+  // top→bottom (seed 1 first), even rounds bottom→top, so the overall pick # zig-zags.
   const teams = draft.teams;
   const T = teams.length;
   const rounds = Array.from({ length: draft.rounds }, (_, i) => i + 1);
-  const pickByTeamRound = (ti: number, round: number) => teams[ti].picks.find((p) => p.round === round) ?? null;
   const overall = (ti: number, round: number) => (round - 1) * T + (round % 2 === 1 ? ti + 1 : T - ti);
 
-  const thBase: React.CSSProperties = { padding: "6px 10px", textAlign: "left", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" };
-  const stickyCol: React.CSSProperties = { position: "sticky", left: 0, background: "var(--surface)", zIndex: 1 };
-  const cell: React.CSSProperties = { padding: "5px 10px", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap", verticalAlign: "top" };
+  const th: React.CSSProperties = { padding: "6px 8px", textAlign: "left", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" };
+  const td: React.CSSProperties = { padding: "5px 8px", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" };
+  const seedCol: React.CSSProperties = { position: "sticky", left: 0, width: 40, textAlign: "center", background: "var(--surface)", zIndex: 1 };
+  const teamCol: React.CSSProperties = { position: "sticky", left: 40, background: "var(--surface)", zIndex: 1, boxShadow: "1px 0 0 var(--border)" };
+  const pickNo: React.CSSProperties = { fontSize: "0.7rem", color: "var(--muted)", marginRight: 5, fontVariantNumeric: "tabular-nums" };
 
   return (
     <main>
       <p><Link href={`/seasons/${enc}`} className="inline-flex items-center gap-1"><ArrowLeft className="size-3.5" /> {seasonName}</Link></p>
       <h1>{seasonName} — Draft board</h1>
-      <p className="sub">{T} teams · {draft.rounds} rounds · snake order. Captains (seed 1) are pre-assigned; each cell shows the pick and its overall number. Odd rounds run left→right, even rounds reverse.</p>
+      <p className="sub">{T} teams · {draft.rounds} rounds · snake order. Seed 1 is the captain; the small number is the overall pick.</p>
 
       <div className="card" style={{ overflowX: "auto", padding: 0 }}>
         <table style={{ borderCollapse: "collapse", width: "max-content", minWidth: "100%" }}>
           <thead>
             <tr>
-              <th style={{ ...thBase, ...stickyCol, zIndex: 2 }}>Round</th>
-              {teams.map((t) => (
-                <th key={t.teamSeasonId} style={thBase}>
-                  <Link href={`/teams/${t.teamSeasonId}`}>{t.teamName}</Link>
-                  <div className="sub" style={{ fontWeight: 400 }}>#{t.seed} · {t.conference}</div>
-                </th>
+              <th style={{ ...th, ...seedCol, zIndex: 2 }}>#</th>
+              <th style={{ ...th, ...teamCol, zIndex: 2 }}>Team</th>
+              <th style={th}><span className="inline-flex items-center gap-1"><Crown className="size-3.5 text-[var(--accent)]" /> Captain</span></th>
+              {rounds.map((r) => (
+                <th key={r} style={th}>R{r}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {/* Captains */}
-            <tr>
-              <th style={{ ...cell, ...stickyCol, fontWeight: 600 }}>
-                <span className="inline-flex items-center gap-1"><Crown className="size-3.5 text-[var(--accent)]" /> C</span>
-              </th>
-              {teams.map((t) => (
-                <td key={t.teamSeasonId} style={{ ...cell, background: "rgba(241, 196, 15, 0.06)" }}>
+            {teams.map((t, ti) => (
+              <tr key={t.teamSeasonId}>
+                <td style={{ ...td, ...seedCol }} className="rank">{t.seed}</td>
+                <td style={{ ...td, ...teamCol }}>
+                  <Link href={`/teams/${t.teamSeasonId}`} className="font-semibold">{t.teamName}</Link>
+                  <div className="sub" style={{ fontWeight: 400 }}>{t.conference}</div>
+                </td>
+                <td style={{ ...td, background: "rgba(241, 196, 15, 0.06)" }}>
                   <Link href={`/players/${t.captainId}`} className="font-semibold">{t.captainName}</Link>
                 </td>
-              ))}
-            </tr>
-            {/* Snake rounds */}
-            {rounds.map((r) => {
-              const ltr = r % 2 === 1;
-              return (
-                <tr key={r}>
-                  <th style={{ ...cell, ...stickyCol }}>
-                    <span className="inline-flex items-center gap-1">
-                      {r}
-                      {ltr ? <ArrowRight className="size-3 text-[var(--muted)]" /> : <ArrowLeftIcon className="size-3 text-[var(--muted)]" />}
-                    </span>
-                  </th>
-                  {teams.map((t, ti) => {
-                    const pick = pickByTeamRound(ti, r);
-                    return (
-                      <td key={t.teamSeasonId} style={cell}>
-                        {pick ? (
-                          <span className="inline-flex items-baseline gap-1.5">
-                            <span className="sub num" style={{ minWidth: "1.7rem" }}>{overall(ti, r)}.</span>
-                            <Link href={`/players/${pick.playerId}`}>{pick.name}</Link>
-                          </span>
-                        ) : (
-                          <span className="muted">—</span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
+                {rounds.map((r) => {
+                  const pick = t.picks.find((p) => p.round === r);
+                  return (
+                    <td key={r} style={td}>
+                      {pick ? (
+                        <span className="inline-flex items-baseline">
+                          <span style={pickNo}>{overall(ti, r)}</span>
+                          <Link href={`/players/${pick.playerId}`}>{pick.name}</Link>
+                        </span>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
