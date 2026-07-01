@@ -199,6 +199,9 @@ export interface TourPlayerRow {
   suggestions?: LeagueRefRow[]; // likely league matches (unlinked players only)
   signupHandle?: string; // Discord @username this player gave on their signup (even if it
                          // can't be resolved to an id yet) — a hint for manual linking
+  mergeCandidate?: { id: string; name: string; sets: number }; // for a LINKED-but-empty
+                         // player: a same-name legacy player that actually holds the data —
+                         // one-click "merge it in" so the account stops looking empty
 }
 
 export type IdentityFilter = "all" | "unlinked" | "linked";
@@ -250,6 +253,25 @@ export async function listTourPlayers(q = "", limit = 60, filter: IdentityFilter
     const byName = new Map<string, string>();
     for (const s of signups) { const k = norm(s.preferredName); if (s.username.trim() && !byName.has(k)) byName.set(k, s.username.trim()); }
     for (const r of unlinked) { const h = byName.get(norm(r.name)); if (h) r.signupHandle = h; }
+  }
+
+  // Un-merged duplicates: a LINKED player with no sets probably has its real data on a
+  // same-name LEGACY player that was never merged in. Suggest merging that one in.
+  const emptyLinked = out.filter((r) => r.linked && r.sets === 0);
+  if (emptyLinked.length) {
+    const dataLegacy = new Map<string, { id: string; name: string; sets: number }>();
+    for (const p of players) {
+      if (!p.discordId.startsWith("legacy:")) continue;
+      const s = setCount.get(p.id) ?? 0;
+      if (s === 0) continue;
+      const k = norm(p.displayName);
+      const cur = dataLegacy.get(k);
+      if (!cur || s > cur.sets) dataLegacy.set(k, { id: p.id, name: p.displayName, sets: s });
+    }
+    for (const r of emptyLinked) {
+      const c = dataLegacy.get(norm(r.name));
+      if (c && c.id !== r.id) r.mergeCandidate = c;
+    }
   }
   return out;
 }

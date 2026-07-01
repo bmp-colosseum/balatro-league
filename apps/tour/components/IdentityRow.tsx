@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { linkPlayerAction, mergePlayerAction, deletePlayerAction } from "@/app/admin/identity/actions";
 
 type Result = { value: string; label: string; detail: string };
-export type IdPlayer = { id: string; name: string; discordId: string; linked: boolean; sets: number; seasons: number; suggestions?: { discordId: string; name: string }[]; signupHandle?: string };
+export type IdPlayer = { id: string; name: string; discordId: string; linked: boolean; sets: number; seasons: number; suggestions?: { discordId: string; name: string }[]; signupHandle?: string; mergeCandidate?: { id: string; name: string; sets: number } };
 
 export function IdentityRow({ player }: { player: IdPlayer }) {
   const [mode, setMode] = useState<null | "link" | "merge">(null);
@@ -48,6 +48,15 @@ export function IdentityRow({ player }: { player: IdPlayer }) {
       alert(res?.message ?? "Failed.");
     }
   }
+  async function mergeCandidateIn() {
+    const c = player.mergeCandidate!;
+    if (!confirm(`This linked account has no data. Merge in "${c.name}" (${c.sets} sets) — its history moves onto this account. Cannot be undone.`)) return;
+    setBusy(true);
+    const res = await mergePlayerAction(player.id, c.id); // keep the linked player, drop the legacy one
+    setBusy(false);
+    if (res?.ok) router.refresh();
+    else alert(res?.message ?? "Failed.");
+  }
   async function del() {
     if (!confirm(`Delete "${player.name}"? This removes the player and ${player.sets} set(s), their roster spots, picks, awards and stats. Cannot be undone.`)) return;
     setBusy(true);
@@ -72,6 +81,11 @@ export function IdentityRow({ player }: { player: IdPlayer }) {
         <span className="sub">{player.seasons} sns · {player.sets} sets</span>
         {!player.linked && player.signupHandle && (
           <span className="sub" title="Discord handle from this player's signup — search/link by it">signup: <strong>@{player.signupHandle}</strong></span>
+        )}
+        {player.mergeCandidate && (
+          <Button size="sm" variant="secondary" disabled={busy} onClick={mergeCandidateIn} title={`Merge in ${player.mergeCandidate.name} (${player.mergeCandidate.sets} sets) — this linked account is empty`}>
+            <GitMerge className="size-3.5" /> Claim {player.mergeCandidate.name} ({player.mergeCandidate.sets})
+          </Button>
         )}
         <span className="ml-auto">
           {player.linked ? (
