@@ -89,9 +89,9 @@ export default async function DraftHeatmap({ searchParams }: { searchParams: Pro
                     <Link href={`/teams/${t.teamSeasonId}`}>{t.name}</Link>
                   </td>
                   <td>
-                    <div style={{ ...cellBox, background: "var(--surface-2)" }} title={`${t.captain.name} (captain) · ${pctStr(t.captain.pct)} sets`}>
+                    <div style={{ ...cellBox, ...(t.captain.delta != null ? heat(t.captain.delta) : { background: "var(--surface-2)" }) }} title={`${t.captain.name} (captain${t.captain.seed != null ? `, seed ${t.captain.seed}` : ""}) · ${pctStr(t.captain.pct)} sets${t.captain.delta != null ? ` · ${fmtDelta(t.captain.delta)} vs seed avg` : ""}`}>
                       <div style={nameLine}><Link href={`/players/${t.captain.captainId}`}>{t.captain.name}</Link></div>
-                      <div style={{ fontSize: 11, color: "var(--muted)" }}>{pctStr(t.captain.pct)} · C</div>
+                      <div style={{ fontSize: 11, opacity: 0.9 }}>{pctStr(t.captain.pct)} <span style={{ color: "var(--muted)" }}>C{t.captain.seed != null ? `·#${t.captain.seed}` : ""}</span></div>
                     </div>
                   </td>
                   {t.cells.map((c, i) => (

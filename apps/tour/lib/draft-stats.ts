@@ -120,7 +120,7 @@ export interface HeatTeam {
   teamSeasonId: string;
   name: string;
   seed: number;
-  captain: { name: string; captainId: string; pct: number | null; sets: number };
+  captain: { name: string; captainId: string; seed: number | null; pct: number | null; delta: number | null; sets: number };
   cells: (HeatCell | null)[];
 }
 
@@ -144,12 +144,21 @@ export async function getDraftHeatmap(seasonName: string) {
   const players = await prisma.player.findMany({ where: { id: { in: ids } }, select: { id: true, displayName: true } });
   const nameOf = new Map(players.map((p) => [p.id, p.displayName]));
 
+  // Captains aren't draft picks, but they have an intra-team seed (from the rankings) — use
+  // it to color them against the expected set% for that seed slot, same idea as the picks.
+  const capEntries = await prisma.rosterEntry.findMany({ where: { roster: { teamSeasonId: { in: teamSeasons.map((t) => t.id) } } }, select: { playerId: true, seed: true, roster: { select: { teamSeasonId: true } } } });
+  const seedByCap = new Map(capEntries.map((e) => [`${e.roster.teamSeasonId}|${e.playerId}`, e.seed]));
+
   const maxRound = Math.max(0, ...picks.map((p) => p.round));
   const recFor = (pid: string) => rec.get(`${season.id}:${pid}`) ?? { setW: 0, setL: 0 };
 
   const teams: HeatTeam[] = teamSeasons.map((ts) => {
     const cr = recFor(ts.captainPlayerId);
     const cTotal = cr.setW + cr.setL;
+    const cSeed = seedByCap.get(`${ts.id}|${ts.captainPlayerId}`) ?? null;
+    const cPct = cTotal ? cr.setW / cTotal : null;
+    const cExp = cSeed != null ? expected.get(cSeed) ?? null : null;
+    const cDelta = cPct != null && cExp != null ? cPct - cExp : null;
     const cells: (HeatCell | null)[] = [];
     for (let round = 1; round <= maxRound; round++) {
       const pick = picks.find((p) => p.teamSeasonId === ts.id && p.round === round);
@@ -168,7 +177,7 @@ export async function getDraftHeatmap(seasonName: string) {
       teamSeasonId: ts.id,
       name: ts.team.name,
       seed: ts.seed,
-      captain: { name: nameOf.get(ts.captainPlayerId) ?? "?", captainId: ts.captainPlayerId, pct: cTotal ? cr.setW / cTotal : null, sets: cTotal },
+      captain: { name: nameOf.get(ts.captainPlayerId) ?? "?", captainId: ts.captainPlayerId, seed: cSeed, pct: cPct, delta: cDelta, sets: cTotal },
       cells,
     };
   });
