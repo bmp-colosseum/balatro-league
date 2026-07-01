@@ -94,7 +94,11 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
               <tr key={p.playerId}>
                 <td className="rank">
                   {p.seed}
-                  {p.reseeded && <span className="sub" title={`Drafted at seed ${p.draftSeed}, re-seeded to ${p.seed}`} style={{ fontWeight: 400 }}> (was {p.draftSeed})</span>}
+                  {p.seedChain.length > 1 && (
+                    <div className="sub" style={{ fontWeight: 400, fontSize: "0.72rem" }} title={`Drafted at seed ${p.seedChain[0]}, now seed ${p.seed}`}>
+                      {p.seedChain.join(" → ")}
+                    </div>
+                  )}
                 </td>
                 <td>
                   <Link href={`/players/${p.playerId}`}>{p.name}</Link>

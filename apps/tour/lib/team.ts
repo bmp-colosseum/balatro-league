@@ -49,6 +49,7 @@ export interface TeamPlayerLine {
   seed: number; // effective seed at the end of the regular season (reflects re-seeds)
   draftSeed: number; // base draft seed
   reseeded: boolean; // true when the effective seed differs from the draft seed
+  seedChain: number[]; // full seed path over the season, e.g. [5, 3, 7] (draft → re-seeds)
   isCaptain: boolean;
   setW: number;
   setL: number;
@@ -199,12 +200,31 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
   // Effective seed reflects mid-season re-seeds (RESEED moves), read at the last regular week.
   const seedAt = await seedAtWeekResolver([id]);
   const lastWeek = Math.max(1, ...sets.map((s) => s.week ?? 0));
+
+  // Full seed path per player over the regular season: draft seed + each re-seed (in week
+  // order) up to the last regular week — so a multi-step re-seed reads #5 → #3 → #7.
+  const seedMoves = await prisma.rosterMove.findMany({
+    where: { teamSeasonId: id, kind: { in: ["DRAFTED", "RESEED"] } },
+    orderBy: [{ effectiveWeek: "asc" }, { createdAt: "asc" }],
+    select: { playerId: true, kind: true, seed: true, effectiveWeek: true },
+  });
+  const chainOf = new Map<string, number[]>();
+  for (const m of seedMoves) {
+    if (m.seed == null) continue;
+    if (m.kind === "RESEED" && m.effectiveWeek > lastWeek) continue;
+    const arr = chainOf.get(m.playerId) ?? [];
+    if (arr[arr.length - 1] !== m.seed) arr.push(m.seed);
+    chainOf.set(m.playerId, arr);
+  }
+
   const playerLines: TeamPlayerLine[] = playerIds
     .map((pid) => {
       const e = entryByPlayer.get(pid)!;
       const a = acc.get(pid) ?? { setW: 0, setL: 0, gameW: 0, gameL: 0 };
       const eff = seedAt(id, lastWeek, pid) ?? e.seed;
-      return { playerId: pid, name: nameById.get(pid) ?? pid, seed: eff, draftSeed: e.seed, reseeded: eff !== e.seed, isCaptain: e.isCaptain, ...a };
+      const chain = (chainOf.get(pid) ?? [e.seed]).slice();
+      if (chain[chain.length - 1] !== eff) chain.push(eff);
+      return { playerId: pid, name: nameById.get(pid) ?? pid, seed: eff, draftSeed: e.seed, reseeded: eff !== e.seed, seedChain: chain, isCaptain: e.isCaptain, ...a };
     })
     .sort((x, y) => x.seed - y.seed);
 
