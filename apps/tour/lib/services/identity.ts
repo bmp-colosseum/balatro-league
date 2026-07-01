@@ -189,6 +189,53 @@ export async function deletePlayer(playerId: string): Promise<{ name: string; se
   return { name: p.displayName, setsDeleted: sets.length };
 }
 
+// Bulk "claim history": every LINKED-but-empty player paired with the same-name LEGACY
+// player that holds the real data. Reviewed then applied together (merge legacy → linked).
+export interface ClaimPair {
+  linkedId: string;
+  linkedName: string;
+  discordId: string;
+  candidateId: string;
+  candidateName: string;
+  sets: number;
+}
+export async function getClaimPairs(): Promise<ClaimPair[]> {
+  const [players, sets] = await Promise.all([
+    prisma.player.findMany({ select: { id: true, displayName: true, discordId: true } }),
+    prisma.tourSet.findMany({ select: { playerAId: true, playerBId: true } }),
+  ]);
+  const setCount = new Map<string, number>();
+  for (const s of sets) { setCount.set(s.playerAId, (setCount.get(s.playerAId) ?? 0) + 1); setCount.set(s.playerBId, (setCount.get(s.playerBId) ?? 0) + 1); }
+  const dataLegacy = new Map<string, { id: string; name: string; sets: number }>();
+  for (const p of players) {
+    if (!p.discordId.startsWith("legacy:")) continue;
+    const s = setCount.get(p.id) ?? 0;
+    if (!s) continue;
+    const k = norm(p.displayName);
+    const cur = dataLegacy.get(k);
+    if (!cur || s > cur.sets) dataLegacy.set(k, { id: p.id, name: p.displayName, sets: s });
+  }
+  const pairs: ClaimPair[] = [];
+  for (const p of players) {
+    if (p.discordId.startsWith("legacy:")) continue; // linked only
+    if ((setCount.get(p.id) ?? 0) > 0) continue; // empty only
+    const c = dataLegacy.get(norm(p.displayName));
+    if (c && c.id !== p.id) pairs.push({ linkedId: p.id, linkedName: p.displayName, discordId: p.discordId, candidateId: c.id, candidateName: c.name, sets: c.sets });
+  }
+  return pairs.sort((a, b) => b.sets - a.sets);
+}
+
+// Apply a reviewed set of claims — merge each legacy player INTO its linked account (keeps
+// the Discord id, moves the history). Skips any that error (e.g. already merged).
+export async function applyClaims(pairs: { linkedId: string; candidateId: string }[]): Promise<{ merged: number }> {
+  let merged = 0;
+  for (const p of pairs) {
+    if (!p.linkedId || !p.candidateId) continue;
+    try { await mergePlayers(p.linkedId, p.candidateId); merged++; } catch { /* skip conflicts */ }
+  }
+  return { merged };
+}
+
 export interface TourPlayerRow {
   id: string;
   name: string;

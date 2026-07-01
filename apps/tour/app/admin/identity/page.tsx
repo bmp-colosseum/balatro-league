@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { ArrowLeft, Search, Wrench, Wand2 } from "lucide-react";
+import { ArrowLeft, Search, Wrench, Wand2, GitMerge } from "lucide-react";
 import { isAdmin } from "@/lib/auth";
-import { listTourPlayers, identityCounts } from "@/lib/services/identity";
+import { listTourPlayers, identityCounts, getClaimPairs } from "@/lib/services/identity";
 import { Callout } from "@/components/Callout";
 import { IdentityRow } from "@/components/IdentityRow";
 import { PrunePhantomsButton } from "@/components/PrunePhantomsButton";
@@ -26,7 +26,7 @@ export default async function Identity({ searchParams }: { searchParams: Promise
 
   const { q, filter: rawFilter } = await searchParams;
   const filter = (FILTERS.find((f) => f.key === rawFilter)?.key ?? "unlinked") as "unlinked" | "linked" | "all";
-  const [players, counts] = await Promise.all([listTourPlayers(q ?? "", 1000, filter), identityCounts()]);
+  const [players, counts, claims] = await Promise.all([listTourPlayers(q ?? "", 1000, filter), identityCounts(), getClaimPairs()]);
   const filterCount = { unlinked: counts.unlinked, linked: counts.linked, all: counts.total };
 
   return (
@@ -48,6 +48,14 @@ export default async function Identity({ searchParams }: { searchParams: Promise
         approval. Then mop up stragglers below. Duplicates from a re-import?{" "}
         <Link href="/admin/identity/recover" className="inline-flex items-center gap-1"><Wrench className="size-3.5" /> Recover duplicates</Link>.
       </Callout>
+
+      {claims.length > 0 && (
+        <Callout type="admin" className="mb-3">
+          <strong>{claims.length} linked account{claims.length === 1 ? "" : "s"} show up empty</strong> — their history is on a
+          same-name legacy player that was never merged in (why a player&apos;s own profile can look statless).{" "}
+          <Link href="/admin/identity/claim" className="inline-flex items-center gap-1"><GitMerge className="size-3.5" /> Claim history</Link> to fix them in one pass.
+        </Callout>
+      )}
 
       <div className="mb-3"><PrunePhantomsButton /></div>
 
