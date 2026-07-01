@@ -2,6 +2,7 @@
 // playoff finals. Everything is a reduction over TourSet→Match (+ RosterEntry for
 // teams, PlayoffSeries finals for rings). Data is small — compute in memory.
 import { prisma } from "./db";
+import { expectedByRound } from "./draft-stats";
 
 export interface PlayerCareer {
   playerId: string;
@@ -117,6 +118,8 @@ export interface PlayerSeasonLine {
   seasonName: string;
   teamName: string;
   teamSeasonId: string;
+  seed: number | null;   // their intra-team seed that season
+  delta: number | null;  // set% minus the expected for that seed (>0 = overperformed)
   setW: number;
   setL: number;
   gameW: number;
@@ -230,10 +233,13 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
   const matchById = new Map(matches.map((m) => [m.id, m]));
   const teamForSeason = new Map<string, string>();
   const teamSeasonForSeason = new Map<string, string>();
+  const seedForSeason = new Map<string, number>();
   for (const e of entries) {
     teamForSeason.set(e.roster.teamSeason.season.id, e.roster.teamSeason.team.name);
     teamSeasonForSeason.set(e.roster.teamSeason.season.id, e.roster.teamSeason.id);
+    seedForSeason.set(e.roster.teamSeason.season.id, e.seed);
   }
+  const expSeed = await expectedByRound(); // expected set% by seed slot — for the per-season heat
 
   const career = newAcc();
   const playoff = newAcc(); // regular season is the default record; playoffs tracked apart
@@ -278,6 +284,13 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
       seasonName: seasonName.get(sid) ?? sid,
       teamName: teamForSeason.get(sid) ?? "—",
       teamSeasonId: teamSeasonForSeason.get(sid) ?? "",
+      seed: seedForSeason.get(sid) ?? null,
+      delta: (() => {
+        const seed = seedForSeason.get(sid);
+        const exp = seed != null ? expSeed.get(seed) : undefined;
+        const total = a.setW + a.setL;
+        return exp != null && total ? a.setW / total - exp : null;
+      })(),
       setW: a.setW,
       setL: a.setL,
       gameW: a.gameW,

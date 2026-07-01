@@ -11,6 +11,12 @@ import { H2HTable } from "@/components/H2HTable";
 export const dynamic = "force-dynamic";
 
 const pct = (w: number, l: number) => (w + l ? `${((100 * w) / (w + l)).toFixed(1)}%` : "—");
+// Per-season heat: green = beat the expected set% for their seed, red = under.
+const heat = (d: number | null): React.CSSProperties => {
+  if (d == null) return {};
+  const a = Math.round(Math.min(1, Math.abs(d) / 0.3) * 45);
+  return { background: `color-mix(in srgb, var(${d >= 0 ? "--success" : "--danger"}) ${a}%, transparent)` };
+};
 const seasonNum = (name: string) => Number(name.match(/(\d+)/)?.[1] ?? 0);
 const shortSeason = (name: string) => name.replace(/^Team Tour\s*/i, "TT").replace(/\s+/g, " ").trim();
 
@@ -124,6 +130,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
             <tr>
               <th>Season</th>
               <th>Team</th>
+              <th className="num">Seed</th>
               <th className="num">Draft</th>
               <th className="num">Sets</th>
               <th className="num">Set %</th>
@@ -138,13 +145,14 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
               <tr key={s.seasonName}>
                 <td><Link href={`/seasons/${encodeURIComponent(s.seasonName)}`}>{s.seasonName}</Link></td>
                 <td>{s.teamSeasonId ? <Link href={`/teams/${s.teamSeasonId}`}>{s.teamName}</Link> : s.teamName}</td>
+                <td className="num muted">{s.seed ?? "—"}</td>
                 <td className="num">
                   {d ? (d.isCaptain ? <span className="text-[var(--accent)]" title="Captain">C</span> : `R${d.round}`) : "—"}
                 </td>
                 <td className="num">
                   {s.setW}–{s.setL}
                 </td>
-                <td className="num">{pct(s.setW, s.setL)}</td>
+                <td className="num" style={heat(s.delta)} title={s.delta != null ? `${s.delta >= 0 ? "+" : ""}${(s.delta * 100).toFixed(0)} pts vs the avg for seed ${s.seed}` : undefined}>{pct(s.setW, s.setL)}</td>
                 <td className="num">
                   {s.gameW}–{s.gameL}
                 </td>

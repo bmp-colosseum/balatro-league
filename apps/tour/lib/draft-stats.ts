@@ -103,7 +103,7 @@ export async function getDraftValueByRound(): Promise<RoundValueRow[]> {
 
 // The expected set-win% for each draft round (the global average) — the baseline
 // a pick's "value" (delta) is measured against in the heatmap.
-async function expectedByRound(): Promise<Map<number, number>> {
+export async function expectedByRound(): Promise<Map<number, number>> {
   const rows = await getDraftValueByRound();
   return new Map(rows.map((r) => [r.round, r.pct]));
 }
