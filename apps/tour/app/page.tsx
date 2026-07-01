@@ -10,7 +10,7 @@ export default async function Home() {
 
   return (
     <main>
-      <h1>Pizza Power — Team Tour</h1>
+      <h1>Pizza Power Team Tour</h1>
       <p className="sub">Standings, brackets, rosters, and all-time history.</p>
 
       {openSeason && (
