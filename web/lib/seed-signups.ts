@@ -71,5 +71,5 @@ export async function runSeedSignups(
     })),
   });
 
-  return { roundId: round.id, count, buildPath: `/admin/signups/${round.id}/build` };
+  return { roundId: round.id, count, buildPath: `/admin/signups/${round.id}/preview` };
 }

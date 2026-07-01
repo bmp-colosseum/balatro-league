@@ -841,8 +841,8 @@ function LifecycleActions({
   if (round && round.status === "CLOSED") {
     return (
       <div className="card">
-        <Link href={`/admin/signups/${round.id}/build`}>
-          <Button type="button"><strong>Set up divisions from {round._count.signups} signups →</strong></Button>
+        <Link href={`/admin/signups/${round.id}/preview`}>
+          <Button type="button"><strong>Set up placement for {round._count.signups} signups →</strong></Button>
         </Link>
       </div>
     );

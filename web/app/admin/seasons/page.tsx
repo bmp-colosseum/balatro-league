@@ -196,7 +196,7 @@ export default async function AdminSeasonsPage({
                   }}
                 >
                   <Link
-                    href={`/admin/signups/${r.id}/build`}
+                    href={`/admin/signups/${r.id}/preview`}
                     style={{ textDecoration: "none", fontWeight: 600, flex: 1 }}
                   >
                     {r.name}
@@ -218,7 +218,7 @@ export default async function AdminSeasonsPage({
                     📊 MMR
                   </Link>
                   <Link
-                    href={`/admin/signups/${r.id}/build`}
+                    href={`/admin/signups/${r.id}/preview`}
                     style={{ fontSize: 12 }}
                   >
                     Set up →
@@ -477,8 +477,8 @@ function LifecycleActions({
     return (
       <div style={{ marginTop: 8 }}>
         <RosterPanel round={round} />
-        <Link href={`/admin/signups/${round.id}/build`}>
-          <Button type="button"><strong>Set up divisions from {round._count.signups} signups →</strong></Button>
+        <Link href={`/admin/signups/${round.id}/preview`}>
+          <Button type="button"><strong>Set up placement for {round._count.signups} signups →</strong></Button>
         </Link>
       </div>
     );

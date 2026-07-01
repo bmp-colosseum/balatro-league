@@ -89,7 +89,21 @@ export default async function PlacementPreviewPage({
     pill = <span className="pill" style={{ background: "rgba(118,199,255,0.2)", color: "var(--info)" }}>{count} signups · dry run</span>;
     body =
       continuity === "NO_SEASON" ? (
-        <div className="card">No active season to base this on — start a season first.</div>
+        // No active season to carry placement over from — this is a first
+        // season (or a rebuild with no history). Continuity can't apply, so
+        // send them to the manual setup (rate players + pick the tier shape).
+        // This is the ONLY place /build is surfaced now — it's the first-season
+        // fallback, not a competing "build" path.
+        <div className="card" style={{ display: "grid", gap: 10 }}>
+          <strong>No previous season to carry placement over from</strong>
+          <p className="muted" style={{ fontSize: 13, margin: 0 }}>
+            This looks like a first season (or there&apos;s no active season to base continuity on). Set the
+            divisions up by hand — rate the players and pick the tier shape.
+          </p>
+          <Link href={`/admin/signups/${round.id}/build`}>
+            <Button type="button"><strong>Set up divisions manually →</strong></Button>
+          </Link>
+        </div>
       ) : !ok ? (
         <div className="card">Couldn&apos;t load the round.</div>
       ) : count === 0 ? (

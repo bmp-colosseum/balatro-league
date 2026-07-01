@@ -44,8 +44,7 @@ export default async function SignupMmrPage({
           <span className="muted" style={{ fontSize: 12 }}>{round.signupCount} signed up</span>
           {round.status !== "BUILT" && (
             <span style={{ marginLeft: "auto", display: "inline-flex", gap: 12, fontSize: 13 }}>
-              <Link href={`/admin/signups/${round.id}/preview`}>🔬 Preview placement →</Link>
-              <Link href={`/admin/signups/${round.id}/build`}>Set up the season →</Link>
+              <Link href={`/admin/signups/${round.id}/preview`}>🔬 Set up placement →</Link>
             </span>
           )}
         </div>

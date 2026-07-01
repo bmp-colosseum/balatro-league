@@ -66,7 +66,7 @@ export default async function SignupsIndexPage() {
                         {r.status === "BUILT" && r.resultingSeasonId ? (
                           <Link href={`/seasons/${r.resultingSeasonId}`} style={{ fontSize: 12, marginLeft: 12 }}>Season →</Link>
                         ) : (
-                          <Link href={`/admin/signups/${r.id}/build`} style={{ fontSize: 12, marginLeft: 12 }}>Build →</Link>
+                          <Link href={`/admin/signups/${r.id}/preview`} style={{ fontSize: 12, marginLeft: 12 }}>Set up →</Link>
                         )}
                         <form action={deleteSignupRound} style={{ display: "inline" }}>
                           <input type="hidden" name="roundId" value={r.id} />
