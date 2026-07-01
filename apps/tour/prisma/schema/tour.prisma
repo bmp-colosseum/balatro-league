@@ -526,3 +526,23 @@ model PowerRankingEntry {
 
   @@index([rankingId])
 }
+
+// ── Pick'em — per-set predictions by any signed-in user ─────────────────────
+// One row per (predictor, set). A predictor is identified by their Discord id (they need
+// not be a rostered Player — spectators can play too); name is cached for the leaderboard.
+// Correctness is DERIVED on read: pickedPlayerId == the set's Match.winnerId. Picks are only
+// accepted while the set is undecided; a decided set locks the pick.
+model Prediction {
+  id                 String   @id @default(cuid())
+  seasonId           String
+  setId              String // TourSet.id being predicted
+  predictorDiscordId String
+  predictorName      String? // cached display name for the leaderboard
+  pickedPlayerId     String // the player predicted to win the set
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([predictorDiscordId, setId])
+  @@index([seasonId])
+  @@index([setId])
+}
