@@ -5,6 +5,7 @@
 //     series). The champion is the crowned team (Championship) or the FINAL winner;
 //     the run is the series the champion actually played.
 import { prisma } from "./db";
+import { seedAtWeekResolver } from "./services/roster-ops";
 
 const ROUND_ORDER: Record<string, number> = { QUARTERFINAL: 0, SEMIFINAL: 1, FINAL: 2 };
 const ROUND_LABEL: Record<string, string> = {
@@ -33,9 +34,11 @@ export interface BracketSeries {
 export interface BracketSet {
   playerA: string;
   playerAId: string;
+  seedA: number | null;
   scoreA: number;
   playerB: string;
   playerBId: string;
+  seedB: number | null;
   scoreB: number;
   winner: "A" | "B" | null;
 }
@@ -74,6 +77,10 @@ export async function getPublicBracket(seasonName: string): Promise<PublicBracke
   ]);
   const poMatchById = new Map(poMatches.map((m) => [m.id, m]));
   const poName = new Map(poPlayers.map((p) => [p.id, p.displayName]));
+  // Each player's seed going into the playoffs (a high week picks up any playoff-block re-seed).
+  const seedAt = await seedAtWeekResolver([...new Set([...teamOfPlayer.values()])]);
+  const PLAYOFF_WK = 999;
+  const seedOfPlayer = (pid: string) => { const t = teamOfPlayer.get(pid); return t ? seedAt(t, PLAYOFF_WK, pid) : null; };
   const pairKey = (x: string, y: string) => [x, y].sort().join("|");
   const setsByPair = new Map<string, BracketSet[]>();
   for (const s of poSets) {
@@ -81,8 +88,8 @@ export async function getPublicBracket(seasonName: string): Promise<PublicBracke
     const m = s.matchId ? poMatchById.get(s.matchId) : undefined;
     if (!tA || !tB || !m) continue;
     (setsByPair.get(pairKey(tA, tB)) ?? setsByPair.set(pairKey(tA, tB), []).get(pairKey(tA, tB))!).push({
-      playerA: poName.get(s.playerAId) ?? "?", playerAId: s.playerAId,
-      playerB: poName.get(s.playerBId) ?? "?", playerBId: s.playerBId,
+      playerA: poName.get(s.playerAId) ?? "?", playerAId: s.playerAId, seedA: seedOfPlayer(s.playerAId),
+      playerB: poName.get(s.playerBId) ?? "?", playerBId: s.playerBId, seedB: seedOfPlayer(s.playerBId),
       scoreA: m.playerAId === s.playerAId ? m.gamesWonA : m.gamesWonB,
       scoreB: m.playerAId === s.playerAId ? m.gamesWonB : m.gamesWonA,
       winner: m.winnerId === s.playerAId ? "A" : m.winnerId === s.playerBId ? "B" : null,
@@ -93,7 +100,7 @@ export async function getPublicBracket(seasonName: string): Promise<PublicBracke
     if (!tsA || !tsB) return [];
     return (setsByPair.get(pairKey(tsA, tsB)) ?? []).map((st) => {
       const aIsTeamA = teamOfPlayer.get(st.playerAId) === tsA;
-      return aIsTeamA ? st : { playerA: st.playerB, playerAId: st.playerBId, scoreA: st.scoreB, playerB: st.playerA, playerBId: st.playerAId, scoreB: st.scoreA, winner: st.winner === "A" ? "B" : st.winner === "B" ? "A" : null };
+      return aIsTeamA ? st : { playerA: st.playerB, playerAId: st.playerBId, seedA: st.seedB, scoreA: st.scoreB, playerB: st.playerA, playerBId: st.playerAId, seedB: st.seedA, scoreB: st.scoreA, winner: st.winner === "A" ? "B" : st.winner === "B" ? "A" : null };
     });
   };
 

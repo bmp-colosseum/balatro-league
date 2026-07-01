@@ -58,9 +58,11 @@ export default async function BracketPage({ params }: { params: Promise<{ name: 
                           <tbody>
                             {s.sets.map((st, j) => (
                               <tr key={j}>
+                                <td className="muted num" style={{ width: 22 }}>{st.seedA ?? ""}</td>
                                 <td style={{ color: st.winner === "A" ? "var(--success)" : undefined }}><Link href={`/players/${st.playerAId}`}>{st.playerA}</Link></td>
                                 <td className="num" style={{ width: 44, textAlign: "center" }}>{st.scoreA}–{st.scoreB}</td>
                                 <td style={{ textAlign: "right", color: st.winner === "B" ? "var(--success)" : undefined }}><Link href={`/players/${st.playerBId}`}>{st.playerB}</Link></td>
+                                <td className="muted num" style={{ width: 22, textAlign: "right" }}>{st.seedB ?? ""}</td>
                               </tr>
                             ))}
                           </tbody>
