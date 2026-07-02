@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { isAdmin } from "@/lib/auth";
+import { can, seasonIdByName } from "@/lib/permissions";
 import { substitute, recordDeparture, reinstate, replacePlayer, removeMove, changeCaptain, reseed, swapSeeds } from "@/lib/services/roster-ops";
 import { addStrike, removeStrike } from "@/lib/services/strikes";
 import type { ActionResult } from "@/lib/action-result";
@@ -12,14 +12,19 @@ function rev(season: string) {
   revalidatePath(`/admin/seasons/${enc}`);
 }
 
+// ROSTERS capability (or TO), or the captain of the given team (team-scoped). Actions without
+// a teamSeasonId (strikes, remove-move) fall through to grant/TO only — not captains.
+const allow = async (season: string, teamSeasonId: string) =>
+  can("ROSTERS", { seasonId: await seasonIdByName(season), teamSeasonId: teamSeasonId || undefined });
+
 const wk = (fd: FormData, key: string) => {
   const v = Number(fd.get(key));
   return Number.isFinite(v) && v > 0 ? v : 0;
 };
 
 export async function substituteAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
   const season = String(formData.get("season") ?? "");
+  if (!(await allow(season, String(formData.get("teamSeasonId") ?? "")))) return { ok: false, message: "Not authorized." };
   const until = wk(formData, "untilWeek");
   try {
     await substitute(
@@ -39,8 +44,8 @@ export async function substituteAction(_prev: ActionResult, formData: FormData):
 }
 
 export async function departureAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
   const season = String(formData.get("season") ?? "");
+  if (!(await allow(season, String(formData.get("teamSeasonId") ?? "")))) return { ok: false, message: "Not authorized." };
   const kind = formData.get("kind") === "BANNED" ? "BANNED" : "QUIT";
   try {
     await recordDeparture(kind, season, String(formData.get("teamSeasonId") ?? ""), String(formData.get("playerId") ?? ""), wk(formData, "effectiveWeek"), String(formData.get("reason") ?? ""));
@@ -52,8 +57,8 @@ export async function departureAction(_prev: ActionResult, formData: FormData): 
 }
 
 export async function replaceAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
   const season = String(formData.get("season") ?? "");
+  if (!(await allow(season, String(formData.get("teamSeasonId") ?? "")))) return { ok: false, message: "Not authorized." };
   try {
     await replacePlayer(season, String(formData.get("teamSeasonId") ?? ""), String(formData.get("inPlayerId") ?? ""), String(formData.get("replacesPlayerId") ?? ""), wk(formData, "effectiveWeek"), String(formData.get("reason") ?? ""));
     rev(season);
@@ -64,8 +69,8 @@ export async function replaceAction(_prev: ActionResult, formData: FormData): Pr
 }
 
 export async function reinstateAction(formData: FormData) {
-  if (!(await isAdmin())) return;
   const season = String(formData.get("season") ?? "");
+  if (!(await allow(season, String(formData.get("teamSeasonId") ?? "")))) return;
   try {
     await reinstate(season, String(formData.get("teamSeasonId") ?? ""), String(formData.get("playerId") ?? ""), wk(formData, "effectiveWeek"), String(formData.get("reason") ?? ""));
   } catch {
@@ -75,15 +80,15 @@ export async function reinstateAction(formData: FormData) {
 }
 
 export async function removeMoveAction(formData: FormData) {
-  if (!(await isAdmin())) return;
   const season = String(formData.get("season") ?? "");
+  if (!(await allow(season, String(formData.get("teamSeasonId") ?? "")))) return;
   await removeMove(String(formData.get("moveId") ?? ""));
   rev(season);
 }
 
 export async function changeCaptainAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
   const season = String(formData.get("season") ?? "");
+  if (!(await allow(season, String(formData.get("teamSeasonId") ?? "")))) return { ok: false, message: "Not authorized." };
   try {
     await changeCaptain(season, String(formData.get("teamSeasonId") ?? ""), String(formData.get("newCaptainPlayerId") ?? ""), wk(formData, "effectiveWeek"), String(formData.get("reason") ?? ""));
     rev(season);
@@ -94,8 +99,8 @@ export async function changeCaptainAction(_prev: ActionResult, formData: FormDat
 }
 
 export async function reseedAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
   const season = String(formData.get("season") ?? "");
+  if (!(await allow(season, String(formData.get("teamSeasonId") ?? "")))) return { ok: false, message: "Not authorized." };
   try {
     await reseed(season, String(formData.get("teamSeasonId") ?? ""), String(formData.get("playerId") ?? ""), Number(formData.get("newSeed")), wk(formData, "effectiveWeek"), String(formData.get("reason") ?? ""));
     rev(season);
@@ -106,8 +111,8 @@ export async function reseedAction(_prev: ActionResult, formData: FormData): Pro
 }
 
 export async function swapSeedsAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
   const season = String(formData.get("season") ?? "");
+  if (!(await allow(season, String(formData.get("teamSeasonId") ?? "")))) return { ok: false, message: "Not authorized." };
   try {
     await swapSeeds(season, String(formData.get("teamSeasonId") ?? ""), String(formData.get("playerAId") ?? ""), String(formData.get("playerBId") ?? ""), wk(formData, "effectiveWeek"), String(formData.get("reason") ?? ""));
     rev(season);
@@ -118,8 +123,8 @@ export async function swapSeedsAction(_prev: ActionResult, formData: FormData): 
 }
 
 export async function addStrikeAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
   const season = String(formData.get("season") ?? "");
+  if (!(await allow(season, String(formData.get("teamSeasonId") ?? "")))) return { ok: false, message: "Not authorized." };
   try {
     await addStrike(String(formData.get("playerId") ?? ""), season, wk(formData, "week") || null, String(formData.get("kind") ?? "SCHEDULING"), String(formData.get("reason") ?? ""));
     rev(season);
@@ -130,8 +135,8 @@ export async function addStrikeAction(_prev: ActionResult, formData: FormData): 
 }
 
 export async function removeStrikeAction(formData: FormData) {
-  if (!(await isAdmin())) return;
   const season = String(formData.get("season") ?? "");
+  if (!(await allow(season, String(formData.get("teamSeasonId") ?? "")))) return;
   await removeStrike(String(formData.get("strikeId") ?? ""));
   rev(season);
 }

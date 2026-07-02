@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
+import { isAdmin } from "@/lib/auth";
+import { NoAccess } from "@/components/NoAccess";
 import { listSeasons } from "@/lib/services/seasons";
 import { ImportUpload } from "@/components/ImportUpload";
 
 export const dynamic = "force-dynamic";
 
-// Gate + admin sub-nav are handled by app/admin/layout.tsx.
+// The shell only checks "has any access"; the dashboard itself is TO-only.
 export default async function Admin() {
+  if (!(await isAdmin())) return <NoAccess what="use the admin dashboard" />;
   const seasons = await listSeasons();
   return (
     <main>

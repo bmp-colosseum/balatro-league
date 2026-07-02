@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/auth";
+import { can, seriesScope } from "@/lib/permissions";
 import { startPlayoffs, reportSeries, resetPlayoffs } from "@/lib/services/playoffs";
 import type { ActionResult } from "@/lib/action-result";
 
@@ -24,9 +25,10 @@ export async function startPlayoffsAction(_prev: ActionResult, formData: FormDat
 }
 
 export async function reportSeriesAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
   const season = String(formData.get("season") ?? "");
   const seriesId = String(formData.get("seriesId") ?? "");
+  const { seasonId, teamSeasonIds } = await seriesScope(seriesId);
+  if (!(await can("SCHEDULE", { seasonId, teamSeasonId: teamSeasonIds }))) return { ok: false, message: "Not authorized." };
   const a = Number(formData.get("scoreA"));
   const b = Number(formData.get("scoreB"));
   try {

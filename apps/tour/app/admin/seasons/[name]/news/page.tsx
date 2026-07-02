@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ArrowLeft, Newspaper, Trash2, Pencil } from "lucide-react";
 import { listSeasonNews } from "@/lib/services/news";
+import { can, seasonIdByName } from "@/lib/permissions";
+import { NoAccess } from "@/components/NoAccess";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -15,6 +17,7 @@ const fmtDate = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day
 // Gate + admin shell come from app/admin/layout.tsx.
 export default async function NewsAdmin({ params }: { params: Promise<{ name: string }> }) {
   const seasonName = decodeURIComponent((await params).name);
+  if (!(await can("NEWS", { seasonId: await seasonIdByName(seasonName) }))) return <NoAccess what="manage news" />;
   const enc = encodeURIComponent(seasonName);
   const posts = await listSeasonNews(seasonName);
 

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, GitMerge } from "lucide-react";
+import { isAdmin } from "@/lib/auth";
+import { NoAccess } from "@/components/NoAccess";
 import { getClaimPairs } from "@/lib/services/identity";
 import { Callout } from "@/components/Callout";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
@@ -8,8 +10,9 @@ import { applyAllClaimsAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-// Gate + admin shell come from app/admin/layout.tsx.
+// Identity is TO-only (the shell only checks "has any access").
 export default async function ClaimHistory() {
+  if (!(await isAdmin())) return <NoAccess what="manage identities" />;
   const pairs = await getClaimPairs();
 
   return (

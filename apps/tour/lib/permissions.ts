@@ -19,6 +19,27 @@ export interface CanContext {
 
 const isTO = (v: Viewer) => v.tier === "OWNER" || v.tier === "TO";
 
+// Season name → id (grants + captain scoping key on the id). null when the season is unknown.
+export async function seasonIdByName(name: string): Promise<string | null> {
+  const s = await prisma.tourSeason.findUnique({ where: { name }, select: { id: true } });
+  return s?.id ?? null;
+}
+
+// The season + both teams of a matchup / playoff series — the scope for SCHEDULE checks
+// (either team's captain, a SCHEDULE mod, or a TO may act).
+export async function matchupScope(matchupId: string): Promise<{ seasonId: string | null; teamSeasonIds: string[] }> {
+  const mu = await prisma.matchup.findUnique({ where: { id: matchupId }, select: { teamSeasonAId: true, teamSeasonBId: true, weekId: true } });
+  if (!mu) return { seasonId: null, teamSeasonIds: [] };
+  const wk = await prisma.week.findUnique({ where: { id: mu.weekId }, select: { seasonId: true } });
+  return { seasonId: wk?.seasonId ?? null, teamSeasonIds: [mu.teamSeasonAId, mu.teamSeasonBId] };
+}
+
+export async function seriesScope(seriesId: string): Promise<{ seasonId: string | null; teamSeasonIds: string[] }> {
+  const s = await prisma.playoffSeries.findUnique({ where: { id: seriesId }, select: { seasonId: true, teamSeasonAId: true, teamSeasonBId: true } });
+  if (!s) return { seasonId: null, teamSeasonIds: [] };
+  return { seasonId: s.seasonId, teamSeasonIds: [s.teamSeasonAId, s.teamSeasonBId].filter((x): x is string => !!x) };
+}
+
 // All capabilities a viewer holds (globally or for the given season) — NOT counting the
 // team-scoped captain grants, which depend on the resource (see canFor).
 export async function capabilitiesFor(v: Viewer, seasonId?: string | null): Promise<Set<Capability>> {

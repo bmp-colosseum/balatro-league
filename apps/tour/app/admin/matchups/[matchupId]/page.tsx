@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { ArrowLeft, X } from "lucide-react";
-import { isAdmin } from "@/lib/auth";
+import { can, matchupScope } from "@/lib/permissions";
 import { getPairingConsole, getMatchupSubOptions } from "@/lib/services/pairing";
 import { getMatchupReport } from "@/lib/services/report";
 import { Callout } from "@/components/Callout";
+import { NoAccess } from "@/components/NoAccess";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -27,16 +28,11 @@ const opts = (players: Player[]) =>
   players.filter((p) => !p.paired).map((p) => ({ value: p.playerId, label: `#${p.seed} ${p.name}` }));
 
 export default async function PairingConsole({ params }: { params: Promise<{ matchupId: string }> }) {
-  if (!(await isAdmin())) {
-    return (
-      <main>
-        <h1>Admin</h1>
-        <Callout type="admin">Admins only — you don&apos;t have access.</Callout>
-      </main>
-    );
-  }
-
   const { matchupId } = await params;
+  // TO, a SCHEDULE mod, or the captain of either team in this matchup.
+  const { seasonId, teamSeasonIds } = await matchupScope(matchupId);
+  if (!(await can("SCHEDULE", { seasonId, teamSeasonId: teamSeasonIds }))) return <NoAccess what="manage this matchup" />;
+
   const c = await getPairingConsole(matchupId);
   const report = await getMatchupReport(matchupId);
   const subOpts = await getMatchupSubOptions(matchupId);

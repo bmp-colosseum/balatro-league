@@ -2,9 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { isAdmin } from "@/lib/auth";
+import { can, seasonIdByName } from "@/lib/permissions";
 import { createRanking, updateRanking, deleteRanking, addRankingEntry, removeRankingEntry } from "@/lib/services/rankings";
 import type { ActionResult } from "@/lib/action-result";
+
+// RANKINGS capability (or TO), scoped to the season being edited.
+const allow = async (season: string) => can("RANKINGS", { seasonId: await seasonIdByName(season) });
 
 function rev(season: string, id?: string) {
   const enc = encodeURIComponent(season);
@@ -18,8 +21,8 @@ const wk = (fd: FormData) => { const v = fd.get("week"); const n = Number(v); re
 const postedAt = (fd: FormData): Date | null => { const v = String(fd.get("postedAt") ?? "").trim(); if (!v) return null; const d = new Date(`${v}T12:00:00`); return Number.isNaN(d.getTime()) ? null : d; };
 
 export async function createRankingAction(formData: FormData) {
-  if (!(await isAdmin())) return;
   const season = String(formData.get("season") ?? "");
+  if (!(await allow(season))) return;
   const r = await createRanking(season, {
     kind: String(formData.get("kind") ?? "TEAM") === "PLAYER" ? "PLAYER" : "TEAM",
     week: wk(formData),
@@ -33,15 +36,15 @@ export async function createRankingAction(formData: FormData) {
 }
 
 export async function deleteRankingAction(formData: FormData) {
-  if (!(await isAdmin())) return;
   const season = String(formData.get("season") ?? "");
+  if (!(await allow(season))) return;
   await deleteRanking(String(formData.get("id") ?? ""));
   rev(season);
 }
 
 export async function updateRankingAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
   const season = String(formData.get("season") ?? "");
+  if (!(await allow(season))) return { ok: false, message: "Not authorized." };
   const id = String(formData.get("id") ?? "");
   try {
     await updateRanking(id, { week: wk(formData), title: String(formData.get("title") ?? ""), author: String(formData.get("author") ?? "") || null, authorPlayerId: String(formData.get("authorPlayerId") ?? "") || null, postedAt: postedAt(formData) });
@@ -53,8 +56,8 @@ export async function updateRankingAction(_prev: ActionResult, formData: FormDat
 }
 
 export async function addEntryAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
   const season = String(formData.get("season") ?? "");
+  if (!(await allow(season))) return { ok: false, message: "Not authorized." };
   const id = String(formData.get("rankingId") ?? "");
   try {
     const pos = Number(formData.get("position"));
@@ -67,8 +70,8 @@ export async function addEntryAction(_prev: ActionResult, formData: FormData): P
 }
 
 export async function removeEntryAction(formData: FormData) {
-  if (!(await isAdmin())) return;
   const season = String(formData.get("season") ?? "");
+  if (!(await allow(season))) return;
   await removeRankingEntry(String(formData.get("entryId") ?? ""));
   rev(season, String(formData.get("rankingId") ?? ""));
 }

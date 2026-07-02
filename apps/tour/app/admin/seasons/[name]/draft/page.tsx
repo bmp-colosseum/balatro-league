@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { ArrowLeft, Crown, Shuffle } from "lucide-react";
-import { isAdmin } from "@/lib/auth";
+import { getViewer, isAdmin } from "@/lib/auth";
+import { capabilitiesFor, captainTeamsFor, seasonIdByName } from "@/lib/permissions";
 import { getDraftSetup, getDraft, getDraftEditData } from "@/lib/services/draft";
 import { Callout } from "@/components/Callout";
+import { NoAccess } from "@/components/NoAccess";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -12,18 +14,18 @@ import { setupDraftAction, resetDraftAction, makePickAction, reassignPickAction 
 export const dynamic = "force-dynamic";
 
 export default async function DraftAdmin({ params }: { params: Promise<{ name: string }> }) {
-  if (!(await isAdmin())) {
-    return (
-      <main>
-        <h1>Admin</h1>
-        <Callout type="admin">Admins only — you don&apos;t have access.</Callout>
-      </main>
-    );
-  }
-
   const { name } = await params;
   const seasonName = decodeURIComponent(name);
   const enc = encodeURIComponent(seasonName);
+
+  // DRAFT runner / TO run the board; a captain can view + pick when on the clock.
+  const to = await isAdmin();
+  const seasonId = to ? null : await seasonIdByName(seasonName);
+  const viewer = to ? null : await getViewer();
+  const isRunner = to || !!(viewer && (await capabilitiesFor(viewer, seasonId)).has("DRAFT"));
+  const isCaptain = !isRunner && !!viewer && (await captainTeamsFor(viewer, seasonId)).size > 0;
+  if (!isRunner && !isCaptain) return <NoAccess what="view the draft" />;
+
   const setup = await getDraftSetup(seasonName);
 
   const back = (

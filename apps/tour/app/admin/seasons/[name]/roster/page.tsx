@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { ArrowLeft, Crown, X, RefreshCw, UserMinus, UserPlus, Undo2, ShieldAlert, AlertTriangle, ArrowUpDown } from "lucide-react";
-import { isAdmin } from "@/lib/auth";
+import { getViewer, isAdmin } from "@/lib/auth";
+import { capabilitiesFor, captainTeamsFor, seasonIdByName } from "@/lib/permissions";
 import { getRosterOps } from "@/lib/services/roster-ops";
 import { STRIKE_KINDS, STRIKE_LABEL } from "@/lib/services/strikes";
-import { Callout } from "@/components/Callout";
+import { NoAccess } from "@/components/NoAccess";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -21,19 +22,19 @@ export default async function RosterOpsAdmin({
   params: Promise<{ name: string }>;
   searchParams: Promise<{ week?: string }>;
 }) {
-  if (!(await isAdmin())) {
-    return (
-      <main>
-        <h1>Admin</h1>
-        <Callout type="admin">Admins only — you don&apos;t have access.</Callout>
-      </main>
-    );
-  }
-
   const { name } = await params;
   const { week } = await searchParams;
   const seasonName = decodeURIComponent(name);
   const enc = encodeURIComponent(seasonName);
+
+  // ROSTERS mod / TO see every team; a captain sees only the team(s) they captain.
+  const to = await isAdmin();
+  const seasonId = to ? null : await seasonIdByName(seasonName);
+  const viewer = to ? null : await getViewer();
+  const isMod = to || !!(viewer && (await capabilitiesFor(viewer, seasonId)).has("ROSTERS"));
+  const myTeams = !isMod && viewer ? await captainTeamsFor(viewer, seasonId) : null;
+  if (!isMod && !(myTeams && myTeams.size)) return <NoAccess what="manage rosters" />;
+
   const data = await getRosterOps(seasonName, week ? Number(week) : undefined);
 
   if (!data) {
@@ -45,8 +46,10 @@ export default async function RosterOpsAdmin({
     );
   }
 
+  // Captains only see (and act on) their own team(s).
+  const teams = myTeams ? data.teams.filter((t) => myTeams.has(t.teamSeasonId)) : data.teams;
   const faOpts = data.freeAgents.map((p) => ({ value: p.id, label: p.name }));
-  const allLineup = data.teams.flatMap((t) => t.lineup.map((p) => ({ value: p.playerId, label: `${p.name} (${t.name})` })));
+  const allLineup = teams.flatMap((t) => t.lineup.map((p) => ({ value: p.playerId, label: `${p.name} (${t.name})` })));
   const weekTabs = data.weeks.length ? data.weeks : [1];
 
   return (
@@ -84,7 +87,7 @@ export default async function RosterOpsAdmin({
 
       {/* Teams: derived lineup + actions */}
       <div className="grid grid-2">
-        {data.teams.map((t) => {
+        {teams.map((t) => {
           const lineupOpts = t.lineup.map((p) => ({ value: p.playerId, label: `#${p.seed} ${p.name}` }));
           return (
             <div className="card" key={t.teamSeasonId} style={{ marginBottom: 0 }}>

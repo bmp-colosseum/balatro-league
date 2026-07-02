@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Trash2 } from "lucide-react";
 import { listSeasonRankings, rankingPool } from "@/lib/services/rankings";
+import { can, seasonIdByName } from "@/lib/permissions";
+import { NoAccess } from "@/components/NoAccess";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -16,6 +18,7 @@ const toDateInput = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).
 export default async function RankingEdit({ params }: { params: Promise<{ name: string; id: string }> }) {
   const { name, id } = await params;
   const seasonName = decodeURIComponent(name);
+  if (!(await can("RANKINGS", { seasonId: await seasonIdByName(seasonName) }))) return <NoAccess what="manage power rankings" />;
   const enc = encodeURIComponent(seasonName);
   const [all, pool] = await Promise.all([listSeasonRankings(seasonName), rankingPool(seasonName)]);
   const r = all.find((x) => x.id === id);

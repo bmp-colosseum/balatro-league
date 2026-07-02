@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { ArrowLeft, Users, Shield, Shuffle, CalendarDays, UserCog, Trophy, Flag, Hash, ExternalLink, Newspaper, ListOrdered } from "lucide-react";
-import { isAdmin } from "@/lib/auth";
+import { getViewer, isAdmin } from "@/lib/auth";
+import { capabilitiesFor, captainTeamsFor, seasonIdByName } from "@/lib/permissions";
 import { getSeasonAdmin } from "@/lib/services/seasons";
-import { Callout } from "@/components/Callout";
+import { NoAccess } from "@/components/NoAccess";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
 import { updateSeasonStateAction } from "../../actions";
@@ -12,17 +13,16 @@ export const dynamic = "force-dynamic";
 const STATES = ["SIGNUPS", "DRAFTING", "REGULAR", "PLAYOFFS", "DONE"] as const;
 
 export default async function SeasonAdmin({ params }: { params: Promise<{ name: string }> }) {
-  if (!(await isAdmin())) {
-    return (
-      <main>
-        <h1>Admin</h1>
-        <Callout type="admin">Admins only — you don&apos;t have access.</Callout>
-      </main>
-    );
-  }
-
   const { name } = await params;
   const seasonName = decodeURIComponent(name);
+  // Shell already checked "has any access"; here we show only the stages this viewer can act on.
+  const to = await isAdmin();
+  const seasonId = to ? null : await seasonIdByName(seasonName);
+  const viewer = to ? null : await getViewer();
+  const caps = viewer ? await capabilitiesFor(viewer, seasonId) : null;
+  const isCaptain = viewer ? (await captainTeamsFor(viewer, seasonId)).size > 0 : false;
+  const cap = (c: "NEWS" | "RANKINGS" | "ROSTERS" | "DRAFT") => to || !!caps?.has(c);
+
   const data = await getSeasonAdmin(seasonName);
   if (!data) {
     return (
@@ -37,18 +37,21 @@ export default async function SeasonAdmin({ params }: { params: Promise<{ name: 
   const enc = encodeURIComponent(season.name);
   const stageIdx = STATES.indexOf(season.state);
 
+  // `show` gates each tile by capability/captaincy (TO sees all). Structural stages are TO-only.
   const stages = [
-    { key: "signups", label: "Signups", icon: Users, href: `/admin/seasons/${enc}/signups`, count: `${signups.APPROVED} approved · ${signups.PENDING} pending`, ready: true },
-    { key: "teams", label: "Teams", icon: Shield, href: `/admin/seasons/${enc}/teams`, count: `${season._count.teamSeasons} teams · ${season._count.conferences} conf`, ready: false },
-    { key: "draft", label: "Draft", icon: Shuffle, href: `/admin/seasons/${enc}/draft`, count: season.draft ? season.draft.state : "not started", ready: true },
-    { key: "schedule", label: "Schedule", icon: CalendarDays, href: `/admin/seasons/${enc}/schedule`, count: `${season._count.weeks} weeks`, ready: true },
-    { key: "roster", label: "Roster ops", icon: UserCog, href: `/admin/seasons/${enc}/roster`, count: "subs · drops · DQs", ready: true },
-    { key: "playoffs", label: "Playoffs", icon: Trophy, href: `/admin/seasons/${enc}/playoffs`, count: season.state === "PLAYOFFS" || season.state === "DONE" ? `bracket · ${season.state}` : `field of ${season.playoffTeams}`, ready: true },
-    { key: "end", label: "Season end", icon: Flag, href: `/admin/seasons/${enc}/end`, count: season.state === "DONE" ? "crowned · awards" : "crown + awards", ready: true },
-    { key: "discord", label: "Discord roles", icon: Hash, href: `/admin/seasons/${enc}/discord`, count: season.playerRoleId ? "synced" : "preview", ready: true },
-    { key: "news", label: "News Network", icon: Newspaper, href: `/admin/seasons/${enc}/news`, count: "previews · recaps", ready: true },
-    { key: "rankings", label: "Power rankings", icon: ListOrdered, href: `/admin/seasons/${enc}/rankings`, count: "teams · players", ready: true },
-  ];
+    { key: "signups", label: "Signups", icon: Users, href: `/admin/seasons/${enc}/signups`, count: `${signups.APPROVED} approved · ${signups.PENDING} pending`, ready: true, show: to },
+    { key: "teams", label: "Teams", icon: Shield, href: `/admin/seasons/${enc}/teams`, count: `${season._count.teamSeasons} teams · ${season._count.conferences} conf`, ready: false, show: to },
+    { key: "draft", label: "Draft", icon: Shuffle, href: `/admin/seasons/${enc}/draft`, count: season.draft ? season.draft.state : "not started", ready: true, show: cap("DRAFT") || isCaptain },
+    { key: "schedule", label: "Schedule", icon: CalendarDays, href: `/admin/seasons/${enc}/schedule`, count: `${season._count.weeks} weeks`, ready: true, show: to },
+    { key: "roster", label: "Roster ops", icon: UserCog, href: `/admin/seasons/${enc}/roster`, count: "subs · drops · DQs", ready: true, show: cap("ROSTERS") || isCaptain },
+    { key: "playoffs", label: "Playoffs", icon: Trophy, href: `/admin/seasons/${enc}/playoffs`, count: season.state === "PLAYOFFS" || season.state === "DONE" ? `bracket · ${season.state}` : `field of ${season.playoffTeams}`, ready: true, show: to },
+    { key: "end", label: "Season end", icon: Flag, href: `/admin/seasons/${enc}/end`, count: season.state === "DONE" ? "crowned · awards" : "crown + awards", ready: true, show: to },
+    { key: "discord", label: "Discord roles", icon: Hash, href: `/admin/seasons/${enc}/discord`, count: season.playerRoleId ? "synced" : "preview", ready: true, show: to },
+    { key: "news", label: "News Network", icon: Newspaper, href: `/admin/seasons/${enc}/news`, count: "previews · recaps", ready: true, show: cap("NEWS") },
+    { key: "rankings", label: "Power rankings", icon: ListOrdered, href: `/admin/seasons/${enc}/rankings`, count: "teams · players", ready: true, show: cap("RANKINGS") },
+  ].filter((s) => s.show);
+
+  if (!stages.length) return <NoAccess what="manage this season" />;
 
   return (
     <main>
@@ -81,11 +84,13 @@ export default async function SeasonAdmin({ params }: { params: Promise<{ name: 
             </span>
           ))}
         </div>
-        <form action={updateSeasonStateAction} className="mt-3 flex items-end gap-2">
-          <input type="hidden" name="name" value={season.name} />
-          <FormSelect name="state" defaultValue={season.state} options={STATES.map((s) => ({ value: s, label: s }))} />
-          <SubmitButton variant="secondary">Set state</SubmitButton>
-        </form>
+        {to && (
+          <form action={updateSeasonStateAction} className="mt-3 flex items-end gap-2">
+            <input type="hidden" name="name" value={season.name} />
+            <FormSelect name="state" defaultValue={season.state} options={STATES.map((s) => ({ value: s, label: s }))} />
+            <SubmitButton variant="secondary">Set state</SubmitButton>
+          </form>
+        )}
       </div>
 
       {/* Config */}

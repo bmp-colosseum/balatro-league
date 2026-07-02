@@ -208,6 +208,15 @@ export async function reassignDraftPick(pickId: string, newPlayerId: string) {
   return { ok: true };
 }
 
+// The teamSeason currently on the clock (the next unfilled pick), or null — used to let that
+// team's captain make their own pick.
+export async function onClockTeam(seasonName: string): Promise<string | null> {
+  const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, include: { draft: true } });
+  if (!season?.draft) return null;
+  const next = await prisma.draftPick.findFirst({ where: { draftId: season.draft.id, playerId: null }, orderBy: { pickIndex: "asc" }, select: { teamSeasonId: true } });
+  return next?.teamSeasonId ?? null;
+}
+
 // Assign the on-the-clock pick to a player from the approved pool, then advance.
 // When the last slot fills, mark the draft DONE + materialize rosters.
 export async function makePick(seasonName: string, playerId: string) {

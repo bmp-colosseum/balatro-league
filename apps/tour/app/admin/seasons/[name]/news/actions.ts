@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { isAdmin } from "@/lib/auth";
+import { can, seasonIdByName } from "@/lib/permissions";
 import { createNews, updateNews, deleteNews } from "@/lib/services/news";
 import type { ActionResult } from "@/lib/action-result";
 
@@ -11,6 +11,9 @@ function rev(season: string) {
   revalidatePath(`/seasons/${enc}/news`);
   revalidatePath(`/seasons/${enc}`);
 }
+
+// NEWS capability (or TO), scoped to the season being edited.
+const allow = async (season: string) => can("NEWS", { seasonId: await seasonIdByName(season) });
 
 const wk = (fd: FormData) => {
   const v = fd.get("week");
@@ -28,8 +31,8 @@ const postedAt = (fd: FormData): Date | null => {
 };
 
 export async function createNewsAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
   const season = String(formData.get("season") ?? "");
+  if (!(await allow(season))) return { ok: false, message: "Not authorized." };
   try {
     await createNews(season, { week: wk(formData), title: String(formData.get("title") ?? ""), body: String(formData.get("body") ?? ""), postedAt: postedAt(formData) });
     rev(season);
@@ -40,8 +43,8 @@ export async function createNewsAction(_prev: ActionResult, formData: FormData):
 }
 
 export async function updateNewsAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
   const season = String(formData.get("season") ?? "");
+  if (!(await allow(season))) return { ok: false, message: "Not authorized." };
   try {
     await updateNews(String(formData.get("id") ?? ""), { week: wk(formData), title: String(formData.get("title") ?? ""), body: String(formData.get("body") ?? ""), postedAt: postedAt(formData) });
     rev(season);
@@ -52,8 +55,8 @@ export async function updateNewsAction(_prev: ActionResult, formData: FormData):
 }
 
 export async function deleteNewsAction(formData: FormData) {
-  if (!(await isAdmin())) return;
   const season = String(formData.get("season") ?? "");
+  if (!(await allow(season))) return;
   await deleteNews(String(formData.get("id") ?? ""));
   rev(season);
 }

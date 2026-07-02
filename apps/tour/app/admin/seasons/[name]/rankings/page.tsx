@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ArrowLeft, ListOrdered, Trash2, Pencil } from "lucide-react";
 import { listSeasonRankings, rankingPool } from "@/lib/services/rankings";
+import { can, seasonIdByName } from "@/lib/permissions";
+import { NoAccess } from "@/components/NoAccess";
 import { FormSelect } from "@/components/FormSelect";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { createRankingAction, deleteRankingAction } from "./actions";
@@ -11,6 +13,7 @@ const inputCls = "rounded border border-[var(--border)] bg-[var(--surface-2)] px
 
 export default async function RankingsAdmin({ params }: { params: Promise<{ name: string }> }) {
   const seasonName = decodeURIComponent((await params).name);
+  if (!(await can("RANKINGS", { seasonId: await seasonIdByName(seasonName) }))) return <NoAccess what="manage power rankings" />;
   const enc = encodeURIComponent(seasonName);
   const [rankings, pool] = await Promise.all([listSeasonRankings(seasonName), rankingPool(seasonName)]);
 
