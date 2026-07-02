@@ -186,6 +186,16 @@ for different things" ask entirely on the web, before any bot infra.
 
 ---
 
+## Dry runs / staging (owner practice — everything supports it)
+
+Duplicate site + DB, like prior seasons' testing: a second Railway web service + its own
+Postgres (db-sync auto-creates the schema on boot; upload the xlsx zip once for history).
+Dry-run whole seasons there: scratch season → signups → draft → pairing → reporting →
+playoffs. **The bot is developed the same way**: staging bot env points at a TEST Discord
+guild (`TOUR_GUILD_ID`) + staging `TOUR_WEB_URL`/`TOUR_ADMIN_TOKEN`; role sync, pings,
+draft channel, and match threads all rehearse in the test server, then go live by flipping
+env vars. Local dev (embedded PG) remains the first line for every feature.
+
 ## Future ideas (owner-flagged, not yet scheduled)
 
 - **Twitch integration** (PizzaPower55's channel is the community hub):
