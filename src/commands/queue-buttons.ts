@@ -8,7 +8,6 @@ import {
   tryStartFromQueue,
   refreshQueueMessage,
   queueStatusFor,
-  playerInActiveMatch,
   isInActiveDivision,
   remainingMatchCount,
   type QueueStatus,
@@ -85,12 +84,9 @@ export const queueButtons: ButtonHandler = {
         await interaction.editReply("You've played all your scheduled matches this season — nothing left to queue for. 🎉");
         return;
       }
-      // Can't queue while already in a match — finish it first, so nobody ends
-      // up sitting in the queue mid-match.
-      if (await playerInActiveMatch(me.id)) {
-        await interaction.editReply("You're already in a match — finish it before queuing up.");
-        return;
-      }
+      // Being mid-match is fine — you can line up your next opponent while you
+      // play. The queue only ever pairs you with a still-scheduled opponent, and
+      // the match-claim refuses a duplicate against someone you're already playing.
       await joinQueue(me.id, season.id);
       const outcome = await tryStartFromQueue({
         client: interaction.client,

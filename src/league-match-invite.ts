@@ -25,10 +25,10 @@ export interface CreateLeagueMatchInviteResult {
 
 // In-process serialization for the match-CLAIM (validity checks → session
 // create). The bot is a single process, so chaining every claim through one
-// promise means two concurrent matchers (two queue clicks, a click racing the
-// sweep, two /start-matches) can never both pass the "already in a match" check
-// and create overlapping sessions. Only the cheap DB claim is serialized; the
-// slow thread/invite I/O runs unlocked afterward.
+// promise means two concurrent matchers for the SAME pair (two queue clicks, a
+// click racing the sweep, two /start-matches) can never both pass the duplicate-
+// pair check and create overlapping sessions between the same two players. Only
+// the cheap DB claim is serialized; the slow thread/invite I/O runs unlocked after.
 let creationLock: Promise<unknown> = Promise.resolve();
 function withCreationLock<T>(fn: () => Promise<T>): Promise<T> {
   const next = creationLock.then(fn, fn);
@@ -85,22 +85,23 @@ export async function createLeagueMatchInvite(opts: {
         if (existingShootout) return { error: `A shootout result is already recorded for this pair.` };
       }
 
-      // Single-match invariant: NEITHER player may already be in a non-terminal
-      // session — with this opponent OR anyone else. Stops a player being pulled
-      // into two matches at once. Reliable because the whole claim is serialized.
-      const busy = await prisma.matchSession.findFirst({
+      // One match at a time BETWEEN THE SAME TWO PLAYERS — nothing stops either
+      // of them being in other matches with other people at the same time (that's
+      // fine, and often useful). This only blocks a duplicate concurrent session
+      // for this exact pair. Reliable because the whole claim is serialized.
+      const dupe = await prisma.matchSession.findFirst({
         where: {
           state: { notIn: ["COMPLETE", "CANCELLED"] },
-          OR: [{ playerAId: me.id }, { playerBId: me.id }, { playerAId: opp.id }, { playerBId: opp.id }],
+          OR: [
+            { playerAId: me.id, playerBId: opp.id },
+            { playerAId: opp.id, playerBId: me.id },
+          ],
         },
-        select: { playerAId: true, playerBId: true },
+        select: { id: true },
       });
-      if (busy) {
-        const meBusy = busy.playerAId === me.id || busy.playerBId === me.id;
+      if (dupe) {
         return {
-          error: meBusy
-            ? `You're already in a match — finish it (or have an admin cancel it) before starting another.`
-            : `${opp.displayName} is already in a match — try again once they're free.`,
+          error: `You already have a match in progress with ${opp.displayName} — finish or cancel that one before starting another with them.`,
         };
       }
 
