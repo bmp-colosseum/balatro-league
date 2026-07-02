@@ -289,10 +289,34 @@ model Signup {
   displayName      String? // snapshot from Discord at signup; display-only, the ID is the key.
   timezone         String? // IANA, e.g. "America/New_York" — powers the TO awkward-tz flag
   availability     String? // free-form / coarse general availability — a hint, not a schedule
-  willingToCaptain Boolean      @default(false)
-  bmpHandle        String? // for the scraped BMP rank (display-only, §0)
+  willingToCaptain Boolean      @default(false) // derived from captainInterest (kept for draft-pool queries)
+  bmpHandle        String? // legacy — rank is now auto-pulled by discordId (bmpMmr/bmpTier)
   status           SignupStatus @default(PENDING)
   createdAt        DateTime     @default(now())
+
+  // ── The real form (option labels stored verbatim — the wording is part of the culture) ──
+  scheduleAgency  String? // "Yes, I have commitments..." / "Somewhat..." / "No, I do not have much control"
+  playFrequency   String? // how often + how they play (single player, ranked, ...)
+  teamActivity    String? // how active with the team (messaging, practice, voice)
+  coachWilling    Boolean @default(false) // willing to coach
+  coachWanted     Boolean @default(false) // willing to be coached
+  coachingNote    String? // voice/mic/frequency note (optional)
+  captainInterest String? // "Yes, I would love to!" / "I will if it is needed" / "Not interested"
+  helperInterest  Boolean @default(false) // assistant TO — feeds the mod-grant pipeline
+  englishOk       Boolean @default(true)
+  discordActivity Int? // 1-10 ("once per day = 6")
+  upcomingBreaks  String? // "No" / "Possibly" / "Yes"
+  weeklyCommit    String? // Yes / Maybe / No — one Bo3 (2-3h) per week for 7-10 weeks
+  outreach        String? // Yes / Maybe / No — reach out to opponents weekly
+  modCheck        String? // Yes / Maybe / No — verify mod versions before sets
+  respectPledge   String? // Yes / Maybe / No
+  asyncExp        String? // "Yes, in a similar tournament to this" / "Yes, in other contexts" / "No"
+  comments        String? // intro / self-nerfs — also the flavor text for their player card
+  twitchFollow    String? // "Of course!" / "Yes, and I'll subscribe with Twitch Prime!" / "No, L self promo"
+
+  // ── Auto-pulled (never asked) ──
+  bmpMmr  Int? // Ranked MMR by discordId at (re)submit — balatromp tRPC
+  bmpTier String? // derived tier label ("Gold", "Lucky", ...)
 
   season TourSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
 
