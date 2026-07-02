@@ -5,6 +5,7 @@ import { getPairingConsole, getMatchupSubOptions } from "@/lib/services/pairing"
 import { getMatchupReport } from "@/lib/services/report";
 import { Callout } from "@/components/Callout";
 import { NoAccess } from "@/components/NoAccess";
+import { LiveRefresh } from "@/components/LiveRefresh";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -53,6 +54,7 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
 
   return (
     <main>
+      <LiveRefresh channel={`matchup:${matchupId}`} />
       <p>
         <Link href={`/admin/seasons/${enc}/schedule`} className="inline-flex items-center gap-1"><ArrowLeft className="size-3.5" /> {c.seasonName} schedule</Link>
       </p>

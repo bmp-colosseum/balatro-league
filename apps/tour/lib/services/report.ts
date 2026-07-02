@@ -5,6 +5,7 @@
 // setsToWin, or every set is in) — so derive-on-read standings count only
 // completed matchups, exactly like the imported team-only seasons.
 import { prisma } from "../db";
+import { notifyLive } from "../notify";
 
 export async function reportSet(setId: string, gamesTeamA: number, gamesTeamB: number) {
   const set = await prisma.tourSet.findUnique({ where: { id: setId } });
@@ -127,6 +128,9 @@ export async function rollupMatchup(matchupId: string) {
       data: { setsWonA: null, setsWonB: null, gamesWonA: null, gamesWonB: null, winnerTeamSeasonId: null },
     });
   }
+  // Live refresh (C5): every confirmed/forfeit/unreport path funnels through this rollup.
+  await notifyLive(`matchup:${matchupId}`);
+  await notifyLive("sets");
 }
 
 // Per-set results view for the matchup console: each set's score + winner, plus

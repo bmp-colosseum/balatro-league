@@ -5,6 +5,7 @@ import { capabilitiesFor, captainTeamsFor, seasonIdByName } from "@/lib/permissi
 import { getDraftSetup, getDraft, getDraftEditData } from "@/lib/services/draft";
 import { Callout } from "@/components/Callout";
 import { NoAccess } from "@/components/NoAccess";
+import { LiveRefresh } from "@/components/LiveRefresh";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -96,6 +97,7 @@ export default async function DraftAdmin({ params }: { params: Promise<{ name: s
 
   return (
     <main>
+      {!done && <LiveRefresh channel={`draft:${board.season.id}`} />}
       {back}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1>{seasonName} — Draft</h1>

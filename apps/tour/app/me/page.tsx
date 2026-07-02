@@ -9,6 +9,7 @@ import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
 import { DECKS, STAKES } from "@/lib/balatro";
+import { LiveRefresh } from "@/components/LiveRefresh";
 import { reportSetAction, confirmSetAction, disputeSetAction } from "./actions";
 
 const g = "w-12 rounded border border-[var(--border)] bg-[var(--surface-2)] px-1 py-0.5 text-center";
@@ -58,6 +59,7 @@ export default async function MyTour() {
 
   return (
     <main>
+      <LiveRefresh channel="sets" />
       <h1>My Tour</h1>
       <p className="sub">
         Signed in as <strong>{viewer.name ?? viewer.discordId}</strong> ·{" "}

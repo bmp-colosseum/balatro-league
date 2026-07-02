@@ -8,6 +8,7 @@
 // transaction — but it still respects whoseProposeTurn + the ±2 window, so the live
 // two-captain tool (auth + SSE, later) layers straight on top.
 import { prisma } from "../db";
+import { notifyLive } from "../notify";
 import {
   initPairing,
   propose,
@@ -186,6 +187,7 @@ async function persistPair(m: LoadedMatchup, aPlayerId: string, bPlayerId: strin
       status: "PROPOSED",
     },
   });
+  await notifyLive(`matchup:${m.matchup.id}`); // live refresh (C5)
 }
 
 // Set the coinflip winner (who proposes first). Stored on the matchup.
@@ -196,14 +198,16 @@ export async function setSendFirst(matchupId: string, team: "A" | "B") {
     where: { id: matchupId },
     data: { sendFirstTeamSeasonId: team === "B" ? m.teamSeasonBId : m.teamSeasonAId },
   });
+  await notifyLive(`matchup:${matchupId}`);
 }
 
 // Deleting a TourSet doesn't cascade its core Match (Match is referenced by plain
 // id, no relation — the decoupling rule), so drop any linked Match too.
 export async function removePair(setId: string) {
-  const s = await prisma.tourSet.findUnique({ where: { id: setId }, select: { matchId: true } });
+  const s = await prisma.tourSet.findUnique({ where: { id: setId }, select: { matchId: true, matchupId: true } });
   await prisma.tourSet.delete({ where: { id: setId } });
   if (s?.matchId) await prisma.match.delete({ where: { id: s.matchId } });
+  if (s?.matchupId) await notifyLive(`matchup:${s.matchupId}`);
 }
 
 export async function resetPairing(matchupId: string) {
@@ -211,6 +215,7 @@ export async function resetPairing(matchupId: string) {
   await prisma.tourSet.deleteMany({ where: { matchupId } });
   const matchIds = sets.map((s) => s.matchId).filter((x): x is string => !!x);
   if (matchIds.length) await prisma.match.deleteMany({ where: { id: { in: matchIds } } });
+  await notifyLive(`matchup:${matchupId}`);
 }
 
 // Reassign the player on ONE side of an UNPLAYED set to a substitute — for a late
@@ -333,6 +338,7 @@ export async function captainPropose(matchupId: string, viewerPlayerId: string, 
   const r = propose(state, side, playerId);
   if (!r.ok) throw new Error(r.reason);
   await prisma.matchup.update({ where: { id: matchupId }, data: { pendingProposalPlayerId: playerId } });
+  await notifyLive(`matchup:${matchupId}`);
   return { ok: true };
 }
 
@@ -350,6 +356,7 @@ export async function captainRespond(matchupId: string, viewerPlayerId: string, 
   if (!r.ok) throw new Error(r.reason);
   await persistPair(m, r.pair.aPlayerId, r.pair.bPlayerId);
   await prisma.matchup.update({ where: { id: matchupId }, data: { pendingProposalPlayerId: null } });
+  await notifyLive(`matchup:${matchupId}`);
   return { ok: true };
 }
 
@@ -362,6 +369,7 @@ export async function captainCancelProposal(matchupId: string, viewerPlayerId: s
   const state = stateFrom(m);
   if (!state.pending || state.pending.by !== side) throw new Error("You have no pending proposal to cancel.");
   await prisma.matchup.update({ where: { id: matchupId }, data: { pendingProposalPlayerId: null } });
+  await notifyLive(`matchup:${matchupId}`);
   return { ok: true };
 }
 

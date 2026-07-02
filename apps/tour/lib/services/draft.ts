@@ -9,6 +9,7 @@
 import { prisma } from "../db";
 import { buildDraft } from "@balatro/tour-core";
 import { getAllTimePlayers } from "../stats";
+import { notifyLive } from "../notify";
 
 export async function getDraftSetup(seasonName: string) {
   const season = await prisma.tourSeason.findUnique({
@@ -287,6 +288,7 @@ export async function makePick(seasonName: string, playerId: string) {
   } else if (season.draft.state === "PENDING") {
     await prisma.draft.update({ where: { id: season.draft.id }, data: { state: "ACTIVE" } });
   }
+  await notifyLive(`draft:${season.id}`); // live refresh (C5)
   return { done: stillOpen === 0 };
 }
 
@@ -334,4 +336,5 @@ export async function resetDraft(seasonName: string) {
   await prisma.teamSeason.deleteMany({ where: { seasonId: season.id } }); // cascades Roster
   await prisma.conference.deleteMany({ where: { seasonId: season.id } });
   await prisma.tourSeason.update({ where: { id: season.id }, data: { state: "SIGNUPS" } });
+  await notifyLive(`draft:${season.id}`);
 }

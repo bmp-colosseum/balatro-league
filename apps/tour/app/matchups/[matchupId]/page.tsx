@@ -6,6 +6,7 @@ import { Callout } from "@/components/Callout";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
+import { LiveRefresh } from "@/components/LiveRefresh";
 import { proposeAction, respondAction, cancelProposalAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +65,7 @@ export default async function CaptainPairing({ params }: { params: Promise<{ mat
 
   return (
     <main>
+      <LiveRefresh channel={`matchup:${matchupId}`} />
       <p>
         <Link href="/me" className="inline-flex items-center gap-1"><ArrowLeft className="size-3.5" /> my tour</Link>
       </p>

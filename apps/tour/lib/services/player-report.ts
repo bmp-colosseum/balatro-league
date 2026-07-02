@@ -7,6 +7,7 @@
 // every op verifies that player is actually in the set.
 import { prisma } from "../db";
 import { rollupMatchup } from "./report";
+import { notifyLive } from "../notify";
 import { isDeck, isStake } from "../balatro";
 
 async function loadSetForPlayer(setId: string, playerId: string) {
@@ -87,6 +88,8 @@ export async function playerReportSet(setId: string, playerId: string, myGames: 
 
   await prisma.tourSet.update({ where: { id: setId }, data: { matchId, status: "REPORTED" } });
   // No matchup rollup yet — only a CONFIRMED set counts toward standings.
+  await notifyLive("sets");
+  if (set.matchupId) await notifyLive(`matchup:${set.matchupId}`);
   return { ok: true };
 }
 
@@ -111,5 +114,7 @@ export async function playerDisputeSet(setId: string, playerId: string, reason: 
     data: { status: "DISPUTED", disputedById: playerId, disputeReason: reason.trim() || null, disputedAt: new Date() },
   });
   await prisma.tourSet.update({ where: { id: setId }, data: { status: "DISPUTED" } });
+  await notifyLive("sets");
+  if (set.matchupId) await notifyLive(`matchup:${set.matchupId}`);
   return { ok: true };
 }
