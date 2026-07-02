@@ -124,6 +124,16 @@ export default async function DraftAdmin({ params }: { params: Promise<{ name: s
           <div>
             Round {board.current!.round}, Pick {board.current!.pickInRound} — <strong>{board.current!.overall}{ordinal(board.current!.overall)} overall</strong> · <strong>{board.current!.team?.name ?? "—"}</strong> — pick a player below.
           </div>
+          {board.upcoming.length > 0 && (
+            <div className="sub mt-2 flex flex-wrap items-center gap-1.5">
+              <span>Up next:</span>
+              {board.upcoming.map((u, i) => (
+                <span key={u.overall} className="pill" style={{ background: "var(--surface-2)", border: "1px solid var(--border)", opacity: 1 - i * 0.15 }}>
+                  {u.overall}. {u.team} <span className="muted">R{u.round}</span>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

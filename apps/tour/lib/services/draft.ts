@@ -203,12 +203,20 @@ export async function getDraft(seasonName: string) {
   const currentTeam = current ? teams.find((t) => t.id === current.teamSeasonId) ?? null : null;
   // "Round R, Pick P — Nth overall": pick-in-round derives from position within the round.
   const pickInRound = current ? picks.filter((p) => p.round === current.round && p.pickIndex <= current.pickIndex).length : 0;
+  // Sports-draft ticker: the next few teams coming up after the current pick (snake order
+  // is fully known), so everyone can see who's on deck.
+  const teamNameOf = new Map(teamSeasons.map((ts) => [ts.id, ts.team.name]));
+  const upcoming = picks
+    .filter((p) => !p.playerId && (!current || p.pickIndex > current.pickIndex))
+    .slice(0, 5)
+    .map((p) => ({ round: p.round, overall: p.pickIndex + 1, team: teamNameOf.get(p.teamSeasonId) ?? "?" }));
   return {
     season,
     state: season.draft.state,
     teams,
     pool,
     current: current ? { round: current.round, pickIndex: current.pickIndex, pickInRound, overall: current.pickIndex + 1, team: currentTeam } : null,
+    upcoming,
     totalPicks: picks.length,
     madePicks: picks.filter((p) => p.playerId).length,
   };
