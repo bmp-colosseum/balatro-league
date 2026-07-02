@@ -8,6 +8,7 @@
 // refines later; nothing here is irreversible (resetDraft wipes it).
 import { prisma } from "../db";
 import { buildDraft } from "@balatro/tour-core";
+import { getAllTimePlayers } from "../stats";
 
 export async function getDraftSetup(seasonName: string) {
   const season = await prisma.tourSeason.findUnique({
@@ -137,18 +138,54 @@ export async function getDraft(seasonName: string) {
   });
   const approvedPlayers = await prisma.player.findMany({
     where: { discordId: { in: approved.map((a) => a.discordId) } },
-    select: { id: true, displayName: true },
+    select: { id: true, displayName: true, discordId: true },
   });
   const nameById = new Map<string, string>(approvedPlayers.map((p) => [p.id, p.displayName]));
   const caps = await prisma.player.findMany({
-    where: { id: { in: teamSeasons.map((t) => t.captainPlayerId) } },
+    where: { id: { in: [...teamSeasons.map((t) => t.captainPlayerId), ...picks.map((p) => p.playerId).filter((x): x is string => !!x)] } },
     select: { id: true, displayName: true },
   });
   for (const c of caps) nameById.set(c.id, c.displayName);
 
   const drafted = new Set(picks.map((p) => p.playerId).filter((x): x is string => !!x));
-  const pool = approvedPlayers.filter((p) => !drafted.has(p.id));
+  const undrafted = approvedPlayers.filter((p) => !drafted.has(p.id));
   const current = picks.find((p) => !p.playerId) ?? null;
+
+  // Draft helper: BMP rank (pulled at signup), career quick-stats, avg seed, and where any
+  // pre-season PLAYER power rankings had each pool player — so captains draft informed.
+  const signupByDiscord = new Map(approved.map((a) => [a.discordId, a]));
+  const poolIds = undrafted.map((p) => p.id);
+  const [careerStats, careers, playerRankings] = await Promise.all([
+    prisma.playerCareerStat.findMany({ where: { playerId: { in: poolIds } }, select: { playerId: true, avgSeed: true } }),
+    poolIds.length ? getAllTimePlayers() : Promise.resolve([]),
+    prisma.powerRanking.findMany({ where: { seasonId: season.id, kind: "PLAYER" }, include: { entries: { select: { playerId: true, position: true } } }, orderBy: { postedAt: "asc" } }),
+  ]);
+  const avgSeedOf = new Map(careerStats.map((c) => [c.playerId, c.avgSeed]));
+  const careerOf = new Map(careers.map((c) => [c.playerId, c]));
+  const ranksOf = new Map<string, string[]>();
+  for (const r of playerRankings) {
+    const author = r.author ?? r.title;
+    for (const e of r.entries) {
+      if (!e.playerId) continue;
+      const arr = ranksOf.get(e.playerId) ?? [];
+      arr.push(`#${e.position} ${author}`);
+      ranksOf.set(e.playerId, arr);
+    }
+  }
+  const pool = undrafted.map((p) => {
+    const su = signupByDiscord.get(p.discordId);
+    const career = careerOf.get(p.id);
+    const setTotal = career ? career.setW + career.setL : 0;
+    return {
+      id: p.id,
+      displayName: p.displayName,
+      bmp: su?.bmpTier ? `${su.bmpTier}${su.bmpMmr != null ? ` ${su.bmpMmr}` : ""}` : null,
+      seasons: career?.seasons ?? 0,
+      setPct: setTotal ? Math.round((100 * career!.setW) / setTotal) : null,
+      avgSeed: avgSeedOf.get(p.id) ?? null,
+      ranks: ranksOf.get(p.id) ?? [],
+    };
+  });
 
   const teams = teamSeasons.map((ts) => ({
     id: ts.id,
@@ -159,16 +196,18 @@ export async function getDraft(seasonName: string) {
     onClock: current?.teamSeasonId === ts.id,
     picks: picks
       .filter((p) => p.teamSeasonId === ts.id && p.playerId)
-      .map((p) => ({ round: p.round, name: nameById.get(p.playerId!) ?? p.playerId! })),
+      .map((p) => ({ round: p.round, name: nameById.get(p.playerId!) ?? p.playerId!, overall: p.pickIndex + 1 })),
   }));
 
   const currentTeam = current ? teams.find((t) => t.id === current.teamSeasonId) ?? null : null;
+  // "Round R, Pick P — Nth overall": pick-in-round derives from position within the round.
+  const pickInRound = current ? picks.filter((p) => p.round === current.round && p.pickIndex <= current.pickIndex).length : 0;
   return {
     season,
     state: season.draft.state,
     teams,
     pool,
-    current: current ? { round: current.round, pickIndex: current.pickIndex, team: currentTeam } : null,
+    current: current ? { round: current.round, pickIndex: current.pickIndex, pickInRound, overall: current.pickIndex + 1, team: currentTeam } : null,
     totalPicks: picks.length,
     madePicks: picks.filter((p) => p.playerId).length,
   };

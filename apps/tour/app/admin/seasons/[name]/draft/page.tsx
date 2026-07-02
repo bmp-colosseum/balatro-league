@@ -13,6 +13,13 @@ import { setupDraftAction, resetDraftAction, makePickAction, reassignPickAction 
 
 export const dynamic = "force-dynamic";
 
+// "63rd" suffix for the overall-pick framing.
+const ordinal = (n: number) => {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return s[(v - 20) % 10] || s[v] || s[0];
+};
+
 export default async function DraftAdmin({ params }: { params: Promise<{ name: string }> }) {
   const { name } = await params;
   const seasonName = decodeURIComponent(name);
@@ -113,7 +120,7 @@ export default async function DraftAdmin({ params }: { params: Promise<{ name: s
         <div className="card card-accent">
           <div className="bracket-title">On the clock</div>
           <div>
-            Round {board.current!.round} · <strong>{board.current!.team?.name ?? "—"}</strong> — pick a player below.
+            Round {board.current!.round}, Pick {board.current!.pickInRound} — <strong>{board.current!.overall}{ordinal(board.current!.overall)} overall</strong> · <strong>{board.current!.team?.name ?? "—"}</strong> — pick a player below.
           </div>
         </div>
       )}
@@ -136,6 +143,7 @@ export default async function DraftAdmin({ params }: { params: Promise<{ name: s
                 <li key={p.round} className="flex items-baseline gap-2 py-0.5">
                   <span className="rank" style={{ width: "1.4rem" }}>{p.round}</span>
                   <span>{p.name}</span>
+                  <span className="sub" style={{ fontSize: "0.7rem" }}>{p.overall}{ordinal(p.overall)}</span>
                 </li>
               ))}
             </ol>
@@ -165,15 +173,28 @@ export default async function DraftAdmin({ params }: { params: Promise<{ name: s
       {!done && (
         <>
           <h2 className="mt-6 mb-1 text-[1.1rem]">Available players ({board.pool.length})</h2>
+          <p className="sub mb-1">BMP rank (from signup) · career (seasons, set %, avg seed) · pre-season power-ranking spots.</p>
           <div className="card">
             <div className="flex flex-wrap gap-2">
-              {board.pool.map((p) => (
-                <form key={p.id} action={makePickAction} className="inline">
-                  <input type="hidden" name="season" value={seasonName} />
-                  <input type="hidden" name="playerId" value={p.id} />
-                  <SubmitButton size="sm" variant="secondary" pendingText="…">{p.displayName}</SubmitButton>
-                </form>
-              ))}
+              {board.pool.map((p) => {
+                const bits = [
+                  p.bmp,
+                  p.seasons ? `${p.seasons} ssn${p.setPct != null ? ` ${p.setPct}%` : ""}${p.avgSeed != null ? ` ~${p.avgSeed.toFixed(1)}` : ""}` : "rookie",
+                  ...p.ranks.slice(0, 2),
+                ].filter(Boolean);
+                return (
+                  <form key={p.id} action={makePickAction} className="inline">
+                    <input type="hidden" name="season" value={seasonName} />
+                    <input type="hidden" name="playerId" value={p.id} />
+                    <SubmitButton size="sm" variant="secondary" pendingText="…" title={p.ranks.join(" · ") || undefined}>
+                      <span className="flex flex-col items-start" style={{ lineHeight: 1.2 }}>
+                        <span>{p.displayName}</span>
+                        <span className="sub" style={{ fontSize: "0.68rem", fontWeight: 400 }}>{bits.join(" · ")}</span>
+                      </span>
+                    </SubmitButton>
+                  </form>
+                );
+              })}
               {board.pool.length === 0 && <p className="sub">Pool empty.</p>}
             </div>
           </div>
