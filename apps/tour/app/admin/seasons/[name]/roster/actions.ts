@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { can, seasonIdByName } from "@/lib/permissions";
-import { substitute, recordDeparture, reinstate, replacePlayer, removeMove, changeCaptain, reseed, swapSeeds } from "@/lib/services/roster-ops";
+import { substitute, recordDeparture, reinstate, replacePlayer, removeMove, changeCaptain, reseed, swapSeeds, setCoCaptain } from "@/lib/services/roster-ops";
 import { addStrike, removeStrike } from "@/lib/services/strikes";
 import type { ActionResult } from "@/lib/action-result";
 
@@ -119,6 +119,21 @@ export async function swapSeedsAction(_prev: ActionResult, formData: FormData): 
     return { ok: true, message: "Seeds swapped." };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Could not swap seeds." };
+  }
+}
+
+// Designate/remove a co-captain — allowed for the TO, a ROSTERS mod, or the team's own captain.
+export async function setCoCaptainAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const season = String(formData.get("season") ?? "");
+  const teamSeasonId = String(formData.get("teamSeasonId") ?? "");
+  if (!(await allow(season, teamSeasonId))) return { ok: false, message: "Not authorized." };
+  try {
+    const on = formData.get("isCoCaptain") === "true";
+    await setCoCaptain(teamSeasonId, String(formData.get("playerId") ?? ""), on);
+    rev(season);
+    return { ok: true, message: on ? "Co-captain designated." : "Co-captain removed." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Could not update co-captain." };
   }
 }
 

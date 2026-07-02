@@ -193,11 +193,12 @@ model Roster {
 }
 
 model RosterEntry {
-  id        String  @id @default(cuid())
-  rosterId  String
-  playerId  String // core Player.id
-  seed      Int // intra-team seed (1..N = draft order)
-  isCaptain Boolean @default(false)
+  id          String  @id @default(cuid())
+  rosterId    String
+  playerId    String // core Player.id
+  seed        Int // intra-team seed (1..N = draft order)
+  isCaptain   Boolean @default(false)
+  isCoCaptain Boolean @default(false) // co-captain: same team-scoped powers as the captain (pairing, subs, reporting)
 
   roster Roster @relation(fields: [rosterId], references: [id], onDelete: Cascade)
 

@@ -125,6 +125,16 @@ export async function seedAtWeekResolver(teamSeasonIds: string[]): Promise<(team
   };
 }
 
+// Designate / remove a co-captain — same team-scoped powers as the captain (permissions
+// resolve via RosterEntry.isCoCaptain), without transferring the captaincy itself.
+export async function setCoCaptain(teamSeasonId: string, playerId: string, isCoCaptain: boolean) {
+  if (!playerId) throw new Error("Pick a player.");
+  const entries = await prisma.rosterEntry.findMany({ where: { playerId, roster: { teamSeasonId } }, select: { id: true } });
+  if (!entries.length) throw new Error("That player isn't on this team's roster.");
+  await prisma.rosterEntry.updateMany({ where: { id: { in: entries.map((e) => e.id) } }, data: { isCoCaptain } });
+  return { ok: true };
+}
+
 // Captaincy passes to a rostered player, effective a week. Logs a CAPTAIN_CHANGE
 // (for the timeline) and updates the current-captain pointer. TO-assigned.
 export async function changeCaptain(seasonName: string, teamSeasonId: string, newCaptainPlayerId: string, effectiveWeek: number, reason: string, by?: string) {
@@ -321,18 +331,22 @@ export async function getRosterOps(seasonName: string, week?: number) {
   const nameOf = new Map(players.map((p) => [p.id, p.displayName]));
   const teamNameOf = new Map(teamSeasons.map((t) => [t.id, t.team.name]));
 
-  const teams = teamSeasons.map((t) => ({
-    teamSeasonId: t.id,
-    name: t.team.name,
-    captainPlayerId: captainAtWeek(movesByTeam.get(t.id) ?? [], selectedWeek, t.captainPlayerId),
-    lineup: deriveLineup(movesByTeam.get(t.id) ?? [], selectedWeek, captainAtWeek(movesByTeam.get(t.id) ?? [], selectedWeek, t.captainPlayerId)).map((p) => ({
-      playerId: p.playerId,
-      name: nameOf.get(p.playerId) ?? p.playerId,
-      seed: p.seed,
-      isCaptain: p.isCaptain,
-      viaSub: p.viaSub,
-    })),
-  }));
+  const teams = teamSeasons.map((t) => {
+    const coCaptains = new Set(t.rosters.flatMap((r) => r.entries.filter((e) => e.isCoCaptain).map((e) => e.playerId)));
+    return {
+      teamSeasonId: t.id,
+      name: t.team.name,
+      captainPlayerId: captainAtWeek(movesByTeam.get(t.id) ?? [], selectedWeek, t.captainPlayerId),
+      lineup: deriveLineup(movesByTeam.get(t.id) ?? [], selectedWeek, captainAtWeek(movesByTeam.get(t.id) ?? [], selectedWeek, t.captainPlayerId)).map((p) => ({
+        playerId: p.playerId,
+        name: nameOf.get(p.playerId) ?? p.playerId,
+        seed: p.seed,
+        isCaptain: p.isCaptain,
+        isCoCaptain: coCaptains.has(p.playerId),
+        viaSub: p.viaSub,
+      })),
+    };
+  });
 
   // Strikes (TO aid): per-rostered-player season + career counts + the season log.
   const lineupIds = [...new Set(teams.flatMap((t) => t.lineup.map((p) => p.playerId)))];

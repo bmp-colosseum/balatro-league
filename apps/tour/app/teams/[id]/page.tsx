@@ -104,6 +104,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
                 <td>
                   <PlayerName id={p.playerId} name={p.name} discordId={p.discordId} />
                   {p.isCaptain && <span className="sub"> (C)</span>}
+                  {p.isCoCaptain && <span className="sub" title="Co-captain"> (CC)</span>}
                 </td>
                 <td className="num">
                   {p.setW}–{p.setL}

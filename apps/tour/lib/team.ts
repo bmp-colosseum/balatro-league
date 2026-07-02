@@ -52,6 +52,7 @@ export interface TeamPlayerLine {
   reseeded: boolean; // true when the effective seed differs from the draft seed
   seedChain: number[]; // full seed path over the season, e.g. [5, 3, 7] (draft → re-seeds)
   isCaptain: boolean;
+  isCoCaptain: boolean;
   setW: number;
   setL: number;
   gameW: number;
@@ -154,9 +155,13 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
   });
   if (!ts) return null;
 
-  const entryByPlayer = new Map<string, { seed: number; isCaptain: boolean }>();
+  const entryByPlayer = new Map<string, { seed: number; isCaptain: boolean; isCoCaptain: boolean }>();
   for (const r of ts.rosters) {
-    for (const e of r.entries) if (!entryByPlayer.has(e.playerId)) entryByPlayer.set(e.playerId, { seed: e.seed, isCaptain: e.isCaptain });
+    for (const e of r.entries) {
+      const prev = entryByPlayer.get(e.playerId);
+      if (!prev) entryByPlayer.set(e.playerId, { seed: e.seed, isCaptain: e.isCaptain, isCoCaptain: e.isCoCaptain });
+      else if (e.isCoCaptain && !prev.isCoCaptain) prev.isCoCaptain = true;
+    }
   }
   const playerIds = [...entryByPlayer.keys()];
 
@@ -226,7 +231,7 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
       const eff = seedAt(id, lastWeek, pid) ?? e.seed;
       const chain = (chainOf.get(pid) ?? [e.seed]).slice();
       if (chain[chain.length - 1] !== eff) chain.push(eff);
-      return { playerId: pid, name: nameById.get(pid) ?? pid, discordId: didById.get(pid) ?? null, seed: eff, draftSeed: e.seed, reseeded: eff !== e.seed, seedChain: chain, isCaptain: e.isCaptain, ...a };
+      return { playerId: pid, name: nameById.get(pid) ?? pid, discordId: didById.get(pid) ?? null, seed: eff, draftSeed: e.seed, reseeded: eff !== e.seed, seedChain: chain, isCaptain: e.isCaptain, isCoCaptain: e.isCoCaptain, ...a };
     })
     .sort((x, y) => x.seed - y.seed);
 

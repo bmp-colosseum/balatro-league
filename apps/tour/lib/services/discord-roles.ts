@@ -55,7 +55,14 @@ export async function getDesiredRoles(seasonName: string): Promise<DesiredRoles 
   const captainIds = new Set<string>();
   for (const ts of teamSeasons) {
     const gone = currentlyGone(movesByTeam.get(ts.id) ?? []);
-    for (const r of ts.rosters) for (const e of r.entries) if (!gone.has(e.playerId)) memberIds.add(e.playerId);
+    for (const r of ts.rosters) {
+      for (const e of r.entries) {
+        if (gone.has(e.playerId)) continue;
+        memberIds.add(e.playerId);
+        // Co-captains hold the Captain role too (same team powers → same channels).
+        if (e.isCoCaptain) captainIds.add(e.playerId);
+      }
+    }
     if (ts.captainPlayerId && !gone.has(ts.captainPlayerId)) captainIds.add(ts.captainPlayerId);
   }
 

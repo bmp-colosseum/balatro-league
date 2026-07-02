@@ -57,14 +57,21 @@ export async function capabilitiesFor(v: Viewer, seasonId?: string | null): Prom
   return out;
 }
 
-// The teamSeason ids a viewer captains (optionally within a season).
+// The teamSeason ids a viewer captains OR co-captains (optionally within a season).
+// Co-captains (RosterEntry.isCoCaptain) hold the same team-scoped powers as the captain.
 export async function captainTeamsFor(v: Viewer, seasonId?: string | null): Promise<Set<string>> {
   if (!v.playerId) return new Set();
-  const teams = await prisma.teamSeason.findMany({
-    where: { captainPlayerId: v.playerId, ...(seasonId ? { seasonId } : {}) },
-    select: { id: true },
-  });
-  return new Set(teams.map((t) => t.id));
+  const [teams, coEntries] = await Promise.all([
+    prisma.teamSeason.findMany({
+      where: { captainPlayerId: v.playerId, ...(seasonId ? { seasonId } : {}) },
+      select: { id: true },
+    }),
+    prisma.rosterEntry.findMany({
+      where: { playerId: v.playerId, isCoCaptain: true, roster: { teamSeason: seasonId ? { seasonId } : {} } },
+      select: { roster: { select: { teamSeasonId: true } } },
+    }),
+  ]);
+  return new Set([...teams.map((t) => t.id), ...coEntries.map((e) => e.roster.teamSeasonId)]);
 }
 
 // Resource-aware capability check for an already-loaded viewer.

@@ -8,7 +8,7 @@ import { NoAccess } from "@/components/NoAccess";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
-import { substituteAction, departureAction, replaceAction, reinstateAction, removeMoveAction, changeCaptainAction, reseedAction, swapSeedsAction, addStrikeAction, removeStrikeAction } from "./actions";
+import { substituteAction, departureAction, replaceAction, reinstateAction, removeMoveAction, changeCaptainAction, reseedAction, swapSeedsAction, addStrikeAction, removeStrikeAction, setCoCaptainAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -103,6 +103,7 @@ export default async function RosterOpsAdmin({
                       <span className="rank" style={{ width: "1.4rem" }}>{p.seed}</span>
                       {p.isCaptain && <Crown className="size-3.5 shrink-0 text-[var(--accent)]" />}
                       <span>{p.name}</span>
+                      {p.isCoCaptain && <span className="badge" title="Co-captain — same team powers as the captain">CC</span>}
                       {p.viaSub && <span className="badge">sub</span>}
                       {st && st.season > 0 && (
                         <span className="badge inline-flex items-center gap-1" style={{ color: st.atRisk ? "var(--danger)" : "var(--accent-2)" }} title={`${st.season} this season · ${st.career} career${st.atRisk ? " · at risk" : ""}`}>
@@ -125,6 +126,18 @@ export default async function RosterOpsAdmin({
                   <label className="block"><span className="sub">From week</span><input type="number" name="effectiveWeek" min={1} defaultValue={data.selectedWeek} className={`${inputCls} w-16`} /></label>
                   <input name="reason" placeholder="reason" className={`${inputCls} w-36`} />
                   <SubmitButton size="sm" variant="secondary" pendingText="…"><Crown className="size-3.5" /> Set captain</SubmitButton>
+                </div>
+              </ActionFlashForm>
+
+              {/* Co-captain (same team powers as the captain; toggleable) */}
+              <div className="bracket-title mt-3">Co-captain</div>
+              <ActionFlashForm action={setCoCaptainAction}>
+                <input type="hidden" name="season" value={seasonName} />
+                <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="block"><span className="sub">Player</span><FormSelect name="playerId" options={opt(lineupOpts)} /></label>
+                  <SubmitButton size="sm" variant="secondary" name="isCoCaptain" value="true" pendingText="…">Make co-captain</SubmitButton>
+                  <SubmitButton size="sm" variant="secondary" name="isCoCaptain" value="false" pendingText="…">Remove</SubmitButton>
                 </div>
               </ActionFlashForm>
 
