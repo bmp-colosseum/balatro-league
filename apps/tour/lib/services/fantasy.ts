@@ -3,7 +3,7 @@
 // so a corrected result reflows automatically. Auth-agnostic (callers gate); the sim and
 // the (future) UI/bot are thin callers of these functions.
 import { prisma } from "../db";
-import { snakeOrder, tallyFantasyPoints, type SetOutcome } from "@balatro/tour-core";
+import { snakeOrder, tallyFantasyBySlot, type SlottedSet } from "@balatro/tour-core";
 
 async function seasonByName(name: string) {
   const s = await prisma.tourSeason.findUnique({ where: { name }, select: { id: true, teamSize: true } });
@@ -98,16 +98,19 @@ export async function getFantasyStandings(seasonName: string) {
   const season = await seasonByName(seasonName);
   const league = await prisma.fantasyLeague.findUnique({
     where: { seasonId: season.id },
-    include: { teams: { include: { picks: { select: { playerId: true } } } } },
+    include: { teams: { include: { picks: { select: { playerId: true, teamSeasonId: true, seed: true } } } } },
   });
   if (!league) return null;
 
-  // ownerOf: real playerId → fantasy manager name.
-  const ownerOf = new Map<string, string>();
-  const nameOfTeam = new Map<string, string>();
+  // Two lookups for the slot-aware tally: by drafted player (identity, re-seed-safe) and by
+  // the drafted seed slot (so a sub/replacement's points flow to that slot's owner).
+  const ownerByPlayer = new Map<string, string>();
+  const ownerBySlot = new Map<string, string>(); // key `${teamSeasonId}:${seed}`
   for (const t of league.teams) {
-    nameOfTeam.set(t.id, t.name);
-    for (const pk of t.picks) ownerOf.set(pk.playerId, t.name);
+    for (const pk of t.picks) {
+      ownerByPlayer.set(pk.playerId, t.name);
+      ownerBySlot.set(`${pk.teamSeasonId}:${pk.seed}`, t.name);
+    }
   }
 
   // In-scope decided sets (have a linked core Match). Playoff scope filters by week kind.
@@ -117,7 +120,13 @@ export async function getFantasyStandings(seasonName: string) {
       OR: [{ seasonId: season.id }, { matchup: { week: { seasonId: season.id } } }],
       ...(league.scope === "PLAYOFFS" ? { matchup: { week: { kind: "PLAYOFF" } } } : {}),
     },
-    select: { playerAId: true, playerBId: true, matchId: true },
+    select: {
+      playerAId: true, playerBId: true, seedA: true, seedB: true,
+      teamSeasonAId: true, teamSeasonBId: true, matchId: true,
+      // Live sets carry their team link on the matchup (the set's own columns are for
+      // historical imports); set side A == matchup team A (schema §TourSet).
+      matchup: { select: { teamSeasonAId: true, teamSeasonBId: true } },
+    },
   });
   const matches = await prisma.match.findMany({
     where: { id: { in: sets.map((s) => s.matchId!).filter(Boolean) }, status: "CONFIRMED" },
@@ -125,27 +134,35 @@ export async function getFantasyStandings(seasonName: string) {
   });
   const matchById = new Map(matches.map((m) => [m.id, m]));
 
-  // Build SetOutcome using the SET's real players (subs included) + the match's game counts,
-  // remembering Match A/B are canonical-by-id (not the set's A/B).
-  const outcomes: SetOutcome[] = [];
+  // Enrich each set with the game counts (Match A/B are canonical-by-id, not the set's A/B)
+  // and the seed slots for the slot-aware owner resolution. Sets missing a team/slot are
+  // skipped (historical/team-only imports have no per-side seed).
+  const slotted: SlottedSet[] = [];
   for (const s of sets) {
     const m = s.matchId ? matchById.get(s.matchId) : undefined;
-    if (!m) continue;
+    const teamA = s.teamSeasonAId ?? s.matchup?.teamSeasonAId ?? null;
+    const teamB = s.teamSeasonBId ?? s.matchup?.teamSeasonBId ?? null;
+    if (!m || teamA == null || teamB == null) continue;
     const gamesFor = (playerId: string) => (m.playerAId === playerId ? m.gamesWonA : m.playerBId === playerId ? m.gamesWonB : 0);
-    outcomes.push({ playerAId: s.playerAId, playerBId: s.playerBId, gamesA: gamesFor(s.playerAId), gamesB: gamesFor(s.playerBId) });
+    slotted.push({
+      playerAId: s.playerAId, teamSeasonAId: teamA, seedA: s.seedA, gamesA: gamesFor(s.playerAId),
+      playerBId: s.playerBId, teamSeasonBId: teamB, seedB: s.seedB, gamesB: gamesFor(s.playerBId),
+    });
   }
 
-  const totals = tallyFantasyPoints(outcomes, (pid) => ownerOf.get(pid) ?? null, {
-    setWinPoints: league.setWinPoints,
-    gameWinPoints: league.gameWinPoints,
-  });
+  const totals = tallyFantasyBySlot(
+    slotted,
+    (pid) => ownerByPlayer.get(pid) ?? null,
+    (tid, seed) => ownerBySlot.get(`${tid}:${seed}`) ?? null,
+    { setWinPoints: league.setWinPoints, gameWinPoints: league.gameWinPoints },
+  );
   // Include managers with 0 points (drafted players who haven't scored yet).
   const scored = new Map(totals.map((t) => [t.managerId, t]));
   const standings = league.teams
     .map((t) => scored.get(t.name) ?? { managerId: t.name, points: 0, sets: 0 })
     .sort((a, b) => b.points - a.points || a.managerId.localeCompare(b.managerId));
 
-  return { scope: league.scope, rosterSize: league.rosterSize, standings, setsCounted: outcomes.length };
+  return { scope: league.scope, rosterSize: league.rosterSize, standings, setsCounted: slotted.length };
 }
 
 // Remove the fantasy league for a season (called by deleteSeason — plain-id, no cascade).

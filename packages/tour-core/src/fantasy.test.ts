@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { scoreSetForPlayers, tallyFantasyPoints, DEFAULT_FANTASY_SCORING, type SetOutcome } from "./fantasy";
+import { scoreSetForPlayers, tallyFantasyPoints, tallyFantasyBySlot, DEFAULT_FANTASY_SCORING, type SetOutcome, type SlottedSet } from "./fantasy";
 
 describe("scoreSetForPlayers", () => {
   it("Chrono 2-1 Fey → 3 and 1 (the owner's example)", () => {
@@ -60,5 +60,45 @@ describe("tallyFantasyPoints", () => {
 
   it("default scoring is 1 set / 1 game", () => {
     expect(DEFAULT_FANTASY_SCORING).toEqual({ setWinPoints: 1, gameWinPoints: 1 });
+  });
+});
+
+describe("tallyFantasyBySlot (roster churn)", () => {
+  // m1 drafted alice at (teamX, seed 3); m2 drafted rival at (teamY, seed 3).
+  const ownerByPlayer = (p: string) => ({ alice: "m1", rival: "m2" } as Record<string, string>)[p] ?? null;
+  const ownerBySlot = (t: string, s: number) => (t === "teamX" && s === 3 ? "m1" : t === "teamY" && s === 3 ? "m2" : null);
+  const slot = (over: Partial<SlottedSet>): SlottedSet => ({
+    playerAId: "alice", teamSeasonAId: "teamX", seedA: 3,
+    playerBId: "rival", teamSeasonBId: "teamY", seedB: 3,
+    gamesA: 2, gamesB: 1, ...over,
+  });
+
+  it("normal week credits the drafted players by identity", () => {
+    expect(tallyFantasyBySlot([slot({})], ownerByPlayer, ownerBySlot)).toEqual([
+      { managerId: "m1", points: 3, sets: 1 },
+      { managerId: "m2", points: 1, sets: 1 },
+    ]);
+  });
+
+  it("a SUB in alice's slot flows the sub's points to m1 (identity misses, slot hits)", () => {
+    // dave (undrafted) plays alice's slot (teamX seed 3) and wins 2-1.
+    const totals = tallyFantasyBySlot([slot({ playerAId: "dave", gamesA: 2, gamesB: 1 })], ownerByPlayer, ownerBySlot);
+    expect(totals.find((t) => t.managerId === "m1")).toEqual({ managerId: "m1", points: 3, sets: 1 });
+  });
+
+  it("a RE-SEEDED drafted player is still credited by identity, not by their new slot", () => {
+    // alice re-seeded to seed 1; her set now reports seedA=1. Slot lookup for (teamX,1) is
+    // null, but identity still finds m1.
+    const totals = tallyFantasyBySlot([slot({ seedA: 1, gamesA: 2, gamesB: 0 })], ownerByPlayer, ownerBySlot);
+    expect(totals.find((t) => t.managerId === "m1")).toEqual({ managerId: "m1", points: 3, sets: 1 });
+  });
+
+  it("an undrafted player in an undrafted slot scores for nobody", () => {
+    const totals = tallyFantasyBySlot(
+      [slot({ playerAId: "ghost", teamSeasonAId: "teamZ", seedA: 9, playerBId: "wraith", teamSeasonBId: "teamZ", seedB: 8 })],
+      ownerByPlayer,
+      ownerBySlot,
+    );
+    expect(totals).toEqual([]);
   });
 });

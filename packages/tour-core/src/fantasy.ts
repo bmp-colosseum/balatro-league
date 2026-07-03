@@ -57,6 +57,61 @@ export interface FantasyManagerTotal {
   sets: number;
 }
 
+/** A finished set enriched with each side's real team + intra-team seed slot. */
+export interface SlottedSet extends SetOutcome {
+  teamSeasonAId: string;
+  seedA: number;
+  teamSeasonBId: string;
+  seedB: number;
+}
+
+/**
+ * Resolve which fantasy manager a played set-side belongs to, honoring roster churn:
+ *   1. identity first — if the player who actually played is a drafted (owned) player,
+ *      credit their owner. This survives re-seeds (same person, different seed slot).
+ *   2. slot fallback — otherwise the player is a sub / add / replacement, so credit
+ *      whoever drafted that team's seed slot (the drafted player they filled in for).
+ * Returns null when neither is owned (an undrafted player in an undrafted slot).
+ */
+export function resolveSlotOwner(
+  playerId: string,
+  teamSeasonId: string,
+  seed: number,
+  ownerByPlayer: (playerId: string) => string | null | undefined,
+  ownerBySlot: (teamSeasonId: string, seed: number) => string | null | undefined,
+): string | null {
+  return ownerByPlayer(playerId) || ownerBySlot(teamSeasonId, seed) || null;
+}
+
+/**
+ * Slot-aware tally: like {@link tallyFantasyPoints} but credits each side via
+ * {@link resolveSlotOwner}, so a substitute's or replacement's points flow to whoever
+ * drafted that roster slot. Deterministic (points desc, then id asc).
+ */
+export function tallyFantasyBySlot(
+  sets: SlottedSet[],
+  ownerByPlayer: (playerId: string) => string | null | undefined,
+  ownerBySlot: (teamSeasonId: string, seed: number) => string | null | undefined,
+  scoring: FantasyScoring = DEFAULT_FANTASY_SCORING,
+): FantasyManagerTotal[] {
+  const byManager = new Map<string, { points: number; sets: number }>();
+  const credit = (mgr: string | null, points: number) => {
+    if (!mgr) return;
+    const cur = byManager.get(mgr) ?? { points: 0, sets: 0 };
+    cur.points += points;
+    cur.sets += 1;
+    byManager.set(mgr, cur);
+  };
+  for (const set of sets) {
+    const [a, b] = scoreSetForPlayers(set, scoring);
+    credit(resolveSlotOwner(set.playerAId, set.teamSeasonAId, set.seedA, ownerByPlayer, ownerBySlot), a.points);
+    credit(resolveSlotOwner(set.playerBId, set.teamSeasonBId, set.seedB, ownerByPlayer, ownerBySlot), b.points);
+  }
+  return [...byManager.entries()]
+    .map(([managerId, v]) => ({ managerId, points: v.points, sets: v.sets }))
+    .sort((x, y) => y.points - x.points || x.managerId.localeCompare(y.managerId));
+}
+
 /**
  * Tally fantasy points per manager over a batch of finished sets. `ownerOf` maps a real
  * player id to the fantasy manager who rostered them (null/undefined = undrafted, ignored).
