@@ -10,7 +10,7 @@ import { prisma } from "../db";
 import { buildDraft } from "@balatro/tour-core";
 import { getAllTimePlayers } from "../stats";
 import { notifyLive } from "../notify";
-import { enqueueRoleReconcile } from "../queue";
+import { enqueueRoleReconcile, enqueueDraftPick } from "../queue";
 
 export async function getDraftSetup(seasonName: string) {
   const season = await prisma.tourSeason.findUnique({
@@ -299,6 +299,36 @@ export async function makePick(seasonName: string, playerId: string) {
     await prisma.draft.update({ where: { id: season.draft.id }, data: { state: "ACTIVE" } });
   }
   await notifyLive(`draft:${season.id}`); // live refresh (C5)
+
+  // #draft post + on-the-clock DM for the next captain (C3). Full payload — the bot reads nothing.
+  try {
+    const nextPick = picks.filter((p) => !p.playerId && p.id !== current.id).sort((a, b) => a.pickIndex - b.pickIndex)[0] ?? null;
+    const tsIds = [current.teamSeasonId, ...(nextPick ? [nextPick.teamSeasonId] : [])];
+    const teamSeasons = await prisma.teamSeason.findMany({ where: { id: { in: tsIds } }, include: { team: true } });
+    const tsOf = new Map(teamSeasons.map((t) => [t.id, t]));
+    const pickedPlayer = await prisma.player.findUnique({ where: { id: playerId }, select: { displayName: true } });
+    let nextCaptainDiscord: string | null = null;
+    if (nextPick) {
+      const cap = await prisma.player.findUnique({ where: { id: tsOf.get(nextPick.teamSeasonId)?.captainPlayerId ?? "" }, select: { discordId: true } });
+      nextCaptainDiscord = cap && /^\d+$/.test(cap.discordId) ? cap.discordId : null;
+    }
+    const pickInRound = picks.filter((p) => p.round === current.round && p.pickIndex <= current.pickIndex).length;
+    await enqueueDraftPick({
+      season: seasonName,
+      teamName: tsOf.get(current.teamSeasonId)?.team.name ?? "?",
+      playerName: pickedPlayer?.displayName ?? "?",
+      round: current.round,
+      pickInRound,
+      overall: current.pickIndex + 1,
+      done: stillOpen === 0,
+      next: nextPick
+        ? { teamName: tsOf.get(nextPick.teamSeasonId)?.team.name ?? "?", captainDiscordId: nextCaptainDiscord, round: nextPick.round, overall: nextPick.pickIndex + 1 }
+        : null,
+      urlPath: `/admin/seasons/${encodeURIComponent(seasonName)}/draft`,
+    });
+  } catch (err) {
+    console.warn("[draft] pick announcement enqueue failed:", err);
+  }
   return { done: stillOpen === 0 };
 }
 

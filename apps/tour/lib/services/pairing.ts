@@ -9,6 +9,7 @@
 // two-captain tool (auth + SSE, later) layers straight on top.
 import { prisma } from "../db";
 import { notifyLive } from "../notify";
+import { enqueuePairingTurn } from "../queue";
 import {
   initPairing,
   propose,
@@ -329,6 +330,26 @@ export async function getCaptainPairing(matchupId: string, viewerPlayerId: strin
 
 // A captain proposes a player from their team (when it's their turn). Persists the
 // proposal on the Matchup; the opposing captain responds next.
+// DM the captain whose move it now is (C3). Fire-and-forget; legacy ids skipped.
+async function pingCaptainTurn(m: LoadedMatchup, side: "A" | "B", kind: "respond" | "propose") {
+  try {
+    const team = side === "A" ? m.teamA : m.teamB;
+    const opp = side === "A" ? m.teamB : m.teamA;
+    const cap = await prisma.player.findUnique({ where: { id: team.captainId }, select: { discordId: true } });
+    if (!cap || !/^\d+$/.test(cap.discordId)) return;
+    await enqueuePairingTurn({
+      discordId: cap.discordId,
+      kind,
+      weekNumber: m.weekNumber,
+      myTeamName: team.name,
+      oppTeamName: opp.name,
+      urlPath: `/matchups/${m.matchup.id}`,
+    });
+  } catch {
+    /* pings are best-effort */
+  }
+}
+
 export async function captainPropose(matchupId: string, viewerPlayerId: string, playerId: string) {
   const m = await load(matchupId);
   if (!m) throw new Error("No such matchup.");
@@ -339,6 +360,7 @@ export async function captainPropose(matchupId: string, viewerPlayerId: string, 
   if (!r.ok) throw new Error(r.reason);
   await prisma.matchup.update({ where: { id: matchupId }, data: { pendingProposalPlayerId: playerId } });
   await notifyLive(`matchup:${matchupId}`);
+  await pingCaptainTurn(m, side === "A" ? "B" : "A", "respond"); // the opposing captain answers
   return { ok: true };
 }
 
@@ -357,6 +379,12 @@ export async function captainRespond(matchupId: string, viewerPlayerId: string, 
   await persistPair(m, r.pair.aPlayerId, r.pair.bPlayerId);
   await prisma.matchup.update({ where: { id: matchupId }, data: { pendingProposalPlayerId: null } });
   await notifyLive(`matchup:${matchupId}`);
+  // If pairing isn't finished, ping whoever proposes next.
+  const m2 = await load(matchupId);
+  if (m2) {
+    const s2 = stateFrom(m2);
+    if (!isComplete(s2)) await pingCaptainTurn(m2, whoseProposeTurn(s2), "propose");
+  }
   return { ok: true };
 }
 

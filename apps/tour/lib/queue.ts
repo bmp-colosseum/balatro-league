@@ -71,6 +71,56 @@ export async function enqueueAnnounceResult(setId: string): Promise<void> {
   }
 }
 
+// A draft pick was made — post it to #draft and DM the next captain ("on the clock").
+// Full payload so the bot needs no reads. One job per pick (keyed on overall number).
+export interface DraftPickJob {
+  season: string;
+  teamName: string;
+  playerName: string;
+  round: number;
+  pickInRound: number;
+  overall: number;
+  done: boolean;
+  next: { teamName: string; captainDiscordId: string | null; round: number; overall: number } | null;
+  urlPath: string;
+}
+export async function enqueueDraftPick(job: DraftPickJob): Promise<void> {
+  try {
+    await ensureStarted();
+    await getBoss().send("tour.draft.pick", job, {
+      retryLimit: 3,
+      retryBackoff: true,
+      singletonKey: `draft-pick:${job.season}:${job.overall}`,
+      singletonSeconds: 60,
+    });
+  } catch (err) {
+    console.warn("[pg-boss tour-web] enqueueDraftPick failed:", err);
+  }
+}
+
+// Weekly pairing: it's now this captain's move (respond to a proposal / propose next).
+export interface PairingTurnJob {
+  discordId: string;
+  kind: "respond" | "propose";
+  weekNumber: number;
+  myTeamName: string;
+  oppTeamName: string;
+  urlPath: string;
+}
+export async function enqueuePairingTurn(job: PairingTurnJob): Promise<void> {
+  try {
+    await ensureStarted();
+    await getBoss().send("tour.pairing.turn", job, {
+      retryLimit: 3,
+      retryBackoff: true,
+      singletonKey: `pairing-turn:${job.discordId}:${job.urlPath}:${job.kind}`,
+      singletonSeconds: 60,
+    });
+  } catch (err) {
+    console.warn("[pg-boss tour-web] enqueuePairingTurn failed:", err);
+  }
+}
+
 // A matchup's team result just became decided — post the rollup banner.
 export async function enqueueAnnounceMatchup(matchupId: string): Promise<void> {
   try {

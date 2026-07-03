@@ -9,10 +9,13 @@ import { env } from "./env";
 import { apiGet } from "./api";
 import { reconcileSeasonRoles } from "./roles";
 import { announceSet, announceMatchup } from "./announce";
+import { announceDraftPick, pingPairingTurn, sendDm, type DraftPickJob, type PairingTurnJob } from "./notify";
 
 const RECONCILE_QUEUE = "tour.roles.reconcile";
 const ANNOUNCE_SET_QUEUE = "tour.announce.result";
 const ANNOUNCE_MATCHUP_QUEUE = "tour.announce.matchup";
+const DRAFT_PICK_QUEUE = "tour.draft.pick";
+const PAIRING_TURN_QUEUE = "tour.pairing.turn";
 
 async function guildOf(client: Client): Promise<Guild> {
   return client.guilds.cache.get(env.TOUR_GUILD_ID) ?? (await client.guilds.fetch(env.TOUR_GUILD_ID));
@@ -52,6 +55,34 @@ export async function startQueue(client: Client): Promise<PgBoss> {
       if (matchupId) await announceMatchup(client, matchupId);
     }
   });
+
+  // Live draft: pick post to #draft + on-the-clock DM.
+  await boss.createQueue(DRAFT_PICK_QUEUE).catch(() => {});
+  await boss.work(DRAFT_PICK_QUEUE, { batchSize: 1 }, async (jobs) => {
+    for (const job of jobs) await announceDraftPick(client, job.data as DraftPickJob);
+  });
+
+  // Pairing: your-turn DMs.
+  await boss.createQueue(PAIRING_TURN_QUEUE).catch(() => {});
+  await boss.work(PAIRING_TURN_QUEUE, { batchSize: 1 }, async (jobs) => {
+    for (const job of jobs) await pingPairingTurn(client, job.data as PairingTurnJob);
+  });
+
+  // Deadline nudges (SOFT — reminders only): Friday reminder + Sunday-morning last call.
+  const runNudges = async (label: string) => {
+    const res = await apiGet<{ nudges: { discordId: string; message: string }[] }>("/api/bot/nudges");
+    let sent = 0;
+    for (const n of res.nudges) if (await sendDm(client, n.discordId, n.message)) sent++;
+    console.log(`[nudge:${label}] ${sent}/${res.nudges.length} DMs sent`);
+  };
+  const NUDGE_FRIDAY = "tour.nudge.friday";
+  const NUDGE_SUNDAY = "tour.nudge.lastcall";
+  await boss.createQueue(NUDGE_FRIDAY).catch(() => {});
+  await boss.work(NUDGE_FRIDAY, { batchSize: 1 }, () => runNudges("friday"));
+  await boss.schedule(NUDGE_FRIDAY, "0 17 * * 5"); // Friday 17:00 UTC (~noon ET)
+  await boss.createQueue(NUDGE_SUNDAY).catch(() => {});
+  await boss.work(NUDGE_SUNDAY, { batchSize: 1 }, () => runNudges("sunday"));
+  await boss.schedule(NUDGE_SUNDAY, "0 15 * * 0"); // Sunday 15:00 UTC (~10-11am ET last call)
 
   // Daily self-heal: reconcile every ACTIVE-ish season (drift from manual Discord edits).
   const CRON_QUEUE = "tour.roles.reconcile-all";
