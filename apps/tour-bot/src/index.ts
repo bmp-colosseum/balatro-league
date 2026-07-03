@@ -44,13 +44,17 @@ async function main() {
   startHealthCheck();
   const client = await login();
 
-  client.once(Events.ClientReady, async (c) => {
-    console.log(`[boot] ready as ${c.user.tag}`);
-    const guild = c.guilds.cache.get(env.TOUR_GUILD_ID);
+  // The ready event can fire BEFORE this listener attaches (login() resolves around the
+  // same time), so handle the already-ready case explicitly or registration never runs.
+  const onReady = async () => {
+    console.log(`[boot] ready as ${client.user?.tag ?? "?"}`);
+    const guild = client.guilds.cache.get(env.TOUR_GUILD_ID) ?? (await client.guilds.fetch(env.TOUR_GUILD_ID).catch(() => null));
     if (guild) console.log(`[boot] guild lock: ${guild.name} (${guild.id})`);
     else console.warn(`[boot] NOT in the configured guild ${env.TOUR_GUILD_ID} yet — invite the bot there.`);
     await ensureCommandsRegistered(client).catch((err) => console.warn("[commands] registration failed:", err));
-  });
+  };
+  if (client.isReady()) await onReady();
+  else client.once(Events.ClientReady, () => void onReady());
 
   // Guild lock — refuse interactions anywhere but the configured guild.
   client.on(Events.InteractionCreate, async (interaction) => {
