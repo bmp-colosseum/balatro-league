@@ -76,6 +76,24 @@ export async function createLeagueMatchInvite(opts: {
           error: `You've already played ${opp.displayName} this season (${existing.gamesWonA}-${existing.gamesWonB}).`,
         };
       }
+      // Schedule enforcement (mirrors the report path in reporting.ts): on a
+      // locked schedule the ONLY valid league matchups are the pre-created
+      // assigned ones. No BO2 row for this pair = they're not on each other's
+      // schedule = refuse to even open the match. Without this, /start-match let
+      // you spin up a thread with any division-mate (the report was blocked, but
+      // the thread wasn't) — which is how an "unscheduled match" got started.
+      // Shootouts (tiebreakers) are exempt: they aren't pre-scheduled pairings.
+      if (!isShootout && !existing) {
+        const { scheduleLocked } = (await prisma.season.findUnique({
+          where: { id: season.id },
+          select: { scheduleLocked: true },
+        })) ?? { scheduleLocked: false };
+        if (scheduleLocked) {
+          return {
+            error: `${opp.displayName} isn't on your schedule this season — you only play your assigned matchups. If this should be a match, ask an admin.`,
+          };
+        }
+      }
       if (isShootout) {
         const existingShootout = await prisma.match.findUnique({
           where: {
