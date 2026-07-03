@@ -1,0 +1,13 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "//": "Portable Dockerfile (build context = repo root so workspaces link). Set the service Root Directory to `/`.",
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "apps/tour-bot/Dockerfile"
+  },
+  "deploy": {
+    "//": "Env needed: DISCORD_TOKEN, TOUR_GUILD_ID, DATABASE_URL, TOUR_WEB_URL, TOUR_ADMIN_TOKEN.",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  }
+}
