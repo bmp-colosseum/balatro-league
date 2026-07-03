@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isAdmin } from "@/lib/auth";
 import { addSignup, setSignupStatus, setSignupStatusBulk, removeSignup, type SignupStatus } from "@/lib/services/signups";
+import { createTeamForSeason } from "@/lib/services/teams-admin";
 import type { ActionResult } from "@/lib/action-result";
 
 function revalidate(season: string) {
@@ -70,6 +71,25 @@ export async function bulkSignupStatusAction(_prev: ActionResult, formData: Form
   const n = await setSignupStatusBulk(ids, status);
   revalidate(season);
   return { ok: true, message: `${n} signup${n === 1 ? "" : "s"} ${status === "APPROVED" ? "approved" : "rejected"}.` };
+}
+
+// One-click promote: create this approved signup's team right here (default "Team {name}"),
+// so captaining happens inline in the review flow instead of a trip to the Teams page.
+export async function makeCaptainAction(formData: FormData) {
+  if (!(await isAdmin())) return;
+  const season = String(formData.get("season") ?? "");
+  const tab = String(formData.get("tab") ?? "");
+  let msg: string;
+  let ok = true;
+  try {
+    const r = await createTeamForSeason(season, { captainDiscordId: String(formData.get("discordId") ?? "") });
+    msg = `Made ${r.captain} captain of ${r.teamName}.`;
+  } catch (e) {
+    ok = false;
+    msg = e instanceof Error ? e.message : "Couldn't create the team.";
+  }
+  revalidate(season);
+  backToSignups(season, tab, msg, ok);
 }
 
 export async function removeSignupAction(formData: FormData) {

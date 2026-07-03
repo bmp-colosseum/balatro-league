@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Crown } from "lucide-react";
 import { isAdmin } from "@/lib/auth";
 import { getSeasonAdmin } from "@/lib/services/seasons";
 import { listSignups, priorParticipation, SIGNUP_OPTIONS } from "@/lib/services/signups";
+import { captainedTeamsByDiscord } from "@/lib/services/teams-admin";
 import { Callout } from "@/components/Callout";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
@@ -12,7 +13,7 @@ import { SelectAllCheckbox } from "@/components/SelectAllCheckbox";
 import { TimezoneSelect } from "@/components/TimezoneSelect";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { addSignupAction, setSignupStatusAction, bulkSignupStatusAction, removeSignupAction } from "./actions";
+import { addSignupAction, setSignupStatusAction, bulkSignupStatusAction, removeSignupAction, makeCaptainAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +77,7 @@ export default async function Signups({
   }
   const signups = await listSignups(seasonName); // createdAt asc — signup order matters
   const prior = await priorParticipation(signups.map((s) => s.discordId));
+  const captainOf = await captainedTeamsByDiscord(seasonName); // discordId → their team this season
   const enc = encodeURIComponent(seasonName);
   const now = Date.now();
 
@@ -230,10 +232,19 @@ export default async function Signups({
                   <span className="flex flex-wrap gap-1.5">
                     {s.status !== "APPROVED" && <StatusBtn id={s.id} status="APPROVED" label="Approve" />}
                     {s.status !== "REJECTED" && <StatusBtn id={s.id} status="REJECTED" label="Reject" variant="secondary" />}
-                    {s.status === "APPROVED" && wantsCaptain && (
-                      <Link href={`/admin/seasons/${enc}/teams?captain=${s.discordId}`} className="pill" style={{ border: "1px solid var(--accent)", color: "var(--accent)" }}>
-                        Create team
+                    {captainOf.has(s.discordId) ? (
+                      <Link href={`/teams/${captainOf.get(s.discordId)!.teamSeasonId}`} className="pill inline-flex items-center gap-1" style={{ border: "1px solid var(--accent)", color: "var(--accent)" }}>
+                        <Crown className="size-3" /> {captainOf.get(s.discordId)!.team}
                       </Link>
+                    ) : (
+                      s.status === "APPROVED" && wantsCaptain && (
+                        <form action={makeCaptainAction} className="inline">
+                          <input type="hidden" name="discordId" value={s.discordId} />
+                          <input type="hidden" name="season" value={seasonName} />
+                          <input type="hidden" name="tab" value={tab.key} />
+                          <SubmitButton size="sm" variant="secondary" pendingText="…"><Crown className="size-3.5" /> Make captain</SubmitButton>
+                        </form>
+                      )
                     )}
                     <form action={removeSignupAction} className="inline">
                       <input type="hidden" name="id" value={s.id} />

@@ -138,6 +138,22 @@ export async function setTeamConference(teamSeasonId: string, conferenceId: stri
   return { ok: true };
 }
 
+// Which approved players already captain a team this season, keyed by discordId — lets the
+// signups review show a "Captain · Team X" badge and hide the "Make captain" button for them.
+export async function captainedTeamsByDiscord(seasonName: string): Promise<Map<string, { team: string; teamSeasonId: string }>> {
+  const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true } });
+  if (!season) return new Map();
+  const tss = await prisma.teamSeason.findMany({ where: { seasonId: season.id }, include: { team: { select: { name: true } } } });
+  const caps = await prisma.player.findMany({ where: { id: { in: tss.map((t) => t.captainPlayerId) } }, select: { id: true, discordId: true } });
+  const discOf = new Map(caps.map((c) => [c.id, c.discordId]));
+  const out = new Map<string, { team: string; teamSeasonId: string }>();
+  for (const t of tss) {
+    const d = discOf.get(t.captainPlayerId);
+    if (d) out.set(d, { team: t.team.name, teamSeasonId: t.id });
+  }
+  return out;
+}
+
 // The season's teams for the manual-management page.
 export async function listSeasonTeams(seasonName: string) {
   const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true } });
