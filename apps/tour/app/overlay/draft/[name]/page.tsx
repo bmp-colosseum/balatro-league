@@ -2,6 +2,7 @@
 // Live-updates via SSE. URL: /overlay/draft/<season name>.
 import { getDraft } from "@/lib/services/draft";
 import { LiveRefresh } from "@/components/LiveRefresh";
+import { ElapsedClock } from "@/components/ElapsedClock";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,11 @@ export default async function DraftOverlay({ params }: { params: Promise<{ name:
             <div style={{ fontWeight: 700, fontSize: 20 }}>
               {board.current.team?.name ?? "—"} <span style={{ color: "var(--muted)", fontWeight: 400 }}>R{board.current.round} · {board.current.overall}{ord(board.current.overall)} overall</span>
             </div>
+            {board.current.onClockAt && (
+              <div style={{ color: "var(--accent)", fontSize: 14 }}>
+                <ElapsedClock since={board.current.onClockAt} />
+              </div>
+            )}
             {board.upcoming.length > 0 && (
               <div style={{ color: "var(--muted)", marginTop: 4, fontSize: 13 }}>
                 Up next: {board.upcoming.map((u) => `${u.overall}. ${u.team}`).join("  ·  ")}

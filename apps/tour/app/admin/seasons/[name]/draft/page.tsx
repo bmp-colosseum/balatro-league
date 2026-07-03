@@ -10,6 +10,7 @@ import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { FormSelect } from "@/components/FormSelect";
+import { ElapsedClock } from "@/components/ElapsedClock";
 import { setupDraftAction, resetDraftAction, makePickAction, reassignPickAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,13 @@ const ordinal = (n: number) => {
   const s = ["th", "st", "nd", "rd"];
   const v = n % 100;
   return s[(v - 20) % 10] || s[v] || s[0];
+};
+
+// Compact pick duration ("4m" / "2h 13m") — the fun stat, never a gate.
+const took = (sec: number) => {
+  if (sec < 60) return `${sec}s`;
+  if (sec < 3600) return `${Math.round(sec / 60)}m`;
+  return `${Math.floor(sec / 3600)}h ${Math.round((sec % 3600) / 60)}m`;
 };
 
 export default async function DraftAdmin({ params }: { params: Promise<{ name: string }> }) {
@@ -123,6 +131,7 @@ export default async function DraftAdmin({ params }: { params: Promise<{ name: s
           <div className="bracket-title">On the clock</div>
           <div>
             Round {board.current!.round}, Pick {board.current!.pickInRound} — <strong>{board.current!.overall}{ordinal(board.current!.overall)} overall</strong> · <strong>{board.current!.team?.name ?? "—"}</strong> — pick a player below.
+            {board.current!.onClockAt && <span className="sub"> · <ElapsedClock since={board.current!.onClockAt} /></span>}
           </div>
           {board.upcoming.length > 0 && (
             <div className="sub mt-2 flex flex-wrap items-center gap-1.5">
@@ -155,7 +164,7 @@ export default async function DraftAdmin({ params }: { params: Promise<{ name: s
                 <li key={p.round} className="flex items-baseline gap-2 py-0.5">
                   <span className="rank" style={{ width: "1.4rem" }}>{p.round}</span>
                   <span>{p.name}</span>
-                  <span className="sub" style={{ fontSize: "0.7rem" }}>{p.overall}{ordinal(p.overall)}</span>
+                  <span className="sub" style={{ fontSize: "0.7rem" }}>{p.overall}{ordinal(p.overall)}{p.tookSec != null ? ` · ${took(p.tookSec)}` : ""}</span>
                 </li>
               ))}
             </ol>

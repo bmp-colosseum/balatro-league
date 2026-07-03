@@ -120,6 +120,10 @@ export async function setupDraft(seasonName: string) {
   });
   await prisma.tourSeason.update({ where: { id: season.id }, data: { state: "DRAFTING" } });
 
+  // Start the (cosmetic — never a gate) clock on the first real pick.
+  const first = await prisma.draftPick.findFirst({ where: { draft: { seasonId: season.id }, playerId: null }, orderBy: { pickIndex: "asc" }, select: { id: true } });
+  if (first) await prisma.draftPick.update({ where: { id: first.id }, data: { onClockAt: new Date() } });
+
   return { teams: teamSeasonIds.length, players: playerByDiscord.size, rounds, picks: slots.length };
 }
 
@@ -198,7 +202,13 @@ export async function getDraft(seasonName: string) {
     onClock: current?.teamSeasonId === ts.id,
     picks: picks
       .filter((p) => p.teamSeasonId === ts.id && p.playerId)
-      .map((p) => ({ round: p.round, name: nameById.get(p.playerId!) ?? p.playerId!, overall: p.pickIndex + 1 })),
+      .map((p) => ({
+        round: p.round,
+        name: nameById.get(p.playerId!) ?? p.playerId!,
+        overall: p.pickIndex + 1,
+        // Fun stat, never a gate: how long this pick took (null for pre-fills/imports).
+        tookSec: p.onClockAt && p.pickedAt ? Math.max(0, Math.round((p.pickedAt.getTime() - p.onClockAt.getTime()) / 1000)) : null,
+      })),
   }));
 
   const currentTeam = current ? teams.find((t) => t.id === current.teamSeasonId) ?? null : null;
@@ -216,7 +226,9 @@ export async function getDraft(seasonName: string) {
     state: season.draft.state,
     teams,
     pool,
-    current: current ? { round: current.round, pickIndex: current.pickIndex, pickInRound, overall: current.pickIndex + 1, team: currentTeam } : null,
+    current: current
+      ? { round: current.round, pickIndex: current.pickIndex, pickInRound, overall: current.pickIndex + 1, team: currentTeam, onClockAt: current.onClockAt?.toISOString() ?? null }
+      : null,
     upcoming,
     totalPicks: picks.length,
     madePicks: picks.filter((p) => p.playerId).length,
@@ -289,6 +301,9 @@ export async function makePick(seasonName: string, playerId: string) {
   if (!inPool) throw new Error("Player is not in the approved pool.");
 
   await prisma.draftPick.update({ where: { id: current.id }, data: { playerId, pickedAt: new Date() } });
+  // Put the next pick on the clock (cosmetic timer — captains are never time-limited).
+  const nextUp = picks.filter((p) => !p.playerId && p.id !== current.id).sort((a, b) => a.pickIndex - b.pickIndex)[0];
+  if (nextUp) await prisma.draftPick.update({ where: { id: nextUp.id }, data: { onClockAt: new Date() } });
 
   const stillOpen = picks.filter((p) => !p.playerId && p.id !== current.id).length;
   if (stillOpen === 0) {

@@ -23,11 +23,16 @@ function getBoss(): PgBoss {
   return globalThis.__tourPgboss;
 }
 
+// Every job name the web can send. Queues are created here (idempotent) so enqueues work
+// even before the bot's first boot — jobs simply wait until a worker exists.
+const QUEUES = ["tour.roles.reconcile", "tour.announce.result", "tour.announce.matchup", "tour.draft.pick", "tour.pairing.turn"];
+
 async function ensureStarted(): Promise<void> {
   if (!globalThis.__tourPgbossStart) {
     globalThis.__tourPgbossStart = getBoss()
       .start()
-      .then(() => {
+      .then(async () => {
+        for (const q of QUEUES) await getBoss().createQueue(q).catch(() => {});
         console.log("[pg-boss tour-web] connected");
       })
       .catch((err) => {
