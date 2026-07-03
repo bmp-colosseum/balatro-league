@@ -7,6 +7,8 @@ import { Client, GatewayIntentBits, Events } from "discord.js";
 import { env } from "./env";
 import { startHealthCheck } from "./healthcheck";
 import { startQueue } from "./queue";
+import { ensureCommandsRegistered } from "./commands/register";
+import { handlePptCommand, handlePickemButton } from "./commands/handlers";
 
 // Intent ladder: try with GuildMembers (needed to enumerate role holders for full
 // reconciliation); if the portal doesn't grant it, fall back to Guilds-only and keep
@@ -42,15 +44,15 @@ async function main() {
   startHealthCheck();
   const client = await login();
 
-  client.once(Events.ClientReady, (c) => {
+  client.once(Events.ClientReady, async (c) => {
     console.log(`[boot] ready as ${c.user.tag}`);
     const guild = c.guilds.cache.get(env.TOUR_GUILD_ID);
     if (guild) console.log(`[boot] guild lock: ${guild.name} (${guild.id})`);
     else console.warn(`[boot] NOT in the configured guild ${env.TOUR_GUILD_ID} yet — invite the bot there.`);
+    await ensureCommandsRegistered(client).catch((err) => console.warn("[commands] registration failed:", err));
   });
 
-  // Guild lock — refuse interactions anywhere but the configured guild (slash commands
-  // arrive in C4; the lock is in place from day one).
+  // Guild lock — refuse interactions anywhere but the configured guild.
   client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.guildId !== env.TOUR_GUILD_ID) {
       if (interaction.isRepliable()) {
@@ -58,7 +60,14 @@ async function main() {
       }
       return;
     }
-    // C4 will route /ppt commands here.
+    if (interaction.isChatInputCommand() && interaction.commandName === "ppt") {
+      await handlePptCommand(interaction);
+      return;
+    }
+    if (interaction.isButton() && interaction.customId.startsWith("pickem:")) {
+      await handlePickemButton(interaction);
+      return;
+    }
   });
 
   await startQueue(client);
