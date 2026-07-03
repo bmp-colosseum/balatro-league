@@ -56,6 +56,14 @@ async function main() {
   if (client.isReady()) await onReady();
   else client.once(Events.ClientReady, () => void onReady());
 
+  // Invited AFTER boot? Register commands the moment we land in the configured guild —
+  // no restart needed.
+  client.on(Events.GuildCreate, async (guild) => {
+    if (guild.id !== env.TOUR_GUILD_ID) return;
+    console.log(`[boot] joined the configured guild: ${guild.name}`);
+    await ensureCommandsRegistered(client).catch((err) => console.warn("[commands] registration failed:", err));
+  });
+
   // Guild lock — refuse interactions anywhere but the configured guild.
   client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.guildId !== env.TOUR_GUILD_ID) {
