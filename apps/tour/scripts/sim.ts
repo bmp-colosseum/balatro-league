@@ -5,9 +5,10 @@
 //   npx tsx scripts/sim.ts draft  [--name "Sim Season"] [--delay 3000]   (watch it live!)
 //   npx tsx scripts/sim.ts week   [--name "Sim Season"]                  (pair + report one week)
 //   npx tsx scripts/sim.ts fans   [--name "Sim Season"] [--count 10]     (fake pick'em predictors)
+//   npx tsx scripts/sim.ts fantasy [--name "Sim Season"] [--scope SEASON|PLAYOFFS] [--managers N]
 //   npx tsx scripts/sim.ts teardown [--name "Sim Season"]
 import "dotenv/config";
-import { seedScratchSeason, simulateDraft, simulateWeek, simulatePredictors, teardownSim } from "../lib/services/simulate";
+import { seedScratchSeason, simulateDraft, simulateWeek, simulatePredictors, simulateFantasy, teardownSim } from "../lib/services/simulate";
 import { prisma } from "../lib/db";
 
 function arg(name: string, fallback: string): string {
@@ -32,11 +33,17 @@ async function main() {
   } else if (cmd === "fans") {
     const r = await simulatePredictors(name, Number(arg("count", "10")));
     console.log(`${r.picks} fake pick'em predictions made.`);
+  } else if (cmd === "fantasy") {
+    const scope = arg("scope", "SEASON") === "PLAYOFFS" ? "PLAYOFFS" : "SEASON";
+    const managers = process.argv.includes("--managers") ? Number(arg("managers", "0")) : undefined;
+    const r = await simulateFantasy(name, { scope, managers });
+    console.log(`Fantasy (${r.scope}, roster ${r.rosterSize}) — ${r.setsCounted} sets counted:`);
+    r.standings.forEach((s, i) => console.log(`  ${String(i + 1).padStart(2)}. ${s.managerId.padEnd(10)} ${s.points} pts (${s.sets} player-sets)`));
   } else if (cmd === "teardown") {
     const r = await teardownSim(name);
     console.log(`Removed "${name}" + ${r.playersDeleted} sim players.`);
   } else {
-    console.log("Usage: sim.ts seed|draft|week|fans|teardown [--name ...] [--players N] [--delay ms] [--count N]");
+    console.log("Usage: sim.ts seed|draft|week|fans|fantasy|teardown [--name ...] [--players N] [--delay ms] [--count N] [--scope SEASON|PLAYOFFS] [--managers N]");
     process.exitCode = 1;
   }
   await prisma.$disconnect();

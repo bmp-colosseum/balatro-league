@@ -16,6 +16,7 @@ import { generateSeasonSchedule } from "./schedule";
 import { getPairingConsole, makePair, setSendFirst } from "./pairing";
 import { reportSet } from "./report";
 import { makePick as makePickemPick } from "./pickem";
+import { openFantasyLeague, autoDraftFantasy, getFantasyStandings } from "./fantasy";
 
 const SIM_PREFIX = "Sim";
 // Fake-but-realistic Discord snowflakes, far above real ranges we use. (BigInt()
@@ -147,6 +148,39 @@ export async function simulateWeek(seasonName: string, opts?: { report?: boolean
     }
   }
   return { week: week.number, paired, reported };
+}
+
+// Fantasy dry-run: open a league, auto-draft N fake managers over the real player pool,
+// and print cumulative standings derived from whatever sets have been played so far. Lets
+// us watch the whole fantasy loop end-to-end before any UI exists.
+export async function simulateFantasy(seasonName: string, opts?: { scope?: "SEASON" | "PLAYOFFS"; managers?: number }) {
+  assertSim(seasonName);
+  const existing = await getFantasyStandings(seasonName);
+  if (!existing) {
+    await openFantasyLeague(seasonName, { scope: opts?.scope ?? "SEASON" });
+    const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { teamSize: true } });
+    // Fake managers, distinct from the sim's players/predictors (SIM_FAN_BASE + 500+).
+    const wantMax = await autoDraftManagerCap(seasonName);
+    const managerCount = Math.max(2, Math.min(opts?.managers ?? wantMax, wantMax));
+    const managers = Array.from({ length: managerCount }, (_, i) => ({
+      discordId: (SIM_FAN_BASE + BigInt(500 + i)).toString(),
+      name: `SimMgr${i + 1}`,
+    }));
+    await autoDraftFantasy(seasonName, managers);
+    void season;
+  }
+  const standings = await getFantasyStandings(seasonName);
+  return standings!;
+}
+
+// How many fantasy managers the pool supports (pool ÷ rosterSize) — mirrors the service guard.
+async function autoDraftManagerCap(seasonName: string): Promise<number> {
+  const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true, teamSize: true } });
+  if (!season) return 2;
+  const draft = await prisma.draft.findUnique({ where: { seasonId: season.id }, select: { id: true } });
+  if (!draft) return 2;
+  const pool = await prisma.draftPick.count({ where: { draftId: draft.id, playerId: { not: null } } });
+  return Math.max(2, Math.floor(pool / season.teamSize));
 }
 
 // N fake predictors making random pick'em picks on open sets — fills leaderboards +

@@ -354,6 +354,54 @@ model DraftPick {
   @@unique([draftId, pickIndex])
 }
 
+// ── Fantasy (ws08) — a meta-game over a live season ────────────────────────
+// Managers draft real players; scoring derives on read from the season's sets via the
+// pure core (packages/tour-core fantasy). All ids are plain (decoupling rule) — no FK to
+// TourSeason/Player/TeamSeason — so deleteSeason clears FantasyLeague explicitly.
+enum FantasyScope {
+  SEASON // every set all season scores
+  PLAYOFFS // only playoff sets score — eliminated players are simply done (you can get screwed)
+}
+
+model FantasyLeague {
+  id            String       @id @default(cuid())
+  seasonId      String       @unique // TourSeason.id (plain id)
+  scope         FantasyScope @default(SEASON)
+  rosterSize    Int // players per fantasy roster (defaults to the real teamSize)
+  setWinPoints  Int          @default(1)
+  gameWinPoints Int          @default(1)
+  tradesEnabled Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+
+  teams FantasyTeam[]
+}
+
+model FantasyTeam {
+  id               String @id @default(cuid())
+  leagueId         String
+  managerDiscordId String
+  name             String
+
+  league FantasyLeague @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  picks  FantasyPick[]
+
+  @@unique([leagueId, managerDiscordId])
+}
+
+model FantasyPick {
+  id            String @id @default(cuid())
+  fantasyTeamId String
+  pickIndex     Int // overall snake-draft pick number
+  playerId      String // core Player.id drafted
+  teamSeasonId  String // the real team the player was on at draft (display + future sub-lineage)
+  seed          Int // their intra-team seed at draft
+
+  team FantasyTeam @relation(fields: [fantasyTeamId], references: [id], onDelete: Cascade)
+
+  @@unique([fantasyTeamId, pickIndex])
+  @@unique([fantasyTeamId, playerId])
+}
+
 // ── Playoffs ───────────────────────────────────────────────────────────────
 model PlayoffEntry {
   id           String  @id @default(cuid())
