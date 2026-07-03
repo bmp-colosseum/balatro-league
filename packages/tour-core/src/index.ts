@@ -14,3 +14,4 @@ export * from "./standings";
 export * from "./schedule";
 export * from "./draft";
 export * from "./pairing";
+export * from "./fantasy";
