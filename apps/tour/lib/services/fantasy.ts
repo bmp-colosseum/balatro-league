@@ -3,7 +3,7 @@
 // so a corrected result reflows automatically. Auth-agnostic (callers gate); the sim and
 // the (future) UI/bot are thin callers of these functions.
 import { prisma } from "../db";
-import { snakeOrder, tallyFantasyBySlot, type SlottedSet } from "@balatro/tour-core";
+import { snakeOrder, tallyFantasyBySlot, ownerAtWeek, type SlottedSet, type OwnershipMove } from "@balatro/tour-core";
 import { notifyLive } from "../notify";
 
 // One live league per season → one SSE scope. The draft board + standings page
@@ -356,29 +356,72 @@ export async function autoDraftFantasy(seasonName: string, managers: { discordId
   return { league: league.id, managers: teams.length, picks: order.length };
 }
 
+// Time-effective fantasy ownership (mirrors seedAtWeekResolver in roster-ops): base = each
+// player's DRAFT owner (from FantasyPick), then fold APPLIED trades so byPlayer/bySlot resolve
+// who owned a player/slot AS OF a given week. A league with no APPLIED trades resolves to the
+// draft owner for every week -> standings are identical to the pre-trades behavior. A trade
+// moves the pick (player + its slot) wholesale, so byPlayer and bySlot fold identically.
+async function fantasyOwnerAtWeekResolver(leagueId: string) {
+  const picks = await prisma.fantasyPick.findMany({
+    where: { team: { leagueId } },
+    select: { playerId: true, teamSeasonId: true, seed: true, fantasyTeamId: true },
+  });
+  const base = new Map<string, string>(); // playerId -> draft owner (fantasyTeamId)
+  const playerForSlot = new Map<string, string>(); // `${teamSeasonId}:${seed}` -> playerId
+  for (const p of picks) {
+    base.set(p.playerId, p.fantasyTeamId);
+    playerForSlot.set(`${p.teamSeasonId}:${p.seed}`, p.playerId);
+  }
+  const trades = await prisma.fantasyTrade.findMany({
+    where: { leagueId, status: "APPLIED" },
+    orderBy: [{ effectiveWeek: "asc" }, { createdAt: "asc" }],
+    select: { effectiveWeek: true, items: { select: { playerId: true, toTeamId: true } } },
+  });
+  const moves: OwnershipMove[] = [];
+  let seq = 0;
+  for (const t of trades) {
+    for (const it of t.items) moves.push({ playerId: it.playerId, toTeamId: it.toTeamId, effectiveWeek: t.effectiveWeek ?? 0, seq: seq++ });
+  }
+  const byPlayer = (playerId: string, week: number | null) => ownerAtWeek(base, moves, playerId, week);
+  const bySlot = (teamSeasonId: string, seed: number, week: number | null) => {
+    const pid = playerForSlot.get(`${teamSeasonId}:${seed}`);
+    return pid ? ownerAtWeek(base, moves, pid, week) : null;
+  };
+  // Owner "right now" = fold at an effectively-infinite week (all applied trades in force).
+  const currentOwner = (playerId: string) => ownerAtWeek(base, moves, playerId, Number.MAX_SAFE_INTEGER);
+  return { byPlayer, bySlot, currentOwner };
+}
+
+// The latest schedule week with a decided set (0 if none) — "now" for trade timing.
+async function currentFantasyWeek(seasonId: string): Promise<number> {
+  const sets = await prisma.tourSet.findMany({
+    where: { matchId: { not: null }, OR: [{ seasonId }, { matchup: { week: { seasonId } } }] },
+    select: { week: true, matchup: { select: { week: { select: { number: true } } } } },
+  });
+  let max = 0;
+  for (const s of sets) {
+    const w = s.matchup?.week?.number ?? s.week ?? 0;
+    if (w > max) max = w;
+  }
+  return max;
+}
+
 // Cumulative standings — derive on read. Loads the in-scope decided sets, maps each set's
-// real players to their fantasy owner, and tallies via the pure core. SEASON = every set;
+// real players to their fantasy owner AS OF that set's week (so a mid-season trade only moves
+// points from its effective week forward), and tallies via the pure core. SEASON = every set;
 // PLAYOFFS = only playoff-week sets (eliminated players simply have no more sets).
 export async function getFantasyStandings(seasonName: string) {
   const season = await seasonByName(seasonName);
   const league = await prisma.fantasyLeague.findUnique({
     where: { seasonId: season.id },
-    include: { teams: { include: { picks: { select: { playerId: true, teamSeasonId: true, seed: true } } } } },
+    select: {
+      scope: true, rosterSize: true, setWinPoints: true, gameWinPoints: true, id: true,
+      teams: { select: { id: true, name: true, managerDiscordId: true } },
+    },
   });
   if (!league) return null;
 
-  // Two lookups for the slot-aware tally: by drafted player (identity, re-seed-safe) and by
-  // the drafted seed slot (so a sub/replacement's points flow to that slot's owner). Keyed
-  // on the fantasy TEAM ID (not name) — two managers may share a display name and must stay
-  // distinct rows; name/discordId are carried through only for display.
-  const ownerByPlayer = new Map<string, string>();
-  const ownerBySlot = new Map<string, string>(); // key `${teamSeasonId}:${seed}`
-  for (const t of league.teams) {
-    for (const pk of t.picks) {
-      ownerByPlayer.set(pk.playerId, t.id);
-      ownerBySlot.set(`${pk.teamSeasonId}:${pk.seed}`, t.id);
-    }
-  }
+  const owner = await fantasyOwnerAtWeekResolver(league.id);
 
   // In-scope decided sets (have a linked core Match). Playoff scope filters by week kind.
   const sets = await prisma.tourSet.findMany({
@@ -389,10 +432,10 @@ export async function getFantasyStandings(seasonName: string) {
     },
     select: {
       playerAId: true, playerBId: true, seedA: true, seedB: true,
-      teamSeasonAId: true, teamSeasonBId: true, matchId: true,
-      // Live sets carry their team link on the matchup (the set's own columns are for
+      teamSeasonAId: true, teamSeasonBId: true, matchId: true, week: true,
+      // Live sets carry their team link + week on the matchup (the set's own columns are for
       // historical imports); set side A == matchup team A (schema §TourSet).
-      matchup: { select: { teamSeasonAId: true, teamSeasonBId: true } },
+      matchup: { select: { teamSeasonAId: true, teamSeasonBId: true, week: { select: { number: true } } } },
     },
   });
   const matches = await prisma.match.findMany({
@@ -401,8 +444,8 @@ export async function getFantasyStandings(seasonName: string) {
   });
   const matchById = new Map(matches.map((m) => [m.id, m]));
 
-  // Enrich each set with the game counts (Match A/B are canonical-by-id, not the set's A/B)
-  // and the seed slots for the slot-aware owner resolution. Sets missing a team/slot are
+  // Enrich each set with the game counts (Match A/B are canonical-by-id, not the set's A/B),
+  // the seed slots, and the WEEK (for time-effective ownership). Sets missing a team/slot are
   // skipped (historical/team-only imports have no per-side seed).
   const slotted: SlottedSet[] = [];
   for (const s of sets) {
@@ -414,13 +457,14 @@ export async function getFantasyStandings(seasonName: string) {
     slotted.push({
       playerAId: s.playerAId, teamSeasonAId: teamA, seedA: s.seedA, gamesA: gamesFor(s.playerAId),
       playerBId: s.playerBId, teamSeasonBId: teamB, seedB: s.seedB, gamesB: gamesFor(s.playerBId),
+      week: s.matchup?.week?.number ?? s.week ?? null,
     });
   }
 
   const totals = tallyFantasyBySlot(
     slotted,
-    (pid) => ownerByPlayer.get(pid) ?? null,
-    (tid, seed) => ownerBySlot.get(`${tid}:${seed}`) ?? null,
+    owner.byPlayer,
+    owner.bySlot,
     { setWinPoints: league.setWinPoints, gameWinPoints: league.gameWinPoints },
   );
   // Include managers with 0 points (drafted players who haven't scored yet). Points/sets
@@ -440,6 +484,302 @@ export async function getFantasyStandings(seasonName: string) {
     .sort((a, b) => b.points - a.points || a.managerName.localeCompare(b.managerName));
 
   return { scope: league.scope, rosterSize: league.rosterSize, standings, setsCounted: slotted.length };
+}
+
+// ── Trades + weekly lock ─────────────────────────────────────────────────────
+// A trade re-attributes ownership from an effective week forward (standings fold it via the
+// resolver above); it never mutates FantasyPick. Managers propose/accept; AUTO applies on
+// accept, TO_APPROVED waits for a TO. The weekly lock (lockedThroughWeek) is the freeze
+// boundary: an APPLIED trade always lands after it, so a scored week never reflows.
+
+async function fantasyLeagueForTrade(seasonName: string) {
+  const season = await seasonByName(seasonName);
+  const league = await prisma.fantasyLeague.findUnique({
+    where: { seasonId: season.id },
+    select: { id: true, tradesEnabled: true, tradeApproval: true, tradeDeadlineWeek: true, lockedThroughWeek: true },
+  });
+  if (!league) throw new Error("No fantasy league for this season.");
+  return { season, league };
+}
+
+// The signed-in viewer's team in this league (or null).
+async function teamOfViewer(leagueId: string, discordId: string | null) {
+  if (!discordId) return null;
+  return prisma.fantasyTeam.findFirst({ where: { leagueId, managerDiscordId: discordId }, select: { id: true, name: true } });
+}
+
+// Propose a trade: proposer gives `give[]` (their players) for the receiver's `receive[]`. An
+// even swap keeps both rosters full. Ownership is validated NOW; the trade only lands (effective
+// week) when it becomes APPLIED. N-for-N capable; the MVP UI is 1-for-1.
+export async function proposeTrade(
+  seasonName: string,
+  proposerDiscordId: string,
+  input: { receiverTeamId: string; give: string[]; receive: string[]; reason?: string },
+) {
+  const { season, league } = await fantasyLeagueForTrade(seasonName);
+  if (!league.tradesEnabled) throw new Error("Trades are turned off for this league.");
+  const give = [...new Set(input.give.filter(Boolean))];
+  const receive = [...new Set(input.receive.filter(Boolean))];
+  if (!give.length || !receive.length) throw new Error("Pick at least one player on each side.");
+  if (give.length !== receive.length) throw new Error("A trade must be an even swap (same number of players each way).");
+
+  const proposer = await teamOfViewer(league.id, proposerDiscordId);
+  if (!proposer) throw new Error("You're not a manager in this league.");
+  if (input.receiverTeamId === proposer.id) throw new Error("Pick another manager to trade with.");
+  const receiver = await prisma.fantasyTeam.findFirst({ where: { id: input.receiverTeamId, leagueId: league.id }, select: { id: true, name: true } });
+  if (!receiver) throw new Error("That manager isn't in this league.");
+
+  const week = await currentFantasyWeek(season.id);
+  if (league.tradeDeadlineWeek != null && week > league.tradeDeadlineWeek) throw new Error(`The trade deadline (week ${league.tradeDeadlineWeek}) has passed.`);
+
+  // Ownership must hold right now (folding prior applied trades).
+  const owner = await fantasyOwnerAtWeekResolver(league.id);
+  for (const pid of give) if (owner.currentOwner(pid) !== proposer.id) throw new Error("You can only offer players you currently own.");
+  for (const pid of receive) if (owner.currentOwner(pid) !== receiver.id) throw new Error("That manager doesn't currently own one of the requested players.");
+
+  const trade = await prisma.fantasyTrade.create({
+    data: {
+      leagueId: league.id,
+      proposerTeamId: proposer.id,
+      receiverTeamId: receiver.id,
+      status: "PROPOSED",
+      proposedByDiscordId: proposerDiscordId,
+      reason: input.reason?.slice(0, 300) || null,
+      items: {
+        create: [
+          ...give.map((playerId) => ({ playerId, fromTeamId: proposer.id, toTeamId: receiver.id })),
+          ...receive.map((playerId) => ({ playerId, fromTeamId: receiver.id, toTeamId: proposer.id })),
+        ],
+      },
+    },
+    select: { id: true },
+  });
+  await notifyLive(fantasyScope(season.id));
+  return { tradeId: trade.id };
+}
+
+// Transition a trade to APPLIED under the league lock: set effectiveWeek = after the lock/now,
+// re-validate that each giver STILL owns their side (no stale double-trade), then flip status.
+// This is the only step that changes ownership.
+async function applyTradeUnderLock(seasonId: string, tradeId: string) {
+  const head = await prisma.fantasyTrade.findUnique({ where: { id: tradeId }, select: { leagueId: true } });
+  if (!head) throw new Error("Trade not found.");
+  const week = await currentFantasyWeek(seasonId);
+  await prisma.$transaction(async (tx) => {
+    await lockLeague(tx, head.leagueId);
+    const trade = await tx.fantasyTrade.findUnique({
+      where: { id: tradeId },
+      select: { status: true, items: { select: { playerId: true, fromTeamId: true } }, league: { select: { lockedThroughWeek: true, tradesEnabled: true } } },
+    });
+    if (!trade) throw new Error("Trade not found.");
+    if (trade.status !== "PROPOSED" && trade.status !== "TO_REVIEW") throw new Error("This trade can no longer be applied.");
+    if (!trade.league.tradesEnabled) throw new Error("Trades are turned off for this league.");
+
+    // Current owners (fold APPLIED trades), tx-consistent, to catch a stale offer.
+    const picks = await tx.fantasyPick.findMany({ where: { team: { leagueId: head.leagueId } }, select: { playerId: true, fantasyTeamId: true } });
+    const base = new Map(picks.map((p) => [p.playerId, p.fantasyTeamId] as [string, string]));
+    const applied = await tx.fantasyTrade.findMany({
+      where: { leagueId: head.leagueId, status: "APPLIED" },
+      orderBy: [{ effectiveWeek: "asc" }, { createdAt: "asc" }],
+      select: { effectiveWeek: true, items: { select: { playerId: true, toTeamId: true } } },
+    });
+    const moves: OwnershipMove[] = [];
+    let seq = 0;
+    for (const t of applied) for (const it of t.items) moves.push({ playerId: it.playerId, toTeamId: it.toTeamId, effectiveWeek: t.effectiveWeek ?? 0, seq: seq++ });
+    for (const it of trade.items) {
+      if (ownerAtWeek(base, moves, it.playerId, Number.MAX_SAFE_INTEGER) !== it.fromTeamId) throw new Error("A player in this trade was already moved - the offer is stale.");
+    }
+
+    const effectiveWeek = Math.max(trade.league.lockedThroughWeek, week) + 1;
+    // Compare-and-set on status. cancel/reject don't take the league lock, so one can commit
+    // between the status read above and this write. Conditioning on the still-open status makes
+    // the APPLIED transition atomic - it matches 0 rows (and we abort) if the trade was just
+    // cancelled/rejected/applied, instead of resurrecting a resolved offer to APPLIED.
+    const res = await tx.fantasyTrade.updateMany({
+      where: { id: tradeId, status: { in: ["PROPOSED", "TO_REVIEW"] } },
+      data: { status: "APPLIED", effectiveWeek, decidedAt: new Date() },
+    });
+    if (res.count !== 1) throw new Error("This trade was just resolved - refresh and try again.");
+  });
+}
+
+// The receiving manager accepts or rejects. AUTO league -> applies now; TO_APPROVED -> queues
+// for a TO. Identity is the caller's discordId (gated by the action), never form data.
+export async function respondToTrade(tradeId: string, viewerDiscordId: string, accept: boolean) {
+  const trade = await prisma.fantasyTrade.findUnique({
+    where: { id: tradeId },
+    select: { status: true, receiverTeamId: true, leagueId: true, league: { select: { seasonId: true, tradeApproval: true } } },
+  });
+  if (!trade) throw new Error("Trade not found.");
+  if (trade.status !== "PROPOSED") throw new Error("This trade isn't awaiting a response.");
+  const myTeam = await teamOfViewer(trade.leagueId, viewerDiscordId);
+  if (!myTeam || myTeam.id !== trade.receiverTeamId) throw new Error("Only the receiving manager can respond to this offer.");
+
+  // Compare-and-set on status=PROPOSED so a race with the proposer's cancel resolves to exactly
+  // one outcome (whichever commits first wins; the loser matches 0 rows and errors out).
+  if (!accept) {
+    const res = await prisma.fantasyTrade.updateMany({ where: { id: tradeId, status: "PROPOSED" }, data: { status: "REJECTED", decidedAt: new Date() } });
+    if (res.count !== 1) throw new Error("This trade isn't awaiting a response.");
+    await notifyLive(fantasyScope(trade.league.seasonId));
+    return { status: "REJECTED" as const };
+  }
+  if (trade.league.tradeApproval === "TO_APPROVED") {
+    const res = await prisma.fantasyTrade.updateMany({ where: { id: tradeId, status: "PROPOSED" }, data: { status: "TO_REVIEW", decidedAt: new Date() } });
+    if (res.count !== 1) throw new Error("This trade isn't awaiting a response.");
+    await notifyLive(fantasyScope(trade.league.seasonId));
+    return { status: "TO_REVIEW" as const };
+  }
+  await applyTradeUnderLock(trade.league.seasonId, tradeId);
+  await notifyLive(fantasyScope(trade.league.seasonId));
+  return { status: "APPLIED" as const };
+}
+
+// The proposer withdraws a still-open offer.
+export async function cancelTrade(tradeId: string, viewerDiscordId: string) {
+  const trade = await prisma.fantasyTrade.findUnique({ where: { id: tradeId }, select: { status: true, proposerTeamId: true, leagueId: true, league: { select: { seasonId: true } } } });
+  if (!trade) throw new Error("Trade not found.");
+  if (trade.status !== "PROPOSED" && trade.status !== "TO_REVIEW") throw new Error("This trade can't be cancelled now.");
+  const myTeam = await teamOfViewer(trade.leagueId, viewerDiscordId);
+  if (!myTeam || myTeam.id !== trade.proposerTeamId) throw new Error("Only the proposer can cancel this offer.");
+  // Compare-and-set: if the receiver's accept/reject (or a TO decision) just landed, this matches
+  // 0 rows and we refuse - a bare update-by-id would clobber an already-APPLIED trade back to
+  // CANCELLED and silently revert the ownership transfer.
+  const res = await prisma.fantasyTrade.updateMany({ where: { id: tradeId, status: { in: ["PROPOSED", "TO_REVIEW"] } }, data: { status: "CANCELLED", decidedAt: new Date() } });
+  if (res.count !== 1) throw new Error("This trade can't be cancelled now - it was just resolved.");
+  await notifyLive(fantasyScope(trade.league.seasonId));
+}
+
+// TO approves/rejects a queued trade (TO_APPROVED leagues). Caller gates isAdmin().
+export async function decideTradeAsTO(tradeId: string, approve: boolean) {
+  const trade = await prisma.fantasyTrade.findUnique({ where: { id: tradeId }, select: { status: true, league: { select: { seasonId: true } } } });
+  if (!trade) throw new Error("Trade not found.");
+  if (trade.status !== "TO_REVIEW") throw new Error("This trade isn't awaiting TO review.");
+  if (!approve) {
+    // CAS: lose to a proposer cancel that raced this decision (both target the TO_REVIEW row).
+    const res = await prisma.fantasyTrade.updateMany({ where: { id: tradeId, status: "TO_REVIEW" }, data: { status: "REJECTED", decidedAt: new Date() } });
+    if (res.count !== 1) throw new Error("This trade isn't awaiting TO review.");
+    await notifyLive(fantasyScope(trade.league.seasonId));
+    return { status: "REJECTED" as const };
+  }
+  await applyTradeUnderLock(trade.league.seasonId, tradeId);
+  await notifyLive(fantasyScope(trade.league.seasonId));
+  return { status: "APPLIED" as const };
+}
+
+// TO advances the weekly freeze. Applied trades already landed after the old lock stay put;
+// this only affects where FUTURE trades land. Caller gates isAdmin().
+export async function advanceFantasyLock(seasonName: string, throughWeek: number) {
+  const { season, league } = await fantasyLeagueForTrade(seasonName);
+  const w = Math.max(0, Math.floor(Number(throughWeek) || 0));
+  await prisma.fantasyLeague.update({ where: { id: league.id }, data: { lockedThroughWeek: w } });
+  await notifyLive(fantasyScope(season.id));
+  return { lockedThroughWeek: w };
+}
+
+// TO trade settings. Caller gates isAdmin().
+export async function setFantasyTradeConfig(seasonName: string, cfg: { tradesEnabled?: boolean; tradeApproval?: "AUTO" | "TO_APPROVED"; tradeDeadlineWeek?: number | null }) {
+  const { season, league } = await fantasyLeagueForTrade(seasonName);
+  await prisma.fantasyLeague.update({
+    where: { id: league.id },
+    data: {
+      ...(cfg.tradesEnabled != null ? { tradesEnabled: cfg.tradesEnabled } : {}),
+      ...(cfg.tradeApproval ? { tradeApproval: cfg.tradeApproval } : {}),
+      ...(cfg.tradeDeadlineWeek !== undefined ? { tradeDeadlineWeek: cfg.tradeDeadlineWeek } : {}),
+    },
+  });
+  await notifyLive(fantasyScope(season.id));
+}
+
+// One trade, oriented for display (player names + team names on each side).
+export interface TradeView {
+  id: string;
+  status: string;
+  effectiveWeek: number | null;
+  reason: string | null;
+  proposer: string;
+  receiver: string;
+  fromProposer: string[]; // players the proposer gives up
+  fromReceiver: string[]; // players the receiver gives up
+}
+
+// Manager trade panel (public fantasy page): current rosters (post-trades), other managers to
+// trade with, and this viewer's incoming / outgoing / historical trades.
+export async function getFantasyTradePanel(seasonName: string, viewerDiscordId: string | null) {
+  const season = await seasonByName(seasonName);
+  const league = await prisma.fantasyLeague.findUnique({
+    where: { seasonId: season.id },
+    select: {
+      id: true, tradesEnabled: true, tradeApproval: true, tradeDeadlineWeek: true,
+      teams: { select: { id: true, name: true, managerDiscordId: true } },
+    },
+  });
+  if (!league) return null;
+  const myTeam = viewerDiscordId ? league.teams.find((t) => t.managerDiscordId === viewerDiscordId) ?? null : null;
+  const week = await currentFantasyWeek(season.id);
+  const deadlinePassed = league.tradeDeadlineWeek != null && week > league.tradeDeadlineWeek;
+
+  // Current rosters (post-trades) + player names.
+  const owner = await fantasyOwnerAtWeekResolver(league.id);
+  const picks = await prisma.fantasyPick.findMany({ where: { team: { leagueId: league.id } }, select: { playerId: true } });
+  const playerIds = [...new Set(picks.map((p) => p.playerId))];
+  const players = await prisma.player.findMany({ where: { id: { in: playerIds } }, select: { id: true, displayName: true } });
+  const nameOf = new Map(players.map((p) => [p.id, p.displayName]));
+  const rosterByTeam = new Map<string, { playerId: string; name: string }[]>();
+  for (const t of league.teams) rosterByTeam.set(t.id, []);
+  for (const pid of playerIds) {
+    const o = owner.currentOwner(pid);
+    if (o && rosterByTeam.has(o)) rosterByTeam.get(o)!.push({ playerId: pid, name: nameOf.get(pid) ?? pid });
+  }
+  for (const arr of rosterByTeam.values()) arr.sort((a, b) => a.name.localeCompare(b.name));
+
+  const teamName = new Map(league.teams.map((t) => [t.id, t.name]));
+  const trades = await prisma.fantasyTrade.findMany({
+    where: { leagueId: league.id },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, status: true, proposerTeamId: true, receiverTeamId: true, effectiveWeek: true, reason: true, items: { select: { playerId: true, fromTeamId: true } } },
+  });
+  const toView = (t: (typeof trades)[number]): TradeView => ({
+    id: t.id, status: t.status, effectiveWeek: t.effectiveWeek, reason: t.reason,
+    proposer: teamName.get(t.proposerTeamId) ?? "?", receiver: teamName.get(t.receiverTeamId) ?? "?",
+    fromProposer: t.items.filter((i) => i.fromTeamId === t.proposerTeamId).map((i) => nameOf.get(i.playerId) ?? i.playerId),
+    fromReceiver: t.items.filter((i) => i.fromTeamId === t.receiverTeamId).map((i) => nameOf.get(i.playerId) ?? i.playerId),
+  });
+  const mine = myTeam ? trades.filter((t) => t.proposerTeamId === myTeam.id || t.receiverTeamId === myTeam.id) : [];
+
+  return {
+    enabled: league.tradesEnabled,
+    deadlinePassed,
+    tradeApproval: league.tradeApproval,
+    myTeam: myTeam ? { id: myTeam.id, name: myTeam.name } : null,
+    managers: league.teams.filter((t) => !myTeam || t.id !== myTeam.id).map((t) => ({ id: t.id, name: t.name })),
+    myRoster: myTeam ? rosterByTeam.get(myTeam.id) ?? [] : [],
+    rosterByTeam: Object.fromEntries([...rosterByTeam.entries()]) as Record<string, { playerId: string; name: string }[]>,
+    incoming: myTeam ? mine.filter((t) => t.receiverTeamId === myTeam.id && t.status === "PROPOSED").map(toView) : [],
+    outgoing: myTeam ? mine.filter((t) => t.proposerTeamId === myTeam.id && (t.status === "PROPOSED" || t.status === "TO_REVIEW")).map(toView) : [],
+    history: myTeam ? mine.filter((t) => t.status === "APPLIED" || t.status === "REJECTED" || t.status === "CANCELLED").map(toView) : [],
+  };
+}
+
+// TO review queue (TO_APPROVED leagues): trades a receiver accepted, awaiting a TO decision.
+export async function getFantasyTradesForAdmin(seasonName: string): Promise<TradeView[]> {
+  const season = await seasonByName(seasonName);
+  const league = await prisma.fantasyLeague.findUnique({ where: { seasonId: season.id }, select: { id: true, teams: { select: { id: true, name: true } } } });
+  if (!league) return [];
+  const trades = await prisma.fantasyTrade.findMany({
+    where: { leagueId: league.id, status: "TO_REVIEW" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, status: true, proposerTeamId: true, receiverTeamId: true, effectiveWeek: true, reason: true, items: { select: { playerId: true, fromTeamId: true } } },
+  });
+  const teamName = new Map(league.teams.map((t) => [t.id, t.name]));
+  const pids = [...new Set(trades.flatMap((t) => t.items.map((i) => i.playerId)))];
+  const players = await prisma.player.findMany({ where: { id: { in: pids } }, select: { id: true, displayName: true } });
+  const nameOf = new Map(players.map((p) => [p.id, p.displayName]));
+  return trades.map((t) => ({
+    id: t.id, status: t.status, effectiveWeek: t.effectiveWeek, reason: t.reason,
+    proposer: teamName.get(t.proposerTeamId) ?? "?", receiver: teamName.get(t.receiverTeamId) ?? "?",
+    fromProposer: t.items.filter((i) => i.fromTeamId === t.proposerTeamId).map((i) => nameOf.get(i.playerId) ?? i.playerId),
+    fromReceiver: t.items.filter((i) => i.fromTeamId === t.receiverTeamId).map((i) => nameOf.get(i.playerId) ?? i.playerId),
+  }));
 }
 
 // Remove the fantasy league for a season (called by deleteSeason — plain-id, no cascade).

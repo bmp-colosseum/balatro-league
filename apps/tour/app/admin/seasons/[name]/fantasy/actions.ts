@@ -6,7 +6,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isAdmin } from "@/lib/auth";
-import { openFantasyLeague, startFantasyDraft, removeFantasyTeam } from "@/lib/services/fantasy";
+import { openFantasyLeague, startFantasyDraft, removeFantasyTeam, advanceFantasyLock, setFantasyTradeConfig, decideTradeAsTO } from "@/lib/services/fantasy";
 import type { ActionResult } from "@/lib/action-result";
 
 function rev(season: string) {
@@ -73,6 +73,53 @@ export async function deleteFantasyTeamAction(formData: FormData) {
   } catch (e) {
     ok = false;
     msg = e instanceof Error ? e.message : "Couldn't remove the manager.";
+  }
+  rev(season);
+  backToFantasy(season, msg, ok);
+}
+
+export async function advanceLockAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
+  const season = String(formData.get("season") ?? "");
+  try {
+    const r = await advanceFantasyLock(season, Number(formData.get("throughWeek") ?? 0));
+    rev(season);
+    return { ok: true, message: `Roster lock set through week ${r.lockedThroughWeek}. New trades land after it.` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Couldn't set the lock." };
+  }
+}
+
+export async function setTradeConfigAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
+  const season = String(formData.get("season") ?? "");
+  try {
+    const deadlineRaw = String(formData.get("tradeDeadlineWeek") ?? "").trim();
+    const deadline = deadlineRaw === "" ? null : Math.max(0, Math.floor(Number(deadlineRaw) || 0));
+    await setFantasyTradeConfig(season, {
+      tradesEnabled: String(formData.get("tradesEnabled") ?? "") === "on",
+      tradeApproval: String(formData.get("tradeApproval") ?? "AUTO") === "TO_APPROVED" ? "TO_APPROVED" : "AUTO",
+      tradeDeadlineWeek: deadline,
+    });
+    rev(season);
+    return { ok: true, message: "Trade settings saved." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Couldn't save trade settings." };
+  }
+}
+
+// TO approve/reject a queued trade (TO_APPROVED leagues) - per-row button -> toast.
+export async function decideTradeAction(formData: FormData) {
+  if (!(await isAdmin())) return;
+  const season = String(formData.get("season") ?? "");
+  const approve = String(formData.get("approve") ?? "") === "1";
+  let msg = approve ? "Trade approved." : "Trade rejected.";
+  let ok = true;
+  try {
+    await decideTradeAsTO(String(formData.get("tradeId") ?? ""), approve);
+  } catch (e) {
+    ok = false;
+    msg = e instanceof Error ? e.message : "Couldn't decide that trade.";
   }
   rev(season);
   backToFantasy(season, msg, ok);

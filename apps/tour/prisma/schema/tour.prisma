@@ -381,7 +381,15 @@ model FantasyLeague {
   orderJson      String? // JSON array of FantasyTeam.id in frozen snake seed order
   onClockSince   DateTime? // bumped each pick — powers the cosmetic ElapsedClock
 
-  teams FantasyTeam[]
+  // Trades + weekly lock. lockedThroughWeek: weeks <= this are frozen/scored, so an APPLIED
+  // trade always lands AFTER it (never reflows a scored week). tradeDeadlineWeek: once the
+  // current week passes it, no NEW proposals (in-flight accepted trades still apply).
+  tradeApproval     TradeApproval @default(AUTO)
+  lockedThroughWeek Int           @default(0)
+  tradeDeadlineWeek Int?
+
+  teams  FantasyTeam[]
+  trades FantasyTrade[]
 }
 
 model FantasyTeam {
@@ -411,6 +419,58 @@ model FantasyPick {
 
   @@unique([fantasyTeamId, pickIndex])
   @@unique([fantasyTeamId, playerId])
+}
+
+// Whether a manager-accepted trade applies instantly (AUTO) or waits for a TO to approve.
+enum TradeApproval {
+  AUTO
+  TO_APPROVED
+}
+
+enum FantasyTradeStatus {
+  PROPOSED // proposer offered; awaiting the receiver
+  TO_REVIEW // receiver accepted; awaiting a TO (TO_APPROVED leagues only)
+  APPLIED // ownership transferred from effectiveWeek forward (terminal, the only scoring state)
+  REJECTED // receiver declined
+  CANCELLED // proposer withdrew
+}
+
+// A two-party fantasy trade AND the ownership log: standings fold APPLIED trades' items over
+// the FantasyPick draft-owner base to resolve who owned a player at any week (derive-on-read,
+// mirroring RosterMove). A trade never mutates FantasyPick (draft history + uniqueness stay intact).
+model FantasyTrade {
+  id                  String             @id @default(cuid())
+  leagueId            String
+  proposerTeamId      String // FantasyTeam.id offering
+  receiverTeamId      String // FantasyTeam.id receiving the offer
+  status              FantasyTradeStatus @default(PROPOSED)
+  effectiveWeek       Int? // null until APPLIED; set to max(lockedThroughWeek, currentWeek)+1 at apply
+  proposedByDiscordId String
+  reason              String?
+  createdAt           DateTime           @default(now())
+  decidedAt           DateTime?
+
+  league FantasyLeague      @relation(fields: [leagueId], references: [id], onDelete: Cascade)
+  items  FantasyTradeItem[]
+
+  @@index([leagueId])
+  @@index([receiverTeamId])
+  @@index([proposerTeamId])
+}
+
+// One player changing hands within a trade (N-for-M capable; MVP UI is 1-for-1). fromTeamId
+// gives up ownership, toTeamId gains it, from the parent trade's effectiveWeek forward.
+model FantasyTradeItem {
+  id         String @id @default(cuid())
+  tradeId    String
+  playerId   String // real Player.id (must match a FantasyPick in this league)
+  fromTeamId String // FantasyTeam.id giving up ownership
+  toTeamId   String // FantasyTeam.id gaining ownership
+
+  trade FantasyTrade @relation(fields: [tradeId], references: [id], onDelete: Cascade)
+
+  @@index([tradeId])
+  @@index([playerId])
 }
 
 // ── Playoffs ───────────────────────────────────────────────────────────────

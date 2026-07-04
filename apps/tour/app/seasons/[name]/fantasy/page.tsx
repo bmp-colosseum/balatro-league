@@ -1,13 +1,15 @@
 import Link from "next/link";
-import { ArrowLeft, Gamepad2, LogIn, Trophy } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, Gamepad2, LogIn, Trophy } from "lucide-react";
 import { getViewer } from "@/lib/auth";
-import { getFantasyLeague, getFantasyStandings, getFantasyDraftBoard } from "@/lib/services/fantasy";
+import { getFantasyLeague, getFantasyStandings, getFantasyDraftBoard, getFantasyTradePanel } from "@/lib/services/fantasy";
 import { Callout } from "@/components/Callout";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
+import { LiveRefresh } from "@/components/LiveRefresh";
+import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { joinFantasyAction } from "./actions";
+import { joinFantasyAction, proposeTradeAction, respondTradeAction, cancelTradeAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -55,8 +57,16 @@ export default async function FantasyPublic({ params }: { params: Promise<{ name
   const myTurn = board.state === "DRAFTING" && !!viewer.discordId && board.current?.managerDiscordId === viewer.discordId;
   const full = board.teams.length >= board.cap;
 
+  // Trades open once the draft is DONE. Only load the panel then (rosters exist).
+  const trade = board.state === "DONE" ? await getFantasyTradePanel(seasonName, viewer.discordId) : null;
+  const canTrade = !!trade && trade.enabled && !!trade.myTeam;
+  const receiveOptions = trade
+    ? trade.managers.flatMap((m) => (trade.rosterByTeam[m.id] ?? []).map((p) => ({ value: p.playerId, label: `${p.name} (${m.name})` })))
+    : [];
+
   return (
     <main>
+      <LiveRefresh channel={`fantasy:${board.seasonId}`} />
       <p><Link href={`/seasons/${enc}`} className="inline-flex items-center gap-1"><ArrowLeft className="size-3.5" /> {seasonName}</Link></p>
       <h1 className="flex items-center gap-2"><Gamepad2 className="size-6" /> Fantasy</h1>
       <p className="sub">
@@ -102,6 +112,103 @@ export default async function FantasyPublic({ params }: { params: Promise<{ name
           </tbody>
         </table>
       </div>
+
+      {/* Trades (managers only, once the draft is DONE) */}
+      {trade && trade.myTeam && (
+        <div className="card">
+          <div className="bracket-title flex items-center gap-2"><ArrowLeftRight className="size-4" /> Trades</div>
+          {!trade.enabled ? (
+            <p className="sub" style={{ margin: 0 }}>Trades are turned off for this league.</p>
+          ) : (
+            <>
+              {trade.deadlinePassed ? (
+                <p className="sub" style={{ marginTop: 0 }}>The trade deadline has passed - no new offers.</p>
+              ) : trade.myRoster.length === 0 || receiveOptions.length === 0 ? (
+                <p className="sub" style={{ marginTop: 0 }}>No one to trade with yet.</p>
+              ) : (
+                <ActionFlashForm action={proposeTradeAction} className="flex flex-wrap items-end gap-3">
+                  <input type="hidden" name="season" value={seasonName} />
+                  <div className="grid gap-1.5">
+                    <Label>You give</Label>
+                    <FormSelect name="give" required placeholder="one of your players" options={trade.myRoster.map((p) => ({ value: p.playerId, label: p.name }))} triggerClassName="w-56" />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label>You get</Label>
+                    <FormSelect name="receive" required placeholder="a player to acquire" options={receiveOptions} triggerClassName="w-64" />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="reason">Note</Label>
+                    <Input id="reason" name="reason" placeholder="optional" maxLength={200} className="w-48" />
+                  </div>
+                  <SubmitButton pendingText="Sending...">Propose 1-for-1</SubmitButton>
+                </ActionFlashForm>
+              )}
+              {trade.tradeApproval === "TO_APPROVED" && !trade.deadlinePassed && (
+                <p className="sub" style={{ marginBottom: 0 }}>Accepted trades need a TO to approve them.</p>
+              )}
+
+              {trade.incoming.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <div className="bracket-title">Incoming offers</div>
+                  {trade.incoming.map((t) => (
+                    <div key={t.id} className="flex flex-wrap items-center gap-2" style={{ marginBottom: 8 }}>
+                      <span className="text-sm">
+                        <strong>{t.proposer}</strong> offers you <strong>{t.fromProposer.join(", ")}</strong> for your <strong>{t.fromReceiver.join(", ")}</strong>
+                        {t.reason ? <span className="muted"> - {t.reason}</span> : null}
+                      </span>
+                      <form action={respondTradeAction} className="inline">
+                        <input type="hidden" name="season" value={seasonName} />
+                        <input type="hidden" name="tradeId" value={t.id} />
+                        <input type="hidden" name="accept" value="1" />
+                        <SubmitButton size="sm" pendingText="...">Accept</SubmitButton>
+                      </form>
+                      <form action={respondTradeAction} className="inline">
+                        <input type="hidden" name="season" value={seasonName} />
+                        <input type="hidden" name="tradeId" value={t.id} />
+                        <input type="hidden" name="accept" value="0" />
+                        <SubmitButton size="sm" variant="secondary" pendingText="...">Reject</SubmitButton>
+                      </form>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {trade.outgoing.length > 0 && (
+                <div style={{ marginTop: 16 }}>
+                  <div className="bracket-title">Your pending offers</div>
+                  {trade.outgoing.map((t) => (
+                    <div key={t.id} className="flex flex-wrap items-center gap-2" style={{ marginBottom: 8 }}>
+                      <span className="text-sm">
+                        You offered <strong>{t.fromProposer.join(", ")}</strong> to <strong>{t.receiver}</strong> for <strong>{t.fromReceiver.join(", ")}</strong>
+                        {t.status === "TO_REVIEW" ? <span className="muted"> - accepted, awaiting TO</span> : <span className="muted"> - awaiting reply</span>}
+                      </span>
+                      <form action={cancelTradeAction} className="inline">
+                        <input type="hidden" name="season" value={seasonName} />
+                        <input type="hidden" name="tradeId" value={t.id} />
+                        <SubmitButton size="sm" variant="secondary" pendingText="...">Withdraw</SubmitButton>
+                      </form>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {trade.history.length > 0 && (
+                <details style={{ marginTop: 16 }}>
+                  <summary className="sub" style={{ cursor: "pointer" }}>Trade history ({trade.history.length})</summary>
+                  <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+                    {trade.history.map((t) => (
+                      <li key={t.id} className="text-sm muted">
+                        {t.proposer} {t.fromProposer.join(", ")} for {t.receiver} {t.fromReceiver.join(", ")} - {t.status.toLowerCase()}
+                        {t.status === "APPLIED" && t.effectiveWeek ? ` (week ${t.effectiveWeek})` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* Join panel (OPEN only) */}
       {board.state === "OPEN" && (

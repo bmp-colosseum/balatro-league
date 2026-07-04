@@ -63,6 +63,45 @@ export interface SlottedSet extends SetOutcome {
   seedA: number;
   teamSeasonBId: string;
   seedB: number;
+  /** Schedule week this set was played (for time-effective ownership); null = unknown/historical. */
+  week: number | null;
+}
+
+/**
+ * An APPLIED trade item as an ownership transfer: `playerId` moves to `toTeamId` from
+ * `effectiveWeek` forward. `seq` is a stable tiebreak (creation order) among same-week moves.
+ */
+export interface OwnershipMove {
+  playerId: string;
+  toTeamId: string;
+  effectiveWeek: number;
+  seq: number;
+}
+
+/**
+ * Fold trade history into "who owns `playerId` in `week`": start from the draft owner (`base`),
+ * then apply the latest APPLIED transfer with `effectiveWeek <= week`. A null week (unknown /
+ * historical set) resolves to the draft owner, so a no-trade league scores identically to before.
+ */
+export function ownerAtWeek(
+  base: Map<string, string>,
+  moves: OwnershipMove[],
+  playerId: string,
+  week: number | null,
+): string | null {
+  let owner = base.get(playerId) ?? null;
+  if (week == null) return owner;
+  let bestWeek = -1;
+  let bestSeq = -1;
+  for (const m of moves) {
+    if (m.playerId !== playerId || m.effectiveWeek > week) continue;
+    if (m.effectiveWeek > bestWeek || (m.effectiveWeek === bestWeek && m.seq > bestSeq)) {
+      bestWeek = m.effectiveWeek;
+      bestSeq = m.seq;
+      owner = m.toTeamId;
+    }
+  }
+  return owner;
 }
 
 /**
@@ -77,10 +116,11 @@ export function resolveSlotOwner(
   playerId: string,
   teamSeasonId: string,
   seed: number,
-  ownerByPlayer: (playerId: string) => string | null | undefined,
-  ownerBySlot: (teamSeasonId: string, seed: number) => string | null | undefined,
+  week: number | null,
+  ownerByPlayerAtWeek: (playerId: string, week: number | null) => string | null | undefined,
+  ownerBySlotAtWeek: (teamSeasonId: string, seed: number, week: number | null) => string | null | undefined,
 ): string | null {
-  return ownerByPlayer(playerId) || ownerBySlot(teamSeasonId, seed) || null;
+  return ownerByPlayerAtWeek(playerId, week) || ownerBySlotAtWeek(teamSeasonId, seed, week) || null;
 }
 
 /**
@@ -90,8 +130,8 @@ export function resolveSlotOwner(
  */
 export function tallyFantasyBySlot(
   sets: SlottedSet[],
-  ownerByPlayer: (playerId: string) => string | null | undefined,
-  ownerBySlot: (teamSeasonId: string, seed: number) => string | null | undefined,
+  ownerByPlayerAtWeek: (playerId: string, week: number | null) => string | null | undefined,
+  ownerBySlotAtWeek: (teamSeasonId: string, seed: number, week: number | null) => string | null | undefined,
   scoring: FantasyScoring = DEFAULT_FANTASY_SCORING,
 ): FantasyManagerTotal[] {
   const byManager = new Map<string, { points: number; sets: number }>();
@@ -104,8 +144,8 @@ export function tallyFantasyBySlot(
   };
   for (const set of sets) {
     const [a, b] = scoreSetForPlayers(set, scoring);
-    credit(resolveSlotOwner(set.playerAId, set.teamSeasonAId, set.seedA, ownerByPlayer, ownerBySlot), a.points);
-    credit(resolveSlotOwner(set.playerBId, set.teamSeasonBId, set.seedB, ownerByPlayer, ownerBySlot), b.points);
+    credit(resolveSlotOwner(set.playerAId, set.teamSeasonAId, set.seedA, set.week, ownerByPlayerAtWeek, ownerBySlotAtWeek), a.points);
+    credit(resolveSlotOwner(set.playerBId, set.teamSeasonBId, set.seedB, set.week, ownerByPlayerAtWeek, ownerBySlotAtWeek), b.points);
   }
   return [...byManager.entries()]
     .map(([managerId, v]) => ({ managerId, points: v.points, sets: v.sets }))

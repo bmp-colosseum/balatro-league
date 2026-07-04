@@ -1,15 +1,15 @@
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, Trash2, Gamepad2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Trash2, Gamepad2, Lock, ArrowLeftRight } from "lucide-react";
 import { isAdmin } from "@/lib/auth";
 import { getSeasonAdmin } from "@/lib/services/seasons";
-import { getFantasyLeague, getFantasyPool, getFantasyDraftBoard } from "@/lib/services/fantasy";
+import { getFantasyLeague, getFantasyPool, getFantasyDraftBoard, getFantasyTradesForAdmin } from "@/lib/services/fantasy";
 import { Callout } from "@/components/Callout";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Label } from "@/components/ui/label";
-import { openFantasyAction, startDraftAction, deleteFantasyTeamAction } from "./actions";
+import { openFantasyAction, startDraftAction, deleteFantasyTeamAction, advanceLockAction, setTradeConfigAction, decideTradeAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +53,8 @@ export default async function FantasyAdmin({ params }: { params: Promise<{ name:
   // Only build the board when the real draft (pool) still exists - if it was reset out from
   // under an open league, poolSize is null and we render the "run the draft first" guard below.
   const board = league && poolSize != null ? await getFantasyDraftBoard(seasonName) : null;
+  // Trades run post-draft; load the TO review queue only then.
+  const tradeQueue = board?.state === "DONE" ? await getFantasyTradesForAdmin(seasonName) : [];
 
   return (
     <main>
@@ -189,6 +191,84 @@ export default async function FantasyAdmin({ params }: { params: Promise<{ name:
                 <Link href={`/seasons/${enc}/fantasy`} className="inline-flex items-center gap-1">Standings <ExternalLink className="size-3.5" /></Link>
               </div>
             </div>
+          )}
+
+          {board!.state === "DONE" && (
+            <>
+              <div className="card">
+                <div className="bracket-title flex items-center gap-2"><ArrowLeftRight className="size-4" /> Trade settings</div>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  Managers trade 1-for-1 from the public page. Trades take effect the week after the
+                  current lock, so scored weeks never reflow.
+                </p>
+                <ActionFlashForm action={setTradeConfigAction} className="flex flex-wrap items-end gap-4">
+                  <input type="hidden" name="season" value={seasonName} />
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="tradesEnabled" defaultChecked={league!.tradesEnabled} className="size-4" />
+                    Trades enabled
+                  </label>
+                  <div className="grid gap-1.5">
+                    <Label>Approval</Label>
+                    <FormSelect
+                      name="tradeApproval"
+                      defaultValue={league!.tradeApproval}
+                      options={[
+                        { value: "AUTO", label: "Auto - apply when the receiver accepts" },
+                        { value: "TO_APPROVED", label: "TO approved - queue for review" },
+                      ]}
+                      triggerClassName="w-72"
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="tradeDeadlineWeek">Deadline week</Label>
+                    <input id="tradeDeadlineWeek" type="number" name="tradeDeadlineWeek" min={0} max={99} placeholder="none" defaultValue={league!.tradeDeadlineWeek ?? ""} className={inputCls} style={{ width: 110 }} />
+                  </div>
+                  <SubmitButton pendingText="Saving...">Save settings</SubmitButton>
+                </ActionFlashForm>
+              </div>
+
+              <div className="card">
+                <div className="bracket-title flex items-center gap-2"><Lock className="size-4" /> Roster lock</div>
+                <p className="sub" style={{ marginTop: 0 }}>
+                  Locked through week <strong>{league!.lockedThroughWeek}</strong>. Set this to the last
+                  fully-scored week so new trades land after it - past weeks stay frozen.
+                </p>
+                <ActionFlashForm action={advanceLockAction} className="flex flex-wrap items-end gap-3">
+                  <input type="hidden" name="season" value={seasonName} />
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="throughWeek">Lock through week</Label>
+                    <input id="throughWeek" type="number" name="throughWeek" min={0} max={99} defaultValue={league!.lockedThroughWeek} className={inputCls} style={{ width: 110 }} />
+                  </div>
+                  <SubmitButton pendingText="Setting...">Set lock</SubmitButton>
+                </ActionFlashForm>
+              </div>
+
+              {tradeQueue.length > 0 && (
+                <div className="card">
+                  <div className="bracket-title">Trades awaiting review ({tradeQueue.length})</div>
+                  {tradeQueue.map((t) => (
+                    <div key={t.id} className="flex flex-wrap items-center gap-2" style={{ marginBottom: 8 }}>
+                      <span className="text-sm">
+                        <strong>{t.proposer}</strong> sends <strong>{t.fromProposer.join(", ")}</strong> to <strong>{t.receiver}</strong> for <strong>{t.fromReceiver.join(", ")}</strong>
+                        {t.reason ? <span className="muted"> - {t.reason}</span> : null}
+                      </span>
+                      <form action={decideTradeAction} className="inline">
+                        <input type="hidden" name="season" value={seasonName} />
+                        <input type="hidden" name="tradeId" value={t.id} />
+                        <input type="hidden" name="approve" value="1" />
+                        <SubmitButton size="sm" pendingText="...">Approve</SubmitButton>
+                      </form>
+                      <form action={decideTradeAction} className="inline">
+                        <input type="hidden" name="season" value={seasonName} />
+                        <input type="hidden" name="tradeId" value={t.id} />
+                        <input type="hidden" name="approve" value="0" />
+                        <SubmitButton size="sm" variant="secondary" pendingText="...">Reject</SubmitButton>
+                      </form>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </>
       )}
