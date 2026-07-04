@@ -171,9 +171,15 @@ export async function sweepAutoPauseIdle(): Promise<number> {
 
   let paused = 0;
   for (const session of idle) {
-    const updated = await prisma.matchSession
-      .update({
-        where: { id: session.id },
+    // ATOMIC guard: only pause if the session is STILL idle + in the same
+    // in-progress phase at write time. If a player reported (or the match
+    // advanced/completed) in the gap since the SELECT, updatedAt is now recent
+    // and/or the state changed, so this matches 0 rows and we skip it. Without
+    // this, a blind update could clobber a just-completed match back to PAUSED —
+    // players then resume and replay it, overwriting the recorded games.
+    const res = await prisma.matchSession
+      .updateMany({
+        where: { id: session.id, updatedAt: { lt: cutoff }, state: { in: IN_PROGRESS_STATES } },
         data: {
           state: "PAUSED",
           pausedFromState: session.state,
@@ -185,11 +191,12 @@ export async function sweepAutoPauseIdle(): Promise<number> {
       })
       .catch((err) => {
         console.warn(`[match-sweep auto-pause] pause ${session.id} failed:`, err);
-        return null;
+        return { count: 0 };
       });
-    if (!updated) continue;
+    if (res.count === 0) continue; // advanced by a player in the gap — leave it alone
     paused++;
-    await notifyAutoPaused(updated);
+    const fresh = await prisma.matchSession.findUnique({ where: { id: session.id } });
+    if (fresh) await notifyAutoPaused(fresh);
   }
   console.log(`[match-sweep auto-pause] paused ${paused} idle in-progress session(s) (>${AUTO_PAUSE_HOURS}h)`);
   return paused;
@@ -213,16 +220,26 @@ export async function sweepIdleSessions(): Promise<number> {
   });
   if (stale.length === 0) return 0;
 
+  let cancelled = 0;
   for (const session of stale) {
-    await prisma.matchSession.update({
-      where: { id: session.id },
-      data: {
-        state: "CANCELLED",
-        version: { increment: 1 },
-      },
-    }).catch((err) => {
-      console.warn(`[match-sweep idle] cancel ${session.id} failed:`, err);
-    });
+    // ATOMIC guard (see sweepAutoPauseIdle): only cancel if the session is STILL
+    // idle + non-terminal at write time, so a match a player just advanced or
+    // completed in the gap since the SELECT isn't clobbered to CANCELLED.
+    const res = await prisma.matchSession
+      .updateMany({
+        where: {
+          id: session.id,
+          updatedAt: { lt: cutoff },
+          state: { notIn: ["COMPLETE", "CANCELLED", "PAUSED"] },
+        },
+        data: { state: "CANCELLED", version: { increment: 1 } },
+      })
+      .catch((err) => {
+        console.warn(`[match-sweep idle] cancel ${session.id} failed:`, err);
+        return { count: 0 };
+      });
+    if (res.count === 0) continue;
+    cancelled++;
     if (session.threadId) {
       try {
         await rest().delete(Routes.channel(session.threadId));
@@ -238,8 +255,8 @@ export async function sweepIdleSessions(): Promise<number> {
       }
     }
   }
-  console.log(`[match-sweep idle] cancelled ${stale.length} abandoned session(s) (>${IDLE_CANCEL_HOURS}h stale)`);
-  return stale.length;
+  console.log(`[match-sweep idle] cancelled ${cancelled} abandoned session(s) (>${IDLE_CANCEL_HOURS}h stale)`);
+  return cancelled;
 }
 
 // Safety-net pass: COMPLETE or CANCELLED sessions whose threadId is
@@ -305,16 +322,22 @@ export async function sweepPausedSessions(): Promise<number> {
   });
   if (stale.length === 0) return 0;
 
+  let cancelled = 0;
   for (const session of stale) {
-    await prisma.matchSession.update({
-      where: { id: session.id },
-      data: {
-        state: "CANCELLED",
-        version: { increment: 1 },
-      },
-    }).catch((err) => {
-      console.warn(`[match-sweep paused] cancel ${session.id} failed:`, err);
-    });
+    // ATOMIC guard: only cancel if it's STILL a stale PAUSED session. If someone
+    // resumed (and maybe completed) it in the gap since the SELECT, state is no
+    // longer PAUSED, so this matches 0 rows and we leave it alone.
+    const res = await prisma.matchSession
+      .updateMany({
+        where: { id: session.id, state: "PAUSED", pausedAt: { lt: cutoff } },
+        data: { state: "CANCELLED", version: { increment: 1 } },
+      })
+      .catch((err) => {
+        console.warn(`[match-sweep paused] cancel ${session.id} failed:`, err);
+        return { count: 0 };
+      });
+    if (res.count === 0) continue;
+    cancelled++;
     if (session.threadId) {
       try {
         await rest().delete(Routes.channel(session.threadId));
@@ -330,8 +353,8 @@ export async function sweepPausedSessions(): Promise<number> {
       }
     }
   }
-  console.log(`[match-sweep paused] cancelled ${stale.length} paused session(s) (>${PAUSED_CANCEL_DAYS}d paused)`);
-  return stale.length;
+  console.log(`[match-sweep paused] cancelled ${cancelled} paused session(s) (>${PAUSED_CANCEL_DAYS}d paused)`);
+  return cancelled;
 }
 
 // Auto-activate seasons whose scheduledStartAt has passed. Mirrors
