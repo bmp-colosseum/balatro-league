@@ -1,28 +1,9 @@
 // Season-end service (B9). Crowns the playoff champion (writes a Championship +
-// advances the season to DONE) and manages the season's awards. The FINAL series
-// winner from B8 is the champion; awards are entered by the TO (the 7 kinds).
+// advances the season to DONE) and surfaces the season's awards for the end page.
+// The FINAL series winner from B8 is the champion; awards are created/managed by the
+// TO via lib/services/awards.ts (preset kinds or custom, multi-slot).
 import { prisma } from "../db";
-
-export const AWARD_KINDS = [
-  "MVP",
-  "ROOKIE",
-  "COMEBACK",
-  "CAPTAIN",
-  "MOST_IMPROVED",
-  "BEST_SET",
-  "BIGGEST_STEAL",
-] as const;
-export type AwardKind = (typeof AWARD_KINDS)[number];
-
-const KIND_LABEL: Record<string, string> = {
-  MVP: "MVP",
-  ROOKIE: "Rookie of the Season",
-  COMEBACK: "Comeback Player",
-  CAPTAIN: "Captain of the Season",
-  MOST_IMPROVED: "Most Improved",
-  BEST_SET: "Best Set",
-  BIGGEST_STEAL: "Biggest Steal",
-};
+import { loadSeasonAwards } from "../awards";
 
 export async function getSeasonEnd(seasonName: string) {
   const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true, name: true, state: true } });
@@ -32,7 +13,7 @@ export async function getSeasonEnd(seasonName: string) {
     prisma.playoffSeries.findFirst({ where: { seasonId: season.id, round: "FINAL" } }),
     prisma.championship.findFirst({ where: { seasonId: season.id } }),
     prisma.teamSeason.findMany({ where: { seasonId: season.id }, include: { team: true, rosters: { include: { entries: true } } } }),
-    prisma.award.findMany({ where: { seasonId: season.id } }),
+    loadSeasonAwards(season.id),
   ]);
 
   const teamName = new Map(teamSeasons.map((t) => [t.id, t.team.name]));
@@ -42,7 +23,6 @@ export async function getSeasonEnd(seasonName: string) {
 
   const playerIds = [...new Set(teamSeasons.flatMap((t) => [t.captainPlayerId, ...t.rosters.flatMap((r) => r.entries.map((e) => e.playerId))]))];
   const players = await prisma.player.findMany({ where: { id: { in: playerIds } }, select: { id: true, displayName: true } });
-  const nameOf = new Map(players.map((p) => [p.id, p.displayName]));
   const playerOptions = players.map((p) => ({ id: p.id, name: p.displayName })).sort((a, b) => a.name.localeCompare(b.name));
 
   const championTeamName = championship
@@ -59,13 +39,7 @@ export async function getSeasonEnd(seasonName: string) {
     championTeamName,
     playerOptions,
     teamOptions,
-    awards: awards.map((a) => ({
-      id: a.id,
-      kind: a.kind,
-      label: KIND_LABEL[a.kind] ?? a.kind,
-      player: a.playerId ? nameOf.get(a.playerId) ?? a.playerId : null,
-      team: (a.meta as { team?: string } | null)?.team ?? null,
-    })),
+    awards,
   };
 }
 
@@ -93,24 +67,4 @@ export async function uncrownChampion(seasonName: string) {
   if (!season) throw new Error(`No season "${seasonName}"`);
   await prisma.championship.deleteMany({ where: { seasonId: season.id } });
   await prisma.tourSeason.update({ where: { id: season.id }, data: { state: "PLAYOFFS" } });
-}
-
-export async function addAward(seasonName: string, kind: string, playerId: string, teamId: string) {
-  if (!AWARD_KINDS.includes(kind as AwardKind)) throw new Error("Unknown award kind.");
-  if (!playerId && !teamId) throw new Error("Pick a player or a team for the award.");
-  const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true } });
-  if (!season) throw new Error(`No season "${seasonName}"`);
-
-  let meta: { team: string } | undefined;
-  if (teamId) {
-    const team = await prisma.team.findUnique({ where: { id: teamId }, select: { name: true } });
-    if (team) meta = { team: team.name };
-  }
-  await prisma.award.create({
-    data: { seasonId: season.id, kind: kind as AwardKind, playerId: playerId || null, teamId: teamId || null, meta },
-  });
-}
-
-export async function removeAward(awardId: string) {
-  await prisma.award.delete({ where: { id: awardId } });
 }

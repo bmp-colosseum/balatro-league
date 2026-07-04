@@ -25,6 +25,7 @@ export default async function SeasonPage({ params }: { params: Promise<{ name: s
     canSeeDiscordIds(),
   ]);
   const mvp = awards.find((a) => a.kind === "MVP");
+  const mvpR = mvp?.recipients[0] ?? null;
 
   if (!data) {
     return (
@@ -61,13 +62,35 @@ export default async function SeasonPage({ params }: { params: Promise<{ name: s
           </Link>
         ))}
       </div>
-      {mvp && mvp.player && (
+      {mvpR && mvpR.player && (
         <p className="flex items-center gap-1.5">
           <Award className="size-4 text-[var(--accent)]" />
           <span className="muted">Season MVP:</span>{" "}
-          {mvp.playerId ? <Link href={`/players/${mvp.playerId}`}>{mvp.player}</Link> : <span>{mvp.player}</span>}
-          {mvp.team && <span className="muted">· {mvp.team}</span>}
+          {mvpR.playerId ? <Link href={`/players/${mvpR.playerId}`}>{mvpR.player}</Link> : <span>{mvpR.player}</span>}
+          {mvpR.team && <span className="muted">- {mvpR.team}</span>}
         </p>
+      )}
+      {awards.length > 0 && (
+        <div className="card">
+          <div className="bracket-title flex items-center gap-2"><Award className="size-4" /> Awards</div>
+          <div className="flex flex-col gap-3">
+            {awards.map((a) => (
+              <div key={a.id}>
+                <div className="font-semibold">{a.label}</div>
+                {a.description && <div className="sub" style={{ marginTop: 2 }}>{a.description}</div>}
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {a.recipients.length === 0 && <span className="sub">To be announced.</span>}
+                  {a.recipients.map((r, i) => (
+                    <span key={r.id ?? i} className="badge inline-flex items-center gap-1">
+                      {r.playerId ? <Link href={`/players/${r.playerId}`}>{r.player}</Link> : (r.team ?? r.player ?? "-")}
+                      {r.note ? <span className="muted">({r.note})</span> : null}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
       {run && (
         <div className="card">

@@ -183,9 +183,14 @@ model PlayoffSeries{ id; seasonId; round PlayoffRound; teamAId; teamBId; matchup
 
 ### Cross-season (the `alltime/` layer)
 ```prisma
-model Championship { id; seasonId; teamId; }              // "rings"
-model Award        { id; seasonId; kind AwardKind; playerId?; teamId?; meta Json; }
-// AwardKind: MVP|ROOKIE|COMEBACK|CAPTAIN|MOST_IMPROVED|BEST_SET|BIGGEST_STEAL
+model Championship  { id; seasonId; teamId; }             // "rings"
+// Awards are custom + MULTI-SLOT (built 2026-07-03): a preset `kind` OR a custom `title` +
+// optional `description`, with one or more AwardRecipient slots (player XOR team + note).
+model Award          { id; seasonId; kind AwardKind?; title?; description?; sortIndex; recipients[]; playerId?; teamId?; meta Json?; }
+model AwardRecipient { id; awardId; playerId?; teamId?; note?; sortIndex; }  // onDelete Cascade
+// AwardKind presets: MVP|ROOKIE|COMEBACK|CAPTAIN|MOST_IMPROVED|BEST_SET|BIGGEST_STEAL.
+// LEGACY imported awards keep their single recipient in Award.playerId/teamId/meta.team; the read
+// models fold "recipients else legacy" so imports render with no data migration.
 // Best-Set meta = the set; Biggest-Steal meta = draft pick #.
 // All-time leaderboard, Hall of Fame, H2H history, draft classes = derived views.
 ```

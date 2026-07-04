@@ -138,6 +138,7 @@ export async function deleteSeason(name: string) {
   if (matchIds.length) await prisma.match.deleteMany({ where: { id: { in: matchIds } } });
   await prisma.playoffSeries.deleteMany({ where: { seasonId: season.id } });
   await prisma.fantasyLeague.deleteMany({ where: { seasonId: season.id } }); // plain-id, no cascade
+  await prisma.award.deleteMany({ where: { seasonId: season.id } }); // plain-id, no cascade; recipients cascade from Award
   return prisma.tourSeason.delete({ where: { id: season.id } });
 }
 

@@ -240,12 +240,13 @@ export async function pruneOrphanPlayers(): Promise<{ removed: number; names: st
   const footprint = new Set<string>();
   if (legacyIds.length) {
     const idSet = { in: legacyIds };
-    const [setRows, picks, rosters, career, awards, captains] = await Promise.all([
+    const [setRows, picks, rosters, career, awards, awardSlots, captains] = await Promise.all([
       prisma.tourSet.findMany({ where: { OR: [{ playerAId: idSet }, { playerBId: idSet }] }, select: { playerAId: true, playerBId: true } }),
       prisma.draftPick.findMany({ where: { playerId: idSet }, select: { playerId: true } }),
       prisma.rosterEntry.findMany({ where: { playerId: idSet }, select: { playerId: true } }),
       prisma.playerCareerStat.findMany({ where: { playerId: idSet }, select: { playerId: true } }),
       prisma.award.findMany({ where: { playerId: idSet }, select: { playerId: true } }),
+      prisma.awardRecipient.findMany({ where: { playerId: idSet }, select: { playerId: true } }),
       prisma.teamSeason.findMany({ where: { captainPlayerId: idSet }, select: { captainPlayerId: true } }),
     ]);
     for (const s of setRows) { footprint.add(s.playerAId); footprint.add(s.playerBId); }
@@ -253,6 +254,7 @@ export async function pruneOrphanPlayers(): Promise<{ removed: number; names: st
     for (const x of rosters) footprint.add(x.playerId);
     for (const x of career) footprint.add(x.playerId);
     for (const x of awards) if (x.playerId) footprint.add(x.playerId);
+    for (const x of awardSlots) if (x.playerId) footprint.add(x.playerId);
     for (const x of captains) footprint.add(x.captainPlayerId);
   }
   const nameById = new Map(players.map((p) => [p.id, p.displayName]));

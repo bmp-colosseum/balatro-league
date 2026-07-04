@@ -507,13 +507,39 @@ model Championship {
   createdAt DateTime @default(now())
 }
 
+// An award (preset kind or a custom title) with one OR MORE recipient slots. `kind` is a preset
+// (the 7 well-known kinds) or null for a fully custom award; `title` overrides the kind label.
+// Recipients live in AwardRecipient. Legacy playerId/teamId/meta are kept ONLY for imported
+// single-recipient awards (parse-awards.mjs writes them); new awards write AwardRecipient rows and
+// the read models fold recipients-else-legacy, so imports render without a data migration.
 model Award {
-  id       String    @id @default(cuid())
-  seasonId String
-  kind     AwardKind
-  playerId String? // core Player.id (when player-scoped)
-  teamId   String? // when team-scoped
-  meta     Json? // e.g. Best-Set = the set; Biggest-Steal = draft pick #
+  id          String           @id @default(cuid())
+  seasonId    String
+  kind        AwardKind? // preset kind, or null for a custom (title-only) award
+  title       String? // custom title; overrides the preset kind label when set
+  description String? // optional blurb shown under the title
+  sortIndex   Int              @default(0)
+  playerId    String? // LEGACY single recipient (imports) — core Player.id
+  teamId      String? // LEGACY single recipient (imports)
+  meta        Json? // e.g. Best-Set = the set; Biggest-Steal = draft pick #; legacy team name
+  recipients  AwardRecipient[]
+
+  @@index([seasonId])
+}
+
+// One recipient slot of an Award: a player XOR a team, with an optional per-slot note
+// ("1st team", "Finals MVP", ...). Cascade-deleted with its award.
+model AwardRecipient {
+  id        String  @id @default(cuid())
+  awardId   String
+  playerId  String? // core Player.id (player slot)
+  teamId    String? // Team.id (team slot)
+  note      String? // optional per-slot note
+  sortIndex Int     @default(0)
+  award     Award   @relation(fields: [awardId], references: [id], onDelete: Cascade)
+
+  @@index([awardId])
+  @@index([playerId])
 }
 
 // Imported career counters from the cross-season `Player Stats` sheet — the ones
