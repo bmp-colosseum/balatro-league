@@ -19,7 +19,10 @@ const GOLD = 0xf1c40f;
 
 export async function handlePptCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   const sub = interaction.options.getSubcommand();
-  await interaction.deferReply({ flags: sub === "mymatch" || sub === "pickem" ? MessageFlags.Ephemeral : undefined });
+  // Every /ppt reply is a personal, on-demand lookup with no cross-user interaction, so keep it
+  // ephemeral - slash output shouldn't clutter the channel. Public broadcast is the announce
+  // system's job (#tt-results / #tt-draft / #tt-announcements), not slash replies.
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   try {
     if (sub === "standings") await standings(interaction);
     else if (sub === "schedule") await schedule(interaction);
