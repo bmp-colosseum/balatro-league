@@ -272,6 +272,80 @@ export async function forfeitResult(args: {
   return { ok: true, matchId: match.id, divisionId };
 }
 
+// DQ a NO-SHOW: award every one of the player's scheduled-but-UNPLAYED matches to
+// the opponent as a 2-0 by forfeit, and KEEP the player active (unlike
+// voidPlayerInDivision, which cancels + drops with no 2-0s). Kept-active means
+// they finish last on these losses, so they absorb their own relegation slot
+// (sparing a real player) and come back relegated whenever they sign up again.
+// Only pristine unplayed PENDING pairings are touched — any already-played result
+// is left as-is. No per-match announcements (avoids spamming #results).
+export async function dqForfeitNoShow(args: {
+  divisionId: string;
+  playerId: string;
+  reason: string;
+  actor: AuditActor;
+}): Promise<{ ok: true; divisionId: string; forfeited: number } | { ok: false; reason: string }> {
+  const { divisionId, playerId, actor } = args;
+  const reason = args.reason?.trim();
+  if (!divisionId || !playerId || !reason) {
+    return { ok: false, reason: "Need a division, a player, and a reason." };
+  }
+  const member = await prisma.divisionMember.findFirst({ where: { divisionId, playerId } });
+  if (!member) return { ok: false, reason: "That player isn't in this division." };
+
+  // Scheduled-but-unplayed = PENDING assigned pairings with no result yet.
+  const unplayed = await prisma.match.findMany({
+    where: {
+      divisionId,
+      format: "LEAGUE_BO2",
+      status: "PENDING",
+      gamesWonA: 0,
+      gamesWonB: 0,
+      OR: [{ playerAId: playerId }, { playerBId: playerId }],
+    },
+    select: { id: true, playerAId: true, playerBId: true },
+  });
+  if (unplayed.length === 0) {
+    return { ok: false, reason: "That player has no unplayed scheduled matches to forfeit." };
+  }
+
+  const now = new Date();
+  for (const m of unplayed) {
+    const opponentId = m.playerAId === playerId ? m.playerBId : m.playerAId;
+    const winnerIsA = opponentId === m.playerAId;
+    await prisma.match.update({
+      where: { id: m.id },
+      data: {
+        gamesWonA: winnerIsA ? 2 : 0,
+        gamesWonB: winnerIsA ? 0 : 2,
+        winnerId: opponentId,
+        status: "CONFIRMED",
+        reportedAt: now,
+        confirmedAt: now,
+        adminOverrideBy: actor.discordId,
+        adminOverrideReason: "forfeit / DQ (no-show)",
+        forfeit: true,
+        forfeitReason: reason,
+      },
+    });
+    // A forfeit is a flat 2-0 — clear any stray per-game rows.
+    await prisma.game.deleteMany({ where: { matchId: m.id } });
+  }
+
+  await recordAudit({
+    actor,
+    action: "player.dq-forfeit",
+    targetType: "Player",
+    targetId: playerId,
+    summary: `DQ (forfeit no-show): awarded ${unplayed.length} opponent(s) a 2-0 in division ${divisionId}; player kept active`,
+    metadata: { divisionId, playerId, forfeited: unplayed.length, reason },
+  });
+  await recomputeDivisionStandings(divisionId).catch((err) =>
+    console.warn("[match-admin] standings recompute failed:", err),
+  );
+  return { ok: true, divisionId, forfeited: unplayed.length };
+}
+
 // Void a single game: record a CONFIRMED 0-0. Counts as PLAYED/finished (so the
 // pair isn't flagged as a remaining match) but awards no points and is neither a
 // win, loss, nor draw. For a misreport / agreed no-contest. Mirrors the bot's

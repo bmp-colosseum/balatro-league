@@ -8,7 +8,7 @@ import { actorFromAdminUser } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 import { reportSetFromWeb } from "@/lib/report";
 import { parseReportForm } from "@/lib/report-form";
-import { recordResult, forfeitResult, recordShowdown, resolveTieWithShowdowns, undoResult, voidGame, voidPlayerInDivision } from "@/lib/match-admin";
+import { recordResult, forfeitResult, recordShowdown, resolveTieWithShowdowns, undoResult, voidGame, voidPlayerInDivision, dqForfeitNoShow } from "@/lib/match-admin";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
 import { resolveDiscordIdToDisplayName } from "@/lib/add-player";
 import { addGuildMemberRole } from "@/lib/discord";
@@ -197,6 +197,20 @@ export async function voidPlayerAction(formData: FormData) {
   if (!r.ok) redirect(`/divisions/${divisionId}?err=${encodeURIComponent(r.reason)}`);
   revalidatePath(`/divisions/${divisionId}`);
   redirect(`/divisions/${divisionId}?ok=player-voided`);
+}
+
+// DQ a NO-SHOW: award every unplayed scheduled opponent a 2-0 by forfeit and KEEP
+// the player active (they finish last, absorbing their own relegation). Unlike
+// voidPlayerAction, opponents get the 2-0s and the player is not dropped.
+export async function dqForfeitPlayerAction(formData: FormData) {
+  const { user } = await requireAdmin();
+  const divisionId = String(formData.get("divisionId") ?? "");
+  const playerId = String(formData.get("playerId") ?? "");
+  const reason = String(formData.get("reason") ?? "");
+  const r = await dqForfeitNoShow({ divisionId, playerId, reason, actor: actorFromAdminUser(user) });
+  if (!r.ok) redirect(`/divisions/${divisionId}?err=${encodeURIComponent(r.reason)}`);
+  revalidatePath(`/divisions/${divisionId}`);
+  redirect(`/divisions/${divisionId}?ok=${encodeURIComponent(`dq-forfeit:${r.forfeited}`)}`);
 }
 
 // Record (or overwrite) a shootout result for two members in this

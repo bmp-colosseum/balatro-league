@@ -33,6 +33,7 @@ import {
   reportFromDivisionAction,
   resolveTieAction,
   voidPlayerAction,
+  dqForfeitPlayerAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -42,10 +43,24 @@ export default async function PublicDivisionPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ err?: string }>;
+  searchParams: Promise<{ err?: string; ok?: string }>;
 }) {
   const { id } = await params;
-  const { err } = await searchParams;
+  const { err, ok } = await searchParams;
+  // Friendly success message for the ?ok= redirect codes admin actions set.
+  const okMessage = ((): string | null => {
+    if (!ok) return null;
+    if (ok.startsWith("dq-forfeit:")) {
+      const n = Number(ok.split(":")[1]) || 0;
+      return `DQ recorded — awarded ${n} opponent${n === 1 ? "" : "s"} a 2-0 by forfeit. Player kept active (finishes last / relegates).`;
+    }
+    const known: Record<string, string> = {
+      "player-voided": "Player voided — all their games cancelled and they were dropped.",
+      "game-voided": "Game voided (0-0).",
+      "tie-resolved": "Tie resolved.",
+    };
+    return known[ok] ?? "Done.";
+  })();
 
   const data = await loadDivisionPageData(id);
   if (!data) notFound();
@@ -98,6 +113,11 @@ export default async function PublicDivisionPage({
         {isAdmin && err && (
           <Callout type="danger">
             {err}
+          </Callout>
+        )}
+        {isAdmin && okMessage && (
+          <Callout type="success">
+            {okMessage}
           </Callout>
         )}
 
@@ -547,14 +567,39 @@ function AdminSection({
           }))}
       />
 
+      {/* Two ways to remove a player mid-season — different effects on opponents. */}
+      <div className="card">
+        <strong>🏳️ DQ a no-show (forfeit — opponents win 2-0)</strong>
+        <p className="muted" style={{ fontSize: 12, margin: "4px 0 8px" }}>
+          For a player who <strong>hasn&apos;t played</strong>: awards each of their <strong>unplayed scheduled
+          opponents a 2-0 win</strong> by forfeit. The player is <strong>kept active</strong> and finishes last on
+          those losses — so they take their own relegation (no innocent player pushed down) and come back relegated
+          if they sign up again. Already-played results are left alone. Reason is admin-only.
+        </p>
+        <form action={dqForfeitPlayerAction} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+          <input type="hidden" name="divisionId" value={divisionId} />
+          <FormSelect
+            name="playerId"
+            required
+            triggerClassName="min-w-[160px]"
+            placeholder="— player —"
+            options={members.filter((m) => m.status === "ACTIVE").map((m) => ({ value: m.playerId, label: m.player.displayName }))}
+          />
+          <Input type="text" name="reason" placeholder="Reason (admin-only)" style={{ flex: "1 1 180px" }} />
+          <ConfirmButton message="DQ this no-show? Every unplayed scheduled opponent gets a 2-0 forfeit win. The player stays in the division (finishes last / relegates).">
+            DQ (forfeit)
+          </ConfirmButton>
+        </form>
+      </div>
+
       {/* DQ / void a whole player: cancel all their games + drop them. No 2-0s
           to opponents, no losses to the player. */}
       <div className="card">
-        <strong>🚫 DQ / void a player</strong>
+        <strong>🚫 DQ / void a player (cancel everything)</strong>
         <p className="muted" style={{ fontSize: 12, margin: "4px 0 8px" }}>
           Erases a player from the season: <strong>cancels all their games</strong> and drops them. Opponents
-          get no 2-0s and the player records no losses — as if they never played. Use for a mid-season
-          DQ. Reason is admin-only.
+          get no 2-0s and the player records no losses — as if they never played. Use when you <em>don&apos;t</em>{" "}
+          want opponents to get forfeit wins. Reason is admin-only.
         </p>
         <form action={voidPlayerAction} style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
           <input type="hidden" name="divisionId" value={divisionId} />
