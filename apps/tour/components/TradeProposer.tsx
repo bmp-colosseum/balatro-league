@@ -4,8 +4,7 @@
 // give and any number of THEIRS to receive; the swap must be even (same count each side) - enforced
 // here for a live button label + disable, and re-validated server-side (ownership + even swap).
 // The receiver is a single manager, so the "receive" pool is that partner's roster only.
-import { useState } from "react";
-import { ActionFlashForm } from "@/components/ActionFlashForm";
+import { useActionState, useEffect, useState } from "react";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Input } from "@/components/ui/input";
 import type { ActionResult } from "@/lib/action-result";
@@ -31,6 +30,17 @@ export function TradeProposer({
   const [partnerId, setPartnerId] = useState(managers[0]?.id ?? "");
   const [give, setGive] = useState<Set<string>>(new Set());
   const [receive, setReceive] = useState<Set<string>>(new Set());
+  const [state, formAction] = useActionState(action, null);
+
+  // The checkboxes are React-controlled, so the post-action form reset doesn't clear them. Clear
+  // the picks ourselves on success, so the still-enabled button can't re-submit the same offer as
+  // a duplicate PROPOSED trade. On error we keep the selection so the manager can adjust and retry.
+  useEffect(() => {
+    if (state?.ok) {
+      setGive(new Set());
+      setReceive(new Set());
+    }
+  }, [state]);
 
   const partnerRoster = rosterByTeam[partnerId] ?? [];
   const even = give.size > 0 && give.size === receive.size;
@@ -48,7 +58,11 @@ export function TradeProposer({
   };
 
   return (
-    <ActionFlashForm action={action} className="flex flex-col gap-3">
+    <div>
+      {state && (
+        <div className={`flash ${state.ok ? "success" : "error"}`} role="status" aria-live="polite">{state.message}</div>
+      )}
+      <form action={formAction} className="flex flex-col gap-3">
       <input type="hidden" name="season" value={season} />
       <input type="hidden" name="receiverTeamId" value={partnerId} />
 
@@ -102,6 +116,7 @@ export function TradeProposer({
           {even ? `Propose ${give.size}-for-${receive.size}` : give.size !== receive.size ? "Even swap only" : "Pick players"}
         </SubmitButton>
       </div>
-    </ActionFlashForm>
+      </form>
+    </div>
   );
 }
