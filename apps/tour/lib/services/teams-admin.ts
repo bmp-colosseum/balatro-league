@@ -3,6 +3,7 @@
 // import's upsert-by-name never removes. Centralized service; the admin page/action only
 // call these. Destructive: the action is admin-gated + confirmed.
 import { prisma } from "../db";
+import { enqueueRoleReconcile } from "../queue";
 
 export interface AdminTeamRow {
   teamSeasonId: string;
@@ -111,6 +112,35 @@ export async function createTeamForSeason(seasonName: string, input: { captainDi
   return { teamSeasonId: ts.id, teamName, captain: captain.displayName };
 }
 
+// Assign / swap a team's captain BEFORE the draft. Captains are ALWAYS explicit (never
+// auto-created), and this is the one place to pick them on the Teams board. Pre-draft only: a
+// mid-season captain change carries an effective week + audit trail and belongs on Roster ops
+// (changeCaptain). Repoints captainPlayerId to an approved-signup player (Player find-or-created,
+// same as createTeamForSeason), rejecting a player who already captains ANOTHER team this season.
+export async function setCaptain(seasonName: string, teamSeasonId: string, captainDiscordId: string) {
+  if (!captainDiscordId) throw new Error("Pick a captain.");
+  const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true } });
+  if (!season) throw new Error(`No season "${seasonName}"`);
+  const ts = await prisma.teamSeason.findUnique({ where: { id: teamSeasonId }, select: { id: true, seasonId: true, captainPlayerId: true } });
+  if (!ts || ts.seasonId !== season.id) throw new Error("No such team in this season.");
+  const draft = await prisma.draft.findUnique({ where: { seasonId: season.id }, select: { id: true } });
+  if (draft) throw new Error("The draft exists - change the captain from Roster ops (a mid-season change with an effective week).");
+  const signup = await prisma.signup.findUnique({ where: { seasonId_discordId: { seasonId: season.id, discordId: captainDiscordId } } });
+  if (!signup || signup.status !== "APPROVED") throw new Error("That captain isn't an approved signup this season.");
+  const captain = await prisma.player.upsert({
+    where: { discordId: captainDiscordId },
+    create: { discordId: captainDiscordId, displayName: signup.displayName ?? captainDiscordId },
+    update: {},
+    select: { id: true, displayName: true },
+  });
+  if (captain.id === ts.captainPlayerId) return { ok: true, captain: captain.displayName, unchanged: true };
+  const other = await prisma.teamSeason.findFirst({ where: { seasonId: season.id, captainPlayerId: captain.id, NOT: { id: teamSeasonId } }, include: { team: true } });
+  if (other) throw new Error(`${captain.displayName} already captains ${other.team.name} this season.`);
+  await prisma.teamSeason.update({ where: { id: teamSeasonId }, data: { captainPlayerId: captain.id } });
+  await enqueueRoleReconcile(seasonName);
+  return { ok: true, captain: captain.displayName, unchanged: false };
+}
+
 // Rename a team (Team.name is the cross-season identity — pre-launch this is fine).
 // Callers gate: TO / ROSTERS mod / the team's own captain or co-captain.
 export async function renameTeam(teamSeasonId: string, newName: string) {
@@ -164,8 +194,9 @@ export async function listSeasonTeams(seasonName: string) {
     orderBy: { seed: "asc" },
   });
   const capIds = [...new Set(tss.map((t) => t.captainPlayerId))];
-  const caps = await prisma.player.findMany({ where: { id: { in: capIds } }, select: { id: true, displayName: true } });
+  const caps = await prisma.player.findMany({ where: { id: { in: capIds } }, select: { id: true, displayName: true, discordId: true } });
   const capName = new Map(caps.map((c) => [c.id, c.displayName]));
+  const capDisc = new Map(caps.map((c) => [c.id, c.discordId]));
   return tss.map((t) => ({
     teamSeasonId: t.id,
     name: t.team.name,
@@ -173,6 +204,7 @@ export async function listSeasonTeams(seasonName: string) {
     conferenceId: t.conferenceId,
     conference: t.conference.name,
     captain: capName.get(t.captainPlayerId) ?? t.captainPlayerId,
+    captainDiscordId: capDisc.get(t.captainPlayerId) ?? null,
   }));
 }
 

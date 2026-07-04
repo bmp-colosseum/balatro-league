@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isAdmin } from "@/lib/auth";
-import { createTeamForSeason, renameTeam, setTeamConference, deleteTeamSeason } from "@/lib/services/teams-admin";
+import { createTeamForSeason, renameTeam, setTeamConference, setCaptain, deleteTeamSeason } from "@/lib/services/teams-admin";
 import type { ActionResult } from "@/lib/action-result";
 
 function rev(season: string) {
@@ -56,6 +56,22 @@ export async function setTeamConferenceAction(formData: FormData) {
   } catch (e) {
     ok = false;
     msg = e instanceof Error ? e.message : "Move failed.";
+  }
+  rev(season);
+  backToTeams(season, msg, ok);
+}
+
+export async function setCaptainAction(formData: FormData) {
+  if (!(await isAdmin())) return;
+  const season = String(formData.get("season") ?? "");
+  let msg = "Captain set.";
+  let ok = true;
+  try {
+    const r = await setCaptain(season, String(formData.get("teamSeasonId") ?? ""), String(formData.get("captainDiscordId") ?? ""));
+    msg = r.unchanged ? `${r.captain} already captains this team.` : `Captain set to ${r.captain}.`;
+  } catch (e) {
+    ok = false;
+    msg = e instanceof Error ? e.message : "Couldn't set the captain.";
   }
   rev(season);
   backToTeams(season, msg, ok);

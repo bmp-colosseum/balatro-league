@@ -10,7 +10,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createTeamAction, renameTeamAdminAction, setTeamConferenceAction, deleteTeamAction } from "./actions";
+import { createTeamAction, renameTeamAdminAction, setTeamConferenceAction, setCaptainAction, deleteTeamAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +64,22 @@ export default async function TeamsAdmin({
   const confOptions = (current?: string | null) =>
     conferences.map((c) => ({ value: c.id, label: c.name, disabled: c.id === current }));
 
+  // Per-team captain dropdown: the whole approved pool, with the current captain selectable and
+  // anyone captaining ANOTHER team disabled. If the current captain somehow isn't in the approved
+  // pool (e.g. their signup was un-approved after assignment), surface them as an explicit option
+  // so the select still shows who's captain.
+  const captainCellOptions = (t: (typeof teams)[number]) => {
+    const opts = pool.map((p) => ({
+      value: p.discordId,
+      label: `${p.name}${interestTag(p.captainInterest)}${p.alreadyCaptain && p.discordId !== t.captainDiscordId ? " · captains another team" : ""}`,
+      disabled: p.alreadyCaptain && p.discordId !== t.captainDiscordId,
+    }));
+    if (t.captainDiscordId && !pool.some((p) => p.discordId === t.captainDiscordId)) {
+      opts.unshift({ value: t.captainDiscordId, label: `${t.captain} (current)`, disabled: false });
+    }
+    return opts;
+  };
+
   return (
     <main>
       <p>
@@ -71,11 +87,15 @@ export default async function TeamsAdmin({
       </p>
       <h1>Teams</h1>
       <p className="sub">
-        {teams.length} team(s). Pick a captain from the approved pool — the team starts as
-        &quot;Team {"{captain}"}&quot; and the captain can rename it from their /me page. Seed order = creation order
-        (draft order); adjust later via roster ops if needed.
+        {teams.length} team(s). Create a team by picking its captain from the approved pool — it starts as
+        &quot;Team {"{captain}"}&quot; and the captain can rename it from their /me page. Change a team&apos;s captain
+        anytime before the draft with the dropdown in the Captain column. Seed order = creation order (draft order).
       </p>
-      {structureLocked && <Callout type="admin">The draft exists — teams are baked in. Changes here won&apos;t reshape the draft.</Callout>}
+      {structureLocked && (
+        <Callout type="admin">
+          The draft exists — teams are baked in. To change a captain now, use <Link href={`/admin/seasons/${enc}/roster`}>Roster ops</Link> (a mid-season change with an effective week).
+        </Callout>
+      )}
 
       <div className="card">
         <div className="bracket-title">Create a team</div>
@@ -146,9 +166,18 @@ export default async function TeamsAdmin({
                   </ActionFlashForm>
                 </td>
                 <td>
-                  <span className="inline-flex items-center gap-1.5">
-                    <Crown className="size-3.5 text-[var(--accent)]" aria-hidden /> {t.captain}
-                  </span>
+                  {structureLocked ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <Crown className="size-3.5 text-[var(--accent)]" aria-hidden /> {t.captain}
+                    </span>
+                  ) : (
+                    <form action={setCaptainAction} className="flex items-center gap-2">
+                      <input type="hidden" name="season" value={seasonName} />
+                      <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
+                      <FormSelect name="captainDiscordId" defaultValue={t.captainDiscordId ?? ""} options={captainCellOptions(t)} size="sm" triggerClassName="w-52" />
+                      <SubmitButton variant="secondary" size="sm">Set</SubmitButton>
+                    </form>
+                  )}
                 </td>
                 <td>
                   {conferences.length > 0 ? (
