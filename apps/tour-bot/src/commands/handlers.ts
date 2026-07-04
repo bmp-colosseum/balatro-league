@@ -22,6 +22,7 @@ export async function handlePptCommand(interaction: ChatInputCommandInteraction)
     if (sub === "standings") await standings(interaction);
     else if (sub === "schedule") await schedule(interaction);
     else if (sub === "bracket") await bracket(interaction);
+    else if (sub === "fantasy") await fantasy(interaction);
     else if (sub === "mymatch") await mymatch(interaction);
     else if (sub === "pickem") await pickem(interaction);
   } catch (err) {
@@ -81,6 +82,29 @@ async function bracket(i: ChatInputCommandInteraction) {
         .slice(0, 1024) || "—",
     });
   }
+  await i.editReply({ embeds: [embed] });
+}
+
+async function fantasy(i: ChatInputCommandInteraction) {
+  const season = i.options.getString("season");
+  const d = await apiGet<{
+    seasonName: string;
+    scope: string;
+    rosterSize: number;
+    setsCounted: number;
+    rows: { rank: number; manager: string; points: number; sets: number }[];
+    urlPath: string;
+  }>(`/api/bot/read?kind=fantasy${season ? `&season=${encodeURIComponent(season)}` : ""}`);
+  const scopeLabel = d.scope === "PLAYOFFS" ? "playoffs" : "whole season";
+  const embed = new EmbedBuilder()
+    .setColor(GOLD)
+    .setTitle(`${d.seasonName} — Fantasy`)
+    .setURL(url(d.urlPath))
+    .setDescription(
+      d.rows.map((r) => `${r.rank}. **${r.manager}** — ${r.points} pt${r.points === 1 ? "" : "s"} (${r.sets} set${r.sets === 1 ? "" : "s"})`).join("\n").slice(0, 4000) ||
+        "No managers have drafted yet.",
+    )
+    .setFooter({ text: `${scopeLabel} scoring · roster ${d.rosterSize} · ${d.setsCounted} set${d.setsCounted === 1 ? "" : "s"} counted` });
   await i.editReply({ embeds: [embed] });
 }
 

@@ -25,6 +25,12 @@ export function commandDefinitions() {
         .setDescription("The playoff bracket")
         .addStringOption((o) => o.setName("season").setDescription("Season name (default: the live season)")),
     )
+    .addSubcommand((s) =>
+      s
+        .setName("fantasy")
+        .setDescription("Fantasy league standings")
+        .addStringOption((o) => o.setName("season").setDescription("Season name (default: the live season)")),
+    )
     .addSubcommand((s) => s.setName("mymatch").setDescription("Your outstanding sets this week"))
     .addSubcommand((s) => s.setName("pickem").setDescription("Make your pick'em predictions"));
   return [ppt.toJSON()];

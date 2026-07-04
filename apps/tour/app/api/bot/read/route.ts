@@ -7,7 +7,7 @@
 //   ?kind=pickem&discordId=[&season=]— open pick'em sets + the viewer's picks
 import { NextResponse } from "next/server";
 import { isApiAdmin } from "@/lib/auth";
-import { resolveSeasonName, botStandings, botSchedule, botBracket, botMyMatch } from "@/lib/services/bot-read";
+import { resolveSeasonName, botStandings, botSchedule, botBracket, botMyMatch, botFantasy } from "@/lib/services/bot-read";
 import { getSeasonPickem } from "@/lib/services/pickem";
 
 export const dynamic = "force-dynamic";
@@ -39,6 +39,10 @@ export async function GET(req: Request) {
   if (kind === "bracket") {
     const data = await botBracket(season);
     return data ? NextResponse.json(data) : NextResponse.json({ error: "no bracket" }, { status: 404 });
+  }
+  if (kind === "fantasy") {
+    const data = await botFantasy(season);
+    return data ? NextResponse.json(data) : NextResponse.json({ error: "no fantasy league" }, { status: 404 });
   }
   if (kind === "pickem") {
     const discordId = url.searchParams.get("discordId") ?? "";

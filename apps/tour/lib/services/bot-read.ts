@@ -5,6 +5,7 @@ import { prisma } from "../db";
 import { getSeasonStandings } from "../standings";
 import { getSeasonWeeks } from "../season-weeks";
 import { getPublicBracket, getChampionRun } from "../playoffs";
+import { getFantasyStandings } from "./fantasy";
 
 export async function resolveSeasonName(requested?: string | null): Promise<string | null> {
   if (requested?.trim()) {
@@ -73,6 +74,21 @@ export async function botBracket(seasonName: string) {
     champion: run.champion,
     rounds: run.rounds.map((r) => ({ label: r.label, series: [{ a: run.champion, b: r.opponent ?? "?", scoreA: r.champScore, scoreB: r.oppScore, winner: "A" as const }] })),
     urlPath: `/seasons/${encodeURIComponent(seasonName)}/bracket`,
+  };
+}
+
+// Fantasy league standings (derive-on-read), trimmed for the embed. null when the season has no
+// fantasy league yet.
+export async function botFantasy(seasonName: string) {
+  const st = await getFantasyStandings(seasonName);
+  if (!st) return null;
+  return {
+    seasonName,
+    scope: st.scope,
+    rosterSize: st.rosterSize,
+    setsCounted: st.setsCounted,
+    rows: st.standings.map((s, i) => ({ rank: i + 1, manager: s.managerName, points: s.points, sets: s.sets })),
+    urlPath: `/seasons/${encodeURIComponent(seasonName)}/fantasy`,
   };
 }
 
