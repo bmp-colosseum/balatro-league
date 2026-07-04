@@ -6,6 +6,7 @@ import { Callout } from "@/components/Callout";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { startPlayoffsAction, reportSeriesAction, resetPlayoffsAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -127,16 +128,19 @@ export default async function PlayoffsAdmin({ params }: { params: Promise<{ name
                   </td>
                   <td>
                     {s.aId && s.bId ? (
-                      <ActionFlashForm action={reportSeriesAction}>
-                        <input type="hidden" name="season" value={seasonName} />
-                        <input type="hidden" name="seriesId" value={s.id} />
-                        <span className="inline-flex items-center gap-1">
-                          <input type="number" name="scoreA" min={0} defaultValue={s.scoreA ?? undefined} className="w-12 rounded border border-[var(--border)] bg-[var(--surface-2)] px-1 py-0.5 text-center" />
-                          <span className="sub">–</span>
-                          <input type="number" name="scoreB" min={0} defaultValue={s.scoreB ?? undefined} className="w-12 rounded border border-[var(--border)] bg-[var(--surface-2)] px-1 py-0.5 text-center" />
-                          <SubmitButton size="sm" variant="secondary" pendingText="…">{s.decided ? "Update" : "Report"}</SubmitButton>
-                        </span>
-                      </ActionFlashForm>
+                      <span className="flex flex-wrap items-center gap-2">
+                        <ActionFlashForm action={reportSeriesAction}>
+                          <input type="hidden" name="season" value={seasonName} />
+                          <input type="hidden" name="seriesId" value={s.id} />
+                          <span className="inline-flex items-center gap-1">
+                            <input type="number" name="scoreA" min={0} defaultValue={s.scoreA ?? undefined} className="w-12 rounded border border-[var(--border)] bg-[var(--surface-2)] px-1 py-0.5 text-center" />
+                            <span className="sub">–</span>
+                            <input type="number" name="scoreB" min={0} defaultValue={s.scoreB ?? undefined} className="w-12 rounded border border-[var(--border)] bg-[var(--surface-2)] px-1 py-0.5 text-center" />
+                            <SubmitButton size="sm" variant="secondary" pendingText="…">{s.decided ? "Update" : "Report"}</SubmitButton>
+                          </span>
+                        </ActionFlashForm>
+                        <CopyLinkButton path={`/overlay/series/${s.id}`} label="Overlay link" />
+                      </span>
                     ) : (
                       <span className="sub">awaiting teams</span>
                     )}

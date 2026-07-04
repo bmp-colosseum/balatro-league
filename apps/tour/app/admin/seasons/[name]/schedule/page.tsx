@@ -6,6 +6,7 @@ import { Callout } from "@/components/Callout";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { generateScheduleAction, resetScheduleAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -141,7 +142,10 @@ export default async function ScheduleAdmin({ params }: { params: Promise<{ name
                     <td>{m.bName}</td>
                     <td className="sub">{m.conference}</td>
                     <td style={{ textAlign: "right" }}>
-                      <Link href={`/admin/matchups/${m.id}`}>Pair →</Link>
+                      <span className="inline-flex items-center gap-2">
+                        <Link href={`/admin/matchups/${m.id}`}>Pair →</Link>
+                        <CopyLinkButton path={`/overlay/matchup/${m.id}`} label="Overlay link" />
+                      </span>
                     </td>
                   </tr>
                 );

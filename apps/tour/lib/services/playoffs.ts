@@ -7,6 +7,7 @@
 import { qualify, seedField, standardBracketPairings, advanceWinners, type StandingRow } from "@balatro/competition-core";
 import { getSeasonStandings } from "../standings";
 import { prisma } from "../db";
+import { notifyLive } from "../notify";
 
 type Round = "QUARTERFINAL" | "SEMIFINAL" | "FINAL";
 const ROUND_BY_SIZE: Record<number, Round> = { 8: "QUARTERFINAL", 4: "SEMIFINAL", 2: "FINAL" };
@@ -91,6 +92,8 @@ export async function reportSeries(seriesId: string, scoreA: number, scoreB: num
   const winnerTeamSeasonId = scoreA > scoreB ? series.teamSeasonAId : series.teamSeasonBId;
   await prisma.playoffSeries.update({ where: { id: seriesId }, data: { scoreA, scoreB, winnerTeamSeasonId } });
   await maybeAdvance(series.seasonId, series.round as Round);
+  // Live-refresh any open series scoreboard overlay (OBS browser source).
+  await notifyLive(`series:${seriesId}`);
   return { champion: series.round === "FINAL" };
 }
 
@@ -184,5 +187,36 @@ export async function getPlayoffAdmin(seasonName: string) {
     entries: entries.map((e) => ({ seed: e.seed, name: nameOf.get(e.teamSeasonId) ?? e.teamSeasonId, viaWildcard: e.viaWildcard })),
     rounds,
     champion,
+  };
+}
+
+// One playoff series, trimmed for the scoreboard overlay: team names + seeds + the TO-entered
+// series score + round + winner. Live-updates via the `series:<id>` scope (reportSeries notifies).
+export async function getSeriesReport(seriesId: string) {
+  const s = await prisma.playoffSeries.findUnique({
+    where: { id: seriesId },
+    select: { id: true, seasonId: true, round: true, teamSeasonAId: true, teamSeasonBId: true, scoreA: true, scoreB: true, winnerTeamSeasonId: true },
+  });
+  if (!s) return null;
+  const teamIds = [s.teamSeasonAId, s.teamSeasonBId].filter((x): x is string => !!x);
+  const [season, teamSeasons, entries] = await Promise.all([
+    prisma.tourSeason.findUnique({ where: { id: s.seasonId }, select: { name: true } }),
+    prisma.teamSeason.findMany({ where: { id: { in: teamIds } }, include: { team: true } }),
+    prisma.playoffEntry.findMany({ where: { seasonId: s.seasonId }, select: { teamSeasonId: true, seed: true } }),
+  ]);
+  const nameOf = new Map(teamSeasons.map((t) => [t.id, t.team.name]));
+  const seedOf = new Map(entries.map((e) => [e.teamSeasonId, e.seed]));
+  return {
+    seriesId: s.id,
+    seasonName: season?.name ?? "",
+    roundLabel: ROUND_LABEL[s.round as Round] ?? s.round,
+    aName: s.teamSeasonAId ? nameOf.get(s.teamSeasonAId) ?? "TBD" : "TBD",
+    bName: s.teamSeasonBId ? nameOf.get(s.teamSeasonBId) ?? "TBD" : "TBD",
+    aSeed: s.teamSeasonAId ? seedOf.get(s.teamSeasonAId) ?? null : null,
+    bSeed: s.teamSeasonBId ? seedOf.get(s.teamSeasonBId) ?? null : null,
+    scoreA: s.scoreA ?? 0,
+    scoreB: s.scoreB ?? 0,
+    winner: s.winnerTeamSeasonId === s.teamSeasonAId ? ("A" as const) : s.winnerTeamSeasonId === s.teamSeasonBId ? ("B" as const) : null,
+    decided: !!s.winnerTeamSeasonId,
   };
 }
