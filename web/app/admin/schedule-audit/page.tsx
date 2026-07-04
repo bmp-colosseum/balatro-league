@@ -28,10 +28,59 @@ export default async function ScheduleAuditPage() {
 
         {audit === "NO_SEASON" && <div className="card">No active season to audit.</div>}
 
-        {/* Broken scores: a reported match whose result awards nobody points. */}
+        {/* Unfinished matches: got underway but never recorded a result. */}
         {audit !== "NO_SEASON" && (
           <>
-            <h3 style={{ margin: "12px 0 4px" }}>Broken scores</h3>
+            <h3 style={{ margin: "12px 0 4px" }}>Unfinished matches</h3>
+            <p className="muted" style={{ margin: "0 0 6px", fontSize: 13 }}>
+              Matches that got <strong>past the invite</strong> (a game was underway) but never reached a recorded
+              result — stuck mid-game or paused. This is the <strong>&ldquo;the bot never reported a result&rdquo;</strong>{" "}
+              case: play them out, or record the result on the division page. <strong>Paused</strong> ones are fine if
+              recent; an old one that never came back is the one to chase.
+            </p>
+            {audit.unfinished.length === 0 ? (
+              <Callout type="success">✓ No unfinished matches — every started match reached a result.</Callout>
+            ) : (
+              <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+                <table style={{ margin: 0 }}>
+                  <thead>
+                    <tr>
+                      <th>Last activity</th>
+                      <th>Division</th>
+                      <th>Players</th>
+                      <th>State</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {audit.unfinished.map((m) => (
+                      <tr key={m.sessionId}>
+                        <td className="muted" style={{ whiteSpace: "nowrap", fontSize: 12 }}>{m.updatedAt.toISOString().slice(0, 10)}</td>
+                        <td>{m.divisionName}</td>
+                        <td>
+                          {m.playerA} <span className="muted">vs</span> {m.playerB}
+                          {m.resultRecorded && (
+                            <span className="muted" style={{ fontSize: 11, marginLeft: 6 }}>(result already recorded)</span>
+                          )}
+                        </td>
+                        <td>
+                          <span
+                            className="pill"
+                            style={{
+                              fontSize: 11,
+                              background: m.paused ? "rgba(241,196,15,0.18)" : "rgba(231,76,60,0.18)",
+                              color: m.paused ? "var(--accent)" : "var(--danger)",
+                            }}
+                          >
+                            {m.paused ? "PAUSED" : m.state}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <h3 style={{ margin: "18px 0 4px" }}>Broken scores</h3>
             <p className="muted" style={{ margin: "0 0 6px", fontSize: 13 }}>
               CONFIRMED matches whose score isn&apos;t a valid <strong>2-0 / 1-1 / 0-2</strong> (0-0 = an intentional
               void is fine). The standings scorer only credits those, so anything else — e.g. a <strong>1-0</strong> —

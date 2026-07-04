@@ -36,16 +36,33 @@ export interface BrokenScoreMatch {
   gamesWonB: number;
 }
 
+// A match that got underway (past the invite) but never reached a recorded
+// result — stuck mid-game or paused. The "bot never reported a result" symptom.
+export interface UnfinishedMatch {
+  sessionId: string;
+  divisionName: string;
+  playerA: string;
+  playerB: string;
+  state: string;
+  paused: boolean;
+  resultRecorded: boolean; // is the assigned BO2 match already CONFIRMED anyway?
+  updatedAt: Date;
+}
+
 export interface ScheduleAuditResult {
   seasonLabel: string;
   scheduleLocked: boolean;
   leagueSessionCount: number; // non-casual, non-shootout sessions examined
   offSchedule: OffScheduleMatch[];
   brokenScores: BrokenScoreMatch[];
+  unfinished: UnfinishedMatch[];
 }
 
 const pairKey = (a: string, b: string) => (a < b ? `${a}:${b}` : `${b}:${a}`);
 const TERMINAL = new Set(["COMPLETE", "CANCELLED"]);
+// States that mean a match got PAST the invite and into (or through) play but
+// hasn't reached a terminal state — i.e. it's unfinished / stuck / paused.
+const UNFINISHED = (state: string) => state !== "WAITING_ACCEPT" && !TERMINAL.has(state);
 // Scores the standings scorer actually credits: 2-0 / 1-1 / 0-2, plus 0-0 (an
 // intentional admin void). Anything else awards NOBODY points — a broken record.
 const VALID_SCORES = new Set(["2-0", "1-1", "0-2", "0-0"]);
@@ -68,12 +85,16 @@ export async function loadScheduleAudit(): Promise<ScheduleAuditResult | "NO_SEA
   });
   if (!season) return "NO_SEASON";
 
-  // Per division: display name + the set of assigned (pre-created) BO2 pairs.
-  const divInfo = new Map<string, { name: string; assigned: Set<string> }>();
+  // Per division: display name, the set of assigned (pre-created) BO2 pairs, and
+  // the pairs that already have a CONFIRMED result.
+  const divInfo = new Map<string, { name: string; assigned: Set<string>; confirmed: Set<string> }>();
   for (const d of season.divisions) {
     divInfo.set(d.id, {
       name: d.name,
       assigned: new Set(d.matches.map((m) => pairKey(m.playerAId, m.playerBId))),
+      confirmed: new Set(
+        d.matches.filter((m) => m.status === "CONFIRMED").map((m) => pairKey(m.playerAId, m.playerBId)),
+      ),
     });
   }
   const divIds = season.divisions.map((d) => d.id);
@@ -88,6 +109,7 @@ export async function loadScheduleAudit(): Promise<ScheduleAuditResult | "NO_SEA
       state: true,
       threadId: true,
       createdAt: true,
+      updatedAt: true,
     },
     orderBy: { createdAt: "desc" },
   });
@@ -133,6 +155,25 @@ export async function loadScheduleAudit(): Promise<ScheduleAuditResult | "NO_SEA
     });
   }
 
+  // Unfinished matches: sessions past the invite but not terminal (stuck mid-game
+  // or paused). Stalest first — those are the likely "never got recorded" ones.
+  const unfinished: UnfinishedMatch[] = sessions
+    .filter((s) => s.divisionId && UNFINISHED(s.state))
+    .map((s) => {
+      const info = divInfo.get(s.divisionId!);
+      return {
+        sessionId: s.id,
+        divisionName: info?.name ?? s.divisionId!,
+        playerA: nameOf.get(s.playerAId) ?? s.playerAId,
+        playerB: nameOf.get(s.playerBId) ?? s.playerBId,
+        state: s.state,
+        paused: s.state === "PAUSED",
+        resultRecorded: info?.confirmed.has(pairKey(s.playerAId, s.playerBId)) ?? false,
+        updatedAt: s.updatedAt,
+      };
+    })
+    .sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime());
+
   const brokenScores: BrokenScoreMatch[] = brokenRaw.map((m) => ({
     matchId: m.matchId,
     divisionName: divInfo.get(m.divisionId)?.name ?? m.divisionId,
@@ -148,5 +189,6 @@ export async function loadScheduleAudit(): Promise<ScheduleAuditResult | "NO_SEA
     leagueSessionCount: sessions.length,
     offSchedule,
     brokenScores,
+    unfinished,
   };
 }
