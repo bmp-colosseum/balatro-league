@@ -45,6 +45,6 @@ export const ADMIN_LINKS: AdminNavLink[] = [
   { href: "/admin/settings", label: "Rules & Settings", devOpsOnly: true, system: true },
   { href: "/admin/ops", label: "Ops", devOpsOnly: true, system: true },
   { href: "/admin/audit", label: "Audit", system: true },
-  { href: "/admin/schedule-audit", label: "Schedule Audit", system: true },
+  { href: "/admin/schedule-audit", label: "Data Audit", system: true },
   { href: "/admin/transcripts", label: "Transcripts", system: true },
 ];

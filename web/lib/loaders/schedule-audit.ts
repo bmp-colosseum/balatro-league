@@ -25,15 +25,30 @@ export interface OffScheduleMatch {
   createdAt: Date;
 }
 
+// A CONFIRMED match whose score awards nobody points because it isn't a valid
+// best-of-2 result — the "reported but no points" symptom.
+export interface BrokenScoreMatch {
+  matchId: string;
+  divisionName: string;
+  playerA: string;
+  playerB: string;
+  gamesWonA: number;
+  gamesWonB: number;
+}
+
 export interface ScheduleAuditResult {
   seasonLabel: string;
   scheduleLocked: boolean;
   leagueSessionCount: number; // non-casual, non-shootout sessions examined
   offSchedule: OffScheduleMatch[];
+  brokenScores: BrokenScoreMatch[];
 }
 
 const pairKey = (a: string, b: string) => (a < b ? `${a}:${b}` : `${b}:${a}`);
 const TERMINAL = new Set(["COMPLETE", "CANCELLED"]);
+// Scores the standings scorer actually credits: 2-0 / 1-1 / 0-2, plus 0-0 (an
+// intentional admin void). Anything else awards NOBODY points — a broken record.
+const VALID_SCORES = new Set(["2-0", "1-1", "0-2", "0-0"]);
 
 export async function loadScheduleAudit(): Promise<ScheduleAuditResult | "NO_SEASON"> {
   const season = await prisma.season.findFirst({
@@ -43,7 +58,10 @@ export async function loadScheduleAudit(): Promise<ScheduleAuditResult | "NO_SEA
         select: {
           id: true,
           name: true,
-          matches: { where: { format: "LEAGUE_BO2" }, select: { playerAId: true, playerBId: true } },
+          matches: {
+            where: { format: "LEAGUE_BO2" },
+            select: { id: true, playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true, status: true },
+          },
         },
       },
     },
@@ -74,7 +92,22 @@ export async function loadScheduleAudit(): Promise<ScheduleAuditResult | "NO_SEA
     orderBy: { createdAt: "desc" },
   });
 
-  const playerIds = [...new Set(sessions.flatMap((s) => [s.playerAId, s.playerBId]))];
+  // Broken-score matches: CONFIRMED BO2 results the scorer can't credit.
+  const brokenRaw: Array<{ matchId: string; divisionId: string; aId: string; bId: string; a: number; b: number }> = [];
+  for (const d of season.divisions) {
+    for (const m of d.matches) {
+      if (m.status !== "CONFIRMED") continue;
+      if (VALID_SCORES.has(`${m.gamesWonA}-${m.gamesWonB}`)) continue;
+      brokenRaw.push({ matchId: m.id, divisionId: d.id, aId: m.playerAId, bId: m.playerBId, a: m.gamesWonA, b: m.gamesWonB });
+    }
+  }
+
+  const playerIds = [
+    ...new Set([
+      ...sessions.flatMap((s) => [s.playerAId, s.playerBId]),
+      ...brokenRaw.flatMap((m) => [m.aId, m.bId]),
+    ]),
+  ];
   const players = playerIds.length
     ? await prisma.player.findMany({ where: { id: { in: playerIds } }, select: { id: true, displayName: true } })
     : [];
@@ -100,10 +133,20 @@ export async function loadScheduleAudit(): Promise<ScheduleAuditResult | "NO_SEA
     });
   }
 
+  const brokenScores: BrokenScoreMatch[] = brokenRaw.map((m) => ({
+    matchId: m.matchId,
+    divisionName: divInfo.get(m.divisionId)?.name ?? m.divisionId,
+    playerA: nameOf.get(m.aId) ?? m.aId,
+    playerB: nameOf.get(m.bId) ?? m.bId,
+    gamesWonA: m.a,
+    gamesWonB: m.b,
+  }));
+
   return {
     seasonLabel: formatSeasonLabel(season),
     scheduleLocked: season.scheduleLocked,
     leagueSessionCount: sessions.length,
     offSchedule,
+    brokenScores,
   };
 }
