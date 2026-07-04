@@ -55,7 +55,8 @@ export async function startDraftAction(_prev: ActionResult, formData: FormData):
   if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
   const season = String(formData.get("season") ?? "");
   try {
-    const r = await startFantasyDraft(season);
+    const order = formData.getAll("order").map(String).filter(Boolean);
+    const r = await startFantasyDraft(season, order.length ? order : undefined);
     rev(season);
     return { ok: true, message: `Draft started - ${r.teams} managers, ${r.totalPicks} picks. Manager 1 is on the clock.` };
   } catch (e) {

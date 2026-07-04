@@ -5,6 +5,7 @@ import { getSeasonAdmin } from "@/lib/services/seasons";
 import { getFantasyLeague, getFantasyPool, getFantasyDraftBoard, getFantasyTradesForAdmin } from "@/lib/services/fantasy";
 import { Callout } from "@/components/Callout";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
+import { DraftOrderEditor } from "@/components/DraftOrderEditor";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -168,16 +169,7 @@ export default async function FantasyAdmin({ params }: { params: Promise<{ name:
               {board!.teams.length < 2 ? (
                 <p className="sub" style={{ margin: 0 }}>Need at least 2 managers before the draft can start.</p>
               ) : (
-                <>
-                  <p className="sub" style={{ marginTop: 0 }}>
-                    Locks the manager list and freezes the snake order (join order). Manager 1 goes on the clock;
-                    everyone drafts from the public board.
-                  </p>
-                  <ActionFlashForm action={startDraftAction}>
-                    <input type="hidden" name="season" value={seasonName} />
-                    <SubmitButton pendingText="Starting...">Start snake draft</SubmitButton>
-                  </ActionFlashForm>
-                </>
+                <DraftOrderEditor season={seasonName} managers={board!.teams.map((t) => ({ id: t.id, name: t.name }))} action={startDraftAction} />
               )}
             </div>
           ) : (
