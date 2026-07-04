@@ -149,7 +149,7 @@ export default async function TeamsAdmin({
               <th className="num">Seed</th>
               <th>Team</th>
               <th>Captain</th>
-              <th>Conference</th>
+              {conferences.length > 0 && <th>Conference</th>}
               <th>Actions</th>
             </tr>
           </thead>
@@ -179,18 +179,16 @@ export default async function TeamsAdmin({
                     </form>
                   )}
                 </td>
-                <td>
-                  {conferences.length > 0 ? (
+                {conferences.length > 0 && (
+                  <td>
                     <form action={setTeamConferenceAction} className="flex items-center gap-2">
                       <input type="hidden" name="season" value={seasonName} />
                       <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
                       <FormSelect name="conferenceId" defaultValue={t.conference === "Unassigned" ? "" : t.conferenceId} placeholder="Unassigned" options={confOptions()} size="sm" triggerClassName="w-40" />
                       <SubmitButton variant="secondary" size="sm">Move</SubmitButton>
                     </form>
-                  ) : (
-                    <span className="sub">{t.conference}</span>
-                  )}
-                </td>
+                  </td>
+                )}
                 <td>
                   <span className="flex flex-wrap items-center gap-1.5">
                     <Link href={`/admin/seasons/${enc}/roster`} className="text-sm">roster ops</Link>
@@ -206,7 +204,7 @@ export default async function TeamsAdmin({
               </tr>
             ))}
             {teams.length === 0 && (
-              <tr><td colSpan={5} className="sub">No teams yet — create the first one above.</td></tr>
+              <tr><td colSpan={conferences.length > 0 ? 5 : 4} className="sub">No teams yet — create the first one above.</td></tr>
             )}
           </tbody>
         </table>
