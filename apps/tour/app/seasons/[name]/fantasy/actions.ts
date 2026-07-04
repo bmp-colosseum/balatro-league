@@ -49,23 +49,28 @@ export async function makePickAction(formData: FormData) {
   redirect(`/seasons/${enc}/fantasy/draft?${qs.toString()}`);
 }
 
-// Propose a 1-for-1 trade. The receiver is DERIVED from the requested player's current owner
-// (the picker lists everyone's players), so the manager just picks "give X, get Y".
+// Propose an N-for-N trade. The client sends the partner (receiverTeamId) + the multi-selected
+// give[]/receive[]; the service re-validates ownership (all give are the proposer's, all receive
+// are the receiver's) and the even swap, so a spoofed receiverTeamId simply fails those checks.
+// receiverTeamId is derived from the first requested player's owner as a fallback (no client field).
 export async function proposeTradeAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const v = await getViewer();
   if (!v.discordId) return { ok: false, message: "Sign in with Discord to trade." };
   const season = String(formData.get("season") ?? "");
-  const give = String(formData.get("give") ?? "");
-  const receive = String(formData.get("receive") ?? "");
-  if (!give || !receive) return { ok: false, message: "Pick a player to give and a player to get." };
+  const give = formData.getAll("give").map(String).filter(Boolean);
+  const receive = formData.getAll("receive").map(String).filter(Boolean);
+  if (!give.length || !receive.length) return { ok: false, message: "Pick at least one player to give and one to get." };
   try {
-    const panel = await getFantasyTradePanel(season, v.discordId);
-    if (!panel) return { ok: false, message: "No fantasy league for this season." };
-    const receiverTeamId = Object.entries(panel.rosterByTeam).find(([, roster]) => roster.some((p) => p.playerId === receive))?.[0];
-    if (!receiverTeamId) return { ok: false, message: "That player isn't on any roster." };
-    await proposeTrade(season, v.discordId, { receiverTeamId, give: [give], receive: [receive], reason: String(formData.get("reason") ?? "") || undefined });
+    let receiverTeamId = String(formData.get("receiverTeamId") ?? "");
+    if (!receiverTeamId) {
+      const panel = await getFantasyTradePanel(season, v.discordId);
+      if (!panel) return { ok: false, message: "No fantasy league for this season." };
+      receiverTeamId = Object.entries(panel.rosterByTeam).find(([, roster]) => roster.some((p) => p.playerId === receive[0]))?.[0] ?? "";
+    }
+    if (!receiverTeamId) return { ok: false, message: "Couldn't tell who you're trading with." };
+    await proposeTrade(season, v.discordId, { receiverTeamId, give, receive, reason: String(formData.get("reason") ?? "") || undefined });
     revalidatePath(`/seasons/${encodeURIComponent(season)}/fantasy`);
-    return { ok: true, message: "Trade offer sent." };
+    return { ok: true, message: `Trade offer sent (${give.length}-for-${receive.length}).` };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Couldn't propose that trade." };
   }

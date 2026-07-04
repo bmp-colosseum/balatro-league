@@ -5,7 +5,7 @@ import { getFantasyLeague, getFantasyStandings, getFantasyDraftBoard, getFantasy
 import { Callout } from "@/components/Callout";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { LiveRefresh } from "@/components/LiveRefresh";
-import { FormSelect } from "@/components/FormSelect";
+import { TradeProposer } from "@/components/TradeProposer";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,10 +59,6 @@ export default async function FantasyPublic({ params }: { params: Promise<{ name
 
   // Trades open once the draft is DONE. Only load the panel then (rosters exist).
   const trade = board.state === "DONE" ? await getFantasyTradePanel(seasonName, viewer.discordId) : null;
-  const canTrade = !!trade && trade.enabled && !!trade.myTeam;
-  const receiveOptions = trade
-    ? trade.managers.flatMap((m) => (trade.rosterByTeam[m.id] ?? []).map((p) => ({ value: p.playerId, label: `${p.name} (${m.name})` })))
-    : [];
 
   return (
     <main>
@@ -123,25 +119,10 @@ export default async function FantasyPublic({ params }: { params: Promise<{ name
             <>
               {trade.deadlinePassed ? (
                 <p className="sub" style={{ marginTop: 0 }}>The trade deadline has passed - no new offers.</p>
-              ) : trade.myRoster.length === 0 || receiveOptions.length === 0 ? (
+              ) : trade.myRoster.length === 0 || trade.managers.length === 0 ? (
                 <p className="sub" style={{ marginTop: 0 }}>No one to trade with yet.</p>
               ) : (
-                <ActionFlashForm action={proposeTradeAction} className="flex flex-wrap items-end gap-3">
-                  <input type="hidden" name="season" value={seasonName} />
-                  <div className="grid gap-1.5">
-                    <Label>You give</Label>
-                    <FormSelect name="give" required placeholder="one of your players" options={trade.myRoster.map((p) => ({ value: p.playerId, label: p.name }))} triggerClassName="w-56" />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label>You get</Label>
-                    <FormSelect name="receive" required placeholder="a player to acquire" options={receiveOptions} triggerClassName="w-64" />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="reason">Note</Label>
-                    <Input id="reason" name="reason" placeholder="optional" maxLength={200} className="w-48" />
-                  </div>
-                  <SubmitButton pendingText="Sending...">Propose 1-for-1</SubmitButton>
-                </ActionFlashForm>
+                <TradeProposer season={seasonName} myRoster={trade.myRoster} managers={trade.managers} rosterByTeam={trade.rosterByTeam} action={proposeTradeAction} />
               )}
               {trade.tradeApproval === "TO_APPROVED" && !trade.deadlinePassed && (
                 <p className="sub" style={{ marginBottom: 0 }}>Accepted trades need a TO to approve them.</p>
