@@ -12,6 +12,7 @@ import "server-only";
 // dropped rather than moved.
 
 import { prisma } from "@/lib/prisma";
+import { isPlayerIdBanned } from "@/lib/bans";
 import { fetchGuildMember, addGuildMemberRole, removeGuildMemberRole } from "@/lib/discord";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
 import { enqueueStandingsRefresh, enqueueWelcomeRefresh, enqueueScheduleChange } from "@/lib/queue";
@@ -91,7 +92,7 @@ export async function replaceDivisionPlayer(departedPlayerId: string, newDiscord
     create: { discordId: newDiscordId, displayName: newName },
     update: {},
   });
-  if (newPlayer.bannedAt) {
+  if (await isPlayerIdBanned(newPlayer.id)) {
     throw new ReplaceError("That replacement is banned from the league — unban them (/admin/bans) first, or pick someone else.");
   }
 

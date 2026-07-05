@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { placePlayerInDivision } from "@/lib/division-membership";
 import { recordAudit, type AuditActor } from "@/lib/audit";
 import { formatSeasonLabel, nextSeasonNumber } from "@/lib/format-season";
+import { isActiveBan } from "@/lib/bans";
 import { loadContinuityPlacement } from "@/lib/loaders/continuity";
 
 export interface BuildContinuityInput {
@@ -88,8 +89,9 @@ export async function absorbSignupsIntoDraft(
       }),
     ),
   );
-  // Banned newcomers are never absorbed into the draft.
-  const players = upserted.filter((p) => p.bannedAt == null);
+  // Banned newcomers are never absorbed into the draft (respects temp-ban expiry).
+  const absorbNextSeason = await nextSeasonNumber(prisma);
+  const players = upserted.filter((p) => !isActiveBan(p, absorbNextSeason));
   const playerByDiscord = new Map(players.map((p) => [p.discordId, p]));
 
   const cont = await loadContinuityPlacement(roundId);
@@ -138,7 +140,8 @@ export async function buildSeasonFromContinuity(
       }),
     ),
   );
-  const players = upserted.filter((p) => p.bannedAt == null);
+  const buildNextSeason = await nextSeasonNumber(prisma);
+  const players = upserted.filter((p) => !isActiveBan(p, buildNextSeason));
   const playerByDiscordId = new Map(players.map((p) => [p.discordId, p]));
 
   const divs = placement.divisions; // ordered top-down (0 = Legendary)

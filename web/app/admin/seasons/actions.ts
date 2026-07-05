@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
-import { isDiscordIdBanned } from "@/lib/bans";
+import { isDiscordIdBanned, isPlayerIdBanned } from "@/lib/bans";
 import { performSeasonActivation } from "@/lib/season-activation";
 import { resyncSeasonSchedules } from "@/lib/schedule-sync";
 import { lockDivisionSchedules, lockOneDivision } from "@/lib/lock-schedule";
@@ -1181,10 +1181,10 @@ export async function addExistingPlayerToDivision(formData: FormData) {
   if (!division) redirect(`/admin/seasons?err=${encodeURIComponent("Division not found")}`);
   const player = await prisma.player.findUnique({
     where: { id: playerId },
-    select: { id: true, displayName: true, bannedAt: true },
+    select: { id: true, displayName: true },
   });
   if (!player) redirect(`/seasons/${division!.seasonId}?err=${encodeURIComponent("Player not found")}`);
-  if (player!.bannedAt) {
+  if (await isPlayerIdBanned(playerId)) {
     redirect(`/seasons/${division!.seasonId}?err=${encodeURIComponent("That player is banned — unban them at /admin/bans first.")}`);
   }
 

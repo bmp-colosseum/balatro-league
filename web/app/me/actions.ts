@@ -6,6 +6,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { isDiscordIdBanned } from "@/lib/bans";
 
 async function currentDiscordId(): Promise<string | null> {
   const session = await auth();
@@ -91,9 +92,9 @@ export async function setSeasonRemindersAction(formData: FormData) {
   const discordId = await currentDiscordId();
   if (!discordId) return;
   const next = String(formData.get("next") ?? "") === "1";
-  const player = await prisma.player.findUnique({ where: { discordId }, select: { id: true, bannedAt: true } });
+  const player = await prisma.player.findUnique({ where: { discordId }, select: { id: true } });
   // Banned players can't opt IN to reminders (but can always opt out).
-  if (next && player?.bannedAt) {
+  if (next && (await isDiscordIdBanned(discordId))) {
     revalidatePath("/me");
     return;
   }

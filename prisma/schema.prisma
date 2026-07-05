@@ -86,9 +86,16 @@ model Player {
   // via /admin/bans; bannedBy is the acting admin's Discord id, bannedReason is
   // an admin-only note. A ban does NOT auto-remove them from a live season — use
   // the division DQ/void tools for that; it stops future signup + new matches.
+  //
+  // banLiftsAtSeasonNumber: null = PERMANENT. A number = a season-count (temp)
+  // ban that auto-lifts once the NEXT season's number reaches it. Banning "for N
+  // seasons" sets it to (nextSeasonNumber + N), so they're blocked from the next
+  // N seasons and free from the one after. All ban checks compare it against the
+  // next season number (see src/bans.ts / web/lib/bans.ts).
   bannedAt             DateTime?
   bannedReason         String?
   bannedBy             String?
+  banLiftsAtSeasonNumber Int?
 
   @@index([rating])
   @@index([bannedAt])

@@ -14,6 +14,7 @@ import { formatSeasonLabel, formatDivisionName } from "@/lib/format-season";
 import { owenLadder } from "@/lib/season-plan";
 import { computeStandings } from "@/lib/standings";
 import { getPlacementRules } from "@/lib/placement-rules";
+import { isActiveBan, nextSeasonNumber } from "@/lib/bans";
 import {
   buildOwenPlacement,
   type ReturnerInput,
@@ -102,10 +103,13 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
   }
 
   const discordIds = round.signups.map((s) => s.discordId);
-  const players = await prisma.player.findMany({
-    where: { discordId: { in: discordIds } },
-    select: { id: true, discordId: true, hiddenMmr: true, bannedAt: true },
-  });
+  const [players, nextSeason] = await Promise.all([
+    prisma.player.findMany({
+      where: { discordId: { in: discordIds } },
+      select: { id: true, discordId: true, hiddenMmr: true, bannedAt: true, banLiftsAtSeasonNumber: true },
+    }),
+    nextSeasonNumber(),
+  ]);
   const playerByDiscord = new Map(players.map((p) => [p.discordId, p]));
   // ALL snapshots (every BMP season), not just the latest — peak is per-season,
   // so the all-time peak = max peakMmr across all of them.
@@ -142,7 +146,7 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
   const rookies: RookieInput[] = [];
   for (const s of round.signups) {
     const p = playerByDiscord.get(s.discordId);
-    if (p?.bannedAt) continue; // banned players are never projected / placed
+    if (p && isActiveBan(p, nextSeason)) continue; // banned players are never projected / placed
     const activeIndex = p ? divIndexByPlayer.get(p.id) : undefined;
     if (p && activeIndex != null) {
       const standing = standingByPlayer.get(p.id) ?? null;

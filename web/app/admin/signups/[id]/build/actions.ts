@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { actorFromAdminUser } from "@/lib/audit";
 import { resolveDiscordIdToDisplayName } from "@/lib/add-player";
-import { isDiscordIdBanned } from "@/lib/bans";
+import { isDiscordIdBanned, isPlayerIdBanned } from "@/lib/bans";
 import { enqueueMmrSnapshot } from "@/lib/queue";
 import { buildSeasonFromRound } from "@/lib/build-season";
 
@@ -210,12 +210,12 @@ export async function addSignupByPlayerId(formData: FormData) {
   }
   const player = await prisma.player.findUnique({
     where: { id: playerId },
-    select: { discordId: true, displayName: true, bannedAt: true },
+    select: { discordId: true, displayName: true },
   });
   if (!player) {
     redirect(`/admin/signups/${roundId}/build?err=${encodeURIComponent("Player not found")}`);
   }
-  if (player!.bannedAt) {
+  if (await isPlayerIdBanned(playerId)) {
     redirect(`/admin/signups/${roundId}/build?err=${encodeURIComponent("That player is banned — unban them at /admin/bans first.")}`);
   }
   await prisma.signup.upsert({

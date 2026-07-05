@@ -6,7 +6,7 @@ import { requireAdmin } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { enqueueMmrSnapshot } from "@/lib/queue";
 import { resolveDiscordIdToDisplayName } from "@/lib/add-player";
-import { isDiscordIdBanned } from "@/lib/bans";
+import { isDiscordIdBanned, isPlayerIdBanned } from "@/lib/bans";
 
 // Add a sign-up to a round straight from the round page — by Discord ID, or an
 // existing player picked by name. Either way it creates a Signup row (so they're
@@ -28,9 +28,9 @@ export async function addSignupToRound(formData: FormData) {
     });
 
   if (playerId) {
-    const player = await prisma.player.findUnique({ where: { id: playerId }, select: { discordId: true, displayName: true, bannedAt: true } });
+    const player = await prisma.player.findUnique({ where: { id: playerId }, select: { discordId: true, displayName: true } });
     if (!player) redirect(`/admin/signups/${roundId}?err=${encodeURIComponent("Player not found")}`);
-    if (player!.bannedAt) redirect(bannedErr);
+    if (await isPlayerIdBanned(playerId)) redirect(bannedErr);
     await upsert(player!.discordId, player!.displayName);
     revalidatePath(`/admin/signups/${roundId}`);
     return;

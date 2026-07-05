@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { placePlayerInDivision } from "@/lib/division-membership";
 import { recordAudit, type AuditActor } from "@/lib/audit";
 import { formatSeasonLabel, formatDivisionName, nextSeasonNumber } from "@/lib/format-season";
+import { isActiveBan } from "@/lib/bans";
 import { parseTierConfig, planByRating, type TierConfig } from "@/lib/season-plan";
 
 // Re-exported so existing importers of these from build-season keep working.
@@ -64,8 +65,9 @@ export async function buildSeasonFromRound(input: BuildSeasonInput): Promise<Bui
     ),
   );
   // Banned players are dropped from the build entirely — they don't get planned
-  // or placed, even if a stale signup exists (newly-upserted players can't be banned).
-  const players = upserted.filter((p) => p.bannedAt == null);
+  // or placed, even if a stale signup exists. Respects temp-ban expiry.
+  const nextSeason = await nextSeasonNumber(prisma);
+  const players = upserted.filter((p) => !isActiveBan(p, nextSeason));
   const playerByDiscordId = new Map(players.map((p) => [p.discordId, p]));
 
   let targetSeasonId: string;
