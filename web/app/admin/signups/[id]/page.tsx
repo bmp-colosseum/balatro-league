@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { PlayerSearch } from "@/components/PlayerSearch";
 import { SignupMmrTable } from "@/components/SignupMmrTable";
 import { Callout } from "@/components/Callout";
-import { refreshSignupMmrs, addSignupToRound } from "./actions";
+import { refreshSignupMmrs, addSignupToRound, withdrawSignupAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +19,11 @@ export default async function SignupMmrPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ refreshing?: string; err?: string }>;
+  searchParams: Promise<{ refreshing?: string; err?: string; ok?: string }>;
 }) {
   await requireAdmin();
   const { id } = await params;
-  const { refreshing, err } = await searchParams;
+  const { refreshing, err, ok } = await searchParams;
   const data = await loadSignupMmrOverview(id);
   if (!data) notFound();
   const allPlayers = await loadAllPlayersForPicker();
@@ -59,6 +59,7 @@ export default async function SignupMmrPage({
             one every few seconds) — refresh this page in a minute to see updated numbers.
           </Callout>
         )}
+        {ok && <Callout type="success">{ok}</Callout>}
 
         {/* Add a sign-up directly — by Discord ID or an existing player. */}
         <div className="card" style={{ display: "grid", gap: 8 }}>
@@ -131,7 +132,7 @@ export default async function SignupMmrPage({
         {/* Roster — sortable (click any column header). */}
         <div className="card">
           <strong>Roster ({rows.length})</strong>
-          <SignupMmrTable rows={rows} bmpCurrentSeason={bmpCurrentSeason} />
+          <SignupMmrTable rows={rows} bmpCurrentSeason={bmpCurrentSeason} roundId={round.id} removeAction={withdrawSignupAction} />
         </div>
       </main>
     </>

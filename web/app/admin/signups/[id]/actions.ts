@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { enqueueMmrSnapshot } from "@/lib/queue";
 import { resolveDiscordIdToDisplayName } from "@/lib/add-player";
 import { isDiscordIdBanned, isPlayerIdBanned } from "@/lib/bans";
+import { refreshSignupPost } from "@/lib/signup-discord";
 
 // Add a sign-up to a round straight from the round page — by Discord ID, or an
 // existing player picked by name. Either way it creates a Signup row (so they're
@@ -73,4 +74,19 @@ export async function refreshSignupMmrs(formData: FormData) {
     await enqueueMmrSnapshot({ discordId: s.discordId, seasonId: round!.resultingSeasonId ?? null }).catch(() => {});
   }
   redirect(`/admin/signups/${roundId}?refreshing=${round!.signups.length}`);
+}
+
+// Remove a player from a signup round (admin). Soft-delete via withdrawn:true
+// (same as a self-withdraw), so they drop off the roster + count and won't be
+// built into the season, but the record is kept. Keeps the Discord post's count
+// live. Use this to drop someone who signed up but shouldn't play.
+export async function withdrawSignupAction(formData: FormData) {
+  await requireAdmin();
+  const roundId = String(formData.get("roundId") ?? "").trim();
+  const discordId = String(formData.get("discordId") ?? "").trim();
+  if (!roundId || !discordId) return;
+  await prisma.signup.updateMany({ where: { roundId, discordId }, data: { withdrawn: true } });
+  await refreshSignupPost(roundId).catch(() => {});
+  revalidatePath(`/admin/signups/${roundId}`);
+  redirect(`/admin/signups/${roundId}?ok=${encodeURIComponent("Removed from signups.")}`);
 }

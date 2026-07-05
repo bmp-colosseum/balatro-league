@@ -7,6 +7,7 @@
 
 import { useState } from "react";
 import type { SignupMmrRow } from "@/lib/loaders/admin";
+import { ConfirmButton } from "@/components/ConfirmButton";
 
 type SortKey = "name" | "mmr" | "peak" | "tier" | "season" | "games" | "winrate";
 
@@ -24,10 +25,16 @@ function seasonNum(tag: string | null): number | null {
 export function SignupMmrTable({
   rows,
   bmpCurrentSeason,
+  roundId,
+  removeAction,
 }: {
   rows: SignupMmrRow[];
   bmpCurrentSeason: string | null;
+  // When both are provided, each row gets a Remove (withdraw) button.
+  roundId?: string;
+  removeAction?: (formData: FormData) => void | Promise<void>;
 }) {
+  const canRemove = !!roundId && !!removeAction;
   const [sortKey, setSortKey] = useState<SortKey>("mmr");
   const [dir, setDir] = useState<"asc" | "desc">("desc");
 
@@ -91,11 +98,12 @@ export function SignupMmrTable({
             {th("season", "Season", "BMP season these numbers are from")}
             {th("games", "Games")}
             {th("winrate", "Win%")}
+            {canRemove && <th></th>}
           </tr>
         </thead>
         <tbody>
           {sorted.length === 0 ? (
-            <tr><td colSpan={8} className="muted">No signups.</td></tr>
+            <tr><td colSpan={canRemove ? 9 : 8} className="muted">No signups.</td></tr>
           ) : (
             sorted.map((r, i) => {
               const isPrev = r.bmpSeason != null && bmpCurrentSeason != null && r.bmpSeason !== bmpCurrentSeason;
@@ -128,6 +136,21 @@ export function SignupMmrTable({
                   </td>
                   <td>{r.totalGames ?? <span className="muted">—</span>}</td>
                   <td>{r.winRatePct != null ? `${r.winRatePct}%` : <span className="muted">—</span>}</td>
+                  {canRemove && (
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <form action={removeAction} style={{ display: "inline" }}>
+                        <input type="hidden" name="roundId" value={roundId} />
+                        <input type="hidden" name="discordId" value={r.discordId} />
+                        <ConfirmButton
+                          variant="secondary"
+                          message={`Remove ${r.globalName ?? r.username} from this signup round? They'll drop off the roster and won't be built into the season. (They can sign up again unless you ban them.)`}
+                          style={{ fontSize: 11, padding: "2px 8px" }}
+                        >
+                          Remove
+                        </ConfirmButton>
+                      </form>
+                    </td>
+                  )}
                 </tr>
               );
             })

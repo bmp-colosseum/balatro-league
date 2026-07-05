@@ -7,23 +7,29 @@ import { prisma } from "@/lib/prisma";
 import { recordAudit, actorFromAdminUser } from "@/lib/audit";
 import { nextSeasonNumber } from "@/lib/bans";
 
+// Where to bounce back to (+ what to also revalidate). Lets these actions be
+// reused from other admin pages (e.g. /admin/participation) that pass returnTo.
+function dest(formData: FormData): string {
+  const rt = String(formData.get("returnTo") ?? "").trim();
+  return rt.startsWith("/admin/") ? rt : "/admin/bans";
+}
+
 // Ban a player: blocks signing up, being added to a round, opting into reminders,
 // being placed into a division, and starting/queuing any match. PERMANENT (no
 // duration) or a season-count TEMP ban (auto-lifts after N seasons). Reason is
-// admin-only (stored + audited). Does NOT remove them from a live season — use
-// the division DQ/void tools for that.
+// admin-only. Does NOT remove them from a live season — use DQ/void for that.
 export async function banPlayerAction(formData: FormData) {
   const { user } = await requireAdmin();
+  const base = dest(formData);
   const playerId = String(formData.get("playerId") ?? "").trim();
   const reason = String(formData.get("reason") ?? "").trim();
   const durationRaw = String(formData.get("duration") ?? "permanent").trim(); // "permanent" | "1".."N"
-  if (!playerId) redirect(`/admin/bans?err=${encodeURIComponent("Pick a player to ban.")}`);
-  if (!reason) redirect(`/admin/bans?err=${encodeURIComponent("A reason is required.")}`);
+  if (!playerId) redirect(`${base}?err=${encodeURIComponent("Pick a player to ban.")}`);
+  if (!reason) redirect(`${base}?err=${encodeURIComponent("A reason is required.")}`);
 
   const player = await prisma.player.findUnique({ where: { id: playerId }, select: { displayName: true } });
-  if (!player) redirect(`/admin/bans?err=${encodeURIComponent("Player not found.")}`);
+  if (!player) redirect(`${base}?err=${encodeURIComponent("Player not found.")}`);
 
-  // Permanent (null) or a season-count ban that lifts at nextSeasonNumber + N.
   let banLiftsAtSeasonNumber: number | null = null;
   let durationLabel = "permanently";
   if (durationRaw !== "permanent") {
@@ -46,11 +52,13 @@ export async function banPlayerAction(formData: FormData) {
     metadata: { reason, banLiftsAtSeasonNumber },
   });
   revalidatePath("/admin/bans");
-  redirect(`/admin/bans?ok=${encodeURIComponent(`Banned ${player!.displayName} ${durationLabel}.`)}`);
+  if (base !== "/admin/bans") revalidatePath(base);
+  redirect(`${base}?ok=${encodeURIComponent(`Banned ${player!.displayName} ${durationLabel}.`)}`);
 }
 
 export async function unbanPlayerAction(formData: FormData) {
   const { user } = await requireAdmin();
+  const base = dest(formData);
   const playerId = String(formData.get("playerId") ?? "").trim();
   if (!playerId) return;
   const player = await prisma.player.findUnique({ where: { id: playerId }, select: { displayName: true } });
@@ -67,20 +75,21 @@ export async function unbanPlayerAction(formData: FormData) {
     summary: `Unbanned ${player?.displayName ?? playerId}`,
   });
   revalidatePath("/admin/bans");
-  redirect(`/admin/bans?ok=${encodeURIComponent(`Unbanned ${player?.displayName ?? "player"}.`)}`);
+  if (base !== "/admin/bans") revalidatePath(base);
+  redirect(`${base}?ok=${encodeURIComponent(`Unbanned ${player?.displayName ?? "player"}.`)}`);
 }
 
-// Log a strike (repeat-offender record). Mirrors the Discord /admin strike, so
-// the count is shared. Strikes are surfaced for the admin to act on — they do NOT
-// auto-ban.
+// Log a strike (a repeat-offender record). Shared with the Discord /admin strike.
+// Strikes are surfaced for the admin to act on — they do NOT auto-ban.
 export async function addStrikeAction(formData: FormData) {
   const { user } = await requireAdmin();
+  const base = dest(formData);
   const playerId = String(formData.get("playerId") ?? "").trim();
   const reason = String(formData.get("reason") ?? "").trim();
-  if (!playerId) redirect(`/admin/bans?err=${encodeURIComponent("Pick a player to strike.")}`);
-  if (!reason) redirect(`/admin/bans?err=${encodeURIComponent("A strike reason is required.")}`);
+  if (!playerId) redirect(`${base}?err=${encodeURIComponent("Pick a player to strike.")}`);
+  if (!reason) redirect(`${base}?err=${encodeURIComponent("A strike reason is required.")}`);
   const player = await prisma.player.findUnique({ where: { id: playerId }, select: { displayName: true } });
-  if (!player) redirect(`/admin/bans?err=${encodeURIComponent("Player not found.")}`);
+  if (!player) redirect(`${base}?err=${encodeURIComponent("Player not found.")}`);
 
   const actor = actorFromAdminUser(user);
   await prisma.strike.create({
@@ -96,11 +105,13 @@ export async function addStrikeAction(formData: FormData) {
     metadata: { reason },
   });
   revalidatePath("/admin/bans");
-  redirect(`/admin/bans?ok=${encodeURIComponent(`Logged strike #${count} for ${player!.displayName}.`)}`);
+  if (base !== "/admin/bans") revalidatePath(base);
+  redirect(`${base}?ok=${encodeURIComponent(`Logged strike #${count} for ${player!.displayName}.`)}`);
 }
 
 export async function removeStrikeAction(formData: FormData) {
   const { user } = await requireAdmin();
+  const base = dest(formData);
   const strikeId = String(formData.get("strikeId") ?? "").trim();
   if (!strikeId) return;
   const strike = await prisma.strike.findUnique({ where: { id: strikeId }, select: { playerId: true } });
@@ -114,5 +125,6 @@ export async function removeStrikeAction(formData: FormData) {
     summary: `Removed a strike`,
   });
   revalidatePath("/admin/bans");
-  redirect(`/admin/bans?ok=${encodeURIComponent("Removed a strike.")}`);
+  if (base !== "/admin/bans") revalidatePath(base);
+  redirect(`${base}?ok=${encodeURIComponent("Removed a strike.")}`);
 }
