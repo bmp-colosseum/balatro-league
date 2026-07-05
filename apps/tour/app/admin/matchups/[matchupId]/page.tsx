@@ -10,15 +10,13 @@ import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { SetReportControls } from "@/components/SetReportControls";
 import {
   makePairAction,
   overridePairAction,
   setSendFirstAction,
   removePairAction,
   resetPairingAction,
-  reportSetAction,
-  unreportSetAction,
-  forfeitSetAction,
   reassignSetAction,
 } from "./actions";
 
@@ -204,42 +202,15 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
                     <td style={{ fontWeight: s.winner === "B" ? 700 : undefined }}>#{s.bSeed} {s.bName}</td>
                     <td className="num">{s.bestOf}</td>
                     <td>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <ActionFlashForm action={reportSetAction}>
-                          <input type="hidden" name="matchupId" value={matchupId} />
-                          <input type="hidden" name="setId" value={s.setId} />
-                          <span className="inline-flex items-center gap-1">
-                            <input
-                              type="number" name="gamesA" min={0} defaultValue={s.teamAGames ?? undefined}
-                              className="w-12 rounded border border-[var(--border)] bg-[var(--surface-2)] px-1 py-0.5 text-center"
-                            />
-                            <span className="sub">–</span>
-                            <input
-                              type="number" name="gamesB" min={0} defaultValue={s.teamBGames ?? undefined}
-                              className="w-12 rounded border border-[var(--border)] bg-[var(--surface-2)] px-1 py-0.5 text-center"
-                            />
-                            <SubmitButton size="sm" variant="secondary" pendingText="…">{s.reported ? "Update" : "Report"}</SubmitButton>
-                          </span>
-                        </ActionFlashForm>
-                        {s.reported && (
-                          <form action={unreportSetAction}>
-                            <input type="hidden" name="matchupId" value={matchupId} />
-                            <input type="hidden" name="setId" value={s.setId} />
-                            <SubmitButton size="sm" variant="secondary" pendingText="…">Clear</SubmitButton>
-                          </form>
-                        )}
-                        <span className="sub" title="0–2 set loss (rules: no reasonable scheduling effort)">FF:</span>
-                        {(["A", "B"] as const).map((side) => (
-                          <form key={side} action={forfeitSetAction}>
-                            <input type="hidden" name="matchupId" value={matchupId} />
-                            <input type="hidden" name="setId" value={s.setId} />
-                            <input type="hidden" name="forfeitTeam" value={side} />
-                            <SubmitButton size="sm" variant="secondary" pendingText="…" title={`${side === "A" ? report.teamAName : report.teamBName} forfeits`}>
-                              {(side === "A" ? report.teamAName : report.teamBName).slice(0, 10)}
-                            </SubmitButton>
-                          </form>
-                        ))}
-                      </div>
+                      <SetReportControls
+                        matchupId={matchupId}
+                        setId={s.setId}
+                        teamAName={report.teamAName}
+                        teamBName={report.teamBName}
+                        reported={s.reported}
+                        teamAGames={s.teamAGames}
+                        teamBGames={s.teamBGames}
+                      />
                       {/* Sub-in for a makeup set (only while unplayed) */}
                       {!s.played && subOpts && (
                         <div className="mt-1 flex flex-wrap items-center gap-2">

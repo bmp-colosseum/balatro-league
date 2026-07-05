@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, Users, Shield, Shuffle, CalendarDays, UserCog, Trophy, Flag, Hash, ExternalLink, Newspaper, ListOrdered, Trash2, Gamepad2 } from "lucide-react";
+import { ArrowLeft, Users, Shield, Shuffle, CalendarDays, UserCog, Trophy, Flag, Hash, ExternalLink, Newspaper, ListOrdered, Trash2, Gamepad2, ClipboardList } from "lucide-react";
 import { getViewer, isAdmin } from "@/lib/auth";
 import { capabilitiesFor, captainTeamsFor, seasonIdByName } from "@/lib/permissions";
 import { getSeasonAdmin, listConferences } from "@/lib/services/seasons";
@@ -52,6 +52,7 @@ export default async function SeasonAdmin({ params }: { params: Promise<{ name: 
     { key: "teams", label: "Teams", icon: Shield, href: `/admin/seasons/${enc}/teams`, count: `${season._count.teamSeasons} teams · ${season._count.conferences} conf`, ready: true, show: to },
     { key: "draft", label: "Draft", icon: Shuffle, href: `/admin/seasons/${enc}/draft`, count: season.draft ? season.draft.state : "not started", ready: true, show: cap("DRAFT") || isCaptain },
     { key: "schedule", label: "Schedule", icon: CalendarDays, href: `/admin/seasons/${enc}/schedule`, count: `${season._count.weeks} weeks`, ready: true, show: to },
+    { key: "audit", label: "Reporting audit", icon: ClipboardList, href: `/admin/seasons/${enc}/audit`, count: "unsettled matchups · who's behind", ready: true, show: to },
     { key: "roster", label: "Roster ops", icon: UserCog, href: `/admin/seasons/${enc}/roster`, count: "subs · drops · DQs", ready: true, show: cap("ROSTERS") || isCaptain },
     { key: "playoffs", label: "Playoffs", icon: Trophy, href: `/admin/seasons/${enc}/playoffs`, count: season.state === "PLAYOFFS" || season.state === "DONE" ? `bracket · ${season.state}` : `field of ${season.playoffTeams}`, ready: true, show: to },
     { key: "end", label: "Season end", icon: Flag, href: `/admin/seasons/${enc}/end`, count: season.state === "DONE" ? "crowned · awards" : "crown + awards", ready: true, show: to },
