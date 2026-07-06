@@ -30,7 +30,7 @@ import {
 import { MatchSessionState, Prisma, type MatchSession } from "@prisma/client";
 import { enqueueAnnounceResult } from "../queue.js";
 import { announceChallengeResult } from "../announce.js";
-import { SYSTEM_ACTOR, recordAudit } from "../audit.js";
+import { SYSTEM_ACTOR, recordAudit, actorFromInteractionUser } from "../audit.js";
 import { isCanonicalDeck } from "../balatro-info.js";
 import { resolveChallengesChannelId } from "../challenges-channel.js";
 import { ensureLeagueMatchesChannel } from "../league-matches-channel.js";
@@ -2012,7 +2012,13 @@ async function handleCancelVote(interaction: ButtonInteraction, session: MatchSe
   }
   const { playerA, playerB } = await loadPlayers(session);
   if (interaction.user.id !== playerA.discordId && interaction.user.id !== playerB.discordId) {
-    return reply(interaction, "Only the two players in this match can cancel it.");
+    // Admins can cancel in-progress matches unilaterally — a single click ends
+    // it, no second vote. Same effect as the /admin cancel-match slash command
+    // but straight from the thread's Cancel button.
+    if (await isMatchAdmin(interaction)) {
+      return finalizeCancel(interaction, session, true);
+    }
+    return reply(interaction, "Only the two players in this match (or an admin) can cancel it.");
   }
   const voterId = interaction.user.id === playerA.discordId ? session.playerAId : session.playerBId;
 
@@ -2040,9 +2046,10 @@ async function handleCancelVote(interaction: ButtonInteraction, session: MatchSe
   return reply(interaction, "You voted to cancel — your opponent has to click Cancel match too.");
 }
 
-// Both players agreed → flip to CANCELLED, record audit, re-render, close
-// the thread. Called from the opponent's second cancel click.
-async function finalizeCancel(interaction: ButtonInteraction, session: MatchSession) {
+// Flip to CANCELLED, record audit, re-render, close the thread. Called from
+// the opponent's second cancel click (mutual consent), OR from an admin's
+// single click (asAdmin=true — unilateral, audited to the acting admin).
+async function finalizeCancel(interaction: ButtonInteraction, session: MatchSession, asAdmin = false) {
   const updated = await updateSession(session, {
     state: MatchSessionState.CANCELLED,
     cancelInitiatorPlayerId: null,
@@ -2050,11 +2057,13 @@ async function finalizeCancel(interaction: ButtonInteraction, session: MatchSess
   });
   if (!updated) return raceLost(interaction);
   recordAudit({
-    actor: SYSTEM_ACTOR,
-    action: "match.cancel-player",
+    actor: asAdmin ? actorFromInteractionUser(interaction.user) : SYSTEM_ACTOR,
+    action: asAdmin ? "match.cancel-admin" : "match.cancel-player",
     targetType: "MatchSession",
     targetId: updated.id,
-    summary: `Both players agreed to cancel match ${updated.id.slice(-6)}`,
+    summary: asAdmin
+      ? `Admin cancelled match ${updated.id.slice(-6)} (was ${session.state})`
+      : `Both players agreed to cancel match ${updated.id.slice(-6)}`,
     metadata: {
       previousState: session.state,
       playerAId: session.playerAId,
@@ -2062,6 +2071,7 @@ async function finalizeCancel(interaction: ButtonInteraction, session: MatchSess
     },
   });
   await refreshMessage(interaction, updated);
+  if (asAdmin) await reply(interaction, "Match cancelled (admin).");
   closeMatchChannel(interaction, updated.id, updated.threadId).catch(() => {});
 }
 
