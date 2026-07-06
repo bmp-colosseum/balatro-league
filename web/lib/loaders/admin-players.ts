@@ -91,6 +91,10 @@ export interface AdminDivisionDetailData {
     b: { id: string; displayName: string };
   }>;
   playerById: Map<string, { id: string; displayName: string }>;
+  // Net life differential per player across the division's confirmed regular-season
+  // games: +winnerLives when they won a game, −winnerLives when an opponent beat
+  // them. Shown next to the resolve-tie form as the tiebreaker reference.
+  lifeDiffByPlayer: Record<string, number>;
 }
 
 export async function loadAdminDivisionDetail(
@@ -145,6 +149,25 @@ export async function loadAdminDivisionDetail(
   const playerById = new Map(
     division.members.map((m) => [m.playerId, { id: m.player.id, displayName: m.player.displayName }]),
   );
+
+  // Net life differential per player (tiebreaker reference for the resolve-tie
+  // form). Only confirmed regular-season (BO2) games with a captured winnerLives.
+  const livesGames = await prisma.game.findMany({
+    where: {
+      winnerId: { not: null },
+      winnerLives: { not: null },
+      match: { divisionId, status: "CONFIRMED", format: "LEAGUE_BO2" },
+    },
+    select: { winnerId: true, winnerLives: true, match: { select: { playerAId: true, playerBId: true } } },
+  });
+  const lifeDiffByPlayer: Record<string, number> = {};
+  for (const g of livesGames) {
+    const winner = g.winnerId!;
+    const lives = g.winnerLives!;
+    const loser = g.match.playerAId === winner ? g.match.playerBId : g.match.playerAId;
+    lifeDiffByPlayer[winner] = (lifeDiffByPlayer[winner] ?? 0) + lives;
+    lifeDiffByPlayer[loser] = (lifeDiffByPlayer[loser] ?? 0) - lives;
+  }
 
   const activeMembers = division.members.filter((m) => m.status === "ACTIVE");
   const playedKey = (a: string, b: string) => {
@@ -212,6 +235,7 @@ export async function loadAdminDivisionDetail(
     standings,
     unplayed,
     playerById,
+    lifeDiffByPlayer,
   };
 }
 

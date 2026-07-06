@@ -448,7 +448,7 @@ function AdminSection({
   adminData: NonNullable<Awaited<ReturnType<typeof loadAdminDivisionDetail>>>;
   tieGroups: TieGroup[];
 }) {
-  const { division, members, pairings, shootouts, unplayed, playerById } = adminData;
+  const { division, members, pairings, shootouts, unplayed, playerById, lifeDiffByPlayer } = adminData;
   return (
     <>
       <div className="card card-accent">
@@ -712,14 +712,27 @@ function AdminSection({
           with each other (e.g. <code>1, 2, 2</code> = one winner, the other two left level). Leave
           everyone else blank. Re-submitting overwrites this group.
         </p>
-        <form action={resolveTieAction} style={{ display: "grid", gap: 4, maxWidth: 360 }}>
+        <form action={resolveTieAction} style={{ display: "grid", gap: 4, maxWidth: 380 }}>
           <input type="hidden" name="divisionId" value={division.id} />
-          {members.map((m) => (
-            <label key={m.playerId} style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 13 }}>{m.player.displayName}</span>
-              <Input type="number" name={`place_${m.playerId}`} min={1} placeholder="—" className="w-16" />
-            </label>
-          ))}
+          {members.map((m) => {
+            const diff = lifeDiffByPlayer[m.playerId];
+            return (
+              <label key={m.playerId} style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 13 }}>
+                  {m.player.displayName}
+                  {diff !== undefined && (
+                    <span
+                      title="Net lives across the division's confirmed games (lives kept in wins − opponents' lives in your losses)"
+                      style={{ fontSize: 11, marginLeft: 6, fontVariantNumeric: "tabular-nums", color: diff > 0 ? "var(--success)" : diff < 0 ? "var(--danger)" : "var(--muted)" }}
+                    >
+                      {diff > 0 ? `+${diff}` : diff} ♥
+                    </span>
+                  )}
+                </span>
+                <Input type="number" name={`place_${m.playerId}`} min={1} placeholder="—" className="w-16" />
+              </label>
+            );
+          })}
           <Button type="submit" variant="secondary" style={{ marginTop: 4 }}>Resolve tie</Button>
         </form>
       </div>
