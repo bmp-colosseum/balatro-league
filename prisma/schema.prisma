@@ -1090,3 +1090,46 @@ model ThreadMessageAttachment {
 
   @@index([messageId])
 }
+
+// Inbound DM a player sent the bot. The bot has no conversational logic; it just
+// captures what people send so staff can read + reply from the web DM console
+// (/admin/dms). Idempotent on discordMessageId so a re-delivered gateway event
+// can't double-insert. status drives the unread badge: unread -> read -> replied.
+// Replies are sent from the web (enqueueDm) and stamp repliedAt/repliedBy/replyText.
+model InboundDm {
+  id               String    @id @default(cuid())
+  discordMessageId String    @unique
+  authorDiscordId  String
+  authorName       String // display-name snapshot at receipt
+  content          String    @db.Text // "" if attachments-only
+  attachmentsJson  String?   @db.Text // JSON array of { filename, url }
+  receivedAt       DateTime // Discord message timestamp
+  capturedAt       DateTime  @default(now())
+  status           String    @default("unread") // unread | read | replied
+  readAt           DateTime?
+  repliedAt        DateTime?
+  repliedBy        String? // admin discordId who replied
+  replyText        String?   @db.Text // what staff sent back (for the thread view)
+
+  @@index([status, receivedAt])
+  @@index([authorDiscordId])
+}
+
+// One row per outbound DM the bot tried to send, so staff can see delivery on the
+// web (who got it, who couldn't be reached). status: sent | failed. errorCode is
+// the Discord code (50007 = recipient has DMs closed). batchId + batchKind group
+// a mass-send (e.g. season-start:<seasonId>) for a delivery summary.
+model DmDelivery {
+  id        String   @id @default(cuid())
+  batchId   String? // groups a mass-send; null for one-offs
+  batchKind String? // season-start | reminder | reply | schedule-change | ...
+  discordId String
+  status    String // sent | failed
+  errorCode Int? // Discord error code on failure (50007 = DMs closed)
+  errorMsg  String?  @db.Text
+  sentAt    DateTime @default(now())
+
+  @@index([batchId])
+  @@index([status, sentAt])
+  @@index([sentAt])
+}

@@ -46,7 +46,15 @@ async function ensureStarted(): Promise<void> {
   return globalThis.__pgbossStart;
 }
 
-export async function enqueueDm(job: { discordId: string; content: string }): Promise<void> {
+export async function enqueueDm(job: {
+  discordId: string;
+  content: string;
+  // Optional grouping so the bot's notify.dm worker records delivery
+  // (DmDelivery) tagged to this send — e.g. batchKind "reply" for a DM sent from
+  // the web DM console.
+  batchId?: string;
+  batchKind?: string;
+}): Promise<void> {
   await ensureStarted();
   await getBoss().send("notify.dm", job, {
     retryLimit: 3,

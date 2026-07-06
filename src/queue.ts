@@ -155,7 +155,7 @@ export async function initQueue(): Promise<void> {
     { batchSize: 1, pollingIntervalSeconds: 5 },
     async (jobs: Job<DmJob>[]) => {
       for (const job of jobs) {
-        const { discordId, content } = job.data;
+        const { discordId, content, batchId, batchKind } = job.data;
         const client = tryGetDiscordClient();
         if (!client) {
           // Enqueued during boot before login — throw so it retries rather
@@ -165,14 +165,25 @@ export async function initQueue(): Promise<void> {
         try {
           const user = await client.users.fetch(discordId);
           await user.send({ content });
+          await recordDmDelivery({ discordId, batchId, batchKind, status: "sent" });
         } catch (err) {
           // Permanently undeliverable (DMs off / blocked / no mutual guilds /
-          // unknown user) — skip silently, don't retry (a retry can't succeed).
+          // unknown user) - skip silently, don't retry (a retry can't succeed).
+          // Record it as failed so the web DM console shows who couldn't be reached.
           if (isUndeliverableDm(err)) {
-            console.warn(`[notify.dm] ${discordId} undeliverable — skipping:`, (err as Error)?.message);
+            const code = (err as { code?: number })?.code;
+            console.warn(`[notify.dm] ${discordId} undeliverable - skipping:`, (err as Error)?.message);
+            await recordDmDelivery({
+              discordId,
+              batchId,
+              batchKind,
+              status: "failed",
+              errorCode: typeof code === "number" ? code : null,
+              errorMsg: (err as Error)?.message ?? null,
+            });
             return;
           }
-          console.warn(`[notify.dm] send to ${discordId} failed — will retry:`, err);
+          console.warn(`[notify.dm] send to ${discordId} failed - will retry:`, err);
           throw err;
         }
       }
@@ -715,6 +726,36 @@ interface AnnounceResultJob {
 interface DmJob {
   discordId: string;
   content: string;
+  // Optional grouping so the notify.dm worker can record delivery (DmDelivery)
+  // tagged to a mass-send (e.g. season-start:<seasonId>) or a web reply.
+  batchId?: string;
+  batchKind?: string;
+}
+
+// Best-effort record of one outbound DM attempt so the web DM console can show
+// delivery (who got it, who couldn't be reached). Never throws into the worker.
+async function recordDmDelivery(row: {
+  discordId: string;
+  batchId?: string;
+  batchKind?: string;
+  status: "sent" | "failed";
+  errorCode?: number | null;
+  errorMsg?: string | null;
+}): Promise<void> {
+  try {
+    await prisma.dmDelivery.create({
+      data: {
+        discordId: row.discordId,
+        batchId: row.batchId ?? null,
+        batchKind: row.batchKind ?? null,
+        status: row.status,
+        errorCode: row.errorCode ?? null,
+        errorMsg: row.errorMsg ?? null,
+      },
+    });
+  } catch (err) {
+    console.warn("[notify.dm] failed to record delivery:", err);
+  }
 }
 
 interface StripRoleJob {
@@ -1124,7 +1165,12 @@ async function queueSeasonOnboardingDms(seasonId: string): Promise<void> {
         `**Your matchups this season:**\n${oppLine}\n\n` +
         `Play each **2 games** — just run \`/start-match @opponent\` and it guides you through it. ` +
         `Track your progress with \`/standings\`, and run \`/help\` anytime for how it all works. Good luck!`;
-      await enqueueDm({ discordId: m.player.discordId, content }).catch((err) =>
+      await enqueueDm({
+        discordId: m.player.discordId,
+        content,
+        batchId: `season-start:${seasonId}`,
+        batchKind: "season-start",
+      }).catch((err) =>
         console.warn(`[season.onboard] enqueue DM failed for ${m.player.discordId}:`, err),
       );
     }

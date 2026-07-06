@@ -8,6 +8,7 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { hasDevOpsBinding } from "@/lib/admin";
 import { ADMIN_LINKS, type AdminNavLink } from "@/lib/nav-links";
+import { unreadDmCount } from "@/lib/loaders/dms";
 
 async function canSeeDevOpsLinks(): Promise<boolean> {
   const session = await auth();
@@ -24,7 +25,7 @@ const linkClass = (isActive: boolean) =>
   (isActive ? "bg-[var(--bg)] text-[var(--accent-2)]" : "text-[var(--muted)] hover:text-foreground");
 
 export async function AdminNav({ activePath }: { activePath: string }) {
-  const showDevOps = await canSeeDevOpsLinks();
+  const [showDevOps, unreadDms] = await Promise.all([canSeeDevOpsLinks(), unreadDmCount()]);
   const visible = (l: AdminNavLink) => !l.devOpsOnly || showDevOps;
   const isActive = (l: AdminNavLink) => (l.exact ? activePath === l.href : activePath.startsWith(l.href));
   const mainLinks = ADMIN_LINKS.filter((l) => !l.system && visible(l));
@@ -37,6 +38,14 @@ export async function AdminNav({ activePath }: { activePath: string }) {
         {mainLinks.map((link) => (
           <Link key={link.href} href={link.href} className={linkClass(isActive(link))}>
             {link.label}
+            {link.href === "/admin/dms" && unreadDms > 0 && (
+              <span
+                className="ml-1.5 inline-flex items-center justify-center rounded-full px-1.5 text-[10px] font-semibold leading-4 text-white"
+                style={{ background: "var(--danger)" }}
+              >
+                {unreadDms}
+              </span>
+            )}
           </Link>
         ))}
         {systemLinks.length > 0 && (

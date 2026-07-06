@@ -1,5 +1,6 @@
 import { Client, Events, GatewayIntentBits, MessageFlags, Partials } from "discord.js";
 import { captureCreate, captureDelete, captureEdit } from "./mod-log.js";
+import { captureInboundDm } from "./inbound-dm.js";
 import { ensureBalatroEmojis } from "./balatro-emojis.js";
 import { ensureCommandsRegistered } from "./commands/register.js";
 import { checkChannelScope } from "./command-channels.js";
@@ -40,6 +41,11 @@ const INTENTS_FULL = [
   GatewayIntentBits.Guilds,
   GatewayIntentBits.GuildMessages,
   GatewayIntentBits.MessageContent,
+  // DirectMessages (non-privileged) lets the bot RECEIVE DMs players send it, so
+  // the web DM console can show + reply to them. DM content is readable without
+  // the privileged gate (the bot is the recipient). Partials.Channel/Message
+  // below are required to get the event for uncached DM channels.
+  GatewayIntentBits.DirectMessages,
   // Privileged: the full-member-roster sync. If this one isn't enabled in the portal,
   // the login ladder below drops to INTENTS_MESSAGES (keeping MessageContent) so adding
   // it can NEVER cost us moderation capture — the sync just no-ops until it's on.
@@ -49,6 +55,7 @@ const INTENTS_MESSAGES = [
   GatewayIntentBits.Guilds,
   GatewayIntentBits.GuildMessages,
   GatewayIntentBits.MessageContent,
+  GatewayIntentBits.DirectMessages,
 ];
 const INTENTS_CORE = [GatewayIntentBits.Guilds];
 
@@ -62,6 +69,9 @@ function createClient(intents: GatewayIntentBits[]): Client {
 // Fire-and-forget; capture must never disrupt the match flow.
 client.on(Events.MessageCreate, (message) => {
   captureCreate(message).catch(() => {});
+  // Capture inbound DMs players send the bot -> web DM console. Scoped to DMs
+  // inside captureInboundDm; guild messages are ignored there.
+  captureInboundDm(message).catch(() => {});
 });
 client.on(Events.MessageUpdate, (_oldMessage, newMessage) => {
   captureEdit(newMessage).catch(() => {});
