@@ -85,10 +85,13 @@ export async function updateSeasonSettingsAction(_prev: ActionResult, formData: 
   const name = String(formData.get("name") ?? "");
   try {
     await updateSeason(name, {
-      format: String(formData.get("format") ?? "") === "SWISS" ? "SWISS" : "CONFERENCES",
+      // Only patch fields the submitting form actually carried -- the locked-season
+      // mini-form posts just defaultBestOf, and must not flip format/size defaults.
+      ...(formData.get("format") != null ? { format: formData.get("format") === "SWISS" ? "SWISS" as const : "CONFERENCES" as const } : {}),
       teamSize: Number(formData.get("teamSize")) || undefined,
       setsToWin: Number(formData.get("setsToWin")) || undefined,
       playoffTeams: Number(formData.get("playoffTeams")) || undefined,
+      defaultBestOf: Number(formData.get("defaultBestOf")) || undefined,
     });
     revSeason(name);
     return { ok: true, message: "Settings saved." };

@@ -68,7 +68,7 @@ export async function createSeason(input: CreateSeasonInput) {
       setsToWin: Number(input.setsToWin) || majority(teamSize),
       conferenceCount: Number(input.conferenceCount) || 2,
       playoffTeams: Number(input.playoffTeams) || 8,
-      defaultBestOf: Number(input.defaultBestOf) || 5,
+      defaultBestOf: Number(input.defaultBestOf) || 3, // sets are Bo3 unless players agree higher
       state: "SIGNUPS",
     },
   });
@@ -148,6 +148,7 @@ export interface UpdateSeasonInput {
   setsToWin?: number;
   conferenceCount?: number;
   playoffTeams?: number;
+  defaultBestOf?: number; // per-set default (Bo3 normally) -- NOT structure, editable any time
   state?: "SIGNUPS" | "SIGNUPS_CLOSED" | "DRAFTING" | "REGULAR" | "PLAYOFFS" | "DONE";
 }
 
@@ -167,6 +168,7 @@ export async function updateSeason(name: string, patch: UpdateSeasonInput) {
       ...(setsToWin != null ? { setsToWin } : {}),
       ...(patch.conferenceCount != null ? { conferenceCount: Number(patch.conferenceCount) } : {}),
       ...(patch.playoffTeams != null ? { playoffTeams: Number(patch.playoffTeams) } : {}),
+      ...(patch.defaultBestOf != null ? { defaultBestOf: Math.max(1, Number(patch.defaultBestOf) || 3) } : {}),
       ...(patch.state ? { state: patch.state } : {}),
     },
   });

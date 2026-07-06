@@ -126,10 +126,19 @@ export default async function SeasonAdmin({ params }: { params: Promise<{ name: 
               <div className="grid grid-3">
                 <div className="stat"><div className="label">Format</div><div className="value">{season.format === "CONFERENCES" ? "Conf" : "Swiss"}</div></div>
                 <div className="stat"><div className="label">Team size</div><div className="value">{season.teamSize}</div><div className="muted">{season.setsToWin} sets to win</div></div>
-                <div className="stat"><div className="label">Best-of</div><div className="value">{season.defaultBestOf}</div><div className="muted">default per set</div></div>
                 <div className="stat"><div className="label">Conferences</div><div className="value">{season.conferenceCount}</div></div>
                 <div className="stat"><div className="label">Playoff field</div><div className="value">{season.playoffTeams}</div><div className="muted">teams</div></div>
               </div>
+              {/* Best-of is a per-set DEFAULT, not structure — new sets pair at this Bo,
+                  so it stays editable even once the draft locks the rest. */}
+              <ActionFlashForm action={updateSeasonSettingsAction} className="mt-3 flex flex-wrap items-end gap-2">
+                <input type="hidden" name="name" value={season.name} />
+                <label className="grid gap-1 text-sm">
+                  <span className="muted">Best-of (default per new set)</span>
+                  <input type="number" name="defaultBestOf" min={1} max={9} step={2} defaultValue={season.defaultBestOf} className={inputCls} style={{ width: 80 }} />
+                </label>
+                <SubmitButton variant="secondary" size="sm">Save best-of</SubmitButton>
+              </ActionFlashForm>
             </>
           ) : (
             <ActionFlashForm action={updateSeasonSettingsAction} className="flex flex-wrap items-end gap-3">
@@ -142,6 +151,10 @@ export default async function SeasonAdmin({ params }: { params: Promise<{ name: 
               <label className="grid gap-1 text-sm">
                 <span className="muted">Playoff teams</span>
                 <input type="number" name="playoffTeams" min={2} max={32} defaultValue={season.playoffTeams} className={inputCls} style={{ width: 80 }} />
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="muted">Best-of (per set)</span>
+                <input type="number" name="defaultBestOf" min={1} max={9} step={2} defaultValue={season.defaultBestOf} className={inputCls} style={{ width: 80 }} />
               </label>
               <SubmitButton variant="secondary">Save settings</SubmitButton>
             </ActionFlashForm>

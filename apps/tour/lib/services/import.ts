@@ -454,8 +454,8 @@ export async function importSeasonShellsFromXlsx(dir = sheetsDir()) {
     const teamSize = Math.max(11, ...draftTeams.map((t) => 1 + t.players.length + t.subs.length));
     const season = await prisma.tourSeason.upsert({
       where: { name: `Team Tour ${num}` },
-      create: { name: `Team Tour ${num}`, teamSize, setsToWin: majority(teamSize), defaultBestOf: 5, state: "DONE", format: isConf ? "CONFERENCES" : "SWISS" },
-      update: { format: isConf ? "CONFERENCES" : "SWISS" },
+      create: { name: `Team Tour ${num}`, teamSize, setsToWin: majority(teamSize), defaultBestOf: 3, state: "DONE", format: isConf ? "CONFERENCES" : "SWISS" },
+      update: { format: isConf ? "CONFERENCES" : "SWISS", defaultBestOf: 3 },
     });
     // Clean rebuild: drop the season's old team-level schedule (Week/Matchup from a prior
     // HTML conference import) — the all-xlsx import is player-set based, not Matchup based.
