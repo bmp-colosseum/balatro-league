@@ -10,16 +10,22 @@ import { prisma } from "@/lib/prisma";
 import { loadDivisionStandings } from "@/lib/standings-cache";
 
 export type H2HResult = "win" | "loss" | "draw" | "none";
+// One game of a matchup, from the row player's perspective.
+export interface GameLife {
+  num: number;
+  won: boolean; // did the row player win this game
+  lives: number | null; // the winner's remaining lives (null = not recorded)
+}
 export interface TieH2H {
   oppId: string;
   oppName: string;
   result: H2HResult; // from THIS member's perspective
   score: string; // e.g. "2-0", "1-1", or "—" if not played
+  games: GameLife[]; // per-game winner-lives for this matchup
 }
 export interface TieMember {
   playerId: string;
   displayName: string;
-  netLives: number; // life differential vs the other tied players
   h2h: TieH2H[]; // vs each other tied member
 }
 export interface TieGroup {
@@ -63,7 +69,7 @@ export async function loadTieHelper(divisionId: string): Promise<TieGroup[]> {
         gamesWonA: true,
         gamesWonB: true,
         winnerId: true,
-        games: { select: { winnerId: true, winnerLives: true } },
+        games: { select: { num: true, winnerId: true, winnerLives: true } },
       },
     }),
     prisma.match.findMany({
@@ -90,31 +96,27 @@ export async function loadTieHelper(divisionId: string): Promise<TieGroup[]> {
 
     const members: TieMember[] = chain.map((r) => {
       const me = r.player.id;
-      let netLives = 0;
       const h2h: TieH2H[] = [];
       for (const oppId of memberIds) {
         if (oppId === me) continue;
         const m = matchByPair.get(pairKey(me, oppId));
-        // Net-life: my lives when I won a game vs them, minus theirs when they won.
-        if (m) {
-          for (const g of m.games) {
-            if (g.winnerLives == null || !g.winnerId) continue;
-            if (g.winnerId === me) netLives += g.winnerLives;
-            else if (g.winnerId === oppId) netLives -= g.winnerLives;
-          }
-        }
-        // H2H result from my perspective.
+        // H2H result from my perspective + the winner-lives of each game.
         let result: H2HResult = "none";
         let score = "—";
+        const games: GameLife[] = [];
         if (m) {
           const myGames = m.playerAId === me ? m.gamesWonA : m.gamesWonB;
           const oppGames = m.playerAId === me ? m.gamesWonB : m.gamesWonA;
           score = `${myGames}-${oppGames}`;
           result = myGames > oppGames ? "win" : myGames < oppGames ? "loss" : "draw";
+          for (const g of [...m.games].sort((a, b) => a.num - b.num)) {
+            if (!g.winnerId) continue;
+            games.push({ num: g.num, won: g.winnerId === me, lives: g.winnerLives });
+          }
         }
-        h2h.push({ oppId, oppName: nameById.get(oppId) ?? oppId, result, score });
+        h2h.push({ oppId, oppName: nameById.get(oppId) ?? oppId, result, score, games });
       }
-      return { playerId: me, displayName: r.player.displayName, netLives, h2h };
+      return { playerId: me, displayName: r.player.displayName, h2h };
     });
 
     // Decided-check + shootout list (each unordered pair once).

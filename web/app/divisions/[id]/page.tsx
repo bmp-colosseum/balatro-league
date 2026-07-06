@@ -747,8 +747,10 @@ function TieHelper({ groups }: { groups: TieGroup[] }) {
       <strong>🔗 Ties to resolve</strong>
       <p className="muted" style={{ fontSize: 12, margin: "4px 0 8px" }}>
         Players level on points that the normal tiebreakers can&apos;t separate. The grid is head-to-head{" "}
-        <em>among the tied players only</em> (✓ = beat them, ✗ = lost, = drew), plus net lives between them and any
-        shootout already recorded — use it to decide the placements below.
+        <em>among the tied players only</em> (✓ = beat them, ✗ = lost, = drew), with each game&apos;s winner-lives
+        below the score — <span style={{ color: "var(--success)" }}>green</span> = lives the row player had when they
+        won that game, <span style={{ color: "var(--danger)" }}>red</span> = the opponent&apos;s lives when they won.
+        Plus any shootout already recorded — use it to decide the placements below.
       </p>
       {groups.length === 0 ? (
         <p className="muted" style={{ fontSize: 13, margin: 0 }}>No unresolved ties — everyone&apos;s separated.</p>
@@ -772,7 +774,6 @@ function TieHelper({ groups }: { groups: TieGroup[] }) {
                       {g.members.map((m) => (
                         <th key={m.playerId} style={{ textAlign: "center", fontSize: 11 }}>{m.displayName}</th>
                       ))}
-                      <th style={{ textAlign: "right", fontSize: 11 }} title="Life differential vs the other tied players">Net ♥</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -787,14 +788,24 @@ function TieHelper({ groups }: { groups: TieGroup[] }) {
                             const c = cell(h?.result ?? "none");
                             const mark = h?.result === "win" ? "✓" : h?.result === "loss" ? "✗" : h?.result === "draw" ? "=" : "—";
                             return (
-                              <td key={o.playerId} style={{ textAlign: "center", background: c.bg, color: c.fg, fontVariantNumeric: "tabular-nums" }}>
-                                {mark} {h && h.result !== "none" ? h.score : ""}
+                              <td key={o.playerId} style={{ textAlign: "center", background: c.bg, color: c.fg, fontVariantNumeric: "tabular-nums", verticalAlign: "top" }}>
+                                <div>{mark} {h && h.result !== "none" ? h.score : ""}</div>
+                                {h && h.games.length > 0 && (
+                                  <div style={{ fontSize: 10, marginTop: 1 }}>
+                                    {h.games.map((gm, k) => (
+                                      <span
+                                        key={k}
+                                        style={{ marginRight: 4, color: gm.won ? "var(--success)" : "var(--danger)" }}
+                                        title={`Game ${gm.num}: ${gm.won ? "won" : "lost"}${gm.lives != null ? `, ${gm.lives} lives` : ""}`}
+                                      >
+                                        {gm.lives != null ? `♥${gm.lives}` : "♥?"}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
                               </td>
                             );
                           })}
-                          <td style={{ textAlign: "right", fontWeight: 600, color: m.netLives > 0 ? "var(--success)" : m.netLives < 0 ? "var(--danger)" : "var(--muted)", fontVariantNumeric: "tabular-nums" }}>
-                            {m.netLives > 0 ? `+${m.netLives}` : m.netLives}
-                          </td>
                         </tr>
                       );
                     })}
