@@ -3,7 +3,7 @@
 // the matchup console) so the TO can clear stragglers without hopping pages. Every
 // row also links to the full console. Live-refreshes on any set activity ("sets").
 import Link from "next/link";
-import { ArrowLeft, ClipboardList } from "lucide-react";
+import { ArrowLeft, ClipboardList, Grid3x3 } from "lucide-react";
 import { isAdmin } from "@/lib/auth";
 import { getSeasonAudit, type PendingCategory } from "@/lib/services/audit";
 import { Callout } from "@/components/Callout";
@@ -74,6 +74,11 @@ export default async function AuditPage({ params }: { params: Promise<{ name: st
       <p className="sub">
         {totals.decided} of {totals.matchups} matchups settled ({pct}%) {"·"} {totals.pending} outstanding
         {hasSeries && <> {"·"} {pendingSeries.length} playoff series undecided</>}
+      </p>
+      <p>
+        <Link href={`/admin/seasons/${enc}/grid`} className="inline-flex items-center gap-1">
+          <Grid3x3 className="size-4" /> Coverage grid {"—"} who played whom, where the holes are {"→"}
+        </Link>
       </p>
 
       {totals.matchups === 0 && importedSetCount > 0 ? (
