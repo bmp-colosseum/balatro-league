@@ -27,14 +27,18 @@ export function SignupMmrTable({
   bmpCurrentSeason,
   roundId,
   removeAction,
+  banAction,
 }: {
   rows: SignupMmrRow[];
   bmpCurrentSeason: string | null;
   // When both are provided, each row gets a Remove (withdraw) button.
   roundId?: string;
   removeAction?: (formData: FormData) => void | Promise<void>;
+  // When provided (alongside roundId), each row also gets a Remove + ban button.
+  banAction?: (formData: FormData) => void | Promise<void>;
 }) {
   const canRemove = !!roundId && !!removeAction;
+  const canBan = !!roundId && !!banAction;
   const [sortKey, setSortKey] = useState<SortKey>("mmr");
   const [dir, setDir] = useState<"asc" | "desc">("desc");
 
@@ -161,17 +165,33 @@ export function SignupMmrTable({
                   </td>
                   {canRemove && (
                     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                      <form action={removeAction} style={{ display: "inline" }}>
-                        <input type="hidden" name="roundId" value={roundId} />
-                        <input type="hidden" name="discordId" value={r.discordId} />
-                        <ConfirmButton
-                          variant="secondary"
-                          message={`Remove ${r.globalName ?? r.username} from this signup round? They'll drop off the roster and won't be built into the season. (They can sign up again unless you ban them.)`}
-                          style={{ fontSize: 11, padding: "2px 8px" }}
-                        >
-                          Remove
-                        </ConfirmButton>
-                      </form>
+                      <div style={{ display: "inline-flex", gap: 6, justifyContent: "flex-end" }}>
+                        <form action={removeAction} style={{ display: "inline" }}>
+                          <input type="hidden" name="roundId" value={roundId} />
+                          <input type="hidden" name="discordId" value={r.discordId} />
+                          <ConfirmButton
+                            variant="secondary"
+                            message={`Remove ${r.globalName ?? r.username} from this signup round? They'll drop off the roster and won't be built into the season. (They can sign up again unless you ban them.)`}
+                            style={{ fontSize: 11, padding: "2px 8px" }}
+                          >
+                            Remove
+                          </ConfirmButton>
+                        </form>
+                        {canBan && (
+                          <form action={banAction} style={{ display: "inline" }}>
+                            <input type="hidden" name="roundId" value={roundId} />
+                            <input type="hidden" name="discordId" value={r.discordId} />
+                            <input type="hidden" name="displayName" value={r.globalName ?? r.username} />
+                            <ConfirmButton
+                              variant="destructive"
+                              message={`Remove ${r.globalName ?? r.username} from this round AND ban them for one season? They'll be blocked from signing up until the ban auto-lifts one season from now. (You can adjust or lift it from /admin/bans.)`}
+                              style={{ fontSize: 11, padding: "2px 8px" }}
+                            >
+                              Remove + ban 1 szn
+                            </ConfirmButton>
+                          </form>
+                        )}
+                      </div>
                     </td>
                   )}
                 </tr>

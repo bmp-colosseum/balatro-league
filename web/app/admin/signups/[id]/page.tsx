@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { PlayerSearch } from "@/components/PlayerSearch";
 import { SignupMmrTable } from "@/components/SignupMmrTable";
 import { Callout } from "@/components/Callout";
-import { refreshSignupMmrs, addSignupToRound, withdrawSignupAction } from "./actions";
+import { refreshSignupMmrs, addSignupToRound, withdrawSignupAction, removeAndBanSignupAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -132,7 +132,7 @@ export default async function SignupMmrPage({
         {/* Roster — sortable (click any column header). */}
         <div className="card">
           <strong>Roster ({rows.length})</strong>
-          <SignupMmrTable rows={rows} bmpCurrentSeason={bmpCurrentSeason} roundId={round.id} removeAction={withdrawSignupAction} />
+          <SignupMmrTable rows={rows} bmpCurrentSeason={bmpCurrentSeason} roundId={round.id} removeAction={withdrawSignupAction} banAction={removeAndBanSignupAction} />
         </div>
       </main>
     </>

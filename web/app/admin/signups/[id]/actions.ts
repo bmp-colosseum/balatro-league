@@ -6,8 +6,9 @@ import { requireAdmin } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { enqueueMmrSnapshot } from "@/lib/queue";
 import { resolveDiscordIdToDisplayName } from "@/lib/add-player";
-import { isDiscordIdBanned, isPlayerIdBanned } from "@/lib/bans";
+import { isDiscordIdBanned, isPlayerIdBanned, nextSeasonNumber } from "@/lib/bans";
 import { refreshSignupPost } from "@/lib/signup-discord";
+import { recordAudit, actorFromAdminUser } from "@/lib/audit";
 
 // Add a sign-up to a round straight from the round page — by Discord ID, or an
 // existing player picked by name. Either way it creates a Signup row (so they're
@@ -89,4 +90,36 @@ export async function withdrawSignupAction(formData: FormData) {
   await refreshSignupPost(roundId).catch(() => {});
   revalidatePath(`/admin/signups/${roundId}`);
   redirect(`/admin/signups/${roundId}?ok=${encodeURIComponent("Removed from signups.")}`);
+}
+
+// Remove from the round AND ban the player for one season, so they can't sign up
+// again. Creates a Player row if they don't have one yet (a ban keyed by a
+// missing Player wouldn't block anything). Season ban auto-lifts a season later.
+export async function removeAndBanSignupAction(formData: FormData) {
+  const { user } = await requireAdmin();
+  const roundId = String(formData.get("roundId") ?? "").trim();
+  const discordId = String(formData.get("discordId") ?? "").trim();
+  const displayName = String(formData.get("displayName") ?? "").trim() || discordId;
+  if (!roundId || !discordId) return;
+  const actor = actorFromAdminUser(user);
+  const reason = "Removed from signups (season ban)";
+  const banLiftsAtSeasonNumber = (await nextSeasonNumber()) + 1;
+
+  const player = await prisma.player.upsert({
+    where: { discordId },
+    create: { discordId, displayName, bannedAt: new Date(), bannedReason: reason, bannedBy: actor.discordId, banLiftsAtSeasonNumber },
+    update: { bannedAt: new Date(), bannedReason: reason, bannedBy: actor.discordId, banLiftsAtSeasonNumber },
+  });
+  await prisma.signup.updateMany({ where: { roundId, discordId }, data: { withdrawn: true } });
+  await refreshSignupPost(roundId).catch(() => {});
+  await recordAudit({
+    actor,
+    action: "player.ban",
+    targetType: "Player",
+    targetId: player.id,
+    summary: `Removed ${displayName} from signups + banned for 1 season (through Season ${banLiftsAtSeasonNumber - 1})`,
+    metadata: { reason, banLiftsAtSeasonNumber, roundId },
+  });
+  revalidatePath(`/admin/signups/${roundId}`);
+  redirect(`/admin/signups/${roundId}?ok=${encodeURIComponent(`Removed + banned ${displayName} for 1 season.`)}`);
 }
