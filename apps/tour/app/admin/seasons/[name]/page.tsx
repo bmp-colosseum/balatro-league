@@ -129,15 +129,25 @@ export default async function SeasonAdmin({ params }: { params: Promise<{ name: 
                 <div className="stat"><div className="label">Conferences</div><div className="value">{season.conferenceCount}</div></div>
                 <div className="stat"><div className="label">Playoff field</div><div className="value">{season.playoffTeams}</div><div className="muted">teams</div></div>
               </div>
-              {/* Best-of is a per-set DEFAULT, not structure — new sets pair at this Bo,
-                  so it stays editable even once the draft locks the rest. */}
+              {/* Repairable values — NOT structure. Sets-per-matchup and sets-to-win are
+                  data corrections (imports derived them from roster capacity, subs included,
+                  which inflates them); best-of is the default for newly-paired sets. */}
               <ActionFlashForm action={updateSeasonSettingsAction} className="mt-3 flex flex-wrap items-end gap-2">
                 <input type="hidden" name="name" value={season.name} />
                 <label className="grid gap-1 text-sm">
-                  <span className="muted">Best-of (default per new set)</span>
+                  <span className="muted">Sets per matchup</span>
+                  <input type="number" name="teamSize" min={1} max={25} defaultValue={season.teamSize} className={inputCls} style={{ width: 80 }}
+                    title="How many sets one team-vs-team match has (drives the completeness audit, NOT roster size)" />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="muted">Sets to win</span>
+                  <input type="number" name="setsToWin" min={1} max={25} defaultValue={season.setsToWin} className={inputCls} style={{ width: 80 }} />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="muted">Best-of (per new set)</span>
                   <input type="number" name="defaultBestOf" min={1} max={9} step={2} defaultValue={season.defaultBestOf} className={inputCls} style={{ width: 80 }} />
                 </label>
-                <SubmitButton variant="secondary" size="sm">Save best-of</SubmitButton>
+                <SubmitButton variant="secondary" size="sm">Save</SubmitButton>
               </ActionFlashForm>
             </>
           ) : (

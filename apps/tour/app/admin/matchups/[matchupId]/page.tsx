@@ -12,7 +12,6 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { SetReportControls } from "@/components/SetReportControls";
 import {
-  makePairAction,
   overridePairAction,
   setSendFirstAction,
   removePairAction,
@@ -46,8 +45,6 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
   }
 
   const enc = encodeURIComponent(c.seasonName);
-  const proposing = c.proposerTeam === "B" ? c.teamB : c.teamA;
-  const responding = c.proposerTeam === "B" ? c.teamA : c.teamB;
   const availA = c.teamA.players.filter((p) => !p.paired);
   const availB = c.teamB.players.filter((p) => !p.paired);
 
@@ -66,12 +63,12 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
           </form>
         )}
       </div>
-      <p className="sub">Each player pairs an opponent within ±{c.windowSize} seeds. {c.pairs.length} of {Math.min(c.teamA.players.length, c.teamB.players.length)} sets paired.</p>
+      <p className="sub">{c.pairs.length} of {c.targetPairs} sets paired. As TO you pair any two players directly {"—"} the ±{c.windowSize} window is the captains&apos; negotiation rule, not a gate here.</p>
 
-      {/* Coinflip / send-first */}
+      {/* Coinflip / send-first — only drives the captain-facing negotiation flow. */}
       <div className="card">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="sub">Proposes first:</span>
+          <span className="sub" title="For the captains' live pairing flow: the coinflip winner proposes first. Doesn't affect TO pairing below.">Captain flow {"—"} proposes first:</span>
           {(["A", "B"] as const).map((t) => {
             const team = t === "A" ? c.teamA : c.teamB;
             const active = c.sendFirst === t;
@@ -128,40 +125,22 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
         </div>
       )}
 
-      {/* Next pair / override / done */}
+      {/* Pair the remaining players — one direct TO form, no propose/respond theater. */}
       {c.complete ? (
-        <Callout type="success">All players paired — {c.pairs.length} sets ready to schedule and report.</Callout>
-      ) : c.deadlocked ? (
-        <>
-          <Callout type="danger">
-            Dead-end: the remaining players can&apos;t complete a ±{c.windowSize} pairing. Pair the rest manually (TO override).
-          </Callout>
-          <div className="card">
-            <div className="bracket-title">TO override (bypasses ±{c.windowSize})</div>
-            <ActionFlashForm action={overridePairAction}>
-              <input type="hidden" name="matchupId" value={c.matchupId} />
-              <div className="flex flex-wrap items-end gap-2">
-                <label className="block"><span className="sub">{c.teamA.name}</span><FormSelect name="aPlayerId" options={opts(availA)} /></label>
-                <label className="block"><span className="sub">{c.teamB.name}</span><FormSelect name="bPlayerId" options={opts(availB)} /></label>
-                <SubmitButton variant="secondary" pendingText="Pairing…">Override pair</SubmitButton>
-              </div>
-            </ActionFlashForm>
-          </div>
-        </>
+        <Callout type="success">All {c.targetPairs} sets paired — ready to schedule and report.</Callout>
       ) : (
         <div className="card card-accent">
-          <div className="bracket-title">{proposing.name} proposes · {responding.name} answers within ±{c.windowSize}</div>
-          <ActionFlashForm action={makePairAction}>
+          {c.deadlocked && (
+            <p className="sub" style={{ color: "var(--warning, #f5a524)", marginTop: 0 }}>
+              Heads-up: the remaining players can&apos;t all be paired within ±{c.windowSize} seeds {"—"} some pairs here will be off-window, which is fine by TO authority.
+            </p>
+          )}
+          <div className="bracket-title">Pair players</div>
+          <ActionFlashForm action={overridePairAction}>
             <input type="hidden" name="matchupId" value={c.matchupId} />
             <div className="flex flex-wrap items-end gap-2">
-              <label className="block">
-                <span className="sub">{proposing.name} (proposes)</span>
-                <FormSelect name="proposerPlayerId" options={opts(proposing.players)} />
-              </label>
-              <label className="block">
-                <span className="sub">{responding.name} (responds)</span>
-                <FormSelect name="responderPlayerId" options={opts(responding.players)} />
-              </label>
+              <label className="block"><span className="sub">{c.teamA.name}</span><FormSelect name="aPlayerId" options={opts(availA)} /></label>
+              <label className="block"><span className="sub">{c.teamB.name}</span><FormSelect name="bPlayerId" options={opts(availB)} /></label>
               <SubmitButton pendingText="Pairing…">Pair</SubmitButton>
             </div>
           </ActionFlashForm>

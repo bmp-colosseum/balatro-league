@@ -37,6 +37,7 @@ interface LoadedMatchup {
   seasonId: string;
   seasonName: string;
   defaultBestOf: number;
+  teamSize: number; // sets per matchup -- the pairing TARGET (rosters may hold more/fewer)
   teamA: { id: string; name: string; roster: RosterPlayer[]; captainId: string };
   teamB: { id: string; name: string; roster: RosterPlayer[]; captainId: string };
   nameOf: Map<string, string>;
@@ -85,6 +86,7 @@ async function load(matchupId: string): Promise<LoadedMatchup | null> {
     seasonId: season.id,
     seasonName: season.name,
     defaultBestOf: season.defaultBestOf,
+    teamSize: season.teamSize,
     teamA,
     teamB,
     nameOf,
@@ -112,8 +114,11 @@ export async function getPairingConsole(matchupId: string) {
   if (!m) return null;
   const state = stateFrom(m);
   const paired = new Set(state.pairs.flatMap((p) => [p.aPlayerId, p.bPlayerId]));
-  const complete = isComplete(state);
-  const deadlocked = isDeadlocked(state);
+  // Target = the season's sets-per-matchup, bounded by what the rosters can field --
+  // unequal rosters or benched subs never make a matchup "unfinishable".
+  const complete = isComplete(state, m.teamSize);
+  const deadlocked = isDeadlocked(state, m.teamSize);
+  const targetPairs = Math.min(m.teamSize, m.teamA.roster.length, m.teamB.roster.length);
 
   const decorate = (team: { id: string; name: string; roster: RosterPlayer[] }) => ({
     id: team.id,
@@ -132,6 +137,7 @@ export async function getPairingConsole(matchupId: string) {
     windowSize: SEED_WINDOW,
     complete,
     deadlocked,
+    targetPairs,
     pairs: m.matchup.sets.map((s) => ({
       setId: s.id,
       aName: m.nameOf.get(s.playerAId) ?? s.playerAId,
@@ -295,8 +301,8 @@ export async function getCaptainPairing(matchupId: string, viewerPlayerId: strin
 
   const state = stateFrom(m);
   const paired = new Set(state.pairs.flatMap((p) => [p.aPlayerId, p.bPlayerId]));
-  const complete = isComplete(state);
-  const deadlocked = isDeadlocked(state);
+  const complete = isComplete(state, m.teamSize);
+  const deadlocked = isDeadlocked(state, m.teamSize);
   const myTeam = side === "A" ? m.teamA : m.teamB;
   const oppTeam = side === "A" ? m.teamB : m.teamA;
 

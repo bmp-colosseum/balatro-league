@@ -77,7 +77,7 @@ describe("completion", () => {
   });
 });
 
-describe("dead-end detection (perfect ±2 matching)", () => {
+describe("dead-end detection (±2 matching to the target)", () => {
   it("a solvable roster is not deadlocked", () => {
     const s = initPairing(roster("a", [1, 2]), roster("b", [2, 3]), "A");
     expect(canCompleteMatching(s)).toBe(true);
@@ -100,6 +100,55 @@ describe("dead-end detection (perfect ±2 matching)", () => {
     s = ok(propose(s, "A", "a1")).state;
     s = ok(respond(s, "b1")).state; // fine so far
     // remaining a[2,5] vs b[4,5]: 2-4 (2) ok, 5-5 ok → still matchable
+    expect(isDeadlocked(s)).toBe(false);
+  });
+
+  it("UNEQUAL rosters are not a dead-end -- surplus players sit out", () => {
+    // 3 vs 2: only 2 sets can exist; a3 benches. The old perfect-matching test
+    // false-flagged this ("remaining lists differ in length -> deadlock").
+    const s = initPairing(roster("a", [1, 2, 3]), roster("b", [1, 2]), "A");
+    expect(canCompleteMatching(s)).toBe(true);
+    expect(isDeadlocked(s)).toBe(false);
+  });
+
+  it("completes at the target even with players left over", () => {
+    let s = initPairing(roster("a", [1, 2, 3]), roster("b", [1, 2]), "A");
+    s = ok(propose(s, "A", "a1")).state;
+    s = ok(respond(s, "b1")).state;
+    s = ok(propose(s, "B", "b2")).state;
+    s = ok(respond(s, "a2")).state;
+    expect(isComplete(s)).toBe(true); // 2 pairs = min(3,2); a3 sits out
+  });
+
+  it("an explicit target below roster size governs completion and dead-ends", () => {
+    // Rosters of 4, but the matchup only needs 2 sets (season teamSize 2).
+    let s = initPairing(roster("a", [1, 2, 3, 4]), roster("b", [1, 2, 3, 4]), "A");
+    expect(isComplete(s, 2)).toBe(false);
+    s = ok(propose(s, "A", "a1")).state;
+    s = ok(respond(s, "b1")).state;
+    expect(isComplete(s, 2)).toBe(false);
+    s = ok(propose(s, "B", "b2")).state;
+    s = ok(respond(s, "a2")).state;
+    expect(isComplete(s, 2)).toBe(true); // target reached; a3/a4/b3/b4 sit out
+    expect(isDeadlocked(s, 2)).toBe(false);
+  });
+
+  it("deadlocks only when the remaining players cannot supply the target", () => {
+    // Target 2. a-side has 1,9; b-side 1,2. Only ONE legal pair total (1-1 or 1-2:
+    // a9 reaches nobody) -> max matching 1 < 2 -> dead-end for target 2, fine for 1.
+    const s = initPairing(roster("a", [1, 9]), roster("b", [1, 2]), "A");
+    expect(canCompleteMatching(s, 2)).toBe(false);
+    expect(isDeadlocked(s, 2)).toBe(true);
+    expect(canCompleteMatching(s, 1)).toBe(true);
+    expect(isDeadlocked(s, 1)).toBe(false);
+  });
+
+  it("pairs referencing off-roster subs still count toward the target", () => {
+    // A set was reassigned to a sub who isn't in this week's derived lineup: the
+    // pair consumes a slot even though its player isn't in rosterA/rosterB.
+    const base = initPairing(roster("a", [1, 2]), roster("b", [1, 2]), "A");
+    const s: PairingState = { ...base, pairs: [{ aPlayerId: "sub9", bPlayerId: "b1" }, { aPlayerId: "a2", bPlayerId: "b2" }] };
+    expect(isComplete(s)).toBe(true); // 2 pairs = target, a1 benched by the sub
     expect(isDeadlocked(s)).toBe(false);
   });
 });

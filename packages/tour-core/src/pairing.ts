@@ -117,21 +117,36 @@ export function respond(
   };
 }
 
-/** All players paired and nothing pending. */
-export function isComplete(state: PairingState): boolean {
-  return remainingOf(state, "A").length === 0 && remainingOf(state, "B").length === 0 && !state.pending;
+/**
+ * How many pairs this matchup actually needs: the explicit target (the season's
+ * teamSize — sets per matchup), bounded by what the rosters can field. Rosters can
+ * be UNEQUAL (a drop, extra subs) — the surplus players simply sit out, they don't
+ * make the matchup unfinishable. No explicit target -> pair as many as both sides can.
+ */
+function effectiveTarget(state: PairingState, target?: number): number {
+  const cap = Math.min(state.rosterA.length, state.rosterB.length);
+  return target != null ? Math.min(Math.max(0, Math.trunc(target)), cap) : cap;
+}
+
+/** Enough pairs for the matchup's sets and nothing pending. */
+export function isComplete(state: PairingState, target?: number): boolean {
+  return state.pairs.length >= effectiveTarget(state, target) && !state.pending;
 }
 
 /**
- * Whether the remaining (unpaired) players admit a COMPLETE ±2 pairing — a
- * perfect bipartite matching where edge (a,b) exists iff |a.seed − b.seed| ≤ 2.
- * Kuhn's augmenting-path algorithm (rosters are small). Ignores any pending
- * proposal — it answers "can what's left still be finished?".
+ * Whether the remaining (unpaired) players can still supply the pairs the matchup
+ * needs — a bipartite matching of size >= (target − already-paired), where edge
+ * (a,b) exists iff |a.seed − b.seed| ≤ 2. Kuhn's augmenting-path maximum matching
+ * (rosters are small). NOT a perfect-matching test: unequal rosters or benched
+ * surplus players are fine — only "can we reach the target?" matters. Ignores any
+ * pending proposal — it answers "can what's left still be finished?".
  */
-export function canCompleteMatching(state: PairingState): boolean {
+export function canCompleteMatching(state: PairingState, target?: number): boolean {
+  const needed = effectiveTarget(state, target) - state.pairs.length;
+  if (needed <= 0) return true;
   const A = remainingOf(state, "A");
   const B = remainingOf(state, "B");
-  if (A.length !== B.length) return false;
+  if (Math.min(A.length, B.length) < needed) return false;
 
   const adj: number[][] = A.map((a) =>
     B.reduce<number[]>((acc, b, j) => {
@@ -157,10 +172,10 @@ export function canCompleteMatching(state: PairingState): boolean {
   for (let u = 0; u < A.length; u++) {
     if (augment(u, new Array<boolean>(B.length).fill(false))) matched++;
   }
-  return matched === A.length;
+  return matched >= needed;
 }
 
 /** Not finished AND no valid completion exists → TO override needed (§6.2). */
-export function isDeadlocked(state: PairingState): boolean {
-  return !isComplete(state) && !canCompleteMatching(state);
+export function isDeadlocked(state: PairingState, target?: number): boolean {
+  return !isComplete(state, target) && !canCompleteMatching(state, target);
 }
