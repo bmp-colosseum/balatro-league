@@ -202,6 +202,22 @@ export async function setSendFirst(matchupId: string, team: "A" | "B") {
   await notifyLive(`matchup:${matchupId}`);
 }
 
+// Change a set's best-of directly (players may agree higher/lower; or fix a set
+// created under the wrong season default). Works on played sets too -- the games
+// already recorded stand; only the format label (and future forfeit math) changes.
+export async function setSetBestOf(setId: string, bestOf: number) {
+  const n = Math.trunc(bestOf);
+  if (!Number.isFinite(n) || n < 1 || n > 15) throw new Error("Best-of must be between 1 and 15.");
+  if (n % 2 === 0) throw new Error("Best-of must be odd (Bo1/Bo3/Bo5...).");
+  const set = await prisma.tourSet.findUnique({ where: { id: setId }, select: { matchId: true, matchupId: true } });
+  if (!set) throw new Error("No such set.");
+  await prisma.tourSet.update({ where: { id: setId }, data: { bestOf: n } });
+  // Keep the linked Match's format label in step (it was stamped "BO<n>" at report time).
+  if (set.matchId) await prisma.match.update({ where: { id: set.matchId }, data: { format: `BO${n}` } });
+  if (set.matchupId) await notifyLive(`matchup:${set.matchupId}`);
+  return { bestOf: n };
+}
+
 // Deleting a TourSet doesn't cascade its core Match (Match is referenced by plain
 // id, no relation — the decoupling rule), so drop any linked Match too.
 export async function removePair(setId: string) {

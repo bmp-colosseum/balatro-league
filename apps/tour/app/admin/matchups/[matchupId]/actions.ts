@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { can, matchupScope } from "@/lib/permissions";
-import { makePair, overridePair, setSendFirst, removePair, resetPairing, reassignSetPlayer } from "@/lib/services/pairing";
+import { makePair, overridePair, setSendFirst, removePair, resetPairing, reassignSetPlayer, setSetBestOf } from "@/lib/services/pairing";
 import { reportSet, unreportSet, forfeitSet, dqSet } from "@/lib/services/report";
 import type { ActionResult } from "@/lib/action-result";
 
@@ -110,6 +110,20 @@ export async function dqSetAction(_prev: ActionResult, formData: FormData): Prom
     return { ok: true, message: "Set recorded as a double DQ (0-0, nobody played)." };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "DQ failed." };
+  }
+}
+
+// Edit a set's best-of in place (e.g. fix sets created under the wrong season default).
+export async function setBestOfAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const matchupId = String(formData.get("matchupId") ?? "");
+  if (!(await allow(matchupId))) return { ok: false, message: "Not authorized." };
+  const setId = String(formData.get("setId") ?? "");
+  try {
+    const r = await setSetBestOf(setId, Number(formData.get("bestOf")));
+    rev(matchupId);
+    return { ok: true, message: `Set is now Bo${r.bestOf}.` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Could not change best-of." };
   }
 }
 

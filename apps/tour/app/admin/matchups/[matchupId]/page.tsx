@@ -18,6 +18,7 @@ import {
   removePairAction,
   resetPairingAction,
   reassignSetAction,
+  setBestOfAction,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -200,7 +201,21 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
                       {s.reassignedFrom && <span className="sub" title={`makeup — originally ${s.reassignedFrom}`}> (sub for {s.reassignedFrom})</span>}
                     </td>
                     <td style={{ fontWeight: s.winner === "B" ? 700 : undefined }}>#{s.bSeed} {s.bName}</td>
-                    <td className="num">{s.bestOf}</td>
+                    <td className="num">
+                      {/* Bo is editable in place — e.g. fix a set created under the wrong season default. */}
+                      <ActionFlashForm action={setBestOfAction}>
+                        <span className="inline-flex items-center gap-1">
+                          <input type="hidden" name="matchupId" value={matchupId} />
+                          <input type="hidden" name="setId" value={s.setId} />
+                          <input
+                            type="number" name="bestOf" min={1} max={15} step={2} defaultValue={s.bestOf}
+                            title="Best-of for this set"
+                            className="w-12 rounded border border-[var(--border)] bg-[var(--surface-2)] px-1 py-0.5 text-center"
+                          />
+                          <SubmitButton size="sm" variant="secondary" pendingText="…" title="Save best-of">Bo</SubmitButton>
+                        </span>
+                      </ActionFlashForm>
+                    </td>
                     <td>
                       <SetReportControls
                         matchupId={matchupId}
