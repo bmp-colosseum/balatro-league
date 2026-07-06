@@ -21,6 +21,7 @@ import { webUrl, WEB_HOST } from "../web-url.js";
 import { clearConfig, getConfig, LeagueConfigKey, setConfig } from "../league-config.js";
 import { ensureQueueMessage, refreshQueueMessage } from "../league-queue.js";
 import { ensureLeagueMatchesMessage } from "../league-matches-message.js";
+import { ensureLeagueMatchesPostable } from "../league-matches-channel.js";
 import { requireOwner } from "../permissions.js";
 import { enqueueLeagueInfoRefresh, enqueueStandingsRefresh, refreshDivisionWelcomes, previewDivisionWelcomes, enqueueActivityScan } from "../queue.js";
 import { activePublicSeason } from "../active-season.js";
@@ -380,8 +381,9 @@ async function refreshMessages(interaction: ChatInputCommandInteraction) {
     console.warn("[refresh-messages] queue refresh failed:", err);
   }
   try {
+    await ensureLeagueMatchesPostable(interaction.client);
     await ensureLeagueMatchesMessage(interaction.client);
-    done.push("#league-matches Start-a-match button");
+    done.push("#league-matches Start-a-match button + attach perms");
   } catch (err) {
     console.warn("[refresh-messages] league-matches refresh failed:", err);
   }
@@ -1060,8 +1062,9 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       reused.push("#league-queue (couldn't post the queue message - re-run /league setup)");
     }
 
-    // Post (or refresh) the pinned "Start a match" button in #league-matches.
+    // Grant posting perms (bot + members), then post the pinned "Start a match" button.
     try {
+      await ensureLeagueMatchesPostable(interaction.client);
       await ensureLeagueMatchesMessage(interaction.client);
     } catch (err) {
       console.warn("[bootstrap] couldn't post #league-matches message:", (err as Error).message);

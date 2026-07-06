@@ -127,16 +127,22 @@ client.once(Events.ClientReady, async (c) => {
   // exists without an admin having to run /league refresh-messages. Idempotent
   // (edits in place on later boots — no duplicates), ping-free, no-ops without a
   // guild.
-  ensureLeagueMatchesMessage(c).catch((err) =>
-    console.warn("[boot] ensureLeagueMatchesMessage failed:", err),
-  );
-
-  // Ensure @everyone can attach images / post in threads under #league-matches,
-  // so players can share screenshots in their match threads even on servers that
-  // strip Attach Files from the base @everyone role.
-  ensureLeagueMatchesPostable(c).catch((err) =>
-    console.warn("[boot] ensureLeagueMatchesPostable failed:", err),
-  );
+  // #league-matches setup: FIRST grant the bot + members posting perms (so the
+  // bot can post the button in the parent, and players can attach in threads),
+  // THEN post/refresh the pinned "Start a match" button. Order matters - the post
+  // needs the perms. Both best-effort; neither blocks boot.
+  void (async () => {
+    try {
+      await ensureLeagueMatchesPostable(c);
+    } catch (err) {
+      console.warn("[boot] ensureLeagueMatchesPostable failed:", err);
+    }
+    try {
+      await ensureLeagueMatchesMessage(c);
+    } catch (err) {
+      console.warn("[boot] ensureLeagueMatchesMessage failed:", err);
+    }
+  })();
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {

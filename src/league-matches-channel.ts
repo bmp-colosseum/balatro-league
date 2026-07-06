@@ -58,7 +58,7 @@ export async function ensureLeagueMatchesPostable(client: Client): Promise<void>
     const ch = await client.channels.fetch(channelId).catch(() => null);
     if (!ch || ch.type !== ChannelType.GuildText) return;
     const tc = ch as TextChannel;
-    // Grant the in-thread posting set (NOT parent SendMessages — this channel is
+    // Members: in-thread posting set (NOT parent SendMessages - the channel is
     // threads-only by design). AttachFiles is the one that was missing.
     await tc.permissionOverwrites.edit(tc.guild.roles.everyone.id, {
       ViewChannel: true,
@@ -70,7 +70,24 @@ export async function ensureLeagueMatchesPostable(client: Client): Promise<void>
       UseExternalEmojis: true,
       UseApplicationCommands: true,
     });
+    // The BOT itself must be able to POST + PIN the "Start a match" message in the
+    // parent (which @everyone can't post in) and manage match threads. Without this
+    // explicit grant the pinned button silently never appears on servers where the
+    // base @everyone role can't send in the parent.
+    const botId = client.user?.id;
+    if (botId) {
+      await tc.permissionOverwrites.edit(botId, {
+        ViewChannel: true,
+        SendMessages: true,
+        SendMessagesInThreads: true,
+        EmbedLinks: true,
+        AttachFiles: true,
+        ManageMessages: true,
+        ManageThreads: true,
+        CreatePrivateThreads: true,
+      });
+    }
   } catch (err) {
-    console.warn("[league-matches-channel] couldn't grant @everyone posting perms:", err);
+    console.warn("[league-matches-channel] couldn't grant posting perms:", err);
   }
 }
