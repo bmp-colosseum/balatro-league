@@ -40,6 +40,9 @@ export const LeagueConfigKey = {
   // to the two players; /helper pulls a moderator in on demand. Auto-created on
   // first /start-match under the '🎴 Matches' category.
   LeagueMatchesChannelId: "league_matches_channel_id",
+  // Pinned message id in #league-matches carrying the "Start a match" button that
+  // opens a per-clicker dropdown of their remaining scheduled opponents.
+  LeagueMatchesMessageId: "league_matches_message_id",
   // #league-queue: players mark themselves "free to play" via a pinned message
   // (LeagueQueueMessageId) carrying the Join/Leave buttons + the live free list.
   // When two scheduled opponents are both queued, the normal match invite fires.
