@@ -66,6 +66,8 @@ export interface ReconcilePreviewRow {
   teamBName: string;
   setsWonA: number;
   setsWonB: number;
+  gamesWonA: number; // total games won across the matchup's sets (the game% tiebreaker input)
+  gamesWonB: number;
   setCount: number;
   decided: boolean;
   winnerName: string | null;
@@ -84,12 +86,12 @@ export async function previewMatchupsFromSets(seasonName: string) {
   const teams = await prisma.teamSeason.findMany({ where: { id: { in: teamIds } }, select: { id: true, team: { select: { name: true } } } });
   const name = new Map(teams.map((t) => [t.id, t.team.name]));
   const matchIds = sets.map((s) => s.matchId).filter((x): x is string => !!x);
-  const matches = await prisma.match.findMany({ where: { id: { in: matchIds } }, select: { id: true, winnerId: true } });
+  const matches = await prisma.match.findMany({ where: { id: { in: matchIds } }, select: { id: true, winnerId: true, playerAId: true, gamesWonA: true, gamesWonB: true } });
   const mById = new Map(matches.map((m) => [m.id, m]));
 
   let flipped = 0;
   const matchups: ReconcilePreviewRow[] = planned.map((g) => {
-    let setsA = 0, setsB = 0, confirmed = 0;
+    let setsA = 0, setsB = 0, gamesA = 0, gamesB = 0, confirmed = 0;
     for (const s of g.rows) {
       const flip = s.teamSeasonAId !== g.teamA;
       if (flip) flipped++;
@@ -97,7 +99,13 @@ export async function previewMatchupsFromSets(seasonName: string) {
       const pB = flip ? s.playerAId : s.playerBId;
       if ((s.status === "CONFIRMED" || s.status === "FORFEIT") && s.matchId) {
         const m = mById.get(s.matchId);
-        if (m) { confirmed++; if (m.winnerId === pA) setsA++; else if (m.winnerId === pB) setsB++; }
+        if (m) {
+          confirmed++;
+          if (m.winnerId === pA) setsA++; else if (m.winnerId === pB) setsB++;
+          // Align games to team A by the same player-id contract rollupMatchup uses.
+          gamesA += m.playerAId === pA ? m.gamesWonA : m.gamesWonB;
+          gamesB += m.playerAId === pA ? m.gamesWonB : m.gamesWonA;
+        }
       }
     }
     const total = g.rows.length;
@@ -105,7 +113,8 @@ export async function previewMatchupsFromSets(seasonName: string) {
     const winner = !decided ? null : setsA > setsB ? g.teamA : setsB > setsA ? g.teamB : null;
     return {
       week: g.week, teamAName: name.get(g.teamA) ?? "?", teamBName: name.get(g.teamB) ?? "?",
-      setsWonA: setsA, setsWonB: setsB, setCount: total, decided, winnerName: winner ? name.get(winner) ?? null : null,
+      setsWonA: setsA, setsWonB: setsB, gamesWonA: gamesA, gamesWonB: gamesB, setCount: total,
+      decided, winnerName: winner ? name.get(winner) ?? null : null,
     };
   }).sort((a, b) => a.week - b.week || a.teamAName.localeCompare(b.teamAName));
 

@@ -22,6 +22,8 @@ export interface PendingSet {
   bName: string;
   status: string;
   reported: boolean; // has a recorded result (CONFIRMED/FORFEIT/REPORTED)
+  teamAGames: number | null; // games won by team A in this set (the game% tiebreaker input); null if unreported
+  teamBGames: number | null;
 }
 
 export interface PendingMatchup {
@@ -57,7 +59,7 @@ export async function getSeasonAudit(seasonName: string) {
       where: { seasonId: season.id },
       include: {
         matchups: {
-          include: { sets: { select: { id: true, status: true, playerAId: true, playerBId: true, seedA: true, seedB: true }, orderBy: { seedA: "asc" } } },
+          include: { sets: { select: { id: true, status: true, playerAId: true, playerBId: true, seedA: true, seedB: true, matchId: true }, orderBy: { seedA: "asc" } } },
         },
       },
       orderBy: { number: "asc" },
@@ -74,7 +76,7 @@ export async function getSeasonAudit(seasonName: string) {
   const teamName = new Map(teamSeasons.map((t) => [t.id, t.team.name]));
 
   const pending: PendingMatchup[] = [];
-  const rawSets = new Map<string, { id: string; status: string; playerAId: string; playerBId: string; seedA: number; seedB: number }[]>();
+  const rawSets = new Map<string, { id: string; status: string; playerAId: string; playerBId: string; seedA: number; seedB: number; matchId: string | null }[]>();
   const weekRows = weeks.map((w) => {
     let decided = 0;
     for (const m of w.matchups) {
@@ -123,16 +125,34 @@ export async function getSeasonAudit(seasonName: string) {
     ? await prisma.player.findMany({ where: { id: { in: [...playerIds] } }, select: { id: true, displayName: true } })
     : [];
   const playerName = new Map(players.map((p) => [p.id, p.displayName]));
+
+  // Pull the game scores for reported sets so the inline controls prefill the current
+  // games (they feed the game% tiebreaker, so a TO wants to see/fix them, not just W/L).
+  const matchIds: string[] = [];
+  for (const sets of rawSets.values()) for (const s of sets) if (s.matchId) matchIds.push(s.matchId);
+  const matches = matchIds.length
+    ? await prisma.match.findMany({ where: { id: { in: matchIds } }, select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true } })
+    : [];
+  const matchById = new Map(matches.map((m) => [m.id, m]));
+
   for (const p of pending) {
-    p.sets = (rawSets.get(p.matchupId) ?? []).map((s) => ({
-      setId: s.id,
-      aSeed: s.seedA,
-      bSeed: s.seedB,
-      aName: playerName.get(s.playerAId) ?? "?",
-      bName: playerName.get(s.playerBId) ?? "?",
-      status: s.status,
-      reported: s.status === "CONFIRMED" || s.status === "FORFEIT" || s.status === "REPORTED",
-    }));
+    p.sets = (rawSets.get(p.matchupId) ?? []).map((s) => {
+      const m = s.matchId ? matchById.get(s.matchId) : undefined;
+      // Align the match's games to the set's team A by player id (same contract as rollup).
+      const teamAGames = m ? (m.playerAId === s.playerAId ? m.gamesWonA : m.gamesWonB) : null;
+      const teamBGames = m ? (m.playerAId === s.playerAId ? m.gamesWonB : m.gamesWonA) : null;
+      return {
+        setId: s.id,
+        aSeed: s.seedA,
+        bSeed: s.seedB,
+        aName: playerName.get(s.playerAId) ?? "?",
+        bName: playerName.get(s.playerBId) ?? "?",
+        status: s.status,
+        reported: s.status === "CONFIRMED" || s.status === "FORFEIT" || s.status === "REPORTED",
+        teamAGames,
+        teamBGames,
+      };
+    });
   }
 
   // Per-team pending tally -- "which teams still owe games", worst first.

@@ -156,6 +156,8 @@ export default async function AuditPage({ params }: { params: Promise<{ name: st
                               teamAName={p.aName}
                               teamBName={p.bName}
                               reported={s.reported}
+                              teamAGames={s.teamAGames}
+                              teamBGames={s.teamBGames}
                             />
                           </td>
                         </tr>
