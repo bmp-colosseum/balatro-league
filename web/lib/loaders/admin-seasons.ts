@@ -10,6 +10,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { bannedDiscordIdSet } from "@/lib/bans";
+import { isScheduleLocked } from "@/lib/schedule-locked";
 import { byBestBmpSnapshot } from "@/lib/bmp-snapshots";
 import { computeStandings } from "@/lib/standings";
 import { computeRatingDeltas, type DivisionForRating } from "@/lib/end-season";
@@ -427,11 +428,12 @@ export interface SignupMmrRow {
   // Which BMP season the shown numbers are from. Compare to the overview's
   // bmpCurrentSeason to flag a fallback ("hasn't played this season").
   bmpSeason: string | null;
-  // League ban (active) + how many league sets they've actually played in the
-  // CURRENT active season — so an admin reviewing signups can spot banned players
-  // and no-shows before building.
+  // League ban (active) + set completion in the CURRENT active season: how many
+  // of their scheduled matches they played (played/scheduled). null = they
+  // weren't in the active season at all (new signup / gap returner) — distinct
+  // from a no-show (in the season, played 0 of N).
   banned: boolean;
-  setsPlayedThisSeason: number;
+  setsThisSeason: { played: number; scheduled: number } | null;
 }
 export interface SignupMmrTier {
   tier: string;
@@ -495,29 +497,51 @@ export async function loadSignupMmrOverview(roundId: string): Promise<SignupMmrO
     best.set(did, arr[0]!);
   }
 
-  // Ban status + this-season sets played, keyed by discordId.
+  // Ban status + this-season set completion (played/scheduled), keyed by discordId.
   const players = discordIds.length
     ? await prisma.player.findMany({ where: { discordId: { in: discordIds } }, select: { id: true, discordId: true } })
     : [];
   const discordByPlayerId = new Map(players.map((p) => [p.id, p.discordId]));
   const bannedSet = await bannedDiscordIdSet(discordIds);
-  const setsByDiscord = new Map<string, number>();
-  const activeSeason = players.length ? await prisma.season.findFirst({ where: { isActive: true }, select: { id: true } }) : null;
+
+  // played/scheduled per active-season member; absent = they weren't in the season.
+  const setsByDiscord = new Map<string, { played: number; scheduled: number }>();
+  const activeSeason = players.length
+    ? await prisma.season.findFirst({
+        where: { isActive: true },
+        select: {
+          scheduleLocked: true,
+          divisions: {
+            select: {
+              members: { where: { status: "ACTIVE" }, select: { playerId: true } },
+              matches: {
+                where: { format: "LEAGUE_BO2" },
+                select: { playerAId: true, playerBId: true, status: true, gamesWonA: true, gamesWonB: true },
+              },
+            },
+          },
+        },
+      })
+    : null;
   if (activeSeason) {
-    const playerIds = players.map((p) => p.id);
-    const confirmed = await prisma.match.findMany({
-      where: {
-        format: "LEAGUE_BO2",
-        status: "CONFIRMED",
-        division: { seasonId: activeSeason.id },
-        OR: [{ playerAId: { in: playerIds } }, { playerBId: { in: playerIds } }],
-      },
-      select: { playerAId: true, playerBId: true },
-    });
-    for (const m of confirmed) {
-      for (const pid of [m.playerAId, m.playerBId]) {
+    for (const d of activeSeason.divisions) {
+      const activeIds = new Set(d.members.map((m) => m.playerId));
+      const locked = isScheduleLocked(activeSeason.scheduleLocked, d.matches);
+      const rrTotal = Math.max(0, activeIds.size - 1);
+      const played = new Map<string, number>();
+      const scheduled = new Map<string, number>();
+      for (const m of d.matches) {
+        if (m.status === "CANCELLED") continue;
+        for (const pid of [m.playerAId, m.playerBId]) {
+          if (!activeIds.has(pid)) continue;
+          scheduled.set(pid, (scheduled.get(pid) ?? 0) + 1);
+          if (m.status === "CONFIRMED") played.set(pid, (played.get(pid) ?? 0) + 1);
+        }
+      }
+      for (const pid of activeIds) {
         const did = discordByPlayerId.get(pid);
-        if (did) setsByDiscord.set(did, (setsByDiscord.get(did) ?? 0) + 1);
+        if (!did) continue;
+        setsByDiscord.set(did, { played: played.get(pid) ?? 0, scheduled: locked ? scheduled.get(pid) ?? 0 : rrTotal });
       }
     }
   }
@@ -537,7 +561,7 @@ export async function loadSignupMmrOverview(roundId: string): Promise<SignupMmrO
         winRatePct: b?.winRatePct ?? null,
         bmpSeason: b?.bmpSeason ?? null,
         banned: bannedSet.has(s.discordId),
-        setsPlayedThisSeason: setsByDiscord.get(s.discordId) ?? 0,
+        setsThisSeason: setsByDiscord.get(s.discordId) ?? null,
       };
     })
     .sort((a, b) => {

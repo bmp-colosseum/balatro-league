@@ -98,7 +98,7 @@ export function SignupMmrTable({
             {th("season", "Season", "BMP season these numbers are from")}
             {th("games", "Games")}
             {th("winrate", "Win%")}
-            <th title="League sets (matches) played in the CURRENT season">Sets</th>
+            <th title="Scheduled sets played / scheduled, in the CURRENT season. — = wasn't in this season.">Sets played</th>
             {canRemove && <th></th>}
           </tr>
         </thead>
@@ -140,11 +140,23 @@ export function SignupMmrTable({
                   </td>
                   <td>{r.totalGames ?? <span className="muted">—</span>}</td>
                   <td>{r.winRatePct != null ? `${r.winRatePct}%` : <span className="muted">—</span>}</td>
-                  <td style={{ fontVariantNumeric: "tabular-nums" }} title="League sets played this season">
-                    {r.setsPlayedThisSeason > 0 ? (
-                      <strong>{r.setsPlayedThisSeason}</strong>
+                  <td style={{ fontVariantNumeric: "tabular-nums" }}>
+                    {r.setsThisSeason === null ? (
+                      <span className="muted" title="Wasn't in the current season">—</span>
+                    ) : r.setsThisSeason.scheduled === 0 ? (
+                      <span className="muted" title="No scheduled sets this season">0/0</span>
+                    ) : r.setsThisSeason.played === 0 ? (
+                      <span style={{ color: "var(--danger)" }} title="Signed up / in the season but hasn't played any of their scheduled sets">
+                        0/{r.setsThisSeason.scheduled}
+                      </span>
+                    ) : r.setsThisSeason.played < r.setsThisSeason.scheduled ? (
+                      <span style={{ color: "var(--accent)" }} title="Some scheduled sets still unplayed">
+                        {r.setsThisSeason.played}/{r.setsThisSeason.scheduled}
+                      </span>
                     ) : (
-                      <span style={{ color: "var(--accent)" }} title="Hasn't played any sets this season">0</span>
+                      <span style={{ color: "var(--success)" }} title="Played all scheduled sets">
+                        {r.setsThisSeason.played}/{r.setsThisSeason.scheduled}
+                      </span>
                     )}
                   </td>
                   {canRemove && (
