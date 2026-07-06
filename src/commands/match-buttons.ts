@@ -44,6 +44,7 @@ import { summonHelpers } from "./helper.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
 import { writeMatchGames } from "../match-write.js";
 import { bannedPlayerIds, BANNED_MESSAGE } from "../bans.js";
+import { hasTier } from "../permissions.js";
 import { backfillMatchId, postModerationNotice } from "../mod-log.js";
 import { postTranscriptSummary } from "../transcript-channel.js";
 import {
@@ -178,12 +179,26 @@ async function raceLost(interaction: AnyInteraction) {
   return reply(interaction, "Someone else just clicked first — the buttons may have changed. Try again.");
 }
 
+// Is the clicker a league ADMIN (or owner)? Used to let staff drive a match on a
+// player's behalf when the normal flow is stuck. Match buttons live on the public
+// thread message, so an admin can already click them — this just lets the
+// server-side gates recognize them.
+async function isMatchAdmin(interaction: AnyInteraction): Promise<boolean> {
+  const guild = interaction.guild;
+  if (!guild) return false;
+  const member =
+    guild.members.cache.get(interaction.user.id) ??
+    (await guild.members.fetch(interaction.user.id).catch(() => null));
+  return member ? hasTier(member, interaction.user.id, "ADMIN") : false;
+}
+
 async function requireActor(interaction: AnyInteraction, expectedDiscordId: string): Promise<boolean> {
-  if (interaction.user.id !== expectedDiscordId) {
-    await reply(interaction, "It's not your turn.");
-    return false;
-  }
-  return true;
+  if (interaction.user.id === expectedDiscordId) return true;
+  // Admin override: a staff member can act on the current player's behalf (ban /
+  // pick / choose-first) to un-stick a match. Their click applies as this turn.
+  if (await isMatchAdmin(interaction)) return true;
+  await reply(interaction, "It's not your turn.");
+  return false;
 }
 
 export const matchButtons: ButtonHandler = {
@@ -1033,7 +1048,13 @@ async function handleWinner(interaction: ButtonInteraction, session: MatchSessio
     return reply(interaction, "Invalid winner.");
   }
   const { playerA, playerB } = await loadPlayers(session);
-  if (interaction.user.id !== playerA.discordId && interaction.user.id !== playerB.discordId) {
+  const isPlayerA = interaction.user.id === playerA.discordId;
+  const isPlayerB = interaction.user.id === playerB.discordId;
+  // Admin override: a staff click on a winner button LOCKS that winner right away
+  // (skips the both-players-must-agree vote + any dispute), for manual reporting
+  // when the normal flow is stuck.
+  const asAdmin = !isPlayerA && !isPlayerB ? await isMatchAdmin(interaction) : false;
+  if (!isPlayerA && !isPlayerB && !asAdmin) {
     return reply(interaction, "Only the two players in this match can vote on the winner.");
   }
 
@@ -1051,13 +1072,24 @@ async function handleWinner(interaction: ButtonInteraction, session: MatchSessio
   // clicking the other button before both votes are in. Disputed games
   // also accept re-votes so players can talk it out and re-cast — voting
   // again clears the disputed flag and re-checks agreement.
-  const voterIsA = interaction.user.id === playerA.discordId;
+  const voterIsA = isPlayerA;
   const newGame: GameState = {
     ...game,
-    voteByA: voterIsA ? winnerIdRaw : game.voteByA,
-    voteByB: !voterIsA ? winnerIdRaw : game.voteByB,
+    // Admin override forces BOTH votes to the chosen winner so it locks below.
+    voteByA: asAdmin ? winnerIdRaw : voterIsA ? winnerIdRaw : game.voteByA,
+    voteByB: asAdmin ? winnerIdRaw : !voterIsA ? winnerIdRaw : game.voteByB,
     disputed: false, // re-check below
   };
+  if (asAdmin) {
+    recordAudit({
+      actor: { discordId: interaction.user.id, displayName: interaction.user.username },
+      action: "match.admin-winner",
+      targetType: "MatchSession",
+      targetId: session.id,
+      summary: `Admin set game winner to ${winnerIdRaw === session.playerAId ? playerA.displayName : playerB.displayName}`,
+      metadata: { winnerId: winnerIdRaw, gameState: session.state },
+    });
+  }
 
   // Both votes in?
   if (!newGame.voteByA || !newGame.voteByB) {
@@ -1089,7 +1121,8 @@ async function handleWinner(interaction: ButtonInteraction, session: MatchSessio
   // advance once the winner picks. DC forfeits (no attrition result) and
   // casual /challenge games (don't count for standings) skip straight to the
   // advance.
-  if (!session.isCasual && !newGame.dcByPlayerId && newGame.winnerLives == null) {
+  // Admin override skips the (optional) lives capture and finalizes now.
+  if (!asAdmin && !session.isCasual && !newGame.dcByPlayerId && newGame.winnerLives == null) {
     const updated = await updateSession(session, {
       [gameField]: JSON.stringify(newGame),
     } as Prisma.MatchSessionUpdateManyMutationInput);
@@ -1184,7 +1217,8 @@ async function handleLives(interaction: ButtonInteraction, session: MatchSession
 
   const { playerA, playerB } = await loadPlayers(session);
   const winnerDiscordId = game.winnerId === playerA.id ? playerA.discordId : playerB.discordId;
-  if (interaction.user.id !== winnerDiscordId) {
+  // Admin can record the winner's lives on their behalf (stuck-match override).
+  if (interaction.user.id !== winnerDiscordId && !(await isMatchAdmin(interaction))) {
     return reply(interaction, "Only the winner of this game can record their remaining lives.");
   }
 
@@ -1759,8 +1793,11 @@ function banPhaseGameNum(state: MatchSessionState): 1 | 2 | 3 | 0 {
 // ephemeral error if they aren't one of them. Returns null on miss.
 async function actorPlayer(interaction: AnyInteraction, session: MatchSession) {
   const { playerA, playerB } = await loadPlayers(session);
-  if (interaction.user.id === playerA.discordId) return { actor: playerA, other: playerB };
-  if (interaction.user.id === playerB.discordId) return { actor: playerB, other: playerA };
+  if (interaction.user.id === playerA.discordId) return { actor: playerA, other: playerB, asAdmin: false };
+  if (interaction.user.id === playerB.discordId) return { actor: playerB, other: playerA, asAdmin: false };
+  // Admin override: staff can drive the custom-combo flow (propose + auto-apply,
+  // or accept a stuck proposal). They act "as player A" for attribution.
+  if (await isMatchAdmin(interaction)) return { actor: playerA, other: playerB, asAdmin: true };
   await reply(interaction, "Only the two players in this match can use these buttons.");
   return null;
 }
@@ -1867,6 +1904,41 @@ async function handleProposeSubmit(interaction: ButtonInteraction, session: Matc
   if (!proposal.deck || !proposal.stake) {
     return reply(interaction, "Pick a deck and a stake first.");
   }
+  // Admin override: an admin's proposal auto-applies to the current game (no
+  // opponent accept step) — a fast manual set-up for a stuck match.
+  if (ctx.asAdmin) {
+    const gameNum = banPhaseGameNum(session.state);
+    if (gameNum === 0) return reply(interaction, "Not in a ban phase.");
+    const gameField = `game${gameNum}` as "game1" | "game2" | "game3";
+    const currentGame = parseGame(session[gameField]);
+    if (!currentGame) return reply(interaction, `Game ${gameNum} state missing — refresh Discord and try again.`);
+    const combo = { deck: proposal.deck, stake: proposal.stake };
+    const newGame: GameState = { firstId: currentGame.firstId, bans: [], pool: [combo], pickedDeckIdx: 0 };
+    const playingState =
+      gameNum === 1 ? MatchSessionState.GAME_1_PLAYING :
+      gameNum === 2 ? MatchSessionState.GAME_2_PLAYING :
+      MatchSessionState.GAME_3_PLAYING;
+    const applied = await updateSession(session, {
+      customComboProposal: null,
+      [gameField]: JSON.stringify(newGame),
+      state: playingState,
+    } as Prisma.MatchSessionUpdateManyMutationInput);
+    if (!applied) return raceLost(interaction);
+    recordAudit({
+      actor: { discordId: interaction.user.id, displayName: interaction.user.username },
+      action: "match.admin-combo",
+      targetType: "MatchSession",
+      targetId: session.id,
+      summary: `Admin set custom combo ${combo.deck} / ${combo.stake} for game ${gameNum}`,
+      metadata: combo,
+    });
+    await interaction.update({
+      embeds: [new EmbedBuilder().setTitle("✅ Combo applied").setColor(0x2ecc71).setDescription(`Set **${combo.deck} / ${combo.stake}** for game ${gameNum}.`)],
+      components: [],
+    });
+    await refreshPublicMatchMessage(interaction, applied);
+    return;
+  }
   const updated = await updateSession(session, {
     customComboProposal: JSON.stringify({ ...proposal, status: "pending" }),
   });
@@ -1890,7 +1962,7 @@ async function handleProposeCounter(interaction: ButtonInteraction, session: Mat
   }
   const ctx = await actorPlayer(interaction, session);
   if (!ctx) return;
-  if (proposal.by === ctx.actor.id) {
+  if (!ctx.asAdmin && proposal.by === ctx.actor.id) {
     return reply(interaction, "You're the proposer — wait for your opponent's response.");
   }
   // Flip ownership to the actor, drop the picks, back to building.
@@ -2005,7 +2077,9 @@ async function handleProposeAccept(interaction: ButtonInteraction, session: Matc
   }
   const ctx = await actorPlayer(interaction, session);
   if (!ctx) return;
-  if (proposal.by === ctx.actor.id) {
+  // Admin can accept on either player's behalf; players can only accept the
+  // OTHER player's proposal.
+  if (!ctx.asAdmin && proposal.by === ctx.actor.id) {
     return reply(interaction, "You proposed this — the other player has to accept.");
   }
   if (!proposal.deck || !proposal.stake) {
