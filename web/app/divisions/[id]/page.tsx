@@ -10,6 +10,7 @@ import { DivisionStandingsTable, type StandingsRowExtras } from "@/components/Di
 import { loadMmrForPlayerIds } from "@/lib/loaders/standings";
 import { getShowBmpMmr } from "@/lib/preferences";
 import { loadDivisionPageData, type DivisionRecentPairing, type DivisionUnplayed } from "@/lib/loaders/division";
+import { loadTieHelper, type TieGroup } from "@/lib/loaders/tie-helper";
 import { loadAdminDivisionDetail } from "@/lib/loaders/admin";
 import { loadPlayerIdByDiscordId } from "@/lib/loaders/players";
 import { tierColors } from "@/lib/tier-colors";
@@ -83,6 +84,7 @@ export default async function PublicDivisionPage({
   // edit/override controls. Skipped when not admin so the public
   // path doesn't pay the cost of the extra query.
   const adminData = isAdmin ? await loadAdminDivisionDetail(id) : null;
+  const tieGroups = isAdmin ? await loadTieHelper(id) : [];
 
   // BMP MMR for the shared standings table (empty unless the preference is on).
   const showBmpMmr = await getShowBmpMmr();
@@ -181,7 +183,7 @@ export default async function PublicDivisionPage({
         )}
 
         {isAdmin && adminData && (
-          <AdminSection divisionId={id} adminData={adminData} />
+          <AdminSection divisionId={id} adminData={adminData} tieGroups={tieGroups} />
         )}
       </main>
     </>
@@ -440,9 +442,11 @@ function YourPlayedTable({ rows, viewerPlayerId }: { rows: DivisionRecentPairing
 function AdminSection({
   divisionId,
   adminData,
+  tieGroups,
 }: {
   divisionId: string;
   adminData: NonNullable<Awaited<ReturnType<typeof loadAdminDivisionDetail>>>;
+  tieGroups: TieGroup[];
 }) {
   const { division, members, pairings, shootouts, unplayed, playerById } = adminData;
   return (
@@ -693,6 +697,10 @@ function AdminSection({
         </form>
       </div>
 
+      {/* Tie helper: shows exactly who's tied + the head-to-head / game stats
+          among them, so you know what to type into the resolve form below. */}
+      <TieHelper groups={tieGroups} />
+
       {/* Resolve a tie of ANY size (3-way+) — type a placement per tied player;
           equal numbers stay tied with each other, so you can pick the winner
           and leave the rest level. Writes the showdowns that encode it. */}
@@ -717,5 +725,93 @@ function AdminSection({
       </div>
 
     </>
+  );
+}
+
+// The tie-resolution helper: for each group of tied players, a head-to-head grid
+// (who beat whom, and by what score) among just those players, their net-life
+// differential vs each other, and any shootout already on record. This is the
+// mini-league you use to decide the placements typed into the form below.
+function TieHelper({ groups }: { groups: TieGroup[] }) {
+  const cell = (r: "win" | "loss" | "draw" | "none") =>
+    r === "win"
+      ? { bg: "rgba(46,204,113,0.15)", fg: "var(--success)" }
+      : r === "loss"
+      ? { bg: "rgba(231,76,60,0.15)", fg: "var(--danger)" }
+      : r === "draw"
+      ? { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)" }
+      : { bg: "transparent", fg: "var(--muted)" };
+
+  return (
+    <div className="card">
+      <strong>🔗 Ties to resolve</strong>
+      <p className="muted" style={{ fontSize: 12, margin: "4px 0 8px" }}>
+        Players level on points that the normal tiebreakers can&apos;t separate. The grid is head-to-head{" "}
+        <em>among the tied players only</em> (✓ = beat them, ✗ = lost, = drew), plus net lives between them and any
+        shootout already recorded — use it to decide the placements below.
+      </p>
+      {groups.length === 0 ? (
+        <p className="muted" style={{ fontSize: 13, margin: 0 }}>No unresolved ties — everyone&apos;s separated.</p>
+      ) : (
+        <div style={{ display: "grid", gap: 14 }}>
+          {groups.map((g, gi) => (
+            <div key={gi} style={{ borderTop: gi === 0 ? undefined : "1px solid var(--border)", paddingTop: gi === 0 ? 0 : 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                {g.members.length}-way tie on <strong>{g.points}</strong> pts
+                {g.allDecided ? (
+                  <span className="pill" style={{ fontSize: 10, marginLeft: 8, background: "rgba(46,204,113,0.16)", color: "var(--success)" }}>head-to-head separates them</span>
+                ) : (
+                  <span className="pill" style={{ fontSize: 10, marginLeft: 8, background: "rgba(241,196,15,0.16)", color: "var(--accent)" }}>needs a call / shootout</span>
+                )}
+              </div>
+              <div className="table-scroll">
+                <table className="table-dense" style={{ margin: 0 }}>
+                  <thead>
+                    <tr>
+                      <th></th>
+                      {g.members.map((m) => (
+                        <th key={m.playerId} style={{ textAlign: "center", fontSize: 11 }}>{m.displayName}</th>
+                      ))}
+                      <th style={{ textAlign: "right", fontSize: 11 }} title="Life differential vs the other tied players">Net ♥</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {g.members.map((m) => {
+                      const vs = new Map(m.h2h.map((h) => [h.oppId, h]));
+                      return (
+                        <tr key={m.playerId}>
+                          <td style={{ fontWeight: 500, whiteSpace: "nowrap" }}>{m.displayName}</td>
+                          {g.members.map((o) => {
+                            if (o.playerId === m.playerId) return <td key={o.playerId} className="muted" style={{ textAlign: "center" }}>·</td>;
+                            const h = vs.get(o.playerId);
+                            const c = cell(h?.result ?? "none");
+                            const mark = h?.result === "win" ? "✓" : h?.result === "loss" ? "✗" : h?.result === "draw" ? "=" : "—";
+                            return (
+                              <td key={o.playerId} style={{ textAlign: "center", background: c.bg, color: c.fg, fontVariantNumeric: "tabular-nums" }}>
+                                {mark} {h && h.result !== "none" ? h.score : ""}
+                              </td>
+                            );
+                          })}
+                          <td style={{ textAlign: "right", fontWeight: 600, color: m.netLives > 0 ? "var(--success)" : m.netLives < 0 ? "var(--danger)" : "var(--muted)", fontVariantNumeric: "tabular-nums" }}>
+                            {m.netLives > 0 ? `+${m.netLives}` : m.netLives}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {g.shootouts.length > 0 && (
+                <p className="muted" style={{ fontSize: 11, margin: "6px 0 0" }}>
+                  Shootouts: {g.shootouts.map((s, i) => (
+                    <span key={i}>{i > 0 && " · "}<strong style={{ color: "var(--text)" }}>{s.winnerName}</strong> beat {s.loserName}</span>
+                  ))}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
