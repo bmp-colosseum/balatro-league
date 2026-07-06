@@ -48,22 +48,48 @@ export interface TieGroup {
   members: TieMember[];
   shootouts: Array<{ winnerName: string; loserName: string }>;
   allDecided: boolean;
+  boundary: "promotion" | "relegation" | "both"; // which cutoff this tie straddles
 }
 
 const pairKey = (a: string, b: string) => (a < b ? `${a}:${b}` : `${b}:${a}`);
 
 export async function loadTieHelper(divisionId: string): Promise<TieGroup[]> {
-  const rows = await loadDivisionStandings(divisionId);
+  const [rows, division] = await Promise.all([
+    loadDivisionStandings(divisionId),
+    prisma.division.findUnique({ where: { id: divisionId }, select: { promoteCount: true, relegateCount: true } }),
+  ]);
+  const n = rows.length;
+  const promote = division?.promoteCount ?? 0;
+  const relegate = division?.relegateCount ?? 0;
+  const hasBoundaries = promote > 0 || relegate > 0;
 
-  const chains: (typeof rows)[] = [];
-  for (const r of rows) {
-    if (r.tiedWithPrev && chains.length) chains[chains.length - 1]!.push(r);
-    else chains.push([r]);
-  }
-  const tied = chains.filter((c) => c.length >= 2);
+  // Chains keep their start index so we can tell where they sit in the table.
+  const chains: { members: typeof rows; startIdx: number }[] = [];
+  rows.forEach((r, idx) => {
+    if (r.tiedWithPrev && chains.length) chains[chains.length - 1]!.members.push(r);
+    else chains.push({ members: [r], startIdx: idx });
+  });
+
+  // A tie only matters if it STRADDLES the promotion or relegation cutoff — a tie
+  // wholly inside the promote zone, the safe middle, or the drop zone changes no
+  // outcome. (If the division has no cutoffs set, show every tie.)
+  const boundaryOf = (startIdx: number, len: number): TieGroup["boundary"] | null => {
+    const endIdx = startIdx + len - 1;
+    const spansPromote = promote > 0 && startIdx < promote && endIdx >= promote;
+    const spansReleg = relegate > 0 && startIdx < n - relegate && endIdx >= n - relegate;
+    if (spansPromote && spansReleg) return "both";
+    if (spansPromote) return "promotion";
+    if (spansReleg) return "relegation";
+    return null;
+  };
+
+  const tied = chains
+    .filter((c) => c.members.length >= 2)
+    .map((c) => ({ ...c, boundary: hasBoundaries ? boundaryOf(c.startIdx, c.members.length) : "both" }))
+    .filter((c): c is typeof c & { boundary: TieGroup["boundary"] } => c.boundary !== null);
   if (tied.length === 0) return [];
 
-  const tiedIds = new Set(tied.flatMap((c) => c.map((r) => r.player.id)));
+  const tiedIds = new Set(tied.flatMap((c) => c.members.map((r) => r.player.id)));
   const idArr = [...tiedIds];
 
   // ALL confirmed BO2 matches involving a tied player (vs ANYONE) + shootouts.
@@ -114,7 +140,8 @@ export async function loadTieHelper(divisionId: string): Promise<TieGroup[]> {
     }
   }
 
-  return tied.map((chain) => {
+  return tied.map((group) => {
+    const chain = group.members;
     const memberIds = chain.map((r) => r.player.id);
     const shootoutRows: TieGroup["shootouts"] = [];
     let allDecided = true;
@@ -184,6 +211,6 @@ export async function loadTieHelper(divisionId: string): Promise<TieGroup[]> {
       }
     }
 
-    return { points: chain[0]!.points, members, shootouts: shootoutRows, allDecided };
+    return { points: chain[0]!.points, members, shootouts: shootoutRows, allDecided, boundary: group.boundary };
   });
 }
