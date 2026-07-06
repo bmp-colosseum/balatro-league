@@ -11,6 +11,7 @@
 // each match thread is visible only to its two players + the bot (+ whoever
 // /helper adds). Mirrors how #challenges hosts casual /challenge threads.
 
+import { ChannelType, type Client, type TextChannel } from "discord.js";
 import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
 import { resolveConfiguredCategory, createGuildTextChannel } from "./discord-helpers.js";
 import { env } from "./env.js";
@@ -41,4 +42,35 @@ export async function ensureLeagueMatchesChannel(): Promise<string | null> {
   await setConfig(LeagueConfigKey.LeagueMatchesChannelId, channel.id, "start-match-auto-create");
   console.log(`[league-matches-channel] auto-created channel ${channel.id} and stored in LeagueConfig`);
   return channel.id;
+}
+
+// Explicitly grant @everyone the posting set on #league-matches so players can
+// ATTACH IMAGES + post links in their match threads. Match threads inherit the
+// parent channel's perms, and many servers strip Attach Files / Embed Links from
+// the base @everyone role to curb spam — which silently left players able to type
+// text but not post screenshots in a match. Mirrors bootstrap's lockPostable.
+// Grants capabilities only; the private threads stay member-gated, so this never
+// exposes them. Idempotent — safe to run on every boot.
+export async function ensureLeagueMatchesPostable(client: Client): Promise<void> {
+  const channelId = await getConfig(LeagueConfigKey.LeagueMatchesChannelId);
+  if (!channelId) return;
+  try {
+    const ch = await client.channels.fetch(channelId).catch(() => null);
+    if (!ch || ch.type !== ChannelType.GuildText) return;
+    const tc = ch as TextChannel;
+    // Grant the in-thread posting set (NOT parent SendMessages — this channel is
+    // threads-only by design). AttachFiles is the one that was missing.
+    await tc.permissionOverwrites.edit(tc.guild.roles.everyone.id, {
+      ViewChannel: true,
+      ReadMessageHistory: true,
+      SendMessagesInThreads: true,
+      AddReactions: true,
+      EmbedLinks: true,
+      AttachFiles: true,
+      UseExternalEmojis: true,
+      UseApplicationCommands: true,
+    });
+  } catch (err) {
+    console.warn("[league-matches-channel] couldn't grant @everyone posting perms:", err);
+  }
 }

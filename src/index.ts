@@ -2,6 +2,7 @@ import { Client, Events, GatewayIntentBits, MessageFlags, Partials } from "disco
 import { captureCreate, captureDelete, captureEdit } from "./mod-log.js";
 import { captureInboundDm } from "./inbound-dm.js";
 import { ensureLeagueMatchesMessage } from "./league-matches-message.js";
+import { ensureLeagueMatchesPostable } from "./league-matches-channel.js";
 import { ensureBalatroEmojis } from "./balatro-emojis.js";
 import { ensureCommandsRegistered } from "./commands/register.js";
 import { checkChannelScope } from "./command-channels.js";
@@ -128,6 +129,13 @@ client.once(Events.ClientReady, async (c) => {
   // guild.
   ensureLeagueMatchesMessage(c).catch((err) =>
     console.warn("[boot] ensureLeagueMatchesMessage failed:", err),
+  );
+
+  // Ensure @everyone can attach images / post in threads under #league-matches,
+  // so players can share screenshots in their match threads even on servers that
+  // strip Attach Files from the base @everyone role.
+  ensureLeagueMatchesPostable(c).catch((err) =>
+    console.warn("[boot] ensureLeagueMatchesPostable failed:", err),
   );
 });
 
