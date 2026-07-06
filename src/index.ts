@@ -1,6 +1,7 @@
 import { Client, Events, GatewayIntentBits, MessageFlags, Partials } from "discord.js";
 import { captureCreate, captureDelete, captureEdit } from "./mod-log.js";
 import { captureInboundDm } from "./inbound-dm.js";
+import { ensureLeagueMatchesMessage } from "./league-matches-message.js";
 import { ensureBalatroEmojis } from "./balatro-emojis.js";
 import { ensureCommandsRegistered } from "./commands/register.js";
 import { checkChannelScope } from "./command-channels.js";
@@ -120,6 +121,14 @@ client.once(Events.ClientReady, async (c) => {
       console.warn("[perms] failed to fetch guild membership for audit:", err);
     }
   }
+
+  // Post/refresh the pinned "Start a match" button in #league-matches so it
+  // exists without an admin having to run /league refresh-messages. Idempotent
+  // (edits in place on later boots — no duplicates), ping-free, no-ops without a
+  // guild.
+  ensureLeagueMatchesMessage(c).catch((err) =>
+    console.warn("[boot] ensureLeagueMatchesMessage failed:", err),
+  );
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
