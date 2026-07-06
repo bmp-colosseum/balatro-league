@@ -153,7 +153,14 @@ export default async function AuditPage({ params }: { params: Promise<{ name: st
                       {p.sets.map((s) => (
                         <tr key={s.setId}>
                           <td style={{ whiteSpace: "nowrap" }}>#{s.aSeed} {s.aName}</td>
-                          <td style={{ whiteSpace: "nowrap" }}>#{s.bSeed} {s.bName}</td>
+                          <td style={{ whiteSpace: "nowrap" }}>
+                            #{s.bSeed} {s.bName}
+                            {s.bSeed !== s.aSeed && (
+                              <span className="sub" style={{ color: "var(--warning, #f5a524)" }} title={`Not seed-for-seed: #${s.aSeed} vs #${s.bSeed}`}>
+                                {" "}({s.bSeed > s.aSeed ? "+" : ""}{s.bSeed - s.aSeed})
+                              </span>
+                            )}
+                          </td>
                           <td style={{ width: "100%" }}>
                             <SetReportControls
                               matchupId={p.matchupId}

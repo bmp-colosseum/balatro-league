@@ -92,20 +92,26 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
           <table>
             <thead>
               <tr>
-                <th className="rank">#</th>
                 <th>{c.teamA.name}</th>
                 <th>{c.teamB.name}</th>
+                <th className="num" title="pairing offset — blank means seed-for-seed">±</th>
                 <th className="num">Bo</th>
                 <th>Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {c.pairs.map((p, i) => (
+              {c.pairs.map((p) => (
                 <tr key={p.setId}>
-                  <td className="rank">{i + 1}</td>
                   <td>#{p.aSeed} {p.aName}</td>
                   <td>#{p.bSeed} {p.bName}</td>
+                  <td className="num">
+                    {p.bSeed !== p.aSeed && (
+                      <span style={{ color: "var(--warning, #f5a524)" }} title={`Not seed-for-seed: #${p.aSeed} vs #${p.bSeed}`}>
+                        {p.bSeed > p.aSeed ? "+" : ""}{p.bSeed - p.aSeed}
+                      </span>
+                    )}
+                  </td>
                   <td className="num">{p.bestOf}</td>
                   <td className="sub">{p.status}</td>
                   <td>
@@ -200,7 +206,14 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
                       #{s.aSeed} {s.aName}
                       {s.reassignedFrom && <span className="sub" title={`makeup — originally ${s.reassignedFrom}`}> (sub for {s.reassignedFrom})</span>}
                     </td>
-                    <td style={{ fontWeight: s.winner === "B" ? 700 : undefined }}>#{s.bSeed} {s.bName}</td>
+                    <td style={{ fontWeight: s.winner === "B" ? 700 : undefined }}>
+                      #{s.bSeed} {s.bName}
+                      {s.bSeed !== s.aSeed && (
+                        <span className="sub" style={{ color: "var(--warning, #f5a524)" }} title={`Not seed-for-seed: #${s.aSeed} vs #${s.bSeed}`}>
+                          {" "}({s.bSeed > s.aSeed ? "+" : ""}{s.bSeed - s.aSeed})
+                        </span>
+                      )}
+                    </td>
                     <td className="num">
                       {/* Bo is editable in place — e.g. fix a set created under the wrong season default. */}
                       <ActionFlashForm action={setBestOfAction}>

@@ -45,7 +45,9 @@ interface LoadedMatchup {
 async function load(matchupId: string): Promise<LoadedMatchup | null> {
   const matchup = await prisma.matchup.findUnique({
     where: { id: matchupId },
-    include: { week: { include: { season: true } }, sets: true },
+    // Sets in team-A seed order: the console reads top-down as A's #1, #2, ... with
+    // whoever each is paired against on the right.
+    include: { week: { include: { season: true } }, sets: { orderBy: { seedA: "asc" } } },
   });
   if (!matchup) return null;
 
