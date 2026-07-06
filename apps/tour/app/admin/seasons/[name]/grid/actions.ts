@@ -21,6 +21,7 @@ export async function recordHoleAction(_prev: ActionResult, formData: FormData):
   const bId = String(formData.get("bId") ?? "");
   const aName = String(formData.get("aName") ?? "Team A");
   const bName = String(formData.get("bName") ?? "Team B");
+  const dq = formData.get("dq") === "1";
   try {
     const r = await recordHoleResult(season, aId, bId, {
       setsA: Number(formData.get("setsA")),
@@ -28,9 +29,15 @@ export async function recordHoleAction(_prev: ActionResult, formData: FormData):
       gamesA: formData.get("gamesA") ? Number(formData.get("gamesA")) : 0,
       gamesB: formData.get("gamesB") ? Number(formData.get("gamesB")) : 0,
       weekNumber: Number(formData.get("week")),
+      dq,
     });
     revalidate(season);
-    return { ok: true, message: `Recorded ${aName} ${formData.get("setsA")}-${formData.get("setsB")} ${bName} in week ${r.weekNumber}.` };
+    return {
+      ok: true,
+      message: dq
+        ? `Recorded ${aName} vs ${bName} as a double DQ (0-0, nobody played) in week ${r.weekNumber}.`
+        : `Recorded ${aName} ${formData.get("setsA")}-${formData.get("setsB")} ${bName} in week ${r.weekNumber}.`,
+    };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Could not record the result." };
   }

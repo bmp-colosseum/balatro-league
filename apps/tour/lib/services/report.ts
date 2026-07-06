@@ -78,6 +78,35 @@ export async function forfeitSet(setId: string, forfeitTeam: "A" | "B") {
   return { ok: true };
 }
 
+// Double DQ: NOBODY played the set and it doesn't matter (rules: both sides no-show).
+// Records a 0-0 with no winner -- the set counts as accounted-for (so the matchup can
+// complete and stops looking short in the grid/audit) but awards no set or game to
+// either team. Distinct from forfeitSet, where one side takes the set.
+export async function dqSet(setId: string) {
+  const set = await prisma.tourSet.findUnique({ where: { id: setId } });
+  if (!set) throw new Error("No such set.");
+  const a = set.playerAId;
+  const b = set.playerBId;
+  const swap = b < a;
+  const data = {
+    playerAId: swap ? b : a,
+    playerBId: swap ? a : b,
+    format: `BO${set.bestOf}`,
+    gamesWonA: 0,
+    gamesWonB: 0,
+    winnerId: null,
+    status: "CONFIRMED" as const,
+    forfeit: true,
+    confirmedAt: new Date(),
+  };
+  let matchId = set.matchId;
+  if (matchId) await prisma.match.update({ where: { id: matchId }, data });
+  else matchId = (await prisma.match.create({ data })).id;
+  await prisma.tourSet.update({ where: { id: setId }, data: { matchId, status: "FORFEIT" } });
+  if (set.matchupId) await rollupMatchup(set.matchupId);
+  return { ok: true };
+}
+
 // Undo a report: drop the Match, unlink the set, recompute the matchup.
 export async function unreportSet(setId: string) {
   const set = await prisma.tourSet.findUnique({ where: { id: setId } });

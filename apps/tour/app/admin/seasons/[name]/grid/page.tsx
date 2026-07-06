@@ -45,11 +45,29 @@ function Cell({ cell, self }: { cell: GridCell | null; self: boolean }) {
       </td>
     );
   }
+  // Whole-match double DQ: decided 0-0 with nothing accounted -- nobody played, on purpose.
+  if (cell.setsFor === 0 && cell.setsAgainst === 0 && cell.setsAccounted === 0) {
+    const dq = <span title="Double DQ -- nobody played (0-0, no winner)">DQ</span>;
+    return (
+      <td style={{ textAlign: "center", color: "var(--muted)", fontWeight: 600 }}>
+        {cell.matchupId ? <Link href={`/admin/matchups/${cell.matchupId}`} style={{ color: "inherit" }}>{dq}</Link> : dq}
+      </td>
+    );
+  }
   const won = cell.setsFor > cell.setsAgainst;
   const lost = cell.setsFor < cell.setsAgainst;
   const color = won ? "var(--accent-2)" : lost ? "var(--danger, #e5484d)" : undefined;
-  const games = `${cell.gamesFor}–${cell.gamesAgainst} games` + (cell.meetings > 1 ? ` · ${cell.meetings} meetings` : "") + (cell.matchupId ? " · click to edit sets" : "");
-  const score = <>{cell.setsFor}{"–"}{cell.setsAgainst}</>;
+  const games =
+    `${cell.gamesFor}–${cell.gamesAgainst} games` +
+    (cell.meetings > 1 ? ` · ${cell.meetings} meetings` : "") +
+    (cell.short ? ` · only ${cell.setsAccounted} of ${cell.setsExpected} sets accounted -- add or DQ the rest in the console` : "") +
+    (cell.matchupId ? " · click to edit sets" : "");
+  const score = (
+    <>
+      {cell.setsFor}{"–"}{cell.setsAgainst}
+      {cell.short && <sup style={{ color: "var(--warning, #f5a524)", fontWeight: 700 }}>{"!"}</sup>}
+    </>
+  );
   return (
     <td style={{ textAlign: "center", color, fontWeight: 600, whiteSpace: "nowrap" }} title={games}>
       {cell.matchupId ? <Link href={`/admin/matchups/${cell.matchupId}`} style={{ color: "inherit" }}>{score}</Link> : score}
@@ -106,6 +124,10 @@ function HolesEditor({ season, c, weekNumbers }: { season: string; c: Conference
               {weekNumbers.map((w) => <option key={w} value={w}>{w}</option>)}
             </select>
             <SubmitButton size="sm" pendingText="Saving…">Record</SubmitButton>
+            <SubmitButton size="sm" variant="secondary" name="dq" value="1" pendingText="Saving…"
+              title="Nobody played and it doesn't matter -- record a 0-0 double DQ (no winner)">
+              DQ 0{"–"}0
+            </SubmitButton>
           </ActionFlashForm>
           <ActionFlashForm action={markNotScheduledAction}>
             <input type="hidden" name="season" value={season} />
@@ -183,8 +205,10 @@ export default async function GridPage({ params }: { params: Promise<{ name: str
         <strong> Click a score</strong> to open its matchup console and edit the individual sets behind it
         (who played whom + each set&apos;s game score). A tinted blank ({"·"}) means they{" "}
         <strong>never played</strong> {"—"} a hole. A dark {"×"} is a designed bye (never scheduled).
-        A {"○"} is an unplayed fixture. Resolve each hole below the matrix: record the team result if the
-        game happened, or mark it a bye.
+        A {"○"} is an unplayed fixture. <strong>DQ</strong> is a double DQ (0{"–"}0, nobody played).
+        An orange <strong>!</strong> marks a short match {"—"} some of its sets are missing (e.g. 10 of 11);
+        open it and report or DQ the rest. Resolve holes below the matrix: record the team result, DQ it,
+        or mark it a bye.
       </Callout>
 
       {needsReconcile && (
@@ -201,7 +225,22 @@ export default async function GridPage({ params }: { params: Promise<{ name: str
 
       {conferences.length === 0 && <Callout type="admin">No conferences with teams yet {"—"} nothing to grid.</Callout>}
 
-      {conferences.map((c) => (
+      {conferences.map((c) => {
+        // Short matches: played but missing sets inside (10 of 11) -- listed under the
+        // matrix because a superscript alone is easy to miss when scanning.
+        const shorts: { label: string; matchupId?: string }[] = [];
+        c.rows.forEach((row, i) => {
+          for (let j = i + 1; j < row.cells.length; j++) {
+            const cell = row.cells[j];
+            if (cell?.short) {
+              shorts.push({
+                label: `${c.teams[i].name} vs ${c.teams[j].name} (${cell.setsAccounted}/${cell.setsExpected} sets)`,
+                matchupId: cell.matchupId,
+              });
+            }
+          }
+        });
+        return (
         <div className="card" key={c.conferenceId} style={{ marginBottom: "1rem" }}>
           <div className="bracket-title">
             {c.conferenceName} <span className="sub">({c.teams.length} teams)</span>
@@ -243,9 +282,22 @@ export default async function GridPage({ params }: { params: Promise<{ name: str
             </table>
           </div>
 
+          {shorts.length > 0 && (
+            <p className="sub" style={{ marginTop: "0.5rem", color: "var(--warning, #f5a524)" }}>
+              Short matches:{" "}
+              {shorts.map((s, k) => (
+                <span key={k}>
+                  {k > 0 && ", "}
+                  {s.matchupId ? <Link href={`/admin/matchups/${s.matchupId}`} style={{ color: "inherit" }}>{s.label}</Link> : s.label}
+                </span>
+              ))}
+            </p>
+          )}
+
           {editable && <HolesEditor season={seasonName} c={c} weekNumbers={weekNumbers} />}
         </div>
-      ))}
+        );
+      })}
 
       {crossConf.length > 0 && (
         <div className="card">

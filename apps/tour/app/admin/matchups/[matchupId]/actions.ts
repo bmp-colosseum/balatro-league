@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { can, matchupScope } from "@/lib/permissions";
 import { makePair, overridePair, setSendFirst, removePair, resetPairing, reassignSetPlayer } from "@/lib/services/pairing";
-import { reportSet, unreportSet, forfeitSet } from "@/lib/services/report";
+import { reportSet, unreportSet, forfeitSet, dqSet } from "@/lib/services/report";
 import type { ActionResult } from "@/lib/action-result";
 
 function rev(matchupId: string) {
@@ -97,6 +97,20 @@ export async function forfeitSetAction(formData: FormData) {
   const team = formData.get("forfeitTeam") === "B" ? "B" : "A";
   await forfeitSet(setId, team);
   rev(matchupId);
+}
+
+// Double DQ -- nobody played, 0-0, no winner; the set counts as accounted-for.
+export async function dqSetAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const matchupId = String(formData.get("matchupId") ?? "");
+  if (!(await allow(matchupId))) return { ok: false, message: "Not authorized." };
+  const setId = String(formData.get("setId") ?? "");
+  try {
+    await dqSet(setId);
+    rev(matchupId);
+    return { ok: true, message: "Set recorded as a double DQ (0-0, nobody played)." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "DQ failed." };
+  }
 }
 
 export async function reassignSetAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {

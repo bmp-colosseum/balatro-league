@@ -45,6 +45,10 @@ export interface HoleResultInput {
   gamesA?: number;
   gamesB?: number;
   weekNumber: number;
+  // Double DQ: the match was scheduled but NOBODY played and it doesn't matter.
+  // Records a decided 0-0 with no winner (a DRAW in standings) so the pair stops
+  // being a hole -- distinct from a bye, where they were never scheduled at all.
+  dq?: boolean;
 }
 
 // Fill a hole: create a Matchup (in the given week) between the two teams with a team-level
@@ -53,10 +57,10 @@ export async function recordHoleResult(seasonName: string, aId: string, bId: str
   const sid = await seasonId(seasonName);
   await validatePair(sid, aId, bId);
 
-  const setsA = Math.trunc(input.setsA), setsB = Math.trunc(input.setsB);
-  const gamesA = Math.max(0, Math.trunc(input.gamesA ?? 0)), gamesB = Math.max(0, Math.trunc(input.gamesB ?? 0));
+  const setsA = input.dq ? 0 : Math.trunc(input.setsA), setsB = input.dq ? 0 : Math.trunc(input.setsB);
+  const gamesA = input.dq ? 0 : Math.max(0, Math.trunc(input.gamesA ?? 0)), gamesB = input.dq ? 0 : Math.max(0, Math.trunc(input.gamesB ?? 0));
   if (setsA < 0 || setsB < 0) throw new Error("Set counts can't be negative.");
-  if (setsA === 0 && setsB === 0) throw new Error("Enter the set score (at least one side must have won a set).");
+  if (!input.dq && setsA === 0 && setsB === 0) throw new Error("Enter the set score, or use DQ if nobody played.");
   const num = Math.trunc(input.weekNumber);
   if (!Number.isFinite(num) || num < 1) throw new Error("Pick a week for this game.");
 

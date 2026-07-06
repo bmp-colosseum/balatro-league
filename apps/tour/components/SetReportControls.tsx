@@ -4,7 +4,7 @@
 // the matchup console's actions (which gate via can("SCHEDULE", matchupScope)).
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
-import { reportSetAction, unreportSetAction, forfeitSetAction } from "@/app/admin/matchups/[matchupId]/actions";
+import { reportSetAction, unreportSetAction, forfeitSetAction, dqSetAction } from "@/app/admin/matchups/[matchupId]/actions";
 
 export function SetReportControls({
   matchupId,
@@ -59,6 +59,13 @@ export function SetReportControls({
           </SubmitButton>
         </form>
       ))}
+      <ActionFlashForm action={dqSetAction}>
+        <input type="hidden" name="matchupId" value={matchupId} />
+        <input type="hidden" name="setId" value={setId} />
+        <SubmitButton size="sm" variant="secondary" pendingText="…" title="Nobody played -- record 0-0 with no winner; the set counts as done but awards nothing">
+          DQ 0{"–"}0
+        </SubmitButton>
+      </ActionFlashForm>
     </div>
   );
 }

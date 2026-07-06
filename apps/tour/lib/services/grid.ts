@@ -24,6 +24,9 @@ interface Meeting {
   gamesHi: number;
   hasResult: boolean; // at least one set confirmed (vs a bare fixture with no play yet)
   matchupId?: string; // the Matchup row (when this meeting is matchup-backed) -> console drill-in
+  // CONFIRMED/FORFEIT set rows backing this meeting (incl. 0-0 DQ sets, which award
+  // nothing but ARE accounted for). null = team-level result only (no set detail).
+  setsAccounted: number | null;
 }
 
 export interface GridCell {
@@ -36,6 +39,9 @@ export interface GridCell {
   // non-matchup the TO marked (these two never play), so it isn't counted as a hole.
   state: "played" | "scheduled" | "excluded";
   matchupId?: string; // set when the pair maps to exactly one Matchup -> link to the per-set console
+  setsAccounted: number; // sets with a recorded outcome (wins either way + 0-0 DQs)
+  setsExpected: number; // teamSize per played meeting -- what a full match should account for
+  short: boolean; // played but sets are missing inside it (e.g. 10 of 11) -> needs attention
 }
 
 export interface GridTeam {
@@ -90,6 +96,20 @@ async function loadMeetings(seasonId: string, setsToWin: number): Promise<Meetin
     where: { week: { seasonId } },
     select: { id: true, teamSeasonAId: true, teamSeasonBId: true, setsWonA: true, setsWonB: true, gamesWonA: true, gamesWonB: true },
   });
+  // Accounted set rows per matchup (CONFIRMED/FORFEIT -- includes 0-0 DQs, which the
+  // win sums can't see). A matchup with NO set rows is a team-level result: null.
+  const setCounts = matchups.length
+    ? await prisma.tourSet.groupBy({
+        by: ["matchupId"],
+        where: { matchupId: { in: matchups.map((m) => m.id) }, status: { in: ["CONFIRMED", "FORFEIT"] } },
+        _count: { _all: true },
+      })
+    : [];
+  const hasAnySet = matchups.length
+    ? await prisma.tourSet.groupBy({ by: ["matchupId"], where: { matchupId: { in: matchups.map((m) => m.id) } }, _count: { _all: true } })
+    : [];
+  const accountedByMatchup = new Map(setCounts.map((r) => [r.matchupId, r._count._all]));
+  const setBacked = new Set(hasAnySet.map((r) => r.matchupId));
   for (const m of matchups) {
     const aIsLo = m.teamSeasonAId < m.teamSeasonBId;
     const loId = aIsLo ? m.teamSeasonAId : m.teamSeasonBId;
@@ -102,6 +122,7 @@ async function loadMeetings(seasonId: string, setsToWin: number): Promise<Meetin
       gamesLo: aIsLo ? gA : gB, gamesHi: aIsLo ? gB : gA,
       hasResult,
       matchupId: m.id,
+      setsAccounted: setBacked.has(m.id) ? accountedByMatchup.get(m.id) ?? 0 : null,
     });
   }
 
@@ -125,7 +146,7 @@ async function loadMeetings(seasonId: string, setsToWin: number): Promise<Meetin
       const loId = aIsLo ? s.teamSeasonAId! : s.teamSeasonBId!;
       const hiId = aIsLo ? s.teamSeasonBId! : s.teamSeasonAId!;
       const key = `${s.week}|${loId}|${hiId}`;
-      const g = groups.get(key) ?? { loId, hiId, setsLo: 0, setsHi: 0, gamesLo: 0, gamesHi: 0, hasResult: false };
+      const g = groups.get(key) ?? { loId, hiId, setsLo: 0, setsHi: 0, gamesLo: 0, gamesHi: 0, hasResult: false, setsAccounted: 0 };
       // Oriented players: whose player represents the canonical lo team in this set.
       const pLo = aIsLo ? s.playerAId : s.playerBId;
       const pHi = aIsLo ? s.playerBId : s.playerAId;
@@ -133,6 +154,7 @@ async function loadMeetings(seasonId: string, setsToWin: number): Promise<Meetin
         const m = mById.get(s.matchId);
         if (m) {
           g.hasResult = true;
+          g.setsAccounted = (g.setsAccounted ?? 0) + 1; // counts 0-0 DQ sets too
           if (m.winnerId === pLo) g.setsLo++; else if (m.winnerId === pHi) g.setsHi++;
           g.gamesLo += m.playerAId === pLo ? m.gamesWonA : m.gamesWonB;
           g.gamesHi += m.playerAId === pLo ? m.gamesWonB : m.gamesWonA;
@@ -152,7 +174,7 @@ async function loadMeetings(seasonId: string, setsToWin: number): Promise<Meetin
 export async function getSeasonGrid(seasonName: string): Promise<SeasonGrid | null> {
   const season = await prisma.tourSeason.findUnique({
     where: { name: seasonName },
-    select: { id: true, name: true, format: true, setsToWin: true },
+    select: { id: true, name: true, format: true, setsToWin: true, teamSize: true },
   });
   if (!season) return null;
 
@@ -188,7 +210,7 @@ export async function getSeasonGrid(seasonName: string): Promise<SeasonGrid | nu
   }
 
   // Index meetings by unordered pair, summing across repeat encounters (double RR).
-  interface PairAgg { meetings: number; setsLo: number; setsHi: number; gamesLo: number; gamesHi: number; played: boolean; matchupIds: string[] }
+  interface PairAgg { meetings: number; setsLo: number; setsHi: number; gamesLo: number; gamesHi: number; played: boolean; matchupIds: string[]; accounted: number; expected: number }
   const pairs = new Map<string, PairAgg>();
   const crossConf: CrossMeeting[] = [];
   let playedMeetings = 0;
@@ -204,11 +226,17 @@ export async function getSeasonGrid(seasonName: string): Promise<SeasonGrid | nu
       continue;
     }
     const key = `${mt.loId}|${mt.hiId}`;
-    const agg = pairs.get(key) ?? { meetings: 0, setsLo: 0, setsHi: 0, gamesLo: 0, gamesHi: 0, played: false, matchupIds: [] };
+    const agg = pairs.get(key) ?? { meetings: 0, setsLo: 0, setsHi: 0, gamesLo: 0, gamesHi: 0, played: false, matchupIds: [], accounted: 0, expected: 0 };
     agg.meetings++;
     agg.setsLo += mt.setsLo; agg.setsHi += mt.setsHi;
     agg.gamesLo += mt.gamesLo; agg.gamesHi += mt.gamesHi;
-    if (mt.hasResult) agg.played = true;
+    if (mt.hasResult) {
+      agg.played = true;
+      // Every played meeting should account for teamSize sets. Team-level-only results
+      // (no set rows) fall back to the win sums -- the best signal we have there.
+      agg.expected += season.teamSize;
+      agg.accounted += mt.setsAccounted ?? mt.setsLo + mt.setsHi;
+    }
     if (mt.matchupId) agg.matchupIds.push(mt.matchupId);
     pairs.set(key, agg);
   }
@@ -221,19 +249,27 @@ export async function getSeasonGrid(seasonName: string): Promise<SeasonGrid | nu
       // No games between them. A marked designed non-matchup renders as a bye (not a hole);
       // an unmarked blank stays null (a candidate missing match).
       if (excluded.has(key)) {
-        return { meetings: 0, setsFor: 0, setsAgainst: 0, gamesFor: 0, gamesAgainst: 0, state: "excluded" };
+        return { meetings: 0, setsFor: 0, setsAgainst: 0, gamesFor: 0, gamesAgainst: 0, state: "excluded", setsAccounted: 0, setsExpected: 0, short: false };
       }
       return null;
     }
+    const setsFor = aIsLo ? agg.setsLo : agg.setsHi;
+    const setsAgainst = aIsLo ? agg.setsHi : agg.setsLo;
+    // Short = played but sets are missing inside it (10 of 11). A whole-match 0-0 DQ
+    // (nothing recorded on purpose) is complete by definition, not short.
+    const wholeDq = agg.played && setsFor === 0 && setsAgainst === 0 && agg.accounted === 0;
     return {
       meetings: agg.meetings,
-      setsFor: aIsLo ? agg.setsLo : agg.setsHi,
-      setsAgainst: aIsLo ? agg.setsHi : agg.setsLo,
+      setsFor,
+      setsAgainst,
       gamesFor: aIsLo ? agg.gamesLo : agg.gamesHi,
       gamesAgainst: aIsLo ? agg.gamesHi : agg.gamesLo,
       state: agg.played ? "played" : "scheduled",
       // Link the cell to its console only when the pair is exactly one matchup (unambiguous).
       matchupId: agg.matchupIds.length === 1 ? agg.matchupIds[0] : undefined,
+      setsAccounted: agg.accounted,
+      setsExpected: agg.expected,
+      short: agg.played && !wholeDq && agg.accounted < agg.expected,
     };
   };
 
