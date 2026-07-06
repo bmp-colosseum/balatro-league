@@ -189,6 +189,11 @@ export const league: SlashCommand = {
             .setName("dry-run")
             .setDescription("Preview which divisions would be edited vs re-posted (and pinned) without changing anything."),
         ),
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName("re-ping")
+        .setDescription("Re-post a FRESH welcome that PINGS every division in the active season (use if the kickoff ping didn't land)."),
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
@@ -209,6 +214,7 @@ export const league: SlashCommand = {
     if (sub === "inactive") return inactiveRegistry(interaction);
     if (sub === "refresh-messages") return refreshMessages(interaction);
     if (sub === "refresh-welcome") return refreshWelcome(interaction);
+    if (sub === "re-ping") return rePing(interaction);
   },
 };
 
@@ -419,6 +425,25 @@ async function refreshWelcome(interaction: ChatInputCommandInteraction) {
           (reposted ? `, **${reposted}** re-posted (no existing message found)` : "") +
           (failed ? `, **${failed}** failed` : "") +
           `. No pings sent.`,
+  );
+}
+
+// Re-ping the whole active season: for every division, delete the old welcome,
+// post a FRESH one that pings the division role, and re-pin it — so people get a
+// new notification and the channel stays clean. Reuses refreshDivisionWelcomes'
+// ping path (delete -> repost-with-ping -> repin). For when the kickoff ping
+// didn't land (e.g. before the bot had Mention-Everyone permission).
+async function rePing(interaction: ChatInputCommandInteraction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const season = await activePublicSeason();
+  if (!season) {
+    await interaction.editReply("No active season right now.");
+    return;
+  }
+  const { reposted, failed } = await refreshDivisionWelcomes(season.id, { ping: true });
+  await interaction.editReply(
+    `Re-pinged the season: re-posted ${reposted} division welcome message(s) with a ping (old ones deleted, new ones pinned).` +
+      (failed ? ` ${failed} failed.` : ""),
   );
 }
 

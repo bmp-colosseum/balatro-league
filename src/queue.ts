@@ -1087,6 +1087,7 @@ async function queueSeasonOnboardingDms(seasonId: string): Promise<void> {
       divisions: {
         select: {
           name: true,
+          discordChannelId: true,
           members: { where: { status: "ACTIVE" }, select: { player: { select: { id: true, discordId: true, displayName: true } } } },
           matches: { where: { format: "LEAGUE_BO2" }, select: { playerAId: true, playerBId: true } },
         },
@@ -1119,10 +1120,10 @@ async function queueSeasonOnboardingDms(seasonId: string): Promise<void> {
         : "_(your matchups will show with_ `/schedule`_)_";
       const content =
         `🎴 **Welcome to ${label}!**\n` +
-        `You're in **${div.name}**.\n\n` +
+        `You're in **${div.name}**.${div.discordChannelId ? ` Head to your division channel: <#${div.discordChannelId}>.` : ""}\n\n` +
         `**Your matchups this season:**\n${oppLine}\n\n` +
         `Play each **2 games** — just run \`/start-match @opponent\` and it guides you through it. ` +
-        `Track your progress with \`/standings\`, and run \`/league\` anytime for how it all works. Good luck!`;
+        `Track your progress with \`/standings\`, and run \`/help\` anytime for how it all works. Good luck!`;
       await enqueueDm({ discordId: m.player.discordId, content }).catch((err) =>
         console.warn(`[season.onboard] enqueue DM failed for ${m.player.discordId}:`, err),
       );
