@@ -193,7 +193,7 @@ export const league: SlashCommand = {
     .addSubcommand((sub) =>
       sub
         .setName("re-ping")
-        .setDescription("Re-post a FRESH welcome that PINGS every division in the active season (use if the kickoff ping didn't land)."),
+        .setDescription("Re-post a fresh welcome that pings every division in the active season."),
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
