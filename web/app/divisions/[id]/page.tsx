@@ -746,11 +746,13 @@ function TieHelper({ groups }: { groups: TieGroup[] }) {
     <div className="card">
       <strong>🔗 Ties to resolve</strong>
       <p className="muted" style={{ fontSize: 12, margin: "4px 0 8px" }}>
-        Players level on points that the normal tiebreakers can&apos;t separate. The grid is head-to-head{" "}
-        <em>among the tied players only</em> (✓ = beat them, ✗ = lost, = drew), with each game&apos;s winner-lives
-        below the score — <span style={{ color: "var(--success)" }}>green</span> = lives the row player had when they
-        won that game, <span style={{ color: "var(--danger)" }}>red</span> = the opponent&apos;s lives when they won.
-        Plus any shootout already recorded — use it to decide the placements below.
+        Players level on points that the normal tiebreakers can&apos;t separate. The <strong>grid</strong> is
+        head-to-head <em>among the tied players only</em> (✓ = beat them, ✗ = lost, = drew), with each game&apos;s
+        winner-lives below the score. Below it, <strong>every game each tied player played this season</strong> (vs
+        anyone) with a life summary — <span style={{ color: "var(--success)" }}>green ♥</span> = their lives when they
+        won, <span style={{ color: "var(--danger)" }}>red ♥</span> = the opponent&apos;s lives when they lost. The{" "}
+        <strong>avg</strong> figures normalize for how many games each played, since raw totals aren&apos;t comparable
+        when players played different numbers of games. Then decide the placements below.
       </p>
       {groups.length === 0 ? (
         <p className="muted" style={{ fontSize: 13, margin: 0 }}>No unresolved ties — everyone&apos;s separated.</p>
@@ -819,6 +821,38 @@ function TieHelper({ groups }: { groups: TieGroup[] }) {
                   ))}
                 </p>
               )}
+
+              {/* Full game log per tied player (vs ANYONE) + normalized life summary. */}
+              <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+                <div className="muted" style={{ fontSize: 11 }}>Every game each tied player played this season (all opponents):</div>
+                {g.members.map((m) => (
+                  <div key={m.playerId}>
+                    <div style={{ fontSize: 12, fontWeight: 600 }}>
+                      {m.displayName}
+                      <span className="muted" style={{ fontWeight: 400, marginLeft: 6 }}>
+                        {m.wins}W · {m.losses}L · won on ♥{m.livesInWins}
+                        {m.wins > 0 ? ` (avg ${(m.livesInWins / m.wins).toFixed(1)})` : ""} · conceded ♥{m.livesConceded}
+                        {m.losses > 0 ? ` (avg ${(m.livesConceded / m.losses).toFixed(1)})` : ""}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11, marginTop: 2, display: "flex", flexWrap: "wrap", gap: "2px 10px" }}>
+                      {m.games.map((gm, k) => (
+                        <span
+                          key={k}
+                          style={{ whiteSpace: "nowrap" }}
+                          title={gm.deck || gm.stake ? `${gm.deck ?? "?"} / ${gm.stake ?? "?"}` : "deck/stake not recorded"}
+                        >
+                          <span className="muted">vs {gm.opponentName}</span>{" "}
+                          <span style={{ color: gm.won ? "var(--success)" : "var(--danger)" }}>
+                            {gm.won ? "W" : "L"} {gm.lives != null ? `♥${gm.lives}` : "♥?"}
+                          </span>
+                        </span>
+                      ))}
+                      {m.games.length === 0 && <span className="muted">no games played</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>
