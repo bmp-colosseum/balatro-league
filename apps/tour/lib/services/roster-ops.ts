@@ -270,7 +270,6 @@ async function reassignUnplayedSets(seasonId: string, teamSeasonId: string, outP
 
 export async function substitute(seasonName: string, teamSeasonId: string, outPlayerId: string, inPlayerId: string, effectiveWeek: number, untilWeek: number | null, reason: string, by?: string) {
   const seasonId = await seasonIdOf(seasonName);
-  if (!reason.trim()) throw new Error("A reason is required.");
   if (!outPlayerId || !inPlayerId) throw new Error("Pick the player going out and the player coming in.");
   if (outPlayerId === inPlayerId) throw new Error("Pick two different players.");
   if (!effectiveWeek || effectiveWeek < 1) throw new Error("Pick the week the sub starts.");
@@ -278,7 +277,7 @@ export async function substitute(seasonName: string, teamSeasonId: string, outPl
   const seed = await seedOfMember(teamSeasonId, outPlayerId);
   await ensureMembership(teamSeasonId, inPlayerId, seed); // attribution: the sub's sets count for this team
   await prisma.rosterMove.create({
-    data: { seasonId, teamSeasonId, kind: "SUB", playerId: inPlayerId, outPlayerId, effectiveWeek, untilWeek, seed, reason: reason.trim(), createdBy: by },
+    data: { seasonId, teamSeasonId, kind: "SUB", playerId: inPlayerId, outPlayerId, effectiveWeek, untilWeek, seed, reason: reason.trim() || "substitution", createdBy: by },
   });
   // The lineup change propagates to the schedule: their unplayed sets in the window move too.
   const sets = await reassignUnplayedSets(seasonId, teamSeasonId, outPlayerId, inPlayerId, effectiveWeek, untilWeek ?? effectiveWeek);
@@ -288,10 +287,9 @@ export async function substitute(seasonName: string, teamSeasonId: string, outPl
 
 export async function recordDeparture(kind: "QUIT" | "BANNED", seasonName: string, teamSeasonId: string, playerId: string, effectiveWeek: number, reason: string, by?: string) {
   const seasonId = await seasonIdOf(seasonName);
-  if (!reason.trim()) throw new Error("A reason is required.");
   if (!playerId) throw new Error("Pick the player.");
   if (!effectiveWeek || effectiveWeek < 1) throw new Error("Pick the week it takes effect.");
-  await prisma.rosterMove.create({ data: { seasonId, teamSeasonId, kind, playerId, effectiveWeek, reason: reason.trim(), createdBy: by } });
+  await prisma.rosterMove.create({ data: { seasonId, teamSeasonId, kind, playerId, effectiveWeek, reason: reason.trim() || (kind === "BANNED" ? "banned" : "quit"), createdBy: by } });
   await queueRoleSync(seasonName);
   return { ok: true };
 }
@@ -309,13 +307,12 @@ export async function reinstate(seasonName: string, teamSeasonId: string, player
 // "For the rest of the season" lives HERE (an ADDED arrival), not in Substitute (windowed).
 export async function replacePlayer(seasonName: string, teamSeasonId: string, inPlayerId: string, replacesPlayerId: string, effectiveWeek: number, reason: string, by?: string) {
   const seasonId = await seasonIdOf(seasonName);
-  if (!reason.trim()) throw new Error("A reason is required.");
   if (!inPlayerId) throw new Error("Pick the incoming player.");
   if (!effectiveWeek || effectiveWeek < 1) throw new Error("Pick the week they join.");
   const seed = replacesPlayerId ? await seedOfMember(teamSeasonId, replacesPlayerId) : 99;
   await ensureMembership(teamSeasonId, inPlayerId, seed);
   await prisma.rosterMove.create({
-    data: { seasonId, teamSeasonId, kind: "ADDED", playerId: inPlayerId, replacesPlayerId: replacesPlayerId || null, effectiveWeek, seed, reason: reason.trim(), createdBy: by },
+    data: { seasonId, teamSeasonId, kind: "ADDED", playerId: inPlayerId, replacesPlayerId: replacesPlayerId || null, effectiveWeek, seed, reason: reason.trim() || "replacement", createdBy: by },
   });
   // Permanent replacement -> every unplayed set of the replaced player from this week on
   // moves to the newcomer (played sets are history).
@@ -467,19 +464,41 @@ export async function getRosterOps(seasonName: string, week?: number) {
   const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true, name: true } });
   if (!season) return null;
 
-  const [weeks, teamSeasons, moves, approved] = await Promise.all([
-    prisma.week.findMany({ where: { seasonId: season.id }, select: { number: true }, orderBy: { number: "asc" } }),
+  const [weekRows, flatWeekRows, playoffSetCount, teamSeasons, moves, approved] = await Promise.all([
+    prisma.week.findMany({ where: { seasonId: season.id }, select: { number: true, kind: true }, orderBy: { number: "asc" } }),
+    // Imported seasons (e.g. TT4) have NO Week rows -- every game is a flat set carrying
+    // its own week number. That's the real source of "which weeks exist".
+    prisma.tourSet.findMany({ where: { seasonId: season.id, bracket: "REGULAR", week: { not: null } }, select: { week: true }, distinct: ["week"] }),
+    prisma.tourSet.count({ where: { seasonId: season.id, bracket: "PLAYOFF" } }),
     prisma.teamSeason.findMany({ where: { seasonId: season.id }, include: { team: true, rosters: { include: { entries: true } } } }),
     prisma.rosterMove.findMany({ where: { seasonId: season.id }, orderBy: [{ effectiveWeek: "asc" }, { createdAt: "asc" }] }),
     prisma.signup.findMany({ where: { seasonId: season.id, status: "APPROVED" }, select: { discordId: true } }),
   ]);
 
-  // Navigable weeks = the schedule's weeks ∪ any week a move takes effect (so you
-  // can jump to where the roster actually changed even before/without a schedule).
-  const moveWeeks = moves.flatMap((m) => [m.effectiveWeek, m.untilWeek ?? m.effectiveWeek]);
-  const weekNumbers = [...new Set([...weeks.map((w) => w.number), ...moveWeeks])].filter((n) => n >= 1).sort((a, b) => a - b);
-  const maxWeek = weekNumbers.length ? Math.max(...weekNumbers) : 1;
-  const selectedWeek = Math.max(1, week ?? maxWeek); // no upper clamp — you can view any week
+  // The week list is tied to the season's ACTUAL weeks -- not freeform. Regular weeks come
+  // from live Week rows (kind-labelled) UNION the weeks the imported flat sets carry, made
+  // contiguous 1..max so "from week X onward" always offers every week. Playoffs are added
+  // as real PLAYOFF Week rows when a live schedule has them, else a single synthetic slot
+  // after the last regular week when playoff sets exist -- so a drop/sub can take effect
+  // "in playoffs" without a numbered week.
+  const WEEK_KIND_LABEL: Record<string, string> = { ROUND_ROBIN: "Round robin", RIVAL: "Rival", CROSS_CONF: "Cross-conf", SEEDED: "Seeded", PLAYOFF: "Playoff" };
+  const regularWeekRows = weekRows.filter((w) => w.kind !== "PLAYOFF");
+  const playoffWeekRows = weekRows.filter((w) => w.kind === "PLAYOFF");
+  const flatWeeks = flatWeekRows.map((f) => f.week!).filter((n) => n >= 1);
+  const regularNums = [...new Set([...regularWeekRows.map((w) => w.number), ...flatWeeks])];
+  const maxRegular = regularNums.length ? Math.max(...regularNums) : 1;
+  const kindByNum = new Map(regularWeekRows.map((w) => [w.number, WEEK_KIND_LABEL[w.kind] ?? w.kind]));
+  const weekOptions: { value: number; label: string }[] = Array.from({ length: maxRegular }, (_, i) => i + 1)
+    .map((n) => ({ value: n, label: kindByNum.has(n) ? `W${n} (${kindByNum.get(n)})` : `W${n}` }));
+  if (playoffWeekRows.length) {
+    for (const w of playoffWeekRows) weekOptions.push({ value: w.number, label: `Playoffs W${w.number}` });
+  } else if (playoffSetCount > 0) {
+    weekOptions.push({ value: maxRegular + 1, label: "Playoffs" });
+  }
+
+  const weekNumbers = weekOptions.map((w) => w.value);
+  const maxWeek = maxRegular; // default active = last regular week, not playoffs
+  const selectedWeek = Math.max(1, week ?? maxWeek); // no upper clamp — any listed week
 
   const movesByTeam = new Map<string, MoveRow[]>();
   for (const m of moves) {
@@ -610,6 +629,7 @@ export async function getRosterOps(seasonName: string, week?: number) {
   return {
     seasonName: season.name,
     weeks: weekNumbers,
+    weekOptions, // real, labelled weeks (incl. Playoffs) for the pickers -- not freeform
     maxWeek,
     selectedWeek,
     teams,

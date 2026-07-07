@@ -13,7 +13,7 @@ import { substituteAction, departureAction, replaceAction, reinstateAction, remo
 export const dynamic = "force-dynamic";
 
 const inputCls = "rounded border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5";
-const opt = (items: { value: string; label: string }[]) => [{ value: "", label: "— select —" }, ...items];
+const opt = (items: { value: string; label: string; disabled?: boolean }[]) => [{ value: "", label: "— select —" }, ...items];
 
 export default async function RosterOpsAdmin({
   params,
@@ -50,7 +50,11 @@ export default async function RosterOpsAdmin({
   const teams = myTeams ? data.teams.filter((t) => myTeams.has(t.teamSeasonId)) : data.teams;
   const faOpts = data.freeAgents.map((p) => ({ value: p.id, label: p.name }));
   const allLineup = teams.flatMap((t) => t.lineup.map((p) => ({ value: p.playerId, label: `${p.name} (${t.name})` })));
-  const weekTabs = data.weeks.length ? data.weeks : [1];
+  // Real, labelled weeks (incl. Playoffs) for every week picker -- no more freeform numbers.
+  const weekTabs = data.weekOptions.length ? data.weekOptions : [{ value: 1, label: "W1" }];
+  const weekSel = data.weekOptions.map((w) => ({ value: String(w.value), label: w.label }));
+  const weekSelOpt = [{ value: "", label: "— one week —" }, ...weekSel]; // optional 'Until' / strike week
+  const defWeek = String(data.selectedWeek);
 
   return (
     <main>
@@ -68,18 +72,18 @@ export default async function RosterOpsAdmin({
       <div className="card">
         <div className="flex flex-wrap items-center gap-2">
           <span className="sub">Active week (highlight + action default):</span>
-          {weekTabs.map((n) => (
+          {weekTabs.map((w) => (
             <Link
-              key={n}
-              href={`?week=${n}`}
+              key={w.value}
+              href={`?week=${w.value}`}
               className="pill hover:no-underline"
               style={{
-                background: n === data.selectedWeek ? "var(--accent-2)" : "var(--surface-2)",
-                color: n === data.selectedWeek ? "#fff" : "var(--muted)",
+                background: w.value === data.selectedWeek ? "var(--accent-2)" : "var(--surface-2)",
+                color: w.value === data.selectedWeek ? "#fff" : "var(--muted)",
                 border: "1px solid var(--border)",
               }}
             >
-              W{n}
+              {w.label}
             </Link>
           ))}
           {data.weeks.length === 0 && <span className="sub">— no schedule yet; showing week 1 —</span>}
@@ -135,8 +139,8 @@ export default async function RosterOpsAdmin({
                 <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
                 <div className="flex flex-wrap items-end gap-2">
                   <label className="block"><span className="sub">New captain</span><FormSelect name="newCaptainPlayerId" options={opt(lineupOpts)} /></label>
-                  <label className="block"><span className="sub">From week</span><input type="number" name="effectiveWeek" min={1} defaultValue={data.selectedWeek} className={`${inputCls} w-16`} /></label>
-                  <input name="reason" placeholder="reason" className={`${inputCls} w-36`} />
+                  <label className="block"><span className="sub">From week</span><FormSelect name="effectiveWeek" options={weekSel} defaultValue={defWeek} /></label>
+                  <input name="reason" placeholder="reason (optional)" className={`${inputCls} w-36`} />
                   <SubmitButton size="sm" variant="secondary" pendingText="…"><Crown className="size-3.5" /> Set captain</SubmitButton>
                 </div>
               </ActionFlashForm>
@@ -161,8 +165,8 @@ export default async function RosterOpsAdmin({
                 <div className="flex flex-wrap items-end gap-2">
                   <label className="block"><span className="sub">Player</span><FormSelect name="playerId" options={opt(lineupOpts)} /></label>
                   <label className="block"><span className="sub">New seed</span><input type="number" name="newSeed" min={1} className={`${inputCls} w-16`} /></label>
-                  <label className="block"><span className="sub">From week</span><input type="number" name="effectiveWeek" min={1} defaultValue={data.selectedWeek} className={`${inputCls} w-16`} /></label>
-                  <input name="reason" placeholder="reason" className={`${inputCls} w-32`} />
+                  <label className="block"><span className="sub">From week</span><FormSelect name="effectiveWeek" options={weekSel} defaultValue={defWeek} /></label>
+                  <input name="reason" placeholder="reason (optional)" className={`${inputCls} w-32`} />
                   <SubmitButton size="sm" variant="secondary" pendingText="…"><ArrowUpDown className="size-3.5" /> Re-seed</SubmitButton>
                 </div>
               </ActionFlashForm>
@@ -175,8 +179,8 @@ export default async function RosterOpsAdmin({
                 <div className="flex flex-wrap items-end gap-2">
                   <label className="block"><span className="sub">Player A</span><FormSelect name="playerAId" options={opt(lineupOpts)} /></label>
                   <label className="block"><span className="sub">Player B</span><FormSelect name="playerBId" options={opt(lineupOpts)} /></label>
-                  <label className="block"><span className="sub">From week</span><input type="number" name="effectiveWeek" min={1} defaultValue={data.selectedWeek} className={`${inputCls} w-16`} /></label>
-                  <input name="reason" placeholder="reason" className={`${inputCls} w-32`} />
+                  <label className="block"><span className="sub">From week</span><FormSelect name="effectiveWeek" options={weekSel} defaultValue={defWeek} /></label>
+                  <input name="reason" placeholder="reason (optional)" className={`${inputCls} w-32`} />
                   <SubmitButton size="sm" variant="secondary" pendingText="…"><ArrowUpDown className="size-3.5" /> Swap</SubmitButton>
                 </div>
               </ActionFlashForm>
@@ -192,10 +196,14 @@ export default async function RosterOpsAdmin({
                 <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
                 <div className="flex flex-wrap items-end gap-2">
                   <label className="block"><span className="sub">Out</span><FormSelect name="outPlayerId" options={opt(lineupOpts)} /></label>
-                  <label className="block"><span className="sub">In</span><FormSelect name="inPlayerId" options={opt(faOpts)} placeholder="— pool —" /></label>
-                  <label className="block"><span className="sub">Week</span><input type="number" name="effectiveWeek" min={1} defaultValue={data.selectedWeek} className={`${inputCls} w-16`} /></label>
-                  <label className="block"><span className="sub">Until</span><input type="number" name="untilWeek" min={1} placeholder="opt" className={`${inputCls} w-16`} /></label>
-                  <input name="reason" placeholder="reason" className={`${inputCls} w-36`} />
+                  {/* In = a teammate covering a set (internal sub) OR someone from the free-agent pool. */}
+                  <label className="block"><span className="sub">In</span><FormSelect name="inPlayerId" options={opt([
+                    ...(lineupOpts.length ? [{ value: "__team", label: "on this team", disabled: true }, ...lineupOpts] : []),
+                    ...(faOpts.length ? [{ value: "__pool", label: "free agents", disabled: true }, ...faOpts] : []),
+                  ])} placeholder="— teammate or pool —" /></label>
+                  <label className="block"><span className="sub">Week</span><FormSelect name="effectiveWeek" options={weekSel} defaultValue={defWeek} /></label>
+                  <label className="block"><span className="sub">Until</span><FormSelect name="untilWeek" options={weekSelOpt} placeholder="— one week —" /></label>
+                  <input name="reason" placeholder="reason (optional)" className={`${inputCls} w-36`} />
                   <SubmitButton size="sm" variant="secondary" pendingText="…"><RefreshCw className="size-3.5" /> Sub</SubmitButton>
                 </div>
               </ActionFlashForm>
@@ -212,10 +220,10 @@ export default async function RosterOpsAdmin({
                     ...lineupOpts,
                     ...t.subStints.filter((s) => !t.lineup.some((p) => p.playerId === s.playerId)).map((s) => ({ value: s.playerId, label: `${s.name} (sub ${s.window})` })),
                   ])} /></label>
-                  <label className="block"><span className="sub">Subbed W</span><input type="number" name="effectiveWeek" min={1} defaultValue={data.selectedWeek} className={`${inputCls} w-16`} /></label>
-                  <label className="block"><span className="sub">Until</span><input type="number" name="untilWeek" min={1} placeholder="opt" className={`${inputCls} w-16`} /></label>
+                  <label className="block"><span className="sub">Subbed W</span><FormSelect name="effectiveWeek" options={weekSel} defaultValue={defWeek} /></label>
+                  <label className="block"><span className="sub">Until</span><FormSelect name="untilWeek" options={weekSelOpt} placeholder="— one week —" /></label>
                   <label className="block"><span className="sub">Covering for</span><FormSelect name="outPlayerId" options={opt(lineupOpts)} placeholder="— optional —" /></label>
-                  <input name="reason" placeholder="reason" className={`${inputCls} w-32`} />
+                  <input name="reason" placeholder="reason (optional)" className={`${inputCls} w-32`} />
                   <SubmitButton size="sm" variant="secondary" pendingText="…"><RefreshCw className="size-3.5" /> Make sub</SubmitButton>
                 </div>
               </ActionFlashForm>
@@ -225,9 +233,9 @@ export default async function RosterOpsAdmin({
                   <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
                   <div className="flex flex-wrap items-end gap-2">
                     <label className="block"><span className="sub">Sub who is really permanent</span><FormSelect name="playerId" options={opt([...new Map(t.subStints.map((s) => [s.playerId, { value: s.playerId, label: `${s.name} (${s.window})` }])).values()])} /></label>
-                    <label className="block"><span className="sub">From W</span><input type="number" name="effectiveWeek" min={1} defaultValue={1} className={`${inputCls} w-16`} /></label>
+                    <label className="block"><span className="sub">From W</span><FormSelect name="effectiveWeek" options={weekSel} defaultValue="1" /></label>
                     <label className="block"><span className="sub">Seed</span><input type="number" name="seed" min={1} placeholder="keep" className={`${inputCls} w-16`} /></label>
-                    <input name="reason" placeholder="reason" className={`${inputCls} w-32`} />
+                    <input name="reason" placeholder="reason (optional)" className={`${inputCls} w-32`} />
                     <SubmitButton size="sm" variant="secondary" pendingText="…"><UserPlus className="size-3.5" /> Make permanent</SubmitButton>
                   </div>
                 </ActionFlashForm>
@@ -241,8 +249,8 @@ export default async function RosterOpsAdmin({
                 <div className="flex flex-wrap items-end gap-2">
                   <label className="block"><span className="sub">Player</span><FormSelect name="playerId" options={opt(lineupOpts)} /></label>
                   <label className="block"><span className="sub">Type</span><FormSelect name="kind" options={[{ value: "QUIT", label: "Quit" }, { value: "BANNED", label: "Banned" }]} defaultValue="QUIT" /></label>
-                  <label className="block"><span className="sub">From week</span><input type="number" name="effectiveWeek" min={1} defaultValue={data.selectedWeek} className={`${inputCls} w-16`} /></label>
-                  <input name="reason" placeholder="reason" className={`${inputCls} w-36`} />
+                  <label className="block"><span className="sub">From week</span><FormSelect name="effectiveWeek" options={weekSel} defaultValue={defWeek} /></label>
+                  <input name="reason" placeholder="reason (optional)" className={`${inputCls} w-36`} />
                   <SubmitButton size="sm" variant="secondary" pendingText="…"><UserMinus className="size-3.5" /> Record</SubmitButton>
                 </div>
               </ActionFlashForm>
@@ -259,8 +267,8 @@ export default async function RosterOpsAdmin({
                 <div className="flex flex-wrap items-end gap-2">
                   <label className="block"><span className="sub">In</span><FormSelect name="inPlayerId" options={opt(faOpts)} placeholder="— pool —" /></label>
                   <label className="block"><span className="sub">Replaces</span><FormSelect name="replacesPlayerId" options={opt(lineupOpts)} placeholder="— slot —" /></label>
-                  <label className="block"><span className="sub">From week</span><input type="number" name="effectiveWeek" min={1} defaultValue={data.selectedWeek} className={`${inputCls} w-16`} /></label>
-                  <input name="reason" placeholder="reason" className={`${inputCls} w-36`} />
+                  <label className="block"><span className="sub">From week</span><FormSelect name="effectiveWeek" options={weekSel} defaultValue={defWeek} /></label>
+                  <input name="reason" placeholder="reason (optional)" className={`${inputCls} w-36`} />
                   <SubmitButton size="sm" variant="secondary" pendingText="…"><UserPlus className="size-3.5" /> Add</SubmitButton>
                 </div>
               </ActionFlashForm>
@@ -278,8 +286,8 @@ export default async function RosterOpsAdmin({
           <div className="flex flex-wrap items-end gap-2">
             <label className="block"><span className="sub">Player</span><FormSelect name="playerId" options={opt(allLineup)} /></label>
             <label className="block"><span className="sub">Kind</span><FormSelect name="kind" options={STRIKE_KINDS.map((k) => ({ value: k, label: STRIKE_LABEL[k] ?? k }))} defaultValue="SCHEDULING" /></label>
-            <label className="block"><span className="sub">Week</span><input type="number" name="week" min={1} placeholder="opt" className={`${inputCls} w-16`} /></label>
-            <input name="reason" placeholder="reason" className={`${inputCls} w-44`} />
+            <label className="block"><span className="sub">Week</span><FormSelect name="week" options={weekSelOpt} placeholder="— any —" /></label>
+            <input name="reason" placeholder="reason (optional)" className={`${inputCls} w-44`} />
             <SubmitButton size="sm" variant="secondary" pendingText="…">Add strike</SubmitButton>
           </div>
         </ActionFlashForm>
