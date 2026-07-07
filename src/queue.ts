@@ -60,6 +60,7 @@ import {
   isUndeliverableDm,
   removeGuildMemberRole as removeGuildMemberRoleViaBot,
 } from "./discord-helpers.js";
+import { divisionControlsRow } from "./division-controls.js";
 import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
 import { formatSeasonLabel } from "./format-season.js";
 import { postPendingReport } from "./report-flow.js";
@@ -896,7 +897,7 @@ export async function refreshDivisionWelcomes(
     const existingId = div.welcomeMessageId ?? (await findWelcomeMessageId(div.discordChannelId));
     if (ping) {
       if (existingId) await deleteChannelMessage(div.discordChannelId, existingId);
-      const newId = await postChannelMessage(div.discordChannelId, content, true);
+      const newId = await postChannelMessage(div.discordChannelId, content, true, [divisionControlsRow()]);
       if (newId) {
         await prisma.division.update({ where: { id: div.id }, data: { welcomeMessageId: newId } });
         await pinChannelMessage(div.discordChannelId, newId);
@@ -907,11 +908,11 @@ export async function refreshDivisionWelcomes(
       continue;
     }
     let msgId = existingId;
-    const ok = msgId ? await editChannelMessage(div.discordChannelId, msgId, content) : false;
+    const ok = msgId ? await editChannelMessage(div.discordChannelId, msgId, content, [divisionControlsRow()]) : false;
     if (ok) {
       edited++;
     } else {
-      msgId = await postChannelMessage(div.discordChannelId, content);
+      msgId = await postChannelMessage(div.discordChannelId, content, false, [divisionControlsRow()]);
       if (msgId) reposted++;
       else { failed++; continue; }
     }
@@ -1041,7 +1042,7 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
     // roles are already assigned (step 2) so everyone can see it. Remember the
     // message id so /league refresh-welcome can edit it later (ping-free).
     const welcome = await renderDivisionWelcome(div, seasonLabel, roleId);
-    welcomeMessageId = await postChannelMessage(channelId, welcome, true);
+    welcomeMessageId = await postChannelMessage(channelId, welcome, true, [divisionControlsRow()]);
   }
 
   await prisma.division.update({

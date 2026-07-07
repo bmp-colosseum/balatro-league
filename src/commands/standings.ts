@@ -2,6 +2,7 @@ import {
   EmbedBuilder,
   MessageFlags,
   SlashCommandBuilder,
+  type ButtonInteraction,
   type ChatInputCommandInteraction,
 } from "discord.js";
 import { activePublicSeason } from "../active-season.js";
@@ -12,6 +13,28 @@ import { tierEmbedColor } from "../tiers.js";
 import { divisionNameAutocomplete } from "./autocomplete.js";
 import { formatSeasonLabel } from "../format-season.js";
 import type { SlashCommand } from "./types.js";
+
+// Both a slash command and a control-panel button drive the standings render;
+// they share these interaction methods (deferReply/editReply/followUp/user).
+type RepliableInteraction = ChatInputCommandInteraction | ButtonInteraction;
+
+// Shared "all divisions" render — used by /standings (no division arg) and the
+// division control-panel "League standings" button. Caller must have deferred.
+export async function runStandingsAll(interaction: RepliableInteraction, discordId: string): Promise<void> {
+  const activeSeason = await activePublicSeason();
+  if (!activeSeason) {
+    await interaction.editReply("No active season right now.");
+    return;
+  }
+  const mySchedule = await buildMyScheduleEmbed(activeSeason.id, discordId);
+  await renderAllDivisions(
+    interaction,
+    activeSeason.id,
+    formatSeasonLabel(activeSeason),
+    activeSeason.targetGroupSize,
+    mySchedule,
+  );
+}
 
 export const standings: SlashCommand = {
   data: new SlashCommandBuilder()
@@ -143,7 +166,7 @@ async function renderSingleDivision(
 }
 
 async function renderAllDivisions(
-  interaction: ChatInputCommandInteraction,
+  interaction: RepliableInteraction,
   seasonId: string,
   seasonName: string,
   targetGroupSize: number,
@@ -255,7 +278,7 @@ function embedLength(e: EmbedBuilder): number {
 // (6000 total chars + 10 embeds per message): editReply the first batch, followUp
 // the rest. A single tier embed is always well under one message's budget.
 async function sendEmbedsChunked(
-  interaction: ChatInputCommandInteraction,
+  interaction: RepliableInteraction,
   embeds: EmbedBuilder[],
 ): Promise<void> {
   const MAX_CHARS = 5500; // margin under Discord's 6000

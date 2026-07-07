@@ -10,6 +10,7 @@
 import {
   ChannelType,
   PermissionFlagsBits,
+  type BaseMessageOptions,
   type CategoryChannel,
   type Guild,
 } from "discord.js";
@@ -278,6 +279,7 @@ export async function postChannelMessage(
   // @mention in the content (only roles — never @everyone/here/users), e.g. the
   // division welcome at season kickoff pings one @division role, not each member.
   pingRole = false,
+  components?: BaseMessageOptions["components"],
 ): Promise<string | null> {
   try {
     const channel = await getDiscordClient().channels.fetch(channelId);
@@ -285,6 +287,7 @@ export async function postChannelMessage(
     const msg = await channel.send({
       content,
       allowedMentions: { parse: pingRole ? ["roles"] : [] },
+      components,
     });
     return msg.id;
   } catch (err) {
@@ -352,12 +355,13 @@ export async function editChannelMessage(
   channelId: string,
   messageId: string,
   content: string,
+  components?: BaseMessageOptions["components"],
 ): Promise<boolean> {
   try {
     const channel = await getDiscordClient().channels.fetch(channelId);
     if (!channel || !channel.isTextBased() || !("messages" in channel)) return false;
     const msg = await channel.messages.fetch(messageId);
-    await msg.edit({ content, allowedMentions: { parse: [] } });
+    await msg.edit({ content, allowedMentions: { parse: [] }, components });
     return true;
   } catch (err) {
     console.warn(`[bot] editChannelMessage(${channelId}/${messageId}) failed:`, err);

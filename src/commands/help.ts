@@ -38,21 +38,25 @@ const ADMIN_COMMANDS = [
   { cmd: "/league unset-results-webhook", desc: "Stop using a webhook for results announces" },
 ];
 
+// The player command list embed — shared by /help and the division control-panel
+// "Help" button so both surfaces show the identical reference.
+export function buildPlayerHelpEmbed(): EmbedBuilder {
+  return new EmbedBuilder()
+    .setTitle("🃏 League commands")
+    .setColor(0x5865f2)
+    .setDescription(
+      PLAYER_COMMANDS.map((c) => `• \`${c.cmd}\` — ${c.desc}`).join("\n"),
+    )
+    .setFooter({ text: "League admins: run /admin-help for the admin/mod command list." });
+}
+
 export const help: SlashCommand = {
   data: new SlashCommandBuilder()
     .setName("help")
     .setDescription("Show the list of player commands."),
 
   async execute(interaction: ChatInputCommandInteraction) {
-    const embed = new EmbedBuilder()
-      .setTitle("🃏 League commands")
-      .setColor(0x5865f2)
-      .setDescription(
-        PLAYER_COMMANDS.map((c) => `• \`${c.cmd}\` — ${c.desc}`).join("\n"),
-      )
-      .setFooter({ text: "League admins: run /admin-help for the admin/mod command list." });
-
-    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    await interaction.reply({ embeds: [buildPlayerHelpEmbed()], flags: MessageFlags.Ephemeral });
   },
 };
 
