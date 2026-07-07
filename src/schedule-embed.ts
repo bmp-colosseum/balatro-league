@@ -47,30 +47,33 @@ export async function buildScheduleEmbed(playerId: string): Promise<EmbedBuilder
   const done: Item[] = [];
 
   for (const opp of opponents) {
+    // Show the display name people recognize (bold) plus their @username, so
+    // opponents can actually find + DM each other on Discord.
+    const label = opp.username ? `**${opp.displayName}** (@${opp.username})` : `**${opp.displayName}**`;
     const p = div.matches.find(
       (pr) =>
         (pr.playerAId === playerId && pr.playerBId === opp.id) ||
         (pr.playerAId === opp.id && pr.playerBId === playerId),
     );
     if (!p) {
-      remaining.push({ name: opp.displayName, status: "", tz: opp.timezone });
+      remaining.push({ name: label, status: "", tz: opp.timezone });
     } else if (p.status === "CONFIRMED") {
       const myGames = p.playerAId === playerId ? p.gamesWonA : p.gamesWonB;
       const oppGames = p.playerAId === playerId ? p.gamesWonB : p.gamesWonA;
-      done.push({ name: opp.displayName, status: `${myGames}-${oppGames}` });
+      done.push({ name: label, status: `${myGames}-${oppGames}` });
     } else if (p.status === "DISPUTED") {
-      disputed.push({ name: opp.displayName, status: "" });
+      disputed.push({ name: label, status: "" });
     } else if (p.status === "PENDING") {
       if (p.gamesWonA === 0 && p.gamesWonB === 0) {
-        remaining.push({ name: opp.displayName, status: "", tz: opp.timezone });
+        remaining.push({ name: label, status: "", tz: opp.timezone });
       } else if (p.reporterId === playerId) {
         const myGames = p.playerAId === playerId ? p.gamesWonA : p.gamesWonB;
         const oppGames = p.playerAId === playerId ? p.gamesWonB : p.gamesWonA;
-        youReported.push({ name: opp.displayName, status: `${myGames}-${oppGames} (you reported)` });
+        youReported.push({ name: label, status: `${myGames}-${oppGames} (you reported)` });
       } else {
         const myGames = p.playerAId === playerId ? p.gamesWonA : p.gamesWonB;
         const oppGames = p.playerAId === playerId ? p.gamesWonB : p.gamesWonA;
-        theyReported.push({ name: opp.displayName, status: `${myGames}-${oppGames} (they reported — confirm/dispute)` });
+        theyReported.push({ name: label, status: `${myGames}-${oppGames} (they reported — confirm/dispute)` });
       }
     }
   }
@@ -79,7 +82,7 @@ export async function buildScheduleEmbed(playerId: string): Promise<EmbedBuilder
     if (items.length === 0) return "_(none)_";
     return items
       .map((i) => {
-        const base = i.status ? `• **${i.name}** — ${i.status}` : `• **${i.name}**`;
+        const base = i.status ? `• ${i.name} — ${i.status}` : `• ${i.name}`;
         return i.tz ? `${base}  ·  🕐 ${formatZone(i.tz)}` : base;
       })
       .join("\n");
