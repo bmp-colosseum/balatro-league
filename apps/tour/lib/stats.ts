@@ -262,23 +262,30 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
   const didOf = new Map(allPlayers.map((p) => [p.id, p.discordId]));
   const seasonName = new Map(seasons.map((s) => [s.id, s.name]));
   const matchById = new Map(matches.map((m) => [m.id, m]));
-  const teamForSeason = new Map<string, string>();
-  const teamSeasonForSeason = new Map<string, string>();
-  const seedForSeason = new Map<string, number>();
-  for (const e of entries) {
-    teamForSeason.set(e.roster.teamSeason.season.id, e.roster.teamSeason.team.name);
-    teamSeasonForSeason.set(e.roster.teamSeason.season.id, e.roster.teamSeason.id);
-    seedForSeason.set(e.roster.teamSeason.season.id, e.seed);
-  }
-
   // Sub-only seasons: the player has SUB stints but no permanent arrival (DRAFTED/ADDED)
   // that season. Their RosterEntry seed is an import artifact -- they held no seed.
   const myMoves = await prisma.rosterMove.findMany({
     where: { playerId, kind: { in: ["DRAFTED", "ADDED", "SUB"] } },
-    select: { seasonId: true, kind: true },
+    select: { seasonId: true, teamSeasonId: true, kind: true },
   });
   const arrivalSeasons = new Set(myMoves.filter((m) => m.kind !== "SUB").map((m) => m.seasonId));
   const subOnlySeason = new Set(myMoves.filter((m) => m.kind === "SUB" && !arrivalSeasons.has(m.seasonId)).map((m) => m.seasonId));
+  const myArrivalTs = new Set(myMoves.filter((m) => m.kind !== "SUB").map((m) => m.teamSeasonId));
+
+  // Team attribution per season: a player can hold TWO RosterEntries in one season
+  // (permanent member of X + sub attribution on Y). Prefer the team they ARRIVED on;
+  // without the preference, last-entry-wins made the shown team nondeterministic.
+  const teamForSeason = new Map<string, string>();
+  const teamSeasonForSeason = new Map<string, string>();
+  const seedForSeason = new Map<string, number>();
+  for (const e of entries) {
+    const sid = e.roster.teamSeason.season.id;
+    const cur = teamSeasonForSeason.get(sid);
+    if (cur != null && (myArrivalTs.has(cur) || !myArrivalTs.has(e.roster.teamSeason.id))) continue;
+    teamForSeason.set(sid, e.roster.teamSeason.team.name);
+    teamSeasonForSeason.set(sid, e.roster.teamSeason.id);
+    seedForSeason.set(sid, e.seed);
+  }
   const expSeed = await expectedBySeed(); // expected set% by SEED slot (captain=1, round-N pick=N+1)
 
   const career = newAcc();
@@ -337,10 +344,23 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
         include: { roster: { include: { teamSeason: { include: { team: true } } } } },
       })
     : [];
+  // Same arrival-preference as the player's own attribution: an opponent with a sub
+  // stint elsewhere must show the team they actually belonged to.
+  const oppArrivals = detailOppIds.length
+    ? await prisma.rosterMove.findMany({
+        where: { playerId: { in: detailOppIds }, kind: { in: ["DRAFTED", "ADDED"] } },
+        select: { playerId: true, teamSeasonId: true },
+      })
+    : [];
+  const oppArrivalTs = new Set(oppArrivals.map((m) => `${m.playerId}|${m.teamSeasonId}`));
   const oppTeamBySeason = new Map<string, { teamSeasonId: string; teamName: string }>();
   for (const e of oppEntries) {
     const key = `${e.playerId}|${e.roster.teamSeason.seasonId}`;
-    if (!oppTeamBySeason.has(key)) oppTeamBySeason.set(key, { teamSeasonId: e.roster.teamSeason.id, teamName: e.roster.teamSeason.team.name });
+    const cur = oppTeamBySeason.get(key);
+    const curArr = cur ? oppArrivalTs.has(`${e.playerId}|${cur.teamSeasonId}`) : false;
+    const eArr = oppArrivalTs.has(`${e.playerId}|${e.roster.teamSeason.id}`);
+    if (cur && (curArr || !eArr)) continue;
+    oppTeamBySeason.set(key, { teamSeasonId: e.roster.teamSeason.id, teamName: e.roster.teamSeason.team.name });
   }
   const seedResolver = await seedAtWeekResolver([
     ...new Set([...teamSeasonForSeason.values(), ...oppEntries.map((e) => e.roster.teamSeason.id)]),
