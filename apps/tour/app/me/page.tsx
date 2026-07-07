@@ -60,6 +60,18 @@ export default async function MyTour() {
   const captainMatchups = focusTeam?.isCaptain && home.focusSeason ? await getCaptainMatchups(home.focusSeason, viewer.playerId) : [];
   const deadlines = focusTeam ? await weekDeadlinesByName(focusTeam.seasonName) : new Map<number, Date | null>();
 
+  // "On your clock" -- what needs action right now, hoisted above the reference tables.
+  const setsToReport = home.sets.filter((s) => s.canReport);
+  const setsToConfirm = home.sets.filter((s) => s.awaitingMyConfirm);
+  const weeksToPair = captainMatchups.filter((mu) => !mu.decided);
+  const pendingCount = setsToReport.length + setsToConfirm.length + weeksToPair.length;
+  const pendingTargets = [
+    ...setsToReport.map((s) => deadlines.get(s.week) ?? null),
+    ...setsToConfirm.map((s) => deadlines.get(s.week) ?? null),
+    ...weeksToPair.map((mu) => mu.deadline),
+  ].filter((d): d is Date => d != null);
+  const nextTarget = pendingTargets.length ? pendingTargets.reduce((a, b) => (a < b ? a : b)) : null;
+
   return (
     <main>
       <LiveRefresh channel="sets" />
@@ -77,40 +89,30 @@ export default async function MyTour() {
         </Callout>
       )}
 
-      {home.teams.length === 0 ? (
+      {home.teams.length === 0 && (
         <Callout type="info">You&apos;re not on a roster yet.</Callout>
-      ) : (
-        <>
-          <h2 className="mt-2 mb-1 text-[1.1rem]">Your teams</h2>
-          <div className="card">
-            <table>
-              <thead><tr><th>Season</th><th>Team</th><th className="num">Seed</th><th>Role</th><th></th></tr></thead>
-              <tbody>
-                {home.teams.map((t) => (
-                  <tr key={t.teamSeasonId}>
-                    <td><Link href={`/seasons/${encodeURIComponent(t.seasonName)}`}>{t.seasonName}</Link>{t.active && <span className="badge" style={{ marginLeft: 6 }}>active</span>}</td>
-                    <td>
-                      <Link href={`/teams/${t.teamSeasonId}`}>{t.teamName}</Link>
-                      {(t.isCaptain || t.isCoCaptain) && t.active && (
-                        <details className="mt-0.5">
-                          <summary className="sub" style={{ cursor: "pointer" }}>rename</summary>
-                          <ActionFlashForm action={renameMyTeamAction} className="mt-1 flex items-center gap-1.5">
-                            <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
-                            <input name="teamName" defaultValue={t.teamName} required maxLength={48} className="w-44 rounded border border-[var(--border)] bg-[var(--surface-2)] px-1.5 py-0.5" />
-                            <SubmitButton size="sm" variant="secondary" pendingText="…">Save</SubmitButton>
-                          </ActionFlashForm>
-                        </details>
-                      )}
-                    </td>
-                    <td className="num">{t.seed}</td>
-                    <td className="sub">{t.isCaptain ? <span className="inline-flex items-center gap-1"><Crown className="size-3.5 text-[var(--accent)]" /> Captain</span> : t.isCoCaptain ? <span className="inline-flex items-center gap-1"><Crown className="size-3.5 text-[var(--muted)]" /> Co-captain</span> : "Player"}</td>
-                    <td style={{ textAlign: "right" }}><Link href={`/seasons/${encodeURIComponent(t.seasonName)}`}>Season →</Link></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      )}
+
+      {/* On your clock -- action-first summary; the tables below carry the actual forms. */}
+      {focusTeam && (
+        pendingCount > 0 ? (
+          <div className="card card-accent" style={{ marginTop: "0.75rem" }}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="bracket-title" style={{ padding: 0 }}>On your clock</span>
+              {setsToReport.length > 0 && <span className="badge" style={{ color: "var(--accent-2)" }}>{setsToReport.length} to report</span>}
+              {setsToConfirm.length > 0 && <span className="badge" style={{ color: "var(--accent-2)" }}>{setsToConfirm.length} to confirm</span>}
+              {weeksToPair.length > 0 && <span className="badge" style={{ color: "var(--accent)" }}>{weeksToPair.length} week{weeksToPair.length === 1 ? "" : "s"} to pair</span>}
+              {nextTarget && <DeadlineChip deadline={nextTarget} prefix="next" />}
+            </div>
+            <p className="sub" style={{ margin: "6px 0 0" }}>Sort these out below -- report and confirm your sets, and pair any weeks you captain.</p>
           </div>
-        </>
+        ) : (
+          <Callout type="success">
+            You&apos;re all caught up here -- the bot keeps the week moving. Jump into{" "}
+            <Link href={`/seasons/${encodeURIComponent(focusTeam.seasonName)}/pickem`}>pick&apos;em</Link> or{" "}
+            <Link href={`/seasons/${encodeURIComponent(focusTeam.seasonName)}/fantasy`}>fantasy</Link> for {focusTeam.seasonName}.
+          </Callout>
+        )
       )}
 
       {captainMatchups.length > 0 && (
@@ -213,6 +215,40 @@ export default async function MyTour() {
               </table>
             </div>
           )}
+        </>
+      )}
+
+      {home.teams.length > 0 && (
+        <>
+          <h2 className="mt-6 mb-1 text-[1.1rem]">Your teams</h2>
+          <div className="card">
+            <table>
+              <thead><tr><th>Season</th><th>Team</th><th className="num">Seed</th><th>Role</th><th></th></tr></thead>
+              <tbody>
+                {home.teams.map((t) => (
+                  <tr key={t.teamSeasonId}>
+                    <td><Link href={`/seasons/${encodeURIComponent(t.seasonName)}`}>{t.seasonName}</Link>{t.active && <span className="badge" style={{ marginLeft: 6 }}>active</span>}</td>
+                    <td>
+                      <Link href={`/teams/${t.teamSeasonId}`}>{t.teamName}</Link>
+                      {(t.isCaptain || t.isCoCaptain) && t.active && (
+                        <details className="mt-0.5">
+                          <summary className="sub" style={{ cursor: "pointer" }}>rename</summary>
+                          <ActionFlashForm action={renameMyTeamAction} className="mt-1 flex items-center gap-1.5">
+                            <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
+                            <input name="teamName" defaultValue={t.teamName} required maxLength={48} className="w-44 rounded border border-[var(--border)] bg-[var(--surface-2)] px-1.5 py-0.5" />
+                            <SubmitButton size="sm" variant="secondary" pendingText="...">Save</SubmitButton>
+                          </ActionFlashForm>
+                        </details>
+                      )}
+                    </td>
+                    <td className="num">{t.seed}</td>
+                    <td className="sub">{t.isCaptain ? <span className="inline-flex items-center gap-1"><Crown className="size-3.5 text-[var(--accent)]" /> Captain</span> : t.isCoCaptain ? <span className="inline-flex items-center gap-1"><Crown className="size-3.5 text-[var(--muted)]" /> Co-captain</span> : "Player"}</td>
+                    <td style={{ textAlign: "right" }}><Link href={`/seasons/${encodeURIComponent(t.seasonName)}`}>Season &rarr;</Link></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </main>
