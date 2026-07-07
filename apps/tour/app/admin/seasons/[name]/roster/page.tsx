@@ -10,6 +10,8 @@ import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
 import { TeamManagePanel } from "@/components/TeamManagePanel";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { Section } from "@/components/admin/Section";
 import { reinstateAction, removeMoveAction, addStrikeAction, removeStrikeAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -68,15 +70,11 @@ export default async function RosterOpsAdmin({
 
   return (
     <main>
-      <p>
-        <Link href={`/admin/seasons/${enc}`} className="inline-flex items-center gap-1"><ArrowLeft className="size-3.5" /> {seasonName}</Link>
-      </p>
-      <h1>Roster ops</h1>
-      <p className="sub">
-        Each card shows the team&apos;s <strong>whole season</strong> — members, subs and departures. The week
-        selector highlights who&apos;s <strong>active that week</strong> (dimmed = not playing it); actions default
-        to it. Everything is an append-only move log, so history is never overwritten. Free-agent pool: {data.freeAgents.length}.
-      </p>
+      <AdminPageHeader
+        back={{ href: `/admin/seasons/${enc}`, label: seasonName }}
+        title="Roster ops"
+        sub={<>Each row is a player; open <strong>Manage</strong> on a row for that player&apos;s actions. The week selector sets the default week actions apply to. Everything is an append-only move log, so history is never overwritten. Free-agent pool: {data.freeAgents.length}.</>}
+      />
 
       {/* Week selector */}
       <div className="card">
@@ -161,8 +159,7 @@ export default async function RosterOpsAdmin({
       </>)}
 
       {/* Timeline */}
-      <h2 className="mt-6 mb-1 text-[1.1rem]">Timeline ({data.timeline.length})</h2>
-      <div className="card">
+      <Section className="mt-6" title={`Timeline (${data.timeline.length})`}>
         {data.timeline.length === 0 ? (
           <p className="sub">No roster moves recorded.</p>
         ) : (
@@ -211,7 +208,7 @@ export default async function RosterOpsAdmin({
             </tbody>
           </table>
         )}
-      </div>
+      </Section>
     </main>
   );
 }

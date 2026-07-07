@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { ArrowLeft, Check, X, Inbox } from "lucide-react";
+import { Check, X, Inbox } from "lucide-react";
 import { getViewer, isAdmin } from "@/lib/auth";
 import { capabilitiesFor, seasonIdByName } from "@/lib/permissions";
 import { listPendingRequests } from "@/lib/services/roster-requests";
 import { NoAccess } from "@/components/NoAccess";
-import { Callout } from "@/components/Callout";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { EmptyState } from "@/components/admin/EmptyState";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { SelectAllCheckbox } from "@/components/SelectAllCheckbox";
@@ -34,17 +35,15 @@ export default async function RosterRequestsInbox({ params }: { params: Promise<
   return (
     <main>
       {sid && <LiveRefresh channel={`roster-requests:${sid}`} />}
-      <p>
-        <Link href={`/admin/seasons/${enc}`} className="inline-flex items-center gap-1"><ArrowLeft className="size-3.5" /> {seasonName}</Link>
-      </p>
-      <h1 className="inline-flex items-center gap-2"><Inbox className="size-5" /> Roster requests</h1>
-      <p className="sub">
-        Captain-submitted roster changes waiting on a mod. <strong>Approve</strong> runs the change (it lands on the
-        team&apos;s move timeline); <strong>Reject</strong> discards it. Captains can withdraw their own from the team page.
-      </p>
+      <AdminPageHeader
+        back={{ href: `/admin/seasons/${enc}`, label: seasonName }}
+        icon={<Inbox className="size-5" />}
+        title="Roster requests"
+        sub={<>Captain-submitted roster changes waiting on a mod. <strong>Approve</strong> runs the change (it lands on the team&apos;s move timeline); <strong>Reject</strong> discards it. Captains can withdraw their own from the team page.</>}
+      />
 
       {pending.length === 0 ? (
-        <Callout type="success">No pending requests -- all caught up.</Callout>
+        <EmptyState tone="success">No pending requests -- all caught up.</EmptyState>
       ) : (
         <>
           {/* Bulk bar: the row checkboxes below join this form via form="bulk-approve-req". */}
