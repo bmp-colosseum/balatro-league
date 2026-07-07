@@ -13,7 +13,7 @@ function rev(season: string) {
   revalidatePath(`/seasons/${enc}`);
 }
 
-// Per-row table actions redirect back with a toast message (not an inline banner).
+// Plain (non-ActionFlashForm) per-row actions redirect back with a toast message.
 function backToTeams(season: string, msg: string, ok = true): never {
   redirect(`/admin/seasons/${encodeURIComponent(season)}/teams?${ok ? "ok" : "err"}=${encodeURIComponent(msg)}`);
 }
@@ -34,47 +34,35 @@ export async function createTeamAction(_prev: ActionResult, formData: FormData):
   }
 }
 
-export async function renameTeamAdminAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+// Combined per-row edit: one Save writes name + conference + (when editable) captain in a
+// single round-trip, instead of three separate mini-forms. Conference/captain are only
+// applied when the row's edit form actually sent a value — an empty conferenceId means the
+// select stayed on the "Unassigned" placeholder (not a real, settable option), and an empty
+// captainDiscordId means the field wasn't rendered at all (captain is locked post-draft; see
+// the page's structureLocked gate). setCaptain no-ops (returns unchanged) when the picked
+// captain is already current, so re-submitting the unchanged value is always safe.
+export async function updateTeamRowAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
   const season = String(formData.get("season") ?? "");
+  const teamSeasonId = String(formData.get("teamSeasonId") ?? "");
   try {
-    const r = await renameTeam(String(formData.get("teamSeasonId") ?? ""), String(formData.get("teamName") ?? ""));
+    const renamed = await renameTeam(teamSeasonId, String(formData.get("teamName") ?? ""));
+
+    const conferenceId = String(formData.get("conferenceId") ?? "");
+    if (conferenceId) await setTeamConference(teamSeasonId, conferenceId);
+
+    let captainNote = "";
+    const captainDiscordId = String(formData.get("captainDiscordId") ?? "");
+    if (captainDiscordId) {
+      const cap = await setCaptain(season, teamSeasonId, captainDiscordId);
+      if (!cap.unchanged) captainNote = ` Captain set to ${cap.captain}.`;
+    }
+
     rev(season);
-    return { ok: true, message: `Renamed to ${r.name}.` };
+    return { ok: true, message: `Saved ${renamed.name}.${captainNote}` };
   } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : "Rename failed." };
+    return { ok: false, message: e instanceof Error ? e.message : "Update failed." };
   }
-}
-
-export async function setTeamConferenceAction(formData: FormData) {
-  if (!(await isAdmin())) return;
-  const season = String(formData.get("season") ?? "");
-  let msg = "Moved conference.";
-  let ok = true;
-  try {
-    await setTeamConference(String(formData.get("teamSeasonId") ?? ""), String(formData.get("conferenceId") ?? ""));
-  } catch (e) {
-    ok = false;
-    msg = e instanceof Error ? e.message : "Move failed.";
-  }
-  rev(season);
-  backToTeams(season, msg, ok);
-}
-
-export async function setCaptainAction(formData: FormData) {
-  if (!(await isAdmin())) return;
-  const season = String(formData.get("season") ?? "");
-  let msg = "Captain set.";
-  let ok = true;
-  try {
-    const r = await setCaptain(season, String(formData.get("teamSeasonId") ?? ""), String(formData.get("captainDiscordId") ?? ""));
-    msg = r.unchanged ? `${r.captain} already captains this team.` : `Captain set to ${r.captain}.`;
-  } catch (e) {
-    ok = false;
-    msg = e instanceof Error ? e.message : "Couldn't set the captain.";
-  }
-  rev(season);
-  backToTeams(season, msg, ok);
 }
 
 export async function deleteTeamAction(formData: FormData) {

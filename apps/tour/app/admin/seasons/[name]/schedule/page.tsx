@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, CalendarDays } from "lucide-react";
+import { ArrowLeft, CalendarDays, Pencil } from "lucide-react";
 import { isAdmin } from "@/lib/auth";
 import { getScheduleSetup, getSchedule } from "@/lib/services/schedule";
 import { Callout } from "@/components/Callout";
@@ -112,19 +112,7 @@ export default async function ScheduleAdmin({ params }: { params: Promise<{ name
   return (
     <main>
       {back}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1>{seasonName} — Schedule</h1>
-        <form action={resetScheduleAction}>
-          <input type="hidden" name="season" value={seasonName} />
-          <ConfirmButton
-            message="Reset the schedule? This deletes every week, matchup, and any sets played under them."
-            variant="destructive"
-            size="sm"
-          >
-            Reset schedule
-          </ConfirmButton>
-        </form>
-      </div>
+      <h1>{seasonName} — Schedule</h1>
       <p className="sub">{board.weeks.length} weeks · {totalMatchups} matchups</p>
 
       {/* Soft weekly targets. A nudge the TO sets, never enforced -- blank = nothing shown. */}
@@ -159,7 +147,12 @@ export default async function ScheduleAdmin({ params }: { params: Promise<{ name
               <DeadlineChip deadline={w.deadlineAt} />
             </div>
             <details>
-              <summary className="sub" style={{ cursor: "pointer" }}>set target</summary>
+              <summary
+                className="pill inline-flex items-center gap-1"
+                style={{ cursor: "pointer", border: "1px solid var(--accent)", color: "var(--accent)" }}
+              >
+                <Pencil className="size-3" /> Set deadline
+              </summary>
               <ActionFlashForm action={setWeekDeadlineAction} className="mt-1">
                 <input type="hidden" name="season" value={seasonName} />
                 <input type="hidden" name="week" value={w.number} />
@@ -184,7 +177,7 @@ export default async function ScheduleAdmin({ params }: { params: Promise<{ name
                     <td>{m.bName}</td>
                     <td className="sub">{m.conference}</td>
                     <td style={{ textAlign: "right" }}>
-                      <span className="inline-flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                         <Link href={`/admin/matchups/${m.id}`}>Pair →</Link>
                         <CopyLinkButton path={`/overlay/matchup/${m.id}`} label="Overlay link" />
                       </span>
@@ -196,6 +189,23 @@ export default async function ScheduleAdmin({ params }: { params: Promise<{ name
           </table>
         </div>
       ))}
+
+      <div className="card card-danger" style={{ marginTop: "1.5rem" }}>
+        <div className="bracket-title" style={{ padding: 0, color: "var(--danger)" }}>Danger zone</div>
+        <p className="sub" style={{ marginTop: "0.25rem" }}>
+          Deletes every week, matchup, and any sets played under them. This can&apos;t be undone.
+        </p>
+        <form action={resetScheduleAction} className="mt-2">
+          <input type="hidden" name="season" value={seasonName} />
+          <ConfirmButton
+            message="Reset the schedule? This deletes every week, matchup, and any sets played under them."
+            variant="destructive"
+            size="sm"
+          >
+            Reset schedule
+          </ConfirmButton>
+        </form>
+      </div>
     </main>
   );
 }

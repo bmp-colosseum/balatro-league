@@ -43,6 +43,8 @@ export default async function SeasonAdmin({ params }: { params: Promise<{ name: 
   const { season, signups } = data;
   const enc = encodeURIComponent(season.name);
   const stageIdx = STATES.indexOf(season.state);
+  // Linear "next" state for the primary Advance action; null once DONE (or on an unknown state).
+  const nextState = stageIdx > -1 && stageIdx < STATES.length - 1 ? STATES[stageIdx + 1] : null;
   const conferences = to ? await listConferences(season.name) : [];
   const fantasy = to ? await getFantasyLeague(season.name).catch(() => null) : null;
   const structureLocked = !!season.draft; // once the draft exists, structure is baked in
@@ -111,11 +113,23 @@ export default async function SeasonAdmin({ params }: { params: Promise<{ name: 
           </p>
         )}
         {to && (
-          <form action={updateSeasonStateAction} className="mt-3 flex items-end gap-2">
-            <input type="hidden" name="name" value={season.name} />
-            <FormSelect name="state" defaultValue={season.state} options={STATES.map((s) => ({ value: s, label: STATE_LABEL[s] }))} />
-            <SubmitButton variant="secondary">Set state</SubmitButton>
-          </form>
+          <div className="mt-3">
+            {nextState && (
+              <form action={updateSeasonStateAction} className="flex items-end gap-2">
+                <input type="hidden" name="name" value={season.name} />
+                <input type="hidden" name="state" value={nextState} />
+                <SubmitButton>Advance to {STATE_LABEL[nextState]}</SubmitButton>
+              </form>
+            )}
+            <details className="mt-2">
+              <summary className="sub" style={{ cursor: "pointer" }}>Override state</summary>
+              <form action={updateSeasonStateAction} className="mt-2 flex items-end gap-2">
+                <input type="hidden" name="name" value={season.name} />
+                <FormSelect name="state" defaultValue={season.state} options={STATES.map((s) => ({ value: s, label: STATE_LABEL[s] }))} />
+                <SubmitButton variant="secondary">Set state</SubmitButton>
+              </form>
+            </details>
+          </div>
         )}
       </div>
 
@@ -124,6 +138,8 @@ export default async function SeasonAdmin({ params }: { params: Promise<{ name: 
       {to ? (
         <div className="card">
           <div className="bracket-title">Season settings</div>
+
+          <div className="bracket-title" style={{ marginTop: 16 }}>Format &amp; structure</div>
           {structureLocked ? (
             <>
               <p className="sub" style={{ marginTop: 0 }}>Locked — the draft exists, so the structure is baked in.</p>

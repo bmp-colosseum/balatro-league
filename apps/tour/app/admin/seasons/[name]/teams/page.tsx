@@ -10,7 +10,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createTeamAction, renameTeamAdminAction, setTeamConferenceAction, setCaptainAction, deleteTeamAction } from "./actions";
+import { createTeamAction, updateTeamRowAction, deleteTeamAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -142,72 +142,60 @@ export default async function TeamsAdmin({
         )}
       </div>
 
-      <div className="card" style={{ overflowX: "auto" }}>
-        <table>
-          <thead>
-            <tr>
-              <th className="num">Seed</th>
-              <th>Team</th>
-              <th>Captain</th>
-              {conferences.length > 0 && <th>Conference</th>}
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {teams.map((t) => (
-              <tr key={t.teamSeasonId}>
-                <td className="num">{t.seed}</td>
-                <td>
-                  <ActionFlashForm action={renameTeamAdminAction} className="flex items-center gap-2">
-                    <input type="hidden" name="season" value={seasonName} />
-                    <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
-                    <Input name="teamName" defaultValue={t.name} required maxLength={48} className="w-56" />
-                    <SubmitButton variant="secondary" size="sm">Rename</SubmitButton>
-                  </ActionFlashForm>
-                </td>
-                <td>
+      <div className="card">
+        {teams.map((t) => (
+          <div key={t.teamSeasonId} style={{ borderTop: "1px solid var(--border)", padding: "0.5rem 0" }}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="sub">#{t.seed}</span>
+                <span style={{ fontWeight: 600 }}>{t.name}</span>
+                <span className="sub inline-flex items-center gap-1">
+                  <Crown className="size-3.5 text-[var(--accent)]" aria-hidden /> {t.captain}
+                </span>
+                {conferences.length > 0 && <span className="pill">{t.conference}</span>}
+              </div>
+              <span className="flex flex-wrap items-center gap-1.5">
+                <Link href={`/admin/seasons/${enc}/roster`} className="text-sm">roster ops</Link>
+                <form action={deleteTeamAction} className="inline">
+                  <input type="hidden" name="season" value={seasonName} />
+                  <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
+                  <ConfirmButton message={`Delete ${t.name}? This removes the team-season and everything on it (roster, sets, picks).`} variant="destructive" size="sm">
+                    Delete
+                  </ConfirmButton>
+                </form>
+              </span>
+            </div>
+            <details className="mt-1">
+              <summary className="sub" style={{ cursor: "pointer" }}>Edit</summary>
+              <ActionFlashForm action={updateTeamRowAction} className="flex flex-wrap items-end gap-3 mt-2">
+                <input type="hidden" name="season" value={seasonName} />
+                <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
+                <div className="grid gap-1.5">
+                  <Label htmlFor={`teamName-${t.teamSeasonId}`}>Team name</Label>
+                  <Input id={`teamName-${t.teamSeasonId}`} name="teamName" defaultValue={t.name} required maxLength={48} className="w-56" />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label>Captain</Label>
                   {structureLocked ? (
-                    <span className="inline-flex items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1.5 sub" style={{ height: "2.25rem" }}>
                       <Crown className="size-3.5 text-[var(--accent)]" aria-hidden /> {t.captain}
                     </span>
                   ) : (
-                    <form action={setCaptainAction} className="flex items-center gap-2">
-                      <input type="hidden" name="season" value={seasonName} />
-                      <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
-                      <FormSelect name="captainDiscordId" defaultValue={t.captainDiscordId ?? ""} options={captainCellOptions(t)} size="sm" triggerClassName="w-52" />
-                      <SubmitButton variant="secondary" size="sm">Set</SubmitButton>
-                    </form>
+                    <FormSelect name="captainDiscordId" defaultValue={t.captainDiscordId ?? ""} options={captainCellOptions(t)} size="sm" triggerClassName="w-52" />
                   )}
-                </td>
+                </div>
                 {conferences.length > 0 && (
-                  <td>
-                    <form action={setTeamConferenceAction} className="flex items-center gap-2">
-                      <input type="hidden" name="season" value={seasonName} />
-                      <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
-                      <FormSelect name="conferenceId" defaultValue={t.conference === "Unassigned" ? "" : t.conferenceId} placeholder="Unassigned" options={confOptions()} size="sm" triggerClassName="w-40" />
-                      <SubmitButton variant="secondary" size="sm">Move</SubmitButton>
-                    </form>
-                  </td>
+                  <div className="grid gap-1.5">
+                    <Label>Conference</Label>
+                    <FormSelect name="conferenceId" defaultValue={t.conference === "Unassigned" ? "" : t.conferenceId} placeholder="Unassigned" options={confOptions()} size="sm" triggerClassName="w-40" />
+                  </div>
                 )}
-                <td>
-                  <span className="flex flex-wrap items-center gap-1.5">
-                    <Link href={`/admin/seasons/${enc}/roster`} className="text-sm">roster ops</Link>
-                    <form action={deleteTeamAction} className="inline">
-                      <input type="hidden" name="season" value={seasonName} />
-                      <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
-                      <ConfirmButton message={`Delete ${t.name}? This removes the team-season and everything on it (roster, sets, picks).`} variant="destructive" size="sm">
-                        Delete
-                      </ConfirmButton>
-                    </form>
-                  </span>
-                </td>
-              </tr>
-            ))}
-            {teams.length === 0 && (
-              <tr><td colSpan={conferences.length > 0 ? 5 : 4} className="sub">No teams yet — create the first one above.</td></tr>
-            )}
-          </tbody>
-        </table>
+                <SubmitButton variant="secondary" size="sm">Save</SubmitButton>
+              </ActionFlashForm>
+            </details>
+          </div>
+        ))}
+        {teams.length === 0 && <p className="sub" style={{ margin: 0 }}>No teams yet - create the first one above.</p>}
       </div>
     </main>
   );
