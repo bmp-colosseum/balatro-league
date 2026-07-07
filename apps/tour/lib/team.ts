@@ -171,7 +171,8 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
     prisma.player.findMany({ where: { id: { in: playerIds } }, select: { id: true, displayName: true, discordId: true } }),
     prisma.tourSet.findMany({
       where: { seasonId: ts.seasonId, bracket: "REGULAR", OR: [{ playerAId: { in: playerIds } }, { playerBId: { in: playerIds } }] },
-      select: { playerAId: true, playerBId: true, matchId: true, week: true },
+      // Live sets carry no week of their own -- join the matchup's so lastWeek is real.
+      select: { playerAId: true, playerBId: true, matchId: true, week: true, matchup: { select: { week: { select: { number: true } } } } },
     }),
   ]);
   const nameById = new Map(players.map((p) => [p.id, p.displayName]));
@@ -208,7 +209,7 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
 
   // Effective seed reflects mid-season re-seeds (RESEED moves), read at the last regular week.
   const seedAt = await seedAtWeekResolver([id]);
-  const lastWeek = Math.max(1, ...sets.map((s) => s.week ?? 0));
+  const lastWeek = Math.max(1, ...sets.map((s) => s.week ?? s.matchup?.week.number ?? 0));
 
   // Full seed path per player over the regular season: draft seed + each re-seed (in week
   // order) up to the last regular week — so a multi-step re-seed reads #5 → #3 → #7.

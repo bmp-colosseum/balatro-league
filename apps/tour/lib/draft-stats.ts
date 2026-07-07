@@ -108,6 +108,27 @@ export async function expectedByRound(): Promise<Map<number, number>> {
   return new Map(rows.map((r) => [r.round, r.pct]));
 }
 
+// The expected set-win% by INTRA-TEAM SEED slot. Distinct from expectedByRound:
+// the captain holds seed 1 (never a draft pick — their baseline is the captains'
+// own aggregate), and a round-N pick sits at seed N+1. Callers comparing a player
+// against "the average for the seed they held" must use THIS map — keying
+// expectedByRound by a seed silently shifts every baseline down a round.
+export async function expectedBySeed(): Promise<Map<number, number>> {
+  const [byRound, teamSeasons, rec] = await Promise.all([
+    getDraftValueByRound(),
+    prisma.teamSeason.findMany({ select: { seasonId: true, captainPlayerId: true } }),
+    seasonPlayerSetRecords(),
+  ]);
+  const out = new Map<number, number>(byRound.map((r) => [r.round + 1, r.pct]));
+  let w = 0, l = 0;
+  for (const t of teamSeasons) {
+    const r = rec.get(`${t.seasonId}:${t.captainPlayerId}`);
+    if (r) { w += r.setW; l += r.setL; }
+  }
+  if (w + l > 0) out.set(1, w / (w + l));
+  return out;
+}
+
 export interface HeatCell {
   name: string;
   playerId: string;

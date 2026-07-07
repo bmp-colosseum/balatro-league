@@ -2,7 +2,7 @@
 // playoff finals. Everything is a reduction over TourSet→Match (+ RosterEntry for
 // teams, PlayoffSeries finals for rings). Data is small — compute in memory.
 import { prisma } from "./db";
-import { expectedByRound } from "./draft-stats";
+import { expectedBySeed } from "./draft-stats";
 import { seedAtWeekResolver } from "./services/roster-ops";
 
 export interface PlayerCareer {
@@ -250,7 +250,9 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
     }),
     prisma.tourSet.findMany({
       where: { OR: [{ playerAId: playerId }, { playerBId: playerId }] },
-      select: { playerAId: true, playerBId: true, matchId: true, seasonId: true, bracket: true, week: true },
+      // Live sets don't store `week` -- it lives on their matchup. Join it so effective
+      // seeds resolve at the REAL week (else everything falls back to week-1 lineups).
+      select: { playerAId: true, playerBId: true, matchId: true, seasonId: true, bracket: true, week: true, matchup: { select: { week: { select: { number: true } } } } },
     }),
     prisma.match.findMany({ select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true, winnerId: true } }),
     ringHolders(),
@@ -277,7 +279,7 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
   });
   const arrivalSeasons = new Set(myMoves.filter((m) => m.kind !== "SUB").map((m) => m.seasonId));
   const subOnlySeason = new Set(myMoves.filter((m) => m.kind === "SUB" && !arrivalSeasons.has(m.seasonId)).map((m) => m.seasonId));
-  const expSeed = await expectedByRound(); // expected set% by seed slot — for the per-season heat
+  const expSeed = await expectedBySeed(); // expected set% by SEED slot (captain=1, round-N pick=N+1)
 
   const career = newAcc();
   const playoff = newAcc(); // regular season is the default record; playoffs tracked apart
@@ -304,7 +306,7 @@ export async function getPlayer(playerId: string): Promise<PlayerDetail | null> 
     const gamesFor = isSetA ? gA : gB;
     const gamesAgainst = isSetA ? gB : gA;
     const won = m.winnerId === playerId ? true : m.winnerId ? false : null;
-    rawDetail.push({ oppId, seasonId: ts.seasonId, week: ts.week, bracket: ts.bracket === "PLAYOFF" ? "PLAYOFF" : "REGULAR", gamesFor, gamesAgainst, won });
+    rawDetail.push({ oppId, seasonId: ts.seasonId, week: ts.week ?? ts.matchup?.week.number ?? null, bracket: ts.bracket === "PLAYOFF" ? "PLAYOFF" : "REGULAR", gamesFor, gamesAgainst, won });
 
     if (ts.bracket === "PLAYOFF") { applySet(playoff, playerId, m, ts.playerAId, ts.seasonId); continue; }
     applySet(career, playerId, m, ts.playerAId, ts.seasonId);
