@@ -69,7 +69,7 @@ export async function announceResult(pairingId: string): Promise<void> {
   const embed = new EmbedBuilder()
     .setTitle(title)
     .setDescription(
-      `<@${pairing.playerA.discordId}> **${pairing.gamesWonA}–${pairing.gamesWonB}** <@${pairing.playerB.discordId}>\n` +
+      `${sanitizeName(pairing.playerA.displayName)} **${pairing.gamesWonA}–${pairing.gamesWonB}** ${sanitizeName(pairing.playerB.displayName)}\n` +
         `Division: **${pairing.division.name}**` +
         (pairing.forfeit ? `\n_Win by forfeit / DQ._` : ""),
     )
@@ -175,7 +175,7 @@ export async function announceChallengeResult(opts: {
   const embed = new EmbedBuilder()
     .setTitle(title)
     .setDescription(
-      `<@${playerA.discordId}> **${winsA}–${winsB}** <@${playerB.discordId}>\n_Casual challenge — not counted toward standings._`,
+      `${sanitizeName(playerA.displayName)} **${winsA}–${winsB}** ${sanitizeName(playerB.displayName)}\n_Casual challenge — not counted toward standings._`,
     )
     .setColor(color)
     .setFooter({ text: "Challenge" })
