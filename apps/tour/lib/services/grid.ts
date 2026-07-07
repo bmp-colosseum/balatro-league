@@ -68,6 +68,8 @@ export interface ConferenceGrid {
 export interface CrossMeeting {
   aName: string;
   bName: string;
+  aTeamSeasonId: string;
+  bTeamSeasonId: string;
   aConf: string;
   bConf: string;
   setsA: number;
@@ -221,6 +223,7 @@ export async function getSeasonGrid(seasonName: string): Promise<SeasonGrid | nu
       // Cross-conference: not part of either conference's round-robin grid.
       crossConf.push({
         aName: nameOf.get(mt.loId) ?? "?", bName: nameOf.get(mt.hiId) ?? "?",
+        aTeamSeasonId: mt.loId, bTeamSeasonId: mt.hiId,
         aConf: ca.name, bConf: cb.name, setsA: mt.setsLo, setsB: mt.setsHi, week: null,
       });
       continue;

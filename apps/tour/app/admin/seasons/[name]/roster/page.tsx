@@ -92,7 +92,7 @@ export default async function RosterOpsAdmin({
           return (
             <div className="card" key={t.teamSeasonId} style={{ marginBottom: 0 }}>
               <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold">{t.name}</span>
+                <span className="font-semibold"><Link href={`/teams/${t.teamSeasonId}`} style={{ color: "inherit" }}>{t.name}</Link></span>
                 <span className="badge">W{data.selectedWeek} · {t.lineup.length} active</span>
               </div>
               <ol className="mt-2 list-none p-0" style={{ margin: 0 }}>
@@ -102,7 +102,7 @@ export default async function RosterOpsAdmin({
                     <li key={p.playerId} className="flex items-baseline gap-2 py-0.5">
                       <span className="rank" style={{ width: "1.4rem" }}>{p.seed}</span>
                       {p.isCaptain && <Crown className="size-3.5 shrink-0 text-[var(--accent)]" />}
-                      <span>{p.name}</span>
+                      <span><Link href={`/players/${p.playerId}`} style={{ color: "inherit" }}>{p.name}</Link></span>
                       {p.isCoCaptain && <span className="badge" title="Co-captain — same team powers as the captain">CC</span>}
                       {p.viaSub && <span className="badge">sub</span>}
                       {st && st.season > 0 && (

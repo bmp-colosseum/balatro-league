@@ -64,6 +64,8 @@ export interface ReconcilePreviewRow {
   week: number;
   teamAName: string;
   teamBName: string;
+  teamAId: string; // teamSeason ids -- the preview links team names to their pages
+  teamBId: string;
   setsWonA: number;
   setsWonB: number;
   gamesWonA: number; // total games won across the matchup's sets (the game% tiebreaker input)
@@ -113,6 +115,7 @@ export async function previewMatchupsFromSets(seasonName: string) {
     const winner = !decided ? null : setsA > setsB ? g.teamA : setsB > setsA ? g.teamB : null;
     return {
       week: g.week, teamAName: name.get(g.teamA) ?? "?", teamBName: name.get(g.teamB) ?? "?",
+      teamAId: g.teamA, teamBId: g.teamB,
       setsWonA: setsA, setsWonB: setsB, gamesWonA: gamesA, gamesWonB: gamesB, setCount: total,
       decided, winnerName: winner ? name.get(winner) ?? null : null,
     };

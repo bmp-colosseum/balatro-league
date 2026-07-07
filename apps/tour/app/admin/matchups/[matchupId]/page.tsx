@@ -55,7 +55,12 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
         <Link href={`/admin/seasons/${enc}/schedule`} className="inline-flex items-center gap-1"><ArrowLeft className="size-3.5" /> {c.seasonName} schedule</Link>
       </p>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1>Week {c.weekNumber} — {c.teamA.name} vs {c.teamB.name}</h1>
+        <h1>
+          Week {c.weekNumber} —{" "}
+          <Link href={`/teams/${c.teamA.id}`} style={{ color: "inherit" }}>{c.teamA.name}</Link>{" "}
+          vs{" "}
+          <Link href={`/teams/${c.teamB.id}`} style={{ color: "inherit" }}>{c.teamB.name}</Link>
+        </h1>
         {c.pairs.length > 0 && (
           <form action={resetPairingAction}>
             <input type="hidden" name="matchupId" value={c.matchupId} />
@@ -100,8 +105,8 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
             <tbody>
               {c.pairs.map((p) => (
                 <tr key={p.setId}>
-                  <td>#{p.aSeed} {p.aName}</td>
-                  <td>#{p.bSeed} {p.bName}</td>
+                  <td>#{p.aSeed} <Link href={`/players/${p.aPlayerId}`} style={{ color: "inherit" }}>{p.aName}</Link></td>
+                  <td>#{p.bSeed} <Link href={`/players/${p.bPlayerId}`} style={{ color: "inherit" }}>{p.bName}</Link></td>
                   <td className="num">
                     {p.bSeed !== p.aSeed && (
                       <span style={{ color: "var(--warning, #f5a524)" }} title={`Not seed-for-seed: #${p.aSeed} vs #${p.bSeed}`}>
@@ -156,9 +161,9 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
           <h2 className="mt-6 mb-1 text-[1.1rem]">Results</h2>
           <div className="card card-accent" style={{ marginBottom: "0.75rem" }}>
             <div className="flex items-center justify-between gap-2">
-              <span className="font-semibold">{report.teamAName}</span>
+              <span className="font-semibold"><Link href={`/teams/${report.teamASeasonId}`} style={{ color: "inherit" }}>{report.teamAName}</Link></span>
               <span className="value" style={{ fontSize: 22 }}>{report.setsWonA} – {report.setsWonB}</span>
-              <span className="font-semibold">{report.teamBName}</span>
+              <span className="font-semibold"><Link href={`/teams/${report.teamBSeasonId}`} style={{ color: "inherit" }}>{report.teamBName}</Link></span>
             </div>
             <p className="sub mt-1" style={{ textAlign: "center" }}>
               {report.decided
@@ -182,11 +187,11 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
                 {report.sets.map((s) => (
                   <tr key={s.setId}>
                     <td style={{ fontWeight: s.winner === "A" ? 700 : undefined }}>
-                      #{s.aSeed} {s.aName}
+                      #{s.aSeed} <Link href={`/players/${s.aPlayerId}`} style={{ color: "inherit" }}>{s.aName}</Link>
                       {s.reassignedFrom && <span className="sub" title={`makeup — originally ${s.reassignedFrom}`}> (sub for {s.reassignedFrom})</span>}
                     </td>
                     <td style={{ fontWeight: s.winner === "B" ? 700 : undefined }}>
-                      #{s.bSeed} {s.bName}
+                      #{s.bSeed} <Link href={`/players/${s.bPlayerId}`} style={{ color: "inherit" }}>{s.bName}</Link>
                       {s.bSeed !== s.aSeed && (
                         <span className="sub" style={{ color: "var(--warning, #f5a524)" }} title={`Not seed-for-seed: #${s.aSeed} vs #${s.bSeed}`}>
                           {" "}({s.bSeed > s.aSeed ? "+" : ""}{s.bSeed - s.aSeed})

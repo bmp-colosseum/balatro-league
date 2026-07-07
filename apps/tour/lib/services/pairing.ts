@@ -76,7 +76,17 @@ async function load(matchupId: string): Promise<LoadedMatchup | null> {
   const teamA = { id: matchup.teamSeasonAId, name: tsById.get(matchup.teamSeasonAId)?.team.name ?? "?", roster: toRoster(lineA), captainId: capA };
   const teamB = { id: matchup.teamSeasonBId, name: tsById.get(matchup.teamSeasonBId)?.team.name ?? "?", roster: toRoster(lineB), captainId: capB };
 
-  const ids = [...new Set([...teamA.roster, ...teamB.roster].map((p) => p.playerId))];
+  // Resolve names for everyone the console can mention: this week's lineups PLUS every
+  // player the sets reference (subs whose window is elsewhere, players since subbed out,
+  // reassigned originals) and both captains -- otherwise those render as raw player ids.
+  const ids = [
+    ...new Set([
+      ...[...teamA.roster, ...teamB.roster].map((p) => p.playerId),
+      ...matchup.sets.flatMap((s) => [s.playerAId, s.playerBId]),
+      capA,
+      capB,
+    ]),
+  ].filter(Boolean);
   const players = await prisma.player.findMany({ where: { id: { in: ids } }, select: { id: true, displayName: true } });
   const nameOf = new Map(players.map((p) => [p.id, p.displayName]));
 
@@ -141,8 +151,10 @@ export async function getPairingConsole(matchupId: string) {
     pairs: m.matchup.sets.map((s) => ({
       setId: s.id,
       aName: m.nameOf.get(s.playerAId) ?? s.playerAId,
+      aPlayerId: s.playerAId,
       aSeed: s.seedA,
       bName: m.nameOf.get(s.playerBId) ?? s.playerBId,
+      bPlayerId: s.playerBId,
       bSeed: s.seedB,
       bestOf: s.bestOf,
       status: s.status,

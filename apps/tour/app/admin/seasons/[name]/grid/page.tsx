@@ -103,7 +103,9 @@ function HolesEditor({ season, c, weekNumbers }: { season: string; c: Conference
       {missing.map(([i, j]) => (
         <div key={`m${i}-${j}`} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", padding: "0.4rem 0", borderTop: "1px solid var(--border)" }}>
           <span style={{ minWidth: "13rem" }}>
-            <strong>{names[i]}</strong> <span className="muted">vs</span> <strong>{names[j]}</strong>
+            <strong><Link href={`/teams/${ids[i]}`} style={{ color: "inherit" }}>{names[i]}</Link></strong>{" "}
+            <span className="muted">vs</span>{" "}
+            <strong><Link href={`/teams/${ids[j]}`} style={{ color: "inherit" }}>{names[j]}</Link></strong>
           </span>
           <ActionFlashForm action={recordHoleAction} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.35rem" }}>
             <input type="hidden" name="season" value={season} />
@@ -264,7 +266,7 @@ export default async function GridPage({ params }: { params: Promise<{ name: str
                   return (
                     <tr key={row.teamSeasonId}>
                       <td style={{ whiteSpace: "nowrap", position: "sticky", left: 0, background: "var(--surface)" }}>
-                        <span className="sub">{i + 1}.</span> {t.name}
+                        <span className="sub">{i + 1}.</span> <Link href={`/teams/${t.teamSeasonId}`} style={{ color: "inherit" }}>{t.name}</Link>
                       </td>
                       {row.cells.map((cell, j) => <Cell key={j} cell={cell} self={i === j} />)}
                       <td className="num">
@@ -309,9 +311,9 @@ export default async function GridPage({ params }: { params: Promise<{ name: str
             <tbody>
               {crossConf.map((m, i) => (
                 <tr key={i}>
-                  <td>{m.aName} <span className="sub">({m.aConf})</span></td>
+                  <td><Link href={`/teams/${m.aTeamSeasonId}`} style={{ color: "inherit" }}>{m.aName}</Link> <span className="sub">({m.aConf})</span></td>
                   <td className="num">{m.setsA}{"–"}{m.setsB}</td>
-                  <td>{m.bName} <span className="sub">({m.bConf})</span></td>
+                  <td><Link href={`/teams/${m.bTeamSeasonId}`} style={{ color: "inherit" }}>{m.bName}</Link> <span className="sub">({m.bConf})</span></td>
                 </tr>
               ))}
             </tbody>

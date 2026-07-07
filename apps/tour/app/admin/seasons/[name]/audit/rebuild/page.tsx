@@ -69,11 +69,15 @@ export default async function RebuildPreview({ params }: { params: Promise<{ nam
                 <tbody>
                   {rows.map((m, i) => (
                     <tr key={i}>
-                      <td style={{ fontWeight: m.winnerName === m.teamAName ? 700 : undefined }}>{m.teamAName}</td>
+                      <td style={{ fontWeight: m.winnerName === m.teamAName ? 700 : undefined }}>
+                        <Link href={`/teams/${m.teamAId}`} style={{ color: "inherit" }}>{m.teamAName}</Link>
+                      </td>
                       <td className="num" style={{ width: "4rem" }}>
                         {m.decided ? `${m.setsWonA}${"–"}${m.setsWonB}` : <span className="sub">{m.setsWonA}{"–"}{m.setsWonB}?</span>}
                       </td>
-                      <td style={{ fontWeight: m.winnerName === m.teamBName ? 700 : undefined }}>{m.teamBName}</td>
+                      <td style={{ fontWeight: m.winnerName === m.teamBName ? 700 : undefined }}>
+                        <Link href={`/teams/${m.teamBId}`} style={{ color: "inherit" }}>{m.teamBName}</Link>
+                      </td>
                       <td className="num sub" style={{ width: "4rem" }}>{m.gamesWonA}{"–"}{m.gamesWonB}</td>
                       <td className="sub" style={{ textAlign: "right" }}>{m.setCount} sets{m.decided ? "" : " · not decided"}</td>
                     </tr>

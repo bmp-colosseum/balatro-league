@@ -20,6 +20,8 @@ export interface PendingSet {
   bSeed: number;
   aName: string;
   bName: string;
+  aPlayerId: string;
+  bPlayerId: string;
   status: string;
   reported: boolean; // has a recorded result (CONFIRMED/FORFEIT/REPORTED)
   teamAGames: number | null; // games won by team A in this set (the game% tiebreaker input); null if unreported
@@ -31,6 +33,8 @@ export interface PendingMatchup {
   week: number;
   aName: string;
   bName: string;
+  aTeamSeasonId: string;
+  bTeamSeasonId: string;
   category: PendingCategory;
   paired: number; // sets created (any status)
   expected: number; // season.teamSize
@@ -104,6 +108,8 @@ export async function getSeasonAudit(seasonName: string) {
         week: w.number,
         aName: teamName.get(m.teamSeasonAId) ?? "?",
         bName: teamName.get(m.teamSeasonBId) ?? "?",
+        aTeamSeasonId: m.teamSeasonAId,
+        bTeamSeasonId: m.teamSeasonBId,
         category,
         paired,
         expected: season.teamSize,
@@ -147,6 +153,8 @@ export async function getSeasonAudit(seasonName: string) {
         bSeed: s.seedB,
         aName: playerName.get(s.playerAId) ?? "?",
         bName: playerName.get(s.playerBId) ?? "?",
+        aPlayerId: s.playerAId,
+        bPlayerId: s.playerBId,
         status: s.status,
         reported: s.status === "CONFIRMED" || s.status === "FORFEIT" || s.status === "REPORTED",
         teamAGames,

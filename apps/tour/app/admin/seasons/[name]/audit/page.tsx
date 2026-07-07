@@ -138,7 +138,9 @@ export default async function AuditPage({ params }: { params: Promise<{ name: st
               <details key={p.matchupId} open={OPEN_BY_DEFAULT.has(cat)} style={{ borderTop: "1px solid var(--border)", padding: "0.45rem 0" }}>
                 <summary style={{ cursor: "pointer", listStyle: "revert" }}>
                   <span className="sub">W{p.week}</span>{" "}
-                  <span style={{ fontWeight: 600 }}>{p.aName}</span> <span className="muted">vs</span> <span style={{ fontWeight: 600 }}>{p.bName}</span>
+                  <span style={{ fontWeight: 600 }}><Link href={`/teams/${p.aTeamSeasonId}`} style={{ color: "inherit" }}>{p.aName}</Link></span>{" "}
+                  <span className="muted">vs</span>{" "}
+                  <span style={{ fontWeight: 600 }}><Link href={`/teams/${p.bTeamSeasonId}`} style={{ color: "inherit" }}>{p.bName}</Link></span>
                   <span className="sub">
                     {"  ·  "}{p.confirmed}/{p.expected} confirmed
                     {p.awaitingConfirm > 0 && <>{"  ·  "}{p.awaitingConfirm} to confirm</>}
@@ -152,9 +154,9 @@ export default async function AuditPage({ params }: { params: Promise<{ name: st
                     <tbody>
                       {p.sets.map((s) => (
                         <tr key={s.setId}>
-                          <td style={{ whiteSpace: "nowrap" }}>#{s.aSeed} {s.aName}</td>
+                          <td style={{ whiteSpace: "nowrap" }}>#{s.aSeed} <Link href={`/players/${s.aPlayerId}`} style={{ color: "inherit" }}>{s.aName}</Link></td>
                           <td style={{ whiteSpace: "nowrap" }}>
-                            #{s.bSeed} {s.bName}
+                            #{s.bSeed} <Link href={`/players/${s.bPlayerId}`} style={{ color: "inherit" }}>{s.bName}</Link>
                             {s.bSeed !== s.aSeed && (
                               <span className="sub" style={{ color: "var(--warning, #f5a524)" }} title={`Not seed-for-seed: #${s.aSeed} vs #${s.bSeed}`}>
                                 {" "}({s.bSeed > s.aSeed ? "+" : ""}{s.bSeed - s.aSeed})
@@ -215,7 +217,7 @@ export default async function AuditPage({ params }: { params: Promise<{ name: st
             <tbody>
               {teams.map((t) => (
                 <tr key={t.teamSeasonId}>
-                  <td>{t.name}</td>
+                  <td><Link href={`/teams/${t.teamSeasonId}`} style={{ color: "inherit" }}>{t.name}</Link></td>
                   <td className="num">{t.count}</td>
                   <td className="sub">{t.weeks.map((w) => `W${w}`).join(", ")}</td>
                 </tr>
