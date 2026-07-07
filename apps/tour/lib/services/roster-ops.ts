@@ -4,6 +4,7 @@
 // for the season) stays in RosterEntry, which is left untouched; this layer is
 // purely lineup-over-time. One team per season, so a player is on at most one team.
 import { prisma } from "../db";
+import { notifyLive } from "../notify";
 import { enqueueRoleReconcile } from "../queue";
 import { getSeasonStrikeCounts, getCareerStrikeCounts, getSeasonStrikeLog, AT_RISK_THRESHOLD } from "./strikes";
 
@@ -224,6 +225,49 @@ async function seedOfMember(teamSeasonId: string, playerId: string): Promise<num
 
 // ── TO operations (each appends a move; nothing is deleted) ──────────────────
 
+// A roster change must reach the SCHEDULE too: any already-paired but UNPLAYED set in the
+// affected weeks that still references the outgoing player is moved to the incoming one
+// (same contract as the console's per-set "Sub in": player swaps, reassignedFromId keeps
+// the original, seed/slot stays). Played/reported/disputed sets are history -- untouched.
+async function reassignUnplayedSets(seasonId: string, teamSeasonId: string, outPlayerId: string, inPlayerId: string, fromWeek: number, untilWeek: number | null) {
+  const matchups = await prisma.matchup.findMany({
+    where: {
+      week: { seasonId, number: { gte: fromWeek, ...(untilWeek != null ? { lte: untilWeek } : {}) } },
+      OR: [{ teamSeasonAId: teamSeasonId }, { teamSeasonBId: teamSeasonId }],
+    },
+    select: {
+      id: true,
+      teamSeasonAId: true,
+      week: { select: { number: true } },
+      sets: { select: { id: true, playerAId: true, playerBId: true, status: true, reassignedFromId: true } },
+    },
+  });
+  let reassigned = 0;
+  const weeks: number[] = [];
+  for (const mu of matchups) {
+    const side = mu.teamSeasonAId === teamSeasonId ? "A" : "B";
+    // Skip if the incoming player already has a set in this matchup (can't play twice).
+    const already = mu.sets.some((s) => (side === "A" ? s.playerAId : s.playerBId) === inPlayerId);
+    for (const s of mu.sets) {
+      const cur = side === "A" ? s.playerAId : s.playerBId;
+      if (cur !== outPlayerId) continue;
+      if (s.status !== "PROPOSED" && s.status !== "SCHEDULED") continue; // played/disputed = history
+      if (already) continue;
+      await prisma.tourSet.update({
+        where: { id: s.id },
+        data: {
+          ...(side === "A" ? { playerAId: inPlayerId } : { playerBId: inPlayerId }),
+          reassignedFromId: s.reassignedFromId ?? outPlayerId, // keep the FIRST original
+        },
+      });
+      reassigned++;
+      if (!weeks.includes(mu.week.number)) weeks.push(mu.week.number);
+      await notifyLive(`matchup:${mu.id}`);
+    }
+  }
+  return { reassigned, weeks: weeks.sort((a, b) => a - b) };
+}
+
 export async function substitute(seasonName: string, teamSeasonId: string, outPlayerId: string, inPlayerId: string, effectiveWeek: number, untilWeek: number | null, reason: string, by?: string) {
   const seasonId = await seasonIdOf(seasonName);
   if (!reason.trim()) throw new Error("A reason is required.");
@@ -236,8 +280,10 @@ export async function substitute(seasonName: string, teamSeasonId: string, outPl
   await prisma.rosterMove.create({
     data: { seasonId, teamSeasonId, kind: "SUB", playerId: inPlayerId, outPlayerId, effectiveWeek, untilWeek, seed, reason: reason.trim(), createdBy: by },
   });
+  // The lineup change propagates to the schedule: their unplayed sets in the window move too.
+  const sets = await reassignUnplayedSets(seasonId, teamSeasonId, outPlayerId, inPlayerId, effectiveWeek, untilWeek ?? effectiveWeek);
   await queueRoleSync(seasonName);
-  return { ok: true };
+  return { ok: true, ...sets };
 }
 
 export async function recordDeparture(kind: "QUIT" | "BANNED", seasonName: string, teamSeasonId: string, playerId: string, effectiveWeek: number, reason: string, by?: string) {
@@ -260,6 +306,7 @@ export async function reinstate(seasonName: string, teamSeasonId: string, player
 }
 
 // Permanent replacement: a new player fills a (typically departed) slot from a week.
+// "For the rest of the season" lives HERE (an ADDED arrival), not in Substitute (windowed).
 export async function replacePlayer(seasonName: string, teamSeasonId: string, inPlayerId: string, replacesPlayerId: string, effectiveWeek: number, reason: string, by?: string) {
   const seasonId = await seasonIdOf(seasonName);
   if (!reason.trim()) throw new Error("A reason is required.");
@@ -270,8 +317,13 @@ export async function replacePlayer(seasonName: string, teamSeasonId: string, in
   await prisma.rosterMove.create({
     data: { seasonId, teamSeasonId, kind: "ADDED", playerId: inPlayerId, replacesPlayerId: replacesPlayerId || null, effectiveWeek, seed, reason: reason.trim(), createdBy: by },
   });
+  // Permanent replacement -> every unplayed set of the replaced player from this week on
+  // moves to the newcomer (played sets are history).
+  const sets = replacesPlayerId
+    ? await reassignUnplayedSets(seasonId, teamSeasonId, replacesPlayerId, inPlayerId, effectiveWeek, null)
+    : { reassigned: 0, weeks: [] as number[] };
   await queueRoleSync(seasonName);
-  return { ok: true };
+  return { ok: true, ...sets };
 }
 
 // The weeks a player actually played sets for a team -- flat imported sets carry week

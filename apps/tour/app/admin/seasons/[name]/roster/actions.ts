@@ -33,17 +33,20 @@ export async function substituteAction(_prev: ActionResult, formData: FormData):
   if (!(await allow(season, String(formData.get("teamSeasonId") ?? "")))) return { ok: false, message: "Not authorized." };
   const until = wk(formData, "untilWeek");
   try {
-    await substitute(
+    const from = wk(formData, "effectiveWeek");
+    const r = await substitute(
       season,
       String(formData.get("teamSeasonId") ?? ""),
       String(formData.get("outPlayerId") ?? ""),
       String(formData.get("inPlayerId") ?? ""),
-      wk(formData, "effectiveWeek"),
+      from,
       until || null,
       String(formData.get("reason") ?? ""),
     );
     rev(season);
-    return { ok: true, message: "Substitution recorded." };
+    const window = until && until !== from ? `W${from}-${until}` : `W${from} only`;
+    const moved = r.reassigned > 0 ? ` ${r.reassigned} unplayed set(s) (W${r.weeks.join(", W")}) moved to the sub.` : "";
+    return { ok: true, message: `Substitution recorded for ${window}.${moved}` };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Substitution failed." };
   }
@@ -113,9 +116,10 @@ export async function replaceAction(_prev: ActionResult, formData: FormData): Pr
   const season = String(formData.get("season") ?? "");
   if (!(await allow(season, String(formData.get("teamSeasonId") ?? "")))) return { ok: false, message: "Not authorized." };
   try {
-    await replacePlayer(season, String(formData.get("teamSeasonId") ?? ""), String(formData.get("inPlayerId") ?? ""), String(formData.get("replacesPlayerId") ?? ""), wk(formData, "effectiveWeek"), String(formData.get("reason") ?? ""));
+    const r = await replacePlayer(season, String(formData.get("teamSeasonId") ?? ""), String(formData.get("inPlayerId") ?? ""), String(formData.get("replacesPlayerId") ?? ""), wk(formData, "effectiveWeek"), String(formData.get("reason") ?? ""));
     rev(season);
-    return { ok: true, message: "Replacement recorded." };
+    const moved = r.reassigned > 0 ? ` ${r.reassigned} unplayed set(s) (W${r.weeks.join(", W")}) moved to them.` : "";
+    return { ok: true, message: `Replacement recorded.${moved}` };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Could not record replacement." };
   }

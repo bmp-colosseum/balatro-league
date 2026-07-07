@@ -182,7 +182,11 @@ export default async function RosterOpsAdmin({
               </ActionFlashForm>
 
               {/* Substitute (temporary) */}
-              <div className="bracket-title mt-3">Substitute (temporary)</div>
+              <div className="bracket-title mt-3">Substitute (temporary {"—"} for specific weeks)</div>
+              <p className="sub" style={{ margin: "0 0 0.3rem" }}>
+                Covers the weeks you set (blank Until = that one week). Their unplayed sets in the window move to
+                the sub automatically. For the <strong>rest of the season</strong>, use Replace below.
+              </p>
               <ActionFlashForm action={substituteAction}>
                 <input type="hidden" name="season" value={seasonName} />
                 <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
@@ -244,7 +248,11 @@ export default async function RosterOpsAdmin({
               </ActionFlashForm>
 
               {/* Replace (permanent add) */}
-              <div className="bracket-title mt-3">Replace (permanent add)</div>
+              <div className="bracket-title mt-3">Replace (permanent {"—"} rest of the season)</div>
+              <p className="sub" style={{ margin: "0 0 0.3rem" }}>
+                The newcomer takes the slot from the given week onward; the replaced player&apos;s unplayed sets
+                move to them automatically. Played sets stay history.
+              </p>
               <ActionFlashForm action={replaceAction}>
                 <input type="hidden" name="season" value={seasonName} />
                 <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
