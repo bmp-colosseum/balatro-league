@@ -18,7 +18,7 @@ import { webUrl } from "./web-url.js";
 const STATIC_INTRO = [
   "# 🃏 Balatro League",
   "",
-  "Each season you're put in a division by skill, then play a set of opponents — **2 games each** (top divisions play everyone; the rest play 4 others). Run `/schedule` to see your matchups. Top of each division moves up next season, bottom moves down.",
+  "Each season you're placed in a division by skill, then play a set of **assigned opponents** - **2 games each**. Run `/schedule` to see exactly who you play. The top finishers in each division **promote** up a division next season and the bottom finishers **relegate** down - how many move (and whether you're currently in a promotion or relegation spot) shows in `/standings` and `/status`.",
   "",
   "**Scoring:** `2-0` = 3 pts · `1-1` = 1 pt each · `0-2` = 0.",
   "",

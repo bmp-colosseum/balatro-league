@@ -52,6 +52,24 @@ export async function buildStatusReply(
   }
   const rank = myRow.rank ?? rows.findIndex((r) => r.player.id === me.id) + 1;
 
+  // Promotion/relegation position: the top `promoteCount` finishers move up a
+  // division next season, the bottom `relegateCount` move down (both 0 at the
+  // top/bottom of the ladder). Tells the player if they're currently in a
+  // moving spot so they know what's at stake.
+  const promote = div.promoteCount ?? 0;
+  const relegate = div.relegateCount ?? 0;
+  let movement: string;
+  if (promote > 0 && rank <= promote) {
+    movement = `🔼 **Promotion spot** - on track to move up next season (top ${promote} promote). Hold it!`;
+  } else if (relegate > 0 && rank > rows.length - relegate) {
+    movement = `🔽 **Relegation spot** - on track to drop next season (bottom ${relegate} relegate). Climb out!`;
+  } else {
+    const parts: string[] = [];
+    if (promote > 0) parts.push(`top ${promote} promote`);
+    if (relegate > 0) parts.push(`bottom ${relegate} relegate`);
+    movement = `✅ **Safe** - holding your spot` + (parts.length ? ` (${parts.join(", ")})` : "");
+  }
+
   // Opponents still to play = your pre-created matchups that haven't been played
   // yet (PENDING + 0-0). Mirrors /schedule's "still to play".
   const nameById = new Map(div.members.map((m) => [m.player.id, m.player.displayName]));
@@ -72,6 +90,7 @@ export async function buildStatusReply(
       `**${formatSeasonLabel(activeSeason)}** · ${div.tier.name} tier\n\n` +
         `🏅 **#${rank}** of ${rows.length}\n` +
         `**${myRow.points}** pts · ${myRow.wins}W · ${myRow.draws}D · ${myRow.losses}L  _(${myRow.played} played)_\n\n` +
+        `${movement}\n\n` +
         (remaining.length
           ? `🎮 **${remaining.length} left to play:** ${remaining.join(", ")}`
           : "✅ All your matches are done!"),

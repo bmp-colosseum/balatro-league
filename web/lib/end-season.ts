@@ -15,7 +15,7 @@ import type { StandingRow } from "./standings";
 import { prisma } from "./prisma";
 import { computeStandings } from "./standings";
 import { recordAudit, type AuditActor } from "./audit";
-import { enqueueLeagueInfoRefresh } from "./queue";
+import { enqueueLeagueInfoRefresh, enqueueDm } from "./queue";
 import { formatSeasonLabel } from "./format-season";
 import { deleteChannel, deleteGuildRole } from "./discord";
 
@@ -354,6 +354,38 @@ export async function endSeasonCore(seasonId: string, actor: AuditActor): Promis
   await enqueueLeagueInfoRefresh().catch((err) =>
     console.warn("[season.end] league-info refresh enqueue failed:", err),
   );
+
+  // DM the players who promoted or relegated so they know their result. Uses the
+  // SAME standings + per-division promote/relegate counts the rating math used,
+  // so the message matches what actually happened. Best-effort via the notify.dm
+  // queue (the bot drains it); a DM failure never affects the ended season.
+  const seasonLabel = formatSeasonLabel(season);
+  for (const d of season.divisions) {
+    const promoteCount = Math.max(0, d.promoteCount);
+    const relegateCount = Math.max(0, d.relegateCount);
+    if (promoteCount === 0 && relegateCount === 0) continue;
+    const droppedSet = new Set(d.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId));
+    const active = computeStandings(d.members.map((m) => m.player), d.matches).filter(
+      (row) => !droppedSet.has(row.player.id),
+    );
+    const dmSeasonEnd = (discordId: string, content: string) =>
+      enqueueDm({ discordId, content, batchId: `season-end:${season.id}`, batchKind: "season-end" }).catch((err) =>
+        console.warn(`[season.end] promo/releg DM failed for ${discordId}:`, err),
+      );
+    for (let i = 0; i < promoteCount && i < active.length; i++) {
+      await dmSeasonEnd(
+        active[i]!.player.discordId,
+        `🎉 **You promoted!** You finished #${i + 1} in **${d.name}** (${seasonLabel}) and move up a division next season. Great work!`,
+      );
+    }
+    // Start relegation after the promotion zone so a tiny division can't send both.
+    for (let i = Math.max(promoteCount, active.length - relegateCount); i < active.length; i++) {
+      await dmSeasonEnd(
+        active[i]!.player.discordId,
+        `You finished #${i + 1} in **${d.name}** (${seasonLabel}) and will drop to a lower division next season. It happens - come back strong and climb back up!`,
+      );
+    }
+  }
 
   return {
     status: "ended",
