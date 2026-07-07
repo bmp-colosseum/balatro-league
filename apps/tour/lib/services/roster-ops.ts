@@ -270,6 +270,77 @@ export async function replacePlayer(seasonName: string, teamSeasonId: string, in
   return { ok: true };
 }
 
+// The weeks a player actually played sets for a team -- flat imported sets carry week
+// directly; live sets get it from their matchup. Lets membership fixes show the TO the
+// real coverage window instead of making them guess.
+async function playedWeeksOf(teamSeasonId: string, playerId: string): Promise<number[]> {
+  const sets = await prisma.tourSet.findMany({
+    where: {
+      OR: [
+        { teamSeasonAId: teamSeasonId, playerAId: playerId },
+        { teamSeasonBId: teamSeasonId, playerBId: playerId },
+        { matchup: { teamSeasonAId: teamSeasonId }, playerAId: playerId },
+        { matchup: { teamSeasonBId: teamSeasonId }, playerBId: playerId },
+      ],
+    },
+    select: { week: true, matchup: { select: { week: { select: { number: true } } } } },
+  });
+  return [...new Set(sets.map((s) => s.week ?? s.matchup?.week.number).filter((w): w is number => w != null))].sort((a, b) => a - b);
+}
+
+// Fix a mis-imported membership: the player was recorded as a PERMANENT member (a
+// DRAFTED/ADDED arrival -- e.g. the import promoted a sub to a week-1 seed-12 slot)
+// but was actually a temporary fill-in. Rewrites the arrival into a SUB move covering
+// [effectiveWeek, untilWeek]. Their RosterEntry (stat attribution) stays -- played sets
+// still credit this team; they just stop holding a permanent lineup slot.
+export async function convertMemberToSub(seasonName: string, teamSeasonId: string, playerId: string, effectiveWeek: number, untilWeek: number | null, outPlayerId: string | null, reason: string, by?: string) {
+  const seasonId = await seasonIdOf(seasonName);
+  if (!playerId) throw new Error("Pick the player.");
+  if (!effectiveWeek || effectiveWeek < 1) throw new Error("Pick the week their fill-in starts.");
+  if (untilWeek != null && untilWeek < effectiveWeek) throw new Error("'Until' week can't be before the start week.");
+  const arrivals = await prisma.rosterMove.findMany({
+    where: { teamSeasonId, playerId, kind: { in: ["DRAFTED", "ADDED"] } },
+    select: { id: true },
+  });
+  if (!arrivals.length) throw new Error("That player isn't a permanent member of this team -- nothing to convert.");
+  const seed = outPlayerId ? await seedOfMember(teamSeasonId, outPlayerId) : await seedOfMember(teamSeasonId, playerId);
+  await prisma.rosterMove.deleteMany({ where: { id: { in: arrivals.map((a) => a.id) } } });
+  await prisma.rosterMove.create({
+    data: {
+      seasonId, teamSeasonId, kind: "SUB", playerId,
+      outPlayerId: outPlayerId || null, effectiveWeek, untilWeek, seed,
+      reason: reason.trim() || "membership fix: imported as permanent, actually a sub",
+      createdBy: by,
+    },
+  });
+  await queueRoleSync(seasonName);
+  const playedWeeks = await playedWeeksOf(teamSeasonId, playerId);
+  const outside = playedWeeks.filter((w) => w < effectiveWeek || (untilWeek != null && w > untilWeek));
+  return { playedWeeks, outside };
+}
+
+// The reverse fix: a temporary SUB who is actually a permanent member. Rewrites their
+// SUB move(s) into an ADDED arrival from the given week.
+export async function convertSubToMember(seasonName: string, teamSeasonId: string, playerId: string, effectiveWeek: number, seed: number | null, reason: string, by?: string) {
+  const seasonId = await seasonIdOf(seasonName);
+  if (!playerId) throw new Error("Pick the player.");
+  if (!effectiveWeek || effectiveWeek < 1) throw new Error("Pick the week they join for good.");
+  const subs = await prisma.rosterMove.findMany({ where: { teamSeasonId, playerId, kind: "SUB" }, select: { id: true, seed: true } });
+  if (!subs.length) throw new Error("That player has no sub stint on this team -- nothing to convert.");
+  const useSeed = seed ?? subs[0].seed ?? 99;
+  await prisma.rosterMove.deleteMany({ where: { id: { in: subs.map((s) => s.id) } } });
+  await prisma.rosterMove.create({
+    data: {
+      seasonId, teamSeasonId, kind: "ADDED", playerId, effectiveWeek, seed: useSeed,
+      reason: reason.trim() || "membership fix: sub is actually a permanent member",
+      createdBy: by,
+    },
+  });
+  await ensureMembership(teamSeasonId, playerId, useSeed);
+  await queueRoleSync(seasonName);
+  return { ok: true };
+}
+
 // Escape hatch for a mis-entered move (the proper "they came back" is reinstate).
 export async function removeMove(moveId: string) {
   const move = await prisma.rosterMove.findUnique({ where: { id: moveId }, select: { seasonId: true } });
@@ -288,7 +359,13 @@ export async function backfillDraftedMoves(): Promise<{ created: number }> {
   // DRAFTED moves are fully derived from the roster (week-1 baseline) — never hand-edited —
   // so refresh them: drop the old ones and rebuild from current RosterEntry seeds. This
   // keeps a re-import in sync without touching manual RESEED / SUB / ADDED moves.
+  //
+  // Skip anyone with a SUB or ADDED move on that team: RosterEntry rows exist for stat
+  // attribution (ensureMembership creates one for every sub), so blindly promoting every
+  // entry to a week-1 DRAFTED member turned subs into permanent seed-holders on re-import.
   await prisma.rosterMove.deleteMany({ where: { kind: "DRAFTED" } });
+  const manual = await prisma.rosterMove.findMany({ where: { kind: { in: ["SUB", "ADDED"] } }, select: { teamSeasonId: true, playerId: true } });
+  const skip = new Set(manual.map((m) => `${m.teamSeasonId}|${m.playerId}`));
   const rosters = await prisma.roster.findMany({
     include: { entries: { select: { playerId: true, seed: true } }, teamSeason: { select: { id: true, seasonId: true } } },
   });
@@ -297,7 +374,7 @@ export async function backfillDraftedMoves(): Promise<{ created: number }> {
   for (const r of rosters) {
     for (const e of r.entries) {
       const k = `${r.teamSeason.id}|${e.playerId}`;
-      if (seen.has(k)) continue;
+      if (seen.has(k) || skip.has(k)) continue;
       seen.add(k);
       await prisma.rosterMove.create({ data: { seasonId: r.teamSeason.seasonId, teamSeasonId: r.teamSeason.id, kind: "DRAFTED", playerId: e.playerId, effectiveWeek: 1, seed: e.seed } });
       created++;

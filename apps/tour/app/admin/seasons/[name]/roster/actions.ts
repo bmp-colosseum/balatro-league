@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { can, seasonIdByName } from "@/lib/permissions";
-import { substitute, recordDeparture, reinstate, replacePlayer, removeMove, changeCaptain, reseed, swapSeeds, setCoCaptain } from "@/lib/services/roster-ops";
+import { substitute, recordDeparture, reinstate, replacePlayer, removeMove, changeCaptain, reseed, swapSeeds, setCoCaptain, convertMemberToSub, convertSubToMember } from "@/lib/services/roster-ops";
 import { addStrike, removeStrike } from "@/lib/services/strikes";
 import type { ActionResult } from "@/lib/action-result";
 
@@ -46,6 +46,51 @@ export async function substituteAction(_prev: ActionResult, formData: FormData):
     return { ok: true, message: "Substitution recorded." };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Substitution failed." };
+  }
+}
+
+// Membership fix: a permanent member (usually a bad import) is actually a temporary sub.
+export async function convertToSubAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const season = String(formData.get("season") ?? "");
+  if (!(await allow(season, String(formData.get("teamSeasonId") ?? "")))) return { ok: false, message: "Not authorized." };
+  const until = wk(formData, "untilWeek");
+  try {
+    const r = await convertMemberToSub(
+      season,
+      String(formData.get("teamSeasonId") ?? ""),
+      String(formData.get("playerId") ?? ""),
+      wk(formData, "effectiveWeek"),
+      until || null,
+      String(formData.get("outPlayerId") ?? "") || null,
+      String(formData.get("reason") ?? ""),
+    );
+    rev(season);
+    const weeks = r.playedWeeks.length ? ` They played in W${r.playedWeeks.join(", W")}.` : " They have no played sets on this team.";
+    const warn = r.outside.length ? ` Heads-up: W${r.outside.join(", W")} falls outside the sub window you set.` : "";
+    return { ok: true, message: `Converted to sub.${weeks}${warn}` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Convert failed." };
+  }
+}
+
+// The reverse: a sub who is actually a permanent member.
+export async function makePermanentAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const season = String(formData.get("season") ?? "");
+  if (!(await allow(season, String(formData.get("teamSeasonId") ?? "")))) return { ok: false, message: "Not authorized." };
+  const seed = Number(formData.get("seed"));
+  try {
+    await convertSubToMember(
+      season,
+      String(formData.get("teamSeasonId") ?? ""),
+      String(formData.get("playerId") ?? ""),
+      wk(formData, "effectiveWeek"),
+      Number.isFinite(seed) && seed > 0 ? seed : null,
+      String(formData.get("reason") ?? ""),
+    );
+    rev(season);
+    return { ok: true, message: "Sub converted to a permanent member." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Convert failed." };
   }
 }
 

@@ -8,7 +8,7 @@ import { NoAccess } from "@/components/NoAccess";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
-import { substituteAction, departureAction, replaceAction, reinstateAction, removeMoveAction, changeCaptainAction, reseedAction, swapSeedsAction, addStrikeAction, removeStrikeAction, setCoCaptainAction } from "./actions";
+import { substituteAction, departureAction, replaceAction, reinstateAction, removeMoveAction, changeCaptainAction, reseedAction, swapSeedsAction, addStrikeAction, removeStrikeAction, setCoCaptainAction, convertToSubAction, makePermanentAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -183,6 +183,35 @@ export default async function RosterOpsAdmin({
                   <SubmitButton size="sm" variant="secondary" pendingText="…"><RefreshCw className="size-3.5" /> Sub</SubmitButton>
                 </div>
               </ActionFlashForm>
+
+              {/* Membership fix — imports sometimes record a temporary sub as a permanent
+                  seed-holder (or vice versa). Converts between the two, keeping stats. */}
+              <div className="bracket-title mt-3">Fix membership (import corrections)</div>
+              <ActionFlashForm action={convertToSubAction}>
+                <input type="hidden" name="season" value={seasonName} />
+                <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="block"><span className="sub">Member who is really a sub</span><FormSelect name="playerId" options={opt(lineupOpts)} /></label>
+                  <label className="block"><span className="sub">Subbed W</span><input type="number" name="effectiveWeek" min={1} defaultValue={data.selectedWeek} className={`${inputCls} w-16`} /></label>
+                  <label className="block"><span className="sub">Until</span><input type="number" name="untilWeek" min={1} placeholder="opt" className={`${inputCls} w-16`} /></label>
+                  <label className="block"><span className="sub">Covering for</span><FormSelect name="outPlayerId" options={opt(lineupOpts)} placeholder="— optional —" /></label>
+                  <input name="reason" placeholder="reason" className={`${inputCls} w-32`} />
+                  <SubmitButton size="sm" variant="secondary" pendingText="…"><RefreshCw className="size-3.5" /> Make sub</SubmitButton>
+                </div>
+              </ActionFlashForm>
+              {t.lineup.some((p) => p.viaSub) && (
+                <ActionFlashForm action={makePermanentAction} className="mt-2">
+                  <input type="hidden" name="season" value={seasonName} />
+                  <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
+                  <div className="flex flex-wrap items-end gap-2">
+                    <label className="block"><span className="sub">Sub who is really permanent</span><FormSelect name="playerId" options={opt(t.lineup.filter((p) => p.viaSub).map((p) => ({ value: p.playerId, label: `#${p.seed} ${p.name}` })))} /></label>
+                    <label className="block"><span className="sub">From W</span><input type="number" name="effectiveWeek" min={1} defaultValue={1} className={`${inputCls} w-16`} /></label>
+                    <label className="block"><span className="sub">Seed</span><input type="number" name="seed" min={1} placeholder="keep" className={`${inputCls} w-16`} /></label>
+                    <input name="reason" placeholder="reason" className={`${inputCls} w-32`} />
+                    <SubmitButton size="sm" variant="secondary" pendingText="…"><UserPlus className="size-3.5" /> Make permanent</SubmitButton>
+                  </div>
+                </ActionFlashForm>
+              )}
 
               {/* Quit / Ban (permanent) */}
               <div className="bracket-title mt-3">Quit / Ban (permanent)</div>
