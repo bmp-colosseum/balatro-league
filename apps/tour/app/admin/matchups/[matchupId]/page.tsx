@@ -12,6 +12,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { SetReportControls } from "@/components/SetReportControls";
 import { SeedOrSub } from "@/components/SeedOrSub";
+import { DeadlineChip } from "@/components/DeadlineChip";
 import {
   overridePairAction,
   setSendFirstAction,
@@ -69,7 +70,10 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
           </form>
         )}
       </div>
-      <p className="sub">{c.pairs.length} of {c.targetPairs} sets paired. As TO you pair any two players directly {"—"} the ±{c.windowSize} window is the captains&apos; negotiation rule, not a gate here.</p>
+      <p className="sub inline-flex flex-wrap items-center gap-2">
+        <span>{c.pairs.length} of {c.targetPairs} sets paired. As TO you pair any two players directly {"—"} the ±{c.windowSize} window is the captains&apos; negotiation rule, not a gate here.</span>
+        <DeadlineChip deadline={c.deadlineAt} prefix="play by" />
+      </p>
 
       {/* Coinflip / send-first — only drives the captain-facing negotiation flow. */}
       <div className="card">

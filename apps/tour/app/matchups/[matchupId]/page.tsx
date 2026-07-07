@@ -7,6 +7,7 @@ import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
 import { SeedOrSub } from "@/components/SeedOrSub";
+import { DeadlineChip } from "@/components/DeadlineChip";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { proposeAction, respondAction, cancelProposalAction } from "./actions";
 
@@ -71,7 +72,10 @@ export default async function CaptainPairing({ params }: { params: Promise<{ mat
         <Link href="/me" className="inline-flex items-center gap-1"><ArrowLeft className="size-3.5" /> my tour</Link>
       </p>
       <h1>Week {c.weekNumber} — {c.myTeamName} vs {c.oppTeamName}</h1>
-      <p className="sub">Pair each of your players against one within ±{c.windowSize} seeds, alternating proposals with {c.oppTeamName}&apos;s captain.</p>
+      <p className="sub inline-flex flex-wrap items-center gap-2">
+        <span>Pair each of your players against one within ±{c.windowSize} seeds, alternating proposals with {c.oppTeamName}&apos;s captain.</span>
+        <DeadlineChip deadline={c.deadlineAt} prefix="play by" />
+      </p>
 
       {/* Completed pairs */}
       {c.pairs.length > 0 && (

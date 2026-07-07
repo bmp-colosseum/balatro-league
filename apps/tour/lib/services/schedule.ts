@@ -116,6 +116,7 @@ export async function getSchedule(seasonName: string) {
       id: w.id,
       number: w.number,
       kind: w.kind,
+      deadlineAt: w.deadlineAt,
       matchups: w.matchups.map((m) => ({
         id: m.id,
         aName: info.get(m.teamSeasonAId)?.name ?? "?",

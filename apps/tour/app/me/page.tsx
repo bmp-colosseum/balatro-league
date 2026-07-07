@@ -4,7 +4,9 @@ import { getViewer } from "@/lib/auth";
 import { getPlayerHome } from "@/lib/player-home";
 import { getPlayerStrikes } from "@/lib/services/strikes";
 import { getCaptainMatchups } from "@/lib/services/pairing";
+import { weekDeadlinesByName } from "@/lib/services/deadlines";
 import { Callout } from "@/components/Callout";
+import { DeadlineChip } from "@/components/DeadlineChip";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -56,6 +58,7 @@ export default async function MyTour() {
   const [home, strikes] = await Promise.all([getPlayerHome(viewer.playerId), getPlayerStrikes(viewer.playerId)]);
   const focusTeam = home.teams.find((t) => t.seasonName === home.focusSeason);
   const captainMatchups = focusTeam?.isCaptain && home.focusSeason ? await getCaptainMatchups(home.focusSeason, viewer.playerId) : [];
+  const deadlines = focusTeam ? await weekDeadlinesByName(focusTeam.seasonName) : new Map<number, Date | null>();
 
   return (
     <main>
@@ -115,12 +118,13 @@ export default async function MyTour() {
           <h2 className="mt-6 mb-1 text-[1.1rem]">Captain — pair your weeks</h2>
           <div className="card">
             <table>
-              <thead><tr><th className="num">Wk</th><th>Opponent</th><th>Status</th><th></th></tr></thead>
+              <thead><tr><th className="num">Wk</th><th>Opponent</th><th>Target</th><th>Status</th><th></th></tr></thead>
               <tbody>
                 {captainMatchups.map((mu) => (
                   <tr key={mu.matchupId}>
                     <td className="num">W{mu.week}</td>
                     <td>vs <Link href={`/teams/${mu.oppTeamSeasonId}`}>{mu.opponent}</Link></td>
+                    <td><DeadlineChip deadline={mu.deadline} /></td>
                     <td className="sub">{mu.status}</td>
                     <td style={{ textAlign: "right" }}>
                       {mu.decided ? <span className="sub">done</span> : <Link href={`/matchups/${mu.matchupId}`}>Pair →</Link>}
@@ -141,11 +145,12 @@ export default async function MyTour() {
           ) : (
             <div className="card">
               <table>
-                <thead><tr><th className="num">Wk</th><th>Opponent</th><th>Result / action</th></tr></thead>
+                <thead><tr><th className="num">Wk</th><th>Target</th><th>Opponent</th><th>Result / action</th></tr></thead>
                 <tbody>
                   {home.sets.map((s) => (
                     <tr key={s.setId}>
                       <td className="num">W{s.week}</td>
+                      <td><DeadlineChip deadline={deadlines.get(s.week) ?? null} /></td>
                       <td style={{ fontWeight: s.result === "won" ? 700 : undefined }}>vs <Link href={`/players/${s.opponentId}`}>{s.opponentName}</Link></td>
                       <td>
                         {s.status === "CONFIRMED" ? (

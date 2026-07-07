@@ -7,7 +7,11 @@ import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
-import { generateScheduleAction, resetScheduleAction } from "./actions";
+import { DeadlineChip } from "@/components/DeadlineChip";
+import { utcToEtWall } from "@/lib/date";
+import { generateScheduleAction, resetScheduleAction, setWeekDeadlineAction, applyCadenceAction, clearDeadlinesAction } from "./actions";
+
+const dtInput = "rounded border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5 text-[13px]";
 
 export const dynamic = "force-dynamic";
 
@@ -123,11 +127,49 @@ export default async function ScheduleAdmin({ params }: { params: Promise<{ name
       </div>
       <p className="sub">{board.weeks.length} weeks · {totalMatchups} matchups</p>
 
+      {/* Soft weekly targets. A nudge the TO sets, never enforced -- blank = nothing shown. */}
+      <div className="card">
+        <div className="bracket-title">Weekly targets <span className="sub" style={{ fontWeight: 400 }}>(soft - a nudge, never enforced)</span></div>
+        <p className="sub" style={{ marginTop: 0 }}>
+          Set every week at once on a cadence (default: same time each week, e.g. Sunday 11:59 PM ET), then tweak any week
+          below. Times are ET.
+        </p>
+        <ActionFlashForm action={applyCadenceAction}>
+          <input type="hidden" name="season" value={seasonName} />
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="block"><span className="sub">Week 1 target (ET)</span><input type="datetime-local" name="first" className={dtInput} required /></label>
+            <label className="block"><span className="sub">Every</span>
+              <span className="inline-flex items-center gap-1"><input type="number" name="interval" min={1} defaultValue={7} className={`${dtInput} w-16`} /><span className="sub">days</span></span>
+            </label>
+            <SubmitButton size="sm" variant="secondary" pendingText="…">Set all weeks</SubmitButton>
+          </div>
+        </ActionFlashForm>
+        <ActionFlashForm action={clearDeadlinesAction} className="mt-2">
+          <input type="hidden" name="season" value={seasonName} />
+          <SubmitButton size="sm" variant="secondary" pendingText="…">Clear all targets</SubmitButton>
+        </ActionFlashForm>
+      </div>
+
       {board.weeks.map((w) => (
         <div className="card" key={w.id} style={{ marginBottom: "0.75rem" }}>
-          <div className="flex items-center justify-between">
-            <div className="bracket-title">Week {w.number}</div>
-            <span className="badge">{w.kind}</span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="bracket-title" style={{ padding: 0 }}>Week {w.number}</div>
+              <span className="badge">{w.kind}</span>
+              <DeadlineChip deadline={w.deadlineAt} />
+            </div>
+            <details>
+              <summary className="sub" style={{ cursor: "pointer" }}>set target</summary>
+              <ActionFlashForm action={setWeekDeadlineAction} className="mt-1">
+                <input type="hidden" name="season" value={seasonName} />
+                <input type="hidden" name="week" value={w.number} />
+                <div className="flex flex-wrap items-end gap-2">
+                  <input type="datetime-local" name="deadline" defaultValue={w.deadlineAt ? utcToEtWall(w.deadlineAt) : ""} className={dtInput} />
+                  <SubmitButton size="sm" variant="secondary" pendingText="…">Save</SubmitButton>
+                  <span className="sub">(blank = clear)</span>
+                </div>
+              </ActionFlashForm>
+            </details>
           </div>
           <table>
             <tbody>

@@ -38,6 +38,7 @@ interface LoadedMatchup {
     sets: { id: string; playerAId: string; playerBId: string; seedA: number; seedB: number; bestOf: number; status: string }[];
   };
   weekNumber: number;
+  deadlineAt: Date | null; // soft weekly target (may be null)
   seasonId: string;
   seasonName: string;
   defaultBestOf: number;
@@ -101,6 +102,7 @@ async function load(matchupId: string): Promise<LoadedMatchup | null> {
   return {
     matchup,
     weekNumber: matchup.week.number,
+    deadlineAt: matchup.week.deadlineAt,
     seasonId: season.id,
     seasonName: season.name,
     defaultBestOf: season.defaultBestOf,
@@ -149,6 +151,7 @@ export async function getPairingConsole(matchupId: string) {
     matchupId: m.matchup.id,
     seasonName: m.seasonName,
     weekNumber: m.weekNumber,
+    deadlineAt: m.deadlineAt,
     teamA: decorate(m.teamA),
     teamB: decorate(m.teamB),
     sendFirst: state.sendFirst,
@@ -349,6 +352,7 @@ export async function getCaptainPairing(matchupId: string, viewerPlayerId: strin
     matchupId,
     seasonName: m.seasonName,
     weekNumber: m.weekNumber,
+    deadlineAt: m.deadlineAt,
     side,
     myTeamName: myTeam.name,
     oppTeamName: oppTeam.name,
@@ -461,7 +465,7 @@ export async function getCaptainMatchups(seasonName: string, viewerPlayerId: str
 
   const matchups = await prisma.matchup.findMany({
     where: { week: { seasonId: season.id }, OR: [{ teamSeasonAId: { in: [...teamIds] } }, { teamSeasonBId: { in: [...teamIds] } }] },
-    include: { week: { select: { number: true } } },
+    include: { week: { select: { number: true, deadlineAt: true } } },
   });
   const tsIds = [...new Set(matchups.flatMap((mu) => [mu.teamSeasonAId, mu.teamSeasonBId]))];
   const ts = await prisma.teamSeason.findMany({ where: { id: { in: tsIds } }, include: { team: true } });
@@ -472,7 +476,7 @@ export async function getCaptainMatchups(seasonName: string, viewerPlayerId: str
       const mine = teamIds.has(mu.teamSeasonAId) ? "A" : "B";
       const oppId = mine === "A" ? mu.teamSeasonBId : mu.teamSeasonAId;
       const setCount = mu.setsWonA != null ? "done" : mu.pendingProposalPlayerId ? "proposal pending" : "to pair";
-      return { matchupId: mu.id, week: mu.week.number, opponent: nameOf.get(oppId) ?? "?", oppTeamSeasonId: oppId, status: setCount, decided: mu.setsWonA != null };
+      return { matchupId: mu.id, week: mu.week.number, deadline: mu.week.deadlineAt, opponent: nameOf.get(oppId) ?? "?", oppTeamSeasonId: oppId, status: setCount, decided: mu.setsWonA != null };
     })
     .sort((a, b) => a.week - b.week);
 }
