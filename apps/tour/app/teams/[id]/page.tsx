@@ -1,7 +1,11 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Settings2 } from "lucide-react";
 import { getTeamSeason, getTeamPlacement, getTeamWeeks, getTeamMoves } from "@/lib/team";
+import { getViewer, isAdmin } from "@/lib/auth";
+import { capabilitiesFor, captainTeamsFor, seasonIdByName } from "@/lib/permissions";
+import { getRosterOps } from "@/lib/services/roster-ops";
 import { PlayerName } from "@/components/PlayerName";
+import { TeamManagePanel } from "@/components/TeamManagePanel";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +35,22 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
   const weeks = await getTeamWeeks(id);
   const moves = await getTeamMoves(id);
 
+  // Manage-this-team panel -- inline for the TO, a ROSTERS mod, or this team's captain/
+  // co-captain, so roster ops happen where you look at the team. Same TeamManagePanel the
+  // season-wide roster-ops page uses (one component, identical everywhere). Public viewers
+  // short-circuit before any permission/roster queries -- zero cost on the public page.
+  let canManage = await isAdmin();
+  if (!canManage) {
+    const viewer = await getViewer();
+    if (viewer?.playerId) {
+      const seasonId = await seasonIdByName(t.seasonName);
+      canManage = (await capabilitiesFor(viewer, seasonId)).has("ROSTERS") || (await captainTeamsFor(viewer, seasonId)).has(id);
+    }
+  }
+  const ro = canManage ? await getRosterOps(t.seasonName) : null;
+  const manageTeam = ro?.teams.find((x) => x.teamSeasonId === id) ?? null;
+  const weekSel = ro ? ro.weekOptions.map((w) => ({ value: String(w.value), label: w.label })) : [];
+
   return (
     <main>
       <p>
@@ -40,6 +60,26 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
       <p className="sub">
         {t.seasonName} · {t.conferenceName}
       </p>
+
+      {ro && manageTeam && (
+        <details open style={{ marginBottom: "1.25rem" }}>
+          <summary className="inline-flex items-center gap-2" style={{ cursor: "pointer", fontWeight: 600, fontSize: "1.05rem", marginBottom: "0.6rem" }}>
+            <Settings2 className="size-4" /> Manage team
+          </summary>
+          <TeamManagePanel
+            seasonName={ro.seasonName}
+            team={manageTeam}
+            selectedWeek={ro.selectedWeek}
+            strikeOf={ro.strikeOf}
+            faOpts={ro.freeAgents.map((p) => ({ value: p.id, label: p.name }))}
+            weekSel={weekSel}
+            weekSelOpt={[{ value: "", label: "— one week —" }, ...weekSel]}
+            defWeek={String(ro.selectedWeek)}
+            linkName={false}
+          />
+        </details>
+      )}
+
       <div className="grid grid-3 mb-4">
         {place && (
           <>
