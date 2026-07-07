@@ -7,6 +7,7 @@ import { getCaptainMatchups } from "@/lib/services/pairing";
 import { weekDeadlinesByName } from "@/lib/services/deadlines";
 import { getMyFantasy } from "@/lib/services/fantasy";
 import { getMyPickem } from "@/lib/services/pickem";
+import { myRecentRequests } from "@/lib/services/roster-requests";
 import { Callout } from "@/components/Callout";
 import { DeadlineChip } from "@/components/DeadlineChip";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
@@ -29,6 +30,13 @@ const STATUS_COLOR: Record<string, string> = {
   CONFIRMED: "var(--success)",
   DISPUTED: "var(--danger)",
   FORFEIT: "var(--danger)",
+};
+
+const REQ_STATUS_COLOR: Record<string, string> = {
+  PENDING: "var(--accent-2)",
+  APPROVED: "var(--success)",
+  REJECTED: "var(--danger)",
+  CANCELLED: "var(--muted)",
 };
 
 export default async function MyTour() {
@@ -65,6 +73,8 @@ export default async function MyTour() {
   const [myFantasy, myPickem] = focusTeam
     ? await Promise.all([getMyFantasy(focusTeam.seasonName, viewer.discordId), getMyPickem(focusTeam.seasonName, viewer.discordId)])
     : [null, null];
+  // The round-trip: roster changes this player filed as a captain, and how they were decided.
+  const myReqs = await myRecentRequests(viewer.discordId, 8);
 
   // "On your clock" -- what needs action right now, hoisted above the reference tables.
   const setsToReport = home.sets.filter((s) => s.canReport);
@@ -158,6 +168,26 @@ export default async function MyTour() {
                 )}
               </div>
             )}
+          </div>
+        </>
+      )}
+
+      {myReqs.length > 0 && (
+        <>
+          <h2 className="mt-6 mb-1 text-[1.1rem]">Your roster requests</h2>
+          <div className="card">
+            <table>
+              <thead><tr><th>Change</th><th>Status</th><th>Note</th></tr></thead>
+              <tbody>
+                {myReqs.map((r) => (
+                  <tr key={r.id}>
+                    <td><span className="badge">{r.kindLabel}</span> {r.summary} <span className="sub">({r.teamName})</span></td>
+                    <td><span className="badge" style={{ color: REQ_STATUS_COLOR[r.status] ?? "var(--muted)" }}>{r.status.toLowerCase()}</span></td>
+                    <td className="sub">{r.status === "REJECTED" && r.decisionNote ? r.decisionNote : ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </>
       )}

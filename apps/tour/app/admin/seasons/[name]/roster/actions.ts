@@ -5,9 +5,16 @@ import { redirect } from "next/navigation";
 import { getViewer, type Viewer } from "@/lib/auth";
 import { capabilitiesFor, captainTeamsFor, seasonIdByName } from "@/lib/permissions";
 import { substitute, recordDeparture, reinstate, replacePlayer, removeMove, changeCaptain, reseed, swapSeeds, setCoCaptain, convertMemberToSub, convertSubToMember } from "@/lib/services/roster-ops";
-import { createRosterRequest, approveRosterRequest, rejectRosterRequest, cancelRosterRequest, type RosterRequestPayload } from "@/lib/services/roster-requests";
+import { createRosterRequest, approveRosterRequest, rejectRosterRequest, cancelRosterRequest, approveManyRosterRequests, type RosterRequestPayload } from "@/lib/services/roster-requests";
 import { addStrike, removeStrike } from "@/lib/services/strikes";
+import { notifyLive } from "@/lib/notify";
 import type { ActionResult } from "@/lib/action-result";
+
+// Nudge the mod inbox (SSE) after a request decision so a handled row vanishes for other mods.
+async function notifyRequests(season: string) {
+  const sid = await seasonIdByName(season);
+  if (sid) await notifyLive(`roster-requests:${sid}`);
+}
 
 function rev(season: string) {
   const enc = encodeURIComponent(season);
@@ -341,6 +348,7 @@ export async function approveRequestAction(_prev: ActionResult, formData: FormDa
   try {
     const r = await approveRosterRequest(id, viewer.discordId ?? viewer.name ?? "mod");
     rev(season);
+    await notifyRequests(season);
     return { ok: true, message: `Approved: ${r.summary}` };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Could not approve." };
@@ -355,6 +363,7 @@ export async function rejectRequestAction(_prev: ActionResult, formData: FormDat
   try {
     await rejectRosterRequest(id, viewer.discordId ?? viewer.name ?? "mod", String(formData.get("note") ?? ""));
     rev(season);
+    await notifyRequests(season);
     return { ok: true, message: "Request rejected." };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Could not reject." };
@@ -371,8 +380,23 @@ export async function cancelRequestAction(_prev: ActionResult, formData: FormDat
   try {
     await cancelRosterRequest(id, viewer.discordId ?? viewer.name ?? "captain");
     rev(season);
+    await notifyRequests(season);
     return { ok: true, message: "Request withdrawn." };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Could not withdraw." };
   }
+}
+
+// Bulk approve from the inbox -- row checkboxes join this via form="bulk-approve-req".
+export async function approveRequestsBulkAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const season = String(formData.get("season") ?? "");
+  if (!(await isModFor(season))) return { ok: false, message: "Not authorized." };
+  const ids = formData.getAll("ids").map(String).filter(Boolean);
+  if (!ids.length) return { ok: false, message: "Tick at least one request to approve." };
+  const viewer = await getViewer();
+  const r = await approveManyRosterRequests(ids, viewer.discordId ?? viewer.name ?? "mod");
+  rev(season);
+  await notifyRequests(season);
+  const failMsg = r.failed.length ? ` ${r.failed.length} could not be applied.` : "";
+  return { ok: r.approved > 0, message: `Approved ${r.approved} request${r.approved === 1 ? "" : "s"}.${failMsg}` };
 }

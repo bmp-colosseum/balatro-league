@@ -42,6 +42,11 @@ const KIND_LABEL: Record<RosterRequestKind, string> = {
   REINSTATE: "Reinstate",
 };
 
+export type RosterRequestStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+// Rejecting one of these needs a written reason -- they're high-impact and the captain
+// who filed it deserves to know why.
+const HIGH_IMPACT = new Set<RosterRequestKind>(["QUIT", "BANNED", "CAPTAIN_CHANGE"]);
+
 // The op payload a captain submits (superset of roster-ops args; only the fields a
 // given kind needs are set). Season/team/requester are supplied by createRosterRequest.
 export interface RosterRequestPayload {
@@ -88,6 +93,10 @@ export interface RosterRequestView {
   requestedBy: string;
   requestedName: string | null;
   createdAt: Date;
+  status: RosterRequestStatus;
+  decidedBy: string | null;
+  decisionNote: string | null;
+  decidedAt: Date | null;
   summary: string;
 }
 
@@ -144,6 +153,10 @@ interface RawRequest {
   requestedBy: string;
   requestedName: string | null;
   createdAt: Date;
+  status: RosterRequestStatus;
+  decidedBy: string | null;
+  decisionNote: string | null;
+  decidedAt: Date | null;
 }
 
 function weekLabel(from: number, until: number | null): string {
@@ -287,14 +300,43 @@ export async function approveRosterRequest(id: string, decidedBy: string): Promi
 }
 
 export async function rejectRosterRequest(id: string, decidedBy: string, note?: string | null): Promise<{ ok: true }> {
-  const r = await prisma.rosterChangeRequest.findUnique({ where: { id }, select: { status: true } });
+  const r = await prisma.rosterChangeRequest.findUnique({ where: { id }, select: { status: true, kind: true } });
   if (!r) throw new Error("Request not found.");
   if (r.status !== "PENDING") throw new Error("This request was already handled.");
+  if (HIGH_IMPACT.has(r.kind as RosterRequestKind) && !note?.trim()) {
+    throw new Error(`Add a note explaining why -- rejecting a ${KIND_LABEL[r.kind as RosterRequestKind].toLowerCase()} needs a reason for the captain.`);
+  }
   await prisma.rosterChangeRequest.update({
     where: { id },
     data: { status: "REJECTED", decidedBy, decidedAt: new Date(), decisionNote: note?.trim() || null },
   });
   return { ok: true };
+}
+
+// A captain's own recent requests (any status) -- the round-trip so they see the outcome.
+export async function myRecentRequests(discordId: string | null, limit = 10): Promise<RosterRequestView[]> {
+  if (!discordId) return [];
+  const rows = await prisma.rosterChangeRequest.findMany({
+    where: { requestedBy: discordId },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+  return enrich(rows as RawRequest[]);
+}
+
+// Approve a batch (the inbox bulk bar). Each runs independently; one failure doesn't block the rest.
+export async function approveManyRosterRequests(ids: string[], decidedBy: string): Promise<{ approved: number; failed: { id: string; error: string }[] }> {
+  let approved = 0;
+  const failed: { id: string; error: string }[] = [];
+  for (const id of ids) {
+    try {
+      await approveRosterRequest(id, decidedBy);
+      approved++;
+    } catch (e) {
+      failed.push({ id, error: e instanceof Error ? e.message : "failed" });
+    }
+  }
+  return { approved, failed };
 }
 
 // Cancel: the requesting captain (or a mod) withdraws a still-pending request.
