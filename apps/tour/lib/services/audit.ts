@@ -11,6 +11,7 @@
 //   UNPLAYED         fully paired, sets just haven't been played/reported yet
 //   NOT_STARTED      zero sets -- pairing hasn't begun (normal for future weeks)
 import { prisma } from "../db";
+import { subOnlyKeySet } from "./roster-ops";
 
 export type PendingCategory = "DISPUTED" | "AWAITING_CONFIRM" | "UNPAIRED" | "UNPLAYED" | "NOT_STARTED";
 
@@ -22,6 +23,8 @@ export interface PendingSet {
   bName: string;
   aPlayerId: string;
   bPlayerId: string;
+  aIsSub: boolean; // sub-only membership -- render "sub", not the stored seed snapshot
+  bIsSub: boolean;
   status: string;
   reported: boolean; // has a recorded result (CONFIRMED/FORFEIT/REPORTED)
   teamAGames: number | null; // games won by team A in this set (the game% tiebreaker input); null if unreported
@@ -127,9 +130,12 @@ export async function getSeasonAudit(seasonName: string) {
   // inline report controls without a per-matchup round trip.
   const playerIds = new Set<string>();
   for (const sets of rawSets.values()) for (const s of sets) { playerIds.add(s.playerAId); playerIds.add(s.playerBId); }
-  const players = playerIds.size
-    ? await prisma.player.findMany({ where: { id: { in: [...playerIds] } }, select: { id: true, displayName: true } })
-    : [];
+  const [players, subOnly] = await Promise.all([
+    playerIds.size
+      ? prisma.player.findMany({ where: { id: { in: [...playerIds] } }, select: { id: true, displayName: true } })
+      : Promise.resolve([]),
+    subOnlyKeySet(teamSeasons.map((t) => t.id)),
+  ]);
   const playerName = new Map(players.map((p) => [p.id, p.displayName]));
 
   // Pull the game scores for reported sets so the inline controls prefill the current
@@ -155,6 +161,8 @@ export async function getSeasonAudit(seasonName: string) {
         bName: playerName.get(s.playerBId) ?? "?",
         aPlayerId: s.playerAId,
         bPlayerId: s.playerBId,
+        aIsSub: subOnly.has(`${p.aTeamSeasonId}|${s.playerAId}`),
+        bIsSub: subOnly.has(`${p.bTeamSeasonId}|${s.playerBId}`),
         status: s.status,
         reported: s.status === "CONFIRMED" || s.status === "FORFEIT" || s.status === "REPORTED",
         teamAGames,

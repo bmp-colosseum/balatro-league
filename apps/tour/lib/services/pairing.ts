@@ -22,7 +22,11 @@ import {
   type RosterPlayer,
   type PairingState,
 } from "@balatro/tour-core";
-import { rosterForWeek, ensureMembership, captainAtWeek } from "./roster-ops";
+import { rosterForWeek, ensureMembership, captainAtWeek, subOnlyKeySet } from "./roster-ops";
+
+// Never print a raw cuid when a Player row can't be resolved (deleted/merged players
+// can leave dangling roster references) -- a labeled stub keeps the UI readable.
+const unresolved = (id: string) => `(unlinked ${id.slice(-6)})`;
 
 interface LoadedMatchup {
   matchup: {
@@ -41,6 +45,7 @@ interface LoadedMatchup {
   teamA: { id: string; name: string; roster: RosterPlayer[]; captainId: string };
   teamB: { id: string; name: string; roster: RosterPlayer[]; captainId: string };
   nameOf: Map<string, string>;
+  subOnly: Set<string>; // `${teamSeasonId}|${playerId}` -- sub stints only, no seed held
 }
 
 async function load(matchupId: string): Promise<LoadedMatchup | null> {
@@ -87,7 +92,10 @@ async function load(matchupId: string): Promise<LoadedMatchup | null> {
       capB,
     ]),
   ].filter(Boolean);
-  const players = await prisma.player.findMany({ where: { id: { in: ids } }, select: { id: true, displayName: true } });
+  const [players, subOnly] = await Promise.all([
+    prisma.player.findMany({ where: { id: { in: ids } }, select: { id: true, displayName: true } }),
+    subOnlyKeySet([matchup.teamSeasonAId, matchup.teamSeasonBId]),
+  ]);
   const nameOf = new Map(players.map((p) => [p.id, p.displayName]));
 
   return {
@@ -100,6 +108,7 @@ async function load(matchupId: string): Promise<LoadedMatchup | null> {
     teamA,
     teamB,
     nameOf,
+    subOnly,
   };
 }
 
@@ -133,7 +142,7 @@ export async function getPairingConsole(matchupId: string) {
   const decorate = (team: { id: string; name: string; roster: RosterPlayer[] }) => ({
     id: team.id,
     name: team.name,
-    players: team.roster.map((p) => ({ playerId: p.playerId, name: m.nameOf.get(p.playerId) ?? p.playerId, seed: p.seed, paired: paired.has(p.playerId) })),
+    players: team.roster.map((p) => ({ playerId: p.playerId, name: m.nameOf.get(p.playerId) ?? unresolved(p.playerId), seed: p.seed, paired: paired.has(p.playerId) })),
   });
 
   return {
@@ -150,12 +159,14 @@ export async function getPairingConsole(matchupId: string) {
     targetPairs,
     pairs: m.matchup.sets.map((s) => ({
       setId: s.id,
-      aName: m.nameOf.get(s.playerAId) ?? s.playerAId,
+      aName: m.nameOf.get(s.playerAId) ?? unresolved(s.playerAId),
       aPlayerId: s.playerAId,
       aSeed: s.seedA,
-      bName: m.nameOf.get(s.playerBId) ?? s.playerBId,
+      aIsSub: m.subOnly.has(`${m.teamA.id}|${s.playerAId}`),
+      bName: m.nameOf.get(s.playerBId) ?? unresolved(s.playerBId),
       bPlayerId: s.playerBId,
       bSeed: s.seedB,
+      bIsSub: m.subOnly.has(`${m.teamB.id}|${s.playerBId}`),
       bestOf: s.bestOf,
       status: s.status,
     })),
@@ -324,13 +335,13 @@ export async function getCaptainPairing(matchupId: string, viewerPlayerId: strin
   const waitingOnOpp = (!!pend && pend.by === side) || (!pend && !complete && whoseProposeTurn(state) !== side);
 
   const avail = (team: { roster: RosterPlayer[] }) =>
-    team.roster.filter((p) => !paired.has(p.playerId) && p.playerId !== pend?.playerId).map((p) => ({ playerId: p.playerId, name: m.nameOf.get(p.playerId) ?? p.playerId, seed: p.seed }));
+    team.roster.filter((p) => !paired.has(p.playerId) && p.playerId !== pend?.playerId).map((p) => ({ playerId: p.playerId, name: m.nameOf.get(p.playerId) ?? unresolved(p.playerId), seed: p.seed }));
 
   const decorate = (team: typeof m.teamA) => ({
     name: team.name,
     captainName: m.nameOf.get(team.captainId) ?? "—",
     captainId: team.captainId,
-    players: team.roster.map((p) => ({ playerId: p.playerId, name: m.nameOf.get(p.playerId) ?? p.playerId, seed: p.seed, paired: paired.has(p.playerId), pending: p.playerId === pend?.playerId })),
+    players: team.roster.map((p) => ({ playerId: p.playerId, name: m.nameOf.get(p.playerId) ?? unresolved(p.playerId), seed: p.seed, paired: paired.has(p.playerId), pending: p.playerId === pend?.playerId })),
   });
 
   return {
@@ -346,19 +357,21 @@ export async function getCaptainPairing(matchupId: string, viewerPlayerId: strin
     windowSize: SEED_WINDOW,
     complete,
     deadlocked,
-    pending: pend ? { byMe: pend.by === side, playerName: m.nameOf.get(pend.playerId) ?? pend.playerId, seed: pend.seed } : null,
+    pending: pend ? { byMe: pend.by === side, playerName: m.nameOf.get(pend.playerId) ?? unresolved(pend.playerId), seed: pend.seed } : null,
     myTurnToPropose,
     myTurnToRespond,
     waitingOnOpp,
     proposeOptions: myTurnToPropose ? avail(myTeam) : [],
-    respondOptions: myTurnToRespond ? eligibleResponses(state).map((p) => ({ playerId: p.playerId, name: m.nameOf.get(p.playerId) ?? p.playerId, seed: p.seed })) : [],
+    respondOptions: myTurnToRespond ? eligibleResponses(state).map((p) => ({ playerId: p.playerId, name: m.nameOf.get(p.playerId) ?? unresolved(p.playerId), seed: p.seed })) : [],
     pairs: m.matchup.sets.map((s) => ({
-      aName: m.nameOf.get(s.playerAId) ?? s.playerAId,
+      aName: m.nameOf.get(s.playerAId) ?? unresolved(s.playerAId),
       aPlayerId: s.playerAId,
       aSeed: s.seedA,
-      bName: m.nameOf.get(s.playerBId) ?? s.playerBId,
+      aIsSub: m.subOnly.has(`${m.teamA.id}|${s.playerAId}`),
+      bName: m.nameOf.get(s.playerBId) ?? unresolved(s.playerBId),
       bPlayerId: s.playerBId,
       bSeed: s.seedB,
+      bIsSub: m.subOnly.has(`${m.teamB.id}|${s.playerBId}`),
       status: s.status,
     })),
   };
@@ -490,7 +503,7 @@ export async function getMatchupSubOptions(matchupId: string) {
   const ids = [...new Set([...memberOf(matchup.teamSeasonAId), ...memberOf(matchup.teamSeasonBId), ...freeAgentIds])];
   const players = await prisma.player.findMany({ where: { id: { in: ids } }, select: { id: true, displayName: true } });
   const nameOf = new Map(players.map((p) => [p.id, p.displayName]));
-  const opt = (pid: string) => ({ id: pid, name: nameOf.get(pid) ?? pid });
+  const opt = (pid: string) => ({ id: pid, name: nameOf.get(pid) ?? unresolved(pid) });
 
   return {
     subsA: [...memberOf(matchup.teamSeasonAId), ...freeAgentIds].map(opt),

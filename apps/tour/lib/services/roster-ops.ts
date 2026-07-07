@@ -326,6 +326,21 @@ export async function replacePlayer(seasonName: string, teamSeasonId: string, in
   return { ok: true, ...sets };
 }
 
+// Sub-only memberships for a set of teams: players with SUB stints but NO permanent
+// arrival (DRAFTED/ADDED) on that teamSeason. Set-row displays use this to render a
+// "sub" chip instead of the stored seed snapshot -- subs hold no seed, anywhere.
+// Keys are `${teamSeasonId}|${playerId}`.
+export async function subOnlyKeySet(teamSeasonIds: string[]): Promise<Set<string>> {
+  const ids = [...new Set(teamSeasonIds)].filter(Boolean);
+  if (!ids.length) return new Set();
+  const moves = await prisma.rosterMove.findMany({
+    where: { teamSeasonId: { in: ids }, kind: { in: ["DRAFTED", "ADDED", "SUB"] } },
+    select: { teamSeasonId: true, playerId: true, kind: true },
+  });
+  const arrivals = new Set(moves.filter((m) => m.kind !== "SUB").map((m) => `${m.teamSeasonId}|${m.playerId}`));
+  return new Set(moves.filter((m) => m.kind === "SUB").map((m) => `${m.teamSeasonId}|${m.playerId}`).filter((k) => !arrivals.has(k)));
+}
+
 // The weeks a player actually played sets for a team -- flat imported sets carry week
 // directly; live sets get it from their matchup. Lets membership fixes show the TO the
 // real coverage window instead of making them guess.

@@ -7,6 +7,7 @@
 import { prisma } from "../db";
 import { notifyLive } from "../notify";
 import { enqueueAnnounceResult, enqueueAnnounceMatchup } from "../queue";
+import { subOnlyKeySet } from "./roster-ops";
 
 export async function reportSet(setId: string, gamesTeamA: number, gamesTeamB: number) {
   const set = await prisma.tourSet.findUnique({ where: { id: setId } });
@@ -179,10 +180,11 @@ export async function getMatchupReport(matchupId: string) {
 
   const matchIds = matchup.sets.map((s) => s.matchId).filter((x): x is string => !!x);
   const playerIds = [...new Set(matchup.sets.flatMap((s) => [s.playerAId, s.playerBId, s.reassignedFromId].filter((x): x is string => !!x)))];
-  const [matches, players, teamSeasons] = await Promise.all([
+  const [matches, players, teamSeasons, subOnly] = await Promise.all([
     prisma.match.findMany({ where: { id: { in: matchIds } }, select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true, winnerId: true } }),
     prisma.player.findMany({ where: { id: { in: playerIds } }, select: { id: true, displayName: true } }),
     prisma.teamSeason.findMany({ where: { id: { in: [matchup.teamSeasonAId, matchup.teamSeasonBId] } }, include: { team: true } }),
+    subOnlyKeySet([matchup.teamSeasonAId, matchup.teamSeasonBId]),
   ]);
   const mById = new Map(matches.map((m) => [m.id, m]));
   const nameOf = new Map(players.map((p) => [p.id, p.displayName]));
@@ -204,6 +206,8 @@ export async function getMatchupReport(matchupId: string) {
       bPlayerId: s.playerBId,
       aSeed: s.seedA,
       bSeed: s.seedB,
+      aIsSub: subOnly.has(`${matchup.teamSeasonAId}|${s.playerAId}`),
+      bIsSub: subOnly.has(`${matchup.teamSeasonBId}|${s.playerBId}`),
       bestOf: s.bestOf,
       status: s.status,
       reported: s.status === "CONFIRMED" || s.status === "FORFEIT",

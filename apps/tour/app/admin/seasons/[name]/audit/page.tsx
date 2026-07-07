@@ -9,6 +9,7 @@ import { getSeasonAudit, type PendingCategory } from "@/lib/services/audit";
 import { Callout } from "@/components/Callout";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { SetReportControls } from "@/components/SetReportControls";
+import { SeedOrSub } from "@/components/SeedOrSub";
 
 export const dynamic = "force-dynamic";
 
@@ -154,10 +155,10 @@ export default async function AuditPage({ params }: { params: Promise<{ name: st
                     <tbody>
                       {p.sets.map((s) => (
                         <tr key={s.setId}>
-                          <td style={{ whiteSpace: "nowrap" }}>#{s.aSeed} <Link href={`/players/${s.aPlayerId}`} style={{ color: "inherit" }}>{s.aName}</Link></td>
+                          <td style={{ whiteSpace: "nowrap" }}><SeedOrSub seed={s.aSeed} isSub={s.aIsSub} /> <Link href={`/players/${s.aPlayerId}`} style={{ color: "inherit" }}>{s.aName}</Link></td>
                           <td style={{ whiteSpace: "nowrap" }}>
-                            #{s.bSeed} <Link href={`/players/${s.bPlayerId}`} style={{ color: "inherit" }}>{s.bName}</Link>
-                            {s.bSeed !== s.aSeed && (
+                            <SeedOrSub seed={s.bSeed} isSub={s.bIsSub} /> <Link href={`/players/${s.bPlayerId}`} style={{ color: "inherit" }}>{s.bName}</Link>
+                            {!s.aIsSub && !s.bIsSub && s.bSeed !== s.aSeed && (
                               <span className="sub" style={{ color: "var(--warning, #f5a524)" }} title={`Not seed-for-seed: #${s.aSeed} vs #${s.bSeed}`}>
                                 {" "}({s.bSeed > s.aSeed ? "+" : ""}{s.bSeed - s.aSeed})
                               </span>

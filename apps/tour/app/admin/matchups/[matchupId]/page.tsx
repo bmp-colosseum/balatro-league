@@ -11,6 +11,7 @@ import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { SetReportControls } from "@/components/SetReportControls";
+import { SeedOrSub } from "@/components/SeedOrSub";
 import {
   overridePairAction,
   setSendFirstAction,
@@ -105,10 +106,11 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
             <tbody>
               {c.pairs.map((p) => (
                 <tr key={p.setId}>
-                  <td>#{p.aSeed} <Link href={`/players/${p.aPlayerId}`} style={{ color: "inherit" }}>{p.aName}</Link></td>
-                  <td>#{p.bSeed} <Link href={`/players/${p.bPlayerId}`} style={{ color: "inherit" }}>{p.bName}</Link></td>
+                  <td><SeedOrSub seed={p.aSeed} isSub={p.aIsSub} /> <Link href={`/players/${p.aPlayerId}`} style={{ color: "inherit" }}>{p.aName}</Link></td>
+                  <td><SeedOrSub seed={p.bSeed} isSub={p.bIsSub} /> <Link href={`/players/${p.bPlayerId}`} style={{ color: "inherit" }}>{p.bName}</Link></td>
                   <td className="num">
-                    {p.bSeed !== p.aSeed && (
+                    {/* Off-seed offset only makes sense between two seed-holders. */}
+                    {!p.aIsSub && !p.bIsSub && p.bSeed !== p.aSeed && (
                       <span style={{ color: "var(--warning, #f5a524)" }} title={`Not seed-for-seed: #${p.aSeed} vs #${p.bSeed}`}>
                         {p.bSeed > p.aSeed ? "+" : ""}{p.bSeed - p.aSeed}
                       </span>
@@ -187,12 +189,12 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
                 {report.sets.map((s) => (
                   <tr key={s.setId}>
                     <td style={{ fontWeight: s.winner === "A" ? 700 : undefined }}>
-                      #{s.aSeed} <Link href={`/players/${s.aPlayerId}`} style={{ color: "inherit" }}>{s.aName}</Link>
+                      <SeedOrSub seed={s.aSeed} isSub={s.aIsSub} /> <Link href={`/players/${s.aPlayerId}`} style={{ color: "inherit" }}>{s.aName}</Link>
                       {s.reassignedFrom && <span className="sub" title={`makeup — originally ${s.reassignedFrom}`}> (sub for {s.reassignedFrom})</span>}
                     </td>
                     <td style={{ fontWeight: s.winner === "B" ? 700 : undefined }}>
-                      #{s.bSeed} <Link href={`/players/${s.bPlayerId}`} style={{ color: "inherit" }}>{s.bName}</Link>
-                      {s.bSeed !== s.aSeed && (
+                      <SeedOrSub seed={s.bSeed} isSub={s.bIsSub} /> <Link href={`/players/${s.bPlayerId}`} style={{ color: "inherit" }}>{s.bName}</Link>
+                      {!s.aIsSub && !s.bIsSub && s.bSeed !== s.aSeed && (
                         <span className="sub" style={{ color: "var(--warning, #f5a524)" }} title={`Not seed-for-seed: #${s.aSeed} vs #${s.bSeed}`}>
                           {" "}({s.bSeed > s.aSeed ? "+" : ""}{s.bSeed - s.aSeed})
                         </span>

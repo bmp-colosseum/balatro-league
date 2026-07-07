@@ -2,7 +2,7 @@
 // that season, with team totals. Derived from the imported sets.
 import { prisma } from "./db";
 import { getSeasonStandings } from "./standings";
-import { seedAtWeekResolver } from "./services/roster-ops";
+import { seedAtWeekResolver, subOnlyKeySet } from "./services/roster-ops";
 
 export interface TeamPlacement {
   placement: number; // 1-based rank within its conference group
@@ -395,6 +395,7 @@ export async function getTeamWeeks(teamSeasonId: string): Promise<TeamWeek[]> {
   // Effective seed AS OF the matchup's week — folds the RosterMove log (RESEED moves,
   // subs) so a mid-season re-seed shows the right number for the weeks it applies to.
   const effSeed = await seedAtWeekResolver([teamSeasonId, ...oppTsIds]);
+  const subOnly = await subOnlyKeySet([teamSeasonId, ...oppTsIds]); // subs hold no seed
 
   // Key by week + opponent: a team usually plays one opponent per week, but this keeps
   // two distinct matchups in the same week from being merged into one row.
@@ -420,8 +421,8 @@ export async function getTeamWeeks(teamSeasonId: string): Promise<TeamWeek[]> {
       playerId: usPid,
       oppPlayer: pName.get(oppPid) ?? "?",
       oppPlayerId: oppPid,
-      seed: effSeed(teamSeasonId, s.week!, usPid),
-      oppSeed: effSeed(oppTsId, s.week!, oppPid),
+      seed: subOnly.has(`${teamSeasonId}|${usPid}`) ? null : effSeed(teamSeasonId, s.week!, usPid),
+      oppSeed: oppTsId && subOnly.has(`${oppTsId}|${oppPid}`) ? null : effSeed(oppTsId, s.week!, oppPid),
       scoreFor: ourGames,
       scoreAgainst: oppGames,
       win: m.winnerId == null ? null : m.winnerId === usPid,

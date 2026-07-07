@@ -3,7 +3,7 @@
 // team matchups + the player sets within them, and surfaces mid-season roster moves
 // (a player whose first appearance is after the opening week = an add/sub). No writes.
 import { prisma } from "./db";
-import { seedAtWeekResolver } from "./services/roster-ops";
+import { seedAtWeekResolver, subOnlyKeySet } from "./services/roster-ops";
 
 export interface WeekSet {
   playerA: string;
@@ -56,6 +56,7 @@ export async function getSeasonWeeks(seasonName: string): Promise<SeasonWeek[]> 
     prisma.draftPick.findMany({ where: { teamSeasonId: { in: tsIds } }, select: { teamSeasonId: true, playerId: true } }),
   ]);
   const seedAt = await seedAtWeekResolver(tsIds);
+  const subOnly = await subOnlyKeySet(tsIds); // subs hold no seed -- blank, not the artifact
   const matchById = new Map(matches.map((m) => [m.id, m]));
   const teamName = new Map(tss.map((t) => [t.id, t.team.name]));
   const captainOf = new Map(tss.map((t) => [t.id, t.captainPlayerId]));
@@ -108,8 +109,8 @@ export async function getSeasonWeeks(seasonName: string): Promise<SeasonWeek[]> 
       playerAId: p0Id,
       playerB: pName.get(p1Id) ?? "?",
       playerBId: p1Id,
-      seedA: seedAt(t0, s.week!, p0Id),
-      seedB: seedAt(t1, s.week!, p1Id),
+      seedA: subOnly.has(`${t0}|${p0Id}`) ? null : seedAt(t0, s.week!, p0Id),
+      seedB: subOnly.has(`${t1}|${p1Id}`) ? null : seedAt(t1, s.week!, p1Id),
       scoreA: flip ? gB : gA,
       scoreB: flip ? gA : gB,
     });

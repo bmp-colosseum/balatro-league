@@ -6,6 +6,7 @@ import { Callout } from "@/components/Callout";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
+import { SeedOrSub } from "@/components/SeedOrSub";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { proposeAction, respondAction, cancelProposalAction } from "./actions";
 
@@ -81,8 +82,8 @@ export default async function CaptainPairing({ params }: { params: Promise<{ mat
               {c.pairs.map((p, i) => (
                 <tr key={i}>
                   <td className="rank">{i + 1}</td>
-                  <td>#{p.aSeed} <Link href={`/players/${p.aPlayerId}`}>{p.aName}</Link></td>
-                  <td>#{p.bSeed} <Link href={`/players/${p.bPlayerId}`}>{p.bName}</Link></td>
+                  <td><SeedOrSub seed={p.aSeed} isSub={p.aIsSub} /> <Link href={`/players/${p.aPlayerId}`}>{p.aName}</Link></td>
+                  <td><SeedOrSub seed={p.bSeed} isSub={p.bIsSub} /> <Link href={`/players/${p.bPlayerId}`}>{p.bName}</Link></td>
                   <td className="sub">{p.status}</td>
                 </tr>
               ))}
