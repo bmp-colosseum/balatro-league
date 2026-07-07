@@ -4,7 +4,7 @@ import { activePublicSeason } from "../active-season.js";
 import { buildScheduleEmbed } from "../schedule-embed.js";
 import { buildStatusReply } from "./status.js";
 import { buildPlayerHelpEmbed } from "./help.js";
-import { runStandingsAll } from "./standings.js";
+import { runStandingsForPlayer } from "./standings.js";
 import type { ButtonHandler } from "./types.js";
 
 // The division control-panel buttons (attached to each division's welcome
@@ -25,7 +25,7 @@ export const divisionControlsButtons: ButtonHandler = {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     if (action === "standings") {
-      await runStandingsAll(interaction, interaction.user.id);
+      await runStandingsForPlayer(interaction, interaction.user.id);
       return;
     }
     if (action === "status") {

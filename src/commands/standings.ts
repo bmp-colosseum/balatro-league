@@ -130,19 +130,28 @@ async function buildMyScheduleEmbed(seasonId: string, discordId: string): Promis
 }
 
 async function renderSingleDivision(
-  interaction: ChatInputCommandInteraction,
+  interaction: RepliableInteraction,
   seasonId: string,
   divisionName: string,
   mySchedule: EmbedBuilder | null,
 ) {
   const division = await prisma.division.findFirst({
     where: { seasonId, name: divisionName },
+    select: { id: true, name: true },
   });
   if (!division) {
     await interaction.editReply(`No division named \`${divisionName}\` this season.`);
     return;
   }
+  await renderDivisionRows(interaction, division, mySchedule);
+}
 
+// Render one division's standings table (+ the caller's own schedule embed).
+async function renderDivisionRows(
+  interaction: RepliableInteraction,
+  division: { id: string; name: string },
+  mySchedule: EmbedBuilder | null,
+) {
   const [members, pairings] = await Promise.all([
     prisma.divisionMember.findMany({
       where: { divisionId: division.id },
@@ -163,6 +172,30 @@ async function renderSingleDivision(
     content: formatStandingsTable(division.name, rows),
     embeds: mySchedule ? [mySchedule] : [],
   });
+}
+
+// Standings for the CALLER's own division — used by the division control-panel
+// "League standings" button so it defaults to your division, not all 16. Falls
+// back to the whole league if the clicker isn't in a division (e.g. staff).
+export async function runStandingsForPlayer(interaction: RepliableInteraction, discordId: string): Promise<void> {
+  const activeSeason = await activePublicSeason();
+  if (!activeSeason) {
+    await interaction.editReply("No active season right now.");
+    return;
+  }
+  const player = await prisma.player.findUnique({ where: { discordId }, select: { id: true } });
+  const membership = player
+    ? await prisma.divisionMember.findFirst({
+        where: { playerId: player.id, status: "ACTIVE", division: { seasonId: activeSeason.id } },
+        include: { division: { select: { id: true, name: true } } },
+      })
+    : null;
+  if (!membership) {
+    await runStandingsAll(interaction, discordId);
+    return;
+  }
+  const mySchedule = await buildMyScheduleEmbed(activeSeason.id, discordId);
+  await renderDivisionRows(interaction, membership.division, mySchedule);
 }
 
 async function renderAllDivisions(
