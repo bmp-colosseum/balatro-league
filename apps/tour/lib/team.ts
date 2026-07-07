@@ -51,6 +51,8 @@ export interface TeamPlayerLine {
   draftSeed: number; // base draft seed
   reseeded: boolean; // true when the effective seed differs from the draft seed
   seedChain: number[]; // full seed path over the season, e.g. [5, 3, 7] (draft → re-seeds)
+  isSub: boolean; // temporary fill-in (SUB stints only, no permanent arrival) -- not a seed-holder
+  subWeeks: string | null; // human window(s) of their stints, e.g. "W3" or "W2-4, W7"
   isCaptain: boolean;
   isCoCaptain: boolean;
   setW: number;
@@ -215,6 +217,23 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
     orderBy: [{ effectiveWeek: "asc" }, { createdAt: "asc" }],
     select: { playerId: true, kind: true, seed: true, effectiveWeek: true },
   });
+
+  // Who is a temporary SUB (stints only, no permanent DRAFTED/ADDED arrival)? They keep a
+  // RosterEntry for stat attribution, but they never held a seed -- show them as subs with
+  // their stint weeks, not as seed-N members.
+  const memberMoves = await prisma.rosterMove.findMany({
+    where: { teamSeasonId: id, kind: { in: ["DRAFTED", "ADDED", "SUB"] } },
+    orderBy: [{ effectiveWeek: "asc" }, { createdAt: "asc" }],
+    select: { playerId: true, kind: true, effectiveWeek: true, untilWeek: true },
+  });
+  const hasArrival = new Set(memberMoves.filter((m) => m.kind !== "SUB").map((m) => m.playerId));
+  const stintsOf = new Map<string, string[]>();
+  for (const m of memberMoves) {
+    if (m.kind !== "SUB" || hasArrival.has(m.playerId)) continue;
+    const arr = stintsOf.get(m.playerId) ?? [];
+    arr.push(m.untilWeek != null && m.untilWeek !== m.effectiveWeek ? `W${m.effectiveWeek}-${m.untilWeek}` : `W${m.effectiveWeek}`);
+    stintsOf.set(m.playerId, arr);
+  }
   const chainOf = new Map<string, number[]>();
   for (const m of seedMoves) {
     if (m.seed == null) continue;
@@ -231,9 +250,16 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
       const eff = seedAt(id, lastWeek, pid) ?? e.seed;
       const chain = (chainOf.get(pid) ?? [e.seed]).slice();
       if (chain[chain.length - 1] !== eff) chain.push(eff);
-      return { playerId: pid, name: nameById.get(pid) ?? pid, discordId: didById.get(pid) ?? null, seed: eff, draftSeed: e.seed, reseeded: eff !== e.seed, seedChain: chain, isCaptain: e.isCaptain, isCoCaptain: e.isCoCaptain, ...a };
+      const stints = stintsOf.get(pid);
+      return {
+        playerId: pid, name: nameById.get(pid) ?? pid, discordId: didById.get(pid) ?? null,
+        seed: eff, draftSeed: e.seed, reseeded: eff !== e.seed, seedChain: chain,
+        isSub: !!stints, subWeeks: stints ? stints.join(", ") : null,
+        isCaptain: e.isCaptain, isCoCaptain: e.isCoCaptain, ...a,
+      };
     })
-    .sort((x, y) => x.seed - y.seed);
+    // Members by seed; subs at the bottom (they never held a seed).
+    .sort((x, y) => Number(x.isSub) - Number(y.isSub) || x.seed - y.seed);
 
   const tot = playerLines.reduce(
     (t, p) => ({ setW: t.setW + p.setW, setL: t.setL + p.setL, gameW: t.gameW + p.gameW, gameL: t.gameL + p.gameL }),

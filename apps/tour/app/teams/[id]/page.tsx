@@ -94,17 +94,24 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
             {t.players.map((p) => (
               <tr key={p.playerId}>
                 <td className="rank">
-                  {p.seed}
-                  {p.seedChain.length > 1 && (
-                    <div className="sub" style={{ fontWeight: 400, fontSize: "0.72rem" }} title={`Drafted at seed ${p.seedChain[0]}, now seed ${p.seed}`}>
-                      {p.seedChain.join(" → ")}
-                    </div>
+                  {p.isSub ? (
+                    <span className="badge" title={`Temporary sub — played ${p.subWeeks}; never held a seed`}>sub</span>
+                  ) : (
+                    <>
+                      {p.seed}
+                      {p.seedChain.length > 1 && (
+                        <div className="sub" style={{ fontWeight: 400, fontSize: "0.72rem" }} title={`Drafted at seed ${p.seedChain[0]}, now seed ${p.seed}`}>
+                          {p.seedChain.join(" → ")}
+                        </div>
+                      )}
+                    </>
                   )}
                 </td>
                 <td>
                   <PlayerName id={p.playerId} name={p.name} discordId={p.discordId} />
                   {p.isCaptain && <span className="sub"> (C)</span>}
                   {p.isCoCaptain && <span className="sub" title="Co-captain"> (CC)</span>}
+                  {p.isSub && <span className="sub" title="weeks they filled in"> ({p.subWeeks})</span>}
                 </td>
                 <td className="num">
                   {p.setW}–{p.setL}

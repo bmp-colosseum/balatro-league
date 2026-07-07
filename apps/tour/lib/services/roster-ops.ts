@@ -298,13 +298,20 @@ export async function convertMemberToSub(seasonName: string, teamSeasonId: strin
   if (!playerId) throw new Error("Pick the player.");
   if (!effectiveWeek || effectiveWeek < 1) throw new Error("Pick the week their fill-in starts.");
   if (untilWeek != null && untilWeek < effectiveWeek) throw new Error("'Until' week can't be before the start week.");
-  const arrivals = await prisma.rosterMove.findMany({
-    where: { teamSeasonId, playerId, kind: { in: ["DRAFTED", "ADDED"] } },
-    select: { id: true },
+  // Convert a permanent arrival OR adjust an existing sub stint (re-running with a new
+  // window replaces the old one -- no dead end when the first window was wrong).
+  const rewritable = await prisma.rosterMove.findMany({
+    where: { teamSeasonId, playerId, kind: { in: ["DRAFTED", "ADDED", "SUB"] } },
+    select: { id: true, kind: true, seed: true },
   });
-  if (!arrivals.length) throw new Error("That player isn't a permanent member of this team -- nothing to convert.");
-  const seed = outPlayerId ? await seedOfMember(teamSeasonId, outPlayerId) : await seedOfMember(teamSeasonId, playerId);
-  await prisma.rosterMove.deleteMany({ where: { id: { in: arrivals.map((a) => a.id) } } });
+  if (!rewritable.length) throw new Error("That player has no membership on this team -- nothing to convert.");
+  const priorSubSeed = rewritable.find((m) => m.kind === "SUB")?.seed;
+  const seed = outPlayerId
+    ? await seedOfMember(teamSeasonId, outPlayerId)
+    : rewritable.some((m) => m.kind !== "SUB")
+      ? await seedOfMember(teamSeasonId, playerId)
+      : priorSubSeed ?? 99;
+  await prisma.rosterMove.deleteMany({ where: { id: { in: rewritable.map((a) => a.id) } } });
   await prisma.rosterMove.create({
     data: {
       seasonId, teamSeasonId, kind: "SUB", playerId,
@@ -427,11 +434,12 @@ export async function getRosterOps(seasonName: string, week?: number) {
 
   const teams = teamSeasons.map((t) => {
     const coCaptains = new Set(t.rosters.flatMap((r) => r.entries.filter((e) => e.isCoCaptain).map((e) => e.playerId)));
+    const tMoves = movesByTeam.get(t.id) ?? [];
     return {
       teamSeasonId: t.id,
       name: t.team.name,
-      captainPlayerId: captainAtWeek(movesByTeam.get(t.id) ?? [], selectedWeek, t.captainPlayerId),
-      lineup: deriveLineup(movesByTeam.get(t.id) ?? [], selectedWeek, captainAtWeek(movesByTeam.get(t.id) ?? [], selectedWeek, t.captainPlayerId)).map((p) => ({
+      captainPlayerId: captainAtWeek(tMoves, selectedWeek, t.captainPlayerId),
+      lineup: deriveLineup(tMoves, selectedWeek, captainAtWeek(tMoves, selectedWeek, t.captainPlayerId)).map((p) => ({
         playerId: p.playerId,
         name: nameOf.get(p.playerId) ?? p.playerId,
         seed: p.seed,
@@ -439,6 +447,16 @@ export async function getRosterOps(seasonName: string, week?: number) {
         isCoCaptain: coCaptains.has(p.playerId),
         viaSub: p.viaSub,
       })),
+      // Every sub stint, ALWAYS visible regardless of the selected week -- a sub whose
+      // window is elsewhere would otherwise vanish from this page entirely.
+      subStints: tMoves
+        .filter((m) => m.kind === "SUB")
+        .map((m) => ({
+          playerId: m.playerId,
+          name: nameOf.get(m.playerId) ?? m.playerId,
+          window: m.untilWeek != null && m.untilWeek !== m.effectiveWeek ? `W${m.effectiveWeek}-${m.untilWeek}` : `W${m.effectiveWeek}`,
+          activeNow: m.effectiveWeek <= selectedWeek && selectedWeek <= (m.untilWeek ?? m.effectiveWeek),
+        })),
     };
   });
 

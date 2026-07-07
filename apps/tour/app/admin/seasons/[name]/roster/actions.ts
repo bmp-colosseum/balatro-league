@@ -65,9 +65,11 @@ export async function convertToSubAction(_prev: ActionResult, formData: FormData
       String(formData.get("reason") ?? ""),
     );
     rev(season);
+    const from = wk(formData, "effectiveWeek");
+    const window = until && until !== from ? `W${from}-${until}` : `W${from} only`;
     const weeks = r.playedWeeks.length ? ` They played in W${r.playedWeeks.join(", W")}.` : " They have no played sets on this team.";
-    const warn = r.outside.length ? ` Heads-up: W${r.outside.join(", W")} falls outside the sub window you set.` : "";
-    return { ok: true, message: `Converted to sub.${weeks}${warn}` };
+    const warn = r.outside.length ? ` Heads-up: W${r.outside.join(", W")} falls outside that window -- re-run with a wider window if that's wrong.` : "";
+    return { ok: true, message: `Converted to a sub covering ${window}.${weeks}${warn}` };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Convert failed." };
   }

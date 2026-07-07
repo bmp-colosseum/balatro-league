@@ -116,6 +116,23 @@ export default async function RosterOpsAdmin({
                 {t.lineup.length === 0 && <li className="sub">No active players this week.</li>}
               </ol>
 
+              {/* Sub stints are ALWAYS listed (the lineup above only shows the selected week,
+                  so a sub whose window is elsewhere would otherwise be invisible here). */}
+              {t.subStints.length > 0 && (
+                <p className="sub" style={{ marginTop: "0.35rem" }}>
+                  Subs:{" "}
+                  {t.subStints.map((s, i) => (
+                    <span key={`${s.playerId}-${i}`}>
+                      {i > 0 && ", "}
+                      <Link href={`/players/${s.playerId}`} style={{ color: "inherit" }}>{s.name}</Link>{" "}
+                      <span title={s.activeNow ? "active in the selected week" : "window outside the selected week"}>
+                        ({s.window}{s.activeNow ? "" : " · not this week"})
+                      </span>
+                    </span>
+                  ))}
+                </p>
+              )}
+
               {/* Change captain */}
               <div className="bracket-title mt-3">Captain</div>
               <ActionFlashForm action={changeCaptainAction}>
@@ -191,7 +208,11 @@ export default async function RosterOpsAdmin({
                 <input type="hidden" name="season" value={seasonName} />
                 <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
                 <div className="flex flex-wrap items-end gap-2">
-                  <label className="block"><span className="sub">Member who is really a sub</span><FormSelect name="playerId" options={opt(lineupOpts)} /></label>
+                  {/* Lineup members + existing subs (re-running adjusts a sub's window). */}
+                  <label className="block"><span className="sub">Member / sub to (re)convert</span><FormSelect name="playerId" options={opt([
+                    ...lineupOpts,
+                    ...t.subStints.filter((s) => !t.lineup.some((p) => p.playerId === s.playerId)).map((s) => ({ value: s.playerId, label: `${s.name} (sub ${s.window})` })),
+                  ])} /></label>
                   <label className="block"><span className="sub">Subbed W</span><input type="number" name="effectiveWeek" min={1} defaultValue={data.selectedWeek} className={`${inputCls} w-16`} /></label>
                   <label className="block"><span className="sub">Until</span><input type="number" name="untilWeek" min={1} placeholder="opt" className={`${inputCls} w-16`} /></label>
                   <label className="block"><span className="sub">Covering for</span><FormSelect name="outPlayerId" options={opt(lineupOpts)} placeholder="— optional —" /></label>
@@ -199,12 +220,12 @@ export default async function RosterOpsAdmin({
                   <SubmitButton size="sm" variant="secondary" pendingText="…"><RefreshCw className="size-3.5" /> Make sub</SubmitButton>
                 </div>
               </ActionFlashForm>
-              {t.lineup.some((p) => p.viaSub) && (
+              {t.subStints.length > 0 && (
                 <ActionFlashForm action={makePermanentAction} className="mt-2">
                   <input type="hidden" name="season" value={seasonName} />
                   <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
                   <div className="flex flex-wrap items-end gap-2">
-                    <label className="block"><span className="sub">Sub who is really permanent</span><FormSelect name="playerId" options={opt(t.lineup.filter((p) => p.viaSub).map((p) => ({ value: p.playerId, label: `#${p.seed} ${p.name}` })))} /></label>
+                    <label className="block"><span className="sub">Sub who is really permanent</span><FormSelect name="playerId" options={opt([...new Map(t.subStints.map((s) => [s.playerId, { value: s.playerId, label: `${s.name} (${s.window})` }])).values()])} /></label>
                     <label className="block"><span className="sub">From W</span><input type="number" name="effectiveWeek" min={1} defaultValue={1} className={`${inputCls} w-16`} /></label>
                     <label className="block"><span className="sub">Seed</span><input type="number" name="seed" min={1} placeholder="keep" className={`${inputCls} w-16`} /></label>
                     <input name="reason" placeholder="reason" className={`${inputCls} w-32`} />
