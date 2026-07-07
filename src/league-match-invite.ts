@@ -12,6 +12,7 @@ import { postModerationNotice } from "./mod-log.js";
 import { ensureLeagueMatchesChannel } from "./league-matches-channel.js";
 import { recordAudit } from "./audit.js";
 import { bannedPlayerIds, BANNED_MESSAGE } from "./bans.js";
+import { sanitizeName } from "./sanitize.js";
 import type { Player } from "@prisma/client";
 
 export interface CreateLeagueMatchInviteResult {
@@ -70,7 +71,7 @@ export async function createLeagueMatchInvite(opts: {
       const banned = await bannedPlayerIds([me.id, opp.id]);
       if (banned.has(me.id)) return { error: BANNED_MESSAGE };
       if (banned.has(opp.id)) {
-        return { error: `${opp.displayName} is banned from the league right now, so you can't start a match with them.` };
+        return { error: `${sanitizeName(opp.displayName)} is banned from the league right now, so you can't start a match with them.` };
       }
       const [playerAId, playerBId] = me.id < opp.id ? [me.id, opp.id] : [opp.id, me.id];
       const existing = await prisma.match.findUnique({
@@ -80,7 +81,7 @@ export async function createLeagueMatchInvite(opts: {
       });
       if (!isShootout && existing && existing.status === "CONFIRMED") {
         return {
-          error: `You've already played ${opp.displayName} this season (${existing.gamesWonA}-${existing.gamesWonB}).`,
+          error: `You've already played ${sanitizeName(opp.displayName)} this season (${existing.gamesWonA}-${existing.gamesWonB}).`,
         };
       }
       // Schedule enforcement (mirrors the report path in reporting.ts): on a
@@ -97,7 +98,7 @@ export async function createLeagueMatchInvite(opts: {
         })) ?? { scheduleLocked: false };
         if (scheduleLocked) {
           return {
-            error: `${opp.displayName} isn't on your schedule this season — you only play your assigned matchups. If this should be a match, ask an admin.`,
+            error: `${sanitizeName(opp.displayName)} isn't on your schedule this season — you only play your assigned matchups. If this should be a match, ask an admin.`,
           };
         }
       }
@@ -126,7 +127,7 @@ export async function createLeagueMatchInvite(opts: {
       });
       if (dupe) {
         return {
-          error: `You already have a match in progress with ${opp.displayName} — finish or cancel that one before starting another with them.`,
+          error: `You already have a match in progress with ${sanitizeName(opp.displayName)} — finish or cancel that one before starting another with them.`,
         };
       }
 

@@ -11,6 +11,7 @@ import { activePublicSeason } from "../active-season.js";
 import { prisma } from "../db.js";
 import { createLeagueMatchInvite } from "../league-match-invite.js";
 import { isDiscordIdBanned, BANNED_MESSAGE } from "../bans.js";
+import { sanitizeName } from "../sanitize.js";
 import type { ButtonHandler, SelectMenuHandler } from "./types.js";
 
 // A player's still-to-play opponents this season: opponents from their PENDING,
@@ -137,7 +138,7 @@ export const leagueMatchesPickSelect: SelectMenuHandler = {
       return;
     }
     await interaction.editReply(
-      `Match invite sent to **${opp.displayName}** — it's in a private thread and they need to accept. Expires in ${result.expiryMinutes} min if not accepted.` +
+      `Match invite sent to **${sanitizeName(opp.displayName)}** — it's in a private thread and they need to accept. Expires in ${result.expiryMinutes} min if not accepted.` +
         (result.inviteUrl ? `\n${result.inviteUrl}` : ""),
     );
   },

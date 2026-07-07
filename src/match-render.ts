@@ -19,6 +19,7 @@ import {
 import { deckEmoji, deckEmojiPartial, stakeEmoji, stakeEmojiPartial } from "./balatro-emojis.js";
 import { parseGame, parseProposal, parsePolicy, phaseFor, remainingCombos, MAX_GAME_LIVES, type GameState, type ComboProposal } from "./match-session.js";
 import type { DeckEntry } from "./match-config.js";
+import { sanitizeName } from "./sanitize.js";
 
 // Components row can hold buttons OR a string-select menu — ban phase
 // renders both (a select menu row + a confirm button row), other phases
@@ -102,20 +103,20 @@ function computeActiveContent(
   if (s.cancelInitiatorPlayerId && s.state !== "CANCELLED" && s.state !== "COMPLETE") {
     const initiator = s.cancelInitiatorPlayerId === a.id ? a : b;
     const opposingDc = s.cancelInitiatorPlayerId === a.id ? b.discordId : a.discordId;
-    return { content: `<@${opposingDc}> ⛔ **${initiator.displayName}** wants to cancel — click **Cancel match** to agree, or just keep playing.`, turnKey: opposingDc };
+    return { content: `<@${opposingDc}> ⛔ **${sanitizeName(initiator.displayName)}** wants to cancel — click **Cancel match** to agree, or just keep playing.`, turnKey: opposingDc };
   }
   // Pause vote pending — ping the other player so it's not just a silent
   // button swap. Same precedence idea as cancel.
   if (s.pauseInitiatorPlayerId && s.state !== "PAUSED" && s.state !== "CANCELLED" && s.state !== "COMPLETE") {
     const initiator = s.pauseInitiatorPlayerId === a.id ? a : b;
     const opposingDc = s.pauseInitiatorPlayerId === a.id ? b.discordId : a.discordId;
-    return { content: `<@${opposingDc}> ⏸️ **${initiator.displayName}** wants to pause — click **Pause** to agree, or keep playing.`, turnKey: opposingDc };
+    return { content: `<@${opposingDc}> ⏸️ **${sanitizeName(initiator.displayName)}** wants to pause — click **Pause** to agree, or keep playing.`, turnKey: opposingDc };
   }
   // DC claim pending — ping the player it's against to confirm or dispute.
   if (s.dcInitiatorPlayerId && s.state !== "CANCELLED" && s.state !== "COMPLETE") {
     const claimant = s.dcInitiatorPlayerId === a.id ? a : b;
     const opposingDc = s.dcInitiatorPlayerId === a.id ? b.discordId : a.discordId;
-    return { content: `<@${opposingDc}> 🔌 **${claimant.displayName}** says you disconnected — **Confirm** to forfeit this game, or **Keep playing** if you're still here.`, turnKey: opposingDc };
+    return { content: `<@${opposingDc}> 🔌 **${sanitizeName(claimant.displayName)}** says you disconnected — **Confirm** to forfeit this game, or **Keep playing** if you're still here.`, turnKey: opposingDc };
   }
   switch (s.state) {
     case "WAITING_ACCEPT":
@@ -150,7 +151,7 @@ function computeActiveContent(
         const voterIsA = Boolean(game.rerollVoteByA);
         const voter = voterIsA ? a : b;
         const opposingDc = voterIsA ? b.discordId : a.discordId;
-        return { content: `<@${opposingDc}> 🔄 **${voter.displayName}** wants to reroll the pool — click **Confirm reroll** to agree, or keep banning.`, turnKey: opposingDc };
+        return { content: `<@${opposingDc}> 🔄 **${sanitizeName(voter.displayName)}** wants to reroll the pool — click **Confirm reroll** to agree, or keep banning.`, turnKey: opposingDc };
       }
       const phase = phaseFor(game, a.id, b.id, parsePolicy(s.policy));
       if (phase.kind !== "BAN") return { content: "", turnKey: "" };
@@ -192,7 +193,7 @@ function computeActiveContent(
           const aVoted = Boolean(game.voteByA);
           const voter = aVoted ? a : b;
           const pendingDc = aVoted ? b.discordId : a.discordId;
-          return { content: `<@${pendingDc}> 🗳️ ${voter.displayName} reported the result — cast your vote to confirm the winner.`, turnKey: pendingDc };
+          return { content: `<@${pendingDc}> 🗳️ ${sanitizeName(voter.displayName)} reported the result — cast your vote to confirm the winner.`, turnKey: pendingDc };
         }
       }
       // No votes yet → both players go play the run, then vote a winner. A
@@ -204,7 +205,7 @@ function computeActiveContent(
       if (s.resumeInitiatorPlayerId) {
         const initiator = s.resumeInitiatorPlayerId === a.id ? a : b;
         const opposingDc = s.resumeInitiatorPlayerId === a.id ? b.discordId : a.discordId;
-        return { content: `<@${opposingDc}> ▶️ **${initiator.displayName}** wants to resume — click **Resume** to continue.`, turnKey: opposingDc };
+        return { content: `<@${opposingDc}> ▶️ **${sanitizeName(initiator.displayName)}** wants to resume — click **Resume** to continue.`, turnKey: opposingDc };
       }
       return { content: "", turnKey: "" };
     }
@@ -381,7 +382,7 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
       return `${i + 1}. ${icons ? `${icons} ` : ""}${combo.deck} / ${combo.stake}`;
     });
     embed.setDescription(
-      `🎯 **${whose.displayName}** is banning — pick **${expected}**.\n\n` +
+      `🎯 **${sanitizeName(whose.displayName)}** is banning — pick **${expected}**.\n\n` +
         `**Pool (${sortedRemaining.length} left):**\n` +
         poolLines.join("\n"),
     );
@@ -466,7 +467,7 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
       );
     });
     embed.setDescription(
-      `Bans done. **${picker.displayName}** picks the deck for this game from the 2 remaining.\n\n` +
+      `Bans done. **${sanitizeName(picker.displayName)}** picks the deck for this game from the 2 remaining.\n\n` +
         optionLines.join("\n\n"),
     );
     // Private dropdown, same as bans: the opponent sees the menu but not
@@ -515,8 +516,8 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
     // (the handler guards), but we render them for everyone to see.
     const winner = phase.winnerId === a.id ? a : b;
     embed.setDescription(
-      `🏆 **${winner.displayName}** won game ${gameNumber}!\n\n` +
-        `**${winner.displayName}** — how many lives did you have left? ` +
+      `🏆 **${sanitizeName(winner.displayName)}** won game ${gameNumber}!\n\n` +
+        `**${sanitizeName(winner.displayName)}** — how many lives did you have left? ` +
         `(For the standings tiebreaker. Only you can set this.)`,
     );
     const livesRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -540,9 +541,9 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
       const dcer = s.dcInitiatorPlayerId === a.id ? b : a;
       embed.setDescription(
         `🎲 Playing: **${picked?.deck ?? "?"} / ${picked?.stake ?? "?"} stake**\n\n` +
-          `🔌 **${claimant.displayName}** reports that **${dcer.displayName}** disconnected.\n\n` +
-          `**${dcer.displayName}** — **Confirm** to give ${claimant.displayName} this game, or **Keep playing** if you're still here.\n` +
-          `_If ${dcer.displayName} is gone for good, use \`/helper\` to get a mod._`,
+          `🔌 **${sanitizeName(claimant.displayName)}** reports that **${sanitizeName(dcer.displayName)}** disconnected.\n\n` +
+          `**${sanitizeName(dcer.displayName)}** — **Confirm** to give ${sanitizeName(claimant.displayName)} this game, or **Keep playing** if you're still here.\n` +
+          `_If ${sanitizeName(dcer.displayName)} is gone for good, use \`/helper\` to get a mod._`,
       );
       // Two options only: the reported player confirms (forfeits), or
       // either player clicks Keep playing to clear the report and resume.
@@ -562,9 +563,9 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
     // the match auto-advances (this render only fires while voting is
     // incomplete or disputed).
     const voteLine = (vote: string | undefined, who: Player) => {
-      if (!vote) return `· **${who.displayName}**: not voted`;
+      if (!vote) return `· **${sanitizeName(who.displayName)}**: not voted`;
       const target = vote === a.id ? a.displayName : b.displayName;
-      return `· **${who.displayName}**: voted ${target}`;
+      return `· **${sanitizeName(who.displayName)}**: voted ${sanitizeName(target)}`;
     };
     let description = `🎲 Playing: **${picked?.deck ?? "?"} / ${picked?.stake ?? "?"} stake**\n\n`;
     if (game.disputed) {
@@ -621,9 +622,9 @@ function renderComplete(s: MatchSession, a: Player, b: Player, g1: GameState | n
     (g2?.winnerId === b.id ? 1 : 0) +
     (g3?.winnerId === b.id ? 1 : 0);
   const verdict =
-    aWins > bWins ? `🏆 ${a.displayName} ${aWins}-${bWins} ${b.displayName}` :
-    bWins > aWins ? `🏆 ${b.displayName} ${bWins}-${aWins} ${a.displayName}` :
-    `🤝 ${a.displayName} ${aWins}-${bWins} ${b.displayName}`;
+    aWins > bWins ? `🏆 ${sanitizeName(a.displayName)} ${aWins}-${bWins} ${sanitizeName(b.displayName)}` :
+    bWins > aWins ? `🏆 ${sanitizeName(b.displayName)} ${bWins}-${aWins} ${sanitizeName(a.displayName)}` :
+    `🤝 ${sanitizeName(a.displayName)} ${aWins}-${bWins} ${sanitizeName(b.displayName)}`;
   const tail = s.isCasual
     ? "Casual match — not recorded to the league."
     : "Result recorded. If something looks wrong, ask an admin to override.";
@@ -705,7 +706,7 @@ export function renderComboBuilder(args: {
         `Accepting skips ban/pick for **this game only** (the next game bans/picks as normal).\n\n` +
         `Deck: ${deck ? `${deckIcon} **${deck}**` : "_not picked_"}\n` +
         `Stake: ${stake ? `${stakeIcon} **${stake}**` : "_not picked_"}\n\n` +
-        `Once you submit, **${responder.displayName}** can Accept, Counter, or Cancel.`,
+        `Once you submit, **${sanitizeName(responder.displayName)}** can Accept, Counter, or Cancel.`,
     )
     .setFooter({ text: `Match ${sessionId}` });
 
@@ -782,9 +783,9 @@ function renderProposal(
     .setColor(0xf1c40f)
     .setFooter({ text: `Match ${s.id}` })
     .setDescription(
-      `**${proposer.displayName}** proposes:\n\n` +
+      `**${sanitizeName(proposer.displayName)}** proposes:\n\n` +
         `${icons ? `${icons}  ` : ""}**${proposal.deck} / ${proposal.stake}**\n\n` +
-        `${responder.displayName}, accept to use this combo for **this game only**. ` +
+        `${sanitizeName(responder.displayName)}, accept to use this combo for **this game only**. ` +
         `Counter to take over the proposal yourself, or cancel to go back to ban/pick.`,
     );
   const actions = new ActionRowBuilder<ButtonBuilder>().addComponents(

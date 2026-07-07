@@ -9,6 +9,7 @@ import { activePublicSeason } from "./active-season.js";
 import { prisma } from "./db.js";
 import { formatSeasonLabel } from "./format-season.js";
 import { formatZone } from "./timezones.js";
+import { sanitizeName } from "./sanitize.js";
 
 export async function buildScheduleEmbed(playerId: string): Promise<EmbedBuilder | null> {
   const activeSeason = await activePublicSeason();
@@ -49,7 +50,7 @@ export async function buildScheduleEmbed(playerId: string): Promise<EmbedBuilder
   for (const opp of opponents) {
     // Show the display name people recognize (bold) plus their @username, so
     // opponents can actually find + DM each other on Discord.
-    const label = opp.username ? `**${opp.displayName}** (@${opp.username})` : `**${opp.displayName}**`;
+    const label = opp.username ? `**${sanitizeName(opp.displayName)}** (@${opp.username})` : `**${sanitizeName(opp.displayName)}**`;
     const p = div.matches.find(
       (pr) =>
         (pr.playerAId === playerId && pr.playerBId === opp.id) ||

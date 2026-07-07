@@ -10,6 +10,7 @@ import { prisma } from "../db.js";
 import { getOrCreatePlayer, guildDisplayName } from "../players.js";
 import { formatSeasonLabel } from "../format-season.js";
 import { computeStandings } from "../standings.js";
+import { sanitizeName } from "../sanitize.js";
 import type { SlashCommand } from "./types.js";
 
 // Shared core for /status + the division control-panel "My standings" button:
@@ -81,7 +82,7 @@ export async function buildStatusReply(
         m.gamesWonA === 0 &&
         m.gamesWonB === 0,
     )
-    .map((m) => nameById.get(m.playerAId === me.id ? m.playerBId : m.playerAId) ?? "?");
+    .map((m) => sanitizeName(nameById.get(m.playerAId === me.id ? m.playerBId : m.playerAId) ?? "?"));
 
   const embed = new EmbedBuilder()
     .setTitle(`Your status — ${div.name}`)

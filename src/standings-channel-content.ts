@@ -8,6 +8,7 @@ import { prisma } from "./db.js";
 import { loadDivisionStandings, recomputeDivisionStandings } from "./standings-cache.js";
 import { formatSeasonLabel } from "./format-season.js";
 import { webUrl } from "./web-url.js";
+import { sanitizeName } from "./sanitize.js";
 
 // Medal for the top 3, otherwise the numeric position.
 function place(i: number): string {
@@ -49,7 +50,7 @@ export async function composeStandingsEmbeds(): Promise<EmbedBuilder[]> {
     await recomputeDivisionStandings(div.id).catch(() => {});
     const rows = await loadDivisionStandings(div.id);
     const lines = rows.map(
-      (r, i) => `${place(i)} ${r.player.displayName} — **${r.points}** pts · ${r.wins}-${r.draws}-${r.losses}`,
+      (r, i) => `${place(i)} ${sanitizeName(r.player.displayName)} — **${r.points}** pts · ${r.wins}-${r.draws}-${r.losses}`,
     );
     divisionEmbeds.push(
       new EmbedBuilder()

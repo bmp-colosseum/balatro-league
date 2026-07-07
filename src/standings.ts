@@ -3,6 +3,7 @@
 
 import type { Match, Player } from "@prisma/client";
 import { DEFAULTS, type ScoringConfig } from "./league-settings.js";
+import { sanitizeName } from "./sanitize.js";
 
 export interface StandingRow {
   player: Player;
@@ -180,7 +181,9 @@ export function formatStandingsTable(divisionName: string, rows: StandingRow[]):
     const n = r.rank ?? i + 1;
     const tied = r.tiedWithPrev || r.tiedWithNext;
     const rank = `${tied ? `#${n}` : `${n}.`}`.padEnd(3);
-    const name = r.player.displayName.padEnd(16);
+    // Inside a ``` code block markdown doesn't render, but backticks could still
+    // break the fence — neutralize them (don't escape, that'd show ugly \` here).
+    const name = r.player.displayName.replace(/`/g, "'").padEnd(16);
     const pts = `${r.points}p`.padStart(4);
     const record = `${r.wins}W-${r.draws}D-${r.losses}L`.padEnd(8);
     const games = `(${r.gamesWon}-${r.gamesLost} games)`;
@@ -201,7 +204,7 @@ export function formatDivisionField(rows: StandingRow[], expectedSize: number): 
         ? `\`#${n.toString().padStart(2)}\``
         : `\`${n.toString().padStart(2)}.\``;
       const stats = `**${r.points}** pts · ${r.wins}-${r.draws}-${r.losses} · ${r.gamesWon}-${r.gamesLost} g`;
-      const name = r.dropped ? `~~${r.player.displayName}~~ _(dropped)_` : r.player.displayName;
+      const name = r.dropped ? `~~${sanitizeName(r.player.displayName)}~~ _(dropped)_` : sanitizeName(r.player.displayName);
       return `${prefix} ${name} — ${stats}`;
     })
     .join("\n") + (rows.length < expectedSize ? `\n_${expectedSize - rows.length} seat(s) open_` : "");

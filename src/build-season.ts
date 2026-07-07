@@ -22,6 +22,7 @@ import { prisma } from "./db.js";
 import { DEFAULT_TIERS, PLAYERS_PER_DIVISION, type TierConfig } from "./pyramid.js";
 import { computeStandings } from "./standings.js";
 import { formatDivisionName } from "./format-season.js";
+import { sanitizeName } from "./sanitize.js";
 
 export interface PlacementPlan {
   tiers: Array<{
@@ -142,7 +143,7 @@ export async function planSeason(roundId: string, opts: PlanOpts = {}): Promise<
       below.sort((a, b) => rankWithin(a) - rankWithin(b));
       const promoted = below.shift()!;
       buckets[i]!.push(promoted);
-      warnings.push(`Pulled **${promoted.signup.displayName}** up to ${tierConfigs[i]!.name} to fill capacity.`);
+      warnings.push(`Pulled **${sanitizeName(promoted.signup.displayName)}** up to ${tierConfigs[i]!.name} to fill capacity.`);
     }
   }
 

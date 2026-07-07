@@ -27,6 +27,7 @@ import { getOrCreatePlayer } from "../players.js";
 import { gamesFromResult, parsePairingResult } from "../scoring.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
 import { formatSeasonLabel } from "../format-season.js";
+import { sanitizeName } from "../sanitize.js";
 import type { SlashCommand } from "./types.js";
 
 const RESULT_CHOICES = [
@@ -481,12 +482,12 @@ async function persistShootout(args: {
     where: { playerId: p1.id, division: { seasonId: activeSeason.id } },
     include: { division: true },
   });
-  if (!member) return { ok: false, error: `${p1.displayName} isn't in a division this season.` };
+  if (!member) return { ok: false, error: `${sanitizeName(p1.displayName)} isn't in a division this season.` };
   const otherInSameDiv = await prisma.divisionMember.findFirst({
     where: { playerId: p2.id, divisionId: member.divisionId },
   });
   if (!otherInSameDiv) {
-    return { ok: false, error: `${p1.displayName} and ${p2.displayName} aren't in the same division — a shootout only makes sense for tied opponents.` };
+    return { ok: false, error: `${sanitizeName(p1.displayName)} and ${sanitizeName(p2.displayName)} aren't in the same division — a shootout only makes sense for tied opponents.` };
   }
 
   const [canonA, canonB] = p1.id < p2.id ? [p1.id, p2.id] : [p2.id, p1.id];
@@ -872,7 +873,7 @@ async function recordForfeit(interaction: ChatInputCommandInteraction) {
   });
 
   await interaction.editReply(
-    `✅ Recorded **${winner.displayName}** def. **${loser.displayName}** — **2-0 by DQ** in **${division.name}**.\n` +
+    `✅ Recorded **${sanitizeName(winner.displayName)}** def. **${sanitizeName(loser.displayName)}** — **2-0 by DQ** in **${division.name}**.\n` +
       `Reason (admin-only): _${reason}_`,
   );
 }
@@ -944,7 +945,7 @@ async function voidPlayer(interaction: ChatInputCommandInteraction) {
   });
 
   await interaction.editReply(
-    `✅ Voided **${player.displayName}** in **${division.name}** — **${voided.count}** match(es) cancelled, removed from standings.\n` +
+    `✅ Voided **${sanitizeName(player.displayName)}** in **${division.name}** — **${voided.count}** match(es) cancelled, removed from standings.\n` +
       `No 2-0s awarded to opponents, no losses recorded against them.\n` +
       `Reason (admin-only): _${reason}_`,
   );
@@ -1008,7 +1009,7 @@ async function voidMatch(interaction: ChatInputCommandInteraction) {
     include: { division: { include: { members: { where: { playerId: p2.id } } } } },
   });
   if (!shared || shared.division.members.length === 0) {
-    await interaction.editReply(`**${p1.displayName}** and **${p2.displayName}** aren't in the same division this season.`);
+    await interaction.editReply(`**${sanitizeName(p1.displayName)}** and **${sanitizeName(p2.displayName)}** aren't in the same division this season.`);
     return;
   }
   const division = shared.division;
@@ -1057,7 +1058,7 @@ async function voidMatch(interaction: ChatInputCommandInteraction) {
   });
 
   await interaction.editReply(
-    `✅ Voided the game between **${p1.displayName}** and **${p2.displayName}** in **${division.name}** — recorded **0-0** (finished, no points, not a W/L/D).\n` +
+    `✅ Voided the game between **${sanitizeName(p1.displayName)}** and **${sanitizeName(p2.displayName)}** in **${division.name}** — recorded **0-0** (finished, no points, not a W/L/D).\n` +
       `Reason (admin-only): _${reason}_`,
   );
 }
@@ -1085,7 +1086,7 @@ async function recordStrike(interaction: ChatInputCommandInteraction) {
     summary: `Strike #${count} on ${player.displayName}: ${reason}`,
     metadata: { reason, count },
   });
-  await interaction.editReply(`⚠️ Logged strike **#${count}** for **${player.displayName}** — _${reason}_`);
+  await interaction.editReply(`⚠️ Logged strike **#${count}** for **${sanitizeName(player.displayName)}** — _${reason}_`);
 }
 
 // List a player's strikes, newest first, with the running count.
@@ -1102,7 +1103,7 @@ async function listStrikes(interaction: ChatInputCommandInteraction) {
     orderBy: { createdAt: "desc" },
   });
   if (strikes.length === 0) {
-    await interaction.editReply(`✅ **${player.displayName}** has no strikes.`);
+    await interaction.editReply(`✅ **${sanitizeName(player.displayName)}** has no strikes.`);
     return;
   }
   const lines = strikes.map(
@@ -1110,7 +1111,7 @@ async function listStrikes(interaction: ChatInputCommandInteraction) {
       `**${strikes.length - i}.** <t:${Math.floor(s.createdAt.getTime() / 1000)}:d> — ${s.reason} _(by ${s.issuedByName})_`,
   );
   await interaction.editReply(
-    `⚠️ **${player.displayName}** — **${strikes.length}** strike${strikes.length === 1 ? "" : "s"}:\n${lines.join("\n")}`,
+    `⚠️ **${sanitizeName(player.displayName)}** — **${strikes.length}** strike${strikes.length === 1 ? "" : "s"}:\n${lines.join("\n")}`,
   );
 }
 
@@ -1168,6 +1169,6 @@ async function forceResult(interaction: ChatInputCommandInteraction) {
   });
 
   await interaction.editReply(
-    `Force-resolved: **${pairing.playerA.displayName} ${games.a}-${games.b} ${pairing.playerB.displayName}** in **${pairing.division.name}**.\nReason: ${reason}`,
+    `Force-resolved: **${sanitizeName(pairing.playerA.displayName)} ${games.a}-${games.b} ${sanitizeName(pairing.playerB.displayName)}** in **${pairing.division.name}**.\nReason: ${reason}`,
   );
 }

@@ -25,6 +25,7 @@ import { buildReportEmbed } from "./report-flow.js";
 import { disputeThreadButtons } from "./commands/dispute-buttons.js";
 import { webUrl } from "./web-url.js";
 import { postModerationNotice } from "./mod-log.js";
+import { sanitizeName } from "./sanitize.js";
 
 export async function spawnDisputeThread(
   pairingId: string,
@@ -139,9 +140,9 @@ export async function spawnDisputeThread(
       pairing.disputeProposedGamesWonB != null
     ) {
       proposalLine =
-        `\n\n**Proposed correction:** ${pairing.playerA.displayName} ` +
+        `\n\n**Proposed correction:** ${sanitizeName(pairing.playerA.displayName)} ` +
         `**${pairing.disputeProposedGamesWonA}-${pairing.disputeProposedGamesWonB}** ` +
-        `${pairing.playerB.displayName}` +
+        `${sanitizeName(pairing.playerB.displayName)}` +
         `\n_Helper can one-click accept this from <${webUrl("admin/disputes")}>._`;
     }
     const reasonLine = pairing.disputeReason
@@ -156,7 +157,7 @@ export async function spawnDisputeThread(
     await thread.send({
       content:
         `${staffMentions ? staffMentions + "\n" : ""}` +
-        `<@${reporter.discordId}> reported **${reporter.displayName} ${pairing.gamesWonA}-${pairing.gamesWonB} ${opponent.displayName}** in **${pairing.division.name}**.\n` +
+        `<@${reporter.discordId}> reported **${sanitizeName(reporter.displayName)} ${pairing.gamesWonA}-${pairing.gamesWonB} ${sanitizeName(opponent.displayName)}** in **${pairing.division.name}**.\n` +
         disputerLine +
         proposalLine +
         reasonLine +

@@ -70,6 +70,7 @@ import { runActivityScan } from "./activity-scan.js";
 import { runRosterCheckin } from "./roster-checkin.js";
 import { MODLOG_RETENTION_DAYS } from "./mod-log.js";
 import { buildScheduleEmbed } from "./schedule-embed.js";
+import { sanitizeName } from "./sanitize.js";
 
 // One recipient of a roster-change schedule DM. "new" = the player just added;
 // "opponent" = someone whose matchup now points at the replacement.
@@ -301,8 +302,8 @@ export async function initQueue(): Promise<void> {
         const embed = await buildScheduleEmbed(playerId);
         const content =
           role === "new"
-            ? `👋 You've been added to **${divisionName}**, taking **${departedName}**'s spot. Here's your schedule — reach out to your opponents to set up games:`
-            : `🔄 **Schedule update — ${divisionName}.** **${departedName}** was dropped and replaced by **${newName}**, so one of your matchups is now against ${newName}. Your current schedule:`;
+            ? `👋 You've been added to **${divisionName}**, taking **${sanitizeName(departedName)}**'s spot. Here's your schedule — reach out to your opponents to set up games:`
+            : `🔄 **Schedule update — ${divisionName}.** **${sanitizeName(departedName)}** was dropped and replaced by **${sanitizeName(newName)}**, so one of your matchups is now against ${sanitizeName(newName)}. Your current schedule:`;
         try {
           const user = await client.users.fetch(player.discordId);
           await user.send(embed ? { content, embeds: [embed] } : { content });
@@ -1158,7 +1159,7 @@ async function queueSeasonOnboardingDms(seasonId: string): Promise<void> {
     for (const m of div.members) {
       const opps = oppsById.get(m.player.id) ?? [];
       const oppLine = opps.length
-        ? opps.map((o) => `• ${o}`).join("\n")
+        ? opps.map((o) => `• ${sanitizeName(o)}`).join("\n")
         : "_(your matchups will show with_ `/schedule`_)_";
       const content =
         `🎴 **Welcome to ${label}!**\n` +

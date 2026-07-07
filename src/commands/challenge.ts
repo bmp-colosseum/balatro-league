@@ -18,6 +18,7 @@ import { renderMatch } from "../match-render.js";
 import { postModerationNotice } from "../mod-log.js";
 import { getOrCreatePlayer, guildDisplayName } from "../players.js";
 import { bannedPlayerIds, BANNED_MESSAGE } from "../bans.js";
+import { sanitizeName } from "../sanitize.js";
 import type { SlashCommand } from "./types.js";
 
 const BO_CHOICES = [
@@ -73,7 +74,7 @@ export const challenge: SlashCommand = {
       return;
     }
     if (banned.has(opp.id)) {
-      await interaction.editReply(`${opp.displayName} is banned from the league right now, so you can't challenge them.`);
+      await interaction.editReply(`${sanitizeName(opp.displayName)} is banned from the league right now, so you can't challenge them.`);
       return;
     }
 

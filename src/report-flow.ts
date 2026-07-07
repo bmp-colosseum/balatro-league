@@ -23,6 +23,7 @@ import { tryGetDiscordClient } from "./discord.js";
 import { env } from "./env.js";
 import { resolveBotCommandsChannelId } from "./bot-commands-channel.js";
 import { getConfig, LeagueConfigKey } from "./league-config.js";
+import { sanitizeName } from "./sanitize.js";
 
 // Resolve the results channel id with the same precedence the announce
 // path uses: season override → global LeagueConfig → env. Falls back
@@ -61,11 +62,11 @@ export function buildReportEmbed(args: {
   const { status, reporter, opponent, divisionName, result, reporterIsA, pairingId, combo } = args;
   const repGames = reporterIsA ? result.gamesWonA : result.gamesWonB;
   const oppGames = reporterIsA ? result.gamesWonB : result.gamesWonA;
-  const scoreline = `${reporter.displayName} **${repGames}-${oppGames}** ${opponent.displayName}`;
+  const scoreline = `${sanitizeName(reporter.displayName)} **${repGames}-${oppGames}** ${sanitizeName(opponent.displayName)}`;
   const verdict =
-    repGames === 2 && oppGames === 0 ? `🏆 ${reporter.displayName} swept`
-    : repGames === 0 && oppGames === 2 ? `🏆 ${opponent.displayName} swept`
-    : `🤝 ${reporter.displayName} and ${opponent.displayName} drew 1-1`;
+    repGames === 2 && oppGames === 0 ? `🏆 ${sanitizeName(reporter.displayName)} swept`
+    : repGames === 0 && oppGames === 2 ? `🏆 ${sanitizeName(opponent.displayName)} swept`
+    : `🤝 ${sanitizeName(reporter.displayName)} and ${sanitizeName(opponent.displayName)} drew 1-1`;
   let title: string;
   let color: number;
   let description: string;

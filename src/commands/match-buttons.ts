@@ -47,6 +47,7 @@ import { bannedPlayerIds, BANNED_MESSAGE } from "../bans.js";
 import { hasTier } from "../permissions.js";
 import { backfillMatchId, postModerationNotice } from "../mod-log.js";
 import { postTranscriptSummary } from "../transcript-channel.js";
+import { sanitizeName } from "../sanitize.js";
 import {
   emptyGameState,
   parseGame,
@@ -749,7 +750,7 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
     const cancelled = await updateSession(session, { state: MatchSessionState.CANCELLED });
     await reply(
       interaction,
-      bannedNow.has(playerB.id) ? BANNED_MESSAGE : `${playerA.displayName} is banned from the league, so this match can't start.`,
+      bannedNow.has(playerB.id) ? BANNED_MESSAGE : `${sanitizeName(playerA.displayName)} is banned from the league, so this match can't start.`,
     );
     if (cancelled) closeMatchChannel(interaction, cancelled.id, cancelled.threadId).catch(() => {});
     return;
@@ -875,7 +876,7 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
     const pointer = new EmbedBuilder()
       .setTitle("🎴 Match started")
       .setColor(0x2ecc71)
-      .setDescription(`${playerA.displayName} vs ${playerB.displayName} — play it out in <#${matchChannelId}>.`)
+      .setDescription(`${sanitizeName(playerA.displayName)} vs ${sanitizeName(playerB.displayName)} — play it out in <#${matchChannelId}>.`)
       .setFooter({ text: `Match ${updated.id}` });
     await editOrUpdate(interaction, { content: "", embeds: [pointer], components: [] })
       .catch((err) => console.warn(`[handleAccept] invite pointer edit failed for ${updated.id}:`, err));
@@ -1948,7 +1949,7 @@ async function handleProposeSubmit(interaction: ButtonInteraction, session: Matc
   const sentEmbed = new EmbedBuilder()
     .setTitle("✅ Proposal sent")
     .setColor(0x2ecc71)
-    .setDescription(`Proposed **${proposal.deck} / ${proposal.stake}** — waiting on ${ctx.other.displayName} to respond.`);
+    .setDescription(`Proposed **${proposal.deck} / ${proposal.stake}** — waiting on ${sanitizeName(ctx.other.displayName)} to respond.`);
   await interaction.update({ embeds: [sentEmbed], components: [] });
   await refreshPublicMatchMessage(interaction, updated);
 }

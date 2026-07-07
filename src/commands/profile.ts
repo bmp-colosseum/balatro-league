@@ -7,6 +7,7 @@ import {
 import { prisma } from "../db.js";
 import { getOrCreatePlayer, guildDisplayName } from "../players.js";
 import { loadPlayerHistory } from "../profile.js";
+import { sanitizeName } from "../sanitize.js";
 import type { SlashCommand } from "./types.js";
 
 // Tier-position-based emoji. Mirrors the default Legendary/Rare/Uncommon/Common palette
@@ -69,7 +70,7 @@ export const profile: SlashCommand = {
     }
 
     const embed = new EmbedBuilder()
-      .setTitle(`${existing.displayName} — profile`)
+      .setTitle(`${sanitizeName(existing.displayName)} — profile`)
       .setColor(0x5865f2)
       .addFields(
         { name: "Seasons played", value: String(t.seasons), inline: true },

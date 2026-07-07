@@ -24,6 +24,7 @@ import { EmbedBuilder } from "discord.js";
 import { prisma } from "./db.js";
 import { env } from "./env.js";
 import { getConfig, LeagueConfigKey } from "./league-config.js";
+import { sanitizeName } from "./sanitize.js";
 
 let cachedRest: REST | null = null;
 function rest(): REST {
@@ -55,13 +56,13 @@ export async function announceResult(pairingId: string): Promise<void> {
   let title: string;
   let color: number;
   if (pairing.gamesWonA === 2 && pairing.gamesWonB === 0) {
-    title = `🏆 ${pairing.playerA.displayName} beats ${pairing.playerB.displayName}${dqSuffix}`;
+    title = `🏆 ${sanitizeName(pairing.playerA.displayName)} beats ${sanitizeName(pairing.playerB.displayName)}${dqSuffix}`;
     color = 0x2ecc71;
   } else if (pairing.gamesWonB === 2 && pairing.gamesWonA === 0) {
-    title = `🏆 ${pairing.playerB.displayName} beats ${pairing.playerA.displayName}${dqSuffix}`;
+    title = `🏆 ${sanitizeName(pairing.playerB.displayName)} beats ${sanitizeName(pairing.playerA.displayName)}${dqSuffix}`;
     color = 0x2ecc71;
   } else {
-    title = `🤝 ${pairing.playerA.displayName} draws ${pairing.playerB.displayName}`;
+    title = `🤝 ${sanitizeName(pairing.playerA.displayName)} draws ${sanitizeName(pairing.playerB.displayName)}`;
     color = 0xf1c40f;
   }
 
@@ -161,13 +162,13 @@ export async function announceChallengeResult(opts: {
   let title: string;
   let color: number;
   if (winsA > winsB) {
-    title = `🎴 ${playerA.displayName} beats ${playerB.displayName}`;
+    title = `🎴 ${sanitizeName(playerA.displayName)} beats ${sanitizeName(playerB.displayName)}`;
     color = 0x9b59b6;
   } else if (winsB > winsA) {
-    title = `🎴 ${playerB.displayName} beats ${playerA.displayName}`;
+    title = `🎴 ${sanitizeName(playerB.displayName)} beats ${sanitizeName(playerA.displayName)}`;
     color = 0x9b59b6;
   } else {
-    title = `🎴 ${playerA.displayName} draws ${playerB.displayName}`;
+    title = `🎴 ${sanitizeName(playerA.displayName)} draws ${sanitizeName(playerB.displayName)}`;
     color = 0x95a5a6;
   }
 
