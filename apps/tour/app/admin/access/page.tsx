@@ -8,11 +8,10 @@ import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { FormSelect } from "@/components/FormSelect";
+import { fieldInput as inputCls } from "@/components/admin/Field";
 import { grantAction, revokeAction } from "./actions";
 
 export const dynamic = "force-dynamic";
-
-const inputCls = "rounded border border-[var(--border)] bg-[var(--surface-2)] px-2 py-1";
 const CAP_LABEL: Record<string, string> = { NEWS: "News", RANKINGS: "Rankings", ROSTERS: "Rosters", DRAFT: "Draft", SCHEDULE: "Schedule" };
 
 function CapChecks() {

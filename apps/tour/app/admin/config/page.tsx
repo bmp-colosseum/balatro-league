@@ -5,11 +5,10 @@ import { allConfig, KNOWN_KEYS } from "@/lib/services/config";
 import { NoAccess } from "@/components/NoAccess";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
+import { fieldInput as inputCls } from "@/components/admin/Field";
 import { setConfigAction } from "./actions";
 
 export const dynamic = "force-dynamic";
-
-const inputCls = "rounded border border-[var(--border)] bg-[var(--surface-2)] px-2 py-1";
 
 export default async function ConfigAdmin() {
   if (!(await isAdmin())) return <NoAccess what="edit configuration" />;

@@ -6,6 +6,7 @@ import { listPendingRequests } from "@/lib/services/roster-requests";
 import { NoAccess } from "@/components/NoAccess";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { EmptyState } from "@/components/admin/EmptyState";
+import { fieldInputSm as inputCls } from "@/components/admin/Field";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { SelectAllCheckbox } from "@/components/SelectAllCheckbox";
@@ -13,8 +14,6 @@ import { LiveRefresh } from "@/components/LiveRefresh";
 import { approveRequestAction, rejectRequestAction, approveRequestsBulkAction } from "../actions";
 
 export const dynamic = "force-dynamic";
-
-const inputCls = "rounded border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5";
 
 export default async function RosterRequestsInbox({ params }: { params: Promise<{ name: string }> }) {
   const { name } = await params;

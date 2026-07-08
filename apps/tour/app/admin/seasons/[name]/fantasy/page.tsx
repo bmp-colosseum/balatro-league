@@ -10,11 +10,10 @@ import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Label } from "@/components/ui/label";
+import { fieldInput as inputCls } from "@/components/admin/Field";
 import { openFantasyAction, startDraftAction, deleteFantasyTeamAction, advanceLockAction, setTradeConfigAction, decideTradeAction } from "./actions";
 
 export const dynamic = "force-dynamic";
-
-const inputCls = "rounded border border-[var(--border)] bg-[var(--surface-2)] px-2 py-1";
 
 // Fantasy admin: open a league, manage the manager list pre-draft, start the snake draft.
 // The manager DRAFT itself happens on the public board (managers pick when on the clock).

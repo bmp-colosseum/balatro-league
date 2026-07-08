@@ -12,11 +12,11 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { TeamManagePanel } from "@/components/TeamManagePanel";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Section } from "@/components/admin/Section";
+import { fieldInputSm as inputCls } from "@/components/admin/Field";
 import { reinstateAction, removeMoveAction, addStrikeAction, removeStrikeAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-const inputCls = "rounded border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5";
 const opt = (items: { value: string; label: string; disabled?: boolean }[]) => [{ value: "", label: "— select —" }, ...items];
 
 export default async function RosterOpsAdmin({
