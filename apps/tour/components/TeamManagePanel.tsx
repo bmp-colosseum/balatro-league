@@ -90,16 +90,16 @@ export function TeamManagePanel({
     const swapOpts = opt(lineupOpts.filter((o) => o.value !== p.playerId));
     return (
       <div className="flex flex-col gap-2" style={{ padding: "6px 0 2px" }}>
-        {/* Substitute -- this player is the one going OUT */}
+        {/* Temp sub -- this player goes OUT for a window; someone fills in, original returns */}
         <ActionFlashForm action={substituteAction}>
           {hidden("outPlayerId", p.playerId)}
           <div className="flex flex-wrap items-end gap-1.5">
-            <span className="sub" style={{ minWidth: "3.5rem" }}>Sub out</span>
+            <span className="sub" style={{ minWidth: "3.5rem" }}>Temp sub</span>
             <FormSelect name="inPlayerId" size="sm" options={subInOpts} placeholder="-- in --" />
             <FormSelect name="effectiveWeek" size="sm" options={weekSel} defaultValue={defWeek} />
             <FormSelect name="untilWeek" size="sm" options={weekSelOpt} placeholder="-- until --" />
             <input name="reason" placeholder="reason" className={`${inputCls} w-24`} />
-            <SubmitButton size="sm" variant="secondary" pendingText="..."><RefreshCw className="size-3.5" /> {verb("Sub", "Request")}</SubmitButton>
+            <SubmitButton size="sm" variant="secondary" pendingText="..."><RefreshCw className="size-3.5" /> {verb("Temp sub", "Request")}</SubmitButton>
           </div>
         </ActionFlashForm>
         {/* Re-seed this player */}
@@ -123,15 +123,15 @@ export function TeamManagePanel({
             <SubmitButton size="sm" variant="secondary" pendingText="..."><ArrowUpDown className="size-3.5" /> {verb("Swap", "Request")}</SubmitButton>
           </div>
         </ActionFlashForm>
-        {/* Replace this player for the rest of the season with a free agent */}
+        {/* Permanent sub -- fills this player's spot for the rest of the season */}
         <ActionFlashForm action={replaceAction}>
           {hidden("replacesPlayerId", p.playerId)}
           <div className="flex flex-wrap items-end gap-1.5">
-            <span className="sub" style={{ minWidth: "3.5rem" }}>Replace</span>
+            <span className="sub" style={{ minWidth: "3.5rem" }}>Perm sub</span>
             <FormSelect name="inPlayerId" size="sm" options={opt(faOpts)} placeholder="-- pool --" />
             <FormSelect name="effectiveWeek" size="sm" options={weekSel} defaultValue={defWeek} />
             <input name="reason" placeholder="reason" className={`${inputCls} w-24`} />
-            <SubmitButton size="sm" variant="secondary" pendingText="..."><UserPlus className="size-3.5" /> {verb("Replace", "Request")}</SubmitButton>
+            <SubmitButton size="sm" variant="secondary" pendingText="..."><UserPlus className="size-3.5" /> {verb("Perm sub", "Request")}</SubmitButton>
           </div>
         </ActionFlashForm>
         {/* Leadership + departure -- one compact row */}

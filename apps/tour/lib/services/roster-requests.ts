@@ -31,10 +31,10 @@ export type RosterRequestKind =
   | "REINSTATE";
 
 const KIND_LABEL: Record<RosterRequestKind, string> = {
-  SUB: "Substitute",
+  SUB: "Temp sub",
   QUIT: "Quit",
   BANNED: "Ban",
-  REPLACE: "Replace",
+  REPLACE: "Perm sub",
   RESEED: "Re-seed",
   SWAP: "Swap seeds",
   CAPTAIN_CHANGE: "Captain change",
@@ -168,13 +168,13 @@ function summarize(r: RawRequest, name: (id: string | null) => string | null): s
   const wk = weekLabel(r.effectiveWeek, r.untilWeek);
   switch (r.kind) {
     case "SUB":
-      return `${name(r.outPlayerId) ?? "someone"} out, ${p} in (${wk})`;
+      return `${p} in for ${name(r.outPlayerId) ?? "someone"} (${wk})`;
     case "QUIT":
       return `${p} quits (from W${r.effectiveWeek})`;
     case "BANNED":
       return `${p} banned (from W${r.effectiveWeek})`;
     case "REPLACE":
-      return `${p} fills ${name(r.replacesPlayerId) ?? "a departed slot"} (W${r.effectiveWeek})`;
+      return `${p} in for ${name(r.replacesPlayerId) ?? "someone"}, permanent (W${r.effectiveWeek})`;
     case "RESEED":
       return `${p} to seed ${r.seed ?? "?"} (W${r.effectiveWeek})`;
     case "SWAP":

@@ -14,8 +14,8 @@ const queueRoleSync = (seasonName: string) => enqueueRoleReconcile(seasonName);
 
 export const KIND_LABEL: Record<string, string> = {
   DRAFTED: "Drafted",
-  ADDED: "Added",
-  SUB: "Sub",
+  ADDED: "Permanent sub",
+  SUB: "Temp sub",
   QUIT: "Quit",
   BANNED: "Banned",
   REINSTATED: "Reinstated",
@@ -61,6 +61,10 @@ export function deriveLineup(moves: MoveRow[], week: number, captainId: string):
     if (m.effectiveWeek > week) continue;
     if (m.kind === "QUIT" || m.kind === "BANNED") gone.set(m.playerId, true);
     else if (m.kind === "REINSTATED") gone.set(m.playerId, false);
+    // A permanent sub (ADDED for someone) removes the player it replaces from that week on --
+    // they've been permanently subbed out; the newcomer inherits their seat (the ADDED move's
+    // seed IS the replaced player's seat). Without this, both linger in the lineup, colliding.
+    else if (m.kind === "ADDED" && m.replacesPlayerId) gone.set(m.replacesPlayerId, true);
     else if (m.kind === "RESEED" && m.seed != null) reseed.set(m.playerId, m.seed);
   }
 

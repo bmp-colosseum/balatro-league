@@ -323,7 +323,7 @@ export async function getTeamMoves(teamSeasonId: string): Promise<TeamMove[]> {
   const pids = [...new Set(moves.flatMap((m) => [m.playerId, m.outPlayerId, m.replacesPlayerId]).filter((x): x is string => !!x))];
   const players = await prisma.player.findMany({ where: { id: { in: pids } }, select: { id: true, displayName: true } });
   const pName = new Map(players.map((p) => [p.id, p.displayName]));
-  const LABEL: Record<string, string> = { ADDED: "Added", QUIT: "Left", BANNED: "Banned", REINSTATED: "Reinstated", SUB: "Sub", CAPTAIN_CHANGE: "Captain", RESEED: "Re-seed" };
+  const LABEL: Record<string, string> = { ADDED: "Permanent sub", QUIT: "Left", BANNED: "Banned", REINSTATED: "Reinstated", SUB: "Temp sub", CAPTAIN_CHANGE: "Captain", RESEED: "Re-seed" };
   const seedNow = new Map<string, number>(); // running seed per player, for re-seed from->to
   const out: TeamMove[] = [];
   for (const m of moves) {
@@ -333,11 +333,9 @@ export async function getTeamMoves(teamSeasonId: string): Promise<TeamMove[]> {
       const from = seedNow.get(m.playerId);
       if (m.seed != null) { detail = from != null ? `#${from} → #${m.seed}` : `→ #${m.seed}`; seedNow.set(m.playerId, m.seed); }
     } else if (m.kind === "SUB" && m.outPlayerId) {
-      detail = `for ${pName.get(m.outPlayerId) ?? "?"}${m.seed != null ? ` at seed #${m.seed}` : ""}${m.untilWeek ? ` · thru W${m.untilWeek}` : ""}`;
+      detail = `in for ${pName.get(m.outPlayerId) ?? "?"}${m.untilWeek ? ` (thru W${m.untilWeek})` : ""}`;
     } else if (m.kind === "ADDED" && m.replacesPlayerId) {
-      detail = `for ${pName.get(m.replacesPlayerId) ?? "?"}${m.seed != null ? ` at seed #${m.seed}` : ""}`;
-    } else if (m.kind === "ADDED" && m.seed != null) {
-      detail = `seed #${m.seed}`;
+      detail = `in for ${pName.get(m.replacesPlayerId) ?? "?"}`;
     } else if (m.reason && !m.reason.startsWith("roster change") && !m.reason.startsWith("ranking")) {
       detail = m.reason;
     }
