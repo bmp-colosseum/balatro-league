@@ -236,9 +236,21 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
     arr.push(m.untilWeek != null && m.untilWeek !== m.effectiveWeek ? `W${m.effectiveWeek}-${m.untilWeek}` : `W${m.effectiveWeek}`);
     stintsOf.set(m.playerId, arr);
   }
+  // All moves once -- drives both the replacement check (here) and the departed check (below).
+  const allMoves = await prisma.rosterMove.findMany({
+    where: { teamSeasonId: id },
+    orderBy: [{ effectiveWeek: "asc" }, { createdAt: "asc" }],
+  });
+  // A "replacement" came in via a permanent sub (ADDED for someone). Their seed history must
+  // ignore any DRAFTED move: the importer records every final-roster member as DRAFTED, so a
+  // replacement wrongly picks up a phantom draft seat (Mgods "drafted at #12" when he only ever
+  // replaced timetwister at #11). They were never drafted onto this team.
+  const replacementIds = new Set(allMoves.filter((m) => m.kind === "ADDED" && m.replacesPlayerId).map((m) => m.playerId));
+
   const chainOf = new Map<string, number[]>();
   for (const m of seedMoves) {
     if (m.seed == null) continue;
+    if (m.kind === "DRAFTED" && replacementIds.has(m.playerId)) continue; // phantom draft for a replacement
     if (m.kind === "RESEED" && m.effectiveWeek > lastWeek) continue;
     const arr = chainOf.get(m.playerId) ?? [];
     if (arr[arr.length - 1] !== m.seed) arr.push(m.seed);
@@ -246,14 +258,10 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
   }
 
   // Who has left / been permanently subbed out by the last week? Reuse the lineup fold (which
-  // now drops a player replaced by a permanent sub): any permanent member (has an arrival, not
-  // a temp sub) who isn't in the active lineup at lastWeek is departed. Keep their stats, but
-  // don't render them as an active seat -- that collision is what put a replaced player back
-  // on the roster next to their replacement on the same seed.
-  const allMoves = await prisma.rosterMove.findMany({
-    where: { teamSeasonId: id },
-    orderBy: [{ effectiveWeek: "asc" }, { createdAt: "asc" }],
-  });
+  // drops a player replaced by a permanent sub): any permanent member (has an arrival, not a
+  // temp sub) who isn't in the active lineup at lastWeek is departed -- keep their stats, but
+  // don't render them as an active seat (that collision put a replaced player back on the
+  // roster next to their replacement on the same seed).
   const activeIds = new Set(
     deriveLineup(allMoves, lastWeek, captainAtWeek(allMoves, lastWeek, ts.captainPlayerId ?? "")).map((l) => l.playerId),
   );
@@ -347,10 +355,17 @@ export async function getTeamMoves(teamSeasonId: string): Promise<TeamMove[]> {
   const players = await prisma.player.findMany({ where: { id: { in: pids } }, select: { id: true, displayName: true } });
   const pName = new Map(players.map((p) => [p.id, p.displayName]));
   const LABEL: Record<string, string> = { ADDED: "Permanent sub", QUIT: "Left", BANNED: "Banned", REINSTATED: "Reinstated", SUB: "Temp sub", CAPTAIN_CHANGE: "Captain", RESEED: "Re-seed" };
+  const replacementIds = new Set(moves.filter((m) => m.kind === "ADDED" && m.replacesPlayerId).map((m) => m.playerId));
+  const addedSeat = new Map<string, number>(); // a replacement's inherited seat, to drop redundant self-reseeds
+  for (const m of moves) if (m.kind === "ADDED" && m.replacesPlayerId && m.seed != null) addedSeat.set(m.playerId, m.seed);
   const seedNow = new Map<string, number>(); // running seed per player, for re-seed from->to
   const out: TeamMove[] = [];
   for (const m of moves) {
-    if (m.kind === "DRAFTED") { if (m.seed != null) seedNow.set(m.playerId, m.seed); continue; }
+    // A replacement was never drafted -- don't let a phantom DRAFTED seed the "from" of a re-seed.
+    if (m.kind === "DRAFTED") { if (m.seed != null && !replacementIds.has(m.playerId)) seedNow.set(m.playerId, m.seed); continue; }
+    // Drop a replacement's redundant self-reseed to the seat they already inherited (the ADDED
+    // move and the RESEED both say "#11" -- one line, not two).
+    if (m.kind === "RESEED" && addedSeat.get(m.playerId) === m.seed) continue;
     let detail: string | undefined;
     if (m.kind === "RESEED") {
       const from = seedNow.get(m.playerId);
