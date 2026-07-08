@@ -82,6 +82,61 @@ export async function startPlayoffs(seasonName: string) {
   return { field: field.seeded.length, round };
 }
 
+// Manual bracket: the TO picks the exact field in seed order (index 0 = seed 1). Same
+// persistence as startPlayoffs, but the field + seeds come from the TO, not the standings.
+export async function startPlayoffsManual(seasonName: string, teamSeasonIds: string[]) {
+  const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true } });
+  if (!season) throw new Error(`No season "${seasonName}"`);
+  if ((await prisma.playoffEntry.count({ where: { seasonId: season.id } })) > 0) {
+    throw new Error("Playoffs already started — reset first.");
+  }
+  const ids = teamSeasonIds.filter(Boolean);
+  if ([...new Set(ids)].length !== ids.length) throw new Error("A team can't be seeded twice.");
+  if (!isPow2(ids.length) || !(ids.length in ROUND_BY_SIZE)) {
+    throw new Error(`Pick a 2/4/8-team field — you picked ${ids.length}.`);
+  }
+  await prisma.playoffEntry.createMany({
+    data: ids.map((id, i) => ({ seasonId: season.id, teamSeasonId: id, seed: i + 1, viaWildcard: false })),
+  });
+  const round = ROUND_BY_SIZE[ids.length]!;
+  const pairs = standardBracketPairings(ids); // ids already in seed order
+  await prisma.playoffSeries.createMany({
+    data: pairs.map(([a, b], i) => ({ seasonId: season.id, round, bracketIndex: i, teamSeasonAId: a, teamSeasonBId: b })),
+  });
+  await prisma.tourSeason.update({ where: { id: season.id }, data: { state: "PLAYOFFS" } });
+  return { field: ids.length, round };
+}
+
+// Manually set (or swap) the two teams in a series -- the direct "build the bracket by hand"
+// lever. Ensures both teams have a PlayoffEntry (so seed labels resolve) and clears any stale
+// score/winner when the teams actually change.
+export async function setSeriesTeams(seriesId: string, teamSeasonAId: string, teamSeasonBId: string) {
+  const s = await prisma.playoffSeries.findUnique({
+    where: { id: seriesId },
+    select: { id: true, seasonId: true, teamSeasonAId: true, teamSeasonBId: true },
+  });
+  if (!s) throw new Error("No such series.");
+  if (!teamSeasonAId || !teamSeasonBId) throw new Error("Pick both teams.");
+  if (teamSeasonAId === teamSeasonBId) throw new Error("A series needs two different teams.");
+  const entries = await prisma.playoffEntry.findMany({ where: { seasonId: s.seasonId }, select: { teamSeasonId: true, seed: true } });
+  const have = new Set(entries.map((e) => e.teamSeasonId));
+  let nextSeed = Math.max(0, ...entries.map((e) => e.seed));
+  for (const id of [teamSeasonAId, teamSeasonBId]) {
+    if (!have.has(id)) {
+      nextSeed += 1;
+      await prisma.playoffEntry.create({ data: { seasonId: s.seasonId, teamSeasonId: id, seed: nextSeed, viaWildcard: false } });
+      have.add(id);
+    }
+  }
+  const changed = teamSeasonAId !== s.teamSeasonAId || teamSeasonBId !== s.teamSeasonBId;
+  await prisma.playoffSeries.update({
+    where: { id: seriesId },
+    data: { teamSeasonAId, teamSeasonBId, ...(changed ? { scoreA: null, scoreB: null, winnerTeamSeasonId: null } : {}) },
+  });
+  await notifyLive(`series:${seriesId}`);
+  return { ok: true };
+}
+
 export async function reportSeries(seriesId: string, scoreA: number, scoreB: number) {
   if (!Number.isInteger(scoreA) || !Number.isInteger(scoreB) || scoreA < 0 || scoreB < 0) {
     throw new Error("Scores must be whole numbers ≥ 0.");
@@ -128,6 +183,14 @@ export async function getPlayoffAdmin(seasonName: string) {
   const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true, state: true } });
   if (!season) return null;
 
+  // Every team in the season, for the manual bracket pickers (field builder + per-series edit).
+  const allTeamSeasons = await prisma.teamSeason.findMany({
+    where: { seasonId: season.id },
+    include: { team: { select: { name: true } } },
+    orderBy: { seed: "asc" },
+  });
+  const allTeams = allTeamSeasons.map((t) => ({ id: t.id, name: t.team.name }));
+
   const entries = await prisma.playoffEntry.findMany({ where: { seasonId: season.id }, orderBy: { seed: "asc" } });
   if (entries.length === 0) {
     const field = await computeSeededField(seasonName);
@@ -139,7 +202,7 @@ export async function getPlayoffAdmin(seasonName: string) {
             return { a: `#${A.seed} ${A.name}`, b: `#${B.seed} ${B.name}` };
           })
         : [];
-    return { started: false as const, seasonState: season.state, projected: field, pairings };
+    return { started: false as const, seasonState: season.state, projected: field, pairings, allTeams };
   }
 
   const series = await prisma.playoffSeries.findMany({
@@ -184,6 +247,7 @@ export async function getPlayoffAdmin(seasonName: string) {
   return {
     started: true as const,
     seasonState: season.state,
+    allTeams,
     entries: entries.map((e) => ({ seed: e.seed, name: nameOf.get(e.teamSeasonId) ?? e.teamSeasonId, viaWildcard: e.viaWildcard })),
     rounds,
     champion,

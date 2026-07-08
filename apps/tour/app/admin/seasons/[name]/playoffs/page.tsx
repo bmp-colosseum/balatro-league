@@ -7,7 +7,8 @@ import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
-import { startPlayoffsAction, reportSeriesAction, resetPlayoffsAction } from "./actions";
+import { FormSelect } from "@/components/FormSelect";
+import { startPlayoffsAction, startPlayoffsManualAction, setSeriesTeamsAction, reportSeriesAction, resetPlayoffsAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,8 @@ export default async function PlayoffsAdmin({ params }: { params: Promise<{ name
     );
   }
 
+  const teamOpts = data.allTeams.map((t) => ({ value: t.id, label: t.name }));
+
   // ── Not started → projected field + start ─────────────────────────────────
   if (!data.started) {
     const field = data.projected;
@@ -48,13 +51,13 @@ export default async function PlayoffsAdmin({ params }: { params: Promise<{ name
       <main>
         {back}
         <h1>Playoffs setup</h1>
-        <p className="sub">Qualifies the top teams from the standings (auto-berths per conference + wildcards), seeds them overall, and builds the single-elim bracket.</p>
+        <p className="sub">Auto-seed the top teams from the standings, or build the field by hand below. Single-elim, 2/4/8 teams.</p>
         {!field ? (
-          <Callout type="admin">No standings yet — generate the schedule and report results first.</Callout>
+          <Callout type="admin">No standings yet for auto-seeding — you can still build the field by hand below.</Callout>
         ) : !field.valid ? (
           <Callout type="admin">
-            The standings produced {field.seeded.length} qualifiers — a single-elim bracket needs a 2/4/8-team field.
-            Adjust the season&apos;s playoff field size.
+            The standings produced {field.seeded.length} qualifiers — auto-seeding needs a 2/4/8-team field. Adjust the
+            season&apos;s playoff field size, or build the field by hand below.
           </Callout>
         ) : (
           <>
@@ -85,11 +88,30 @@ export default async function PlayoffsAdmin({ params }: { params: Promise<{ name
             <div className="card">
               <ActionFlashForm action={startPlayoffsAction}>
                 <input type="hidden" name="season" value={seasonName} />
-                <SubmitButton pendingText="Starting…"><Trophy /> Start playoffs</SubmitButton>
+                <SubmitButton pendingText="Starting..."><Trophy /> Start playoffs (auto-seeded)</SubmitButton>
               </ActionFlashForm>
             </div>
           </>
         )}
+
+        <div className="card">
+          <div className="bracket-title">Build the field by hand</div>
+          <p className="sub">Pick teams in seed order -- Seed 1 is the top seed; leave the rest blank. Field must be 2, 4, or 8 teams. Matchups follow standard seeding (1 v N, 2 v N-1, ...).</p>
+          <ActionFlashForm action={startPlayoffsManualAction}>
+            <input type="hidden" name="season" value={seasonName} />
+            <div className="grid grid-2" style={{ gap: "0.4rem" }}>
+              {Array.from({ length: 8 }, (_, i) => (
+                <label key={i} className="flex items-center gap-2">
+                  <span className="sub" style={{ width: "3.5rem" }}>Seed {i + 1}</span>
+                  <FormSelect name={`seed${i + 1}`} size="sm" options={teamOpts} placeholder="-- team --" />
+                </label>
+              ))}
+            </div>
+            <div style={{ marginTop: "0.6rem" }}>
+              <SubmitButton pendingText="Starting..."><Trophy /> Start with this field</SubmitButton>
+            </div>
+          </ActionFlashForm>
+        </div>
       </main>
     );
   }
@@ -144,6 +166,17 @@ export default async function PlayoffsAdmin({ params }: { params: Promise<{ name
                     ) : (
                       <span className="sub">awaiting teams</span>
                     )}
+                    <details className="mt-1">
+                      <summary className="sub" style={{ cursor: "pointer" }}>Edit teams</summary>
+                      <ActionFlashForm action={setSeriesTeamsAction} className="mt-1 flex flex-wrap items-center gap-1">
+                        <input type="hidden" name="season" value={seasonName} />
+                        <input type="hidden" name="seriesId" value={s.id} />
+                        <FormSelect name="teamSeasonAId" size="sm" options={teamOpts} defaultValue={s.aId ?? ""} placeholder="-- team A --" />
+                        <span className="sub">vs</span>
+                        <FormSelect name="teamSeasonBId" size="sm" options={teamOpts} defaultValue={s.bId ?? ""} placeholder="-- team B --" />
+                        <SubmitButton size="sm" variant="secondary" pendingText="...">Save</SubmitButton>
+                      </ActionFlashForm>
+                    </details>
                   </td>
                 </tr>
               ))}

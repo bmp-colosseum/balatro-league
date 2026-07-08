@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/auth";
 import { can, seriesScope } from "@/lib/permissions";
-import { startPlayoffs, reportSeries, resetPlayoffs } from "@/lib/services/playoffs";
+import { startPlayoffs, startPlayoffsManual, setSeriesTeams, reportSeries, resetPlayoffs } from "@/lib/services/playoffs";
 import type { ActionResult } from "@/lib/action-result";
 
 function rev(season: string) {
@@ -21,6 +21,35 @@ export async function startPlayoffsAction(_prev: ActionResult, formData: FormDat
     return { ok: true, message: `Playoffs started: ${r.field}-team field, ${r.round.toLowerCase()}.` };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Could not start playoffs." };
+  }
+}
+
+export async function startPlayoffsManualAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
+  const season = String(formData.get("season") ?? "");
+  // Ordered seed slots seed1..seed8; blanks dropped, order preserved (slot N = seed N).
+  const ids = Array.from({ length: 8 }, (_, i) => String(formData.get(`seed${i + 1}`) ?? "")).filter(Boolean);
+  try {
+    const r = await startPlayoffsManual(season, ids);
+    rev(season);
+    return { ok: true, message: `Playoffs started: ${r.field}-team field, ${r.round.toLowerCase()}.` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Could not start playoffs." };
+  }
+}
+
+export async function setSeriesTeamsAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
+  const season = String(formData.get("season") ?? "");
+  const seriesId = String(formData.get("seriesId") ?? "");
+  const aId = String(formData.get("teamSeasonAId") ?? "");
+  const bId = String(formData.get("teamSeasonBId") ?? "");
+  try {
+    await setSeriesTeams(seriesId, aId, bId);
+    rev(season);
+    return { ok: true, message: "Matchup updated." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Could not update matchup." };
   }
 }
 

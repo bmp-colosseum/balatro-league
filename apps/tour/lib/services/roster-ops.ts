@@ -420,14 +420,22 @@ export async function convertSubToMember(seasonName: string, teamSeasonId: strin
   return { ok: true };
 }
 
-// Escape hatch for a mis-entered move (the proper "they came back" is reinstate).
+// Escape hatch / real undo for a mis-entered move. For a sub (temp SUB or permanent ADDED)
+// this ALSO reverses the schedule side: the incoming player's still-unplayed sets in the
+// affected window go back to whoever they were taken from -- so removing a sub is a true
+// undo, not a half-undo that leaves the schedule pointing at the wrong player. (The proper
+// "they came back later" is reinstate; this is for undoing a move that shouldn't exist.)
 export async function removeMove(moveId: string) {
-  const move = await prisma.rosterMove.findUnique({ where: { id: moveId }, select: { seasonId: true } });
-  await prisma.rosterMove.delete({ where: { id: moveId } });
-  if (move) {
-    const season = await prisma.tourSeason.findUnique({ where: { id: move.seasonId }, select: { name: true } });
-    if (season) await queueRoleSync(season.name);
+  const move = await prisma.rosterMove.findUnique({ where: { id: moveId } });
+  if (!move) return;
+  const backTo = move.kind === "SUB" ? move.outPlayerId : move.kind === "ADDED" ? move.replacesPlayerId : null;
+  if (backTo) {
+    const until = move.kind === "SUB" ? move.untilWeek ?? move.effectiveWeek : null;
+    await reassignUnplayedSets(move.seasonId, move.teamSeasonId, move.playerId, backTo, move.effectiveWeek, until);
   }
+  await prisma.rosterMove.delete({ where: { id: moveId } });
+  const season = await prisma.tourSeason.findUnique({ where: { id: move.seasonId }, select: { name: true } });
+  if (season) await queueRoleSync(season.name);
 }
 
 // One-time backfill: seed DRAFTED moves so seasons drafted before this model still derive
