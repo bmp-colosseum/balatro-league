@@ -7,6 +7,7 @@ import { prisma } from "../db";
 import { notifyLive } from "../notify";
 import { enqueueRoleReconcile } from "../queue";
 import { getSeasonStrikeCounts, getCareerStrikeCounts, getSeasonStrikeLog, AT_RISK_THRESHOLD } from "./strikes";
+import { PLAYOFF_ROUNDS } from "./playoff-weeks";
 
 // Roster mutations change who should hold the season's Discord roles — nudge the bot.
 // Fire-and-forget (enqueueRoleReconcile never throws).
@@ -502,10 +503,10 @@ export async function getRosterOps(seasonName: string, week?: number) {
   const kindByNum = new Map(regularWeekRows.map((w) => [w.number, WEEK_KIND_LABEL[w.kind] ?? w.kind]));
   const weekOptions: { value: number; label: string }[] = Array.from({ length: maxRegular }, (_, i) => i + 1)
     .map((n) => ({ value: n, label: kindByNum.has(n) ? `W${n} (${kindByNum.get(n)})` : `W${n}` }));
-  if (playoffWeekRows.length) {
-    for (const w of playoffWeekRows) weekOptions.push({ value: w.number, label: `Playoffs W${w.number}` });
-  } else if (playoffSetCount > 0) {
-    weekOptions.push({ value: maxRegular + 1, label: "Playoffs" });
+  // Playoff rounds as named pseudo-weeks after the regular season -- "Quarterfinal (W9)" etc.
+  // A sub/drop can take effect in a specific round without a numbered schedule week.
+  if (playoffWeekRows.length || playoffSetCount > 0) {
+    for (const r of PLAYOFF_ROUNDS) weekOptions.push({ value: maxRegular + r.offset, label: `${r.label} (W${maxRegular + r.offset})` });
   }
 
   const weekNumbers = weekOptions.map((w) => w.value);
@@ -646,6 +647,9 @@ export async function getRosterOps(seasonName: string, week?: number) {
     selectedWeek,
     teams,
     freeAgents: freeAgents.map((p) => ({ id: p.id, name: p.displayName })),
+    // Players rostered on ANOTHER team this season -- lets a cross-team / playoff sub (an
+    // eliminated player covering for a different team) be picked, not just free agents.
+    allRostered: approvedPlayers.filter((p) => rosteredIds.has(p.id)).map((p) => ({ id: p.id, name: p.displayName })),
     timeline,
     strikeOf,
     strikeLog,

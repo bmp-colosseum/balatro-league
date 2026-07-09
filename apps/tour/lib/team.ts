@@ -3,6 +3,7 @@
 import { prisma } from "./db";
 import { getSeasonStandings } from "./standings";
 import { seedAtWeekResolver, subOnlyKeySet, deriveLineup, captainAtWeek } from "./services/roster-ops";
+import { regularWeekCount, windowLabel } from "./services/playoff-weeks";
 
 export interface TeamPlacement {
   placement: number; // 1-based rank within its conference group
@@ -100,7 +101,7 @@ export async function getAllTimeTeams(): Promise<TeamSeasonRow[]> {
 
   const sets = await prisma.tourSet.findMany({
     where: { seasonId: { not: null }, bracket: "REGULAR" }, // all-time team records = regular season
-    select: { playerAId: true, playerBId: true, matchId: true, seasonId: true },
+    select: { playerAId: true, playerBId: true, teamSeasonAId: true, teamSeasonBId: true, matchId: true, seasonId: true },
   });
   const matches = await prisma.match.findMany({
     where: { id: { in: sets.map((s) => s.matchId).filter((x): x is string => !!x) } },
@@ -121,7 +122,9 @@ export async function getAllTimeTeams(): Promise<TeamSeasonRow[]> {
     const m = s.matchId ? mById.get(s.matchId) : undefined;
     if (!m) continue;
     for (const pid of [s.playerAId, s.playerBId]) {
-      const tsId = tsByPlayerSeason.get(`${pid}|${s.seasonId}`);
+      // Credit the set to the team the player actually played it for (a cross-team sub is on
+      // two teams that season); fall back to the season's roster team for legacy untagged sets.
+      const tsId = (pid === s.playerAId ? s.teamSeasonAId : s.teamSeasonBId) ?? tsByPlayerSeason.get(`${pid}|${s.seasonId}`);
       if (!tsId) continue;
       const a = get(tsId);
       const gFor = m.playerAId === pid ? m.gamesWonA : m.gamesWonB;
@@ -173,7 +176,9 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
     prisma.tourSet.findMany({
       where: { seasonId: ts.seasonId, bracket: "REGULAR", OR: [{ playerAId: { in: playerIds } }, { playerBId: { in: playerIds } }] },
       // Live sets carry no week of their own -- join the matchup's so lastWeek is real.
-      select: { playerAId: true, playerBId: true, matchId: true, week: true, matchup: { select: { week: { select: { number: true } } } } },
+      // teamSeason side ids let us credit a set to the team the player actually played FOR --
+      // a cross-team sub (a member of one team covering another) must not leak stats across.
+      select: { playerAId: true, playerBId: true, teamSeasonAId: true, teamSeasonBId: true, matchId: true, week: true, matchup: { select: { week: { select: { number: true } } } } },
     }),
   ]);
   const nameById = new Map(players.map((p) => [p.id, p.displayName]));
@@ -198,6 +203,10 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
     if (!m) continue;
     for (const pid of [s.playerAId, s.playerBId]) {
       if (!entryByPlayer.has(pid)) continue;
+      // Only count the set if the player played it FOR this team (cross-team subs keep an
+      // entry on both teams). Null side id = legacy import without team tags -> count as before.
+      const setTeam = pid === s.playerAId ? s.teamSeasonAId : s.teamSeasonBId;
+      if (setTeam != null && setTeam !== id) continue;
       const a = get(pid);
       const gFor = m.playerAId === pid ? m.gamesWonA : m.gamesWonB;
       const gAg = m.playerAId === pid ? m.gamesWonB : m.gamesWonA;
@@ -211,6 +220,8 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
   // Effective seed reflects mid-season re-seeds (RESEED moves), read at the last regular week.
   const seedAt = await seedAtWeekResolver([id]);
   const lastWeek = Math.max(1, ...sets.map((s) => s.week ?? s.matchup?.week.number ?? 0));
+  // Season-wide regular-week count -- labels playoff pseudo-weeks (> this) as QF/Semi/Final.
+  const regularWeeks = (await regularWeekCount(ts.seasonId)) || lastWeek;
 
   // Full seed path per player over the regular season: draft seed + each re-seed (in week
   // order) up to the last regular week — so a multi-step re-seed reads #5 → #3 → #7.
@@ -233,7 +244,7 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
   for (const m of memberMoves) {
     if (m.kind !== "SUB" || hasArrival.has(m.playerId)) continue;
     const arr = stintsOf.get(m.playerId) ?? [];
-    arr.push(m.untilWeek != null && m.untilWeek !== m.effectiveWeek ? `W${m.effectiveWeek}-${m.untilWeek}` : `W${m.effectiveWeek}`);
+    arr.push(windowLabel(regularWeeks, m.effectiveWeek, m.untilWeek));
     stintsOf.set(m.playerId, arr);
   }
   // All moves once -- drives both the replacement check (here) and the departed check (below).
@@ -301,7 +312,7 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
   // Post-season record — the roster's playoff sets that season (regular is the default above).
   const poSets = await prisma.tourSet.findMany({
     where: { seasonId: ts.seasonId, bracket: "PLAYOFF", OR: [{ playerAId: { in: playerIds } }, { playerBId: { in: playerIds } }] },
-    select: { playerAId: true, playerBId: true, matchId: true },
+    select: { playerAId: true, playerBId: true, teamSeasonAId: true, teamSeasonBId: true, matchId: true },
   });
   const poMatches = await prisma.match.findMany({
     where: { id: { in: poSets.map((s) => s.matchId).filter((x): x is string => !!x) } },
@@ -312,8 +323,11 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
   for (const s of poSets) {
     const m = s.matchId ? poById.get(s.matchId) : undefined;
     if (!m) continue;
-    // Count once from the rostered player's side (the opponent isn't on this team).
-    const pid = playerIds.includes(s.playerAId) ? s.playerAId : s.playerBId;
+    // Count once from the side that played this set FOR this team (a cross-team sub keeps a
+    // roster entry on both teams, so "rostered here" alone isn't enough -- check the team tag).
+    const aOk = entryByPlayer.has(s.playerAId) && (s.teamSeasonAId == null || s.teamSeasonAId === id);
+    const pid = aOk ? s.playerAId : s.playerBId;
+    if (!entryByPlayer.has(pid) || (pid === s.playerBId && s.teamSeasonBId != null && s.teamSeasonBId !== id)) continue;
     playoff.gameW += m.playerAId === pid ? m.gamesWonA : m.gamesWonB;
     playoff.gameL += m.playerAId === pid ? m.gamesWonB : m.gamesWonA;
     if (m.winnerId === pid) playoff.setW++;

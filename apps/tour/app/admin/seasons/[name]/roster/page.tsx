@@ -101,21 +101,28 @@ export default async function RosterOpsAdmin({
       {/* Teams: derived lineup + actions. Each card is the SAME TeamManagePanel that also
           appears inline on the team's own page -- one component, identical everywhere. */}
       <div className="grid grid-2">
-        {teams.map((t) => (
-          <TeamManagePanel
-            key={t.teamSeasonId}
-            seasonName={seasonName}
-            team={t}
-            selectedWeek={data.selectedWeek}
-            strikeOf={data.strikeOf}
-            faOpts={faOpts}
-            weekSel={weekSel}
-            weekSelOpt={weekSelOpt}
-            defWeek={defWeek}
-            mode={isMod ? "apply" : "request"}
-            pending={pendingByTeam.get(t.teamSeasonId) ?? []}
-          />
-        ))}
+        {teams.map((t) => {
+          // Cross-team sub pool: everyone rostered elsewhere this season (this team's own
+          // members already appear under "on this team").
+          const teamMemberIds = new Set(t.membership.map((m) => m.playerId));
+          const crossTeamOpts = data.allRostered.filter((p) => !teamMemberIds.has(p.id)).map((p) => ({ value: p.id, label: p.name }));
+          return (
+            <TeamManagePanel
+              key={t.teamSeasonId}
+              seasonName={seasonName}
+              team={t}
+              selectedWeek={data.selectedWeek}
+              strikeOf={data.strikeOf}
+              faOpts={faOpts}
+              crossTeamOpts={crossTeamOpts}
+              weekSel={weekSel}
+              weekSelOpt={weekSelOpt}
+              defWeek={defWeek}
+              mode={isMod ? "apply" : "request"}
+              pending={pendingByTeam.get(t.teamSeasonId) ?? []}
+            />
+          );
+        })}
       </div>
 
       {/* Strikes (TO aid — informational) */}

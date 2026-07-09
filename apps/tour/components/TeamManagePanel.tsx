@@ -43,6 +43,7 @@ export function TeamManagePanel({
   selectedWeek,
   strikeOf,
   faOpts,
+  crossTeamOpts = [],
   weekSel,
   weekSelOpt,
   defWeek,
@@ -55,6 +56,7 @@ export function TeamManagePanel({
   selectedWeek: number;
   strikeOf: Record<string, { season: number; career: number; atRisk: boolean }>;
   faOpts: SelOpt[];
+  crossTeamOpts?: SelOpt[]; // players rostered on another team (cross-team / playoff subs)
   weekSel: SelOpt[];
   weekSelOpt: SelOpt[];
   defWeek: string;
@@ -86,6 +88,7 @@ export function TeamManagePanel({
         ? [{ value: "__team", label: "on this team", disabled: true }, ...lineupOpts.filter((o) => o.value !== p.playerId)]
         : []),
       ...(faOpts.length ? [{ value: "__pool", label: "free agents", disabled: true }, ...faOpts] : []),
+      ...(crossTeamOpts.length ? [{ value: "__other", label: "other teams (cross-team sub)", disabled: true }, ...crossTeamOpts] : []),
     ]);
     const swapOpts = opt(lineupOpts.filter((o) => o.value !== p.playerId));
     return (
