@@ -7,8 +7,11 @@
 import { prisma } from "./db";
 import { seedAtWeekResolver } from "./services/roster-ops";
 
-const ROUND_ORDER: Record<string, number> = { QUARTERFINAL: 0, SEMIFINAL: 1, FINAL: 2 };
+const ROUND_ORDER: Record<string, number> = { ROUND_OF_64: 0, ROUND_OF_32: 1, ROUND_OF_16: 2, QUARTERFINAL: 3, SEMIFINAL: 4, FINAL: 5 };
 const ROUND_LABEL: Record<string, string> = {
+  ROUND_OF_64: "Round of 64",
+  ROUND_OF_32: "Round of 32",
+  ROUND_OF_16: "Round of 16",
   QUARTERFINAL: "Quarterfinal",
   SEMIFINAL: "Semifinal",
   FINAL: "Final",
@@ -66,7 +69,7 @@ export async function getPublicBracket(seasonName: string): Promise<PublicBracke
 
   // Player sets within each series — a playoff set's two players tell us which teams met
   // (via their season rosters), so group the season's PLAYOFF sets by unordered team pair.
-  const poSets = await prisma.tourSet.findMany({ where: { seasonId: season.id, bracket: "PLAYOFF" }, select: { playerAId: true, playerBId: true, matchId: true } });
+  const poSets = await prisma.tourSet.findMany({ where: { seasonId: season.id, bracket: "PLAYOFF" }, select: { playerAId: true, playerBId: true, matchId: true, teamSeasonAId: true, teamSeasonBId: true } });
   const rEntries = await prisma.rosterEntry.findMany({ where: { roster: { teamSeason: { seasonId: season.id } } }, select: { playerId: true, roster: { select: { teamSeasonId: true } } } });
   const teamOfPlayer = new Map(rEntries.map((e) => [e.playerId, e.roster.teamSeasonId]));
   const poMatchIds = poSets.map((s) => s.matchId).filter((x): x is string => !!x);
@@ -84,7 +87,9 @@ export async function getPublicBracket(seasonName: string): Promise<PublicBracke
   const pairKey = (x: string, y: string) => [x, y].sort().join("|");
   const setsByPair = new Map<string, BracketSet[]>();
   for (const s of poSets) {
-    const tA = teamOfPlayer.get(s.playerAId), tB = teamOfPlayer.get(s.playerBId);
+    // Prefer the set's stamped team (live playoff sets) so a cross-team sub is attributed
+    // to the team they played FOR; fall back to roster membership for historical imports.
+    const tA = s.teamSeasonAId ?? teamOfPlayer.get(s.playerAId), tB = s.teamSeasonBId ?? teamOfPlayer.get(s.playerBId);
     const m = s.matchId ? poMatchById.get(s.matchId) : undefined;
     if (!tA || !tB || !m) continue;
     (setsByPair.get(pairKey(tA, tB)) ?? setsByPair.set(pairKey(tA, tB), []).get(pairKey(tA, tB))!).push({

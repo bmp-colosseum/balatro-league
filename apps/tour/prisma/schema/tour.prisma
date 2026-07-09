@@ -68,6 +68,9 @@ enum SignupStatus {
 }
 
 enum PlayoffRound {
+  ROUND_OF_64
+  ROUND_OF_32
+  ROUND_OF_16
   QUARTERFINAL
   SEMIFINAL
   FINAL
@@ -508,6 +511,7 @@ model PlayoffSeries {
   seasonId           String
   round              PlayoffRound
   bracketIndex       Int          @default(0) // position within its round (bracket order) — drives advanceWinners
+  conferenceId       String? // which conference's bracket this series is in (null = cross-conference FINAL); plain id, no relation
   teamSeasonAId      String? // higher seed (for historical champion-path imports, A = the champion)
   teamSeasonBId      String? // the opponent
   scoreA             Int? // set score (A's sets won)

@@ -95,7 +95,7 @@ async function loadMeetings(seasonId: string, setsToWin: number): Promise<Meetin
   // Source A -- Matchup rows (live play + reconciled imports). The rolled-up team result
   // is stored directly; a matchup with a null result is a fixture that isn't played yet.
   const matchups = await prisma.matchup.findMany({
-    where: { week: { seasonId } },
+    where: { week: { seasonId, kind: { not: "PLAYOFF" } } }, // regular-season coverage only -- playoff matchups don't count
     select: { id: true, teamSeasonAId: true, teamSeasonBId: true, setsWonA: true, setsWonB: true, gamesWonA: true, gamesWonB: true },
   });
   // Accounted set rows per matchup (CONFIRMED/FORFEIT -- includes 0-0 DQs, which the

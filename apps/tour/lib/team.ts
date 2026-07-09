@@ -3,7 +3,7 @@
 import { prisma } from "./db";
 import { getSeasonStandings } from "./standings";
 import { seedAtWeekResolver, subOnlyKeySet, deriveLineup, captainAtWeek } from "./services/roster-ops";
-import { regularWeekCount, windowLabel } from "./services/playoff-weeks";
+import { regularWeekCount, windowLabel, playoffFieldSize } from "./services/playoff-weeks";
 
 export interface TeamPlacement {
   placement: number; // 1-based rank within its conference group
@@ -222,6 +222,7 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
   const lastWeek = Math.max(1, ...sets.map((s) => s.week ?? s.matchup?.week.number ?? 0));
   // Season-wide regular-week count -- labels playoff pseudo-weeks (> this) as QF/Semi/Final.
   const regularWeeks = (await regularWeekCount(ts.seasonId)) || lastWeek;
+  const playoffField = await playoffFieldSize(ts.seasonId);
 
   // Full seed path per player over the regular season: draft seed + each re-seed (in week
   // order) up to the last regular week — so a multi-step re-seed reads #5 → #3 → #7.
@@ -244,7 +245,7 @@ export async function getTeamSeason(id: string): Promise<TeamSeasonView | null> 
   for (const m of memberMoves) {
     if (m.kind !== "SUB" || hasArrival.has(m.playerId)) continue;
     const arr = stintsOf.get(m.playerId) ?? [];
-    arr.push(windowLabel(regularWeeks, m.effectiveWeek, m.untilWeek));
+    arr.push(windowLabel(regularWeeks, playoffField, m.effectiveWeek, m.untilWeek));
     stintsOf.set(m.playerId, arr);
   }
   // All moves once -- drives both the replacement check (here) and the departed check (below).

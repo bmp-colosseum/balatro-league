@@ -8,7 +8,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { FormSelect } from "@/components/FormSelect";
-import { startPlayoffsAction, startPlayoffsManualAction, setSeriesTeamsAction, reportSeriesAction, resetPlayoffsAction } from "./actions";
+import { startPlayoffsAction, startPlayoffsManualAction, startConferencePlayoffsAction, setSeriesTeamsAction, reportSeriesAction, resetPlayoffsAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -47,12 +47,58 @@ export default async function PlayoffsAdmin({ params }: { params: Promise<{ name
   // ── Not started → projected field + start ─────────────────────────────────
   if (!data.started) {
     const field = data.projected;
+    const cs = data.conferenceSetup;
+    const confMode = !!(cs && cs.supported && cs.conferences.every((c) => c.enoughTeams));
     return (
       <main>
         {back}
         <h1>Playoffs setup</h1>
-        <p className="sub">Auto-seed the top teams from the standings, or build the field by hand below. Single-elim, 2/4/8 teams.</p>
-        {!field ? (
+        <p className="sub">
+          {confMode
+            ? "Conference playoffs: each conference's #1 seed picks its first-round opponent; #2 gets the other. Winners meet in the conference final, then the two champions in the final."
+            : "Auto-seed the top teams from the standings, or build the field by hand below. Single-elim, 2/4/8 teams."}
+        </p>
+
+        {confMode && cs && (
+          <div className="card">
+            <div className="bracket-title">Seed the bracket — pick each #1 seed&apos;s opponent</div>
+            <ActionFlashForm action={startConferencePlayoffsAction}>
+              <input type="hidden" name="season" value={seasonName} />
+              <input type="hidden" name="confIds" value={cs.conferences.map((c) => c.conferenceId).join(",")} />
+              <div className="grid grid-2" style={{ gap: "1rem" }}>
+                {cs.conferences.map((c) => (
+                  <div key={c.conferenceId}>
+                    <div style={{ fontWeight: 600 }}>{c.conferenceName}</div>
+                    <table style={{ margin: "0.25rem 0" }}>
+                      <tbody>
+                        {c.seeds.map((s) => (
+                          <tr key={s.teamSeasonId}>
+                            <td className="rank">#{s.seed}</td>
+                            <td>{s.name}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <label className="flex flex-wrap items-center gap-2">
+                      <span className="sub">#1 {c.chooser?.name} plays</span>
+                      <FormSelect
+                        name={`pick_${c.conferenceId}`}
+                        size="sm"
+                        options={c.pickables.map((p) => ({ value: p.teamSeasonId, label: `#${p.seed} ${p.name}` }))}
+                        placeholder="-- pick opponent --"
+                      />
+                    </label>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: "0.6rem" }}>
+                <SubmitButton pendingText="Starting..."><Trophy /> Start conference playoffs</SubmitButton>
+              </div>
+            </ActionFlashForm>
+          </div>
+        )}
+
+        {!confMode && (!field ? (
           <Callout type="admin">No standings yet for auto-seeding — you can still build the field by hand below.</Callout>
         ) : !field.valid ? (
           <Callout type="admin">
@@ -92,7 +138,7 @@ export default async function PlayoffsAdmin({ params }: { params: Promise<{ name
               </ActionFlashForm>
             </div>
           </>
-        )}
+        ))}
 
         <div className="card">
           <div className="bracket-title">Build the field by hand</div>
@@ -143,7 +189,10 @@ export default async function PlayoffsAdmin({ params }: { params: Promise<{ name
             <tbody>
               {r.series.map((s) => (
                 <tr key={s.id}>
-                  <td style={{ fontWeight: s.winnerLabel === s.aLabel ? 700 : undefined }}>{s.aLabel}</td>
+                  <td style={{ fontWeight: s.winnerLabel === s.aLabel ? 700 : undefined }}>
+                    {s.conferenceName && <div className="sub" style={{ fontSize: "0.75em" }}>{s.conferenceName}</div>}
+                    {s.aLabel}
+                  </td>
                   <td style={{ fontWeight: s.winnerLabel === s.bLabel ? 700 : undefined }}>{s.bLabel}</td>
                   <td className="num" style={{ width: "4rem" }}>
                     {s.decided ? `${s.scoreA}–${s.scoreB}` : <span className="sub">—</span>}
@@ -151,32 +200,44 @@ export default async function PlayoffsAdmin({ params }: { params: Promise<{ name
                   <td>
                     {s.aId && s.bId ? (
                       <span className="flex flex-wrap items-center gap-2">
-                        <ActionFlashForm action={reportSeriesAction}>
-                          <input type="hidden" name="season" value={seasonName} />
-                          <input type="hidden" name="seriesId" value={s.id} />
-                          <span className="inline-flex items-center gap-1">
-                            <input type="number" name="scoreA" min={0} defaultValue={s.scoreA ?? undefined} className="w-12 rounded border border-[var(--border)] bg-[var(--surface-2)] px-1 py-0.5 text-center" />
-                            <span className="sub">–</span>
-                            <input type="number" name="scoreB" min={0} defaultValue={s.scoreB ?? undefined} className="w-12 rounded border border-[var(--border)] bg-[var(--surface-2)] px-1 py-0.5 text-center" />
-                            <SubmitButton size="sm" variant="secondary" pendingText="…">{s.decided ? "Update" : "Report"}</SubmitButton>
-                          </span>
-                        </ActionFlashForm>
+                        {s.matchupId ? (
+                          // Live series: games are paired + reported in the matchup console,
+                          // and the series score derives from them (no manual score here).
+                          <Link href={`/admin/matchups/${s.matchupId}`} className="inline-flex items-center gap-1 underline">
+                            {s.decided ? "Edit games" : "Pair & enter games"}
+                          </Link>
+                        ) : (
+                          <ActionFlashForm action={reportSeriesAction}>
+                            <input type="hidden" name="season" value={seasonName} />
+                            <input type="hidden" name="seriesId" value={s.id} />
+                            <span className="inline-flex items-center gap-1">
+                              <input type="number" name="scoreA" min={0} defaultValue={s.scoreA ?? undefined} className="w-12 rounded border border-[var(--border)] bg-[var(--surface-2)] px-1 py-0.5 text-center" />
+                              <span className="sub">–</span>
+                              <input type="number" name="scoreB" min={0} defaultValue={s.scoreB ?? undefined} className="w-12 rounded border border-[var(--border)] bg-[var(--surface-2)] px-1 py-0.5 text-center" />
+                              <SubmitButton size="sm" variant="secondary" pendingText="…">{s.decided ? "Update" : "Report"}</SubmitButton>
+                            </span>
+                          </ActionFlashForm>
+                        )}
                         <CopyLinkButton path={`/overlay/series/${s.id}`} label="Overlay link" />
                       </span>
                     ) : (
                       <span className="sub">awaiting teams</span>
                     )}
-                    <details className="mt-1">
-                      <summary className="sub" style={{ cursor: "pointer" }}>Edit teams</summary>
-                      <ActionFlashForm action={setSeriesTeamsAction} className="mt-1 flex flex-wrap items-center gap-1">
-                        <input type="hidden" name="season" value={seasonName} />
-                        <input type="hidden" name="seriesId" value={s.id} />
-                        <FormSelect name="teamSeasonAId" size="sm" options={teamOpts} defaultValue={s.aId ?? ""} placeholder="-- team A --" />
-                        <span className="sub">vs</span>
-                        <FormSelect name="teamSeasonBId" size="sm" options={teamOpts} defaultValue={s.bId ?? ""} placeholder="-- team B --" />
-                        <SubmitButton size="sm" variant="secondary" pendingText="...">Save</SubmitButton>
-                      </ActionFlashForm>
-                    </details>
+                    {/* Hand-edit teams only for flat/manual series -- live series are played
+                        through their matchup, so editing here would desync them. */}
+                    {!s.matchupId && (
+                      <details className="mt-1">
+                        <summary className="sub" style={{ cursor: "pointer" }}>Edit teams</summary>
+                        <ActionFlashForm action={setSeriesTeamsAction} className="mt-1 flex flex-wrap items-center gap-1">
+                          <input type="hidden" name="season" value={seasonName} />
+                          <input type="hidden" name="seriesId" value={s.id} />
+                          <FormSelect name="teamSeasonAId" size="sm" options={teamOpts} defaultValue={s.aId ?? ""} placeholder="-- team A --" />
+                          <span className="sub">vs</span>
+                          <FormSelect name="teamSeasonBId" size="sm" options={teamOpts} defaultValue={s.bId ?? ""} placeholder="-- team B --" />
+                          <SubmitButton size="sm" variant="secondary" pendingText="...">Save</SubmitButton>
+                        </ActionFlashForm>
+                      </details>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/auth";
 import { can, seriesScope } from "@/lib/permissions";
-import { startPlayoffs, startPlayoffsManual, setSeriesTeams, reportSeries, resetPlayoffs } from "@/lib/services/playoffs";
+import { startPlayoffs, startPlayoffsManual, startConferencePlayoffs, setSeriesTeams, reportSeries, resetPlayoffs } from "@/lib/services/playoffs";
 import type { ActionResult } from "@/lib/action-result";
 
 function rev(season: string) {
@@ -35,6 +35,23 @@ export async function startPlayoffsManualAction(_prev: ActionResult, formData: F
     return { ok: true, message: `Playoffs started: ${r.field}-team field, ${r.round.toLowerCase()}.` };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Could not start playoffs." };
+  }
+}
+
+export async function startConferencePlayoffsAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, message: "Not authorized." };
+  const season = String(formData.get("season") ?? "");
+  // One pick per conference: pick_<conferenceId> = the #1 seed's chosen opponent.
+  const confIds = String(formData.get("confIds") ?? "").split(",").filter(Boolean);
+  const picks = confIds
+    .map((id) => ({ conferenceId: id, chosenOpponentTeamSeasonId: String(formData.get(`pick_${id}`) ?? "") }))
+    .filter((p) => p.chosenOpponentTeamSeasonId);
+  try {
+    const r = await startConferencePlayoffs(season, picks);
+    rev(season);
+    return { ok: true, message: `Conference playoffs started: ${r.conferences} conferences, ${r.series} first-round series.` };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Could not start conference playoffs." };
   }
 }
 

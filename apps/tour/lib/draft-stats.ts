@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 // (season, player) → set W/L, tallied once from every set's wrapped Match winner.
 async function seasonPlayerSetRecords(): Promise<Map<string, { setW: number; setL: number }>> {
   const [sets, matches] = await Promise.all([
-    prisma.tourSet.findMany({ select: { playerAId: true, playerBId: true, matchId: true, seasonId: true } }),
+    prisma.tourSet.findMany({ where: { bracket: "REGULAR" }, select: { playerAId: true, playerBId: true, matchId: true, seasonId: true } }),
     prisma.match.findMany({ select: { id: true, winnerId: true } }),
   ]);
   const winById = new Map(matches.map((m) => [m.id, m.winnerId]));

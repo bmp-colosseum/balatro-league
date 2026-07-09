@@ -38,6 +38,7 @@ interface LoadedMatchup {
     sets: { id: string; playerAId: string; playerBId: string; seedA: number; seedB: number; bestOf: number; status: string }[];
   };
   weekNumber: number;
+  weekKind: string; // WeekKind -- "PLAYOFF" sets get team-stamped + bracket-tagged
   deadlineAt: Date | null; // soft weekly target (may be null)
   seasonId: string;
   seasonName: string;
@@ -102,6 +103,7 @@ async function load(matchupId: string): Promise<LoadedMatchup | null> {
   return {
     matchup,
     weekNumber: matchup.week.number,
+    weekKind: matchup.week.kind,
     deadlineAt: matchup.week.deadlineAt,
     seasonId: season.id,
     seasonName: season.name,
@@ -210,6 +212,10 @@ export async function overridePair(matchupId: string, aPlayerId: string, bPlayer
 async function persistPair(m: LoadedMatchup, aPlayerId: string, bPlayerId: string) {
   const seedA = m.teamA.roster.find((p) => p.playerId === aPlayerId)?.seed ?? 0;
   const seedB = m.teamB.roster.find((p) => p.playerId === bPlayerId)?.seed ?? 0;
+  // Playoff sets carry their team + week + bracket tag directly (not reconstructed from
+  // rosters) so a cross-team sub is attributed to the team they played FOR, and the
+  // public bracket / playoff reads can find them. Regular sets are left as-is.
+  const isPlayoff = m.weekKind === "PLAYOFF";
   await prisma.tourSet.create({
     data: {
       matchupId: m.matchup.id,
@@ -220,6 +226,9 @@ async function persistPair(m: LoadedMatchup, aPlayerId: string, bPlayerId: strin
       seedB,
       bestOf: m.defaultBestOf,
       status: "PROPOSED",
+      ...(isPlayoff
+        ? { teamSeasonAId: m.matchup.teamSeasonAId, teamSeasonBId: m.matchup.teamSeasonBId, bracket: "PLAYOFF", week: m.weekNumber }
+        : {}),
     },
   });
   await notifyLive(`matchup:${m.matchup.id}`); // live refresh (C5)

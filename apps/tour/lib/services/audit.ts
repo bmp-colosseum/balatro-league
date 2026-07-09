@@ -63,7 +63,9 @@ export async function getSeasonAudit(seasonName: string) {
 
   const [weeks, teamSeasons, series] = await Promise.all([
     prisma.week.findMany({
-      where: { seasonId: season.id },
+      // Regular-season weeks only -- playoff series are audited via the dedicated `series` path,
+      // so playoff matchups must not double-count in the matchup totals / pending / per-team tally.
+      where: { seasonId: season.id, kind: { not: "PLAYOFF" } },
       include: {
         matchups: {
           include: { sets: { select: { id: true, status: true, playerAId: true, playerBId: true, seedA: true, seedB: true, matchId: true }, orderBy: { seedA: "asc" } } },

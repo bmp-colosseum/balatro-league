@@ -8,6 +8,7 @@ import { prisma } from "../db";
 import { notifyLive } from "../notify";
 import { enqueueAnnounceResult, enqueueAnnounceMatchup } from "../queue";
 import { subOnlyKeySet } from "./roster-ops";
+import { syncSeriesFromMatchup } from "./playoffs";
 
 export async function reportSet(setId: string, gamesTeamA: number, gamesTeamB: number) {
   const set = await prisma.tourSet.findUnique({ where: { id: setId } });
@@ -167,6 +168,9 @@ export async function rollupMatchup(matchupId: string) {
   // Live refresh (C5): every confirmed/forfeit/unreport path funnels through this rollup.
   await notifyLive(`matchup:${matchupId}`);
   await notifyLive("sets");
+  // If this matchup backs a playoff series, mirror the team result onto the bracket
+  // (and advance the round when it completes). No-op for regular matchups.
+  await syncSeriesFromMatchup(matchupId);
 }
 
 // Per-set results view for the matchup console: each set's score + winner, plus

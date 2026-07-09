@@ -7,7 +7,7 @@ import { prisma } from "../db";
 import { notifyLive } from "../notify";
 import { enqueueRoleReconcile } from "../queue";
 import { getSeasonStrikeCounts, getCareerStrikeCounts, getSeasonStrikeLog, AT_RISK_THRESHOLD } from "./strikes";
-import { PLAYOFF_ROUNDS } from "./playoff-weeks";
+import { playoffRounds, ROUND_LABEL } from "./playoff-weeks";
 
 // Roster mutations change who should hold the season's Discord roles — nudge the bot.
 // Fire-and-forget (enqueueRoleReconcile never throws).
@@ -474,7 +474,7 @@ export async function backfillDraftedMoves(): Promise<{ created: number }> {
 // Admin view: the derived lineup per team for a selected week + the free-agent pool
 // + the full move timeline.
 export async function getRosterOps(seasonName: string, week?: number) {
-  const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true, name: true } });
+  const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true, name: true, playoffTeams: true } });
   if (!season) return null;
 
   const [weekRows, flatWeekRows, playoffSetCount, teamSeasons, moves, approved] = await Promise.all([
@@ -506,7 +506,7 @@ export async function getRosterOps(seasonName: string, week?: number) {
   // Playoff rounds as named pseudo-weeks after the regular season -- "Quarterfinal (W9)" etc.
   // A sub/drop can take effect in a specific round without a numbered schedule week.
   if (playoffWeekRows.length || playoffSetCount > 0) {
-    for (const r of PLAYOFF_ROUNDS) weekOptions.push({ value: maxRegular + r.offset, label: `${r.label} (W${maxRegular + r.offset})` });
+    playoffRounds(season.playoffTeams).forEach((r, i) => weekOptions.push({ value: maxRegular + i + 1, label: `${ROUND_LABEL[r]} (W${maxRegular + i + 1})` }));
   }
 
   const weekNumbers = weekOptions.map((w) => w.value);
