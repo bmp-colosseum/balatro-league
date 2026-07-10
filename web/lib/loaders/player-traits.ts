@@ -121,12 +121,23 @@ type Counts = Record<string, number>;
 function bump(c: Counts, k: string): void {
   c[k] = (c[k] ?? 0) + 1;
 }
-function topEntry(c: Counts): { name: string; count: number } | null {
-  let best: { name: string; count: number } | null = null;
-  for (const [name, count] of Object.entries(c)) {
-    if (!best || count > best.count) best = { name, count };
+// Deterministic "top stake": highest `metric` count, ties broken by the
+// `tiebreak` count, then by stake name (alphabetical). Shared with the traits
+// page (traits-admin.ts) so a player's traits are IDENTICAL on both surfaces.
+// The old profile/page split used insertion order vs SQL row order and disagreed
+// whenever a player's most-won stake was tied (e.g. Gold 2 / Purple 2).
+export function topStakeDeterministic(
+  metric: Record<string, number>,
+  tiebreak: Record<string, number>,
+): string | null {
+  let best: { name: string; m: number; tb: number } | null = null;
+  for (const name of Object.keys(metric).sort()) {
+    const m = metric[name] ?? 0;
+    if (m <= 0) continue;
+    const tb = tiebreak[name] ?? 0;
+    if (!best || m > best.m || (m === best.m && tb > best.tb)) best = { name, m, tb };
   }
-  return best;
+  return best?.name ?? null;
 }
 
 export async function loadPlayerTraits(
@@ -191,28 +202,28 @@ export async function loadPlayerTraits(
   if (games < 10) return []; // 10-game floor — earned over a few seasons, not in one
 
   const traits: PlayerTrait[] = [];
-  const topPlayedStake = topEntry(playedStakes);
-  const topWonStake = topEntry(wonStakes);
+  const topPlayedStake = topStakeDeterministic(playedStakes, wonStakes);
+  const topWonStake = topStakeDeterministic(wonStakes, playedStakes);
 
   // 🤍 White Stake Warrior — White is BOTH their most-played and most-won
   // stake. Will beat you… as long as it's on White (the gentle stake). The
   // self-deprecating mirror of Dr. Spectred, who does it on Gold.
-  if (topPlayedStake?.name === "White" && topWonStake?.name === "White") {
+  if (topPlayedStake === "White" && topWonStake === "White") {
     traits.push(
       makeTrait(
         "white-warrior",
-        `${topPlayedStake.count} games on White · ${topWonStake.count} wins on it`,
+        `${playedStakes["White"] ?? 0} games on White · ${wonStakes["White"] ?? 0} wins on it`,
         overrides,
       ),
     );
   }
   // 🎓 Dr. Spectred — PhD in Gold Stake. Gold is BOTH most-played and most-won.
   // Gold is the hardest stake → rare in practice.
-  if (topPlayedStake?.name === "Gold" && topWonStake?.name === "Gold") {
+  if (topPlayedStake === "Gold" && topWonStake === "Gold") {
     traits.push(
       makeTrait(
         "dr-spectred",
-        `${topPlayedStake.count} games on Gold · ${topWonStake.count} wins on it`,
+        `${playedStakes["Gold"] ?? 0} games on Gold · ${wonStakes["Gold"] ?? 0} wins on it`,
         overrides,
       ),
     );
