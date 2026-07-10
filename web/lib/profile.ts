@@ -24,6 +24,17 @@
 import { prisma } from "./prisma";
 import { formatSeasonLabel } from "./format-season";
 
+// One combo in a game's pick/ban pool, in pool order. `picked` = the combo the
+// game was played on; otherwise `banOrdinal` (1-based) is the order it was
+// banned and `bannedByMe` says which side did it.
+export interface GameBan {
+  deck: string;
+  stake: string;
+  picked: boolean;
+  banOrdinal: number | null;
+  bannedByMe: boolean | null; // true = you, false = opponent, null = survived (the pick)
+}
+
 export interface GamePlayed {
   // 1, 2, or 3 — index into the match's games. Shootouts only have
   // game 1.
@@ -37,6 +48,8 @@ export interface GamePlayed {
   iWon: boolean | null;
   // Winner's lives remaining this game, if captured (attrition tiebreaker).
   lives: number | null;
+  // The full pick/ban pool for this game (empty for manual/lives-only reports).
+  pool: GameBan[];
 }
 
 export interface MatchEntry {
@@ -269,7 +282,13 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
       playerA: { select: { id: true, displayName: true } },
       playerB: { select: { id: true, displayName: true } },
       games: {
-        select: { num: true, deck: true, stake: true, winnerId: true, winnerLives: true, dcByPlayerId: true },
+        select: {
+          num: true, deck: true, stake: true, winnerId: true, winnerLives: true, dcByPlayerId: true,
+          pool: {
+            select: { poolIdx: true, deck: true, stake: true, picked: true, banOrdinal: true, bannedById: true },
+            orderBy: { poolIdx: "asc" },
+          },
+        },
         orderBy: { num: "asc" },
       },
     },
@@ -306,7 +325,14 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
     for (const g of match.games) {
       const iWon = g.winnerId == null ? null : g.winnerId === playerId;
       const num = (g.num === 3 ? 3 : g.num === 2 ? 2 : 1) as 1 | 2 | 3;
-      result.push({ num, deck: g.deck, stake: g.stake, iWon, lives: g.winnerLives });
+      const pool: GameBan[] = g.pool.map((pd) => ({
+        deck: pd.deck,
+        stake: pd.stake,
+        picked: pd.picked,
+        banOrdinal: pd.banOrdinal,
+        bannedByMe: pd.bannedById == null ? null : pd.bannedById === playerId,
+      }));
+      result.push({ num, deck: g.deck, stake: g.stake, iWon, lives: g.winnerLives, pool });
       if (iWon === null) continue;
       if (g.dcByPlayerId) continue;
       // Lives-only manual reports have no deck/stake — skip the per-combo

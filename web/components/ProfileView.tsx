@@ -6,7 +6,7 @@ import { loadProfileExtras } from "@/lib/loaders/profile-extras";
 import { loadPlayerTraits } from "@/lib/loaders/player-traits";
 import { deckImage, stakeImage } from "@/lib/balatro-slugs";
 import { getShowBmpMmr } from "@/lib/preferences";
-import { loadPlayerHistory, loadPlayerBanStats } from "@/lib/profile";
+import { loadPlayerHistory, loadPlayerBanStats, type GamePlayed } from "@/lib/profile";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { Callout } from "@/components/Callout";
@@ -117,6 +117,50 @@ function favBlock(title: string, rows: FavoriteEntry[], kind: "deck" | "stake" |
 // relationship: your own profile (settings + report form + next-season
 // opt-ins), an admin (record / DQ tools), or anyone else (read-only + the
 // "vs you" head-to-head).
+// Expandable pick/ban history for a match: per game, the bans in the order they
+// happened (who banned what) then the combo that got played. Native <details> so
+// it needs no client JS, and the pool is already loaded (no extra request).
+function picksBansDetails(games: GamePlayed[], opponentName: string) {
+  const withPool = games.filter((g) => g.pool.length > 0);
+  if (withPool.length === 0) return null;
+  return (
+    <details style={{ marginTop: 3 }}>
+      <summary style={{ cursor: "pointer", fontSize: 10, color: "var(--accent-2)" }}>picks &amp; bans</summary>
+      <div style={{ marginTop: 4, display: "grid", gap: 8 }}>
+        {withPool.map((g) => {
+          const bans = g.pool
+            .filter((p) => p.banOrdinal != null)
+            .sort((a, b) => (a.banOrdinal ?? 0) - (b.banOrdinal ?? 0));
+          const picked = g.pool.find((p) => p.picked);
+          return (
+            <div key={g.num} style={{ fontSize: 11 }}>
+              <div style={{ opacity: 0.55, marginBottom: 2 }}>Game {g.num} - pool of {g.pool.length}</div>
+              {bans.map((b, i) => (
+                <div key={i} style={{ color: "var(--danger)", opacity: 0.85 }}>
+                  <span style={{ opacity: 0.6 }}>{b.banOrdinal}.</span> {b.deck}/{b.stake}
+                  <span className="muted" style={{ marginLeft: 4 }}>
+                    banned by {b.bannedByMe ? "you" : opponentName}
+                  </span>
+                </div>
+              ))}
+              {picked && (
+                <div style={{ color: "var(--success)", marginTop: 2 }}>
+                  Played: {picked.deck}/{picked.stake}
+                  {g.lives != null && (
+                    <span className="muted" style={{ marginLeft: 4 }}>
+                      (winner had {g.lives} {g.lives === 1 ? "life" : "lives"})
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </details>
+  );
+}
+
 export async function ProfileView({
   playerId,
   disputeOk,
@@ -841,6 +885,7 @@ export async function ProfileView({
                                   ))}
                                 </div>
                               )}
+                              {picksBansDetails(m.games, m.opponentDisplayName)}
                             </td>
                             <td data-label="Result"><span className="pill" style={{ background: outcomePill.bg, color: outcomePill.fg, fontSize: isDisputed ? 10 : undefined }}>{outcomePill.label}</span></td>
                             {isOwnProfile && h.isActive && isShootout && (
