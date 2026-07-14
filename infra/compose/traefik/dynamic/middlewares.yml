@@ -1,0 +1,32 @@
+# File-provider dynamic config: reusable middlewares.
+#
+# Attach by name with the @file suffix, e.g. a router's
+#   traefik.http.routers.x.middlewares=security-headers@file
+# (see the compose labels on league-web / tour-web).
+
+http:
+  middlewares:
+    # Sensible security headers for the public sites.
+    security-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: strict-origin-when-cross-origin
+        frameDeny: true
+
+    # Apex -> www redirect for the league (canonical host is www). Attach to a
+    # router that matches only the apex if you want to force the redirect.
+    apex-to-www:
+      redirectRegex:
+        regex: "^https://balatroleague\\.com/(.*)"
+        replacement: "https://www.balatroleague.com/${1}"
+        permanent: true
+
+    # (Future) SSO for OPS dashboards only - the apps authenticate users with
+    # Discord directly (NextAuth), so nothing user-facing is gated here. If you
+    # later add Grafana/pgAdmin/etc. and want one SSO login, stand up Authentik,
+    # then add a forwardAuth middleware pointing at its outpost and attach it to
+    # those ops routers. Not needed while everything is Discord-native.

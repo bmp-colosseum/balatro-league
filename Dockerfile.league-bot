@@ -1,0 +1,29 @@
+# syntax=docker/dockerfile:1
+#
+# League Discord bot - the ROOT workspace package (src/ -> dist/). Build context
+# must be the repo root. From the repo root:
+#   docker build -f Dockerfile.league-bot -t balatro-league-bot .
+#
+# The bot owns the league DB migrations (prisma/migrations) and applies them on
+# boot via `prisma migrate deploy` (npm start).
+
+FROM node:24-bookworm-slim AS base
+WORKDIR /app
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---- build: workspace install at root -> tsc ----
+FROM base AS build
+COPY . .
+RUN npm ci
+RUN npm run build
+
+# ---- runtime ----
+FROM base AS runner
+ENV NODE_ENV=production
+COPY --from=build /app /app
+WORKDIR /app
+# Healthcheck server binds $PORT (default 8080); the bot is a Discord gateway client.
+EXPOSE 8080
+# npm start = `prisma migrate deploy && node dist/index.js`
+CMD ["npm", "start"]

@@ -1,0 +1,95 @@
+name: deploy
+
+# Self-hosted deploy to the Netcup box (runner label: balatro). Builds the images
+# on the box, pushes to GHCR, then rolls the compose stack from the STABLE
+# /srv/balatro/repo path so Traefik/Postgres bind-mounts point at persistent host
+# files (not the ephemeral Actions checkout). Secrets stay box-local at
+# /srv/balatro/secrets.env. A manual run defaults to build+push ONLY (deploy=false)
+# so you can prove the pipeline without recreating live containers.
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Roll the live compose stack (false = build + push only)"
+        type: boolean
+        default: false
+  push:
+    branches: [master]
+    paths:
+      - "src/**"
+      - "web/**"
+      - "apps/**"
+      - "packages/**"
+      - "prisma/**"
+      - "Dockerfile.league-bot"
+      - "web/Dockerfile"
+      - "apps/tour/Dockerfile"
+      - "apps/tour-bot/Dockerfile"
+      - "infra/compose/**"
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, balatro]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve names
+        id: v
+        run: |
+          echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          echo "tag=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        run: echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+
+      - name: Build + push images
+        env:
+          OWNER: ${{ steps.v.outputs.owner }}
+          TAG: ${{ steps.v.outputs.tag }}
+        run: |
+          set -euo pipefail
+          declare -A DF=(
+            [balatro-league-bot]=Dockerfile.league-bot
+            [balatro-league-web]=web/Dockerfile
+            [balatro-tour-web]=apps/tour/Dockerfile
+            [balatro-tour-bot]=apps/tour-bot/Dockerfile
+          )
+          for name in "${!DF[@]}"; do
+            img="ghcr.io/$OWNER/$name"
+            docker build -f "${DF[$name]}" -t "$img:$TAG" -t "$img:latest" .
+            docker push "$img:$TAG"
+            docker push "$img:latest"
+          done
+
+      - name: Deploy (roll live stack)
+        if: ${{ github.event_name == 'push' || inputs.deploy }}
+        env:
+          OWNER: ${{ steps.v.outputs.owner }}
+          TAG: ${{ steps.v.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Refresh the stable compose config (bind-mount sources live here).
+          mkdir -p /srv/balatro/repo
+          cp -a infra /srv/balatro/repo/
+          cat > /srv/balatro/versions.env <<EOF
+          GHCR_OWNER=$OWNER
+          LEAGUE_BOT_TAG=$TAG
+          LEAGUE_WEB_TAG=$TAG
+          TOUR_WEB_TAG=$TAG
+          TOUR_BOT_TAG=$TAG
+          TRAEFIK_TAG=v3.3
+          POSTGRES_TAG=18
+          EOF
+          cd /srv/balatro/repo/infra/compose
+          E="--env-file /srv/balatro/versions.env --env-file /srv/balatro/secrets.env"
+          # Roll only the app containers; Postgres/Traefik are stable infra.
+          docker compose -p balatro $E pull league-bot league-web tour-web
+          docker compose -p balatro $E up -d --remove-orphans league-bot league-web tour-web
+          docker image prune -f
