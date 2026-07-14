@@ -1,7 +1,9 @@
 # STAGE 2 - secret-dependent services. NOT part of the first install.
 #
+# OPTIONAL - currently NOT enabled: the GitHub runner runs as a Docker container
+# instead (see infra/README.md). This is the declarative NixOS alternative.
 # Enable AFTER the sops age key (/var/lib/sops-nix/key.txt) and the encrypted
-# secrets.yaml (netbird-setup-key + github-runner-token) are on the box:
+# secrets.yaml (github-runner-token) are on the box:
 #   1. add `./services.nix` and `sops-nix.nixosModules.sops` to flake.nix modules
 #   2. nixos-rebuild switch --flake .#balatro  (from the box or a nix host)
 { config, pkgs, lib, ... }:
@@ -10,18 +12,7 @@
   # ---- secrets (sops-nix) ---------------------------------------------------
   sops.defaultSopsFile = ./secrets.yaml;
   sops.age.keyFile = "/var/lib/sops-nix/key.txt";
-  sops.secrets."netbird-setup-key" = { };
   sops.secrets."github-runner-token" = { };
-
-  # ---- NetBird agent (private mesh: SSH + Postgres + dashboards) ------------
-  services.netbird.clients.wt0 = {
-    login.enable = true;
-    login.setupKeyFile = config.sops.secrets."netbird-setup-key".path;
-    port = 51821;
-    ui.enable = false;
-    openFirewall = true;
-    openInternalFirewall = true;
-  };
 
   # ---- GitHub Actions self-hosted runner ------------------------------------
   # DynamicUser + SupplementaryGroups grants the docker group so it can build.

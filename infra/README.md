@@ -1,133 +1,120 @@
 # Balatro League - self-hosted infra (Netcup)
 
-Full migration off Railway to one Netcup box (EPYC 9645 / 32 GB ECC / 12 cores
-/ 1 TB NVMe). Two layers:
+The Balatro League + Pizza Power Team Tour, migrated off Railway to one Netcup
+box (EPYC 9645 / 32 GB ECC / 12 cores / 1 TB NVMe). Two layers:
 
-- **NixOS** = the thin, declarative base OS (`nixos/`) - firewall, Docker,
-  NetBird, sops secrets, the CI runner. Deployed with deploy-rs, atomic rollback.
-- **Docker Compose** = every service (`compose/`) - Traefik, Postgres, and the
-  4 app containers. Deployed by GitHub Actions on the self-hosted runner.
+- **NixOS** = the thin, declarative base OS (`nixos/`) - firewall, Docker daemon,
+  key-only SSH, users. Installed with `nixos-anywhere`; the disk layout is
+  declarative via disko.
+- **Docker Compose** = every service (`compose/`) - Traefik, Postgres, the league
+  bot + web, the tour web, an isolated tour DEV stack, and the CI runner. This is
+  where all the moving parts live.
 
-User login is Discord-native (NextAuth in each app); there is no separate SSO
-layer. See "Auth model" below.
+User login is Discord-native (NextAuth in each app); there is no SSO layer.
+
+## Architecture
 
 ```
-                internet
-                   |  :80/:443 only
-              [ Traefik ]  <-- Let's Encrypt TLS
-                /     \
-        league-web   tour-web        (network: proxy, has egress)
-                \     /
-          league-bot  tour-bot       (proxy for Discord egress)
-                 \   /
-       [ Postgres ]  (network: data, internal:true - NO internet, NO public port)
-                   ^
-                   |  127.0.0.1:5432 only -> reach via SSH tunnel over NetBird
+internet -- :80/:443 --> [ Traefik ]   (Let's Encrypt via TLS-ALPN-01)
+                            | routes by Host (FILE provider, no docker socket)
+   www / balatroleague.com     -> league-web
+   tour.balatroleague.com       -> tour-web
+   tour-dev.balatroleague.com   -> tour-web-dev   (separate dev stack)
 
-   Admin plane (SSH, Postgres, Traefik dashboard): NetBird mesh only.
+app containers on network `proxy` (has egress for the Discord API):
+   league-bot, league-web, tour-web      (+ dev: tour-web-dev)
+
+[ Postgres 18 ] on network `data` (internal: true - NO internet, NO host port)
+   apps reach it by DNS `postgres:5432`; admin via `docker exec`.
+   the dev stack has its OWN postgres-dev on `data-dev`.
+
+Admin plane: SSH (port 22, key-only). No mesh VPN - a small solo admin surface
+didn't warrant NetBird/WireGuard. Add plain WireGuard later to take SSH off the
+public internet if you want.
 ```
 
-## DNS (point balatroleague.com at the box)
+## Access
+- **SSH:** key-only on port 22 (`deploy@<box>`), passwords off + fail2ban.
+- **Postgres** (no host port - it's on the internal network):
+  `docker exec -it balatro-postgres-1 psql -U postgres -d league`
+- **Traefik dashboard:** published on `127.0.0.1:8080` -
+  `ssh -L 8080:127.0.0.1:8080 deploy@<box>` then open `http://127.0.0.1:8080`.
 
-| Record | Type | Value |
-|--------|------|-------|
-| `balatroleague.com` | A | box public IP |
-| `www.balatroleague.com` | A | box public IP |
-| `tour.balatroleague.com` | A | box public IP |
+## DNS (Cloudflare, grey / DNS-only)
+Every record is an `A` -> the box IP, **un-proxied (grey cloud)** - orange/proxied
+breaks TLS-ALPN cert issuance.
 
-Traefik gets certs via TLS-ALPN-01 on :443, so no extra DNS/API config.
+| Record | Value |
+|--------|-------|
+| `balatroleague.com`, `www.balatroleague.com` | box IP (grey) |
+| `tour.balatroleague.com` | box IP (grey) |
+| `tour-dev.balatroleague.com` | box IP (grey) |
 
-## One-time bring-up
+## CI/CD
+- **Runner:** a self-hosted GitHub Actions runner (Docker container,
+  `myoung34/github-runner`, label `balatro`) with the docker socket + `/srv/balatro`
+  mounted so it can build + deploy. Registered with a `gh api` registration token.
+- **Deploy** (`.github/workflows/deploy.yml`): build the 4 images on the runner ->
+  push to GHCR -> refresh `/srv/balatro/repo/infra` -> roll the app containers via
+  `docker compose` from that STABLE path (so bind-mounts persist). Image tag == SHA.
+  - auto on push to `master` (paths: app code / Dockerfiles / `infra/compose`)
+  - manual full deploy: `gh workflow run deploy.yml -f deploy=true`
+  - safe build-only test: `gh workflow run deploy.yml -f deploy=false`
+- **PR CI** (`ci.yml`, pre-existing): runs on GitHub-HOSTED runners (never the box).
+- **Secrets** stay box-local at `/srv/balatro/secrets.env` (+ `secrets.dev.env`),
+  never in git. `compose/.env.example` is the template.
 
-1. **Base install.** Install NixOS on the Netcup VPS (minimal). Create the
-   deploy user's SSH key locally and put the public half in
-   `nixos/configuration.nix` (`users.users.deploy`).
-2. **Hardware config.** On the box: `nixos-generate-config --show-hardware-config
-   > hardware-configuration.nix`; commit the real output over the placeholder.
-   Fix the bootloader block in `configuration.nix` to match (UEFI vs BIOS).
-3. **Secrets (sops).** Generate an age key (`age-keygen`), put your public key +
-   the box key in `nixos/.sops.yaml`, then `cp secrets.yaml.example secrets.yaml
-   && sops secrets.yaml` and fill the NetBird setup key + runner token. Put the
-   age private key on the box at `/var/lib/sops-nix/key.txt`.
-4. **First deploy.** Temporarily allow SSH (firewall bootstrap note in
-   `configuration.nix`, or the Netcup console), then from your laptop:
-   `nix run github:serokell/deploy-rs -- .#balatro` (or `nixos-rebuild` on the
-   box). This brings up Docker, NetBird, and the runner.
-5. **Join NetBird**, confirm you can SSH over the mesh, then remove port 22 from
-   the public firewall and re-deploy. SSH is now mesh-only.
-6. **Compose secrets.** `cp compose/.env.example /srv/balatro/secrets.env` on the
-   box and fill every value (or sops-encrypt it and decrypt on deploy).
-7. **Restore data** (see below) into Postgres before first app boot.
-8. **Runner + first app deploy.** Confirm the runner shows up in GitHub
-   (Settings -> Actions -> Runners), then merge to `main` (or run the `deploy`
-   workflow) - it builds the 4 images, pushes to GHCR, and `compose up`.
+## Data migration (Railway -> box)
+Two-step, because Postgres is on an internal network (no host port to dump into):
+```bash
+# dump from Railway via a host-network container (has internet):
+docker run --rm --network host -e SRC="$RAILWAY_URL" -v /srv/balatro/dumps:/dumps \
+  postgres:18 bash -c 'pg_dump "$SRC" -Fc -f /dumps/db.dump'
+# restore via a data-network container (reaches postgres by DNS):
+docker run --rm --network data -v /srv/balatro/dumps:/dumps postgres:18 \
+  bash -c 'pg_restore -d "postgres://ROLE:PW@postgres:5432/DB" --no-owner --no-acl /dumps/db.dump'
+```
+The league bot runs `prisma migrate deploy` and tour runs `prisma db push` on boot
+- both idempotent against a restored schema.
+
+## Gotchas (learned the hard way; don't re-learn them)
+- **Postgres 18 image** mounts the volume at `/var/lib/postgresql`, NOT
+  `/var/lib/postgresql/data` (the old path crash-loops on 18).
+- **Internal networks can't publish host ports** - no loopback `5432`; use
+  `docker exec` or the two-step dump/restore above.
+- **Traefik routes via the FILE provider** (`traefik/dynamic/routers.yml`), NOT
+  docker labels - Docker 29's daemon rejects Traefik's default old API version.
+  (Also lets Traefik run with no docker.sock mount.)
+- **ACME + Cloudflare:** records must be grey/DNS-only, and point DNS FIRST + let
+  it propagate before adding the Traefik router, or the failed-auth rate limit
+  (5/hr/identifier) locks the domain. A `404 Certificate not found` on cert fetch
+  is fixed by `docker restart balatro-traefik-1` (fresh order, keeps existing certs).
 
 ## Auth model
-
-There is deliberately NO SSO layer. Each app authenticates users with Discord
-(NextAuth v5) and authorizes off live Discord state - guild membership, roles,
-and player identity (`lib/permissions.ts`, `lib/admin.ts`, capabilities, captain
-team-scoping). Discord is the identity provider and the source of roles, which
-is correct for a Discord community.
-
-Operator tools (Traefik dashboard, Postgres) are not user-facing and are gated
-by NetBird + loopback binding, not a login page. If you later add ops dashboards
-(Grafana, pgAdmin, etc.) and want one SSO + MFA gate for THOSE, add Authentik
-then and wire the forwardAuth breadcrumb left in `traefik/dynamic/middlewares.yml`
-- it does not belong in front of the apps.
-
-## Migrating the databases off Railway
-
-Dump each Railway DB and restore into the box's `league` / `tour` databases
-(do this after step 6, before step 8):
-
-```bash
-# from anywhere with the Railway connection strings:
-pg_dump "$RAILWAY_LEAGUE_URL" -Fc -f league.dump
-pg_dump "$RAILWAY_TOUR_URL"   -Fc -f tour.dump
-
-# copy to the box, then (over the SSH tunnel, see below):
-pg_restore -d "postgres://league:PW@127.0.0.1:5432/league" --no-owner league.dump
-pg_restore -d "postgres://tour:PW@127.0.0.1:5432/tour"     --no-owner tour.dump
-```
-
-The league bot runs `prisma migrate deploy` and tour runs `prisma db push` on
-boot - both idempotent, so they reconcile the restored schema cleanly.
-
-## Day-2
-
-- **Deploy** = merge to `main`. CI (`ci.yml`, GitHub-hosted) gates the PR; the
-  `deploy` workflow (self-hosted runner) builds + ships. Image tag == git SHA.
-- **Rollback** = run the `deploy` workflow via `workflow_dispatch` with a prior
-  `ref`, or `compose up` with an older tag in `versions.env`.
-- **Reach Postgres / Traefik dashboard** (mesh only): SSH over NetBird with a
-  tunnel:
-  ```bash
-  ssh -L 5432:127.0.0.1:5432 -L 8080:127.0.0.1:8080 deploy@balatro
-  # then psql postgres://league:PW@127.0.0.1:5432/league
-  # and open http://127.0.0.1:8080 for the Traefik dashboard
-  ```
-
-## Verify before first prod deploy (living-software bits)
-
-These change over time - confirm against current docs, they're marked in-file:
-
-- **NixOS channel** in `flake.nix` (`nixos-25.05`) -> set to current stable.
-- **Traefik tag** `v3.3` and **Postgres tag** `17` in `deploy.yml` /
-  `versions.env` -> pin to current.
-- **`services.netbird.clients.wt0`** + **`services.github-runners`** option
-  shapes - confirm against your pinned nixpkgs; verify the runner's DynamicUser
-  actually gets the `docker` group (`SupplementaryGroups`).
+No SSO. Each app authenticates users with Discord (NextAuth v5) and authorizes off
+live Discord state - guild membership, roles, player identity. Discord is the
+identity provider. If you later add ops dashboards (Grafana/pgAdmin) and want one
+SSO gate for THOSE, wire the forwardAuth breadcrumb in
+`traefik/dynamic/middlewares.yml` to an Authentik instance - it does not belong in
+front of the apps.
 
 ## Security posture
-
-- Public interface: **only 80/443 + WireGuard**. SSH is mesh-only.
-- Postgres: `internal:true` network (no internet), host port bound to
-  `127.0.0.1` (SSH-tunnel only).
+- Public interface: **only 80/443 + SSH (22, key-only)**. fail2ban on.
+- Postgres: internal network (no internet, no host port).
 - Apps: `cap_drop: ALL` + `no-new-privileges`.
-- PR CI runs on GitHub-hosted runners (never the box). Turn on repo Settings ->
-  Actions -> "Require approval for all outside collaborators" so a fork PR can't
-  run without your click. Only you merge `main` -> only trusted code deploys.
-- Harden later: swap Traefik's raw docker.sock mount for a socket-proxy; give
-  tour a read-only role on the league DB; move Postgres to its own no-public-IP
-  box on the mesh if it's ever worth it (one-service move, nothing else changes).
+- Traefik: file-provider routing, no docker socket.
+- CI: PR builds on GitHub-hosted runners; only `master` (which only you merge)
+  deploys via the box runner. Turn on repo Settings -> Actions -> "require approval
+  for outside collaborators" for the fork-PR gate.
+- Harden later: give tour a read-only role on the league DB; add plain WireGuard to
+  take SSH off the public internet; split Postgres onto its own box if it's ever
+  worth it.
+
+## NixOS notes (`nixos/`)
+Installed via `nixos-anywhere` from a nix host. `configuration.nix` is the active
+base (networking is STATIC - Netcup serves no DHCP; `eth0` is pinned).
+`services.nix` (sops + a NixOS `services.github-runners` + auto-upgrade) is an
+OPTIONAL layer, currently NOT enabled - the runner runs as a Docker container
+instead. If you enable it, confirm option shapes against the pinned nixpkgs
+(`nixos-26.05`).
+```

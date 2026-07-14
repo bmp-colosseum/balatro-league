@@ -37,10 +37,10 @@
   networking.nftables.enable = true;
   networking.firewall = {
     enable = true;
-    # 22 is OPEN during bootstrap - remove it once NetBird is confirmed up, so
-    # SSH becomes mesh-only. 80/443 = Traefik, 51821 = NetBird WireGuard.
+    # SSH (22) is public + key-only (see openssh below). 80/443 = Traefik.
+    # No mesh VPN; add plain WireGuard + its UDP port here to take SSH off the
+    # public internet later.
     allowedTCPPorts = [ 22 80 443 ];
-    allowedUDPPorts = [ 51821 ];
   };
 
   # ---- ssh: key-only ---------------------------------------------------------
