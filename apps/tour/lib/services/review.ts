@@ -329,3 +329,15 @@ export async function reviewReassignPlayer(setId: string, side: "our" | "their",
   }
   return { ok: true, changed: true };
 }
+
+// Correct the recorded seed on one side of a set (TourSet.seedA/seedB). This is the
+// raw stored seed the pairing shows and the +/-2 off-seed flag reads -- editing it
+// clears a bad flag / fixes an imported seed directly. `slot` is the set's A/B side
+// (the page maps our/their -> A/B via each pair's ourSlot).
+export async function reviewSetSeed(setId: string, slot: "A" | "B", seed: number) {
+  if (!Number.isInteger(seed) || seed < 1) throw new Error("Seed must be a whole number >= 1.");
+  const set = await prisma.tourSet.findUnique({ where: { id: setId }, select: { id: true } });
+  if (!set) throw new Error("No such set.");
+  await prisma.tourSet.update({ where: { id: setId }, data: slot === "A" ? { seedA: seed } : { seedB: seed } });
+  return { ok: true };
+}

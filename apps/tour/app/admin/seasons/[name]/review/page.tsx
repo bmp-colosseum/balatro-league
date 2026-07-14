@@ -15,7 +15,7 @@ import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { SeedOrSub } from "@/components/SeedOrSub";
 import { fieldInputSm } from "@/components/admin/Field";
-import { reportSetAction, clearSetAction, reassignAction } from "./actions";
+import { reportSetAction, clearSetAction, reassignAction, setSeedAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -197,18 +197,20 @@ function PairRow({
   teamSeasonId: string;
   teamPlayers: { id: string; name: string }[];
 }) {
+  const theirSlot = p.ourSlot === "A" ? "B" : "A";
   return (
     <div
       className="flex flex-wrap items-center gap-x-3 gap-y-1"
       style={{ padding: "6px 0", borderBottom: "1px solid var(--border)" }}
     >
       {/* our player */}
-      <div style={{ minWidth: 190 }}>
-        <span className="sub" style={{ display: "inline-block", width: 34 }}>
-          <SeedOrSub seed={p.ourSeed} isSub={p.ourIsSub} />
-        </span>
-        <b>{p.ourName}</b>
-        {p.reassignedFrom && <span className="sub"> (was {p.reassignedFrom})</span>}
+      <div style={{ minWidth: 230 }}>
+        <div className="flex items-center gap-1">
+          <SeedEdit season={season} setId={p.setId} slot={p.ourSlot} seed={p.ourSeed} />
+          <b>{p.ourName}</b>
+          {p.ourIsSub && <span className="sub">(sub)</span>}
+        </div>
+        {p.reassignedFrom && <span className="sub">was {p.reassignedFrom}</span>}
         <details>
           <summary className="sub" style={{ cursor: "pointer", fontSize: 12 }}>fix player</summary>
           <ActionFlashForm action={reassignAction} className="flex flex-wrap items-center gap-1" style={{ marginTop: 4 }}>
@@ -250,12 +252,23 @@ function PairRow({
       </span>
 
       {/* their player */}
-      <div style={{ marginLeft: "auto", textAlign: "right", minWidth: 150 }}>
-        <b>{p.theirName}</b>{" "}
-        <span className="sub">
-          <SeedOrSub seed={p.theirSeed} />
-        </span>
+      <div className="flex items-center gap-1" style={{ marginLeft: "auto" }}>
+        <b>{p.theirName}</b>
+        <SeedEdit season={season} setId={p.setId} slot={theirSlot} seed={p.theirSeed} />
       </div>
     </div>
+  );
+}
+
+// Inline seed corrector for one side of a set -- writes TourSet.seedA/seedB directly.
+function SeedEdit({ season, setId, slot, seed }: { season: string; setId: string; slot: "A" | "B"; seed: number }) {
+  return (
+    <ActionFlashForm action={setSeedAction} className="inline-flex items-center gap-1">
+      <input type="hidden" name="season" value={season} />
+      <input type="hidden" name="setId" value={setId} />
+      <input type="hidden" name="slot" value={slot} />
+      <input type="number" name="seed" min={1} defaultValue={seed} className={`${fieldInputSm} w-11 text-center`} title="seed -- edit and save" />
+      <SubmitButton size="sm" variant="secondary" pendingText="...">seed</SubmitButton>
+    </ActionFlashForm>
   );
 }

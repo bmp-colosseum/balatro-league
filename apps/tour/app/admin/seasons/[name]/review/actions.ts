@@ -7,7 +7,7 @@
 import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/auth";
 import { reportSet, unreportSet, dqSet } from "@/lib/services/report";
-import { reviewReassignPlayer } from "@/lib/services/review";
+import { reviewReassignPlayer, reviewSetSeed } from "@/lib/services/review";
 import type { ActionResult } from "@/lib/action-result";
 
 function rev(season: string) {
@@ -55,6 +55,21 @@ export async function dqSetAction(_prev: ActionResult, formData: FormData): Prom
     return { ok: true, message: "Marked 0-0 (nobody played)." };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Failed." };
+  }
+}
+
+export async function setSeedAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, message: "Admins only." };
+  const season = String(formData.get("season") ?? "");
+  const setId = String(formData.get("setId") ?? "");
+  const slot = formData.get("slot") === "B" ? "B" : "A";
+  const seed = Number(formData.get("seed"));
+  try {
+    await reviewSetSeed(setId, slot, seed);
+    rev(season);
+    return { ok: true, message: "Seed updated." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Seed update failed." };
   }
 }
 
