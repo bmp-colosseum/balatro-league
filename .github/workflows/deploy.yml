@@ -94,6 +94,6 @@ jobs:
           docker compose -p balatro $E up -d --remove-orphans league-bot league-web tour-web
           # Dev stack: separate project + env file; tour-web-dev reuses the tour-web image.
           EDEV="--env-file /srv/balatro/versions.env --env-file /srv/balatro/secrets.dev.env"
-          docker compose -p balatro-dev $EDEV -f docker-compose.dev.yml pull tour-web-dev
-          docker compose -p balatro-dev $EDEV -f docker-compose.dev.yml up -d tour-web-dev
+          docker compose -p balatro-dev $EDEV -f docker-compose.dev.yml pull tour-web-dev league-web-dev
+          docker compose -p balatro-dev $EDEV -f docker-compose.dev.yml up -d tour-web-dev league-web-dev
           docker image prune -f
