@@ -11,6 +11,11 @@ import { reviewReassignPlayer, reviewSetSeed, reviewRemovePair, reviewAddPair } 
 import type { ActionResult } from "@/lib/action-result";
 
 function rev(season: string) {
+  // Revalidate by ROUTE PATTERN (not just the concrete path): if the season name has
+  // special chars, encodeURIComponent may not match the URL segment exactly and the
+  // concrete revalidate silently misses -- so the derived gap/flags stay stale after a
+  // save even though the write landed. The pattern form always matches the current page.
+  revalidatePath("/admin/seasons/[name]/review", "page");
   revalidatePath(`/admin/seasons/${encodeURIComponent(season)}/review`);
 }
 
