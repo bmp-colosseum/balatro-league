@@ -1,0 +1,41 @@
+name: deploy-antelytics
+
+# Rolls the Antelytics app stack on the Netcup box. Antelytics is its OWN compose
+# project (-p antelytics, source repo ChronoFinale/Antelytics). This workflow just
+# pulls the freshly published GHCR image and restarts it — it does NOT touch the
+# league/tour stacks.
+#
+# Triggered by a repository_dispatch (event `antelytics-deploy`) fired from the
+# Antelytics publish-image workflow after it pushes :latest. Runs on the box's
+# self-hosted runner (label `balatro`).
+#
+# Prereqs on the box (one-time, see Antelytics infra/README.md):
+#   - /srv/antelytics/secrets.env exists (chmod 600)
+#   - the `antelytics` Postgres role/db exists on the shared Postgres
+#   - ghcr.io/<owner>/antelytics-web is a PUBLIC package (so the pull needs no auth)
+on:
+  repository_dispatch:
+    types: [antelytics-deploy]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-antelytics
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, balatro]
+    steps:
+      - name: Refresh compose + roll antelytics
+        run: |
+          set -euo pipefail
+          install -d /srv/antelytics
+          # Pull the current compose from the public Antelytics repo (dev branch)
+          # so a compose change ships without a manual copy.
+          curl -fsSL https://raw.githubusercontent.com/ChronoFinale/Antelytics/dev/infra/docker-compose.prod.yml \
+            -o /srv/antelytics/docker-compose.prod.yml
+          cd /srv/antelytics
+          E="--env-file /srv/antelytics/secrets.env"
+          docker compose -p antelytics $E -f docker-compose.prod.yml pull antelytics-web
+          docker compose -p antelytics $E -f docker-compose.prod.yml up -d antelytics-web
+          docker image prune -f

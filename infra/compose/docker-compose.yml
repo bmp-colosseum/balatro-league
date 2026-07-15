@@ -69,6 +69,10 @@ services:
       # Consumed by initdb/01-init.sh to create per-app roles + databases.
       LEAGUE_DB_PASSWORD: ${LEAGUE_DB_PASSWORD}
       TOUR_DB_PASSWORD: ${TOUR_DB_PASSWORD}
+      # Antelytics viewer role/db (separate compose project, shares this Postgres).
+      # Only used by initdb on a FRESH box; on the live box the role is created
+      # once via docker exec (see Antelytics infra/README.md).
+      ANTELYTICS_DB_PASSWORD: ${ANTELYTICS_DB_PASSWORD:-}
     volumes:
       # Postgres 18 image places data in a version subdir; mount the parent
       # (/var/lib/postgresql), NOT /var/lib/postgresql/data (that crash-loops on 18).

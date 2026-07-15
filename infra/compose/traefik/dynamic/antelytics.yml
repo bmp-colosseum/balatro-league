@@ -1,0 +1,27 @@
+# Antelytics routing — drop-in for the shared Traefik file provider.
+#
+# Antelytics runs as its OWN compose project (`-p antelytics`, source repo:
+# ChronoFinale/Antelytics, infra/docker-compose.prod.yml) that joins the shared
+# `proxy` network this box already creates. Traefik reaches its container by the
+# compose service-name alias `antelytics-web` on `proxy` (cross-project DNS works
+# — aliases are per-network, not per-project).
+#
+# This file lives in the LEAGUE repo only because the deploy `cp -a infra` would
+# otherwise clobber it. It is add-only: it does not modify league/tour routing.
+# `security-headers` is defined in middlewares.yml.
+http:
+  routers:
+    antelytics:
+      rule: "Host(`antelytics.gg`) || Host(`www.antelytics.gg`)"
+      entryPoints:
+        - websecure
+      service: antelytics
+      middlewares:
+        - security-headers
+      tls:
+        certResolver: le
+  services:
+    antelytics:
+      loadBalancer:
+        servers:
+          - url: "http://antelytics-web:3000"
