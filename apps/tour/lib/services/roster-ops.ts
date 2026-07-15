@@ -439,6 +439,26 @@ export async function removeMove(moveId: string) {
   if (season) await queueRoleSync(season.name);
 }
 
+// Hard-remove a player from a team as a DATA FIX (bad import, phantom, duplicate) -- NOT a
+// departure. Deletes every RosterMove for them on this team AND their draft RosterEntry, so a
+// re-import/backfill can't resurrect them, and leaves NO QUIT/BANNED log entry. Blocks if they
+// are the captain (set a new captain first, so no dangling pointer). Played sets are NOT
+// touched -- returns how many still reference the player so the caller can fix those in the
+// review hub. This is the escape hatch for "this person's roster data is just wrong."
+export async function purgePlayerFromTeam(seasonName: string, teamSeasonId: string, playerId: string) {
+  if (!playerId) throw new Error("Pick a player to delete.");
+  const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true } });
+  if (!season) throw new Error("No such season.");
+  const ts = await prisma.teamSeason.findUnique({ where: { id: teamSeasonId }, select: { captainPlayerId: true } });
+  if (!ts) throw new Error("No such team.");
+  if (ts.captainPlayerId === playerId) throw new Error("This player is the team captain -- make someone else captain first, then delete them.");
+  const playedSets = await prisma.tourSet.count({ where: { seasonId: season.id, OR: [{ playerAId: playerId }, { playerBId: playerId }] } });
+  const moves = await prisma.rosterMove.deleteMany({ where: { teamSeasonId, playerId } });
+  const entries = await prisma.rosterEntry.deleteMany({ where: { playerId, roster: { teamSeasonId } } });
+  await queueRoleSync(seasonName);
+  return { movesDeleted: moves.count, entriesDeleted: entries.count, playedSets };
+}
+
 // One-time backfill: seed DRAFTED moves so seasons drafted before this model still derive
 // + show their initial rosters. Sourced from RosterEntry (the canonical intra-team seed:
 // captain = 1, drafted players = 2..N, unique) — NOT DraftPick.round, which omits the

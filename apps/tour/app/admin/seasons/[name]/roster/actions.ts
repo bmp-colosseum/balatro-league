@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getViewer, type Viewer } from "@/lib/auth";
 import { capabilitiesFor, captainTeamsFor, seasonIdByName } from "@/lib/permissions";
-import { substitute, recordDeparture, reinstate, replacePlayer, removeMove, changeCaptain, reseed, swapSeeds, setCoCaptain, convertMemberToSub, convertSubToMember } from "@/lib/services/roster-ops";
+import { substitute, recordDeparture, reinstate, replacePlayer, removeMove, changeCaptain, reseed, swapSeeds, setCoCaptain, convertMemberToSub, convertSubToMember, purgePlayerFromTeam } from "@/lib/services/roster-ops";
 import { createRosterRequest, approveRosterRequest, rejectRosterRequest, cancelRosterRequest, approveManyRosterRequests, type RosterRequestPayload } from "@/lib/services/roster-requests";
 import { addStrike, removeStrike } from "@/lib/services/strikes";
 import { notifyLive } from "@/lib/notify";
@@ -217,6 +217,27 @@ export async function removeMoveAction(formData: FormData) {
   } catch (e) {
     ok = false;
     msg = e instanceof Error ? e.message : "Could not remove the move.";
+  }
+  rev(season);
+  backToRoster(season, msg, ok);
+}
+
+// Hard delete (data fix) -- mod/TO only. Wipes a player's roster data on a team with NO log,
+// unlike departureAction which records a QUIT/BANNED. For bad imports / duplicates / phantoms.
+export async function purgeMemberAction(formData: FormData) {
+  const season = String(formData.get("season") ?? "");
+  if (!(await isModFor(season))) return;
+  const teamSeasonId = String(formData.get("teamSeasonId") ?? "");
+  const playerId = String(formData.get("playerId") ?? "");
+  let msg = "Player deleted from the team (no log entry).";
+  let ok = true;
+  try {
+    const r = await purgePlayerFromTeam(season, teamSeasonId, playerId);
+    msg = `Deleted ${r.movesDeleted} move(s) + ${r.entriesDeleted} roster entr${r.entriesDeleted === 1 ? "y" : "ies"}, no log.` +
+      (r.playedSets > 0 ? ` NOTE: ${r.playedSets} played set(s) still reference them -- fix those in Review & correct.` : "");
+  } catch (e) {
+    ok = false;
+    msg = e instanceof Error ? e.message : "Could not delete the player.";
   }
   rev(season);
   backToRoster(season, msg, ok);

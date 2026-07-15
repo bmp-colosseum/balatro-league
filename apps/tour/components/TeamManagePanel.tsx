@@ -6,13 +6,14 @@
 // action posts to the shared roster-ops server actions, which gate it: a mod applies now, a
 // captain files a pending request (mode "request"). The caller has already gated access.
 import Link from "next/link";
-import { Crown, RefreshCw, UserPlus, AlertTriangle, Check, X, Undo2, Settings2, Wrench } from "lucide-react";
+import { Crown, RefreshCw, UserPlus, UserMinus, AlertTriangle, Check, X, Undo2, Settings2, Wrench } from "lucide-react";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { PlayerManage } from "@/components/PlayerManage";
 import {
-  convertToSubAction, makePermanentAction, reinstateAction, removeMoveAction,
+  convertToSubAction, makePermanentAction, reinstateAction, removeMoveAction, purgeMemberAction,
   approveRequestAction, rejectRequestAction, cancelRequestAction,
 } from "@/app/admin/seasons/[name]/roster/actions";
 import type { RosterRequestView } from "@/lib/services/roster-requests";
@@ -328,6 +329,23 @@ export function TeamManagePanel({
                   <SubmitButton size="sm" variant="secondary" pendingText="..."><UserPlus className="size-3.5" /> Make permanent</SubmitButton>
                 </div>
               </ActionFlashForm>
+            )}
+
+            {/* Danger zone: hard delete. Wipes a player's roster data on this team with NO log
+                entry (vs "Remove from team", which records a QUIT). For bad/duplicate/phantom
+                imports only -- a re-import can't resurrect them because the draft entry goes too. */}
+            {t.membership.length > 0 && (
+              <div className="rounded border p-2" style={{ borderColor: "var(--danger)" }}>
+                <span className="sub" style={{ color: "var(--danger)" }}>Delete a player from this team (data fix -- leaves no log, not a departure)</span>
+                <form action={purgeMemberAction} className="mt-1 flex flex-wrap items-end gap-1.5">
+                  <input type="hidden" name="season" value={seasonName} />
+                  <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
+                  <FormSelect name="playerId" size="sm" options={opt(t.membership.map((p) => ({ value: p.playerId, label: p.isMember ? `${p.name}${p.seed != null ? ` #${p.seed}` : ""}` : `${p.name} (sub)` })))} placeholder="-- player --" />
+                  <ConfirmButton size="sm" variant="destructive" message="Permanently DELETE this player from the team? Removes their draft entry + all roster moves with NO log entry. Use only for bad/duplicate data -- to record someone leaving, use Remove from team instead.">
+                    <UserMinus className="size-3.5" /> Delete
+                  </ConfirmButton>
+                </form>
+              </div>
             )}
           </div>
         </details>
