@@ -4,9 +4,9 @@
 // season and fix what's wrong. Works for imported flat seasons (TT4) and live ones,
 // because getSeasonReview reads TourSet directly. TO-only.
 import Link from "next/link";
-import { ClipboardCheck, TriangleAlert, UserCog } from "lucide-react";
+import { ClipboardCheck, TriangleAlert, UserCog, BellOff, Bell } from "lucide-react";
 import { isAdmin } from "@/lib/auth";
-import { getSeasonReview, getSeasonOffSeed, type ReviewMatchup, type ReviewPair } from "@/lib/services/review";
+import { getSeasonReview, getSeasonCorrections, type ReviewMatchup, type ReviewPair, type Correction } from "@/lib/services/review";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { Section } from "@/components/admin/Section";
 import { EmptyState } from "@/components/admin/EmptyState";
@@ -16,7 +16,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { SeedOrSub } from "@/components/SeedOrSub";
 import { fieldInputSm } from "@/components/admin/Field";
-import { reportSetAction, clearSetAction, dqSetAction, reassignAction, setSeedAction, removePairAction, addPairAction } from "./actions";
+import { reportSetAction, clearSetAction, dqSetAction, reassignAction, setSeedAction, removePairAction, addPairAction, dismissAction, undismissAction } from "./actions";
 
 type PlayerOpt = { id: string; name: string };
 
@@ -52,7 +52,7 @@ export default async function ReviewPage({
   const sp = await searchParams;
   const seasonName = decodeURIComponent(name);
   const enc = encodeURIComponent(seasonName);
-  const [review, offseed] = await Promise.all([getSeasonReview(seasonName, sp.team), getSeasonOffSeed(seasonName)]);
+  const [review, corrections] = await Promise.all([getSeasonReview(seasonName, sp.team), getSeasonCorrections(seasonName)]);
   if (!review) {
     return (
       <main>
@@ -145,34 +145,99 @@ export default async function ReviewPage({
         </>
       )}
 
-      {offseed && offseed.rows.length > 0 && (
-        <Section
-          title={`Off-seed report (all teams): ${offseed.rows.length}`}
-          description="Every pairing across the whole season whose two seeds are more than 2 apart. Usually a mis-recorded seed. Jump to the team to fix it."
-          className="mt-4"
-        >
-          <details>
-            <summary className="sub" style={{ cursor: "pointer" }}>show {offseed.rows.length} off-seed pairing{offseed.rows.length === 1 ? "" : "s"}</summary>
-            <div className="flex flex-col gap-1" style={{ marginTop: 8 }}>
-              {offseed.rows.map((r) => (
-                <div key={r.setId} className="flex flex-wrap items-center gap-x-2 gap-y-0.5" style={{ padding: "3px 0", borderBottom: "1px solid var(--border)" }}>
-                  <span className="badge" style={dangerBadge}>gap {r.gap}</span>
-                  <span className="sub" style={{ minWidth: 42 }}>{r.label}</span>
-                  <span>{r.aTeam} <b>{r.aName}</b> #{r.aSeed}</span>
-                  <span className="sub">vs</span>
-                  <span>#{r.bSeed} <b>{r.bName}</b> {r.bTeam}</span>
-                  {r.aTeamSeasonId && (
-                    <Link href={r.week != null ? `/admin/seasons/${enc}/review?team=${r.aTeamSeasonId}&week=${r.week}` : `/admin/seasons/${enc}/review?team=${r.aTeamSeasonId}`} className="sub" style={{ marginLeft: "auto" }}>
-                      review &rarr;
-                    </Link>
-                  )}
-                </div>
-              ))}
-            </div>
-          </details>
-        </Section>
-      )}
+      {corrections && <CorrectionsBoard corrections={corrections} season={seasonName} enc={enc} />}
     </main>
+  );
+}
+
+const KIND_LABEL: Record<Correction["kind"], string> = {
+  OFF_SEED: "Off-seed",
+  SHORT: "Short matchup",
+  ALL_ZERO: "All 0-0",
+};
+
+// The season-wide "corrections needed" punch-list: everything worth a second look
+// across ALL teams, each silenceable when it's actually intentional (an off-seed the
+// captains agreed to, a genuinely-short week). Silenced items drop to a collapsed list.
+function CorrectionsBoard({
+  corrections,
+  season,
+  enc,
+}: {
+  corrections: NonNullable<Awaited<ReturnType<typeof getSeasonCorrections>>>;
+  season: string;
+  enc: string;
+}) {
+  const { active, silenced, activeByKind } = corrections;
+  const jump = (c: Correction) =>
+    c.teamSeasonId
+      ? `/admin/seasons/${enc}/review?team=${c.teamSeasonId}${c.week != null ? `&week=${c.week}` : ""}`
+      : null;
+  const summary =
+    active.length === 0
+      ? "Nothing outstanding -- every flag is clean or silenced."
+      : [
+          activeByKind.OFF_SEED ? `${activeByKind.OFF_SEED} off-seed` : "",
+          activeByKind.SHORT ? `${activeByKind.SHORT} short` : "",
+          activeByKind.ALL_ZERO ? `${activeByKind.ALL_ZERO} all-0-0` : "",
+        ]
+          .filter(Boolean)
+          .join(" | ");
+
+  return (
+    <Section
+      title={`Corrections needed: ${active.length}`}
+      description={`Every flag across the whole season. Fix it, or silence it if it's intentional. ${summary}`}
+      className="mt-4"
+    >
+      {active.length === 0 ? (
+        <span className="sub">All clear. {silenced.length > 0 && `${silenced.length} silenced below.`}</span>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {active.map((c) => (
+            <div key={c.key} className="flex flex-wrap items-center gap-x-2 gap-y-0.5" style={{ padding: "4px 0", borderBottom: "1px solid var(--border)" }}>
+              <span className="badge" style={dangerBadge}>{KIND_LABEL[c.kind]}{c.gap != null ? ` ${c.gap}` : ""}</span>
+              <span className="sub" style={{ minWidth: 42 }}>{c.weekLabel}</span>
+              <span>{c.title}</span>
+              {jump(c) && (
+                <Link href={jump(c)!} className="sub" style={{ marginLeft: "auto" }}>review &rarr;</Link>
+              )}
+              <ActionFlashForm action={dismissAction} style={jump(c) ? undefined : { marginLeft: "auto" }}>
+                <input type="hidden" name="season" value={season} />
+                <input type="hidden" name="kind" value={c.kind} />
+                <input type="hidden" name="targetId" value={c.targetId} />
+                <SubmitButton size="sm" variant="secondary" pendingText="..." title="mark intentional -- stop flagging it">
+                  <BellOff className="inline size-3" /> silence
+                </SubmitButton>
+              </ActionFlashForm>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {silenced.length > 0 && (
+        <details style={{ marginTop: 10 }}>
+          <summary className="sub" style={{ cursor: "pointer" }}>{silenced.length} silenced (marked intentional)</summary>
+          <div className="flex flex-col gap-1" style={{ marginTop: 8 }}>
+            {silenced.map((c) => (
+              <div key={c.key} className="flex flex-wrap items-center gap-x-2 gap-y-0.5" style={{ padding: "3px 0", borderBottom: "1px solid var(--border)", opacity: 0.7 }}>
+                <span className="badge">{KIND_LABEL[c.kind]}{c.gap != null ? ` ${c.gap}` : ""}</span>
+                <span className="sub" style={{ minWidth: 42 }}>{c.weekLabel}</span>
+                <span className="sub">{c.title}</span>
+                <ActionFlashForm action={undismissAction} style={{ marginLeft: "auto" }}>
+                  <input type="hidden" name="season" value={season} />
+                  <input type="hidden" name="kind" value={c.kind} />
+                  <input type="hidden" name="targetId" value={c.targetId} />
+                  <SubmitButton size="sm" variant="secondary" pendingText="..." title="put it back on the list">
+                    <Bell className="inline size-3" /> un-silence
+                  </SubmitButton>
+                </ActionFlashForm>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </Section>
   );
 }
 
@@ -310,9 +375,9 @@ function PairRow({
         <ConfirmButton size="sm" variant="destructive" message={`Remove this pairing (${p.ourName} vs ${p.theirName}) entirely?`}>remove</ConfirmButton>
       </ActionFlashForm>
 
-      {/* seed gap */}
-      <span className="sub" style={p.offSeed ? dangerBadge : undefined}>
-        {p.seedGap == null ? "" : `gap ${p.seedGap}${p.offSeed ? " !" : ""}`}
+      {/* seed gap -- red when off-seed, muted "(allowed)" when a TO silenced it */}
+      <span className="sub" style={p.offSeed && !p.offSeedDismissed ? dangerBadge : undefined}>
+        {p.seedGap == null ? "" : `gap ${p.seedGap}${p.offSeed ? (p.offSeedDismissed ? " (allowed)" : " !") : ""}`}
       </span>
 
       {/* their player */}

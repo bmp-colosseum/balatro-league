@@ -833,3 +833,21 @@ model Prediction {
   @@index([seasonId])
   @@index([setId])
 }
+
+// ── Review-hub flag dismissals -- TO acknowledges an intentional anomaly (an
+// off-seed pairing that's deliberate, an all-0-0 matchup that really happened) so
+// it stops showing in the "corrections needed" punch-list. Keyed by (kind,target)
+// so it's stable; targetId = the TourSet id for OFF_SEED, the matchup/bucket key for
+// the matchup-level flags. Purely advisory -- it silences a flag, changes no data.
+model ReviewDismissal {
+  id        String   @id @default(cuid())
+  seasonId  String
+  kind      String // "OFF_SEED" | "SHORT" | "ALL_ZERO"
+  targetId  String
+  reason    String?
+  createdBy String?
+  createdAt DateTime @default(now())
+
+  @@unique([seasonId, kind, targetId])
+  @@index([seasonId])
+}

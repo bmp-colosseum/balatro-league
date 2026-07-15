@@ -29,6 +29,7 @@ export interface ReviewPair {
   reported: boolean; // has a recorded result
   seedGap: number | null;
   offSeed: boolean; // |ourSeed - theirSeed| > 2 -- the +/-2 pairing rule
+  offSeedDismissed: boolean; // off-seed, but a TO marked it intentional (silenced)
   reassignedFrom: string | null;
 }
 
@@ -181,11 +182,13 @@ export async function getSeasonReview(seasonName: string, teamSeasonId?: string)
   );
   for (const lps of lineupByWeek.values()) for (const p of lps) playerIds.add(p.playerId);
 
-  const [players, matches, subOnly] = await Promise.all([
+  const [players, matches, subOnly, dismissRows] = await Promise.all([
     playerIds.size ? prisma.player.findMany({ where: { id: { in: [...playerIds] } }, select: { id: true, displayName: true } }) : Promise.resolve([]),
     matchIds.length ? prisma.match.findMany({ where: { id: { in: matchIds } }, select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true, winnerId: true } }) : Promise.resolve([]),
     subOnlyKeySet(teamSeasons.map((t) => t.id)),
+    prisma.reviewDismissal.findMany({ where: { seasonId: season.id }, select: { kind: true, targetId: true } }),
   ]);
+  const dismissed = new Set(dismissRows.map((d) => `${d.kind}:${d.targetId}`));
   const nameOf = new Map(players.map((p) => [p.id, p.displayName]));
   const matchById = new Map(matches.map((m) => [m.id, m]));
   const teamNameOf = new Map(teams.map((t) => [t.teamSeasonId, t.name]));
@@ -233,7 +236,7 @@ export async function getSeasonReview(seasonName: string, teamSeasonId?: string)
           theirPlayerId, theirName: nameOf.get(theirPlayerId) ?? theirPlayerId, theirSeed,
           ourGames, theirGames, bestOf: s.bestOf, status: s.status,
           reported: isReported(s.status, s.matchId),
-          seedGap, offSeed: seedGap > 2,
+          seedGap, offSeed: seedGap > 2, offSeedDismissed: seedGap > 2 && dismissed.has(`OFF_SEED:${s.id}`),
           reassignedFrom: s.reassignedFromId ? nameOf.get(s.reassignedFromId) ?? null : null,
         };
       })
@@ -261,7 +264,7 @@ export async function getSeasonReview(seasonName: string, teamSeasonId?: string)
       noPairs: pairs.length === 0,
       short: pairs.length > 0 && pairs.length < season.teamSize,
       allZero: recorded.length > 0 && recorded.every((p) => (p.ourGames ?? 0) === 0 && (p.theirGames ?? 0) === 0),
-      offSeedCount: pairs.filter((p) => p.offSeed).length,
+      offSeedCount: pairs.filter((p) => p.offSeed && !p.offSeedDismissed).length,
     };
   };
 
@@ -425,70 +428,143 @@ export async function reviewAddPair(templateSetId: string, ourTeamSeasonId: stri
   return { ok: true, id: created.id };
 }
 
-export interface OffSeedRow {
-  setId: string;
+export type CorrectionKind = "OFF_SEED" | "SHORT" | "ALL_ZERO";
+
+export interface Correction {
+  key: string; // dismiss key = `${kind}:${targetId}`
+  kind: CorrectionKind;
+  targetId: string; // TourSet id (OFF_SEED) or matchup/bucket key (SHORT/ALL_ZERO)
+  dismissed: boolean; // a TO silenced it (marked intentional)
+  teamSeasonId: string | null; // jump target for the review link
   week: number | null;
-  label: string;
-  aTeamSeasonId: string | null;
-  bTeamSeasonId: string | null;
-  aTeam: string;
-  bTeam: string;
-  aName: string;
-  bName: string;
-  aSeed: number;
-  bSeed: number;
-  gap: number;
+  weekLabel: string;
+  title: string;
+  detail: string;
+  gap: number | null; // OFF_SEED only
 }
 
-// Season-wide sweep: every pairing whose two seeds are more than 2 apart, across ALL
-// teams -- the "is anything mis-seeded anywhere" report the per-team flags can't give.
-export async function getSeasonOffSeed(seasonName: string): Promise<{ seasonName: string; rows: OffSeedRow[] } | null> {
-  const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true, name: true } });
+export interface SeasonCorrections {
+  seasonName: string;
+  active: Correction[];
+  silenced: Correction[];
+  activeByKind: { OFF_SEED: number; SHORT: number; ALL_ZERO: number };
+}
+
+const KIND_ORDER: Record<CorrectionKind, number> = { OFF_SEED: 0, SHORT: 1, ALL_ZERO: 2 };
+
+// The whole-season "corrections needed" punch-list: every off-seed pairing (>2), plus
+// short matchups (fewer pairings than the team size) and all-0-0 matchups, across ALL
+// teams -- each silenceable (a TO can mark an intentional anomaly so it drops off).
+export async function getSeasonCorrections(seasonName: string): Promise<SeasonCorrections | null> {
+  const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true, name: true, teamSize: true } });
   if (!season) return null;
   const sets = await prisma.tourSet.findMany({
     where: { seasonId: season.id },
     select: {
       id: true, week: true, bracket: true, seedA: true, seedB: true, playerAId: true, playerBId: true,
-      teamSeasonAId: true, teamSeasonBId: true,
-      matchup: { select: { teamSeasonAId: true, teamSeasonBId: true, week: { select: { number: true } } } },
+      teamSeasonAId: true, teamSeasonBId: true, status: true, matchId: true,
+      matchup: { select: { id: true, teamSeasonAId: true, teamSeasonBId: true, week: { select: { number: true } } } },
     },
   });
-  const off = sets.filter((s) => Math.abs(s.seedA - s.seedB) > 2);
-  const teamIds = new Set<string>();
-  const playerIds = new Set<string>();
-  for (const s of off) {
-    const a = s.matchup?.teamSeasonAId ?? s.teamSeasonAId;
-    const b = s.matchup?.teamSeasonBId ?? s.teamSeasonBId;
-    if (a) teamIds.add(a);
-    if (b) teamIds.add(b);
-    playerIds.add(s.playerAId); playerIds.add(s.playerBId);
-  }
-  const [teamRows, playerRows] = await Promise.all([
-    teamIds.size ? prisma.teamSeason.findMany({ where: { id: { in: [...teamIds] } }, select: { id: true, team: { select: { name: true } } } }) : Promise.resolve([]),
-    playerIds.size ? prisma.player.findMany({ where: { id: { in: [...playerIds] } }, select: { id: true, displayName: true } }) : Promise.resolve([]),
+  const playerIds = [...new Set(sets.flatMap((s) => [s.playerAId, s.playerBId]))];
+  const matchIds = sets.map((s) => s.matchId).filter((x): x is string => !!x);
+  const [teamRows, playerRows, matchRows, dismissRows] = await Promise.all([
+    prisma.teamSeason.findMany({ where: { seasonId: season.id }, select: { id: true, team: { select: { name: true } } } }),
+    playerIds.length ? prisma.player.findMany({ where: { id: { in: playerIds } }, select: { id: true, displayName: true } }) : Promise.resolve([]),
+    matchIds.length ? prisma.match.findMany({ where: { id: { in: matchIds } }, select: { id: true, gamesWonA: true, gamesWonB: true } }) : Promise.resolve([]),
+    prisma.reviewDismissal.findMany({ where: { seasonId: season.id }, select: { kind: true, targetId: true } }),
   ]);
   const teamName = new Map(teamRows.map((t) => [t.id, t.team.name]));
   const nm = new Map(playerRows.map((p) => [p.id, p.displayName]));
-  const rows: OffSeedRow[] = off.map((s) => {
+  const matchById = new Map(matchRows.map((m) => [m.id, m]));
+  const dismissed = new Set(dismissRows.map((d) => `${d.kind}:${d.targetId}`));
+  const tn = (id: string | null | undefined) => (id && teamName.get(id)) || "?";
+
+  const weekOf = (s: (typeof sets)[number]) => {
     const wk = s.week ?? s.matchup?.week?.number ?? null;
-    const isPlayoff = (s.bracket != null && s.bracket !== "REGULAR") || wk == null;
+    const playoff = (s.bracket != null && s.bracket !== "REGULAR") || wk == null;
+    return { week: playoff ? null : wk, label: playoff ? (s.bracket && s.bracket !== "PLAYOFF" ? s.bracket : "Playoffs") : `W${wk}` };
+  };
+
+  const corrections: Correction[] = [];
+
+  // OFF_SEED -- per pairing whose seeds are >2 apart.
+  for (const s of sets) {
+    const gap = Math.abs(s.seedA - s.seedB);
+    if (gap <= 2) continue;
     const a = s.matchup?.teamSeasonAId ?? s.teamSeasonAId;
     const b = s.matchup?.teamSeasonBId ?? s.teamSeasonBId;
-    return {
-      setId: s.id,
-      week: isPlayoff ? null : wk,
-      label: isPlayoff ? (s.bracket && s.bracket !== "PLAYOFF" ? s.bracket : "Playoffs") : `W${wk}`,
-      aTeamSeasonId: a ?? null,
-      bTeamSeasonId: b ?? null,
-      aTeam: (a && teamName.get(a)) || "?",
-      bTeam: (b && teamName.get(b)) || "?",
-      aName: nm.get(s.playerAId) ?? s.playerAId,
-      bName: nm.get(s.playerBId) ?? s.playerBId,
-      aSeed: s.seedA,
-      bSeed: s.seedB,
-      gap: Math.abs(s.seedA - s.seedB),
-    };
+    const w = weekOf(s);
+    corrections.push({
+      key: `OFF_SEED:${s.id}`, kind: "OFF_SEED", targetId: s.id, dismissed: dismissed.has(`OFF_SEED:${s.id}`),
+      teamSeasonId: a ?? b ?? null, week: w.week, weekLabel: w.label, gap,
+      title: `${tn(a)} #${s.seedA} ${nm.get(s.playerAId) ?? "?"} vs #${s.seedB} ${nm.get(s.playerBId) ?? "?"} ${tn(b)}`,
+      detail: `${w.label} -- seeds ${gap} apart`,
+    });
+  }
+
+  // Matchup-level -- group sets into buckets, flag SHORT and all-0-0.
+  interface G { key: string; week: number | null; label: string; ts: string | null; aTeam: string; bTeam: string; count: number; recorded: number; zeroAll: boolean }
+  const groups = new Map<string, G>();
+  for (const s of sets) {
+    const a = s.matchup?.teamSeasonAId ?? s.teamSeasonAId;
+    const b = s.matchup?.teamSeasonBId ?? s.teamSeasonBId;
+    if (!a || !b) continue;
+    const w = weekOf(s);
+    const key = s.matchup?.id ?? `${w.label}|${[a, b].sort().join("~")}`;
+    let g = groups.get(key);
+    if (!g) { g = { key, week: w.week, label: w.label, ts: a, aTeam: tn(a), bTeam: tn(b), count: 0, recorded: 0, zeroAll: true }; groups.set(key, g); }
+    g.count++;
+    const m = s.matchId ? matchById.get(s.matchId) : undefined;
+    if (isReported(s.status, s.matchId)) {
+      g.recorded++;
+      if (m ? m.gamesWonA !== 0 || m.gamesWonB !== 0 : false) g.zeroAll = false;
+    }
+  }
+  for (const g of groups.values()) {
+    if (g.count < season.teamSize) {
+      const key = `SHORT:${g.key}`;
+      corrections.push({ key, kind: "SHORT", targetId: g.key, dismissed: dismissed.has(key), teamSeasonId: g.ts, week: g.week, weekLabel: g.label, gap: null, title: `${g.aTeam} vs ${g.bTeam}`, detail: `${g.label} -- ${g.count}/${season.teamSize} pairings recorded` });
+    }
+    if (g.recorded > 0 && g.zeroAll) {
+      const key = `ALL_ZERO:${g.key}`;
+      corrections.push({ key, kind: "ALL_ZERO", targetId: g.key, dismissed: dismissed.has(key), teamSeasonId: g.ts, week: g.week, weekLabel: g.label, gap: null, title: `${g.aTeam} vs ${g.bTeam}`, detail: `${g.label} -- every recorded set is 0-0` });
+    }
+  }
+
+  const order = (a: Correction, b: Correction) =>
+    KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || (b.gap ?? 0) - (a.gap ?? 0) || (a.week ?? 999) - (b.week ?? 999) || a.title.localeCompare(b.title);
+  const active = corrections.filter((c) => !c.dismissed).sort(order);
+  const silenced = corrections.filter((c) => c.dismissed).sort(order);
+  return {
+    seasonName: season.name,
+    active,
+    silenced,
+    activeByKind: {
+      OFF_SEED: active.filter((c) => c.kind === "OFF_SEED").length,
+      SHORT: active.filter((c) => c.kind === "SHORT").length,
+      ALL_ZERO: active.filter((c) => c.kind === "ALL_ZERO").length,
+    },
+  };
+}
+
+// Silence a flag (mark an intentional anomaly) / un-silence it. Idempotent.
+export async function reviewDismiss(seasonName: string, kind: string, targetId: string, reason?: string, by?: string) {
+  if (!["OFF_SEED", "SHORT", "ALL_ZERO"].includes(kind)) throw new Error("Unknown flag kind.");
+  if (!targetId) throw new Error("Nothing to silence.");
+  const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true } });
+  if (!season) throw new Error("No such season.");
+  await prisma.reviewDismissal.upsert({
+    where: { seasonId_kind_targetId: { seasonId: season.id, kind, targetId } },
+    create: { seasonId: season.id, kind, targetId, reason: reason ?? null, createdBy: by ?? null },
+    update: { reason: reason ?? null },
   });
-  rows.sort((x, y) => y.gap - x.gap || (x.week ?? 999) - (y.week ?? 999) || x.aTeam.localeCompare(y.aTeam));
-  return { seasonName: season.name, rows };
+  return { ok: true };
+}
+
+export async function reviewUndismiss(seasonName: string, kind: string, targetId: string) {
+  const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true } });
+  if (!season) throw new Error("No such season.");
+  await prisma.reviewDismissal.deleteMany({ where: { seasonId: season.id, kind, targetId } });
+  return { ok: true };
 }

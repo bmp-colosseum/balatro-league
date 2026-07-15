@@ -7,7 +7,7 @@
 import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/auth";
 import { reportSet, unreportSet, dqSet } from "@/lib/services/report";
-import { reviewReassignPlayer, reviewSetSeed, reviewRemovePair, reviewAddPair } from "@/lib/services/review";
+import { reviewReassignPlayer, reviewSetSeed, reviewRemovePair, reviewAddPair, reviewDismiss, reviewUndismiss } from "@/lib/services/review";
 import type { ActionResult } from "@/lib/action-result";
 
 function rev(season: string) {
@@ -104,6 +104,35 @@ export async function removePairAction(_prev: ActionResult, formData: FormData):
     return { ok: true, message: "Pairing removed." };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Remove failed." };
+  }
+}
+
+export async function dismissAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, message: "Admins only." };
+  const season = String(formData.get("season") ?? "");
+  const kind = String(formData.get("kind") ?? "");
+  const targetId = String(formData.get("targetId") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim() || undefined;
+  try {
+    await reviewDismiss(season, kind, targetId, reason);
+    rev(season);
+    return { ok: true, message: "Silenced -- marked intentional." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Silence failed." };
+  }
+}
+
+export async function undismissAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  if (!(await isAdmin())) return { ok: false, message: "Admins only." };
+  const season = String(formData.get("season") ?? "");
+  const kind = String(formData.get("kind") ?? "");
+  const targetId = String(formData.get("targetId") ?? "");
+  try {
+    await reviewUndismiss(season, kind, targetId);
+    rev(season);
+    return { ok: true, message: "Un-silenced -- back on the list." };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Un-silence failed." };
   }
 }
 
