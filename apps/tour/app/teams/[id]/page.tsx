@@ -84,6 +84,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
             linkName={false}
             mode={isMod ? "apply" : "request"}
             pending={pendingReqs}
+            recentMoves={ro.timeline.filter((m) => m.teamSeasonId === manageTeam.teamSeasonId)}
           />
         </details>
       )}

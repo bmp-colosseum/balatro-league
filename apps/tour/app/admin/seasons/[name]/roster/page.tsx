@@ -24,12 +24,13 @@ export default async function RosterOpsAdmin({
   searchParams,
 }: {
   params: Promise<{ name: string }>;
-  searchParams: Promise<{ week?: string }>;
+  searchParams: Promise<{ week?: string; team?: string }>;
 }) {
   const { name } = await params;
-  const { week } = await searchParams;
+  const { week, team } = await searchParams;
   const seasonName = decodeURIComponent(name);
   const enc = encodeURIComponent(seasonName);
+  const weekQ = week ? `&week=${week}` : "";
 
   // ROSTERS mod / TO see every team; a captain sees only the team(s) they captain.
   const to = await isAdmin();
@@ -51,7 +52,10 @@ export default async function RosterOpsAdmin({
   }
 
   // Captains only see (and act on) their own team(s).
-  const teams = myTeams ? data.teams.filter((t) => myTeams.has(t.teamSeasonId)) : data.teams;
+  const allTeams = myTeams ? data.teams.filter((t) => myTeams.has(t.teamSeasonId)) : data.teams;
+  // Focus one team (?team=) so "manage a roster" isn't a wall of every team at once.
+  const focusTeam = team ? allTeams.find((t) => t.teamSeasonId === team) ?? null : null;
+  const teams = focusTeam ? [focusTeam] : allTeams;
   const faOpts = data.freeAgents.map((p) => ({ value: p.id, label: p.name }));
   const allLineup = teams.flatMap((t) => t.lineup.map((p) => ({ value: p.playerId, label: `${p.name} (${t.name})` })));
   // Real, labelled weeks (incl. Playoffs) for every week picker -- no more freeform numbers.
@@ -98,9 +102,31 @@ export default async function RosterOpsAdmin({
         </div>
       </div>
 
+      {/* Focus one team vs the whole field. Managing a roster should be one team at a time,
+          not a wall of all of them -- pick one here (or arrive focused from the review hub). */}
+      {allTeams.length > 1 && (
+        <div className="card">
+          {focusTeam ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="sub">Managing <strong>{focusTeam.name}</strong> only.</span>
+              <Link href={`?${week ? `week=${week}` : ""}`} className="pill" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>&larr; back to all teams</Link>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="sub">Manage one team:</span>
+              {allTeams.map((t) => (
+                <Link key={t.teamSeasonId} href={`?team=${t.teamSeasonId}${weekQ}`} className="pill" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                  {t.name}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Teams: derived lineup + actions. Each card is the SAME TeamManagePanel that also
           appears inline on the team's own page -- one component, identical everywhere. */}
-      <div className="grid grid-2">
+      <div className={focusTeam ? "" : "grid grid-2"}>
         {teams.map((t) => {
           // Cross-team sub pool: everyone rostered elsewhere this season (this team's own
           // members already appear under "on this team").
@@ -121,6 +147,7 @@ export default async function RosterOpsAdmin({
                 defWeek={defWeek}
                 mode={isMod ? "apply" : "request"}
                 pending={pendingByTeam.get(t.teamSeasonId) ?? []}
+                recentMoves={data.timeline.filter((m) => m.teamSeasonId === t.teamSeasonId)}
               />
             </div>
           );

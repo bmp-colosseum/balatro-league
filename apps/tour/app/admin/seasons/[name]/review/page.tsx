@@ -65,11 +65,11 @@ export default async function ReviewPage({
   const selWeek = weeks.find((w) => String(w.week) === sp.week) ?? weeks[0];
   const teamHref = (tsId: string) => `/admin/seasons/${enc}/review?team=${tsId}`;
   const weekHref = (wk: number) => `/admin/seasons/${enc}/review?team=${teamSeasonId}&week=${wk}`;
-  // Deep-link to Roster ops, landing on THIS team's card (anchor) with the viewed week
-  // pre-selected -- subs/adds/reseeds happen there. Playoff tabs use a synthetic week, so
-  // skip the week param for those (the roster page's own week picker takes over).
+  // Deep-link to Roster ops FOCUSED on this team (?team=) with the viewed week pre-selected
+  // -- subs/adds/reseeds happen there, one team at a time (no wall of every team). Playoff
+  // tabs use a synthetic week, so skip the week param for those (roster's picker takes over).
   const rosterHref = (w?: { week: number; isPlayoff: boolean }) =>
-    `/admin/seasons/${enc}/roster${w && !w.isPlayoff ? `?week=${w.week}` : ""}#team-${teamSeasonId}`;
+    `/admin/seasons/${enc}/roster?team=${teamSeasonId}${w && !w.isPlayoff ? `&week=${w.week}` : ""}`;
 
   return (
     <main>
