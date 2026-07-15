@@ -428,12 +428,12 @@ export async function reviewAddPair(templateSetId: string, ourTeamSeasonId: stri
   return { ok: true, id: created.id };
 }
 
-export type CorrectionKind = "OFF_SEED" | "SHORT" | "ALL_ZERO";
+export type CorrectionKind = "OUT_OF_RANGE" | "OFF_SEED" | "SHORT" | "ALL_ZERO";
 
 export interface Correction {
   key: string; // dismiss key = `${kind}:${targetId}`
   kind: CorrectionKind;
-  targetId: string; // TourSet id (OFF_SEED) or matchup/bucket key (SHORT/ALL_ZERO)
+  targetId: string; // TourSet id (OUT_OF_RANGE/OFF_SEED) or matchup/bucket key (SHORT/ALL_ZERO)
   dismissed: boolean; // a TO silenced it (marked intentional)
   teamSeasonId: string | null; // jump target for the review link
   week: number | null;
@@ -447,14 +447,17 @@ export interface SeasonCorrections {
   seasonName: string;
   active: Correction[];
   silenced: Correction[];
-  activeByKind: { OFF_SEED: number; SHORT: number; ALL_ZERO: number };
+  validMaxSeed: number; // highest seed a team legitimately fields (derived); higher = out of range
+  activeByKind: { OUT_OF_RANGE: number; OFF_SEED: number; SHORT: number; ALL_ZERO: number };
 }
 
-const KIND_ORDER: Record<CorrectionKind, number> = { OFF_SEED: 0, SHORT: 1, ALL_ZERO: 2 };
+const KIND_ORDER: Record<CorrectionKind, number> = { OUT_OF_RANGE: 0, OFF_SEED: 1, SHORT: 2, ALL_ZERO: 3 };
 
-// The whole-season "corrections needed" punch-list: every off-seed pairing (>2), plus
-// short matchups (fewer pairings than the team size) and all-0-0 matchups, across ALL
-// teams -- each silenceable (a TO can mark an intentional anomaly so it drops off).
+// The whole-season "corrections needed" punch-list: out-of-range seeds (a seed higher
+// than any board a team legitimately fields -- e.g. a stray #12 when teams play 11
+// boards), off-seed pairings (>2 apart), short matchups (fewer pairings than the team
+// size), and all-0-0 matchups, across ALL teams -- each silenceable (a TO can mark an
+// intentional anomaly so it drops off).
 export async function getSeasonCorrections(seasonName: string): Promise<SeasonCorrections | null> {
   const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true, name: true, teamSize: true } });
   if (!season) return null;
@@ -488,8 +491,45 @@ export async function getSeasonCorrections(seasonName: string): Promise<SeasonCo
 
   const corrections: Correction[] = [];
 
-  // OFF_SEED -- per pairing whose seeds are >2 apart.
+  // Derive the legit top seed from the data itself: the highest seed value that at least
+  // TWO teams field. A real board is played by every team, so its seed appears broadly; a
+  // typo (a lone #12 when everyone plays 11 boards) appears once and is excluded. Falls
+  // back to the stored teamSize if nothing qualifies. This gives 11 for TT4 automatically
+  // and generalizes across seasons without a hardcoded cap.
+  const seedTeams = new Map<number, Set<string>>();
   for (const s of sets) {
+    for (const [seed, ts] of [[s.seedA, s.matchup?.teamSeasonAId ?? s.teamSeasonAId], [s.seedB, s.matchup?.teamSeasonBId ?? s.teamSeasonBId]] as const) {
+      if (seed == null || seed < 1 || !ts) continue;
+      let set = seedTeams.get(seed);
+      if (!set) { set = new Set(); seedTeams.set(seed, set); }
+      set.add(ts);
+    }
+  }
+  const supported = [...seedTeams.entries()].filter(([, ts]) => ts.size >= 2).map(([seed]) => seed);
+  const validMaxSeed = supported.length ? Math.max(...supported) : season.teamSize;
+
+  // OUT_OF_RANGE -- a seed that can't exist (below 1, or above the legit top seed). This
+  // is the root cause behind most extreme off-seed gaps, so we flag the set here and
+  // suppress its OFF_SEED entry to avoid double-listing the same pairing.
+  const outOfRange = new Set<string>();
+  for (const s of sets) {
+    const bad = [s.seedA, s.seedB].filter((v) => v < 1 || v > validMaxSeed);
+    if (!bad.length) continue;
+    outOfRange.add(s.id);
+    const a = s.matchup?.teamSeasonAId ?? s.teamSeasonAId;
+    const b = s.matchup?.teamSeasonBId ?? s.teamSeasonBId;
+    const w = weekOf(s);
+    corrections.push({
+      key: `OUT_OF_RANGE:${s.id}`, kind: "OUT_OF_RANGE", targetId: s.id, dismissed: dismissed.has(`OUT_OF_RANGE:${s.id}`),
+      teamSeasonId: a ?? b ?? null, week: w.week, weekLabel: w.label, gap: null,
+      title: `${tn(a)} #${s.seedA} ${nm.get(s.playerAId) ?? "?"} vs #${s.seedB} ${nm.get(s.playerBId) ?? "?"} ${tn(b)}`,
+      detail: `${w.label} -- seed ${bad.join(" & ")} is above the max board (${validMaxSeed})`,
+    });
+  }
+
+  // OFF_SEED -- per pairing whose seeds are >2 apart (skip if already flagged out-of-range).
+  for (const s of sets) {
+    if (outOfRange.has(s.id)) continue;
     const gap = Math.abs(s.seedA - s.seedB);
     if (gap <= 2) continue;
     const a = s.matchup?.teamSeasonAId ?? s.teamSeasonAId;
@@ -540,7 +580,9 @@ export async function getSeasonCorrections(seasonName: string): Promise<SeasonCo
     seasonName: season.name,
     active,
     silenced,
+    validMaxSeed,
     activeByKind: {
+      OUT_OF_RANGE: active.filter((c) => c.kind === "OUT_OF_RANGE").length,
       OFF_SEED: active.filter((c) => c.kind === "OFF_SEED").length,
       SHORT: active.filter((c) => c.kind === "SHORT").length,
       ALL_ZERO: active.filter((c) => c.kind === "ALL_ZERO").length,
@@ -550,7 +592,7 @@ export async function getSeasonCorrections(seasonName: string): Promise<SeasonCo
 
 // Silence a flag (mark an intentional anomaly) / un-silence it. Idempotent.
 export async function reviewDismiss(seasonName: string, kind: string, targetId: string, reason?: string, by?: string) {
-  if (!["OFF_SEED", "SHORT", "ALL_ZERO"].includes(kind)) throw new Error("Unknown flag kind.");
+  if (!["OUT_OF_RANGE", "OFF_SEED", "SHORT", "ALL_ZERO"].includes(kind)) throw new Error("Unknown flag kind.");
   if (!targetId) throw new Error("Nothing to silence.");
   const season = await prisma.tourSeason.findUnique({ where: { name: seasonName }, select: { id: true } });
   if (!season) throw new Error("No such season.");

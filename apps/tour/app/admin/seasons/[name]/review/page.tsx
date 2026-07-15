@@ -151,6 +151,7 @@ export default async function ReviewPage({
 }
 
 const KIND_LABEL: Record<Correction["kind"], string> = {
+  OUT_OF_RANGE: "Bad seed",
   OFF_SEED: "Off-seed",
   SHORT: "Short matchup",
   ALL_ZERO: "All 0-0",
@@ -177,6 +178,7 @@ function CorrectionsBoard({
     active.length === 0
       ? "Nothing outstanding -- every flag is clean or silenced."
       : [
+          activeByKind.OUT_OF_RANGE ? `${activeByKind.OUT_OF_RANGE} bad seed` : "",
           activeByKind.OFF_SEED ? `${activeByKind.OFF_SEED} off-seed` : "",
           activeByKind.SHORT ? `${activeByKind.SHORT} short` : "",
           activeByKind.ALL_ZERO ? `${activeByKind.ALL_ZERO} all-0-0` : "",
@@ -199,6 +201,7 @@ function CorrectionsBoard({
               <span className="badge" style={dangerBadge}>{KIND_LABEL[c.kind]}{c.gap != null ? ` ${c.gap}` : ""}</span>
               <span className="sub" style={{ minWidth: 42 }}>{c.weekLabel}</span>
               <span>{c.title}</span>
+              <span className="sub">{c.detail.split(" -- ").slice(1).join(" -- ")}</span>
               {jump(c) && (
                 <Link href={jump(c)!} className="sub" style={{ marginLeft: "auto" }}>review &rarr;</Link>
               )}
