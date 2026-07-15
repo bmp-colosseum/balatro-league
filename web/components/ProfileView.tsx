@@ -594,13 +594,22 @@ export async function ProfileView({
             (h) => h.opponentPlayerId === viewer.playerId,
           );
           if (!h2h) return null;
+          // headToHeads are stored from the PROFILE OWNER's perspective; this
+          // card reads "from your (the viewer's) side", so invert W<->L and games.
+          const yourWins = h2h.losses;
+          const yourLosses = h2h.wins;
+          const yourGamesWon = h2h.gamesLost;
+          const yourGamesLost = h2h.gamesWon;
+          const n = h2h.totalMatches;
           return (
             <div className="card card-info" style={{ marginTop: 16 }}>
               <strong style={{ color: "var(--info)" }}>vs you</strong>
               <p style={{ marginTop: 4, marginBottom: 0 }}>
-                <strong>{h2h.wins}W</strong> – <strong>{h2h.draws}D</strong> – <strong>{h2h.losses}L</strong>{" "}
-                across {h2h.totalMatches} matches (game record {h2h.gamesWon}-{h2h.gamesLost}).{" "}
-                <span className="muted" style={{ fontSize: 12 }}>From your perspective.</span>
+                <strong>{yourWins}W</strong>
+                {h2h.draws > 0 && <> &ndash; <strong>{h2h.draws}D</strong></>}
+                {" "}&ndash; <strong>{yourLosses}L</strong>{" "}
+                across {n} {n === 1 ? "match" : "matches"} (games {yourGamesWon}-{yourGamesLost}).{" "}
+                <span className="muted" style={{ fontSize: 12 }}>From your side.</span>
               </p>
             </div>
           );
