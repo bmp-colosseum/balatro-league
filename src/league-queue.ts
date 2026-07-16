@@ -15,6 +15,22 @@ import { createLeagueMatchInvite } from "./league-match-invite.js";
 import { recordAudit, SYSTEM_ACTOR } from "./audit.js";
 import { getDiscordClient } from "./discord.js";
 
+// A queue entry auto-expires after this long without the player re-queueing.
+// Past ~12h idle it's near-certain they're no longer around, and a stale entry
+// is worse than none (an opponent "matches" a ghost). Clicking Queue up again
+// resets the clock (see joinQueue).
+export const QUEUE_IDLE_TIMEOUT_MS = 12 * 60 * 60 * 1000;
+
+// Pure: has this entry gone idle past the timeout? Injectable now/timeout keep it
+// unit-testable without a clock.
+export function isQueueEntryExpired(
+  queuedAt: Date,
+  now: Date,
+  timeoutMs: number = QUEUE_IDLE_TIMEOUT_MS,
+): boolean {
+  return now.getTime() - queuedAt.getTime() >= timeoutMs;
+}
+
 // The pinned message's content + Join/Leave buttons + the live "free right now"
 // list. allowedMentions is cleared so editing the message on every join/leave
 // never re-pings anyone.
@@ -54,7 +70,10 @@ export async function joinQueue(playerId: string, seasonId: string): Promise<voi
   await prisma.queueEntry.upsert({
     where: { playerId },
     create: { playerId, seasonId },
-    update: { seasonId }, // re-queueing refreshes the season scope; keep original queuedAt
+    // Re-queueing is an "I'm around now" signal: refresh the season scope AND
+    // reset queuedAt so the idle-expiry clock starts over (also re-orders to the
+    // back of the barely-relevant, opponent-specific matching line).
+    update: { seasonId, queuedAt: new Date() },
   });
 }
 
@@ -87,12 +106,12 @@ export async function remainingMatchCount(playerId: string, seasonId: string): P
   });
 }
 
-// Remove queue entries for anyone no longer eligible — not an ACTIVE division
-// member this season (not in the league), or with no scheduled matches left.
-// Mirrors the Queue-up gate; runs each sweep so the queue self-cleans. Returns
-// how many entries were removed.
-export async function pruneIneligibleQueue(seasonId: string): Promise<number> {
-  const entries = await prisma.queueEntry.findMany({ select: { playerId: true } });
+// Remove queue entries for anyone no longer eligible — idle past the expiry
+// window, not an ACTIVE division member this season (not in the league), or with
+// no scheduled matches left. Mirrors the Queue-up gate; runs each sweep so the
+// queue self-cleans. `now` is injectable for tests. Returns how many were removed.
+export async function pruneIneligibleQueue(seasonId: string, now: Date = new Date()): Promise<number> {
+  const entries = await prisma.queueEntry.findMany({ select: { playerId: true, queuedAt: true } });
   if (entries.length === 0) return 0;
   const queuedIds = entries.map((e) => e.playerId);
   const members = await prisma.divisionMember.findMany({
@@ -101,7 +120,12 @@ export async function pruneIneligibleQueue(seasonId: string): Promise<number> {
   });
   const memberSet = new Set(members.map((m) => m.playerId));
   const toRemove: string[] = [];
-  for (const id of queuedIds) {
+  for (const e of entries) {
+    const id = e.playerId;
+    if (isQueueEntryExpired(e.queuedAt, now)) {
+      toRemove.push(id); // idle too long — almost certainly gone
+      continue;
+    }
     if (!memberSet.has(id)) {
       toRemove.push(id); // not in the league this season
       continue;
