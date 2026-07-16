@@ -9,6 +9,7 @@
 // derives from them; flat brackets keep the manual per-series score.
 import { qualify, seedField, standardBracketPairings, advanceWinners, assembleBracketByChoice, type StandingRow } from "@balatro/competition-core";
 import { getSeasonStandings } from "../standings";
+import { getMatchupReport } from "./report";
 import { prisma } from "../db";
 import { notifyLive } from "../notify";
 import { regularWeekCount, roundWeekOf, playoffFieldSize, ROUND_BY_TEAMS, TEAMS_BY_ROUND, ROUND_LABEL } from "./playoff-weeks";
@@ -465,9 +466,22 @@ export async function getPlayoffAdmin(seasonName: string) {
 export async function getSeriesReport(seriesId: string) {
   const s = await prisma.playoffSeries.findUnique({
     where: { id: seriesId },
-    select: { id: true, seasonId: true, round: true, teamSeasonAId: true, teamSeasonBId: true, scoreA: true, scoreB: true, winnerTeamSeasonId: true },
+    select: { id: true, seasonId: true, round: true, matchupId: true, teamSeasonAId: true, teamSeasonBId: true, scoreA: true, scoreB: true, winnerTeamSeasonId: true },
   });
   if (!s) return null;
+
+  // A live conference series only persists scoreA/scoreB when its matchup is DECIDED, so
+  // pull the running set tally from the matchup for the overlay's in-progress score.
+  let scoreA = s.scoreA ?? 0;
+  let scoreB = s.scoreB ?? 0;
+  if (s.matchupId) {
+    const rep = await getMatchupReport(s.matchupId);
+    if (rep) {
+      const aIsMatchupA = s.teamSeasonAId === rep.teamASeasonId;
+      scoreA = aIsMatchupA ? rep.setsWonA : rep.setsWonB;
+      scoreB = aIsMatchupA ? rep.setsWonB : rep.setsWonA;
+    }
+  }
   const teamIds = [s.teamSeasonAId, s.teamSeasonBId].filter((x): x is string => !!x);
   const [season, teamSeasons, entries] = await Promise.all([
     prisma.tourSeason.findUnique({ where: { id: s.seasonId }, select: { name: true } }),
@@ -484,8 +498,8 @@ export async function getSeriesReport(seriesId: string) {
     bName: s.teamSeasonBId ? nameOf.get(s.teamSeasonBId) ?? "TBD" : "TBD",
     aSeed: s.teamSeasonAId ? seedOf.get(s.teamSeasonAId) ?? null : null,
     bSeed: s.teamSeasonBId ? seedOf.get(s.teamSeasonBId) ?? null : null,
-    scoreA: s.scoreA ?? 0,
-    scoreB: s.scoreB ?? 0,
+    scoreA,
+    scoreB,
     winner: s.winnerTeamSeasonId === s.teamSeasonAId ? ("A" as const) : s.winnerTeamSeasonId === s.teamSeasonBId ? ("B" as const) : null,
     decided: !!s.winnerTeamSeasonId,
   };
