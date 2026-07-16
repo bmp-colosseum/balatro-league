@@ -207,7 +207,8 @@ export default async function PairingConsole({ params, searchParams }: { params:
               </thead>
               <tbody>
                 {report.sets.map((s) => (
-                  <tr key={s.setId}>
+                  // Reported rows get a faint green wash so unreported sets stand out.
+                  <tr key={s.setId} style={{ background: s.reported ? "rgba(22, 163, 74, 0.07)" : undefined }}>
                     <td style={{ fontWeight: s.winner === "A" ? 700 : undefined }}>
                       <SeedOrSub seed={s.aSeed} isSub={s.aIsSub} /> <Link href={`/players/${s.aPlayerId}`} style={{ color: "inherit" }}>{s.aName}</Link>
                       {s.reassignedFrom && <span className="sub" title={`makeup — originally ${s.reassignedFrom}`}> (sub for {s.reassignedFrom})</span>}

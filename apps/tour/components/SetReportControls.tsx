@@ -3,6 +3,7 @@
 // everywhere. A single outcome dropdown (SetOutcomeSelect) records the result on
 // pick; "Clear" undoes a recorded result. Server component: the dropdown posts to
 // setOutcomeAction, Clear to unreportSetAction (both gate via can("SCHEDULE")).
+import { CircleCheck, CircleDashed } from "lucide-react";
 import { SetOutcomeSelect } from "@/components/SetOutcomeSelect";
 import { SubmitButton } from "@/components/SubmitButton";
 import { unreportSetAction } from "@/app/admin/matchups/[matchupId]/actions";
@@ -26,6 +27,16 @@ export function SetReportControls({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {/* At-a-glance status so a done set reads differently from one still owed. */}
+      {reported ? (
+        <span className="inline-flex items-center gap-1 text-sm font-medium" style={{ color: "var(--success, #16a34a)" }} title="Result recorded">
+          <CircleCheck className="size-4" /> Reported
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1 text-sm" style={{ color: "var(--warning, #f5a524)" }} title="No result yet">
+          <CircleDashed className="size-4" /> Needs result
+        </span>
+      )}
       <SetOutcomeSelect
         matchupId={matchupId}
         setId={setId}
