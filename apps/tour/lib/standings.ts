@@ -162,3 +162,35 @@ export async function getSeasonStandings(seasonName: string): Promise<SeasonStan
     groups,
   };
 }
+
+export interface SeedRow extends TeamRow {
+  seed: number;
+  conferenceName: string;
+}
+export interface OverallSeeding {
+  seasonName: string;
+  format: string;
+  playoffTeams: number;
+  rows: SeedRow[];
+}
+
+// Cross-conference seeding order 1..N -- the SAME ranking the playoff bracket seeds by
+// (matchup% -> set% -> game%, see getPlayoffPicture), flattened across every conference.
+export async function getOverallSeeding(seasonName: string): Promise<OverallSeeding | null> {
+  const s = await getSeasonStandings(seasonName);
+  if (!s) return null;
+  const pct = (w: number, l: number) => (w + l ? w / (w + l) : 0);
+  const flat = s.groups.flatMap((g) => g.rows.map((r) => ({ ...r, conferenceName: g.conferenceName })));
+  flat.sort(
+    (a, b) =>
+      pct(b.matchupsW, b.matchupsL) - pct(a.matchupsW, a.matchupsL) ||
+      pct(b.setsW, b.setsL) - pct(a.setsW, a.setsL) ||
+      pct(b.gamesW, b.gamesL) - pct(a.gamesW, a.gamesL),
+  );
+  return {
+    seasonName: s.seasonName,
+    format: s.format,
+    playoffTeams: s.playoffTeams,
+    rows: flat.map((r, i) => ({ ...r, seed: i + 1 })),
+  };
+}

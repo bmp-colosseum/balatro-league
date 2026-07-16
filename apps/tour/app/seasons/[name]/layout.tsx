@@ -32,6 +32,8 @@ export default async function SeasonLayout({
   const enc = encodeURIComponent(name);
   const tabs: SeasonNavTab[] = [
     { href: `/seasons/${enc}`, label: "Overview" },
+    { href: `/seasons/${enc}/seeding`, label: "Seeding" },
+    { href: `/seasons/${enc}/players`, label: "Players" },
     { href: `/seasons/${enc}/rankings`, label: "Rankings" },
     { href: `/seasons/${enc}/weeks`, label: "Weeks" },
     { href: `/seasons/${enc}/bracket`, label: "Playoffs" },
