@@ -241,7 +241,6 @@ export default async function PairingConsole({ params, searchParams }: { params:
                         setId={s.setId}
                         aName={s.aName}
                         bName={s.bName}
-                        bestOf={s.bestOf}
                         reported={s.reported}
                         outcome={s.outcome}
                       />

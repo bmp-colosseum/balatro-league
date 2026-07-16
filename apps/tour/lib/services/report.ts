@@ -71,7 +71,9 @@ export async function reportSet(setId: string, gamesTeamA: number, gamesTeamB: n
 export async function forfeitSet(setId: string, forfeitTeam: "A" | "B") {
   const set = await prisma.tourSet.findUnique({ where: { id: setId } });
   if (!set) throw new Error("No such set.");
-  const win = Math.max(1, Math.ceil(set.bestOf / 2)); // 2 for BO3
+  // Bo3-normalized like every recorded result (design §12.4): a forfeit is a 2-0 sweep
+  // for the winner regardless of the set's best-of -- the loser played nothing.
+  const win = 2;
   const gamesTeamA = forfeitTeam === "A" ? 0 : win;
   const gamesTeamB = forfeitTeam === "B" ? 0 : win;
   const a = set.playerAId;

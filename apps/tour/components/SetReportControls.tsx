@@ -12,7 +12,6 @@ export function SetReportControls({
   setId,
   aName,
   bName,
-  bestOf,
   reported,
   outcome,
 }: {
@@ -20,7 +19,6 @@ export function SetReportControls({
   setId: string;
   aName: string; // team A's player in this set (results are labelled by player, not team)
   bName: string; // team B's player in this set
-  bestOf: number;
   reported: boolean;
   outcome: string; // encoded recorded result (see setOutcomeValue); "" when unreported
 }) {
@@ -29,7 +27,6 @@ export function SetReportControls({
       <SetOutcomeSelect
         matchupId={matchupId}
         setId={setId}
-        bestOf={bestOf}
         aName={aName}
         bName={bName}
         current={outcome}
