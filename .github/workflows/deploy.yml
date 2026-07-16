@@ -163,4 +163,15 @@ jobs:
           # Dev stack: separate project + env file; tour-web-dev reuses the tour-web image.
           EDEV="--env-file /srv/balatro/versions.env --env-file /srv/balatro/secrets.dev.env"
           docker compose -p balatro-dev $EDEV -f docker-compose.dev.yml up -d tour-web-dev league-web-dev
+          # Observability stack (Loki/Promtail/Grafana), managed by the pipeline like
+          # everything else. Idempotent: reconciles only when its compose/config changes.
+          # Dashboards are bind-mounted from repo/infra, so a dashboard JSON change lands via
+          # the cp -a above + Grafana's provisioning reload -- no container recreate needed.
+          # Best-effort so a monitoring hiccup never blocks an app deploy.
+          if [ -f /srv/balatro/mon.env ]; then
+            docker compose -p balatro-mon --env-file /srv/balatro/mon.env -f docker-compose.monitoring.yml up -d \
+              || echo "[mon] up failed (non-fatal)"
+          else
+            echo "[mon] /srv/balatro/mon.env missing -- skipping monitoring stack"
+          fi
           docker image prune -f
