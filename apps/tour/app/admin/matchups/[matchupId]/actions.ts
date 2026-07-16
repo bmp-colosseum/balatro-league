@@ -38,9 +38,9 @@ export async function overridePairAction(_prev: ActionResult, formData: FormData
   try {
     await overridePair(matchupId, a, b);
     rev(matchupId);
-    return { ok: true, message: "Override pair set." };
+    return { ok: true, message: "Pairing created." };
   } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : "Override failed." };
+    return { ok: false, message: e instanceof Error ? e.message : "Could not create the pairing." };
   }
 }
 
