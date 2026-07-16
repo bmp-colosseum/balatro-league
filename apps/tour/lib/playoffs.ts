@@ -186,7 +186,10 @@ export async function getChampionRun(seasonName: string): Promise<ChampionRun | 
   const championship = await prisma.championship.findFirst({ where: { seasonId: season.id } });
   let championTsId: string | null = championship ? tsByTeam.get(championship.teamId) ?? null : null;
   if (!championTsId) championTsId = series.find((s) => s.round === "FINAL")?.winnerTeamSeasonId ?? null;
-  if (!championTsId) {
+  // "Won a series and never lost one" only names a champion once the bracket is fully
+  // resolved -- otherwise a team that has merely won its early rounds (and not yet played
+  // the final) would be crowned mid-playoffs. In progress => no champion yet.
+  if (!championTsId && series.every((s) => s.winnerTeamSeasonId != null)) {
     const winners = new Set<string>(), losers = new Set<string>();
     for (const s of series) {
       if (!s.winnerTeamSeasonId) continue;
