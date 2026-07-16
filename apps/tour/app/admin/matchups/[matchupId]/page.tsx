@@ -202,7 +202,7 @@ export default async function PairingConsole({ params, searchParams }: { params:
                   <th>{report.teamAName}</th>
                   <th>{report.teamBName}</th>
                   <th className="num">Bo</th>
-                  <th>Report (games {report.teamAName}–{report.teamBName})</th>
+                  <th>Result</th>
                 </tr>
               </thead>
               <tbody>
@@ -241,9 +241,9 @@ export default async function PairingConsole({ params, searchParams }: { params:
                         setId={s.setId}
                         teamAName={report.teamAName}
                         teamBName={report.teamBName}
+                        bestOf={s.bestOf}
                         reported={s.reported}
-                        teamAGames={s.teamAGames}
-                        teamBGames={s.teamBGames}
+                        outcome={s.outcome}
                       />
                       {/* Sub-in for a makeup set (only while unplayed) */}
                       {!s.played && subOpts && (

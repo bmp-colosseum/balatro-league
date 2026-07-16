@@ -11,7 +11,7 @@
 //      to "" in the submitted hidden input.
 //   2. A "" value with no matching empty option falls through to the placeholder.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Select,
   SelectContent,
@@ -39,6 +39,7 @@ export function FormSelect({
   title,
   triggerClassName,
   size,
+  submitOnChange,
 }: {
   name: string;
   options: FormSelectOption[];
@@ -48,15 +49,26 @@ export function FormSelect({
   title?: string;
   triggerClassName?: string;
   size?: "sm" | "default";
+  submitOnChange?: boolean; // after a pick, submit the enclosing <form> (one-tap reporting)
 }) {
   const [value, setValue] = useState(defaultValue);
+  const hiddenRef = useRef<HTMLInputElement>(null);
+  const firstRender = useRef(true);
+
+  // Auto-submit on change: fire after the hidden input has committed the new value,
+  // and never on the initial mount (so preselected values don't self-submit).
+  useEffect(() => {
+    if (!submitOnChange) return;
+    if (firstRender.current) { firstRender.current = false; return; }
+    hiddenRef.current?.form?.requestSubmit();
+  }, [value, submitOnChange]);
   const hasEmptyOption = options.some((o) => o.value === "");
   const rootValue = value === "" ? (hasEmptyOption ? EMPTY : "") : value;
   const items = options.map((o) => ({ value: enc(o.value), label: o.label }));
 
   return (
     <>
-      <input type="hidden" name={name} value={value} required={required} />
+      <input ref={hiddenRef} type="hidden" name={name} value={value} required={required} />
       <Select items={items} value={rootValue} onValueChange={(v) => setValue(dec(v))}>
         <SelectTrigger className={triggerClassName} title={title} size={size}>
           <SelectValue placeholder={placeholder} />

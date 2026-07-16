@@ -10,6 +10,24 @@ import { enqueueAnnounceResult, enqueueAnnounceMatchup } from "../queue";
 import { subOnlyKeySet } from "./roster-ops";
 import { syncSeriesFromMatchup } from "./playoffs";
 
+// Encode a reported set as the single value the outcome dropdown uses:
+//   ""    -> not reported yet
+//   "void"-> 0-0 double DQ (nobody played)
+//   "ff-a"/"ff-b" -> a forfeit win for team A / team B
+//   "a-b" -> a played result (team A games - team B games)
+// Pure: shared by every reporting surface so the dropdown preselects the recorded result.
+export function setOutcomeValue(
+  reported: boolean,
+  teamAGames: number | null,
+  teamBGames: number | null,
+  forfeit: boolean,
+): string {
+  if (!reported || teamAGames == null || teamBGames == null) return "";
+  if (teamAGames === 0 && teamBGames === 0) return "void";
+  if (forfeit) return teamAGames > teamBGames ? "ff-a" : "ff-b";
+  return `${teamAGames}-${teamBGames}`;
+}
+
 export async function reportSet(setId: string, gamesTeamA: number, gamesTeamB: number) {
   const set = await prisma.tourSet.findUnique({ where: { id: setId } });
   if (!set) throw new Error("No such set.");
@@ -185,7 +203,7 @@ export async function getMatchupReport(matchupId: string) {
   const matchIds = matchup.sets.map((s) => s.matchId).filter((x): x is string => !!x);
   const playerIds = [...new Set(matchup.sets.flatMap((s) => [s.playerAId, s.playerBId, s.reassignedFromId].filter((x): x is string => !!x)))];
   const [matches, players, teamSeasons, subOnly] = await Promise.all([
-    prisma.match.findMany({ where: { id: { in: matchIds } }, select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true, winnerId: true } }),
+    prisma.match.findMany({ where: { id: { in: matchIds } }, select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true, winnerId: true, forfeit: true } }),
     prisma.player.findMany({ where: { id: { in: playerIds } }, select: { id: true, displayName: true } }),
     prisma.teamSeason.findMany({ where: { id: { in: [matchup.teamSeasonAId, matchup.teamSeasonBId] } }, include: { team: true } }),
     subOnlyKeySet([matchup.teamSeasonAId, matchup.teamSeasonBId]),
@@ -202,6 +220,7 @@ export async function getMatchupReport(matchupId: string) {
     const winner = m?.winnerId === s.playerAId ? "A" : m?.winnerId === s.playerBId ? "B" : null;
     if (s.status === "CONFIRMED" && winner === "A") liveA++;
     if (s.status === "CONFIRMED" && winner === "B") liveB++;
+    const reported = s.status === "CONFIRMED" || s.status === "FORFEIT";
     return {
       setId: s.id,
       aName: nameOf.get(s.playerAId) ?? s.playerAId,
@@ -214,12 +233,14 @@ export async function getMatchupReport(matchupId: string) {
       bIsSub: subOnly.has(`${matchup.teamSeasonBId}|${s.playerBId}`),
       bestOf: s.bestOf,
       status: s.status,
-      reported: s.status === "CONFIRMED" || s.status === "FORFEIT",
+      reported,
       played: s.status === "CONFIRMED" || s.status === "FORFEIT" || s.status === "REPORTED",
       reassignedFrom: s.reassignedFromId ? nameOf.get(s.reassignedFromId) ?? null : null,
       teamAGames,
       teamBGames,
       winner,
+      // Preselect the dropdown to the recorded result (forfeit fidelity preserved).
+      outcome: setOutcomeValue(reported, teamAGames, teamBGames, m?.forfeit ?? false),
     };
   });
 

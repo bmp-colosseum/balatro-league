@@ -170,9 +170,9 @@ export default async function AuditPage({ params }: { params: Promise<{ name: st
                               setId={s.setId}
                               teamAName={p.aName}
                               teamBName={p.bName}
+                              bestOf={s.bestOf}
                               reported={s.reported}
-                              teamAGames={s.teamAGames}
-                              teamBGames={s.teamBGames}
+                              outcome={s.outcome}
                             />
                           </td>
                         </tr>

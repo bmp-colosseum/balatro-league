@@ -12,6 +12,7 @@
 //   NOT_STARTED      zero sets -- pairing hasn't begun (normal for future weeks)
 import { prisma } from "../db";
 import { subOnlyKeySet } from "./roster-ops";
+import { setOutcomeValue } from "./report";
 
 export type PendingCategory = "DISPUTED" | "AWAITING_CONFIRM" | "UNPAIRED" | "UNPLAYED" | "NOT_STARTED";
 
@@ -29,6 +30,8 @@ export interface PendingSet {
   reported: boolean; // has a recorded result (CONFIRMED/FORFEIT/REPORTED)
   teamAGames: number | null; // games won by team A in this set (the game% tiebreaker input); null if unreported
   teamBGames: number | null;
+  bestOf: number; // drives the outcome dropdown's score options
+  outcome: string; // encoded recorded result for the dropdown (see setOutcomeValue)
 }
 
 export interface PendingMatchup {
@@ -68,7 +71,7 @@ export async function getSeasonAudit(seasonName: string) {
       where: { seasonId: season.id, kind: { not: "PLAYOFF" } },
       include: {
         matchups: {
-          include: { sets: { select: { id: true, status: true, playerAId: true, playerBId: true, seedA: true, seedB: true, matchId: true }, orderBy: { seedA: "asc" } } },
+          include: { sets: { select: { id: true, status: true, playerAId: true, playerBId: true, seedA: true, seedB: true, matchId: true, bestOf: true }, orderBy: { seedA: "asc" } } },
         },
       },
       orderBy: { number: "asc" },
@@ -85,7 +88,7 @@ export async function getSeasonAudit(seasonName: string) {
   const teamName = new Map(teamSeasons.map((t) => [t.id, t.team.name]));
 
   const pending: PendingMatchup[] = [];
-  const rawSets = new Map<string, { id: string; status: string; playerAId: string; playerBId: string; seedA: number; seedB: number; matchId: string | null }[]>();
+  const rawSets = new Map<string, { id: string; status: string; playerAId: string; playerBId: string; seedA: number; seedB: number; matchId: string | null; bestOf: number }[]>();
   const weekRows = weeks.map((w) => {
     let decided = 0;
     for (const m of w.matchups) {
@@ -145,7 +148,7 @@ export async function getSeasonAudit(seasonName: string) {
   const matchIds: string[] = [];
   for (const sets of rawSets.values()) for (const s of sets) if (s.matchId) matchIds.push(s.matchId);
   const matches = matchIds.length
-    ? await prisma.match.findMany({ where: { id: { in: matchIds } }, select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true } })
+    ? await prisma.match.findMany({ where: { id: { in: matchIds } }, select: { id: true, playerAId: true, gamesWonA: true, gamesWonB: true, forfeit: true } })
     : [];
   const matchById = new Map(matches.map((m) => [m.id, m]));
 
@@ -169,6 +172,13 @@ export async function getSeasonAudit(seasonName: string) {
         reported: s.status === "CONFIRMED" || s.status === "FORFEIT" || s.status === "REPORTED",
         teamAGames,
         teamBGames,
+        bestOf: s.bestOf,
+        outcome: setOutcomeValue(
+          s.status === "CONFIRMED" || s.status === "FORFEIT" || s.status === "REPORTED",
+          teamAGames,
+          teamBGames,
+          m?.forfeit ?? false,
+        ),
       };
     });
   }
