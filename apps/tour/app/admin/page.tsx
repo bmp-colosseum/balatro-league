@@ -44,7 +44,12 @@ export default async function Admin() {
     <main>
       <AdminPageHeader
         title="Dashboard"
-        actions={<Link href="/admin/seasons/new" className="pill inline-flex items-center gap-1 hover:no-underline"><Plus className="size-3.5" /> New season</Link>}
+        actions={
+          <>
+            <Link href="/admin/identity" className="pill inline-flex items-center gap-1 hover:no-underline"><Users className="size-3.5" /> Players</Link>
+            <Link href="/admin/seasons/new" className="pill inline-flex items-center gap-1 hover:no-underline"><Plus className="size-3.5" /> New season</Link>
+          </>
+        }
         sub="Jump straight to any section of the active season, or open its hub for the rest."
       />
 
