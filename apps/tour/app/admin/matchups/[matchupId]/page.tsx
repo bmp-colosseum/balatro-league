@@ -239,8 +239,8 @@ export default async function PairingConsole({ params, searchParams }: { params:
                       <SetReportControls
                         matchupId={matchupId}
                         setId={s.setId}
-                        teamAName={report.teamAName}
-                        teamBName={report.teamBName}
+                        aName={s.aName}
+                        bName={s.bName}
                         bestOf={s.bestOf}
                         reported={s.reported}
                         outcome={s.outcome}

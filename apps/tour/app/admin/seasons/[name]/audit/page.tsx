@@ -168,8 +168,8 @@ export default async function AuditPage({ params }: { params: Promise<{ name: st
                             <SetReportControls
                               matchupId={p.matchupId}
                               setId={s.setId}
-                              teamAName={p.aName}
-                              teamBName={p.bName}
+                              aName={s.aName}
+                              bName={s.bName}
                               bestOf={s.bestOf}
                               reported={s.reported}
                               outcome={s.outcome}

@@ -10,16 +10,16 @@ import { unreportSetAction } from "@/app/admin/matchups/[matchupId]/actions";
 export function SetReportControls({
   matchupId,
   setId,
-  teamAName,
-  teamBName,
+  aName,
+  bName,
   bestOf,
   reported,
   outcome,
 }: {
   matchupId: string;
   setId: string;
-  teamAName: string;
-  teamBName: string;
+  aName: string; // team A's player in this set (results are labelled by player, not team)
+  bName: string; // team B's player in this set
   bestOf: number;
   reported: boolean;
   outcome: string; // encoded recorded result (see setOutcomeValue); "" when unreported
@@ -30,8 +30,8 @@ export function SetReportControls({
         matchupId={matchupId}
         setId={setId}
         bestOf={bestOf}
-        teamAName={teamAName}
-        teamBName={teamBName}
+        aName={aName}
+        bName={bName}
         current={outcome}
       />
       {reported && (
