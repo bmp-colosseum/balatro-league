@@ -34,7 +34,7 @@ export default async function SeasonLayout({
     { href: `/seasons/${enc}`, label: "Overview" },
     { href: `/seasons/${enc}/rankings`, label: "Rankings" },
     { href: `/seasons/${enc}/weeks`, label: "Weeks" },
-    { href: `/seasons/${enc}/bracket`, label: "Bracket" },
+    { href: `/seasons/${enc}/bracket`, label: "Playoffs" },
     { href: `/seasons/${enc}/pickem`, label: "Pick'em", emphasis: true },
     ...(hasFantasy ? [{ href: `/seasons/${enc}/fantasy`, label: "Fantasy", emphasis: true }] : []),
     { href: `/seasons/${enc}/news`, label: "News" },

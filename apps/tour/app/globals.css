@@ -289,11 +289,9 @@ th.sortable:hover { color: var(--accent); }
 .bracket-match { flex: 1 1 0; display: flex; flex-direction: column; justify-content: center; position: relative; min-height: 66px; }
 
 /* the visible card sits centered inside its full-height slot */
-.bracket-match > summary { list-style: none; cursor: pointer; }
-.bracket-match > summary::-webkit-details-marker { display: none; }
-.bm-card { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface-2); transition: border-color 0.12s; }
-.bracket-match > summary:hover .bm-card,
-.bracket-match[open] > summary .bm-card { border-color: var(--accent-2); }
+.bm-card { display: block; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface-2); color: inherit; text-decoration: none; transition: border-color 0.12s; }
+.bm-card-link { cursor: pointer; }
+.bm-card-link:hover { border-color: var(--accent-2); }
 .bracket-team { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; font-size: 13px; min-width: 0; }
 .bracket-team + .bracket-team { border-top: 1px solid var(--border); }
 .bracket-team .seed { color: var(--muted); font-size: 11px; min-width: 20px; flex: none; font-variant-numeric: tabular-nums; }
@@ -302,13 +300,18 @@ th.sortable:hover { color: var(--accent); }
 .bracket-team .score { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 600; flex: none; }
 .bracket-team.win .score { color: var(--accent); }
 
-/* Sets open as a FLOATING panel (absolute) so revealing them never reflows the bracket
-   or knocks the connector lines out of place. The last match in a column opens upward so
-   it never spills past the bottom. On narrow screens (below) it becomes a normal block. */
-.bm-sets { position: absolute; top: calc(100% + 5px); left: 0; z-index: 30; min-width: 100%; width: max-content; max-width: 300px;
-  background: var(--surface); border: 1px solid var(--accent-2); border-radius: 10px; padding: 5px 8px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5); }
-.bracket-matches .bracket-match:last-child .bm-sets { top: auto; bottom: calc(100% + 5px); }
-.bm-sets table { width: 100%; }
+/* Series detail opens BELOW the bracket (never overlaps or reflows it). Only the tapped
+   series is shown, via :target; a long set list has full width here. */
+.bm-details { margin-top: 4px; }
+.bm-detail { display: none; scroll-margin-top: 76px; }
+.bm-detail:target { display: block; border: 1px solid var(--accent-2); border-radius: 12px; background: var(--surface); padding: 10px 14px 12px; margin-top: 10px; }
+.bm-detail-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-bottom: 8px; margin-bottom: 6px; border-bottom: 1px solid var(--border); }
+.bm-detail-round { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.bm-detail-team { font-weight: 600; }
+.bm-detail-close { margin-left: auto; color: var(--muted); font-size: 20px; line-height: 1; text-decoration: none; padding: 0 6px; }
+.bm-detail-close:hover { color: var(--text); }
+.bm-detail-table { width: 100%; }
+.bm-detail-table td { padding: 3px 6px; }
 
 /* connectors: each pair's two cards join with an L (drawn as borders on ::after), and
    the next round's card reaches back with a short incoming stub (::before). */
@@ -338,8 +341,6 @@ th.sortable:hover { color: var(--accent); }
   .bracket-matches { gap: 8px; }
   .bracket-match { flex: none; min-height: 0; }
   .bracket-round .bracket-match::before, .bracket-round .bracket-match::after { display: none !important; }
-  .bm-sets { position: static; max-width: none; width: auto; box-shadow: none; border-color: var(--border); margin-top: 6px; }
-  .bracket-matches .bracket-match:last-child .bm-sets { top: auto; bottom: auto; }
 }
 
 /* search box (type="search" isn't covered by the native input rule above) */

@@ -122,21 +122,30 @@ export async function getPublicBracket(seasonName: string): Promise<PublicBracke
       label: ROUND_LABEL[round] ?? round,
       series: ss
         .sort((a, b) => a.bracketIndex - b.bracketIndex)
-        .map((s): BracketSeries => ({
-          round,
-          label: ROUND_LABEL[round] ?? round,
-          aSeed: s.teamSeasonAId ? seedOf.get(s.teamSeasonAId) ?? null : null,
-          aName: s.teamSeasonAId ? nameOf.get(s.teamSeasonAId) ?? "?" : "TBD",
-          aTeamSeasonId: s.teamSeasonAId ?? null,
-          bSeed: s.teamSeasonBId ? seedOf.get(s.teamSeasonBId) ?? null : null,
-          bName: s.teamSeasonBId ? nameOf.get(s.teamSeasonBId) ?? "?" : "TBD",
-          bTeamSeasonId: s.teamSeasonBId ?? null,
-          scoreA: s.scoreA,
-          scoreB: s.scoreB,
-          winner: s.winnerTeamSeasonId === s.teamSeasonAId ? "A" : s.winnerTeamSeasonId === s.teamSeasonBId ? "B" : null,
-          decided: !!s.winnerTeamSeasonId,
-          sets: setsFor(s.teamSeasonAId, s.teamSeasonBId),
-        })),
+        .map((s): BracketSeries => {
+          const sets = setsFor(s.teamSeasonAId, s.teamSeasonBId);
+          // A live series only persists scoreA/scoreB once decided; until then derive the
+          // running set-win tally from its confirmed sets so the score shows in progress.
+          const liveA = sets.filter((x) => x.winner === "A").length;
+          const liveB = sets.filter((x) => x.winner === "B").length;
+          const scoreA = s.scoreA ?? (sets.length ? liveA : null);
+          const scoreB = s.scoreB ?? (sets.length ? liveB : null);
+          return {
+            round,
+            label: ROUND_LABEL[round] ?? round,
+            aSeed: s.teamSeasonAId ? seedOf.get(s.teamSeasonAId) ?? null : null,
+            aName: s.teamSeasonAId ? nameOf.get(s.teamSeasonAId) ?? "?" : "TBD",
+            aTeamSeasonId: s.teamSeasonAId ?? null,
+            bSeed: s.teamSeasonBId ? seedOf.get(s.teamSeasonBId) ?? null : null,
+            bName: s.teamSeasonBId ? nameOf.get(s.teamSeasonBId) ?? "?" : "TBD",
+            bTeamSeasonId: s.teamSeasonBId ?? null,
+            scoreA,
+            scoreB,
+            winner: s.winnerTeamSeasonId === s.teamSeasonAId ? "A" : s.winnerTeamSeasonId === s.teamSeasonBId ? "B" : null,
+            decided: !!s.winnerTeamSeasonId,
+            sets,
+          };
+        }),
     }));
 
   const finalS = series.find((s) => s.round === "FINAL");
