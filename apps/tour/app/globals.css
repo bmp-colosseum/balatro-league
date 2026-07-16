@@ -122,6 +122,9 @@ tr:hover { background: var(--surface-2); }
     max-width: 100%;
   }
   .table-scroll > table { display: table; }
+  /* the draft board scrolls inside its own .draftboard-wrap and needs sticky
+     columns + fixed layout -- keep it a real table, don't turn it into a block. */
+  main table.draftboard { display: table; }
 
   table.responsive-table thead { display: none; }
   table.responsive-table,
@@ -173,6 +176,9 @@ tr:hover { background: var(--surface-2); }
 .stat .value { font-size: 28px; font-weight: 600; margin-top: 4px; }
 
 main { max-width: 1100px; margin: 24px auto; padding: 0 24px; }
+/* the draft board is a wide dense grid (teams x rounds) -- give it more room than
+   the reading column so every round fits without horizontal scroll. */
+main:has(.draftboard-wrap) { max-width: 1340px; }
 
 /* native form elements */
 input[type="text"], input[type="number"], input[type="datetime-local"],
