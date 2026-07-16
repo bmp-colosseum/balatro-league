@@ -3,7 +3,6 @@ import { Trophy, ArrowLeft, Award } from "lucide-react";
 import { StandingsTable } from "@/components/StandingsTable";
 import { getSeasonStandings } from "@/lib/standings";
 import { getChampionRun } from "@/lib/playoffs";
-import { getPlayoffPicture } from "@/lib/playoff-picture";
 import { getSeasonLeaders } from "@/lib/stats";
 import { getSeasonAwards } from "@/lib/awards";
 import { canSeeDiscordIds } from "@/lib/discord-id";
@@ -16,10 +15,9 @@ const pctOf = (w: number, l: number) => (w + l ? `${((100 * w) / (w + l)).toFixe
 export default async function SeasonPage({ params }: { params: Promise<{ name: string }> }) {
   const { name } = await params;
   const seasonName = decodeURIComponent(name);
-  const [data, run, picture, leaders, awards, showIds] = await Promise.all([
+  const [data, run, leaders, awards, showIds] = await Promise.all([
     getSeasonStandings(seasonName),
     getChampionRun(seasonName),
-    getPlayoffPicture(seasonName),
     getSeasonLeaders(seasonName),
     getSeasonAwards(seasonName),
     canSeeDiscordIds(),
@@ -44,7 +42,7 @@ export default async function SeasonPage({ params }: { params: Promise<{ name: s
         <Link href="/">← seasons</Link>
       </p>
       <h1>{data.seasonName}</h1>
-      <p className="sub">Standings derived from {data.setCount} sets · §5 tiebreakers.</p>
+      <p className="sub">Standings from {data.setCount} sets. Ties broken by matchup %, then set %, then game %.</p>
       {mvpR && mvpR.player && (
         <p className="flex items-center gap-1.5">
           <Award className="size-4 text-[var(--accent)]" />
@@ -109,33 +107,6 @@ export default async function SeasonPage({ params }: { params: Promise<{ name: s
           </div>
         </div>
       )}
-      {!run && picture && picture.quarterfinals.length > 0 && (
-        <div className="card">
-          <div className="bracket-title">
-            Projected playoffs — top {picture.perGroup} per conference
-          </div>
-          <div className="bracket">
-            <div className="bracket-round">
-              <div className="bracket-label">Quarterfinals</div>
-              <div className="bracket-matches">
-                {picture.quarterfinals.map((qf, i) => (
-                  <div className="bracket-match" key={i}>
-                    <div className="bm-card">
-                      <div className="bracket-team">
-                        <span className="nm"><Link href={`/teams/${qf.aTeamSeasonId}`}>{qf.a}</Link></span>
-                      </div>
-                      <div className="bracket-team">
-                        <span className="nm"><Link href={`/teams/${qf.bTeamSeasonId}`}>{qf.b}</Link></span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {data.groups.map((g) => (
         <div className="card" key={g.conferenceId}>
           {data.groups.length > 1 && (
