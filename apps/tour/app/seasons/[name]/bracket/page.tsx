@@ -34,7 +34,7 @@ export default async function BracketPage({ params }: { params: Promise<{ name: 
             <span className="muted">Champion:</span> <strong>{bracket.championTeamSeasonId ? <Link href={`/teams/${bracket.championTeamSeasonId}`}>{bracket.champion}</Link> : bracket.champion}</strong>
           </p>
         )}
-        <p className="sub">Click a matchup to see its player-by-player sets.</p>
+        <p className="sub">Seeds and series scores by round. Scroll sideways to follow the bracket to the final.</p>
         <div className="card" style={{ overflowX: "auto" }}>
           {/* Height scales with the widest round so pairs stay visually grouped at any field size. */}
           <div className="bracket" style={{ minHeight: (bracket.rounds[0]?.series.length ?? 2) * 120 }}>
@@ -43,8 +43,8 @@ export default async function BracketPage({ params }: { params: Promise<{ name: 
                 <div className="bracket-label">{r.label}</div>
                 <div className="bracket-matches">
                   {r.series.map((s, i) => (
-                    <details className="bracket-match" key={i}>
-                      <summary className="bm-card">
+                    <div className="bracket-match" key={i}>
+                      <div className="bm-card">
                         <div className={`bracket-team${s.winner === "A" ? " win" : ""}`}>
                           {s.aSeed ? <span className="seed">#{s.aSeed}</span> : null}
                           <span className="nm">{s.aTeamSeasonId ? <Link href={`/teams/${s.aTeamSeasonId}`}>{s.aName}</Link> : s.aName}</span>
@@ -55,25 +55,8 @@ export default async function BracketPage({ params }: { params: Promise<{ name: 
                           <span className="nm">{s.bTeamSeasonId ? <Link href={`/teams/${s.bTeamSeasonId}`}>{s.bName}</Link> : s.bName}</span>
                           <span className="score">{s.scoreB ?? "—"}</span>
                         </div>
-                      </summary>
-                      {s.sets.length > 0 && (
-                        <div className="bm-sets">
-                          <table style={{ fontSize: "0.85em" }}>
-                            <tbody>
-                              {s.sets.map((st, j) => (
-                                <tr key={j}>
-                                  <td className="muted num" style={{ width: 22 }}>{st.seedA ?? ""}</td>
-                                  <td style={{ color: st.winner === "A" ? "var(--success)" : undefined }}><Link href={`/players/${st.playerAId}`}>{st.playerA}</Link></td>
-                                  <td className="num" style={{ width: 44, textAlign: "center" }}>{st.scoreA}–{st.scoreB}</td>
-                                  <td style={{ textAlign: "right", color: st.winner === "B" ? "var(--success)" : undefined }}><Link href={`/players/${st.playerBId}`}>{st.playerB}</Link></td>
-                                  <td className="muted num" style={{ width: 22, textAlign: "right" }}>{st.seedB ?? ""}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </details>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
