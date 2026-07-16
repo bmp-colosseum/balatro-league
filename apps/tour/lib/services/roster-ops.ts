@@ -328,15 +328,16 @@ export async function replacePlayer(seasonName: string, teamSeasonId: string, in
   return { ok: true, ...sets };
 }
 
-// Add a brand-new person to a team who was never signed up -- creates (or reuses) the core
-// Player by Discord ID (required, so the player is real + linkable, never an unresolvable
-// placeholder), then rosters them as a permanent ADDED arrival. Idempotent on the player
-// (upsert by discordId), so re-adding an existing id reuses them instead of duplicating.
-export async function addPlayerToTeam(
+// Add a brand-new person who was never signed up -- creates (or reuses) the core Player by
+// Discord ID (required -> real, linkable, never a placeholder). NO signup: a mid-season add
+// isn't a signup, and a sub definitely isn't. role "member" rosters them permanently (ADDED
+// arrival at a seed); role "sub" runs a real substitution -- they cover a chosen current
+// player for a week window. Idempotent on the player (upsert by discordId), no duplicate.
+export async function addTourPlayer(
   seasonName: string,
   teamSeasonId: string,
   input: { discordId: string; displayName: string },
-  opts: { seed?: number | null; effectiveWeek?: number; reason?: string; by?: string } = {},
+  opts: { role?: "member" | "sub"; seed?: number | null; effectiveWeek?: number; untilWeek?: number | null; coversPlayerId?: string; reason?: string; by?: string } = {},
 ) {
   const displayName = (input.displayName ?? "").trim();
   if (!displayName) throw new Error("Enter a display name.");
@@ -344,15 +345,23 @@ export async function addPlayerToTeam(
   if (!discordId) throw new Error("Discord ID is required.");
   if (!/^\d{17,20}$/.test(discordId)) throw new Error("Discord ID must be 17-20 digits.");
   const seasonId = await seasonIdOf(seasonName);
+  // Player only -- find-or-create by Discord ID. No signup record.
   const p = await prisma.player.upsert({ where: { discordId }, create: { discordId, displayName }, update: {}, select: { id: true } });
   const playerId = p.id;
   const effectiveWeek = opts.effectiveWeek && opts.effectiveWeek >= 1 ? opts.effectiveWeek : 1;
+
+  if (opts.role === "sub") {
+    if (!opts.coversPlayerId) throw new Error("Pick which player the sub is covering for.");
+    await substitute(seasonName, teamSeasonId, opts.coversPlayerId, playerId, effectiveWeek, opts.untilWeek ?? null, opts.reason?.trim() || "sub added mid-season", opts.by);
+    return { ok: true, playerId, role: "sub" as const };
+  }
+
   const maxSeed = await prisma.rosterMove.aggregate({ where: { teamSeasonId, kind: { in: ["DRAFTED", "ADDED"] } }, _max: { seed: true } });
   const seed = opts.seed && opts.seed >= 1 ? opts.seed : (maxSeed._max.seed ?? 0) + 1;
   await ensureMembership(teamSeasonId, playerId, seed);
   await prisma.rosterMove.create({ data: { seasonId, teamSeasonId, kind: "ADDED", playerId, effectiveWeek, seed, reason: opts.reason?.trim() || "added mid-season", createdBy: opts.by } });
   await queueRoleSync(seasonName);
-  return { ok: true, playerId, seed };
+  return { ok: true, playerId, seed, role: "member" as const };
 }
 
 // Sub-only memberships for a set of teams: players with SUB stints but NO permanent

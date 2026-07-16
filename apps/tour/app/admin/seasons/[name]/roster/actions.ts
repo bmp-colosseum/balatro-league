@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getViewer, type Viewer } from "@/lib/auth";
 import { capabilitiesFor, captainTeamsFor, seasonIdByName } from "@/lib/permissions";
-import { substitute, recordDeparture, reinstate, replacePlayer, removeMove, changeCaptain, reseed, swapSeeds, setCoCaptain, convertMemberToSub, convertSubToMember, purgePlayerFromTeam, addPlayerToTeam } from "@/lib/services/roster-ops";
+import { substitute, recordDeparture, reinstate, replacePlayer, removeMove, changeCaptain, reseed, swapSeeds, setCoCaptain, convertMemberToSub, convertSubToMember, purgePlayerFromTeam, addTourPlayer } from "@/lib/services/roster-ops";
 import { createRosterRequest, approveRosterRequest, rejectRosterRequest, cancelRosterRequest, approveManyRosterRequests, type RosterRequestPayload } from "@/lib/services/roster-requests";
 import { addStrike, removeStrike } from "@/lib/services/strikes";
 import { notifyLive } from "@/lib/notify";
@@ -243,25 +243,32 @@ export async function purgeMemberAction(formData: FormData) {
   backToRoster(season, msg, ok);
 }
 
-// Add a brand-new person (never signed up) to a team -- creates the Player by Discord ID
-// (or a name-only placeholder) and rosters them. Mod/TO only (captains can't mint players).
+// Add a brand-new person (never signed up) to a team -- creates the Player by Discord ID,
+// then rosters them as a permanent member OR runs a real substitution (they cover a chosen
+// player for a week window). No signup. Mod/TO only (captains can't mint players).
 export async function addPlayerAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const season = String(formData.get("season") ?? "");
   if (!(await isModFor(season))) return { ok: false, message: "Mods only." };
   const teamSeasonId = String(formData.get("teamSeasonId") ?? "");
   const displayName = String(formData.get("displayName") ?? "");
   const discordId = String(formData.get("discordId") ?? "");
+  const role = formData.get("role") === "sub" ? "sub" : "member";
   const seedRaw = Number(formData.get("seed"));
   const from = wk(formData, "effectiveWeek");
+  const until = wk(formData, "untilWeek");
+  const coversPlayerId = String(formData.get("coversPlayerId") ?? "");
   try {
-    const r = await addPlayerToTeam(
+    const r = await addTourPlayer(
       season,
       teamSeasonId,
       { discordId, displayName },
-      { seed: Number.isFinite(seedRaw) && seedRaw > 0 ? seedRaw : null, effectiveWeek: from ?? undefined },
+      { role, seed: Number.isFinite(seedRaw) && seedRaw > 0 ? seedRaw : null, effectiveWeek: from ?? undefined, untilWeek: until, coversPlayerId },
     );
     rev(season);
-    return { ok: true, message: `Added ${displayName.trim()} at seed #${r.seed}.` };
+    return {
+      ok: true,
+      message: r.role === "sub" ? `Added ${displayName.trim()} as a sub.` : `Added ${displayName.trim()} at seed #${r.seed}.`,
+    };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Could not add player." };
   }

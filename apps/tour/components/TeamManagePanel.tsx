@@ -12,8 +12,9 @@ import { FormSelect } from "@/components/FormSelect";
 import { SubmitButton } from "@/components/SubmitButton";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { PlayerManage } from "@/components/PlayerManage";
+import { AddPlayerForm } from "@/components/AddPlayerForm";
 import {
-  convertToSubAction, makePermanentAction, reinstateAction, removeMoveAction, purgeMemberAction, addPlayerAction,
+  convertToSubAction, makePermanentAction, reinstateAction, removeMoveAction, purgeMemberAction,
   approveRequestAction, rejectRequestAction, cancelRequestAction,
 } from "@/app/admin/seasons/[name]/roster/actions";
 import type { RosterRequestView } from "@/lib/services/roster-requests";
@@ -259,23 +260,21 @@ export function TeamManagePanel({
         </table>
       </div>
 
-      {/* Add a brand-new player who was never signed up -- creates the Player by Discord ID
-          and rosters them. Mod/TO only. */}
+      {/* Add a brand-new player who was never signed up -- as a permanent member or a sub
+          covering someone. Creates the Player by Discord ID; no signup. Mod/TO only. */}
       {!req && (
         <details className="mt-2">
           <summary className="pill inline-flex items-center gap-1" style={{ cursor: "pointer", listStyle: "none", background: "var(--surface-2)", border: "1px solid var(--border)" }}>
             <UserPlus className="size-3.5" /> Add a player (new -- not signed up)
           </summary>
-          <ActionFlashForm action={addPlayerAction} className="mt-2 flex flex-wrap items-end gap-1.5">
-            <input type="hidden" name="season" value={seasonName} />
-            <input type="hidden" name="teamSeasonId" value={t.teamSeasonId} />
-            <label className="block"><span className="sub">Display name</span><input name="displayName" placeholder="name" className={`${inputCls} w-32`} required /></label>
-            <label className="block"><span className="sub">Discord ID</span><input name="discordId" inputMode="numeric" pattern="\d{17,20}" placeholder="17-20 digits" className={`${inputCls} w-32`} required /></label>
-            <label className="block"><span className="sub">Seed</span><input type="number" name="seed" min={1} placeholder="next" className={`${inputCls} w-16`} /></label>
-            <label className="block"><span className="sub">From week</span><FormSelect name="effectiveWeek" size="sm" options={weekSel} defaultValue={defWeek} /></label>
-            <SubmitButton size="sm" variant="secondary" pendingText="..."><UserPlus className="size-3.5" /> Add to team</SubmitButton>
-          </ActionFlashForm>
-          <p className="sub" style={{ margin: "4px 0 0" }}>The Discord ID is how the player is identified everywhere -- required, and reused if they already exist.</p>
+          <AddPlayerForm
+            seasonName={seasonName}
+            teamSeasonId={t.teamSeasonId}
+            lineupOpts={lineupOpts}
+            weekSel={weekSel}
+            weekSelOpt={weekSelOpt}
+            defWeek={defWeek}
+          />
         </details>
       )}
 
