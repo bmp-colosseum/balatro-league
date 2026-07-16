@@ -38,6 +38,15 @@ http:
         - security-headers
       tls:
         certResolver: le
+    grafana:
+      rule: "Host(`grafana.balatroleague.com`)"
+      entryPoints:
+        - websecure
+      service: grafana
+      middlewares:
+        - security-headers
+      tls:
+        certResolver: le
   services:
     league-web:
       loadBalancer:
@@ -55,3 +64,7 @@ http:
       loadBalancer:
         servers:
           - url: "http://tour-web-dev:3000"
+    grafana:
+      loadBalancer:
+        servers:
+          - url: "http://grafana:3000"

@@ -1,0 +1,12 @@
+# Auto-wire Loki as Grafana's default datasource on first boot, so there's
+# nothing to click after login - Explore is ready to search logs immediately.
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: true
+    jsonData:
+      maxLines: 1000
