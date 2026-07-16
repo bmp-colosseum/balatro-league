@@ -360,6 +360,21 @@ th.sortable:hover { color: var(--accent); }
 .wk-sets table { width: 100%; }
 .wk-sets td { padding: 2px 5px; }
 
+/* Draft board: a dense spreadsheet (teams down, rounds across) that FITS the width on
+   desktop -- no horizontal scroll. table-layout:fixed shares the round columns equally and
+   long names ellipsis (full name on hover). Below its min-width (phones) it scrolls, with
+   the seed + team columns pinned so you never lose your place. */
+.draftboard-wrap { overflow-x: auto; }
+.draftboard { border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 760px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.draftboard th, .draftboard td { border: 1px solid var(--border); padding: 4px 7px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.draftboard thead th { position: sticky; top: 0; z-index: 3; background: var(--surface-2); font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
+.draftboard tbody tr:hover td { background: rgba(110, 168, 254, 0.06); }
+.draftboard .c-seed { width: 34px; text-align: center; position: sticky; left: 0; z-index: 2; background: var(--surface); }
+.draftboard .c-team { width: 148px; position: sticky; left: 34px; z-index: 2; background: var(--surface); box-shadow: 1px 0 0 var(--border); }
+.draftboard thead .c-seed, .draftboard thead .c-team { z-index: 4; background: var(--surface-2); }
+.draftboard .c-capt { background: rgba(241, 196, 15, 0.05); }
+.draftboard .pickno { color: var(--muted); font-size: 0.85em; margin-right: 4px; }
+
 /* search box (type="search" isn't covered by the native input rule above) */
 .search { width: 100%; max-width: 320px; margin-bottom: 16px; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; color: var(--text); font: inherit; }
 .search::placeholder { color: var(--muted); }

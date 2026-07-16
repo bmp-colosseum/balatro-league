@@ -21,7 +21,7 @@ export default async function SeasonPlayers({ params }: { params: Promise<{ name
       <p>
         <Link href={`/seasons/${enc}`} className="inline-flex items-center gap-1"><ArrowLeft className="size-3.5" /> {name}</Link>
       </p>
-      <h1 className="flex items-center gap-2"><Users className="size-5 text-[var(--accent)]" /> Player stats</h1>
+      <h1 className="flex items-center gap-2"><Users className="size-5 text-[var(--accent)]" /> Player rankings</h1>
       <p className="sub">Every player&apos;s regular-season record, ranked by set win %. Set = a 1v1 within a matchup; games are the individual game wins inside those sets.</p>
 
       {players.length === 0 ? (

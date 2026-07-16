@@ -86,7 +86,7 @@ export default async function SeasonWeeks({ params, searchParams }: { params: Pr
       <p>
         <Link href={`/seasons/${enc}`} className="inline-flex items-center gap-1"><ArrowLeft className="size-3.5" /> {name}</Link>
       </p>
-      <h1>{name} — week by week</h1>
+      <h1>{name} — regular season</h1>
       <p className="sub">Pick a week to see its matchups by conference. Tap a matchup for the player-by-player sets.</p>
 
       {weeks.length === 0 ? (

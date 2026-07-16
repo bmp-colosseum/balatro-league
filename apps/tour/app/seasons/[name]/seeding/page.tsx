@@ -18,7 +18,7 @@ export default async function SeasonSeeding({ params }: { params: Promise<{ name
       <p>
         <Link href={`/seasons/${enc}`} className="inline-flex items-center gap-1"><ArrowLeft className="size-3.5" /> {name}</Link>
       </p>
-      <h1 className="flex items-center gap-2"><ListOrdered className="size-5 text-[var(--accent)]" /> Overall seeding</h1>
+      <h1 className="flex items-center gap-2"><ListOrdered className="size-5 text-[var(--accent)]" /> Team rankings</h1>
       <p className="sub">
         Every team ranked across all conferences by the playoff tiebreakers — matchup %, then set %, then game %.
         This is the order that drives the playoff seeding and the seeded week (#1 vs #last).
