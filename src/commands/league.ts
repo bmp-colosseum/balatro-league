@@ -474,6 +474,7 @@ const ENSURED_CHANNELS: {
   { name: "league-chat", key: LeagueConfigKey.GeneralChannelId, type: ChannelType.GuildText, postable: true },
   { name: "league-bot-commands", key: LeagueConfigKey.BotCommandsChannelId, type: ChannelType.GuildText, postable: true },
   { name: "league-standings", key: LeagueConfigKey.StandingsChannelId, type: ChannelType.GuildText, postable: false },
+  { name: "league-bot-status", key: LeagueConfigKey.StatusChannelId, type: ChannelType.GuildText, postable: false },
   { name: "league-help", key: LeagueConfigKey.HelpChannelId, type: ChannelType.GuildText, postable: false },
   { name: "league-announcements", key: LeagueConfigKey.AnnouncementsChannelId, type: ChannelType.GuildAnnouncement, postable: false },
   { name: "league-feedback", key: LeagueConfigKey.FeedbackChannelId, type: ChannelType.GuildText, postable: true },
@@ -847,6 +848,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     const chatChan = await ensureChannel("league-chat", "General league chat. Match scheduling, banter, etc.", ChannelType.GuildText, LeagueConfigKey.GeneralChannelId);
     const botCmdChan = await ensureChannel("league-bot-commands", "General bot commands: /random, /profile, /standings, etc. Most replies are private (only you see them) so you can run commands from any channel.", ChannelType.GuildText, LeagueConfigKey.BotCommandsChannelId);
     const standingsChan = await ensureChannel("league-standings", "📊 Live standings for the active season — auto-updated by the bot. Read-only.", ChannelType.GuildText, LeagueConfigKey.StandingsChannelId);
+    const statusChan = await ensureChannel("league-bot-status", "🚀 Automated deploy + bot status — posts when the bot is updating / back up so you know about brief restarts. Read-only.", ChannelType.GuildText, LeagueConfigKey.StatusChannelId);
     const helpChan = await ensureChannel("league-help", "📖 All the bot commands. You can also type /help anywhere.", ChannelType.GuildText, LeagueConfigKey.HelpChannelId);
     const announcementsChan = await ensureChannel(
       "league-announcements",
@@ -1014,6 +1016,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     await lockReadOnly(announcementsChan, "#league-announcements", true);
     await lockReadOnly(signupChan, "#league-signups", false);
     await lockReadOnly(standingsChan, "#league-standings", false);
+    await lockReadOnly(statusChan, "#league-bot-status", false);
     await lockReadOnly(helpChan, "#league-help", false);
     // #league-queue is bot-only too — the pinned message + its Join/Leave buttons
     // are the whole UI; buttons work regardless of send-message perms.

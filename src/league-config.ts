@@ -186,6 +186,11 @@ export const LeagueConfigKey = {
   // place, posting/deleting only when the division count changes.
   StandingsMessageIds: "standings_message_ids",
 
+  // Public, read-only channel for automated deploy / bot status posts (e.g. the
+  // CI pipeline announcing "deploying…" / "back up" so players know when a brief
+  // restart is happening). Bot/webhook-only; @everyone can view but not post.
+  StatusChannelId: "status_channel_id",
+
   // Discord category IDs the bot creates its channels under. Resolved
   // config-first (so an admin can point the bot at an existing category on
   // a server it didn't create) → find-or-create by name fallback. Bootstrap
