@@ -206,7 +206,7 @@ export default async function PlayoffsAdmin({ params }: { params: Promise<{ name
                         {s.matchupId ? (
                           // Live series: games are paired + reported in the matchup console,
                           // and the series score derives from them (no manual score here).
-                          <Link href={`/admin/matchups/${s.matchupId}`} className="inline-flex items-center gap-1 underline">
+                          <Link href={`/admin/matchups/${s.matchupId}?from=playoffs`} className="inline-flex items-center gap-1 underline">
                             {s.decided ? "Edit games" : "Pair & enter games"}
                           </Link>
                         ) : (

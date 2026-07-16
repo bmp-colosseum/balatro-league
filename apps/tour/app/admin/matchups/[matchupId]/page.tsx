@@ -29,8 +29,9 @@ type Player = { playerId: string; name: string; seed: number; paired: boolean };
 const opts = (players: Player[]) =>
   players.filter((p) => !p.paired).map((p) => ({ value: p.playerId, label: `#${p.seed} ${p.name}` }));
 
-export default async function PairingConsole({ params }: { params: Promise<{ matchupId: string }> }) {
+export default async function PairingConsole({ params, searchParams }: { params: Promise<{ matchupId: string }>; searchParams: Promise<{ from?: string }> }) {
   const { matchupId } = await params;
+  const { from } = await searchParams;
   // TO, a SCHEDULE mod, or the captain of either team in this matchup.
   const { seasonId, teamSeasonIds } = await matchupScope(matchupId);
   if (!(await can("SCHEDULE", { seasonId, teamSeasonId: teamSeasonIds }))) return <NoAccess what="manage this matchup" />;
@@ -50,12 +51,19 @@ export default async function PairingConsole({ params }: { params: Promise<{ mat
   const enc = encodeURIComponent(c.seasonName);
   const availA = c.teamA.players.filter((p) => !p.paired);
   const availB = c.teamB.players.filter((p) => !p.paired);
+  // Back link returns to where you came from (?from=), defaulting to playoffs for a playoff
+  // matchup and the schedule otherwise -- so "back" from playoff pairing goes to playoffs.
+  const source = from ?? (c.weekKind === "PLAYOFF" ? "playoffs" : "schedule");
+  const back =
+    source === "playoffs" ? { href: `/admin/seasons/${enc}/playoffs`, label: `${c.seasonName} playoffs` }
+      : source === "review" ? { href: `/admin/seasons/${enc}/review`, label: `${c.seasonName} review` }
+        : { href: `/admin/seasons/${enc}/schedule`, label: `${c.seasonName} schedule` };
 
   return (
     <main>
       <LiveRefresh channel={`matchup:${matchupId}`} />
       <p>
-        <Link href={`/admin/seasons/${enc}/schedule`} className="inline-flex items-center gap-1"><ArrowLeft className="size-3.5" /> {c.seasonName} schedule</Link>
+        <Link href={back.href} className="inline-flex items-center gap-1"><ArrowLeft className="size-3.5" /> {back.label}</Link>
       </p>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1>

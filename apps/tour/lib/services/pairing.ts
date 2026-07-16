@@ -153,6 +153,7 @@ export async function getPairingConsole(matchupId: string) {
     matchupId: m.matchup.id,
     seasonName: m.seasonName,
     weekNumber: m.weekNumber,
+    weekKind: m.weekKind, // "PLAYOFF" etc. -- lets the console default its back link sensibly
     deadlineAt: m.deadlineAt,
     teamA: decorate(m.teamA),
     teamB: decorate(m.teamB),

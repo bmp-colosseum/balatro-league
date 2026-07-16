@@ -281,7 +281,7 @@ function MatchupCard({
       {m.noPairs && <span className="badge" style={dangerBadge}>no pairings</span>}
       {m.allZero && !m.noPairs && <span className="badge" style={dangerBadge}>all 0-0</span>}
       {m.matchupId && (
-        <Link href={`/admin/matchups/${m.matchupId}`} className="sub" style={{ marginLeft: "auto" }}>
+        <Link href={`/admin/matchups/${m.matchupId}?from=review`} className="sub" style={{ marginLeft: "auto" }}>
           full console &rarr;
         </Link>
       )}
