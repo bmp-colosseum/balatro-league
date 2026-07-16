@@ -84,6 +84,20 @@ interface ScheduleChangeJob {
 
 let boss: PgBoss | null = null;
 
+// Graceful stop for deploys: let in-flight jobs wind down, then close pg-boss so
+// the next boot starts clean. Idempotent; bounded so we never overrun Docker's
+// stop grace period.
+export async function stopQueue(): Promise<void> {
+  if (!boss) return;
+  const b = boss;
+  boss = null;
+  try {
+    await b.stop({ timeout: 8000 }); // graceful is the default
+  } catch (err) {
+    console.warn("[pg-boss] stop failed:", err);
+  }
+}
+
 export async function initQueue(): Promise<void> {
   if (boss) return;
   boss = new PgBoss({

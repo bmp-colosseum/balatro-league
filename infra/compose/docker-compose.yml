@@ -92,6 +92,10 @@ services:
   league-bot:
     <<: *app-hardening
     image: ghcr.io/${GHCR_OWNER}/balatro-league-bot:${LEAGUE_BOT_TAG}
+    # Give the graceful shutdown room to close the gateway + drain pg-boss (up to
+    # ~8s) before Docker escalates to SIGKILL — a clean close avoids the stale
+    # interaction-replay storm on the next boot.
+    stop_grace_period: 20s
     environment:
       NODE_ENV: production
       PORT: "8080"

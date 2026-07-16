@@ -14,7 +14,7 @@ import { startHealthCheck } from "./healthcheck.js";
 import { startMatchSweep } from "./match-sweep.js";
 import { startMatchControlBumper } from "./commands/match-buttons.js";
 import { bootstrapPresetsAndPointers } from "./match-config.js";
-import { initQueue } from "./queue.js";
+import { initQueue, stopQueue } from "./queue.js";
 import { attachRateLimitLogging } from "./rate-limit-logger.js";
 
 // Time an interaction handler and log it if it exceeds SLOW_OP_MS (default 1.5s)
@@ -349,3 +349,28 @@ ensureBalatroEmojis(env.DISCORD_CLIENT_ID).catch((err) =>
 ensureCommandsRegistered().catch((err) =>
   console.warn("[register] auto-register failed:", err),
 );
+
+// Graceful shutdown on deploy (docker sends SIGTERM). Destroy the Discord client
+// FIRST so the gateway session closes cleanly — otherwise Discord holds the
+// session open and replays stale INTERACTION_CREATE events to the next boot,
+// which fail as 10062/40060 storms (button clicks look "timed out" for minutes).
+// Then wind down pg-boss. Prisma is disconnected by db.ts's own handler.
+let shuttingDown = false;
+async function gracefulShutdown(signal: NodeJS.Signals): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[shutdown] ${signal} — closing Discord gateway + pg-boss cleanly`);
+  try {
+    await client.destroy();
+  } catch (err) {
+    console.warn("[shutdown] client.destroy failed:", err);
+  }
+  try {
+    await stopQueue();
+  } catch (err) {
+    console.warn("[shutdown] stopQueue failed:", err);
+  }
+  process.exit(0);
+}
+process.once("SIGTERM", (s) => void gracefulShutdown(s));
+process.once("SIGINT", (s) => void gracefulShutdown(s));
