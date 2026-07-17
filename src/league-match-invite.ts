@@ -184,8 +184,12 @@ export async function createLeagueMatchInvite(opts: {
       autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
       invitable: false,
     });
-    await thread.members.add(me.discordId).catch(() => {});
-    await thread.members.add(opp.discordId).catch(() => {});
+    // Add both players in parallel — independent calls, so don't pay two
+    // round-trips serially (matters when Discord's API is slow).
+    await Promise.all([
+      thread.members.add(me.discordId).catch(() => {}),
+      thread.members.add(opp.discordId).catch(() => {}),
+    ]);
     // First thing in the thread: the moderation-recording notice (pinned).
     await postModerationNotice(thread);
     threadId = thread.id;

@@ -176,6 +176,17 @@ async function reply(interaction: AnyInteraction, content: string) {
   }
 }
 
+// Ack a component interaction immediately (no visible message change) so
+// Discord's 3-second window is met even when the handler's work runs long —
+// otherwise a slow handler blows the deadline and the click fails with 10062
+// "Unknown interaction". Idempotent (skips if already acked); the terminal
+// editOrUpdate/reply helpers detect the deferred state and use editReply/
+// followUp, so callers need no other change. Only for handlers that end via
+// those helpers — NOT ones that showModal or need a fresh interaction.reply.
+async function ackFast(interaction: AnyInteraction) {
+  if (!interaction.deferred && !interaction.replied) await interaction.deferUpdate();
+}
+
 async function raceLost(interaction: AnyInteraction) {
   return reply(interaction, "Someone else just clicked first — the buttons may have changed. Try again.");
 }
@@ -482,6 +493,7 @@ export function startMatchControlBumper(client: Client): void {
 // confirm step. loadBanContext (public variant) guards the actor and
 // refreshes the public message in place if the phase is stale.
 async function handleBanSelect(interaction: StringSelectMenuInteraction, session: MatchSession) {
+  await ackFast(interaction);
   const ctx = await loadBanContext(interaction, session);
   if (!ctx) return;
   const selected = interaction.values.map((v) => parseInt(v, 10)).filter((n) => !Number.isNaN(n));
@@ -501,6 +513,7 @@ async function handleBanSelect(interaction: StringSelectMenuInteraction, session
 // from the public button, so we update the message in place and drop a
 // small ephemeral ack.
 async function handleBanRandom(interaction: ButtonInteraction, session: MatchSession) {
+  await ackFast(interaction);
   const ctx = await loadBanContext(interaction, session);
   if (!ctx) return;
   const remaining = remainingCombos(ctx.game.pool, ctx.game.bans).map((r) => r.idx);
@@ -930,6 +943,7 @@ async function handleDecline(interaction: ButtonInteraction, session: MatchSessi
 }
 
 async function handleChooseFirst(interaction: ButtonInteraction, session: MatchSession, firstIdRaw: string | undefined) {
+  await ackFast(interaction);
   const isGame2 = session.state === "GAME_2_CHOOSE_FIRST";
   const isGame3 = session.state === "GAME_3_CHOOSE_FIRST";
   if (!isGame2 && !isGame3) {
@@ -1003,6 +1017,7 @@ async function handlePickRandom(interaction: ButtonInteraction, session: MatchSe
 }
 
 async function handlePick(interaction: AnyInteraction, session: MatchSession, idxRaw: string | undefined, random = false) {
+  await ackFast(interaction);
   if (!idxRaw) return reply(interaction, "This button looks broken — refresh Discord and try again.");
   const idx = parseInt(idxRaw, 10);
   if (Number.isNaN(idx)) return reply(interaction, "Invalid index.");
@@ -2008,6 +2023,7 @@ async function handleProposeCancel(interaction: ButtonInteraction, session: Matc
 //   - clicking again withdraws your vote
 //   - the opponent's click drops the match
 async function handleCancelVote(interaction: ButtonInteraction, session: MatchSession) {
+  await ackFast(interaction);
   if (session.state === "CANCELLED" || session.state === "COMPLETE" || session.state === "PAUSED") {
     return reply(interaction, "This match isn't active.");
   }
