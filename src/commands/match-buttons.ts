@@ -543,6 +543,7 @@ async function handleBanRandom(interaction: ButtonInteraction, session: MatchSes
 // at game start). Clears bans and reroll votes so the ban phase
 // starts over with a fresh shuffle.
 async function handleReroll(interaction: ButtonInteraction, session: MatchSession) {
+  await ackFast(interaction);
   const gameNum =
     session.state === "GAME_1_BAN" ? 1 :
     session.state === "GAME_2_BAN" ? 2 :
@@ -1059,6 +1060,7 @@ async function handlePick(interaction: AnyInteraction, session: MatchSession, id
 }
 
 async function handleWinner(interaction: ButtonInteraction, session: MatchSession, winnerIdRaw: string | undefined) {
+  await ackFast(interaction);
   if (!winnerIdRaw) return reply(interaction, "This button looks broken — refresh Discord and try again.");
   if (winnerIdRaw !== session.playerAId && winnerIdRaw !== session.playerBId) {
     return reply(interaction, "Invalid winner.");
@@ -1220,6 +1222,7 @@ async function advanceAfterGameWin(
 // before the match advances; only the winning player can set it. Once set we
 // hand off to advanceAfterGameWin to start the next game / finalize.
 async function handleLives(interaction: ButtonInteraction, session: MatchSession, livesRaw: string | undefined) {
+  await ackFast(interaction);
   const lives = Number(livesRaw);
   if (!Number.isInteger(lives) || lives < 1 || lives > MAX_GAME_LIVES) {
     return reply(interaction, "That lives button looks broken — refresh Discord and try again.");

@@ -215,9 +215,21 @@ export const LeagueConfigKey = {
 
 export type LeagueConfigKey = (typeof LeagueConfigKey)[keyof typeof LeagueConfigKey];
 
+// Config values (SignupsOnlyMode, channel-scope ids, etc.) are read on the hot path
+// of EVERY interaction — SignupsOnlyMode gates dispatch inside Discord's 3s ack window.
+// Cache with a short TTL so those reads don't add a serial DB round-trip per click.
+// setConfig/clearConfig write through (invalidate) for immediate consistency; the TTL
+// backstops changes made outside this process (e.g. the website writing leagueConfig).
+const CONFIG_TTL_MS = 30 * 1000;
+const configCache = new Map<string, { value: string | null; expiresAt: number }>();
+
 export async function getConfig(key: LeagueConfigKey): Promise<string | null> {
+  const c = configCache.get(key);
+  if (c && c.expiresAt > Date.now()) return c.value;
   const row = await prisma.leagueConfig.findUnique({ where: { key } });
-  return row?.value ?? null;
+  const value = row?.value ?? null;
+  configCache.set(key, { value, expiresAt: Date.now() + CONFIG_TTL_MS });
+  return value;
 }
 
 export async function setConfig(key: LeagueConfigKey, value: string, updatedBy: string): Promise<void> {
@@ -226,8 +238,10 @@ export async function setConfig(key: LeagueConfigKey, value: string, updatedBy: 
     create: { key, value, updatedBy },
     update: { value, updatedBy },
   });
+  configCache.delete(key);
 }
 
 export async function clearConfig(key: LeagueConfigKey): Promise<void> {
   await prisma.leagueConfig.deleteMany({ where: { key } });
+  configCache.delete(key);
 }
