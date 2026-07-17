@@ -2,6 +2,7 @@
 // JSON yourself if you need structure.
 
 import { prisma } from "./db.js";
+import { cacheEventsTotal } from "./metrics.js";
 
 export const LeagueConfigKey = {
   ResultsWebhookUrl: "results_webhook_url",
@@ -225,7 +226,11 @@ const configCache = new Map<string, { value: string | null; expiresAt: number }>
 
 export async function getConfig(key: LeagueConfigKey): Promise<string | null> {
   const c = configCache.get(key);
-  if (c && c.expiresAt > Date.now()) return c.value;
+  if (c && c.expiresAt > Date.now()) {
+    cacheEventsTotal.inc({ cache: "league_config", result: "hit" });
+    return c.value;
+  }
+  cacheEventsTotal.inc({ cache: "league_config", result: "miss" });
   const row = await prisma.leagueConfig.findUnique({ where: { key } });
   const value = row?.value ?? null;
   configCache.set(key, { value, expiresAt: Date.now() + CONFIG_TTL_MS });

@@ -24,11 +24,17 @@ import { EmbedBuilder } from "discord.js";
 import { prisma } from "./db.js";
 import { env } from "./env.js";
 import { getConfig, LeagueConfigKey } from "./league-config.js";
+import { attachRestTiming } from "./rate-limit-logger.js";
 import { sanitizeName } from "./sanitize.js";
 
 let cachedRest: REST | null = null;
 function rest(): REST {
-  if (!cachedRest) cachedRest = new REST({ version: "10" }).setToken(env.DISCORD_TOKEN);
+  if (!cachedRest) {
+    cachedRest = new REST({ version: "10" }).setToken(env.DISCORD_TOKEN);
+    // Standalone instance bypasses client.rest -- time it too so
+    // bot_discord_rest_* covers announce/webhook traffic.
+    attachRestTiming(cachedRest);
+  }
   return cachedRest;
 }
 

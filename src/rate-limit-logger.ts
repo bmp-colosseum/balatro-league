@@ -13,11 +13,65 @@
 //   Response 429: an actual rate-limited response slipped through (rare;
 //     means discord.js's preemptive throttling didn't catch it).
 
-import { RESTEvents, type RateLimitData, type InvalidRequestWarningData, type RestEvents } from "@discordjs/rest";
+import {
+  RESTEvents,
+  type InternalRequest,
+  type InvalidRequestWarningData,
+  type RateLimitData,
+  type REST,
+  type RestEvents,
+} from "@discordjs/rest";
 import type { Client } from "discord.js";
+import { discordRestDurationSeconds, discordRestRequestsTotal, normalizeRestRoute } from "./metrics.js";
+
+// Pull an HTTP status off a rejected REST call -- DiscordAPIError and
+// HTTPError both carry a numeric .status; anything else labels "error".
+function restErrorStatus(err: unknown): string {
+  if (typeof err === "object" && err !== null && "status" in err) {
+    const status = (err as { status: unknown }).status;
+    if (typeof status === "number") return String(status);
+  }
+  return "error";
+}
+
+// Time every REST request into Prometheus. request() is replaced with a
+// wrapper that hangs sync observes off the promise the call already returns
+// -- no added awaits, same signature, same resolution/rejection. request()
+// resolves with the parsed body (not the Response), so successes are
+// labeled status="ok"; failures use the error's HTTP status when present.
+// Exported for the standalone REST instances (announce.ts, balatro-emojis.ts)
+// that don't go through client.rest; WeakSet guards double-wrapping.
+const instrumented = new WeakSet<REST>();
+
+export function attachRestTiming(rest: REST): void {
+  if (instrumented.has(rest)) return;
+  instrumented.add(rest);
+  const original = rest.request.bind(rest);
+  const wrapped: typeof rest.request = (options: InternalRequest) => {
+    const method = options.method;
+    const route = normalizeRestRoute(options.fullRoute);
+    const start = Date.now();
+    const record = (status: string) => {
+      discordRestDurationSeconds.observe({ method, route }, (Date.now() - start) / 1000);
+      discordRestRequestsTotal.inc({ method, route, status });
+    };
+    return original(options).then(
+      (result) => {
+        record("ok");
+        return result;
+      },
+      (err: unknown) => {
+        record(restErrorStatus(err));
+        throw err;
+      },
+    );
+  };
+  rest.request = wrapped;
+}
 
 export function attachRateLimitLogging(client: Client): void {
   const rest = client.rest;
+  attachRestTiming(rest);
 
   rest.on(RESTEvents.RateLimited, (info: RateLimitData) => {
     console.warn("[rate-limit] hit:", {

@@ -10,12 +10,17 @@
 
 import type { Season } from "@prisma/client";
 import { prisma } from "./db.js";
+import { cacheEventsTotal } from "./metrics.js";
 
 const TTL_MS = 30 * 1000;
 let cache: { value: Season | null; expiresAt: number } | null = null;
 
 export async function activePublicSeason(): Promise<Season | null> {
-  if (cache && cache.expiresAt > Date.now()) return cache.value;
+  if (cache && cache.expiresAt > Date.now()) {
+    cacheEventsTotal.inc({ cache: "active_season", result: "hit" });
+    return cache.value;
+  }
+  cacheEventsTotal.inc({ cache: "active_season", result: "miss" });
   const value = await prisma.season.findFirst({ where: { isActive: true } });
   cache = { value, expiresAt: Date.now() + TTL_MS };
   return value;

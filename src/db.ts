@@ -9,10 +9,15 @@
 
 import { PrismaClient } from "@prisma/client";
 import { env } from "./env.js";
+import { dbQueriesTotal, dbQueryDurationSeconds } from "./metrics.js";
+
+// $extends changes the client type, so the exported/cached type is derived
+// from the factory rather than naming PrismaClient directly.
+type BotPrismaClient = ReturnType<typeof makePrisma>;
 
 declare global {
   // eslint-disable-next-line no-var
-  var __botPrisma: PrismaClient | undefined;
+  var __botPrisma: BotPrismaClient | undefined;
 }
 
 // Cap Prisma's pool. Railway's tier shares ~22 Postgres connections between
@@ -34,7 +39,7 @@ const LOG_SLOW_QUERIES = process.env.LOG_SLOW_QUERIES === "true";
 const SLOW_QUERY_MS = Number(process.env.SLOW_QUERY_MS ?? 150);
 type PrismaQueryEvent = { duration: number; query: string; target: string };
 
-function makePrisma(): PrismaClient {
+function makePrisma() {
   const client = new PrismaClient({
     datasourceUrl: pooledDbUrl(5),
     log: LOG_SLOW_QUERIES
@@ -44,11 +49,42 @@ function makePrisma(): PrismaClient {
         : ["error", "warn"],
   });
   if (LOG_SLOW_QUERIES) {
+    // $on must attach to the BASE client -- extended clients don't expose it.
     (client as unknown as { $on(e: "query", cb: (ev: PrismaQueryEvent) => void): void }).$on("query", (ev) => {
       if (ev.duration >= SLOW_QUERY_MS) console.warn(`[slow-query] ${ev.duration}ms — ${ev.query.slice(0, 240)}`);
     });
   }
-  return client;
+  // Per-query Prometheus timing. Synchronous in-memory observes hung off the
+  // promise the query already returns -- no extra awaits on the query path.
+  // model is undefined for raw ops ($queryRaw/$executeRaw) -> labeled "raw".
+  return client.$extends({
+    query: {
+      $allOperations({ model, operation, args, query }) {
+        const start = Date.now();
+        const labels = { model: model ?? "raw", operation };
+        // Guarded: a prom-client label mismatch throws, and an instrumentation
+        // bug must never fail the query it's measuring.
+        const record = () => {
+          try {
+            dbQueryDurationSeconds.observe(labels, (Date.now() - start) / 1000);
+            dbQueriesTotal.inc(labels);
+          } catch (err) {
+            console.warn("[metrics] db observe failed:", err);
+          }
+        };
+        return query(args).then(
+          (result) => {
+            record();
+            return result;
+          },
+          (err: unknown) => {
+            record();
+            throw err;
+          },
+        );
+      },
+    },
+  });
 }
 
 export const prisma = globalThis.__botPrisma ?? makePrisma();

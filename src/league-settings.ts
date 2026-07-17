@@ -10,6 +10,7 @@
 
 import type { LeagueRulesTemplate } from "@prisma/client";
 import { prisma } from "./db.js";
+import { cacheEventsTotal } from "./metrics.js";
 
 export interface ScoringConfig {
   pointsFor20Win: number;
@@ -46,7 +47,11 @@ const cache = new Map<string, { value: LeagueSettings; expiresAt: number }>();
 export async function getLeagueSettings(): Promise<LeagueSettings> {
   const key = "";
   const c = cache.get(key);
-  if (c && c.expiresAt > Date.now()) return c.value;
+  if (c && c.expiresAt > Date.now()) {
+    cacheEventsTotal.inc({ cache: "league_settings", result: "hit" });
+    return c.value;
+  }
+  cacheEventsTotal.inc({ cache: "league_settings", result: "miss" });
   const template = await prisma.leagueRulesTemplate.findFirst({ where: { isDefault: true } });
   const value = templateToSettings(template);
   cache.set(key, { value, expiresAt: Date.now() + TTL_MS });
@@ -55,7 +60,11 @@ export async function getLeagueSettings(): Promise<LeagueSettings> {
 
 export async function getLeagueSettingsForSeason(seasonId: string): Promise<LeagueSettings> {
   const c = cache.get(seasonId);
-  if (c && c.expiresAt > Date.now()) return c.value;
+  if (c && c.expiresAt > Date.now()) {
+    cacheEventsTotal.inc({ cache: "league_settings", result: "hit" });
+    return c.value;
+  }
+  cacheEventsTotal.inc({ cache: "league_settings", result: "miss" });
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
     select: { leagueRulesTemplate: true },

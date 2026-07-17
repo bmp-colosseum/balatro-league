@@ -26,6 +26,7 @@ import {
   stakeSlug,
 } from "./balatro-info.js";
 import { env } from "./env.js";
+import { attachRestTiming } from "./rate-limit-logger.js";
 
 const ASSET_ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)), "src", "assets", "balatro");
 
@@ -37,7 +38,12 @@ interface AppEmoji {
 
 let cachedRest: REST | null = null;
 function rest(): REST {
-  if (!cachedRest) cachedRest = new REST({ version: "10" }).setToken(env.DISCORD_TOKEN);
+  if (!cachedRest) {
+    cachedRest = new REST({ version: "10" }).setToken(env.DISCORD_TOKEN);
+    // Standalone instance bypasses client.rest -- time it too so
+    // bot_discord_rest_* covers app-emoji sync traffic.
+    attachRestTiming(cachedRest);
+  }
   return cachedRest;
 }
 

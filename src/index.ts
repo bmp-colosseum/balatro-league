@@ -16,18 +16,32 @@ import { startMatchControlBumper } from "./commands/match-buttons.js";
 import { bootstrapPresetsAndPointers } from "./match-config.js";
 import { initQueue, stopQueue } from "./queue.js";
 import { attachRateLimitLogging } from "./rate-limit-logger.js";
+import {
+  discordErrorCodeLabel,
+  instrumentAckTiming,
+  interactionDurationSeconds,
+  interactionErrorsTotal,
+  normalizeHandlerLabel,
+} from "./metrics.js";
 
 // Time an interaction handler and log it if it exceeds SLOW_OP_MS (default 1.5s)
 // — surfaces user-facing slowness (which command/button is dragging) without any
 // external tooling. Always awaits the work; logging is in a finally so a thrown
 // handler is still timed. Tune the threshold via env, no redeploy.
+// Also feeds Prometheus: total duration under the NORMALIZED handler label
+// (raw labels embed cuids/snowflakes -- unbounded cardinality), plus a one-shot
+// time-to-first-ack wrap on the interaction's ack methods. Both are sync
+// in-memory observes; no latency added to dispatch.
 const SLOW_OP_MS = Number(process.env.SLOW_OP_MS ?? 1500);
-async function timed(label: string, fn: () => Promise<void>): Promise<void> {
+async function timed(label: string, interaction: object, fn: () => Promise<void>): Promise<void> {
+  const handler = normalizeHandlerLabel(label);
   const start = Date.now();
+  instrumentAckTiming(interaction, handler, start);
   try {
     await fn();
   } finally {
     const ms = Date.now() - start;
+    interactionDurationSeconds.observe({ handler }, ms / 1000);
     if (ms >= SLOW_OP_MS) console.warn(`[slow-op] ${label} took ${ms}ms`);
   }
 }
@@ -146,6 +160,10 @@ client.once(Events.ClientReady, async (c) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  // Which handler was dispatched -- for the error counter in the catch below.
+  // Raw label (normalized at increment time); "unknown" covers pre-dispatch
+  // failures (guild lock, scope checks, handler lookup).
+  let dispatchLabel = "unknown";
   try {
     // Guild lock: this instance only operates in its configured DISCORD_GUILD_ID.
     // If the bot gets added to another server, politely refuse rather than act
@@ -205,7 +223,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
         return;
       }
-      await timed(`cmd:${interaction.commandName}`, () => command.execute(interaction));
+      dispatchLabel = `cmd:${interaction.commandName}`;
+      await timed(dispatchLabel, interaction, () => command.execute(interaction));
       return;
     }
 
@@ -228,7 +247,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
         return;
       }
-      await timed(`btn:${interaction.customId}`, () => handler.execute(interaction));
+      dispatchLabel = `btn:${interaction.customId}`;
+      await timed(dispatchLabel, interaction, () => handler.execute(interaction));
       return;
     }
 
@@ -241,7 +261,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
         return;
       }
-      await timed(`menu:${interaction.customId}`, () => handler.execute(interaction));
+      dispatchLabel = `menu:${interaction.customId}`;
+      await timed(dispatchLabel, interaction, () => handler.execute(interaction));
       return;
     }
 
@@ -254,11 +275,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
         return;
       }
-      await timed(`modal:${interaction.customId}`, () => handler.execute(interaction));
+      dispatchLabel = `modal:${interaction.customId}`;
+      await timed(dispatchLabel, interaction, () => handler.execute(interaction));
       return;
     }
   } catch (err) {
     console.error("Interaction handler failed:", err);
+    interactionErrorsTotal.inc({
+      handler: normalizeHandlerLabel(dispatchLabel),
+      code: discordErrorCodeLabel(err),
+    });
     const errorMsg = "Something went wrong handling that — check the bot logs.";
     if (interaction.isRepliable()) {
       if (interaction.replied || interaction.deferred) {

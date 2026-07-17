@@ -17,6 +17,7 @@
 // same Postgres tables; this file owns the workers.
 
 import { PgBoss, type Job } from "pg-boss";
+import { timedJobHandler } from "./metrics.js";
 import { announceResult } from "./announce.js";
 import { snapshotPlayerMmr, ensureBmpCurrentSeasonDetected, type MmrSnapshotJob } from "./mmr-snapshots.js";
 import { runDisplayNameRefresh } from "./display-name-refresh.js";
@@ -84,6 +85,23 @@ interface ScheduleChangeJob {
 
 let boss: PgBoss | null = null;
 
+// Auto-instrument every work() registration with per-queue Prometheus job
+// metrics (bot_job_duration_seconds / bot_jobs_total) so the ~10 workers
+// below don't each need a manual wrap. work() is overloaded -- (name, handler)
+// or (name, options, handler) -- so the wrapper keys off the trailing function
+// argument and passes everything else through untouched.
+function instrumentBossWork(b: PgBoss): void {
+  const original = b.work.bind(b) as (name: string, ...rest: unknown[]) => Promise<string>;
+  const wrapped = (name: string, ...rest: unknown[]): Promise<string> => {
+    const last = rest[rest.length - 1];
+    if (typeof last === "function") {
+      rest[rest.length - 1] = timedJobHandler(name, last as (...args: unknown[]) => Promise<unknown>);
+    }
+    return original(name, ...rest);
+  };
+  b.work = wrapped as PgBoss["work"];
+}
+
 // Graceful stop for deploys: let in-flight jobs wind down, then close pg-boss so
 // the next boot starts clean. Idempotent; bounded so we never overrun Docker's
 // stop grace period.
@@ -115,6 +133,7 @@ export async function initQueue(): Promise<void> {
     schema: "pgboss",
   });
   boss.on("error", (err: Error) => console.warn("[pg-boss] error:", err));
+  instrumentBossWork(boss);
   await boss.start();
   // pg-boss v12 no longer auto-creates queues on first work()/send(). Have
   // to declare every queue we use here; createQueue is idempotent so safe
