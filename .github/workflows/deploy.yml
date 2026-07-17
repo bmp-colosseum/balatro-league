@@ -1,20 +1,17 @@
 name: deploy
 
-# Self-hosted deploy to the Netcup box (runner label: balatro). Builds the images
-# on the box, pushes to GHCR, then rolls the compose stack from the STABLE
-# /srv/balatro/repo path so Traefik/Postgres bind-mounts point at persistent host
-# files (not the ephemeral Actions checkout). Secrets stay box-local at
-# /srv/balatro/secrets.env. A manual run defaults to build+push ONLY (deploy=false)
-# so you can prove the pipeline without recreating live containers.
-#
-# Only the services whose paths changed are rebuilt (see "Pick images"); unchanged
-# services keep their previously-deployed tag (carried over from versions.env), so a
-# tour-only push builds one image instead of four. A manual dispatch rebuilds all.
+# League app repo -> builds the two LEAGUE images on the shared Netcup box
+# (self-hosted runner label: balatro), pushes to GHCR, then rolls ONLY the league
+# services in the shared compose stack. The stack itself (compose file, Traefik, the
+# shared Postgres, monitoring) is owned by the infra repo (bmp-colosseum-infra); this
+# workflow only advances LEAGUE_BOT_TAG / LEAGUE_WEB_TAG in the box's versions.env and
+# recreates those containers. Tour images live in balatro-team-tour. Secrets stay
+# box-local at /srv/balatro/secrets.env.
 on:
   workflow_dispatch:
     inputs:
       deploy:
-        description: "Roll the live compose stack (false = build + push only)"
+        description: "Roll the live league services (false = build + push only)"
         type: boolean
         default: false
   push:
@@ -22,16 +19,11 @@ on:
     paths:
       - "src/**"
       - "web/**"
-      - "apps/**"
-      - "packages/**"
       - "prisma/**"
       - "package.json"
       - "package-lock.json"
       - "Dockerfile.league-bot"
       - "web/Dockerfile"
-      - "apps/tour/Dockerfile"
-      - "apps/tour-bot/Dockerfile"
-      - "infra/compose/**"
 
 concurrency:
   group: deploy
@@ -46,7 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # need history so we can diff against the previous commit
+          fetch-depth: 0
 
       - name: Resolve names
         id: v
@@ -54,8 +46,8 @@ jobs:
           echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
           echo "tag=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
 
-      # Decide which of the four images to rebuild from the changed paths. Shared inputs
-      # (packages/**, root package*.json) or a manual dispatch force all four.
+      # Rebuild only the image whose paths changed. Root manifests (package*.json) or a
+      # manual dispatch rebuild both.
       - name: Pick images
         id: pick
         run: |
@@ -65,26 +57,19 @@ jobs:
           else
             BEFORE='${{ github.event.before }}'
             if [ -z "$BEFORE" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
-              FILES="__ALL__" # new branch / shallow / force-push -> rebuild everything
+              FILES="__ALL__"
             else
               FILES="$(git diff --name-only "$BEFORE" '${{ github.sha }}')"
             fi
           fi
           echo "changed files:"; printf '%s\n' "$FILES"
           ALL=0
-          if [ "$FILES" = "__ALL__" ] || printf '%s\n' "$FILES" | grep -qE '^(packages/|package\.json$|package-lock\.json$)'; then
+          if [ "$FILES" = "__ALL__" ] || printf '%s\n' "$FILES" | grep -qE '^(package\.json$|package-lock\.json$)'; then
             ALL=1
           fi
           want() { if [ "$ALL" = 1 ] || printf '%s\n' "$FILES" | grep -qE "$1"; then echo 1; else echo 0; fi; }
-          LB=$(want '^(src/|prisma/|Dockerfile\.league-bot$)')
-          LW=$(want '^(web/|prisma/)')
-          TW=$(want '^apps/tour/')
-          TB=$(want '^apps/tour-bot/')
-          echo "league_bot=$LB" >> "$GITHUB_OUTPUT"
-          echo "league_web=$LW" >> "$GITHUB_OUTPUT"
-          echo "tour_web=$TW"   >> "$GITHUB_OUTPUT"
-          echo "tour_bot=$TB"   >> "$GITHUB_OUTPUT"
-          echo "build -> league-bot=$LB league-web=$LW tour-web=$TW tour-bot=$TB (all=$ALL)"
+          echo "league_bot=$(want '^(src/|prisma/|Dockerfile\.league-bot$)')" >> "$GITHUB_OUTPUT"
+          echo "league_web=$(want '^(web/|prisma/)')" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
         run: echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
@@ -99,56 +84,40 @@ jobs:
             local name="$1" df="$2" img="ghcr.io/$OWNER/$1"
             echo "== building $name =="
             docker build -f "$df" -t "$img:$TAG" -t "$img:latest" .
-            docker push "$img:$TAG"
-            docker push "$img:latest"
+            docker push "$img:$TAG"; docker push "$img:latest"
           }
           if [ "${{ steps.pick.outputs.league_bot }}" = 1 ]; then build balatro-league-bot Dockerfile.league-bot; else echo "skip league-bot"; fi
           if [ "${{ steps.pick.outputs.league_web }}" = 1 ]; then build balatro-league-web web/Dockerfile; else echo "skip league-web"; fi
-          if [ "${{ steps.pick.outputs.tour_web }}"  = 1 ]; then build balatro-tour-web apps/tour/Dockerfile; else echo "skip tour-web"; fi
-          if [ "${{ steps.pick.outputs.tour_bot }}"  = 1 ]; then build balatro-tour-bot apps/tour-bot/Dockerfile; else echo "skip tour-bot"; fi
 
-      - name: Deploy (roll live stack)
+      - name: Deploy (roll league services only)
         if: ${{ github.event_name == 'push' || inputs.deploy }}
         env:
           OWNER: ${{ steps.v.outputs.owner }}
           TAG: ${{ steps.v.outputs.tag }}
         run: |
           set -euo pipefail
-          # Refresh the stable compose config (bind-mount sources live here).
-          mkdir -p /srv/balatro/repo
-          cp -a infra /srv/balatro/repo/
-          # Per-service tags: a service we rebuilt this run advances to $TAG; one we skipped
-          # keeps its previously-deployed tag (from the existing versions.env) so compose
-          # leaves its running container untouched. First run / missing prior -> $TAG.
+          # The infra repo owns the compose file + the shared versions.env baseline on the
+          # box. We advance only the two league tags here (a service we skipped keeps its
+          # previously-deployed tag), preserving GHCR_OWNER + the tour tags. Then recreate
+          # only the league containers -- Postgres / Traefik / tour services never move.
           PREV=/srv/balatro/versions.env
           prev() { grep -E "^$1=" "$PREV" 2>/dev/null | tail -1 | cut -d= -f2-; }
-          # Skipped + no recorded prior tag -> fall back to :latest (always exists from a
-          # prior build), never to $TAG which was NOT built for this service this run.
           pick() { if [ "$2" = 1 ]; then echo "$TAG"; else local p; p="$(prev "$1")"; echo "${p:-latest}"; fi; }
           LB_TAG=$(pick LEAGUE_BOT_TAG '${{ steps.pick.outputs.league_bot }}')
           LW_TAG=$(pick LEAGUE_WEB_TAG '${{ steps.pick.outputs.league_web }}')
-          TW_TAG=$(pick TOUR_WEB_TAG  '${{ steps.pick.outputs.tour_web }}')
-          TB_TAG=$(pick TOUR_BOT_TAG  '${{ steps.pick.outputs.tour_bot }}')
-          cat > /srv/balatro/versions.env <<EOF
-          GHCR_OWNER=$OWNER
-          LEAGUE_BOT_TAG=$LB_TAG
-          LEAGUE_WEB_TAG=$LW_TAG
-          TOUR_WEB_TAG=$TW_TAG
-          TOUR_BOT_TAG=$TB_TAG
-          TRAEFIK_TAG=v3.3
-          POSTGRES_TAG=18
-          EOF
-          echo "deploying tags: league-bot=$LB_TAG league-web=$LW_TAG tour-web=$TW_TAG tour-bot=$TB_TAG"
+          # Rewrite only the two LEAGUE_* lines, preserving GHCR_OWNER + everything else.
+          tmp="$(mktemp)"
+          grep -vE '^(LEAGUE_BOT_TAG|LEAGUE_WEB_TAG)=' "$PREV" > "$tmp" || true
+          { echo "LEAGUE_BOT_TAG=$LB_TAG"; echo "LEAGUE_WEB_TAG=$LW_TAG"; } >> "$tmp"
+          mv "$tmp" "$PREV"
+          echo "rolling league: league-bot=$LB_TAG league-web=$LW_TAG"
           cd /srv/balatro/repo/infra/compose
           E="--env-file /srv/balatro/versions.env --env-file /srv/balatro/secrets.env"
-          # Roll the web apps immediately (safe to restart anytime). Postgres/Traefik are
-          # stable infra. compose leaves a service whose tag is unchanged running as-is. No
-          # `pull` -- images were just built locally on this same box.
-          docker compose -p balatro $E up -d --remove-orphans league-web tour-web
+          # Web is safe to restart anytime.
+          docker compose -p balatro $E up -d league-web
           # Ban-phase guard: if the bot is being rolled, don't interrupt a live ban/pick
-          # phase (players actively clicking). Wait for click-sensitive sessions to clear,
-          # re-checking every 30s up to ~10 min, then roll regardless (graceful shutdown
-          # makes a late roll a recoverable ~3s blip). *_PLAYING/WAITING/PAUSED are safe.
+          # phase. Wait for click-sensitive sessions to clear (re-check every 30s up to
+          # ~10 min), then roll regardless (graceful shutdown makes a late roll a ~3s blip).
           if [ "${{ steps.pick.outputs.league_bot }}" = 1 ]; then
             SENS="'GAME_1_BAN','GAME_1_PICK','GAME_2_CHOOSE_FIRST','GAME_2_BAN','GAME_2_PICK','GAME_3_CHOOSE_FIRST','GAME_3_BAN','GAME_3_PICK'"
             for i in $(seq 1 20); do
@@ -160,18 +129,7 @@ jobs:
             done
           fi
           docker compose -p balatro $E up -d league-bot
-          # Dev stack: separate project + env file; tour-web-dev reuses the tour-web image.
+          # League dev web (separate project + dev env file).
           EDEV="--env-file /srv/balatro/versions.env --env-file /srv/balatro/secrets.dev.env"
-          docker compose -p balatro-dev $EDEV -f docker-compose.dev.yml up -d tour-web-dev league-web-dev
-          # Observability stack (Loki/Promtail/Grafana), managed by the pipeline like
-          # everything else. Idempotent: reconciles only when its compose/config changes.
-          # Dashboards are bind-mounted from repo/infra, so a dashboard JSON change lands via
-          # the cp -a above + Grafana's provisioning reload -- no container recreate needed.
-          # Best-effort so a monitoring hiccup never blocks an app deploy.
-          if [ -f /srv/balatro/mon.env ]; then
-            docker compose -p balatro-mon --env-file /srv/balatro/mon.env -f docker-compose.monitoring.yml up -d \
-              || echo "[mon] up failed (non-fatal)"
-          else
-            echo "[mon] /srv/balatro/mon.env missing -- skipping monitoring stack"
-          fi
+          docker compose -p balatro-dev $EDEV -f docker-compose.dev.yml up -d league-web-dev || echo "[dev] league-web-dev roll skipped"
           docker image prune -f

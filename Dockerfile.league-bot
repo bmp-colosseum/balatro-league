@@ -18,11 +18,6 @@ FROM base AS build
 # `postinstall: prisma generate` needs) so an app-source edit doesn't bust
 # `npm ci`. The npm cache mount avoids re-downloading on a cache miss too.
 COPY package.json package-lock.json ./
-COPY packages/competition-core/package.json ./packages/competition-core/
-COPY packages/match-core/package.json ./packages/match-core/
-COPY packages/tour-core/package.json ./packages/tour-core/
-COPY apps/tour/package.json ./apps/tour/
-COPY apps/tour-bot/package.json ./apps/tour-bot/
 COPY prisma ./prisma
 RUN --mount=type=cache,target=/root/.npm npm ci
 COPY . .

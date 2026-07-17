@@ -1,4 +1,4 @@
-# Build context = repo root (for the Team Tour Dockerfile). Keep installs clean,
+# Build context = repo root (for Dockerfile.league-bot). Keep installs clean,
 # images lean, and secrets / local artifacts out of the image.
 **/node_modules
 **/.next
@@ -11,8 +11,6 @@
 **/.env
 **/.env.*
 !**/.env.example
-apps/tour/.dev-db
-apps/tour/prisma/generated
 
 # Mapping files contain real Discord IDs — never in an image
 **/*.csv

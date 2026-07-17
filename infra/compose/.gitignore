@@ -1,5 +1,0 @@
-# Never commit real secrets or runtime state.
-secrets.env
-secrets.dev.env
-.env
-versions.env

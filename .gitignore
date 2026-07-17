@@ -46,3 +46,6 @@ league-players.csv
 # Next.js (Tour web)
 next-env.d.ts
 *.tsbuildinfo
+
+# Playwright MCP session scratch (console/page snapshots)
+.playwright-mcp/

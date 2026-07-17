@@ -4,10 +4,6 @@
   "description": "Discord bot that runs a Balatro league with round-robin divisions and promotion/relegation.",
   "private": true,
   "type": "module",
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
   "engines": {
     "node": ">=22"
   },
