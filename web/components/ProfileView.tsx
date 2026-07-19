@@ -25,6 +25,7 @@ import { dropPlayer, reinstatePlayer, movePlayer, setPlayerDiscordId } from "@/a
 import { TimezoneSetting } from "@/components/TimezoneSetting";
 import { NextSeasonCard } from "@/components/NextSeasonCard";
 import { prisma } from "@/lib/prisma";
+import { tourProfilePath, TOUR_PUBLIC_URL } from "@/lib/tour-profile";
 import type { SeasonHistoryEntry, FavoriteEntry, BanStatEntry } from "@/lib/profile";
 
 // Builds the hover tooltip for a season card's "W-D-L" inline number.
@@ -231,6 +232,11 @@ export async function ProfileView({
   const activeSeasonEntry = profile.history.find((h) => h.isActive);
   const activeSeason = activeSeasonEntry?.status === "ACTIVE" ? activeSeasonEntry : undefined;
 
+  // Cross-link to this person's Team Tour profile, resolved server-side by Discord id (so the
+  // raw id never lands in this page's source). Best-effort: null (no link) if the Tour is
+  // unconfigured/unreachable or this person isn't in the Tour.
+  const tourPath = await tourProfilePath(profile.player.discordId);
+
   return (
     <>
       <SiteNav activePath="" />
@@ -241,6 +247,13 @@ export async function ProfileView({
         <h2>{profile.player.displayName}<DiscordId value={profile.player.discordId} username={profile.player.username} /></h2>
         {shownTimezone && (
           <p className="muted" style={{ fontSize: 13, marginTop: -4 }}>🕐 {shownTimezone}</p>
+        )}
+        {tourPath && (
+          <p style={{ fontSize: 13, marginTop: 2 }}>
+            <a href={`${TOUR_PUBLIC_URL}${tourPath}`} className="link-action" style={{ color: "var(--accent-2)" }}>
+              View on Team Tour ↗
+            </a>
+          </p>
         )}
 
         {activeSeason && (
