@@ -7,7 +7,7 @@ import { cache } from "react";
 // layer (a person's Discord id -> Tour profile mapping is effectively static).
 export const tourProfilePath = cache(async (discordId: string): Promise<string | null> => {
   const base = process.env.TOUR_INTERNAL_URL || process.env.TOUR_URL || process.env.NEXT_PUBLIC_TOUR_URL;
-  const token = process.env.TOUR_ADMIN_TOKEN;
+  const token = process.env.PROFILE_LOOKUP_TOKEN;
   if (!base || !token || !/^\d+$/.test(discordId)) return null;
   try {
     const r = await fetch(`${base}/api/profile/by-discord/${discordId}`, {
