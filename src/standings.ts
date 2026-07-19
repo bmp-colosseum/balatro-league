@@ -49,6 +49,57 @@ export function assignRanks(rows: StandingRow[]): StandingRow[] {
   return rows;
 }
 
+// A tie the season can't resolve on its own that lands ON a consequential
+// boundary — the two players must play a single shootout game to decide who
+// takes the promotion (or avoids the relegation) spot.
+export interface ShootoutNeed {
+  aId: string;
+  bId: string;
+  boundary: "promotion" | "relegation";
+}
+
+// End-of-division shootout detection over ALREADY-RANKED rows (computeStandings
+// output). A shootout is owed only when a tie group of EXACTLY TWO straddles the
+// promotion or relegation cutoff:
+//   - Being a 2-player tie group already means their head-to-head is unresolved
+//     (split 1-1 or unplayed) AND no shootout has been played — either would have
+//     separated them in the sort, so they wouldn't share a rank. So "still tied"
+//     == "shootout owed, not yet played". No extra h2h check needed.
+//   - 3-or-more-way ties are settled by net lives, NOT a shootout — skipped here.
+// `promote`/`relegate` are this division's movement counts (0 when a boundary
+// doesn't exist, e.g. the top division never promotes / the bottom never relegates).
+export function shootoutsNeeded(rows: StandingRow[], promote: number, relegate: number): ShootoutNeed[] {
+  const active = rows.filter((r) => !r.dropped);
+  const n = active.length;
+  const needs: ShootoutNeed[] = [];
+
+  // A boundary sits between sorted positions cutoff-1 and cutoff (1-indexed by
+  // how many players are on the top side). Returns the straddling pair only when
+  // exactly two players share the rank spanning it.
+  const straddle = (cutoff: number): [StandingRow, StandingRow] | null => {
+    if (cutoff <= 0 || cutoff >= n) return null;
+    const hi = active[cutoff - 1]!;
+    const lo = active[cutoff]!;
+    if (hi.rank == null || hi.rank !== lo.rank) return null; // no tie across the line
+    if (active.filter((r) => r.rank === hi.rank).length !== 2) return null; // 3+ -> net lives
+    return [hi, lo];
+  };
+
+  const promo = straddle(promote);
+  if (promo) needs.push({ aId: promo[0].player.id, bId: promo[1].player.id, boundary: "promotion" });
+
+  const releg = straddle(n - relegate);
+  if (releg) {
+    const dup = needs.some(
+      (x) =>
+        (x.aId === releg[0].player.id && x.bId === releg[1].player.id) ||
+        (x.aId === releg[1].player.id && x.bId === releg[0].player.id),
+    );
+    if (!dup) needs.push({ aId: releg[0].player.id, bId: releg[1].player.id, boundary: "relegation" });
+  }
+  return needs;
+}
+
 // Confirmed-only. Status filtering is the caller's job. Shootouts (when
 // supplied) break ties that points + h2h can't resolve — winner sorts
 // above loser. scoring is optional; admin-tunable per LeagueSettings,
