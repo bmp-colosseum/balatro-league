@@ -46,30 +46,46 @@ jobs:
           echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
           echo "tag=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_OUTPUT"
 
-      # Rebuild only the image whose paths changed. Root manifests (package*.json) or a
-      # manual dispatch rebuild both.
+      # Rebuild only the image whose paths changed -- but measured from the commit that
+      # is ACTUALLY DEPLOYED for that service, not from the previous push.
+      #
+      # Why: image tags only advance on a SUCCESSFUL build. If a build fails, that
+      # service stays pinned to an older tag. Diffing the last push would then say
+      # "nothing in your paths changed -> skip", silently leaving the service stale
+      # forever (that is exactly how league-web sat 2 hours behind after a failed
+      # type check). Diffing from the DEPLOYED tag is self-healing: a service that
+      # missed a build still has the change in its diff and gets retried, while a
+      # service that is genuinely current and untouched still correctly skips.
+      # Unknown/missing/unresolvable tag (first deploy, "latest", force-push) -> rebuild.
       - name: Pick images
         id: pick
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            FILES="__ALL__"
-          else
-            BEFORE='${{ github.event.before }}'
-            if [ -z "$BEFORE" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
-              FILES="__ALL__"
-            else
-              FILES="$(git diff --name-only "$BEFORE" '${{ github.sha }}')"
+          SHA='${{ github.sha }}'
+          VERSIONS=/srv/balatro/versions.env
+          deployed() { grep -E "^$1=" "$VERSIONS" 2>/dev/null | tail -1 | cut -d= -f2-; }
+          changed_since_deployed() {
+            local tag="$1"
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then echo "__ALL__"; return; fi
+            if [ -z "$tag" ] || [ "$tag" = "latest" ] || ! git cat-file -e "${tag}^{commit}" 2>/dev/null; then
+              echo "__ALL__"; return
             fi
-          fi
-          echo "changed files:"; printf '%s\n' "$FILES"
-          ALL=0
-          if [ "$FILES" = "__ALL__" ] || printf '%s\n' "$FILES" | grep -qE '^(package\.json$|package-lock\.json$)'; then
-            ALL=1
-          fi
-          want() { if [ "$ALL" = 1 ] || printf '%s\n' "$FILES" | grep -qE "$1"; then echo 1; else echo 0; fi; }
-          echo "league_bot=$(want '^(src/|prisma/|Dockerfile\.league-bot$)')" >> "$GITHUB_OUTPUT"
-          echo "league_web=$(want '^(web/|prisma/)')" >> "$GITHUB_OUTPUT"
+            git diff --name-only "$tag" "$SHA"
+          }
+          # name-regex matches this service's paths; root manifests rebuild everything.
+          pick_one() {
+            local files; files="$(changed_since_deployed "$1")"
+            if [ "$files" = "__ALL__" ] \
+              || printf '%s\n' "$files" | grep -qE '^(package\.json$|package-lock\.json$)' \
+              || printf '%s\n' "$files" | grep -qE "$2"; then echo 1; else echo 0; fi
+          }
+          LB_PREV="$(deployed LEAGUE_BOT_TAG)"; LW_PREV="$(deployed LEAGUE_WEB_TAG)"
+          LB=$(pick_one "$LB_PREV" '^(src/|prisma/|Dockerfile\.league-bot$)')
+          LW=$(pick_one "$LW_PREV" '^(web/|prisma/)')
+          echo "deployed now: league-bot=${LB_PREV:-<none>} league-web=${LW_PREV:-<none>} | target=$SHA"
+          echo "build -> league-bot=$LB league-web=$LW"
+          echo "league_bot=$LB" >> "$GITHUB_OUTPUT"
+          echo "league_web=$LW" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GHCR
         run: echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
