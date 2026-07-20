@@ -23,20 +23,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // and the *.railway.app URL. (A cookie can't span two DIFFERENT domains, so
   // this only unifies www + apex of one domain — not prod vs the test URL.)
   ...(process.env.AUTH_COOKIE_DOMAIN
-    ? {
-        cookies: {
-          sessionToken: {
-            name: "__Secure-authjs.session-token",
-            options: {
-              httpOnly: true,
-              sameSite: "lax" as const,
-              path: "/",
-              secure: true,
-              domain: process.env.AUTH_COOKIE_DOMAIN,
-            },
+    ? (() => {
+        const base = {
+          httpOnly: true,
+          sameSite: "lax" as const,
+          path: "/",
+          secure: true,
+          domain: process.env.AUTH_COOKIE_DOMAIN,
+        };
+        // Domain-scope EVERY auth cookie — the session AND the short-lived OAuth
+        // flow cookies — so the whole login works across www + apex. Without a
+        // domain on the flow cookies, a login that starts on one host and returns
+        // on the other loses the PKCE verifier -> "pkceCodeVerifier value could
+        // not be parsed". csrfToken uses the __Host- prefix (which forbids a
+        // domain) and is same-host only, so it stays at the default.
+        return {
+          cookies: {
+            sessionToken: { name: "__Secure-authjs.session-token", options: base },
+            callbackUrl: { name: "__Secure-authjs.callback-url", options: base },
+            pkceCodeVerifier: { name: "__Secure-authjs.pkce.code_verifier", options: { ...base, maxAge: 900 } },
+            state: { name: "__Secure-authjs.state", options: { ...base, maxAge: 900 } },
+            nonce: { name: "__Secure-authjs.nonce", options: { ...base, maxAge: 900 } },
           },
-        },
-      }
+        };
+      })()
     : {}),
   providers: [
     Discord({
