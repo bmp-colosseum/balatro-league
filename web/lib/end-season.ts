@@ -372,17 +372,24 @@ export async function endSeasonCore(seasonId: string, actor: AuditActor): Promis
       enqueueDm({ discordId, content, batchId: `season-end:${season.id}`, batchKind: "season-end" }).catch((err) =>
         console.warn(`[season.end] promo/releg DM failed for ${discordId}:`, err),
       );
+    // Divisions are rebuilt from next season's signups, so who's in which division
+    // (and how many divisions there are) can shift — set expectations so a promoted
+    // player isn't confused if the layout looks different next season.
+    const layoutCaveat =
+      "\n_Heads up: next season's divisions are redrawn once signups close, so exactly where you land can shift._";
     for (let i = 0; i < promoteCount && i < active.length; i++) {
       await dmSeasonEnd(
         active[i]!.player.discordId,
-        `🎉 **You promoted!** You finished #${i + 1} in **${d.name}** (${seasonLabel}) and move up a division next season. Great work!`,
+        `🎉 **You promoted!** You finished #${i + 1} in **${d.name}** (${seasonLabel}) and move up a division next season. Great work!` +
+          layoutCaveat,
       );
     }
     // Start relegation after the promotion zone so a tiny division can't send both.
     for (let i = Math.max(promoteCount, active.length - relegateCount); i < active.length; i++) {
       await dmSeasonEnd(
         active[i]!.player.discordId,
-        `You finished #${i + 1} in **${d.name}** (${seasonLabel}) and will drop to a lower division next season. It happens - come back strong and climb back up!`,
+        `You finished #${i + 1} in **${d.name}** (${seasonLabel}) and will drop to a lower division next season. It happens - come back strong and climb back up!` +
+          layoutCaveat,
       );
     }
   }
