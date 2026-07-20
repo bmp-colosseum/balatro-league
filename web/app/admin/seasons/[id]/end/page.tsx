@@ -30,8 +30,11 @@ export default async function EndSeasonPreviewPage({
       <main>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <h2 style={{ margin: 0 }}>End "{season.name}"</h2>
-          <Link href="/admin/seasons" className="muted" style={{ marginLeft: "auto" }}>
-            ← Back
+          <Link href={`/admin/seasons/${id}/winners`} className="muted" style={{ marginLeft: "auto" }}>
+            Division winners
+          </Link>
+          <Link href="/admin/seasons" className="muted">
+            {"<- Back"}
           </Link>
         </div>
         <p className="muted">

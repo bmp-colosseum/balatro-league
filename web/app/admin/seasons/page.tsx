@@ -249,6 +249,11 @@ export default async function AdminSeasonsPage({
                   ) : (
                     <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "var(--muted)" }}>Inactive</span>
                   )}
+                  {s.divisions.length > 0 && (
+                    <Link href={`/admin/seasons/${s.id}/winners`} style={{ fontSize: 12, marginLeft: "auto" }}>
+                      Division winners
+                    </Link>
+                  )}
                 </div>
                 <div className="muted" style={{ marginTop: 4 }}>{tierLine}</div>
                 <div className="muted">
