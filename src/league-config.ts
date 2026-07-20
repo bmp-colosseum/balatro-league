@@ -192,6 +192,12 @@ export const LeagueConfigKey = {
   // restart is happening). Bot/webhook-only; @everyone can view but not post.
   StatusChannelId: "status_channel_id",
 
+  // Days between "finish all your games" (Season.scheduledEndAt) and the next
+  // season kicking off - the window used to settle shootouts/tiebreakers and give
+  // players a short break. Drives the timeline shown in the pinned messages.
+  // Unset = 2.
+  TiebreakBufferDays: "tiebreak_buffer_days",
+
   // Discord category IDs the bot creates its channels under. Resolved
   // config-first (so an admin can point the bot at an existing category on
   // a server it didn't create) → find-or-create by name fallback. Bootstrap

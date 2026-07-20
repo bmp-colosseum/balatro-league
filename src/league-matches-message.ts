@@ -10,15 +10,15 @@ import {
 import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
 import { ensureLeagueMatchesChannel } from "./league-matches-channel.js";
 import { activePublicSeason } from "./active-season.js";
-import { seasonEndsHeader } from "./season-timing.js";
+import { seasonTimelineLines, parseBufferDays } from "./season-timing.js";
 
 // The pinned #league-matches message + its "Start a match" button. Clicking it
 // opens an ephemeral dropdown of the clicker's remaining scheduled opponents
 // (see commands/league-matches-buttons.ts) so people can start a match without
 // typing /start-match. allowedMentions cleared so re-rendering never pings.
-function renderLeagueMatchesMessage(endsHeader: string): BaseMessageOptions {
+function renderLeagueMatchesMessage(timeline: string[]): BaseMessageOptions {
   const lines = [
-    ...(endsHeader ? [endsHeader, ""] : []),
+    ...(timeline.length ? [...timeline, ""] : []),
     "## 🎴 Start a League Match",
     "Ready to play? Hit **Start a match**, pick an opponent from your schedule, and I'll send them an invite to accept — no slash commands needed.",
     "",
@@ -43,7 +43,8 @@ export async function ensureLeagueMatchesMessage(client: Client): Promise<void> 
   if (!ch || ch.type !== ChannelType.GuildText) return;
   const tc = ch as TextChannel;
   const season = await activePublicSeason();
-  const payload = renderLeagueMatchesMessage(seasonEndsHeader(season?.scheduledEndAt ?? null));
+  const bufferDays = parseBufferDays(await getConfig(LeagueConfigKey.TiebreakBufferDays));
+  const payload = renderLeagueMatchesMessage(seasonTimelineLines(season?.scheduledEndAt ?? null, bufferDays));
 
   const existingId = await getConfig(LeagueConfigKey.LeagueMatchesMessageId);
   if (existingId) {

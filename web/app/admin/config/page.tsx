@@ -66,6 +66,7 @@ const SEASON_KEYS = [
 const BMP_KEYS = [
   { key: "bmp_current_season", label: "Current BMP season", help: "e.g. 'season6'. Auto-detected from balatromp.com daily — override here if needed." },
   { key: "bmp_capture_previous_season", label: "Capture previous BMP season on refresh", help: "Set to 'true' to backfill the previous BMP season for everyone. Default: unset (only current is captured)." },
+  { key: "tiebreak_buffer_days", label: "Tiebreak buffer (days)", help: "Days between the season's 'finish all your games by' deadline (the season's scheduled end) and the next season starting - the window used to settle shootouts/tiebreakers and give players a short break. Drives the timeline shown in the pinned #league-matches and division messages. Default: 2." },
 ];
 
 const SITE_KEYS = [

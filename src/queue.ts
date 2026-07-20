@@ -73,7 +73,7 @@ import { MODLOG_RETENTION_DAYS } from "./mod-log.js";
 import { buildScheduleEmbed } from "./schedule-embed.js";
 import { sanitizeName } from "./sanitize.js";
 import { runShootoutCheck, isDivisionComplete } from "./shootout.js";
-import { seasonEndsHeader } from "./season-timing.js";
+import { seasonTimelineLines, parseBufferDays } from "./season-timing.js";
 
 // One recipient of a roster-change schedule DM. "new" = the player just added;
 // "opponent" = someone whose matchup now points at the replacement.
@@ -908,12 +908,15 @@ export async function renderDivisionWelcome(
     where: { id: div.id },
     select: { season: { select: { scheduledEndAt: true } } },
   });
-  const endsHeader = seasonEndsHeader(seasonRow?.season?.scheduledEndAt ?? null);
+  const timeline = seasonTimelineLines(
+    seasonRow?.season?.scheduledEndAt ?? null,
+    parseBufferDays(await getConfig(LeagueConfigKey.TiebreakBufferDays)),
+  );
   return [
     `# 🃏 Welcome to ${div.name}`,
     `_${seasonLabel} · ${div.name} division_`,
     ``,
-    ...(endsHeader ? [endsHeader, ``] : []),
+    ...(timeline.length ? [...timeline, ``] : []),
     groupTag,
     ``,
     `**Your division (${div.members.length} players):**`,
