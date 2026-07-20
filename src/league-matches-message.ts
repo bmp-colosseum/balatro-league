@@ -9,13 +9,16 @@ import {
 } from "discord.js";
 import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
 import { ensureLeagueMatchesChannel } from "./league-matches-channel.js";
+import { activePublicSeason } from "./active-season.js";
+import { seasonEndsHeader } from "./season-timing.js";
 
 // The pinned #league-matches message + its "Start a match" button. Clicking it
 // opens an ephemeral dropdown of the clicker's remaining scheduled opponents
 // (see commands/league-matches-buttons.ts) so people can start a match without
 // typing /start-match. allowedMentions cleared so re-rendering never pings.
-function renderLeagueMatchesMessage(): BaseMessageOptions {
+function renderLeagueMatchesMessage(endsHeader: string): BaseMessageOptions {
   const lines = [
+    ...(endsHeader ? [endsHeader, ""] : []),
     "## 🎴 Start a League Match",
     "Ready to play? Hit **Start a match**, pick an opponent from your schedule, and I'll send them an invite to accept — no slash commands needed.",
     "",
@@ -39,7 +42,8 @@ export async function ensureLeagueMatchesMessage(client: Client): Promise<void> 
   const ch = await client.channels.fetch(channelId).catch(() => null);
   if (!ch || ch.type !== ChannelType.GuildText) return;
   const tc = ch as TextChannel;
-  const payload = renderLeagueMatchesMessage();
+  const season = await activePublicSeason();
+  const payload = renderLeagueMatchesMessage(seasonEndsHeader(season?.scheduledEndAt ?? null));
 
   const existingId = await getConfig(LeagueConfigKey.LeagueMatchesMessageId);
   if (existingId) {

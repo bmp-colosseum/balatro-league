@@ -73,6 +73,7 @@ import { MODLOG_RETENTION_DAYS } from "./mod-log.js";
 import { buildScheduleEmbed } from "./schedule-embed.js";
 import { sanitizeName } from "./sanitize.js";
 import { runShootoutCheck, isDivisionComplete } from "./shootout.js";
+import { seasonEndsHeader } from "./season-timing.js";
 
 // One recipient of a roster-change schedule DM. "new" = the player just added;
 // "opponent" = someone whose matchup now points at the replacement.
@@ -900,10 +901,16 @@ export async function renderDivisionWelcome(
     : `• Play **every other person** in this list once — 2 games each (**${N - 1} matchups**, ${rrTotal} total in this division).`;
   const queueChannelId = await getConfig(LeagueConfigKey.LeagueQueueChannelId);
   const queueRef = queueChannelId ? `<#${queueChannelId}>` : "#league-queue";
+  const seasonRow = await prisma.division.findUnique({
+    where: { id: div.id },
+    select: { season: { select: { scheduledEndAt: true } } },
+  });
+  const endsHeader = seasonEndsHeader(seasonRow?.season?.scheduledEndAt ?? null);
   return [
     `# 🃏 Welcome to ${div.name}`,
     `_${seasonLabel} · ${div.name} division_`,
     ``,
+    ...(endsHeader ? [endsHeader, ``] : []),
     groupTag,
     ``,
     `**Your division (${div.members.length} players):**`,
