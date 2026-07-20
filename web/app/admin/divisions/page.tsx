@@ -37,9 +37,19 @@ export default async function AdminDivisionsPage({
           </span>
         </h2>
 
+        {/* Promote/relegate counts only drive END-OF-SEASON movement (and the
+            up/down zones on standings) - they never affect who plays whom, so
+            there's nothing to regenerate. */}
         {ok === "rules-saved" && (
           <Callout type="success" style={{ marginBottom: 12 }}>
-            ✓ Saved. Regenerate the division&apos;s schedule to apply.
+            ✓ Saved — promotion/relegation counts apply immediately.
+          </Callout>
+        )}
+        {/* Opponents-per-player DOES change the schedule shape, so this is the
+            one that needs a regenerate to take effect. */}
+        {ok === "format-saved" && (
+          <Callout type="success" style={{ marginBottom: 12 }}>
+            ✓ Saved. Regenerate the division&apos;s schedule to apply the new opponent count.
           </Callout>
         )}
         {ok?.startsWith("regenerated-") && (
