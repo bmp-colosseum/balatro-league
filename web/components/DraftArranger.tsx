@@ -53,6 +53,9 @@ export async function DraftArranger({ seasonId, roundId }: { seasonId: string; r
       floor: number | null;
       floorName: string | null;
       outcome: "promoted" | "relegated" | "same" | null;
+      // The division the AUTO-placement dropped/raised them into - i.e. what they
+      // were SUPPOSED to be relegated to (or promoted into) before any dragging.
+      placedName: string | null;
     }
   >();
   if (roundId) {
@@ -81,6 +84,7 @@ export async function DraftArranger({ seasonId, roundId }: { seasonId: string; r
             floor,
             floorName: floor != null ? cont.divisions[floor]?.name ?? null : null,
             outcome,
+            placedName: dv.name,
           });
         }
       });
@@ -145,6 +149,7 @@ export async function DraftArranger({ seasonId, roundId }: { seasonId: string; r
         floorGlobalIndex: prior?.floor ?? null,
         floorDivisionName: prior?.floorName ?? null,
         priorOutcome: prior?.outcome ?? null,
+        priorAutoPlacedName: prior?.placedName ?? null,
       };
     }),
   );

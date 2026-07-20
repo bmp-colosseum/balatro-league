@@ -59,6 +59,9 @@ export interface EditorMember {
   // MovementMark, this never changes when the TO drags the player afterward.
   // null = no continuity data or a rookie (no earned division).
   priorOutcome?: "promoted" | "relegated" | "same" | null;
+  // The division the auto-placement put them in - what they were SUPPOSED to be
+  // relegated to (or promoted into), independent of where the TO drags them.
+  priorAutoPlacedName?: string | null;
   // The WORST division (highest ladder index) the player is entitled to — their
   // last-season division, or one below if relegated. Dropping them below this
   // means dropping someone who wasn't relegated. null = no floor (rookie).
@@ -571,6 +574,15 @@ export function DraggableDivisionsEditor({
                                 <PriorOutcomeBadge member={m} />
                                 <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                   {m.priorDivisionName ?? ""}
+                                  {/* Where they were SUPPOSED to land, e.g. "Common 4 -> Common 5". */}
+                                  {(m.priorOutcome === "relegated" || m.priorOutcome === "promoted") && m.priorAutoPlacedName && (
+                                    <span
+                                      className="muted"
+                                      title={m.priorOutcome === "relegated" ? "Was due to drop into this division" : "Was due to rise into this division"}
+                                    >
+                                      {" -> "}{m.priorAutoPlacedName}
+                                    </span>
+                                  )}
                                   {m.priorStanding && (
                                     <span className="muted" style={{ marginLeft: 4 }}>{m.priorStanding}</span>
                                   )}
@@ -771,7 +783,7 @@ function PriorOutcomeBadge({ member }: { member: EditorMember }) {
   if (member.priorOutcome === "relegated") {
     return (
       <span
-        title={`Was relegated last season${member.floorDivisionName ? ` (entitled floor: ${member.floorDivisionName})` : ""} -- pinned regardless of where they're dragged.`}
+        title={`Was relegated last season${member.priorAutoPlacedName ? ` -- should drop to ${member.priorAutoPlacedName}` : ""} -- pinned regardless of where they're dragged.`}
         style={{ color: "var(--danger)", fontSize: 9, fontWeight: 700 }}
       >
         REL
@@ -781,7 +793,7 @@ function PriorOutcomeBadge({ member }: { member: EditorMember }) {
   if (member.priorOutcome === "promoted") {
     return (
       <span
-        title="Was promoted last season -- pinned regardless of where they're dragged."
+        title={`Was promoted last season${member.priorAutoPlacedName ? ` -- should rise to ${member.priorAutoPlacedName}` : ""} -- pinned regardless of where they're dragged.`}
         style={{ color: "var(--success)", fontSize: 9, fontWeight: 700 }}
       >
         PRO
