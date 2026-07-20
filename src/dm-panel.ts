@@ -36,7 +36,7 @@
 import { type BaseMessageOptions, type Client } from "discord.js";
 import { activePublicSeason } from "./active-season.js";
 import { prisma } from "./db.js";
-import { divisionControlsRow } from "./division-controls.js";
+import { playerActionRows } from "./division-controls.js";
 import { getConfig, LeagueConfigKey } from "./league-config.js";
 import { seasonTimelineLines, parseBufferDays } from "./season-timing.js";
 import { computeStatusSummaryForPlayer, type PlayerStatusSummary } from "./commands/status.js";
@@ -149,7 +149,7 @@ export function buildDmPanelLines(summary: PlayerStatusSummary, timelineLines: s
 export function buildDmPanel(summary: PlayerStatusSummary, timelineLines: string[]): BaseMessageOptions {
   return {
     content: buildDmPanelLines(summary, timelineLines).join("\n\n"),
-    components: [divisionControlsRow()],
+    components: playerActionRows(),
     allowedMentions: { parse: [] },
   };
 }

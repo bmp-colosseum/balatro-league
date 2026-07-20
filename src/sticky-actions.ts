@@ -25,7 +25,7 @@ import {
 import { activePublicSeason } from "./active-season.js";
 import { getConfig, LeagueConfigKey } from "./league-config.js";
 import { seasonTimelineLines, parseBufferDays } from "./season-timing.js";
-import { divisionControlsRow } from "./division-controls.js";
+import { playerActionRows } from "./division-controls.js";
 import { prisma } from "./db.js";
 import { logDiscordError } from "./log-discord-error.js";
 
@@ -126,7 +126,7 @@ export function recordDivisionChannelMessage(message: Message): void {
 export function buildStickyActionsMessage(timeline: string[] = []): BaseMessageOptions {
   return {
     content: [...timeline, "**Quick actions**"].join("\n"),
-    components: [divisionControlsRow()],
+    components: playerActionRows(),
     allowedMentions: { parse: [] },
   };
 }

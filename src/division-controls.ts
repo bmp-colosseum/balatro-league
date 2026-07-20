@@ -14,3 +14,20 @@ export function divisionControlsRow(): ActionRowBuilder<ButtonBuilder> {
     new ButtonBuilder().setCustomId("controls:help").setLabel("Help").setStyle(ButtonStyle.Secondary),
   );
 }
+
+// A one-button row linking Hammertime (timezone-aware Discord timestamps) so
+// players can generate a "let's play at <time>" stamp when scheduling matches
+// across time zones. A Link button carries no customId (it's just a URL).
+function hammertimeRow(): ActionRowBuilder<ButtonBuilder> {
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("Schedule a time").setURL("https://hammertime.cyou"),
+  );
+}
+
+// The full player action block: the controls row + the Hammertime scheduling
+// link (the controls row is already full at Discord's 5-button max, so the link
+// needs its own row). Used by the DM panel, the sticky message, and the division
+// welcome so all three stay identical.
+export function playerActionRows(): ActionRowBuilder<ButtonBuilder>[] {
+  return [divisionControlsRow(), hammertimeRow()];
+}

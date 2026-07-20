@@ -101,7 +101,9 @@ describe("buildDmPanel -- full send/edit payload", () => {
     expect(options.content).toContain("**Your League Panel**");
     expect(options.content).toContain("Timeline line");
     expect(options.content).toContain("Rare 1");
-    expect(options.components).toHaveLength(1);
+    expect(options.components).toHaveLength(2); // controls row + hammertime link row
+    // The second row is the Hammertime scheduling link.
+    expect(JSON.stringify(options.components)).toContain("hammertime.cyou");
     expect(options.allowedMentions).toEqual({ parse: [] });
   });
 });
