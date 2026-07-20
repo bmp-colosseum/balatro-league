@@ -14,6 +14,7 @@ import { DiscordId } from "@/components/DiscordId";
 import {
   loadSeasonWinners,
   winnerAwardStatus,
+  type DivisionWinnerRow,
   type SeasonWinnerDivision,
   type WinnerAwardStatus,
 } from "@/lib/loaders/admin-winners";
@@ -88,6 +89,30 @@ export default async function SeasonWinnersPage({
   );
 }
 
+// Career title count next to a winner's name -- the detail a TO wants when
+// handing out awards for repeat champions (Rare 1, Rare 2, Common 3, etc.).
+function ChampionBadge({ winner: w }: { winner: DivisionWinnerRow }) {
+  if (w.priorTitleCount === 0) {
+    return (
+      <div className="muted" style={{ fontSize: 11 }}>
+        first title
+      </div>
+    );
+  }
+  const careerTotal = w.priorTitleCount + 1;
+  const tooltip = w.priorTitles
+    .map((t) => `${t.divisionName} (${t.seasonLabel})`)
+    .join("; ");
+  return (
+    <div
+      title={tooltip}
+      style={{ fontSize: 11, color: "var(--admin)", cursor: "help" }}
+    >
+      {careerTotal}x champion
+    </div>
+  );
+}
+
 function DivisionRow({ division: d }: { division: SeasonWinnerDivision }) {
   const status = winnerAwardStatus(d);
   const label = STATUS_LABEL[status];
@@ -113,6 +138,7 @@ function DivisionRow({ division: d }: { division: SeasonWinnerDivision }) {
                   {w.displayName}
                 </Link>
                 <DiscordId value={w.discordId} username={w.username} />
+                <ChampionBadge winner={w} />
               </div>
             ))}
           </div>

@@ -14,6 +14,13 @@ import { loadManyDivisionStandings } from "@/lib/standings-cache";
 import { formatSeasonLabel } from "@/lib/format-season";
 import type { StandingRow } from "@/lib/standings";
 
+export interface PriorTitle {
+  seasonLabel: string;
+  seasonNumber: number;
+  divisionName: string;
+  tierName: string;
+}
+
 export interface DivisionWinnerRow {
   playerId: string;
   displayName: string;
@@ -23,6 +30,11 @@ export interface DivisionWinnerRow {
   wins: number;
   losses: number;
   draws: number;
+  // Division titles won in OTHER ended seasons (rank-1 finishes off standings,
+  // not Division.championPlayerId -- that field is unset for every division in
+  // prod, so it can't be used as a title record). Most-recent-season first.
+  priorTitles: PriorTitle[];
+  priorTitleCount: number;
 }
 
 export interface SeasonWinnerDivision {
@@ -98,22 +110,39 @@ export async function loadSeasonWinners(seasonId: string): Promise<SeasonWinners
 
   const standingsByDivision = await loadManyDivisionStandings(season.divisions.map((d) => d.id));
 
-  const divisions: SeasonWinnerDivision[] = season.divisions.map((d) => {
+  // Interim pass: resolve each division's rank-1 finisher(s) before we know
+  // which players need prior-title history looked up.
+  const interimDivisions = season.divisions.map((d) => {
     const rows = standingsByDivision.get(d.id) ?? [];
     const hasPlayedMatches = rows.some((r) => r.played > 0);
     // No played matches -> every row reads as tied on 0-0-0, which is NOT a
     // real "everyone shares the win" -- it's "no winner yet". Suppress.
     const winnerRows = hasPlayedMatches ? pickDivisionWinners(rows) : [];
-    const winners: DivisionWinnerRow[] = winnerRows.map((r) => ({
-      playerId: r.player.id,
-      displayName: r.player.displayName,
-      discordId: r.player.discordId,
-      username: r.player.username,
-      points: r.points,
-      wins: r.wins,
-      losses: r.losses,
-      draws: r.draws,
-    }));
+    return { d, winnerRows, hasPlayedMatches };
+  });
+
+  const currentWinnerIds = new Set<string>();
+  for (const { winnerRows } of interimDivisions) {
+    for (const r of winnerRows) currentWinnerIds.add(r.player.id);
+  }
+  const priorTitlesByPlayer = await loadPriorTitles(season.id, currentWinnerIds);
+
+  const divisions: SeasonWinnerDivision[] = interimDivisions.map(({ d, winnerRows, hasPlayedMatches }) => {
+    const winners: DivisionWinnerRow[] = winnerRows.map((r) => {
+      const priorTitles = priorTitlesByPlayer.get(r.player.id) ?? [];
+      return {
+        playerId: r.player.id,
+        displayName: r.player.displayName,
+        discordId: r.player.discordId,
+        username: r.player.username,
+        points: r.points,
+        wins: r.wins,
+        losses: r.losses,
+        draws: r.draws,
+        priorTitles,
+        priorTitleCount: priorTitles.length,
+      };
+    });
     return {
       divisionId: d.id,
       divisionName: d.name,
@@ -133,4 +162,66 @@ export async function loadSeasonWinners(seasonId: string): Promise<SeasonWinners
     seasonEnded: season.endedAt !== null,
     divisions,
   };
+}
+
+// Prior division titles (rank-1 finishes in OTHER ended seasons) for the
+// given set of current-season winner player ids, most-recent-season first.
+// Division.championPlayerId is unset for every division in prod (never
+// recorded), so titles are re-derived from standings the same way the
+// current season's winners are -- pickDivisionWinners on cached rank-1 rows,
+// via the SAME batched standings reader (one loadManyDivisionStandings call
+// for every past division, no N+1). We still have to compute rank-1 for
+// every past division to know who its champion was, but only RETAIN a title
+// for players in `winnerIds` -- no history is built for anyone else.
+async function loadPriorTitles(
+  currentSeasonId: string,
+  winnerIds: Set<string>,
+): Promise<Map<string, PriorTitle[]>> {
+  const out = new Map<string, PriorTitle[]>();
+  if (winnerIds.size === 0) return out;
+
+  const pastSeasons = await prisma.season.findMany({
+    where: { endedAt: { not: null }, id: { not: currentSeasonId } },
+    orderBy: { number: "desc" },
+    select: {
+      number: true,
+      subtitle: true,
+      divisions: {
+        select: {
+          id: true,
+          name: true,
+          tier: { select: { name: true } },
+        },
+      },
+    },
+  });
+  if (pastSeasons.length === 0) return out;
+
+  const allDivisionIds = pastSeasons.flatMap((s) => s.divisions.map((d) => d.id));
+  const standingsByDivision = await loadManyDivisionStandings(allDivisionIds);
+
+  // pastSeasons is already ordered most-recent-first, so appending in this
+  // iteration order keeps each player's title list most-recent-first too.
+  for (const s of pastSeasons) {
+    const seasonLabel = formatSeasonLabel(s);
+    for (const d of s.divisions) {
+      const rows = standingsByDivision.get(d.id) ?? [];
+      const hasPlayedMatches = rows.some((r) => r.played > 0);
+      if (!hasPlayedMatches) continue;
+      const champions = pickDivisionWinners(rows);
+      for (const champ of champions) {
+        if (!winnerIds.has(champ.player.id)) continue;
+        const title: PriorTitle = {
+          seasonLabel,
+          seasonNumber: s.number,
+          divisionName: d.name,
+          tierName: d.tier.name,
+        };
+        const existing = out.get(champ.player.id);
+        if (existing) existing.push(title);
+        else out.set(champ.player.id, [title]);
+      }
+    }
+  }
+  return out;
 }
