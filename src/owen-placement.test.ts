@@ -17,7 +17,7 @@ const DIVS = [
 // to finish POSITION within that size, so tests must pass the actual division
 // size (not a fixed 10) for relegation/promotion to mean "finished bottom/top".
 function returner(id: string, divIndex: number, standingRank: number, divSize: number, mmr = 1000): ReturnerInput {
-  return { discordId: id, displayName: id, mmr, divIndex, standingRank, divSize, standing: { rank: standingRank, record: "0-0-0" } };
+  return { discordId: id, displayName: id, mmr, divIndex, standingRank, divSize, standing: { rank: standingRank, record: "0-0-0", points: 0 } };
 }
 const idsIn = (out: ReturnType<typeof buildOwenPlacement>, i: number) => out[i]!.members.map((m) => m.discordId);
 const divisionOf = (out: ReturnType<typeof buildOwenPlacement>, id: string) =>

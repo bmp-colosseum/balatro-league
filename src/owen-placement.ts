@@ -22,7 +22,7 @@ export interface PlacementMember {
   displayName: string;
   mmr: number;
   isRookie: boolean;
-  standing: { rank: number; record: string } | null;
+  standing: { rank: number; record: string; points: number } | null;
   // Returner's ORIGINAL division index (on this ladder) before promotion/
   // relegation/overflow — lets the UI show "↑ from Rare 1". Null for rookies.
   fromIndex: number | null;
@@ -43,7 +43,7 @@ export interface ReturnerInput {
   divIndex: number; // index in `divisions`, 0 = top (Legendary)
   standingRank: number; // 1 = top of their current division
   divSize: number; // how many are in their current division
-  standing: { rank: number; record: string } | null;
+  standing: { rank: number; record: string; points: number } | null;
   bmp?: number | null;
 }
 export interface RookieInput {
