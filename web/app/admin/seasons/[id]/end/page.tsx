@@ -47,6 +47,7 @@ export default async function EndSeasonPreviewPage({
           <Callout type="accent">
             ⚠ {unfinishedPairings} match{unfinishedPairings === 1 ? "" : "es"} still unplayed this season. Ending now ranks
             players on their partial records — check with the league before you do.
+            {" "}<Link href="/admin/resolve" style={{ color: "var(--accent)" }}>{"Resolve them ->"}</Link>
           </Callout>
         )}
 

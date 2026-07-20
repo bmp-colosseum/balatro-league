@@ -36,6 +36,7 @@ export const ADMIN_LINKS: AdminNavLink[] = [
   { href: "/admin/participation", label: "Participation" },
   { href: "/admin/whats-at-stake", label: "At Stake" },
   { href: "/admin/results", label: "Results" },
+  { href: "/admin/resolve", label: "Resolve All" },
   { href: "/admin/disputes", label: "Disputes" },
   { href: "/admin/dms", label: "DMs" },
   { href: "/admin/bans", label: "Bans" },
