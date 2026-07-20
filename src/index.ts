@@ -12,6 +12,7 @@ import { setDiscordClient } from "./discord.js";
 import { env } from "./env.js";
 import { startHealthCheck } from "./healthcheck.js";
 import { startMatchSweep } from "./match-sweep.js";
+import { recordDivisionChannelMessage, startStickyActions } from "./sticky-actions.js";
 import { startMatchControlBumper } from "./commands/match-buttons.js";
 import { bootstrapPresetsAndPointers } from "./match-config.js";
 import { initQueue, stopQueue } from "./queue.js";
@@ -88,6 +89,9 @@ client.on(Events.MessageCreate, (message) => {
   // Capture inbound DMs players send the bot -> web DM console. Scoped to DMs
   // inside captureInboundDm; guild messages are ignored there.
   captureInboundDm(message).catch(() => {});
+  // Sticky quick-actions throttle bookkeeping (division channels only, no-op
+  // elsewhere). Synchronous + self-guarded -- never throws.
+  recordDivisionChannelMessage(message);
 });
 client.on(Events.MessageUpdate, (_oldMessage, newMessage) => {
   captureEdit(newMessage).catch(() => {});
@@ -347,6 +351,7 @@ setDiscordClient(client);
 attachRateLimitLogging(client);
 startHealthCheck();
 startMatchSweep();
+startStickyActions(client);
 startMatchControlBumper(client);
 // Start the pg-boss worker AFTER the Discord client is logged in — DM
 // jobs need the client to send. Errors here don't abort the bot.
