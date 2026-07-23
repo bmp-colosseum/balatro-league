@@ -578,6 +578,9 @@ export async function loadPlayerBanStats(playerId: string): Promise<PlayerBanSta
   // "appeared" = this deck/stake was offered in this game; "banned" = the player
   // banned at least one combo carrying it this game.
   for (const g of games) {
+    // Skip custom picks (a single-combo "pool" -- e.g. Spectral+): there was no
+    // ban pool, so it isn't a ban/appearance datapoint. Still counted as played.
+    if (g.pool.length < 2) continue;
     const appDecks = new Set<string>();
     const appStakes = new Set<string>();
     const banDecks = new Set<string>();

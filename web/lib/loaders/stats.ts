@@ -200,6 +200,11 @@ async function computeStatsPageData(): Promise<StatsPageData> {
     poolByGame.set(r.gameId, arr);
   }
   for (const rows of poolByGame.values()) {
+    // Skip custom picks: a game whose "pool" is a single combo had no ban pool
+    // (e.g. Spectral+, a custom combo). Counting it as an appearance would credit
+    // a never-bannable 0% and dilute the real ban rates. Real ban/pick pools have
+    // many combos. Custom combos still count in the PLAYED stats above.
+    if (rows.length < 2) continue;
     const banDecks = new Set<string>();
     const banStakes = new Set<string>();
     const appDecks = new Set<string>();
