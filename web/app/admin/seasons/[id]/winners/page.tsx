@@ -11,6 +11,8 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Callout } from "@/components/Callout";
 import { DiscordId } from "@/components/DiscordId";
+import { ActionFlashForm } from "@/components/ActionFlashForm";
+import { SubmitButton } from "@/components/SubmitButton";
 import {
   loadSeasonWinners,
   winnerAwardStatus,
@@ -18,6 +20,7 @@ import {
   type SeasonWinnerDivision,
   type WinnerAwardStatus,
 } from "@/lib/loaders/admin-winners";
+import { setDivisionAwarded } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +55,8 @@ export default async function SeasonWinnersPage({
         </div>
         <p className="muted">
           One row per division, ladder order. Use this to hand out awards without scrolling
-          every division's full standings table.
+          every division's full standings table. &quot;Mark awarded&quot; is bookkeeping only --
+          it checks the division off here without assigning any Discord role.
         </p>
 
         {!data.seasonEnded && (
@@ -170,7 +174,41 @@ function DivisionRow({ division: d }: { division: SeasonWinnerDivision }) {
           </span>
         )}
       </td>
-      <td style={{ color: label.color }}>{label.text}</td>
+      <td>
+        <AwardStatusCell division={d} status={status} label={label} />
+      </td>
     </tr>
+  );
+}
+
+// Award-status cell with a manual bookkeeping toggle. "pending"/"mismatch" get
+// a "Mark awarded" button (re-points championPlayerId at the current winner);
+// "awarded" gets a "Mark pending" undo. "tied"/"no-winner" can't be awarded, so
+// they show status text only. The toggle NEVER touches Discord roles -- it's
+// pure check-off bookkeeping (see ./actions.ts).
+function AwardStatusCell({
+  division: d,
+  status,
+  label,
+}: {
+  division: SeasonWinnerDivision;
+  status: WinnerAwardStatus;
+  label: { text: string; color: string };
+}) {
+  if (status === "no-winner" || status === "tied") {
+    return <span style={{ color: label.color }}>{label.text}</span>;
+  }
+  const isAwarded = status === "awarded";
+  return (
+    <div style={{ display: "grid", gap: 4, justifyItems: "start" }}>
+      <span style={{ color: label.color }}>{label.text}</span>
+      <ActionFlashForm action={setDivisionAwarded}>
+        <input type="hidden" name="divisionId" value={d.divisionId} />
+        <input type="hidden" name="awarded" value={isAwarded ? "0" : "1"} />
+        <SubmitButton size="sm" variant="secondary">
+          {isAwarded ? "Mark pending" : "Mark awarded"}
+        </SubmitButton>
+      </ActionFlashForm>
+    </div>
   );
 }
