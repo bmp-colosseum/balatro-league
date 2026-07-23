@@ -13,6 +13,7 @@ import { Callout } from "@/components/Callout";
 import { DiscordId } from "@/components/DiscordId";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
+import { tierColors } from "@/lib/tier-colors";
 import {
   loadSeasonWinners,
   winnerAwardStatus,
@@ -93,8 +94,34 @@ export default async function SeasonWinnersPage({
   );
 }
 
-// Career title count next to a winner's name -- the detail a TO wants when
-// handing out awards for repeat champions (Rare 1, Rare 2, Common 3, etc.).
+// Rarity-colored tier pill (gold Legendary / purple Rare / blue Uncommon /
+// grey Common, cycling for custom tiers) -- so the award's rarity is scannable.
+function RarityPill({
+  name,
+  position,
+  size = 11,
+  title,
+}: {
+  name: string;
+  position: number;
+  size?: number;
+  title?: string;
+}) {
+  const c = tierColors(position);
+  return (
+    <span
+      className="pill"
+      title={title}
+      style={{ background: c.bg, color: c.fg, fontSize: size, whiteSpace: "nowrap" }}
+    >
+      {name}
+    </span>
+  );
+}
+
+// Career title history next to a winner's name -- the detail a TO wants when
+// handing out awards for repeat champions. Shows the count plus a rarity pill
+// per prior title, so a past Legendary/Rare win stands out from a Common one.
 function ChampionBadge({ winner: w }: { winner: DivisionWinnerRow }) {
   if (w.priorTitleCount === 0) {
     return (
@@ -104,15 +131,20 @@ function ChampionBadge({ winner: w }: { winner: DivisionWinnerRow }) {
     );
   }
   const careerTotal = w.priorTitleCount + 1;
-  const tooltip = w.priorTitles
-    .map((t) => `${t.divisionName} (${t.seasonLabel})`)
-    .join("; ");
   return (
-    <div
-      title={tooltip}
-      style={{ fontSize: 11, color: "var(--admin)", cursor: "help" }}
-    >
-      {careerTotal}x champion
+    <div style={{ display: "grid", gap: 3, marginTop: 2 }}>
+      <div style={{ fontSize: 11, color: "var(--admin)" }}>{careerTotal}x champion</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+        {w.priorTitles.map((t, i) => (
+          <RarityPill
+            key={i}
+            name={t.tierName}
+            position={t.tierPosition}
+            size={10}
+            title={`${t.divisionName} - ${t.seasonLabel}`}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -124,9 +156,12 @@ function DivisionRow({ division: d }: { division: SeasonWinnerDivision }) {
   return (
     <tr>
       <td>
-        <strong>{d.divisionName}</strong>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <strong>{d.divisionName}</strong>
+          <RarityPill name={d.tierName} position={d.tierPosition} />
+        </div>
         <div className="muted" style={{ fontSize: 11 }}>
-          {d.tierName} - {d.memberCount} player{d.memberCount === 1 ? "" : "s"}
+          {d.memberCount} player{d.memberCount === 1 ? "" : "s"}
         </div>
       </td>
       <td>

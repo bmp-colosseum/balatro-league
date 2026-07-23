@@ -19,6 +19,10 @@ export interface PriorTitle {
   seasonNumber: number;
   divisionName: string;
   tierName: string;
+  // Tier ladder position (1 = top, e.g. Legendary) -- drives the rarity color
+  // of the prior-title pill so a past Legendary title reads differently from a
+  // Common one at a glance.
+  tierPosition: number;
 }
 
 export interface DivisionWinnerRow {
@@ -41,6 +45,9 @@ export interface SeasonWinnerDivision {
   divisionId: string;
   divisionName: string;
   tierName: string;
+  // Tier ladder position (1 = top). Drives the rarity pill color on the row so
+  // a TO can see at a glance whether this is a Legendary/Rare/Common award.
+  tierPosition: number;
   memberCount: number;
   // Rank-1 finisher(s). Empty when no active member has played a match yet
   // (nothing to award). More than one entry = a real, unresolved tie for #1.
@@ -100,7 +107,7 @@ export async function loadSeasonWinners(seasonId: string): Promise<SeasonWinners
           name: true,
           championPlayerId: true,
           championRoleId: true,
-          tier: { select: { name: true } },
+          tier: { select: { name: true, position: true } },
           _count: { select: { members: { where: { status: "ACTIVE" } } } },
         },
       },
@@ -147,6 +154,7 @@ export async function loadSeasonWinners(seasonId: string): Promise<SeasonWinners
       divisionId: d.id,
       divisionName: d.name,
       tierName: d.tier.name,
+      tierPosition: d.tier.position,
       memberCount: d._count.members,
       winners,
       tied: winners.length > 1,
@@ -190,7 +198,7 @@ async function loadPriorTitles(
         select: {
           id: true,
           name: true,
-          tier: { select: { name: true } },
+          tier: { select: { name: true, position: true } },
         },
       },
     },
@@ -216,6 +224,7 @@ async function loadPriorTitles(
           seasonNumber: s.number,
           divisionName: d.name,
           tierName: d.tier.name,
+          tierPosition: d.tier.position,
         };
         const existing = out.get(champ.player.id);
         if (existing) existing.push(title);
