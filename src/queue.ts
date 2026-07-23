@@ -165,6 +165,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("modlog.purge");
   await boss.createQueue("notify.schedule-change");
   await boss.createQueue("shootout.check");
+  await boss.createQueue("match.close-thread");
   await boss.createQueue("dm-panel.blast");
 
   // One-shot cleanup for retired queues. Their cron schedule rows +
@@ -613,6 +614,28 @@ export async function initQueue(): Promise<void> {
   await boss.schedule("signup.reminder-tick", "0 * * * *");
   console.log("[pg-boss] scheduled signup.reminder-tick hourly");
 
+  // Worker: delete a completed match's thread after its close grace. Posted a
+  // "closing in a minute" notice at completion; this fires ~60s later so players
+  // have a beat to read the result before the thread vanishes. Best-effort: a
+  // missing/already-gone thread just stamps threadArchivedAt so the sweep stops
+  // retrying. Survives a restart (the job is durable in Postgres).
+  await boss.work<{ sessionId: string; threadId: string }>(
+    "match.close-thread",
+    { batchSize: 1, pollingIntervalSeconds: 10 },
+    async (jobs: Job<{ sessionId: string; threadId: string }>[]) => {
+      const client = tryGetDiscordClient();
+      if (!client) throw new Error("Discord client not ready -- will retry");
+      for (const job of jobs) {
+        const { sessionId, threadId } = job.data;
+        const ch = await client.channels.fetch(threadId).catch(() => null);
+        if (ch?.isThread()) {
+          await ch.delete("Match complete").catch((err) => console.warn(`[match.close-thread] delete ${threadId} failed:`, err));
+        }
+        await prisma.matchSession.update({ where: { id: sessionId }, data: { threadArchivedAt: new Date() } }).catch(() => {});
+      }
+    },
+  );
+
   // Worker: when a division completes, notify any boundary tie that owes a
   // shootout (DM both + @-ping in the division channel). Idempotent -- no-ops if
   // the division isn't complete or the tie's already been notified/played.
@@ -702,6 +725,15 @@ export async function enqueueStandingsRefresh(): Promise<void> {
 export async function enqueueDm(job: DmJob): Promise<void> {
   if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
   await boss.send("notify.dm", job, { retryLimit: 3, retryBackoff: true });
+}
+
+// Grace before a completed match's thread is actually deleted (a beat for
+// players to read the result). The completion path posts a heads-up, then
+// enqueues this to fire ~60s later.
+export const MATCH_THREAD_CLOSE_DELAY_SECONDS = 60;
+export async function enqueueMatchThreadClose(job: { sessionId: string; threadId: string }): Promise<void> {
+  if (!boss) return;
+  await boss.send("match.close-thread", job, { startAfter: MATCH_THREAD_CLOSE_DELAY_SECONDS, retryLimit: 2 });
 }
 
 // Season-start (and on-demand) DM-panel blast: send/refresh every active

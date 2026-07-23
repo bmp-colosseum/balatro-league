@@ -268,6 +268,12 @@ export async function sweepIdleSessions(): Promise<number> {
 // hundreds of Discord deletes in one minute. The next tick picks up
 // the next 50.
 const COMPLETED_SWEEP_BATCH = 50;
+// Completed/declined threads are deleted ~60s after the fact by the
+// match.close-thread job (giving players a beat to read the result). This pass is
+// only the BACKSTOP for a job that never fired (bot offline, etc.), so it waits a
+// bit longer than that delay before stepping in -- otherwise it would preempt the
+// normal delayed close.
+const LEAKED_THREAD_GRACE_MS = 90 * 1000;
 
 export async function sweepLeakedThreads(): Promise<number> {
   const leaked = await prisma.matchSession.findMany({
@@ -275,6 +281,7 @@ export async function sweepLeakedThreads(): Promise<number> {
       state: { in: ["COMPLETE", "CANCELLED"] },
       threadId: { not: null },
       threadArchivedAt: null,
+      updatedAt: { lt: new Date(Date.now() - LEAKED_THREAD_GRACE_MS) },
     },
     select: { id: true, threadId: true },
     orderBy: { updatedAt: "asc" },

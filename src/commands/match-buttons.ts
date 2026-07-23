@@ -28,7 +28,7 @@ import {
   type ThreadChannel,
 } from "discord.js";
 import { MatchSessionState, Prisma, type MatchSession } from "@prisma/client";
-import { enqueueAnnounceResult } from "../queue.js";
+import { enqueueAnnounceResult, enqueueMatchThreadClose } from "../queue.js";
 import { announceChallengeResult } from "../announce.js";
 import { SYSTEM_ACTOR, recordAudit, actorFromInteractionUser } from "../audit.js";
 import { isCanonicalDeck } from "../balatro-info.js";
@@ -687,10 +687,18 @@ async function closeMatchChannel(
     }
     if (channel.type === ChannelType.PrivateThread || channel.type === ChannelType.PublicThread) {
       const thread = channel as ThreadChannel;
-      await thread.delete("Match complete").then(
-        () => { ok = true; },
-        (err: unknown) => logDiscordError("closeMatchChannel.delete", err, { threadId: channelId, sessionId }),
+      // Don't nuke the thread out from under people the instant they finish --
+      // post a heads-up and delete it ~a minute later (via the match.close-thread
+      // job). Leaving threadArchivedAt null keeps the sweep as a backstop if the
+      // job is somehow lost. The final result is already rendered above, so the
+      // thread is read-only-interesting for that last minute.
+      await thread
+        .send("**Match complete!** This thread will close in about a minute.")
+        .catch((err: unknown) => logDiscordError("closeMatchChannel.closingNotice", err, { threadId: channelId, sessionId }));
+      enqueueMatchThreadClose({ sessionId, threadId: channelId }).catch((err) =>
+        logDiscordError("closeMatchChannel.enqueue", err, { threadId: channelId, sessionId }),
       );
+      return; // deletion + threadArchivedAt happen in the delayed job (backstopped by the sweep)
     } else if (channel.type === ChannelType.GuildText) {
       // Legacy: pre-revert per-match text channels. Lock @everyone + each
       // user overwrite so the channel becomes read-only. Admin can delete
