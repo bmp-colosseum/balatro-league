@@ -120,9 +120,25 @@ function RarityPill({
 }
 
 // Career title history next to a winner's name -- the detail a TO wants when
-// handing out awards for repeat champions. Shows the count plus a rarity pill
-// per prior title, so a past Legendary/Rare win stands out from a Common one.
-function ChampionBadge({ winner: w }: { winner: DivisionWinnerRow }) {
+// handing out awards for repeat champions. A flat "2x champion" hides WHICH
+// rarities those titles were, so instead we break the career down by tier:
+// one counted rarity pill per tier (this season's title + all prior titles),
+// most-prestigious first, so "2x" can't be mistaken for 2 Common wins when one
+// was Legendary. Each pill's tooltip lists the exact divisions/seasons.
+function ChampionBadge({
+  winner: w,
+  currentTier,
+  // False when this division is still TIED for #1 -- the current title isn't
+  // clinched yet, so it must not be counted toward the career breakdown (both
+  // co-leaders would otherwise be credited a title neither has won).
+  currentTitleClinched,
+}: {
+  winner: DivisionWinnerRow;
+  currentTier: { name: string; position: number; divisionName: string };
+  currentTitleClinched: boolean;
+}) {
+  // Nothing to show when there are no prior titles and this one isn't clinched.
+  if (w.priorTitleCount === 0 && !currentTitleClinched) return null;
   if (w.priorTitleCount === 0) {
     return (
       <div className="muted" style={{ fontSize: 11 }}>
@@ -130,18 +146,34 @@ function ChampionBadge({ winner: w }: { winner: DivisionWinnerRow }) {
       </div>
     );
   }
-  const careerTotal = w.priorTitleCount + 1;
+
+  // Aggregate career titles by tier position (1 = top). Seed with this season's
+  // title only if it's clinched (not a live tie), then fold in every prior title.
+  const byTier = new Map<number, { name: string; titles: string[] }>();
+  const add = (position: number, name: string, label: string) => {
+    const e = byTier.get(position);
+    if (e) e.titles.push(label);
+    else byTier.set(position, { name, titles: [label] });
+  };
+  if (currentTitleClinched) {
+    add(currentTier.position, currentTier.name, `${currentTier.divisionName} (this season)`);
+  }
+  for (const t of w.priorTitles) add(t.tierPosition, t.tierName, `${t.divisionName} (${t.seasonLabel})`);
+
+  const tiers = [...byTier.entries()].sort((a, b) => a[0] - b[0]); // top rarity first
+  const careerTotal = w.priorTitleCount + (currentTitleClinched ? 1 : 0);
+
   return (
     <div style={{ display: "grid", gap: 3, marginTop: 2 }}>
       <div style={{ fontSize: 11, color: "var(--admin)" }}>{careerTotal}x champion</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-        {w.priorTitles.map((t, i) => (
+        {tiers.map(([position, { name, titles }]) => (
           <RarityPill
-            key={i}
-            name={t.tierName}
-            position={t.tierPosition}
+            key={position}
+            name={titles.length > 1 ? `${name} x${titles.length}` : name}
+            position={position}
             size={10}
-            title={`${t.divisionName} - ${t.seasonLabel}`}
+            title={titles.join("; ")}
           />
         ))}
       </div>
@@ -177,7 +209,15 @@ function DivisionRow({ division: d }: { division: SeasonWinnerDivision }) {
                   {w.displayName}
                 </Link>
                 <DiscordId value={w.discordId} username={w.username} />
-                <ChampionBadge winner={w} />
+                <ChampionBadge
+                  winner={w}
+                  currentTier={{
+                    name: d.tierName,
+                    position: d.tierPosition,
+                    divisionName: d.divisionName,
+                  }}
+                  currentTitleClinched={!d.tied}
+                />
               </div>
             ))}
           </div>
