@@ -130,8 +130,7 @@ async function computeStatsPageData(): Promise<StatsPageData> {
     gamesAsB,
     deckGameAgg,
     stakeGameAgg,
-    deckBanAgg,
-    stakeBanAgg,
+    poolRows,
     playedComboAgg,
     bannedComboAgg,
   ] = await Promise.all([
@@ -141,8 +140,10 @@ async function computeStatsPageData(): Promise<StatsPageData> {
     prisma.match.groupBy({ by: ["playerBId"], where: matchWhere, _sum: { gamesWonB: true } }),
     prisma.game.groupBy({ by: ["deck"], where: gameWhere, _count: { _all: true } }),
     prisma.game.groupBy({ by: ["stake"], where: gameWhere, _count: { _all: true } }),
-    prisma.gameDeck.groupBy({ by: ["deck"], where: poolWhere, _count: { _all: true, banOrdinal: true } }),
-    prisma.gameDeck.groupBy({ by: ["stake"], where: poolWhere, _count: { _all: true, banOrdinal: true } }),
+    // Per-deck / per-stake ban stats are counted PER GAME (deduped below), not
+    // per pool combo -- a stake rides on multiple combos in one pool, so a raw
+    // groupBy over-inflates it. Fetch the raw pool rows and fold them per game.
+    prisma.gameDeck.findMany({ where: poolWhere, select: { gameId: true, deck: true, stake: true, banOrdinal: true } }),
     prisma.game.groupBy({ by: ["deck", "stake"], where: gameWhere, _count: { _all: true } }),
     prisma.gameDeck.groupBy({ by: ["deck", "stake"], where: poolWhere, _count: { _all: true, banOrdinal: true } }),
   ]);
@@ -179,8 +180,41 @@ async function computeStatsPageData(): Promise<StatsPageData> {
   // (Prisma's groupBy result type still widens to `string | null`).
   const deckGameMap = new Map(deckGameAgg.map((r) => [r.deck!, { games: r._count._all }]));
   const stakeGameMap = new Map(stakeGameAgg.map((r) => [r.stake!, { games: r._count._all }]));
-  const deckBanMap = new Map(deckBanAgg.map((r) => [r.deck, { appearances: r._count._all, bans: r._count.banOrdinal }]));
-  const stakeBanMap = new Map(stakeBanAgg.map((r) => [r.stake, { appearances: r._count._all, bans: r._count.banOrdinal }]));
+
+  // Fold the pool rows into per-deck / per-stake appearance + ban counts, deduped
+  // PER GAME: a deck/stake "appears" once per game it was offered in (not once per
+  // combo carrying it), and is "banned" once per game a combo carrying it was
+  // banned. This is what keeps appearances <= games instead of ballooning past it.
+  const deckBanMap = new Map<string, { appearances: number; bans: number }>();
+  const stakeBanMap = new Map<string, { appearances: number; bans: number }>();
+  const bumpBan = (m: Map<string, { appearances: number; bans: number }>, key: string, banned: boolean) => {
+    const cur = m.get(key) ?? { appearances: 0, bans: 0 };
+    cur.appearances += 1;
+    if (banned) cur.bans += 1;
+    m.set(key, cur);
+  };
+  const poolByGame = new Map<string, typeof poolRows>();
+  for (const r of poolRows) {
+    const arr = poolByGame.get(r.gameId) ?? [];
+    arr.push(r);
+    poolByGame.set(r.gameId, arr);
+  }
+  for (const rows of poolByGame.values()) {
+    const banDecks = new Set<string>();
+    const banStakes = new Set<string>();
+    const appDecks = new Set<string>();
+    const appStakes = new Set<string>();
+    for (const r of rows) {
+      appDecks.add(r.deck);
+      appStakes.add(r.stake);
+      if (r.banOrdinal != null) {
+        banDecks.add(r.deck);
+        banStakes.add(r.stake);
+      }
+    }
+    for (const d of appDecks) bumpBan(deckBanMap, d, banDecks.has(d));
+    for (const s of appStakes) bumpBan(stakeBanMap, s, banStakes.has(s));
+  }
   const pool = await getStandardPool();
   const decks = buildItemRows(pool.decks, deckGameMap, deckBanMap);
   const stakes = buildItemRows(pool.stakes, stakeGameMap, stakeBanMap);

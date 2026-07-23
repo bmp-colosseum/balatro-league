@@ -571,15 +571,29 @@ export async function loadPlayerBanStats(playerId: string): Promise<PlayerBanSta
   const stakeBan = new Map<string, number>();
   const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
 
+  // Count PER GAME, not per pool combo. A deck/stake rides on multiple combos in
+  // one pool, so counting per combo over-inflates it (a single ban of "Red Deck
+  // + Gold Stake" would otherwise count as banning BOTH Red and Gold, and stakes
+  // -- few of them -- get hit on nearly every combo). Dedupe within each game:
+  // "appeared" = this deck/stake was offered in this game; "banned" = the player
+  // banned at least one combo carrying it this game.
   for (const g of games) {
+    const appDecks = new Set<string>();
+    const appStakes = new Set<string>();
+    const banDecks = new Set<string>();
+    const banStakes = new Set<string>();
     for (const d of g.pool) {
-      bump(deckApp, d.deck);
-      bump(stakeApp, d.stake);
+      appDecks.add(d.deck);
+      appStakes.add(d.stake);
       if (d.bannedById === playerId) {
-        bump(deckBan, d.deck);
-        bump(stakeBan, d.stake);
+        banDecks.add(d.deck);
+        banStakes.add(d.stake);
       }
     }
+    for (const k of appDecks) bump(deckApp, k);
+    for (const k of appStakes) bump(stakeApp, k);
+    for (const k of banDecks) bump(deckBan, k);
+    for (const k of banStakes) bump(stakeBan, k);
   }
 
   const build = (appMap: Map<string, number>, banMap: Map<string, number>): BanStatEntry[] =>
