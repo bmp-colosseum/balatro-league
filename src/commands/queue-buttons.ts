@@ -13,6 +13,7 @@ import {
   type QueueStatus,
 } from "../league-queue.js";
 import { isDiscordIdBanned, BANNED_MESSAGE } from "../bans.js";
+import { enqueueQueueOpponentNotify } from "../queue.js";
 import type { ButtonHandler } from "./types.js";
 
 const names = (ps: { displayName: string }[]) => ps.map((p) => p.displayName).join(", ");
@@ -109,6 +110,11 @@ export const queueButtons: ButtonHandler = {
         );
         return;
       }
+
+      // No instant pair -> nudge any opted-in opponent who still owes this player
+      // a match that they're now around. Durable + cooldown-gated in the worker;
+      // fire-and-forget so the reply isn't held up.
+      void enqueueQueueOpponentNotify({ joinerId: me.id, seasonId: season.id }).catch(() => {});
 
       const s = await queueStatusFor(me.id, season.id);
       const head = outcome.error

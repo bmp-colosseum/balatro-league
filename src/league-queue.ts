@@ -313,3 +313,113 @@ export async function ensureQueueMessage(client: Client, channelId: string): Pro
   await sent.pin().catch(() => {});
   await setConfig(LeagueConfigKey.LeagueQueueMessageId, sent.id, "system");
 }
+
+// ---- "Notify me when an opponent I owe a match queues" opt-in ---------------
+//
+// Per-player, default OFF, toggled via /notify. Stored in LeagueConfig under
+// queue_notify:<playerId> (same raw-key pattern as dm_panel:<id>). The DM is the
+// player's own explicit opt-in, so no dm_panels master switch gates it.
+
+const queueNotifyKey = (playerId: string): string => `queue_notify:${playerId}`;
+
+// Per-JOINER cooldown so queue churn (join / leave / re-queue) can't spam an
+// opponent: one notify wave per joiner per window; re-queueing inside it stays
+// silent. Stored as an ISO timestamp under queue_notify_last:<joinerId>.
+export const QUEUE_NOTIFY_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2h
+const queueNotifyCooldownKey = (playerId: string): string => `queue_notify_last:${playerId}`;
+
+export async function isQueueNotifyOptIn(playerId: string): Promise<boolean> {
+  const row = await prisma.leagueConfig.findUnique({ where: { key: queueNotifyKey(playerId) } });
+  return row?.value === "1";
+}
+
+export async function setQueueNotifyOptIn(playerId: string, on: boolean): Promise<void> {
+  const value = on ? "1" : "0";
+  await prisma.leagueConfig.upsert({
+    where: { key: queueNotifyKey(playerId) },
+    create: { key: queueNotifyKey(playerId), value, updatedBy: "player" },
+    update: { value, updatedBy: "player" },
+  });
+}
+
+// DM every opted-in opponent the joiner still owes a match, when the joiner hits
+// Queue up and DIDN'T instantly pair. Skips opponents already in the queue (they
+// would have matched, or the sweep will pair them) and honors the per-joiner
+// cooldown. Best-effort: a closed-DM failure is swallowed. Returns how many were
+// actually DMed. Runs off the durable queue.notify-opponents job (see queue.ts).
+export async function notifyOpponentsOfQueueJoin(
+  joinerId: string,
+  seasonId: string,
+  client: Client,
+): Promise<number> {
+  // Cooldown gate: at most one wave per joiner per window.
+  const lastRow = await prisma.leagueConfig.findUnique({ where: { key: queueNotifyCooldownKey(joinerId) } });
+  const last = lastRow?.value ? Date.parse(lastRow.value) : NaN;
+  if (!Number.isNaN(last) && Date.now() - last < QUEUE_NOTIFY_COOLDOWN_MS) return 0;
+
+  const joiner = await prisma.player.findUnique({ where: { id: joinerId } });
+  if (!joiner) return 0;
+
+  // Opponents with a scheduled, unplayed match against the joiner this season.
+  const pending = await prisma.match.findMany({
+    where: {
+      status: "PENDING",
+      format: "LEAGUE_BO2",
+      gamesWonA: 0,
+      gamesWonB: 0,
+      division: { seasonId },
+      OR: [{ playerAId: joinerId }, { playerBId: joinerId }],
+    },
+    select: { playerAId: true, playerBId: true },
+  });
+  const oppIds = [...new Set(pending.map((m) => (m.playerAId === joinerId ? m.playerBId : m.playerAId)))];
+  if (oppIds.length === 0) return 0;
+
+  // Opponents already queued would have matched (or the sweep will pair them) —
+  // don't nudge them to do what's already happening.
+  const queued = await prisma.queueEntry.findMany({
+    where: { playerId: { in: oppIds } },
+    select: { playerId: true },
+  });
+  const queuedSet = new Set(queued.map((q) => q.playerId));
+
+  const channelId = (await getConfig(LeagueConfigKey.LeagueQueueChannelId)) ?? "";
+  const queueLink = channelId ? `\nJump in here: <#${channelId}>` : "";
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId("queue:join").setLabel("Queue up").setStyle(ButtonStyle.Success),
+  );
+
+  let notified = 0;
+  for (const oppId of oppIds) {
+    if (queuedSet.has(oppId)) continue;
+    if (!(await isQueueNotifyOptIn(oppId))) continue;
+    const opp = await prisma.player.findUnique({ where: { id: oppId } });
+    if (!opp?.discordId) continue;
+    const user = await client.users.fetch(opp.discordId).catch(() => null);
+    if (!user) continue;
+    const ok = await user
+      .send({
+        content:
+          `🔔 **${joiner.displayName}** just joined the league queue — you still have a match to play against them. ` +
+          `Hit **Queue up** and you'll pair up instantly.` +
+          queueLink,
+        components: [row],
+        allowedMentions: { parse: [] },
+      })
+      .then(() => true)
+      .catch(() => false); // DMs closed -> skip
+    if (ok) notified++;
+  }
+
+  // Only start the cooldown once a wave actually went out, so a join with no
+  // opted-in opponents doesn't silently burn the window.
+  if (notified > 0) {
+    const nowIso = new Date().toISOString();
+    await prisma.leagueConfig.upsert({
+      where: { key: queueNotifyCooldownKey(joinerId) },
+      create: { key: queueNotifyCooldownKey(joinerId), value: nowIso, updatedBy: "system" },
+      update: { value: nowIso, updatedBy: "system" },
+    });
+  }
+  return notified;
+}

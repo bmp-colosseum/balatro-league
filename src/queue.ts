@@ -62,6 +62,7 @@ import {
   removeGuildMemberRole as removeGuildMemberRoleViaBot,
 } from "./discord-helpers.js";
 import { playerActionRows } from "./division-controls.js";
+import { notifyOpponentsOfQueueJoin } from "./league-queue.js";
 import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
 import { formatSeasonLabel } from "./format-season.js";
 import { postPendingReport } from "./report-flow.js";
@@ -166,6 +167,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("notify.schedule-change");
   await boss.createQueue("shootout.check");
   await boss.createQueue("match.close-thread");
+  await boss.createQueue("queue.notify-opponents");
   await boss.createQueue("dm-panel.blast");
 
   // One-shot cleanup for retired queues. Their cron schedule rows +
@@ -636,6 +638,21 @@ export async function initQueue(): Promise<void> {
     },
   );
 
+  // Worker: DM opted-in opponents when a player joins the queue and didn't
+  // instantly pair -- "someone you still owe a match is around, hop in". Opt-in
+  // + per-joiner cooldown are enforced inside notifyOpponentsOfQueueJoin.
+  await boss.work<{ joinerId: string; seasonId: string }>(
+    "queue.notify-opponents",
+    { batchSize: 1, pollingIntervalSeconds: 10 },
+    async (jobs: Job<{ joinerId: string; seasonId: string }>[]) => {
+      const client = tryGetDiscordClient();
+      if (!client) throw new Error("Discord client not ready -- will retry");
+      for (const job of jobs) {
+        await notifyOpponentsOfQueueJoin(job.data.joinerId, job.data.seasonId, client);
+      }
+    },
+  );
+
   // Worker: when a division completes, notify any boundary tie that owes a
   // shootout (DM both + @-ping in the division channel). Idempotent -- no-ops if
   // the division isn't complete or the tie's already been notified/played.
@@ -734,6 +751,13 @@ export const MATCH_THREAD_CLOSE_DELAY_SECONDS = 60;
 export async function enqueueMatchThreadClose(job: { sessionId: string; threadId: string }): Promise<void> {
   if (!boss) return;
   await boss.send("match.close-thread", job, { startAfter: MATCH_THREAD_CLOSE_DELAY_SECONDS, retryLimit: 2 });
+}
+
+// Fire-and-forget nudge: after a player queues without instantly pairing, DM any
+// opted-in opponent they still owe a match. Opt-in + cooldown live in the worker.
+export async function enqueueQueueOpponentNotify(job: { joinerId: string; seasonId: string }): Promise<void> {
+  if (!boss) return;
+  await boss.send("queue.notify-opponents", job, { retryLimit: 2 });
 }
 
 // Season-start (and on-demand) DM-panel blast: send/refresh every active
