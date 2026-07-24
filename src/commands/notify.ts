@@ -7,13 +7,13 @@ import { getOrCreatePlayer, guildDisplayName } from "../players.js";
 import { setQueueNotifyOptIn } from "../league-queue.js";
 import type { SlashCommand } from "./types.js";
 
-// /notify on:True|False -- opt into (or out of) a DM whenever an opponent you
-// still owe a match joins the league queue, so you can hop in and pair up
+// /league-notify on:True|False -- opt into (or out of) a DM whenever an opponent
+// you still owe a match joins the league queue, so you can hop in and pair up
 // instantly. Explicit boolean rather than a blind toggle so running it twice
 // can't silently flip you back off. Default state (never set) is OFF.
 export const notify: SlashCommand = {
   data: new SlashCommandBuilder()
-    .setName("notify")
+    .setName("league-notify")
     .setDescription("Get a DM when an opponent you still owe a match joins the league queue.")
     .addBooleanOption((o) =>
       o
