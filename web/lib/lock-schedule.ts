@@ -11,9 +11,31 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { generateSchedule, scheduleDegree } from "@/lib/schedule";
 import { getPlacementRules } from "@/lib/placement-rules";
+import { loadAvoidedPairIdPairs } from "@/lib/loaders/avoided-pairs";
 
-export async function lockDivisionSchedules(seasonId: string): Promise<{ created: number; divisions: number }> {
+// Resolve the "never pair these two" blocklist into ready-to-show warnings for
+// the divisions where it couldn't be honored (a full round-robin can't drop any
+// edge). Only queries player names when something was actually unavoidable.
+async function describeUnavoidable(
+  pairs: Array<{ divisionName: string; a: string; b: string }>,
+): Promise<string[]> {
+  if (pairs.length === 0) return [];
+  const ids = [...new Set(pairs.flatMap((u) => [u.a, u.b]))];
+  const players = await prisma.player.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, displayName: true },
+  });
+  const nameById = new Map(players.map((p) => [p.id, p.displayName]));
+  return pairs.map(
+    (u) => `${u.divisionName}: ${nameById.get(u.a) ?? u.a} & ${nameById.get(u.b) ?? u.b} (full round-robin -- can't separate)`,
+  );
+}
+
+export async function lockDivisionSchedules(
+  seasonId: string,
+): Promise<{ created: number; divisions: number; unavoidable: string[] }> {
   const rules = await getPlacementRules();
+  const forbidden = await loadAvoidedPairIdPairs();
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
     include: {
@@ -28,10 +50,11 @@ export async function lockDivisionSchedules(seasonId: string): Promise<{ created
       },
     },
   });
-  if (!season) return { created: 0, divisions: 0 };
+  if (!season) return { created: 0, divisions: 0, unavoidable: [] };
 
   let created = 0;
   let divisionsWithSchedule = 0;
+  const unavoidablePairs: Array<{ divisionName: string; a: string; b: string }> = [];
 
   for (let idx = 0; idx < season.divisions.length; idx++) {
     const d = season.divisions[idx]!;
@@ -49,7 +72,8 @@ export async function lockDivisionSchedules(seasonId: string): Promise<{ created
     // default, clamped to size-1 (so a division at or above that count plays a
     // full round-robin, and small divisions collapse to round-robin automatically).
     const degree = scheduleDegree(d.opponentsPerPlayer, rules.defaultOpponentsPerPlayer, members.length);
-    const { opponents } = generateSchedule(sp, { degree, seed: 1 });
+    const { opponents, unavoidable } = generateSchedule(sp, { degree, seed: 1, forbidden });
+    for (const [a, b] of unavoidable) unavoidablePairs.push({ divisionName: d.name, a, b });
 
     // Dedupe to canonical pairs (A.id < B.id, matching the Match convention).
     const pairs = new Set<string>();
@@ -81,7 +105,11 @@ export async function lockDivisionSchedules(seasonId: string): Promise<{ created
     await prisma.season.update({ where: { id: seasonId }, data: { scheduleLocked: true } });
   }
 
-  return { created, divisions: divisionsWithSchedule };
+  return {
+    created,
+    divisions: divisionsWithSchedule,
+    unavoidable: await describeUnavoidable(unavoidablePairs),
+  };
 }
 
 // Regenerate ONE division's schedule (its own opponents-per-player setting, or
@@ -106,7 +134,11 @@ export async function lockOneDivision(divisionId: string): Promise<number> {
   const avg = seeded.length ? Math.round(seeded.reduce((a, b) => a + b, 0) / seeded.length) : 1000;
   const sp = members.map((m) => ({ id: m.id, mmr: m.hiddenMmr ?? avg }));
   const degree = scheduleDegree(division.opponentsPerPlayer, rules.defaultOpponentsPerPlayer, members.length);
-  const { opponents } = generateSchedule(sp, { degree, seed: 1 });
+  const forbidden = await loadAvoidedPairIdPairs();
+  const { opponents, unavoidable } = generateSchedule(sp, { degree, seed: 1, forbidden });
+  if (unavoidable.length) {
+    console.warn(`[lock-schedule] division ${divisionId} can't separate ${unavoidable.length} avoided pair(s) (full round-robin)`);
+  }
 
   const pairs = new Set<string>();
   for (const [pid, opps] of opponents) {

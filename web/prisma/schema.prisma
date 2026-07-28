@@ -1134,3 +1134,23 @@ model DmDelivery {
   @@index([status, sentAt])
   @@index([sentAt])
 }
+
+// A pair of players who must NEVER be scheduled against each other. Global +
+// permanent (applies to every season's schedule build), symmetric: stored in
+// canonical order (playerAId < playerBId) so the pair is unique regardless of
+// input order. Plain string ids (no relation), matching QueueEntry. The graph
+// scheduler drops these edges when building a division; a division too small to
+// avoid the edge (a full round-robin) reports the pair as unavoidable instead
+// of silently pairing them.
+model AvoidedPair {
+  id        String   @id @default(cuid())
+  playerAId String // canonical: playerAId < playerBId
+  playerBId String
+  note      String? // optional admin note (why they're separated)
+  createdAt DateTime @default(now())
+  createdBy String? // Discord id of the admin who added it
+
+  @@unique([playerAId, playerBId])
+  @@index([playerAId])
+  @@index([playerBId])
+}

@@ -109,6 +109,144 @@ function degrees(memberIds: string[], pairs: [string, string][], existing: Exist
   return deg;
 }
 
+// --- forbidden pairs (never-schedule-together) ---
+
+function canon(a: string, b: string): [string, string] {
+  return a < b ? [a, b] : [b, a];
+}
+
+function hasPair(pairs: ReadonlyArray<readonly [string, string]>, a: string, b: string): boolean {
+  const [x, y] = canon(a, b);
+  return pairs.some(([p, q]) => p === x && q === y);
+}
+
+function checkStructureWithForbidden(
+  players: SchedulePlayer[],
+  degree: number,
+  forbidden: ReadonlyArray<readonly [string, string]>,
+  seed = 42,
+) {
+  const r = generateSchedule(players, { degree, seed, forbidden });
+  const byId = new Map(players.map((p) => [p.id, p.mmr]));
+  for (const p of players) {
+    const opps = r.opponents.get(p.id)!;
+    expect(opps).toBeDefined();
+    expect(opps.length).toBe(degree);
+    expect(new Set(opps).size).toBe(degree);
+    expect(opps).not.toContain(p.id);
+    for (const o of opps) expect(r.opponents.get(o)).toContain(p.id);
+    const expectedSos = opps.reduce((s, o) => s + byId.get(o)!, 0);
+    expect(r.sos.get(p.id)).toBeCloseTo(expectedSos, 6);
+  }
+  return r;
+}
+
+describe("generateSchedule — forbidden pairs", () => {
+  it("keeps regularity + validity when honoring a forbidden set (n=12, k=4)", () => {
+    const players = division(12);
+    const forbidden: [string, string][] = [
+      ["p1", "p2"],
+      ["p5", "p6"],
+      ["p9", "p10"],
+    ];
+    checkStructureWithForbidden(players, 4, forbidden);
+  });
+
+  it("avoids every forbidden pair when the set is sparse (n comfortably > k+1) and reports no unavoidables", () => {
+    const players = division(12);
+    const forbidden: [string, string][] = [
+      ["p1", "p2"],
+      ["p5", "p6"],
+      ["p9", "p10"],
+    ];
+    const r = checkStructureWithForbidden(players, 4, forbidden);
+    for (const [a, b] of forbidden) {
+      expect(r.opponents.get(a)).not.toContain(b);
+      expect(r.opponents.get(b)).not.toContain(a);
+    }
+    expect(r.unavoidable).toEqual([]);
+  });
+
+  it("full round-robin (n <= k+1): a forbidden pair among members shows up in unavoidable", () => {
+    const players = division(5); // n=5, k=4 -> n <= k+1
+    const r = generateSchedule(players, { degree: 4, seed: 1, forbidden: [["p1", "p2"]] });
+    expect(r.unavoidable).toEqual([["p1", "p2"]]);
+    // still a full round robin -- the pair is unavoidably present.
+    expect(r.opponents.get("p1")).toContain("p2");
+    expect(r.opponents.get("p2")).toContain("p1");
+  });
+
+  it("is deterministic with a forbidden set (identical args -> deep-equal output)", () => {
+    const players = division(16);
+    const forbidden: [string, string][] = [["p1", "p2"], ["p3", "p4"]];
+    const a = generateSchedule(players, { degree: 4, seed: 7, forbidden });
+    const b = generateSchedule(players, { degree: 4, seed: 7, forbidden });
+    expect(a.opponents).toEqual(b.opponents);
+    expect(a.sos).toEqual(b.sos);
+    expect(a.unavoidable).toEqual(b.unavoidable);
+  });
+
+  it("ignores a forbidden pair referencing a non-member id", () => {
+    const players = division(16);
+    const withForbidden = generateSchedule(players, { degree: 4, seed: 7, forbidden: [["p1", "pZZZ"]] });
+    const without = generateSchedule(players, { degree: 4, seed: 7 });
+    expect(withForbidden.unavoidable).toEqual([]);
+    expect(withForbidden.opponents).toEqual(without.opponents);
+    expect(withForbidden.sos).toEqual(without.sos);
+  });
+
+  it("holds across a sweep of division sizes with multiple forbidden pairs", () => {
+    for (const n of [13, 17, 23]) {
+      const players = division(n);
+      // Pick a handful of pairs deterministically -- neighbors in MMR order,
+      // which the circulant seed would otherwise always connect.
+      const forbidden: [string, string][] = [
+        ["p1", "p2"],
+        ["p3", "p4"],
+        [`p${n - 1}`, `p${n}`],
+      ];
+      const r = checkStructureWithForbidden(players, 4, forbidden, 99);
+      for (const [a, b] of forbidden) {
+        expect(r.opponents.get(a)).not.toContain(b);
+      }
+      expect(r.unavoidable).toEqual([]);
+    }
+  });
+});
+
+describe("planDivisionResync — forbidden pairs", () => {
+  it("never emits a forbidden pair in createPairs", () => {
+    const existing = roundRobin(["p1", "p2", "p3", "p4", "p5"]); // all at degree 4
+    const members = ["p1", "p2", "p3", "p4", "p5", "p6"]; // p6 just joined, needs 4
+    const forbidden: [string, string][] = [["p6", "p2"]];
+    const plan = planDivisionResync(members, existing, 4, forbidden);
+    expect(hasPair(plan.createPairs, "p6", "p2")).toBe(false);
+    expect(plan.createPairs.length).toBe(4); // exactly enough non-forbidden partners left
+    const deg = degrees(members, plan.createPairs, existing, plan.pruneIds);
+    expect(deg.get("p6")).toBe(4);
+  });
+
+  it("leaves the deficit rather than honoring a forbidden pairing when partners run out", () => {
+    const existing = roundRobin(["p1", "p2", "p3", "p4", "p5"]); // all at degree 4
+    const members = ["p1", "p2", "p3", "p4", "p5", "p6"];
+    // Only p1, p4, p5 remain eligible for p6 -> deficit of 1 against target 4.
+    const forbidden: [string, string][] = [["p6", "p2"], ["p6", "p3"]];
+    const plan = planDivisionResync(members, existing, 4, forbidden);
+    expect(hasPair(plan.createPairs, "p6", "p2")).toBe(false);
+    expect(hasPair(plan.createPairs, "p6", "p3")).toBe(false);
+    expect(plan.createPairs.length).toBe(3);
+    const deg = degrees(members, plan.createPairs, existing, plan.pruneIds);
+    expect(deg.get("p6")).toBe(3); // deficit left, not filled by a forbidden partner
+  });
+
+  it("is unaffected by a forbidden pair referencing a non-member", () => {
+    const members = ["p1", "p2", "p3", "p4", "p5"];
+    const withForbidden = planDivisionResync(members, [], 4, [["p1", "pZZZ"]]);
+    const without = planDivisionResync(members, [], 4);
+    expect(withForbidden).toEqual(without);
+  });
+});
+
 describe("planDivisionResync", () => {
   it("gives a newcomer exactly `target` opponents and disturbs nobody else", () => {
     const existing = roundRobin(["p1", "p2", "p3", "p4", "p5"]); // all at degree 4

@@ -517,7 +517,12 @@ export async function regenerateSchedules(formData: FormData) {
   }
 
   const deleted = await prisma.match.deleteMany({ where: { division: { seasonId }, format: "LEAGUE_BO2" } });
-  const { created, divisions } = await lockDivisionSchedules(seasonId);
+  const { created, divisions, unavoidable } = await lockDivisionSchedules(seasonId);
+  if (unavoidable.length) {
+    // A full round-robin division can't drop any edge, so a blocked pair in one
+    // is impossible to honor. Log the specifics; flag the count to the admin.
+    console.warn(`[regenerate-schedules] ${unavoidable.length} avoided pair(s) unavoidable:\n  ${unavoidable.join("\n  ")}`);
+  }
   // Refresh the division welcome messages (rosters/formats updated) — silent.
   await enqueueWelcomeRefresh(seasonId).catch(() => {});
 
@@ -531,7 +536,9 @@ export async function regenerateSchedules(formData: FormData) {
   });
 
   revalidatePath("/admin/divisions");
-  redirect(`/admin/divisions?ok=regenerated-${created}`);
+  redirect(
+    `/admin/divisions?ok=regenerated-${created}${unavoidable.length ? `&unavoidable=${unavoidable.length}` : ""}`,
+  );
 }
 
 // Regenerate ONE division's schedule with the current rules + roster, leaving

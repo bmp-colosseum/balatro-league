@@ -27,6 +27,11 @@ export interface ScheduleResult {
   opponents: Map<string, string[]>;
   // playerId -> strength of schedule (sum of opponent MMRs).
   sos: Map<string, number>;
+  // Forbidden pairs (canonical [a,b], a < b) that could NOT be avoided --
+  // either both members are in a full round-robin (n <= degree+1) or no
+  // degree-preserving, forbidden-free rewiring existed. Empty in the common
+  // case (sparse forbidden set, n comfortably > degree+1).
+  unavoidable: Array<[string, string]>;
 }
 
 function mulberry32(seed: number): () => number {
@@ -71,11 +76,96 @@ function sumSq(sos: number[]): number {
   return sos.reduce((a, x) => a + x * x, 0);
 }
 
+// Canonical undirected-edge key over vertex INDICES (used internally while
+// working the graph -- distinct from the id-based canonical keys we hand
+// back to callers).
+function fkey(i: number, j: number): string {
+  return i < j ? `${i}|${j}` : `${j}|${i}`;
+}
+
+function pairCompare(a: readonly [string, string], b: readonly [string, string]): number {
+  if (a[0] !== b[0]) return a[0] < b[0] ? -1 : 1;
+  if (a[1] !== b[1]) return a[1] < b[1] ? -1 : 1;
+  return 0;
+}
+
+function dedupeSortPairs(pairs: Array<[string, string]>): Array<[string, string]> {
+  const byKey = new Map<string, [string, string]>();
+  for (const p of pairs) byKey.set(`${p[0]}|${p[1]}`, p);
+  return [...byKey.values()].sort(pairCompare);
+}
+
+function countForbiddenEdges(adj: Set<number>[], forbidden: ReadonlySet<string>): number {
+  if (forbidden.size === 0) return 0;
+  let count = 0;
+  for (let i = 0; i < adj.length; i++) for (const j of adj[i]!) if (i < j && forbidden.has(fkey(i, j))) count++;
+  return count;
+}
+
+// Degree-preserving 2-swap search dedicated to REMOVING forbidden edges
+// (ignores SoS -- that's `optimize`'s job). For each forbidden edge (a,b)
+// still present, looks for another edge (c,d) sharing no vertex with it such
+// that rewiring to (a,c)+(b,d) or (a,d)+(b,c) drops (a,b) without creating a
+// duplicate edge or another forbidden one. Repeats in rounds until no
+// forbidden edges remain or a full scan makes no progress (some may be
+// structurally unavoidable, e.g. every valid rewiring is itself forbidden).
+function repairForbidden(
+  adj: Set<number>[],
+  forbidden: ReadonlySet<string>,
+  rng: () => number,
+  maxRounds: number,
+): void {
+  if (forbidden.size === 0) return;
+  const n = adj.length;
+  for (let round = 0; round < maxRounds; round++) {
+    const badEdges: [number, number][] = [];
+    for (let i = 0; i < n; i++) for (const j of adj[i]!) if (i < j && forbidden.has(fkey(i, j))) badEdges.push([i, j]);
+    if (badEdges.length === 0) return;
+    shuffle(badEdges, rng);
+
+    let progressed = false;
+    for (const [a, b] of badEdges) {
+      if (!adj[a]!.has(b)) continue; // already resolved earlier this round
+
+      const otherEdges: [number, number][] = [];
+      for (let i = 0; i < n; i++) {
+        if (i === a || i === b) continue;
+        for (const j of adj[i]!) if (i < j && j !== a && j !== b) otherEdges.push([i, j]);
+      }
+      shuffle(otherEdges, rng);
+
+      for (const [c, d] of otherEdges) {
+        const r1ok = !adj[a]!.has(c) && !adj[b]!.has(d) && !forbidden.has(fkey(a, c)) && !forbidden.has(fkey(b, d));
+        if (r1ok) {
+          adj[a]!.delete(b); adj[b]!.delete(a); adj[c]!.delete(d); adj[d]!.delete(c);
+          adj[a]!.add(c); adj[c]!.add(a); adj[b]!.add(d); adj[d]!.add(b);
+          progressed = true;
+          break;
+        }
+        const r2ok = !adj[a]!.has(d) && !adj[b]!.has(c) && !forbidden.has(fkey(a, d)) && !forbidden.has(fkey(b, c));
+        if (r2ok) {
+          adj[a]!.delete(b); adj[b]!.delete(a); adj[c]!.delete(d); adj[d]!.delete(c);
+          adj[a]!.add(d); adj[d]!.add(a); adj[b]!.add(c); adj[c]!.add(b);
+          progressed = true;
+          break;
+        }
+      }
+    }
+    if (!progressed) return;
+  }
+}
+
 // Degree-preserving 2-swap local search minimising Σ SoS². (Mean SoS is fixed
 // by regularity, so minimising Σ SoS² minimises variance.) Each round scans all
 // edge pairs and applies EVERY improving swap it finds; rounds repeat until a
 // full scan makes no change (a local optimum).
-function optimize(adj: Set<number>[], mmr: number[], rng: () => number, maxRounds: number): void {
+function optimize(
+  adj: Set<number>[],
+  mmr: number[],
+  rng: () => number,
+  maxRounds: number,
+  forbidden: ReadonlySet<string>,
+): void {
   const n = adj.length;
   const sos = sosArray(adj, mmr);
 
@@ -95,13 +185,13 @@ function optimize(adj: Set<number>[], mmr: number[], rng: () => number, maxRound
         // Apply the better of the two valid rewirings if it lowers Σ SoS².
         const before = sos[a]! ** 2 + sos[b]! ** 2 + sos[c]! ** 2 + sos[d]! ** 2;
         // R1: (a,c)+(b,d)
-        const r1ok = !adj[a]!.has(c) && !adj[b]!.has(d);
+        const r1ok = !adj[a]!.has(c) && !adj[b]!.has(d) && !forbidden.has(fkey(a, c)) && !forbidden.has(fkey(b, d));
         const r1 = r1ok
           ? (sos[a]! + mmr[c]! - mmr[b]!) ** 2 + (sos[b]! + mmr[d]! - mmr[a]!) ** 2 +
             (sos[c]! + mmr[a]! - mmr[d]!) ** 2 + (sos[d]! + mmr[b]! - mmr[c]!) ** 2
           : Infinity;
         // R2: (a,d)+(b,c)
-        const r2ok = !adj[a]!.has(d) && !adj[b]!.has(c);
+        const r2ok = !adj[a]!.has(d) && !adj[b]!.has(c) && !forbidden.has(fkey(a, d)) && !forbidden.has(fkey(b, c));
         const r2 = r2ok
           ? (sos[a]! + mmr[d]! - mmr[b]!) ** 2 + (sos[b]! + mmr[c]! - mmr[a]!) ** 2 +
             (sos[c]! + mmr[b]! - mmr[d]!) ** 2 + (sos[d]! + mmr[a]! - mmr[c]!) ** 2
@@ -144,7 +234,16 @@ export function scheduleDegree(
 
 export function generateSchedule(
   players: SchedulePlayer[],
-  opts: { degree?: number; seed?: number; passes?: number; restarts?: number } = {},
+  opts: {
+    degree?: number;
+    seed?: number;
+    passes?: number;
+    restarts?: number;
+    // Unordered player-id pairs that must never end up as opponents. Pairs
+    // referencing an id not among `players` are silently ignored. Honored on
+    // a best-effort basis (see ScheduleResult.unavoidable).
+    forbidden?: ReadonlyArray<readonly [string, string]>;
+  } = {},
 ): ScheduleResult {
   const k = opts.degree ?? 4;
   const n = players.length;
@@ -152,11 +251,27 @@ export function generateSchedule(
   const sorted = [...players].sort((a, b) => b.mmr - a.mmr);
   const ids = sorted.map((p) => p.id);
   const mmr = sorted.map((p) => p.mmr);
+  const idIndex = new Map(ids.map((id, i) => [id, i]));
 
   const opponents = new Map<string, string[]>();
   const sosOut = new Map<string, number>();
 
-  // Too small for a proper k-regular graph → everyone plays everyone.
+  // Canonicalize the forbidden set to internal vertex-index keys, dropping
+  // any pair that doesn't reference two real members.
+  const forbiddenIdx = new Set<string>();
+  const forbiddenIds: Array<[string, string]> = [];
+  for (const pair of opts.forbidden ?? []) {
+    const [x, y] = pair;
+    if (x === y) continue;
+    const ix = idIndex.get(x);
+    const iy = idIndex.get(y);
+    if (ix === undefined || iy === undefined) continue; // not a member -> ignore
+    forbiddenIdx.add(fkey(ix, iy));
+    forbiddenIds.push(x < y ? [x, y] : [y, x]);
+  }
+
+  // Too small for a proper k-regular graph → everyone plays everyone, so any
+  // forbidden pair present is unavoidable by construction.
   if (n <= k + 1) {
     for (let i = 0; i < n; i++) {
       const list: string[] = [];
@@ -165,18 +280,27 @@ export function generateSchedule(
       opponents.set(ids[i]!, list);
       sosOut.set(ids[i]!, s);
     }
-    return { opponents, sos: sosOut };
+    return { opponents, sos: sosOut, unavoidable: dedupeSortPairs(forbiddenIds) };
   }
 
   const restarts = Math.max(1, opts.restarts ?? 8);
   const maxRounds = Math.max(1, opts.passes ?? 100);
-  let best: { adj: Set<number>[]; cost: number } | null = null;
+  let best: { adj: Set<number>[]; cost: number; badCount: number } | null = null;
   for (let r = 0; r < restarts; r++) {
     const rng = mulberry32((opts.seed ?? 1) * 1009 + r * 7919 + 1);
     const adj = buildCirculant(n, k);
-    optimize(adj, mmr, rng, maxRounds);
+    // Clear any forbidden edges the circulant seed happened to include before
+    // SoS-optimizing, then sweep again afterward in case the optimizer's own
+    // rewiring exposed a further removable one. Neither pass ever introduces
+    // a NEW forbidden edge (both are forbidden-aware).
+    repairForbidden(adj, forbiddenIdx, rng, Math.max(10, n));
+    optimize(adj, mmr, rng, maxRounds, forbiddenIdx);
+    repairForbidden(adj, forbiddenIdx, rng, Math.max(10, n));
+    const badCount = countForbiddenEdges(adj, forbiddenIdx);
     const cost = sumSq(sosArray(adj, mmr));
-    if (!best || cost < best.cost) best = { adj, cost };
+    if (!best || badCount < best.badCount || (badCount === best.badCount && cost < best.cost)) {
+      best = { adj, cost, badCount };
+    }
   }
 
   const adj = best!.adj;
@@ -187,7 +311,18 @@ export function generateSchedule(
     opponents.set(ids[i]!, list);
     sosOut.set(ids[i]!, s);
   }
-  return { opponents, sos: sosOut };
+
+  const unavoidableIds: Array<[string, string]> = [];
+  for (let i = 0; i < n; i++) {
+    for (const j of adj[i]!) {
+      if (i < j && forbiddenIdx.has(fkey(i, j))) {
+        const a = ids[i]!, b = ids[j]!;
+        unavoidableIds.push(a < b ? [a, b] : [b, a]);
+      }
+    }
+  }
+
+  return { opponents, sos: sosOut, unavoidable: dedupeSortPairs(unavoidableIds) };
 }
 
 export interface ExistingMatch {
@@ -213,13 +348,23 @@ export interface ResyncPlan {
 // preserved — we only ADD edges to fill deficits, so nobody's existing schedule
 // is disturbed. Deterministic: connects the most-deficient member to the most-
 // deficient available partner, ties broken by id, so a re-run is idempotent.
+// An optional `forbidden` list of unordered id pairs is never proposed as a
+// createPairs entry; if a member's deficit can only be filled by a forbidden
+// partner, the deficit is left rather than honored.
 export function planDivisionResync(
   activeMemberIds: string[],
   matches: ExistingMatch[],
   target: number,
+  forbidden?: ReadonlyArray<readonly [string, string]>,
 ): ResyncPlan {
   const active = new Set(activeMemberIds);
   const key = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+  const forbiddenSet = new Set<string>();
+  for (const pair of forbidden ?? []) {
+    const [a, b] = pair;
+    if (a === b) continue;
+    forbiddenSet.add(key(a, b));
+  }
 
   // 1. Prune unplayed (PENDING 0-0) rows that now involve a non-member.
   const pruneIds: string[] = [];
@@ -259,7 +404,7 @@ export function planDivisionResync(
     let progressed = false;
     for (const a of needy) {
       const partners = members
-        .filter((b) => b !== a && !pairSet.has(key(a, b)))
+        .filter((b) => b !== a && !pairSet.has(key(a, b)) && !forbiddenSet.has(key(a, b)))
         .sort((b1, b2) => {
           const n1 = (deg.get(b1)! < cap ? 0 : 1) - (deg.get(b2)! < cap ? 0 : 1);
           if (n1 !== 0) return n1; // prefer partners who also still need games

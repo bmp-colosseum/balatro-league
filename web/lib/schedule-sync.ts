@@ -11,6 +11,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { planDivisionResync, scheduleDegree, type ExistingMatch } from "@/lib/schedule";
 import { getPlacementRules } from "@/lib/placement-rules";
+import { loadAvoidedPairIdPairs } from "@/lib/loaders/avoided-pairs";
 
 export async function resyncSeasonSchedules(seasonId: string): Promise<{ pruned: number; created: number }> {
   // A season has a locked schedule iff the flag is set OR — the ground truth — a
@@ -49,6 +50,7 @@ export async function resyncSeasonSchedules(seasonId: string): Promise<{ pruned:
     await prisma.season.update({ where: { id: seasonId }, data: { scheduleLocked: true } });
   }
   const rules = await getPlacementRules();
+  const forbidden = await loadAvoidedPairIdPairs();
 
   let pruned = 0;
   let created = 0;
@@ -66,7 +68,7 @@ export async function resyncSeasonSchedules(seasonId: string): Promise<{ pruned:
       memberIds.length < 2
         ? 0
         : scheduleDegree(d.opponentsPerPlayer, rules.defaultOpponentsPerPlayer, memberIds.length);
-    const plan = planDivisionResync(memberIds, matches, target);
+    const plan = planDivisionResync(memberIds, matches, target, forbidden);
 
     if (plan.pruneIds.length) {
       await prisma.match.deleteMany({ where: { id: { in: plan.pruneIds } } });

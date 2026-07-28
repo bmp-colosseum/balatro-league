@@ -18,10 +18,10 @@ export const dynamic = "force-dynamic";
 export default async function AdminDivisionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; err?: string; replace?: string; replaceerr?: string }>;
+  searchParams: Promise<{ ok?: string; err?: string; replace?: string; replaceerr?: string; unavoidable?: string }>;
 }) {
   await requireAdmin();
-  const { ok, err, replace, replaceerr } = await searchParams;
+  const { ok, err, replace, replaceerr, unavoidable } = await searchParams;
   const { season, tiers } = await loadAdminDivisionsIndex();
   const roster = season ? await loadActiveSeasonRoster() : [];
 
@@ -55,6 +55,14 @@ export default async function AdminDivisionsPage({
         {ok?.startsWith("regenerated-") && (
           <Callout type="success" style={{ marginBottom: 12 }}>
             ♻️ Schedule regenerated — {ok.slice("regenerated-".length)} matches created.
+          </Callout>
+        )}
+        {unavoidable && Number(unavoidable) > 0 && (
+          <Callout type="admin" style={{ marginBottom: 12 }}>
+            ⚠️ {unavoidable} avoided pairing{Number(unavoidable) === 1 ? "" : "s"} couldn&apos;t be
+            separated — a division is small enough to be a full round-robin (everyone plays everyone),
+            so a blocked pair can&apos;t be avoided there. See the server log for which. Manage the list
+            at <Link href="/admin/avoided-pairs">Avoided pairs</Link>.
           </Callout>
         )}
         {err === "games-already-played" && (
