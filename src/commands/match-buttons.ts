@@ -38,7 +38,17 @@ import { prisma } from "../db.js";
 import { env } from "../env.js";
 import { getLeagueSettings, getLeagueSettingsForSeason } from "../league-settings.js";
 import { logDiscordError } from "../log-discord-error.js";
-import { bootstrapPresetsAndPointers, generatePool, presetForCasualMatch, presetForCustomCombo, presetForDivision, type DeckEntry } from "../match-config.js";
+import {
+  bootstrapPresetsAndPointers,
+  BMP_POOL,
+  generatePool,
+  presetForCasualMatch,
+  presetForCustomCombo,
+  presetForDivision,
+  type DeckEntry,
+  type DeckWeight,
+  type PoolPolicy,
+} from "../match-config.js";
 import { renderComboBuilder, renderMatch } from "../match-render.js";
 import { summonHelpers } from "./helper.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
@@ -122,6 +132,29 @@ function collectPriorExclusions(
     }
   }
   return { priorDecks: [...priorDecks], excludeCombos };
+}
+
+// Which decks/stakes/weights/policy a game's pool should draw from.
+// BMP-style matches (session.bmpStyle) always draw from the fixed BMP_POOL
+// vocabulary and never require a configured preset -- a casual /challenge
+// can go BMP-style even if no casual preset has been set up. Ordinary
+// matches use the resolved preset (league division or casual), unchanged.
+// Returns null only for the ordinary path when no usable preset exists;
+// the BMP-style path always resolves.
+function resolvePoolSource(
+  session: Pick<MatchSession, "bmpStyle">,
+  preset: { decks: string[]; stakes: string[] } | null,
+): { decks: string[]; stakes: string[]; deckWeights: DeckWeight[]; poolPolicy: PoolPolicy } | null {
+  if (session.bmpStyle) {
+    return {
+      decks: BMP_POOL.decks,
+      stakes: BMP_POOL.stakes,
+      deckWeights: BMP_POOL.deckWeights,
+      poolPolicy: BMP_POOL.poolPolicy,
+    };
+  }
+  if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) return null;
+  return { decks: preset.decks, stakes: preset.stakes, deckWeights: [], poolPolicy: {} };
 }
 
 async function loadSession(id: string) {
@@ -636,7 +669,8 @@ async function handleReroll(interaction: ButtonInteraction, session: MatchSessio
   const preset = session.divisionId
     ? await presetForDivision(session.divisionId)
     : await presetForCasualMatch();
-  if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) {
+  const poolSource = resolvePoolSource(session, preset);
+  if (!poolSource) {
     return reply(interaction, "The deck pool isn't set up for this match — ask an admin to configure decks/stakes.");
   }
   // Collect every deck NAME from prior games (variety) and, when the Bo5
@@ -646,7 +680,16 @@ async function handleReroll(interaction: ButtonInteraction, session: MatchSessio
   // Use the session's stamped pool size so a reroll honors whatever
   // policy was locked in at accept time, not the current admin config.
   const policy = parsePolicy(session.policy);
-  const newPool = generatePool(preset.decks, preset.stakes, policy.poolSize, undefined, priorDecks, excludeCombos);
+  const newPool = generatePool(
+    poolSource.decks,
+    poolSource.stakes,
+    policy.poolSize,
+    undefined,
+    priorDecks,
+    excludeCombos,
+    poolSource.deckWeights,
+    poolSource.poolPolicy,
+  );
   const rerolledGame: GameState = {
     firstId: game.firstId,
     bans: [],
@@ -840,7 +883,8 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
   const preset = session.divisionId
     ? await presetForDivision(session.divisionId)
     : await presetForCasualMatch();
-  if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) {
+  const poolSource = resolvePoolSource(session, preset);
+  if (!poolSource) {
     const which = session.divisionId ? "this season's preset" : "the casual-match preset";
     return reply(interaction, `The deck pool isn't set up — ask an admin to configure decks/stakes for ${which} on \`/admin/deck-bans\` before accepting.`);
   }
@@ -848,11 +892,22 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
   // policy onto the session — that snapshot stays valid for this
   // match's full lifetime even if an admin changes the config later.
   // League matches use the season's template; casual /challenge has
-  // no season context so it reads the global default.
+  // no season context so it reads the global default. A BMP-style match
+  // uses BMP_POOL's own fixed pool size instead of the resolved policy's.
   const settings = session.divisionId
     ? await getLeagueSettingsForSeason((await prisma.division.findUnique({ where: { id: session.divisionId }, select: { seasonId: true } }))!.seasonId)
     : await getLeagueSettings();
-  const game1Pool = generatePool(preset.decks, preset.stakes, settings.matchPolicy.poolSize);
+  const poolSize = session.bmpStyle ? BMP_POOL.poolSize : settings.matchPolicy.poolSize;
+  const game1Pool = generatePool(
+    poolSource.decks,
+    poolSource.stakes,
+    poolSize,
+    undefined,
+    [],
+    [],
+    poolSource.deckWeights,
+    poolSource.poolPolicy,
+  );
   const policySnapshot = {
     firstPlayerBans: settings.matchPolicy.firstPlayerBans,
     secondPlayerBans: settings.matchPolicy.secondPlayerBans,
@@ -938,7 +993,7 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
     },
   });
 
-  const allowedStakes = preset.stakes;
+  const allowedStakes = poolSource.stakes;
   // Did the match just relocate into a NEW private thread? (start-match
   // posts the invite in the division channel, then makes a thread on
   // accept. /challenge's invite is already in the thread, so no move.)
@@ -1028,7 +1083,8 @@ async function handleChooseFirst(interaction: ButtonInteraction, session: MatchS
   const preset = session.divisionId
     ? await presetForDivision(session.divisionId)
     : await presetForCasualMatch();
-  if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) {
+  const poolSource = resolvePoolSource(session, preset);
+  if (!poolSource) {
     return reply(interaction, "The deck pool isn't set up for this match — ask an admin to configure decks/stakes.");
   }
   // Collect every deck NAME that appeared in any prior game's pool so the
@@ -1040,12 +1096,14 @@ async function handleChooseFirst(interaction: ButtonInteraction, session: MatchS
   // Every game reuses the session's stamped pool size — same policy across
   // the whole match, even if admin tweaks config mid-series.
   const freshPool = generatePool(
-    preset.decks,
-    preset.stakes,
+    poolSource.decks,
+    poolSource.stakes,
     parsePolicy(session.policy).poolSize,
     undefined,
     priorDecks,
     excludeCombos,
+    poolSource.deckWeights,
+    poolSource.poolPolicy,
   );
 
   const data = {

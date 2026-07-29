@@ -58,6 +58,12 @@ export const challenge: SlashCommand = {
         .setName("no-ban-repeat")
         .setDescription("Once a deck+stake combo is banned, it can't come back in a later game this series")
         .setRequired(false),
+    )
+    .addBooleanOption((opt) =>
+      opt
+        .setName("bmp-style")
+        .setDescription("Use BMP-style bans: restricted deck/stake pool with stake caps and a guaranteed White")
+        .setRequired(false),
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
@@ -65,6 +71,7 @@ export const challenge: SlashCommand = {
     const bestOf = (interaction.options.getInteger("best-of") ?? 1) as 1 | 2 | 3 | 5;
     const noRepeatCombos = interaction.options.getBoolean("no-repeats") ?? false;
     const noBanRepeat = interaction.options.getBoolean("no-ban-repeat") ?? false;
+    const bmpStyle = interaction.options.getBoolean("bmp-style") ?? false;
 
     if (opponentUser.id === interaction.user.id) {
       await interaction.reply({ content: "Can't challenge yourself.", flags: MessageFlags.Ephemeral });
@@ -125,6 +132,7 @@ export const challenge: SlashCommand = {
         bestOf,
         noRepeatCombos,
         noBanRepeat,
+        bmpStyle,
         expiresAt,
       },
     });
@@ -215,8 +223,8 @@ export const challenge: SlashCommand = {
       action: "match.create",
       targetType: "MatchSession",
       targetId: session.id,
-      summary: `Challenged ${opp.displayName} (casual best-of-${bestOf}${noRepeatCombos ? ", no repeats" : ""}${noBanRepeat ? ", no ban repeat" : ""})`,
-      metadata: { isCasual: true, bestOf, noRepeatCombos, noBanRepeat, opponentDiscordId: opponentUser.id, threadId },
+      summary: `Challenged ${opp.displayName} (casual best-of-${bestOf}${noRepeatCombos ? ", no repeats" : ""}${noBanRepeat ? ", no ban repeat" : ""}${bmpStyle ? ", BMP-style" : ""})`,
+      metadata: { isCasual: true, bestOf, noRepeatCombos, noBanRepeat, bmpStyle, opponentDiscordId: opponentUser.id, threadId },
     });
 
     await interaction.editReply(

@@ -459,6 +459,11 @@ model MatchSession {
   // it's also dropped from every later game's pool (companion to noRepeatCombos,
   // but for bans). Off for normal matches.
   noBanRepeat             Boolean            @default(false)
+  // BMP-style bans: the pool is drawn from the fixed BMP_POOL vocabulary
+  // (restricted deck/stake list, per-stake/per-deck caps, guaranteed White)
+  // instead of the resolved preset. Set at /challenge time; doesn't require a
+  // casual preset to exist. See src/match-config.ts's BMP_POOL.
+  bmpStyle                Boolean            @default(false)
   // True when this is a tiebreaker shootout (e.g. /start-match mode:shootout
   // between two players tied for promo/relegation after a 1-1 regular-season
   // h2h). Forces bestOf=1 and writes a Shootout row instead of a Pairing
