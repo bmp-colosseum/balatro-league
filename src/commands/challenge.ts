@@ -50,7 +50,7 @@ export const challenge: SlashCommand = {
     .addBooleanOption((opt) =>
       opt
         .setName("no-repeats")
-        .setDescription("Bo5 finals rule: a deck+stake combo that's been played can't be picked again")
+        .setDescription("Once a deck+stake combo is played, it can't be picked again this series")
         .setRequired(false),
     ),
 
