@@ -99,24 +99,39 @@ async function firstExistingPreset() {
 // deck that already showed up in a prior game's pool. If filtering would
 // leave too few combos to fill `size`, we fall back to including the
 // excluded decks so the match can still proceed.
+// excludeCombos: exact (deck+stake) combos to hard-drop — the Bo5 "no repeats"
+// rule, fed the deck+stake actually PLAYED in each earlier game so it can't be
+// picked twice. Only relaxed if dropping them would leave fewer than 2 combos
+// (which would break the final pick); a normal-size pool never hits that.
 export function generatePool(
   decks: string[],
   stakes: string[],
   size: number = DEFAULT_POOL_SIZE,
   rand: () => number = Math.random,
   excludeDecks: string[] = [],
+  excludeCombos: DeckEntry[] = [],
 ): DeckEntry[] {
   const excluded = new Set(excludeDecks);
   const filteredDecks = decks.filter((d) => !excluded.has(d));
-  // Only honor the exclusion if the filtered set can still fill the pool.
+  // Only honor the deck exclusion if the filtered set can still fill the pool.
   // Otherwise fall back to the full deck list so the match doesn't stall.
   const usable = filteredDecks.length * stakes.length >= size ? filteredDecks : decks;
-  const combos: DeckEntry[] = [];
-  for (const deck of usable) {
-    for (const stake of stakes) {
-      combos.push({ deck, stake });
+  const comboKey = (d: string, s: string) => `${d}|${s}`;
+  const bannedCombos = new Set(excludeCombos.map((c) => comboKey(c.deck, c.stake)));
+  const build = (dropCombos: boolean): DeckEntry[] => {
+    const out: DeckEntry[] = [];
+    for (const deck of usable) {
+      for (const stake of stakes) {
+        if (dropCombos && bannedCombos.has(comboKey(deck, stake))) continue;
+        out.push({ deck, stake });
+      }
     }
-  }
+    return out;
+  };
+  // Hard-drop played combos (no-repeat); relax only if it would starve the
+  // final 2-combo pick.
+  let combos = build(bannedCombos.size > 0);
+  if (combos.length < 2) combos = build(false);
   if (combos.length < size) return shuffle(combos, rand);
   return shuffle(combos, rand).slice(0, size);
 }

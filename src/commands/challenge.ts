@@ -1,6 +1,8 @@
 // /challenge — same ban/pick flow as /start-match but NOT a league match.
 // No division or season required, no Pairing written, no announce. Best-of
-// is configurable (1, 2, or 3).
+// is configurable (1, 2, 3, or 5). Bo5 can opt into "no repeats" — once a
+// deck+stake combo has been played it's dropped from every later game's
+// pool (see MatchSession.noRepeatCombos + generatePool's excludeCombos).
 
 import {
   ChannelType,
@@ -25,6 +27,7 @@ const BO_CHOICES = [
   { name: "Best of 1", value: 1 },
   { name: "Best of 2", value: 2 },
   { name: "Best of 3", value: 3 },
+  { name: "Best of 5", value: 5 },
 ] as const;
 
 export const challenge: SlashCommand = {
@@ -43,11 +46,18 @@ export const challenge: SlashCommand = {
         .setDescription("Number of games (default 1)")
         .setRequired(false)
         .addChoices(...BO_CHOICES),
+    )
+    .addBooleanOption((opt) =>
+      opt
+        .setName("no-repeats")
+        .setDescription("Bo5 finals rule: a deck+stake combo that's been played can't be picked again")
+        .setRequired(false),
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
     const opponentUser = interaction.options.getUser("opponent", true);
-    const bestOf = (interaction.options.getInteger("best-of") ?? 1) as 1 | 2 | 3;
+    const bestOf = (interaction.options.getInteger("best-of") ?? 1) as 1 | 2 | 3 | 5;
+    const noRepeatCombos = interaction.options.getBoolean("no-repeats") ?? false;
 
     if (opponentUser.id === interaction.user.id) {
       await interaction.reply({ content: "Can't challenge yourself.", flags: MessageFlags.Ephemeral });
@@ -106,6 +116,7 @@ export const challenge: SlashCommand = {
         channelId: interaction.channelId,
         isCasual: true,
         bestOf,
+        noRepeatCombos,
         expiresAt,
       },
     });
@@ -196,8 +207,8 @@ export const challenge: SlashCommand = {
       action: "match.create",
       targetType: "MatchSession",
       targetId: session.id,
-      summary: `Challenged ${opp.displayName} (casual best-of-${bestOf})`,
-      metadata: { isCasual: true, bestOf, opponentDiscordId: opponentUser.id, threadId },
+      summary: `Challenged ${opp.displayName} (casual best-of-${bestOf}${noRepeatCombos ? ", no repeats" : ""})`,
+      metadata: { isCasual: true, bestOf, noRepeatCombos, opponentDiscordId: opponentUser.id, threadId },
     });
 
     await interaction.editReply(

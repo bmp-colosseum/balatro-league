@@ -397,6 +397,16 @@ enum MatchSessionState {
   GAME_3_BAN
   GAME_3_PICK
   GAME_3_PLAYING
+  // BO5 only (e.g. /challenge no-repeats playoff finals) — games 4 and 5 are
+  // played only while the series is still undecided (first to 3 wins).
+  GAME_4_CHOOSE_FIRST
+  GAME_4_BAN
+  GAME_4_PICK
+  GAME_4_PLAYING
+  GAME_5_CHOOSE_FIRST
+  GAME_5_BAN
+  GAME_5_PICK
+  GAME_5_PLAYING
   PAUSED // mutual-consent pause after game 1; pausedFromState remembers where to resume
   COMPLETE // pairing written (or just done if casual)
   CANCELLED // never accepted or admin-killed
@@ -437,9 +447,14 @@ model MatchSession {
   // written at COMPLETE, no auto-announce. Otherwise uses the same
   // ban/pick state machine and Discord rendering.
   isCasual                Boolean            @default(false)
-  // 1, 2, or 3. 1 = one game and done. 2 = league default. 3 = play game 3
-  // only if game 1 and 2 split (1-1 W-L).
+  // 1, 2, 3, or 5. 1 = one game and done. 2 = league default (play both, 1-1 is
+  // a tie). 3/5 = odd series, first to ceil(bestOf/2) wins; later games are only
+  // played while the series is still live. 5 = casual /challenge "playoff" mode.
   bestOf                  Int                @default(2)
+  // Bo5 "no repeats" rule (casual finals): once a deck+stake combo has been
+  // PLAYED in this series it's dropped from every later game's pool, so no combo
+  // can be picked twice. Off for normal matches.
+  noRepeatCombos          Boolean            @default(false)
   // True when this is a tiebreaker shootout (e.g. /start-match mode:shootout
   // between two players tied for promo/relegation after a 1-1 regular-season
   // h2h). Forces bestOf=1 and writes a Shootout row instead of a Pairing
@@ -486,7 +501,9 @@ model MatchSession {
   customComboProposal String?
   game1               String? // {firstId, bans: [...], pickedDeck, winnerId}
   game2               String?
-  game3               String? // populated only when bestOf=3 and game 1+2 split
+  game3               String? // populated only when bestOf>=3 and the series reaches game 3
+  game4               String? // BO5 only — game 4 (series still live after 3)
+  game5               String? // BO5 only — game 5 (2-2 decider)
 
   pairingId String? // populated when COMPLETE (only for league matches)
 
