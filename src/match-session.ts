@@ -174,19 +174,26 @@ export type Phase =
 // policy, return what phase the game is in and who's acting. Used to
 // render the embed + decide which buttons are clickable. Policy is read
 // from MatchSession.policy at the call site (parsePolicy + pass in).
+// requiresLives: whether THIS session collects the winner's remaining lives.
+// Must mirror handleWinner's gate (`!session.isCasual`) -- lives only feed the
+// league's net-lives tiebreaker, so casual /challenge games never capture them.
+// When this disagreed with that gate, a casual match rendered a lives prompt it
+// would never consume. Defaults true so any un-updated caller keeps the league
+// behavior.
 export function phaseFor(
   game: GameState,
   playerAId: string,
   playerBId: string,
   policy: BanPickPolicy,
+  requiresLives: boolean = true,
 ): Phase {
   const otherId = game.firstId === playerAId ? playerBId : playerAId;
   const banCount = game.bans.length;
   const { firstPlayerBans, secondPlayerBans, poolSize } = policy;
   if (game.winnerId) {
-    // DC forfeits skip lives capture (no real attrition result). Otherwise
-    // the winner must record their remaining lives before the game is done.
-    if (!game.dcByPlayerId && game.winnerLives == null) {
+    // DC forfeits skip lives capture (no real attrition result), as do casual
+    // sessions. Otherwise the winner records their lives before the game's done.
+    if (requiresLives && !game.dcByPlayerId && game.winnerLives == null) {
       return { kind: "AWAIT_LIVES", winnerId: game.winnerId };
     }
     return { kind: "DONE" };

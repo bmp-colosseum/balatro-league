@@ -5,7 +5,38 @@
 // nextFirstBanner (ALTERNATE mode's pure decision).
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { parseFirstPickMode, nextFirstBanner, FIRST_PICK_MODES } from "./match-session.js";
+import { parseFirstPickMode, nextFirstBanner, FIRST_PICK_MODES, phaseFor, type GameState } from "./match-session.js";
+
+// Regression: a casual /challenge game must never sit in AWAIT_LIVES. Lives
+// feed the league's net-lives tiebreaker only, and handleWinner skips capturing
+// them for casual sessions -- so rendering a lives prompt there asked for input
+// nothing would ever consume.
+describe("phaseFor -- lives are league-only", () => {
+  const policy = { firstPlayerBans: 4, secondPlayerBans: 3, poolSize: 9, picksFromRemaining: 2 };
+  const wonGame: GameState = {
+    firstId: "A",
+    bans: [0, 1, 2, 3, 4, 5, 6],
+    pool: Array.from({ length: 9 }, (_, i) => ({ deck: `D${i}`, stake: "White" })),
+    pickedDeckIdx: 7,
+    winnerId: "A",
+  };
+
+  it("asks a LEAGUE game's winner for lives", () => {
+    expect(phaseFor(wonGame, "A", "B", policy, true)).toEqual({ kind: "AWAIT_LIVES", winnerId: "A" });
+  });
+
+  it("marks a CASUAL game DONE without asking for lives", () => {
+    expect(phaseFor(wonGame, "A", "B", policy, false)).toEqual({ kind: "DONE" });
+  });
+
+  it("defaults to the league behavior when the flag is omitted", () => {
+    expect(phaseFor(wonGame, "A", "B", policy)).toEqual({ kind: "AWAIT_LIVES", winnerId: "A" });
+  });
+
+  it("still skips lives for a DC forfeit even in a league game", () => {
+    expect(phaseFor({ ...wonGame, dcByPlayerId: "B" }, "A", "B", policy, true)).toEqual({ kind: "DONE" });
+  });
+});
 
 describe("parseFirstPickMode", () => {
   it("recognizes the two valid modes", () => {

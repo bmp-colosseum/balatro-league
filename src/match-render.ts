@@ -153,7 +153,7 @@ function computeActiveContent(
         const opposingDc = voterIsA ? b.discordId : a.discordId;
         return { content: `<@${opposingDc}> 🔄 **${sanitizeName(voter.displayName)}** wants to reroll the pool — click **Confirm reroll** to agree, or keep banning.`, turnKey: opposingDc };
       }
-      const phase = phaseFor(game, a.id, b.id, parsePolicy(s.policy));
+      const phase = phaseFor(game, a.id, b.id, parsePolicy(s.policy), !s.isCasual);
       if (phase.kind !== "BAN") return { content: "", turnKey: "" };
       const dc = phase.whoseBanId === a.id ? a.discordId : b.discordId;
       return { content: `<@${dc}> 🎯 your turn — ban ${phase.remainingForThem} combo(s).`, turnKey: dc };
@@ -163,7 +163,7 @@ function computeActiveContent(
     case "GAME_3_PICK": {
       const game = s.state.startsWith("GAME_1") ? g1 : s.state.startsWith("GAME_2") ? g2 : g3;
       if (!game) return { content: "", turnKey: "" };
-      const phase = phaseFor(game, a.id, b.id, parsePolicy(s.policy));
+      const phase = phaseFor(game, a.id, b.id, parsePolicy(s.policy), !s.isCasual);
       if (phase.kind !== "PICK") return { content: "", turnKey: "" };
       const dc = phase.pickerId === a.id ? a.discordId : b.discordId;
       return { content: `<@${dc}> 🎯 your turn — pick the deck/stake.`, turnKey: dc };
@@ -176,7 +176,7 @@ function computeActiveContent(
       // their remaining lives before it advances — single them out so they get
       // a dedicated ping instead of the generic both-players "go play" nudge.
       if (game) {
-        const phase = phaseFor(game, a.id, b.id, parsePolicy(s.policy));
+        const phase = phaseFor(game, a.id, b.id, parsePolicy(s.policy), !s.isCasual);
         if (phase.kind === "AWAIT_LIVES") {
           const winnerDc = phase.winnerId === a.id ? a.discordId : b.discordId;
           return { content: `<@${winnerDc}> 🏆 you won the game — record your remaining lives to wrap it up.`, turnKey: winnerDc };
@@ -334,7 +334,7 @@ function renderChooseFirst(s: MatchSession, a: Player, b: Player, prevGame: Game
 
 function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], game: GameState, gameNumber: 1 | 2 | 3, opts: RenderOptions = {}) {
   const policy = parsePolicy(s.policy);
-  const phase = phaseFor(game, a.id, b.id, policy);
+  const phase = phaseFor(game, a.id, b.id, policy, !s.isCasual);
   const first = game.firstId === a.id ? a : b;
   const otherPlayer = game.firstId === a.id ? b : a;
   const remaining = remainingCombos(pool, game.bans);

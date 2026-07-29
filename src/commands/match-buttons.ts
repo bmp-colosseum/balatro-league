@@ -460,7 +460,7 @@ async function loadBanContext(
     await reply(interaction, "Game state missing.");
     return null;
   }
-  const phase = phaseFor(game, session.playerAId, session.playerBId, parsePolicy(session.policy));
+  const phase = phaseFor(game, session.playerAId, session.playerBId, parsePolicy(session.policy), !session.isCasual);
   if (phase.kind !== "BAN") {
     // Same stale-button case as above — session state still says
     // BAN but bans have already been confirmed past the policy
@@ -670,7 +670,7 @@ async function handleBanRandom(interaction: ButtonInteraction, session: MatchSes
   }
   // Flag which side used random (for the Rando Brando trait). The active
   // banner is whoever phaseFor says — which equals the interaction user.
-  const phase = phaseFor(ctx.game, session.playerAId, session.playerBId, parsePolicy(session.policy));
+  const phase = phaseFor(ctx.game, session.playerAId, session.playerBId, parsePolicy(session.policy), !session.isCasual);
   const actorIsFirst = phase.kind === "BAN" && phase.whoseBanId === ctx.game.firstId;
   const updated = await applyBans(session, ctx, selected, actorIsFirst ? { firstBannedRandomly: true } : { otherBannedRandomly: true });
   if (!updated) return raceLost(interaction);
@@ -775,7 +775,7 @@ async function applyBans(
     rerollVoteByB: undefined,
     ...extra,
   };
-  const newPhase = phaseFor(newGame, session.playerAId, session.playerBId, parsePolicy(session.policy));
+  const newPhase = phaseFor(newGame, session.playerAId, session.playerBId, parsePolicy(session.policy), !session.isCasual);
   let newState: MatchSessionState = session.state;
   if (newPhase.kind === "PICK") {
     newState = gameStateFor(ctx.gameNum, "PICK");
@@ -1183,7 +1183,7 @@ async function handlePick(interaction: AnyInteraction, session: MatchSession, id
     return reply(interaction, "That combo isn't in the remaining 2.");
   }
 
-  const phase = phaseFor(game, session.playerAId, session.playerBId, parsePolicy(session.policy));
+  const phase = phaseFor(game, session.playerAId, session.playerBId, parsePolicy(session.policy), !session.isCasual);
   if (phase.kind !== "PICK") return reply(interaction, "Not a pick phase.");
   const picker = await prisma.player.findUniqueOrThrow({ where: { id: phase.pickerId } });
   if (!(await requireActor(interaction, picker.discordId))) return;
@@ -1368,6 +1368,10 @@ async function handleLives(interaction: ButtonInteraction, session: MatchSession
   }
   const gameNum = gameNumInPhase(session.state, "PLAYING");
   if (gameNum === 0) return reply(interaction, "This match isn't waiting for a lives count.");
+  // Casual games never capture lives (they feed the league tiebreaker only), so
+  // a lives click here is always a stale button. Mirrors phaseFor's
+  // requiresLives and handleWinner's gate.
+  if (session.isCasual) return reply(interaction, "Casual matches don't record lives.");
   const gameField = gameFieldFor(gameNum);
   const game = parseGame(session[gameField]);
   if (!game || !game.winnerId) return reply(interaction, "No game winner recorded yet — vote on the winner first.");
