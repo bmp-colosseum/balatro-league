@@ -20,6 +20,7 @@ import { PERM_PRESETS } from "../discord-helpers.js";
 import { webUrl, WEB_HOST } from "../web-url.js";
 import { clearConfig, getConfig, LeagueConfigKey, setConfig } from "../league-config.js";
 import { ensureQueueMessage, refreshQueueMessage } from "../league-queue.js";
+import { refreshChallengeInfoPinned } from "../channel-refresh.js";
 import { ensureLeagueMatchesMessage } from "../league-matches-message.js";
 import { ensureLeagueMatchesPostable } from "../league-matches-channel.js";
 import { requireOwner } from "../permissions.js";
@@ -392,6 +393,12 @@ async function refreshMessages(interaction: ChatInputCommandInteraction) {
     done.push("#league-info message (queued)");
   } catch (err) {
     console.warn("[refresh-messages] league-info enqueue failed:", err);
+  }
+  try {
+    await refreshChallengeInfoPinned();
+    done.push("challenges how-to message");
+  } catch (err) {
+    console.warn("[refresh-messages] challenge-info refresh failed:", err);
   }
 
   const season = await activePublicSeason();

@@ -6,6 +6,7 @@
 import { tryGetDiscordClient } from "./discord.js";
 import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
 import { composeLeagueInfoContent } from "./league-info-content.js";
+import { composeChallengeInfoContent } from "./challenge-info-content.js";
 import { composeStandingsEmbeds } from "./standings-channel-content.js";
 
 // Rebuild + edit the pinned #league-info message. Idempotent — pulls
@@ -69,6 +70,61 @@ export async function refreshLeagueInfoPinned(): Promise<void> {
     console.log(`[league-info.refresh] posted + pinned new message in ${channelId}`);
   } catch (err) {
     console.warn(`[league-info.refresh] failed: ${(err as Error).message}`);
+  }
+}
+
+// Keep the "how challenges work" post current in the challenges channel. Same
+// reconciliation as refreshLeagueInfoPinned (edit a remembered message id →
+// adopt an existing pinned bot message → post+pin a new one), so it never
+// duplicates and heals a lost pin. No-ops if no challenges channel is set.
+export async function refreshChallengeInfoPinned(): Promise<void> {
+  const channelId = await getConfig(LeagueConfigKey.ChallengesChannelId);
+  if (!channelId) return; // challenges channel not configured — nothing to do
+  const client = tryGetDiscordClient();
+  if (!client) {
+    console.warn("[challenge-info.refresh] Discord client not ready — skipping");
+    return;
+  }
+  const channel = await client.channels.fetch(channelId).catch(() => null);
+  if (!channel || !channel.isTextBased() || !("send" in channel)) {
+    console.warn(`[challenge-info.refresh] channel ${channelId} not found or unusable`);
+    return;
+  }
+  const content = composeChallengeInfoContent();
+  const botId = client.user?.id;
+  type MiniMsg = { id: string; author: { id: string }; edit: (o: { content: string }) => Promise<unknown>; pin: () => Promise<unknown> };
+  const messages = channel as {
+    messages: {
+      fetch: (id: string) => Promise<MiniMsg>;
+      fetchPinned: () => Promise<{ values: () => Iterable<MiniMsg> }>;
+    };
+    send: (o: { content: string }) => Promise<MiniMsg>;
+  };
+  try {
+    const storedId = await getConfig(LeagueConfigKey.ChallengeInfoMessageId);
+    if (storedId) {
+      const existing = await messages.messages.fetch(storedId).catch(() => null);
+      if (existing && existing.author.id === botId) {
+        await existing.edit({ content });
+        return;
+      }
+    }
+    const pinned = await messages.messages.fetchPinned().catch(() => null);
+    if (pinned) {
+      for (const msg of pinned.values()) {
+        if (msg.author.id === botId) {
+          await msg.edit({ content });
+          await setConfig(LeagueConfigKey.ChallengeInfoMessageId, msg.id, "challenge-info.refresh");
+          return;
+        }
+      }
+    }
+    const sent = await messages.send({ content });
+    await sent.pin().catch((err: unknown) => console.warn("[challenge-info.refresh] pin failed:", err));
+    await setConfig(LeagueConfigKey.ChallengeInfoMessageId, sent.id, "challenge-info.refresh");
+    console.log(`[challenge-info.refresh] posted + pinned new message in ${channelId}`);
+  } catch (err) {
+    console.warn(`[challenge-info.refresh] failed: ${(err as Error).message}`);
   }
 }
 

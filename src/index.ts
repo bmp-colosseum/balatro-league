@@ -3,6 +3,7 @@ import { captureCreate, captureDelete, captureEdit } from "./mod-log.js";
 import { captureInboundDm } from "./inbound-dm.js";
 import { ensureLeagueMatchesMessage } from "./league-matches-message.js";
 import { ensureLeagueMatchesPostable } from "./league-matches-channel.js";
+import { refreshChallengeInfoPinned } from "./channel-refresh.js";
 import { ensureBalatroEmojis } from "./balatro-emojis.js";
 import { ensureCommandsRegistered } from "./commands/register.js";
 import { checkChannelScope } from "./command-channels.js";
@@ -160,6 +161,12 @@ client.once(Events.ClientReady, async (c) => {
       await ensureLeagueMatchesMessage(c);
     } catch (err) {
       console.warn("[boot] ensureLeagueMatchesMessage failed:", err);
+    }
+    // Keep the "how challenges work" post current in the challenges channel.
+    try {
+      await refreshChallengeInfoPinned();
+    } catch (err) {
+      console.warn("[boot] refreshChallengeInfoPinned failed:", err);
     }
   })();
 });

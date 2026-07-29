@@ -172,6 +172,11 @@ export const LeagueConfigKey = {
   // pinned) so a lost/removed pin can't make the worker post duplicates.
   LeagueInfoMessageId: "league_info_message_id",
 
+  // Message id of the self-updating "how challenges work" post the bot keeps in
+  // the challenges channel (ChallengesChannelId). Edited in place on boot +
+  // /league refresh-messages so the /challenge how-to is always current there.
+  ChallengeInfoMessageId: "challenge_info_message_id",
+
   // Read-only #league-help channel + the bot's pinned command-list message id.
   // /league setup creates the channel and posts/edits the pinned message (the
   // player command list + "type /help anywhere"), so it's rebootstrappable.
