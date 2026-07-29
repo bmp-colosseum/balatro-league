@@ -154,7 +154,7 @@ export async function announceChallengeResult(opts: {
   playerB: { discordId: string; displayName: string };
   winsA: number;
   winsB: number;
-  combos: Array<{ deck: string | null; stake: string | null }>;
+  combos: Array<{ deck: string | null; stake: string | null; winnerName?: string | null }>;
 }): Promise<void> {
   const webhookUrl =
     (await getConfig(LeagueConfigKey.ChallengeResultsWebhookUrl)) || undefined;
@@ -186,14 +186,19 @@ export async function announceChallengeResult(opts: {
     .setColor(color)
     .setFooter({ text: "Challenge" })
     .setTimestamp(new Date());
+  // One line per game: what was played and who took it. This post outlives the
+  // match thread (deleted shortly after the match), so it's the lasting record.
   const played = opts.combos
     .map((c, i) => {
       const v = [c.deck, c.stake].filter(Boolean).join(" / ");
-      return v ? `Game ${i + 1}: ${v}` : null;
+      if (!v && !c.winnerName) return null;
+      const combo = v || "_combo not recorded_";
+      const who = c.winnerName ? ` — **${sanitizeName(c.winnerName)}**` : "";
+      return `Game ${i + 1}: ${combo}${who}`;
     })
     .filter(Boolean) as string[];
   if (played.length > 0) {
-    embed.addFields({ name: "🃏 Decks played", value: played.join("\n"), inline: false });
+    embed.addFields({ name: "🃏 Games", value: played.join("\n"), inline: false });
   }
 
   if (channelId) {

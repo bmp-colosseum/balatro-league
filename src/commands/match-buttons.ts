@@ -1782,9 +1782,14 @@ async function finalizeMatch(
   if (session.isCasual || !session.divisionId) {
     await refreshMessage(interaction, updated);
     closeMatchChannel(interaction, updated.id, updated.threadId).catch(() => {});
-    const comboOf = (g: GameState): { deck: string | null; stake: string | null } => {
+    // Per-game line for the durable results post: what was played AND who won
+    // it. The thread is deleted a minute after the match, so this announce is
+    // the only lasting record of the deck/stake/winner breakdown.
+    const comboOf = (g: GameState): { deck: string | null; stake: string | null; winnerName: string | null } => {
       const c = g.pickedDeckIdx !== undefined ? g.pool[g.pickedDeckIdx] : undefined;
-      return c ? { deck: c.deck, stake: c.stake } : { deck: null, stake: null };
+      const winnerName =
+        g.winnerId === playerA.id ? playerA.displayName : g.winnerId === playerB.id ? playerB.displayName : null;
+      return c ? { deck: c.deck, stake: c.stake, winnerName } : { deck: null, stake: null, winnerName };
     };
     announceChallengeResult({
       sessionId: updated.id,
