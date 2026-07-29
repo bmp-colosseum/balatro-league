@@ -125,6 +125,13 @@ export interface DeckBansPresetSummary {
   decks: string[];
   stakes: string[];
   seasonCount: number;
+  // JSON-as-text columns, unparsed -- the page parses them via
+  // @/lib/deck-pool-config-core (parseDeckWeightsJson/parsePoolPolicyJson)
+  // right before handing initial state to the pool-policy editor, same
+  // "never trust the column verbatim" posture as every other reader of
+  // these columns. null = unset = uniform/no policy.
+  deckWeights: string | null;
+  poolPolicy: string | null;
 }
 
 export interface DeckBansPageData {
@@ -146,6 +153,8 @@ export async function loadDeckBansPage(selectedIdParam: string | undefined): Pro
         name: true,
         decks: true,
         stakes: true,
+        deckWeights: true,
+        poolPolicy: true,
         _count: { select: { seasons: true } },
       },
     }),
@@ -160,6 +169,8 @@ export async function loadDeckBansPage(selectedIdParam: string | undefined): Pro
     decks: p.decks,
     stakes: p.stakes,
     seasonCount: p._count.seasons,
+    deckWeights: p.deckWeights,
+    poolPolicy: p.poolPolicy,
   }));
   const selected = selectedIdParam
     ? presets.find((p) => p.id === selectedIdParam) ?? null

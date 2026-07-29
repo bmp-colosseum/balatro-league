@@ -21,6 +21,12 @@ const webRoot = resolve(here, "..");
 const SYNC = [
   { from: ["prisma", "schema.prisma"], to: ["prisma", "schema.prisma"] },
   { from: ["src", "data", "match-defaults.json"], to: ["lib", "match-defaults.json"] },
+  // Second copy, same relative "data/" subpath as the bot -- match-pool.ts
+  // (synced below) imports it as "./data/match-defaults.json", which only
+  // resolves under web/lib/data/. Existing web code keeps using the flat
+  // @/lib/match-defaults.json copy above; this one exists solely so
+  // match-pool.ts's import resolves unchanged on both sides.
+  { from: ["src", "data", "match-defaults.json"], to: ["lib", "data", "match-defaults.json"] },
   { from: ["src", "data", "balatro-info.json"], to: ["lib", "balatro-info.json"] },
   // Pure "Elowen" hidden-MMR engine (Owen's server formula) — shared by the bot
   // (per-match updates) and the web (seeding + preview).
@@ -31,6 +37,15 @@ const SYNC = [
   // Pure season-build placement (Owen's promotion/relegation + rookie GLB +
   // overflow). Shared by the bot and the web (preview + real build).
   { from: ["src", "owen-placement.ts"], to: ["lib", "owen-placement.ts"] },
+  // Pure deck/stake pool-generation engine (weights, caps, guarantees, BMP
+  // pool) -- shared by the bot (match-buttons.ts) and the web (the
+  // /admin/deck-bans pool-policy editor's live feasibility check).
+  { from: ["src", "match-pool.ts"], to: ["lib", "match-pool.ts"] },
+  // Pure deck-pool-config-core -- parses/validates the preset deckWeights/
+  // poolPolicy columns. Imports match-pool.ts above (synced alongside it),
+  // never match-config.ts (which imports the bot's own prisma singleton and
+  // can't resolve on the web side).
+  { from: ["src", "deck-pool-config-core.ts"], to: ["lib", "deck-pool-config-core.ts"] },
 ];
 
 for (const { from, to } of SYNC) {

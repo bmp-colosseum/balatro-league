@@ -7,6 +7,14 @@ import { requireAdmin } from "@/lib/admin";
 import { isCanonicalDeck, isCanonicalStake } from "@/lib/balatro-info";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import defaults from "@/lib/match-defaults.json";
+import type { ActionResult } from "@/lib/action-result";
+import {
+  DEFAULT_POOL_SIZE,
+  validatePoolConfig,
+  type DeckWeight,
+  type GuaranteedStake,
+  type StakeWeight,
+} from "@/lib/deck-pool-config-core";
 
 // Mirrors src/league-config.ts — kept inline to avoid a cross-package
 // import. These are arbitrary strings; whatever the bot writes is what
@@ -195,4 +203,100 @@ export async function setPresetRole(formData: FormData) {
     metadata: { presetId: id, presetName: preset.name },
   });
   revalidatePresetSurfaces();
+}
+
+// Save a preset's per-deck/per-stake weights + pool policy (caps, guaranteed
+// minimums) -- the pieces src/match-pool.ts's generatePool already supports
+// but that, before this action, no admin surface ever wrote. Every deck in
+// the preset always posts a weight_<deck> field (PoolPolicyEditor renders
+// one row per current preset.decks/stakes entry, never a subset), so this
+// reads straight off the preset's OWN decks/stakes -- never a client-
+// submitted list -- both to match how addDeck/removeDeck already treat
+// membership as server-side truth and so a stale form can't resurrect a
+// deck/stake the admin removed in another tab.
+//
+// Validates via the SAME pure core (validatePoolConfig) the editor's client-
+// side feasibility line approximates, so a config that can't fill its own
+// pool is refused here with the specific reason -- never silently saved and
+// discovered as a runtime throw the next time generatePool runs it.
+export async function savePoolConfig(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const { user } = await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return { ok: false, message: "Missing preset id." };
+  const preset = await prisma.matchConfigPreset.findUnique({ where: { id } });
+  if (!preset) return { ok: false, message: "That preset no longer exists — reload the page." };
+
+  // A weight of exactly 1 (uniform, the default) is dropped rather than
+  // stored -- keeps the JSON column to just the real overrides, and matches
+  // parseDeckWeights/parseStakeWeights's own "unlisted = weight 1" contract.
+  const deckWeights: DeckWeight[] = [];
+  for (const deck of preset.decks) {
+    const raw = formData.get(`weight_${deck}`);
+    if (raw == null || raw === "") continue;
+    const weight = Number(raw);
+    if (Number.isFinite(weight) && weight !== 1) deckWeights.push({ deck, weight });
+  }
+
+  const stakeWeights: StakeWeight[] = [];
+  const guaranteedStakes: GuaranteedStake[] = [];
+  for (const stake of preset.stakes) {
+    const rawWeight = formData.get(`stakeWeight_${stake}`);
+    if (rawWeight != null && rawWeight !== "") {
+      const weight = Number(rawWeight);
+      if (Number.isFinite(weight) && weight !== 1) stakeWeights.push({ stake, weight });
+    }
+    const rawMin = formData.get(`guarantee_${stake}`);
+    if (rawMin != null && rawMin !== "") {
+      const min = Number(rawMin);
+      if (Number.isFinite(min) && min > 0) guaranteedStakes.push({ stake, min });
+    }
+  }
+
+  const maxPerDeckRaw = String(formData.get("maxPerDeck") ?? "").trim();
+  const maxPerStakeRaw = String(formData.get("maxPerStake") ?? "").trim();
+  const maxPerDeck = maxPerDeckRaw === "" ? undefined : Number(maxPerDeckRaw);
+  const maxPerStake = maxPerStakeRaw === "" ? undefined : Number(maxPerStakeRaw);
+
+  // The league's match pool size is a fixed league-wide constant (see
+  // web/lib/league-settings.ts's DEFAULTS.matchPolicy.poolSize -- not
+  // per-preset, not currently editable from the UI), so that's what a
+  // saved config is actually validated against.
+  const validation = validatePoolConfig({
+    decks: preset.decks,
+    stakes: preset.stakes,
+    poolSize: DEFAULT_POOL_SIZE,
+    deckWeights,
+    maxPerDeck,
+    maxPerStake,
+    guaranteedStakes,
+    stakeWeights,
+  });
+  if (!validation.ok) {
+    return { ok: false, message: validation.errors.join(" ") };
+  }
+
+  const deckWeightsJson = deckWeights.length > 0 ? JSON.stringify(deckWeights) : null;
+  const poolPolicy = {
+    ...(maxPerDeck !== undefined ? { maxPerDeck } : {}),
+    ...(maxPerStake !== undefined ? { maxPerStake } : {}),
+    ...(guaranteedStakes.length > 0 ? { guaranteedStakes } : {}),
+    ...(stakeWeights.length > 0 ? { stakeWeights } : {}),
+  };
+  const poolPolicyJson = Object.keys(poolPolicy).length > 0 ? JSON.stringify(poolPolicy) : null;
+
+  await prisma.matchConfigPreset.update({
+    where: { id },
+    data: { deckWeights: deckWeightsJson, poolPolicy: poolPolicyJson },
+  });
+
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "preset.pool-policy",
+    targetType: "MatchConfigPreset",
+    targetId: id,
+    summary: `Updated pool weights/policy for preset "${preset.name}"`,
+    metadata: { deckWeights: deckWeightsJson, poolPolicy: poolPolicyJson },
+  });
+  revalidatePresetSurfaces();
+  return { ok: true, message: "Pool weights + policy saved." };
 }

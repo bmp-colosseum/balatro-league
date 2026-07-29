@@ -144,7 +144,7 @@ function collectPriorExclusions(
 // the BMP-style path always resolves.
 function resolvePoolSource(
   session: Pick<MatchSession, "bmpStyle" | "includeSpectral">,
-  preset: { decks: string[]; stakes: string[] } | null,
+  preset: { decks: string[]; stakes: string[]; deckWeights: DeckWeight[]; poolPolicy: PoolPolicy } | null,
 ): { decks: string[]; stakes: string[]; deckWeights: DeckWeight[]; poolPolicy: PoolPolicy } | null {
   if (session.bmpStyle) {
     const bmp = bmpPoolConfig(session.includeSpectral);
@@ -156,7 +156,10 @@ function resolvePoolSource(
     };
   }
   if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) return null;
-  return { decks: preset.decks, stakes: preset.stakes, deckWeights: [], poolPolicy: {} };
+  // The preset's own PARSED weights/policy (see match-config.ts's
+  // withParsedPool) -- a preset with both columns unset parses to `[]`/`{}`,
+  // byte-identical to the hardcoded values this used to pass unconditionally.
+  return { decks: preset.decks, stakes: preset.stakes, deckWeights: preset.deckWeights, poolPolicy: preset.poolPolicy };
 }
 
 async function loadSession(id: string) {

@@ -66,19 +66,19 @@ model Player {
   hiddenMmr            Int?
   mmrVolatility        Int      @default(0)
 
-  memberships     DivisionMember[]
+  memberships          DivisionMember[]
   // Unified Match model — the source of truth (Pairing/Shootout dropped in 4c).
-  matchesAsA      Match[]             @relation("MatchPlayerA")
-  matchesAsB      Match[]             @relation("MatchPlayerB")
-  reportedMatches Match[]             @relation("MatchReporter")
-  disputedMatches Match[]             @relation("MatchDisputer")
-  mmrSnapshots    PlayerMmrSnapshot[]
-  strikes         Strike[]
+  matchesAsA           Match[]             @relation("MatchPlayerA")
+  matchesAsB           Match[]             @relation("MatchPlayerB")
+  reportedMatches      Match[]             @relation("MatchReporter")
+  disputedMatches      Match[]             @relation("MatchDisputer")
+  mmrSnapshots         PlayerMmrSnapshot[]
+  strikes              Strike[]
   // Opt-OUT of "a new season is opening" reminder DMs. Default false = every
   // past player gets asked when signups open (they answer in/out from the DM).
   // Set true by the 🔕 "stop asking" button or the /me toggle. Replaces the old
   // autoSignup auto-enroll flag — we ASK now instead of enrolling silently.
-  signupReminderOptOut Boolean        @default(false)
+  signupReminderOptOut Boolean             @default(false)
 
   // League ban: when set, the player CANNOT sign up for a season, be added to a
   // signup round, opt into reminders, be placed into a division, or start/queue a
@@ -92,9 +92,9 @@ model Player {
   // seasons" sets it to (nextSeasonNumber + N), so they're blocked from the next
   // N seasons and free from the one after. All ban checks compare it against the
   // next season number (see src/bans.ts / web/lib/bans.ts).
-  bannedAt             DateTime?
-  bannedReason         String?
-  bannedBy             String?
+  bannedAt               DateTime?
+  bannedReason           String?
+  bannedBy               String?
   banLiftsAtSeasonNumber Int?
 
   @@index([rating])
@@ -372,12 +372,18 @@ model SignupAsk {
 // "Wild Stakes Only", etc. Per-season selection via Season.matchConfigPresetId.
 // Falls back to the preset named "Default" if a season hasn't picked one.
 model MatchConfigPreset {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  decks     String[] // Postgres array — order is display order
-  stakes    String[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String   @unique
+  decks       String[] // Postgres array — order is display order
+  stakes      String[]
+  // JSON-as-text DeckWeight[] / PoolPolicy (see src/match-pool.ts) — null means
+  // "unset = uniform, no policy", byte-identical to this preset's behavior
+  // before these columns existed. Parsed via src/deck-pool-config-core.ts,
+  // never trusted verbatim. Edited at /admin/deck-bans.
+  deckWeights String?
+  poolPolicy  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   seasons Season[]
 }
@@ -629,18 +635,18 @@ model Tier {
 }
 
 model Division {
-  id               String  @id @default(cuid())
-  seasonId         String
-  tierId           String
+  id                 String  @id @default(cuid())
+  seasonId           String
+  tierId             String
   // Index within the tier (1-based). Sibling divisions at the same tier are parallel.
-  groupNumber      Int
+  groupNumber        Int
   // Display label, e.g. "Rare 3", "Legendary", or any custom name.
-  name             String
+  name               String
   // Optional per-division target size — overrides Season.targetGroupSize for
   // this division's "X/Y players" display + auto-assign behavior. Lets a
   // division be intentionally larger or smaller than the season default
   // without affecting other divisions.
-  targetSize       Int?
+  targetSize         Int?
   // Per-division end-season movement, set independently. promoteCount = how many of
   // this division's TOP finishers move up a division; relegateCount = how many of its
   // BOTTOM finishers move down. They need NOT match the neighbour's count — at each
@@ -648,8 +654,8 @@ model Division {
   // Drive BOTH the ↑/↓ zones on /standings AND the end-season rating reorder, so the
   // displayed zones are exactly who actually moves. (Top division never promotes;
   // bottom never relegates — those counts are ignored there.)
-  promoteCount     Int     @default(1)
-  relegateCount    Int     @default(1)
+  promoteCount       Int     @default(1)
+  relegateCount      Int     @default(1)
   // How many opponents each player is scheduled against in this division (the
   // graph degree). The schedule generator clamps it to (divisionSize - 1), so a
   // value >= size-1 yields a full round-robin (everyone plays everyone) and a
@@ -657,18 +663,18 @@ model Division {
   // defaultOpponentsPerPlayer placement rule. Replaces the old roundRobin flag.
   opponentsPerPlayer Int?
   // Optional Discord role + channel IDs the bot manages for this division
-  discordRoleId    String?
-  discordChannelId String?
+  discordRoleId      String?
+  discordChannelId   String?
   // The pinned welcome/onboarding message in the division channel — remembered so
   // an admin can refresh its content in place (no re-post, no re-ping).
-  welcomeMessageId String?
+  welcomeMessageId   String?
   // End-of-season champion role + winner. Set when admin clicks
   // 'Award champion roles' on an ended season. Role persists forever
   // as a bragging-rights badge. championPlayerId is the rank-1
   // finisher — null when admin hasn't awarded yet OR the division had
   // an unresolved tie at #1 (skipped, re-runnable after shootout).
-  championRoleId   String?
-  championPlayerId String?
+  championRoleId     String?
+  championPlayerId   String?
 
   season  Season           @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   tier    Tier             @relation(fields: [tierId], references: [id], onDelete: Cascade)

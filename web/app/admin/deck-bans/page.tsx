@@ -8,7 +8,9 @@ import { FormSelect } from "@/components/FormSelect";
 import { Input } from "@/components/ui/input";
 import { AdminNav } from "@/components/AdminNav";
 import { CANONICAL_DECKS, CANONICAL_STAKES, deckDescription, stakeDescription } from "@/lib/balatro-info";
+import { parseDeckWeightsJson, parsePoolPolicyJson } from "@/lib/deck-pool-config-core";
 import defaults from "@/lib/match-defaults.json";
+import { PoolPolicyEditor } from "./PoolPolicyEditor";
 import {
   addDeck,
   addStake,
@@ -215,7 +217,14 @@ function PresetEditor({
   isCasual,
   isCustomCombo,
 }: {
-  preset: { id: string; name: string; decks: string[]; stakes: string[] };
+  preset: {
+    id: string;
+    name: string;
+    decks: string[];
+    stakes: string[];
+    deckWeights: string | null;
+    poolPolicy: string | null;
+  };
   isSeasonDefault: boolean;
   isCasual: boolean;
   isCustomCombo: boolean;
@@ -296,6 +305,14 @@ function PresetEditor({
           kind="stakes"
         />
       </div>
+
+      <PoolPolicyEditor
+        presetId={preset.id}
+        decks={preset.decks}
+        stakes={preset.stakes}
+        deckWeights={parseDeckWeightsJson(preset.deckWeights)}
+        poolPolicy={parsePoolPolicyJson(preset.poolPolicy)}
+      />
     </div>
   );
 }
