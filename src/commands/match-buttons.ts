@@ -64,6 +64,8 @@ import {
   parseGame,
   parseProposal,
   parsePolicy,
+  parseFirstPickMode,
+  nextFirstBanner,
   phaseFor,
   remainingCombos,
   MAX_GAME_LIVES,
@@ -160,6 +162,46 @@ function resolvePoolSource(
   // withParsedPool) -- a preset with both columns unset parses to `[]`/`{}`,
   // byte-identical to the hardcoded values this used to pass unconditionally.
   return { decks: preset.decks, stakes: preset.stakes, deckWeights: preset.deckWeights, poolPolicy: preset.poolPolicy };
+}
+
+// Build a fresh game state for `gameNum`: resolve the preset, draw a pool
+// (excluding prior decks/combos per collectPriorExclusions), and stamp
+// `firstId` as the game's first banner. Shared by handleChooseFirst
+// (LOSER_CHOOSES, the normal path) and advanceAfterGameWin/applyDcForfeit
+// (ALTERNATE, which skips the choose-first step and builds the next game's
+// pool right away). Returns the same friendly "deck pool isn't set up"
+// error handleChooseFirst has always shown.
+async function buildGameStateFor(
+  session: MatchSession,
+  gameNum: number,
+  firstId: string,
+): Promise<{ ok: true; game: GameState } | { ok: false; error: string }> {
+  const preset = session.divisionId
+    ? await presetForDivision(session.divisionId)
+    : await presetForCasualMatch();
+  const poolSource = resolvePoolSource(session, preset);
+  if (!poolSource) {
+    return { ok: false, error: "The deck pool isn't set up for this match — ask an admin to configure decks/stakes." };
+  }
+  // Collect every deck NAME that appeared in any prior game's pool so the
+  // new pool can avoid them (variety across games), and — when the Bo5
+  // "no repeats" rule is on — every EXACT combo actually played, so it's
+  // hard-dropped from later pools. generatePool relaxes either exclusion
+  // only if it would starve the pool.
+  const { priorDecks, excludeCombos } = collectPriorExclusions(session, gameNum);
+  // Every game reuses the session's stamped pool size — same policy across
+  // the whole match, even if admin tweaks config mid-series.
+  const freshPool = generatePool(
+    poolSource.decks,
+    poolSource.stakes,
+    parsePolicy(session.policy).poolSize,
+    undefined,
+    priorDecks,
+    excludeCombos,
+    poolSource.deckWeights,
+    poolSource.poolPolicy,
+  );
+  return { ok: true, game: emptyGameState(firstId, freshPool) };
 }
 
 async function loadSession(id: string) {
@@ -1069,6 +1111,15 @@ async function handleChooseFirst(interaction: ButtonInteraction, session: MatchS
   if (gameNum === 0) {
     return reply(interaction, "Not waiting for a first-ban choice.");
   }
+  // Defensive: ALTERNATE-mode matches skip this state entirely
+  // (advanceAfterGameWin / applyDcForfeit build the next game directly), so
+  // this state should be unreachable for them. If it's somehow hit anyway
+  // (e.g. a mode flip mid-match), refresh instead of honoring a choice that
+  // shouldn't exist for this session.
+  if (parseFirstPickMode(session.firstPickMode) === "ALTERNATE") {
+    await refreshMessage(interaction, session);
+    return;
+  }
   if (!firstIdRaw) return reply(interaction, "This button looks broken — refresh Discord and try again.");
 
   // Loser of the PREVIOUS game chooses who bans first in the next.
@@ -1083,37 +1134,15 @@ async function handleChooseFirst(interaction: ButtonInteraction, session: MatchS
   }
 
   // Each game gets a fresh deck/stake pool — bans don't carry over and
-  // game N doesn't reuse game N-1's shuffle. Re-fetch the preset to draw
-  // from the same configured decks/stakes the match was set up with.
-  const preset = session.divisionId
-    ? await presetForDivision(session.divisionId)
-    : await presetForCasualMatch();
-  const poolSource = resolvePoolSource(session, preset);
-  if (!poolSource) {
-    return reply(interaction, "The deck pool isn't set up for this match — ask an admin to configure decks/stakes.");
+  // game N doesn't reuse game N-1's shuffle.
+  const built = await buildGameStateFor(session, gameNum, firstIdRaw);
+  if (!built.ok) {
+    return reply(interaction, built.error);
   }
-  // Collect every deck NAME that appeared in any prior game's pool so the
-  // new pool can avoid them (variety across games), and — when the Bo5
-  // "no repeats" rule is on — every EXACT combo actually played, so it's
-  // hard-dropped from later pools. generatePool relaxes either exclusion
-  // only if it would starve the pool.
-  const { priorDecks, excludeCombos } = collectPriorExclusions(session, gameNum);
-  // Every game reuses the session's stamped pool size — same policy across
-  // the whole match, even if admin tweaks config mid-series.
-  const freshPool = generatePool(
-    poolSource.decks,
-    poolSource.stakes,
-    parsePolicy(session.policy).poolSize,
-    undefined,
-    priorDecks,
-    excludeCombos,
-    poolSource.deckWeights,
-    poolSource.poolPolicy,
-  );
 
   const data = {
     state: gameStateFor(gameNum, "BAN"),
-    [gameFieldFor(gameNum)]: JSON.stringify(emptyGameState(firstIdRaw, freshPool)),
+    [gameFieldFor(gameNum)]: JSON.stringify(built.game),
   } as Prisma.MatchSessionUpdateManyMutationInput;
   const updated = await updateSession(session, data);
   if (!updated) return raceLost(interaction);
@@ -1297,9 +1326,32 @@ async function advanceAfterGameWin(
     return finalizeMatch(interaction, session, newGame, gameField);
   }
 
+  const nextGameNum = n + 1;
+  // ALTERNATE mode: skip the CHOOSE_FIRST step entirely — compute the next
+  // game's first-banner as the OTHER player from this game's, build its pool
+  // right away, and land straight in that game's BAN phase (both the
+  // just-finished game and the freshly-built next game persist in ONE write).
+  // A build failure (e.g. preset misconfigured) falls back to the normal
+  // CHOOSE_FIRST path below rather than wedging the match.
+  if (parseFirstPickMode(session.firstPickMode) === "ALTERNATE") {
+    const firstId = nextFirstBanner(newGame.firstId, session.playerAId, session.playerBId);
+    const built = await buildGameStateFor(session, nextGameNum, firstId);
+    if (built.ok) {
+      const nextGameField = gameFieldFor(nextGameNum);
+      const updated = await updateSession(session, {
+        [gameField]: JSON.stringify(newGame),
+        [nextGameField]: JSON.stringify(built.game),
+        state: gameStateFor(nextGameNum, "BAN"),
+      } as Prisma.MatchSessionUpdateManyMutationInput);
+      if (!updated) return raceLost(interaction);
+      return refreshMessage(interaction, updated);
+    }
+    console.warn(`[advanceAfterGameWin] ALTERNATE pool build failed for ${session.id}, falling back to CHOOSE_FIRST:`, built.error);
+  }
+
   const updated = await updateSession(session, {
     [gameField]: JSON.stringify(newGame),
-    state: gameStateFor(n + 1, "CHOOSE_FIRST"),
+    state: gameStateFor(nextGameNum, "CHOOSE_FIRST"),
   } as Prisma.MatchSessionUpdateManyMutationInput);
   if (!updated) return raceLost(interaction);
   return refreshMessage(interaction, updated);
@@ -1642,6 +1694,27 @@ async function applyDcForfeit(
   }
 
   const nextGameNum = gameNum + 1;
+  // Same ALTERNATE-mode skip-CHOOSE_FIRST wiring as advanceAfterGameWin —
+  // build the next game's pool right away and land in its BAN phase in one
+  // write, falling back to CHOOSE_FIRST on a build error.
+  if (parseFirstPickMode(session.firstPickMode) === "ALTERNATE") {
+    const firstId = nextFirstBanner(newGame.firstId, session.playerAId, session.playerBId);
+    const built = await buildGameStateFor(session, nextGameNum, firstId);
+    if (built.ok) {
+      const nextGameField = gameFieldFor(nextGameNum);
+      const updated = await updateSession(session, {
+        [gameField]: JSON.stringify(newGame),
+        [nextGameField]: JSON.stringify(built.game),
+        state: gameStateFor(nextGameNum, "BAN"),
+        dcInitiatorPlayerId: null,
+      } as Prisma.MatchSessionUpdateManyMutationInput);
+      if (!updated) return raceLost(interaction);
+      await refreshMessage(interaction, updated);
+      return reply(interaction, `Confirmed — DC win recorded for game ${gameNum}. Game ${nextGameNum} plays normally.`);
+    }
+    console.warn(`[applyDcForfeit] ALTERNATE pool build failed for ${session.id}, falling back to CHOOSE_FIRST:`, built.error);
+  }
+
   const updated = await updateSession(session, {
     [gameField]: JSON.stringify(newGame),
     state: gameStateFor(nextGameNum, "CHOOSE_FIRST"),

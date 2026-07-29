@@ -1,12 +1,22 @@
 // Reads the league rules. Scoring (3/1/0) and ban/pick policy
 // (4/3/9/2) are HARDCODED constants — not configurable from the UI.
-// LeagueRulesTemplate now only carries the two timeout fields
-// (matchInviteExpiryMinutes, reportAutoConfirmSeconds); templates
-// still exist so a season can opt into different timeouts via
-// Season.leagueRulesTemplateId.
+// LeagueRulesTemplate carries the two timeout fields
+// (matchInviteExpiryMinutes, reportAutoConfirmSeconds) plus the
+// first-pick-mode default (firstPickMode); templates still exist so a
+// season can opt into different values via Season.leagueRulesTemplateId.
 
 import type { LeagueRulesTemplate } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+
+// Who bans first in games 2+ -- must match src/match-session.ts's
+// FirstPickMode + parseFirstPickMode exactly (this file is a hand-kept
+// mirror of src/league-settings.ts, not one of sync-schema.mjs's synced
+// files, so it isn't pulled in automatically).
+export type FirstPickMode = "LOSER_CHOOSES" | "ALTERNATE";
+
+export function parseFirstPickMode(raw: string | null | undefined): FirstPickMode {
+  return raw === "ALTERNATE" ? "ALTERNATE" : "LOSER_CHOOSES";
+}
 
 export interface ScoringConfig {
   pointsFor20Win: number;
@@ -26,6 +36,7 @@ export interface LeagueSettings {
   matchPolicy: MatchPolicy;
   matchInviteExpiryMinutes: number;
   reportAutoConfirmSeconds: number;
+  firstPickMode: FirstPickMode;
 }
 
 export const DEFAULTS: LeagueSettings = {
@@ -33,6 +44,7 @@ export const DEFAULTS: LeagueSettings = {
   matchPolicy: { firstPlayerBans: 4, secondPlayerBans: 3, poolSize: 9, picksFromRemaining: 2 },
   matchInviteExpiryMinutes: 5,
   reportAutoConfirmSeconds: 120,
+  firstPickMode: "LOSER_CHOOSES",
 };
 
 const TTL_MS = 30 * 1000;
@@ -89,6 +101,7 @@ function templateToSettings(template: LeagueRulesTemplate | null | undefined): L
     matchPolicy: DEFAULTS.matchPolicy,
     matchInviteExpiryMinutes: template.matchInviteExpiryMinutes,
     reportAutoConfirmSeconds: template.reportAutoConfirmSeconds,
+    firstPickMode: parseFirstPickMode(template.firstPickMode),
   };
 }
 

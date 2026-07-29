@@ -11,6 +11,14 @@
 //   GAME_2_PICK     --second picks 1 of 2---->   GAME_2_PLAYING
 //   GAME_2_PLAYING  --winner button---------->   COMPLETE (writes Pairing, fires announce)
 //
+// The GAME_<n>_CHOOSE_FIRST step above is MatchSession.firstPickMode's
+// default, "LOSER_CHOOSES". A session set to "ALTERNATE" skips that state
+// for every game after the first -- GAME_<n>_PLAYING advances straight to
+// GAME_<n+1>_BAN, with the next game's first-banner computed by
+// nextFirstBanner (the OTHER player from the previous game's first-banner).
+// See parseFirstPickMode / nextFirstBanner below and match-buttons.ts's
+// advanceAfterGameWin / applyDcForfeit for where the branch happens.
+//
 // Ban order in each game:
 //   - First player bans 1 (8 left)
 //   - Second player bans 3 (5 left)
@@ -230,4 +238,29 @@ export function remainingCombos(pool: DeckEntry[], bans: number[]): { idx: numbe
     if (!banned.has(idx)) out.push({ idx, combo });
   });
   return out;
+}
+
+// Who bans first in games 2+. "LOSER_CHOOSES" (default): the loser of the
+// previous game clicks who bans first, same as the original behavior.
+// "ALTERNATE": no choose-first step -- the next game's first-banner is
+// automatically the OTHER player from the previous game's first-banner.
+export type FirstPickMode = "LOSER_CHOOSES" | "ALTERNATE";
+
+export const FIRST_PICK_MODES: readonly FirstPickMode[] = ["LOSER_CHOOSES", "ALTERNATE"];
+
+// Parses MatchSession.firstPickMode / LeagueRulesTemplate.firstPickMode. Any
+// unrecognized value (null, legacy row, hand-edited DB row) falls back to
+// "LOSER_CHOOSES" so a bad DB value can never wedge a live match.
+export function parseFirstPickMode(raw: string | null | undefined): FirstPickMode {
+  return raw === "ALTERNATE" ? "ALTERNATE" : "LOSER_CHOOSES";
+}
+
+// ALTERNATE mode's pure decision: the next game's first-banner is the OTHER
+// player from whoever banned first last game. Defensive fallback to
+// playerAId if prevFirstId matches neither player (shouldn't happen -- every
+// GameState.firstId is stamped from one of the two session player ids).
+export function nextFirstBanner(prevFirstId: string, playerAId: string, playerBId: string): string {
+  if (prevFirstId === playerAId) return playerBId;
+  if (prevFirstId === playerBId) return playerAId;
+  return playerAId;
 }

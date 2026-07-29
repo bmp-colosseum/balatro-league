@@ -1,9 +1,9 @@
 // Reads the league rules. Scoring (3/1/0) and ban/pick policy
 // (4/3/9/2) are HARDCODED constants — not configurable from the UI.
-// LeagueRulesTemplate now only carries the two timeout fields
-// (matchInviteExpiryMinutes, reportAutoConfirmSeconds); templates
-// still exist so a season can opt into different timeouts via
-// Season.leagueRulesTemplateId.
+// LeagueRulesTemplate carries the two timeout fields
+// (matchInviteExpiryMinutes, reportAutoConfirmSeconds) plus the
+// first-pick-mode default (firstPickMode); templates still exist so a
+// season can opt into different values via Season.leagueRulesTemplateId.
 //
 // Match sessions stamp their policy at accept time so in-flight games
 // don't break when an admin edits or swaps templates mid-season.
@@ -11,6 +11,7 @@
 import type { LeagueRulesTemplate } from "@prisma/client";
 import { prisma } from "./db.js";
 import { cacheEventsTotal } from "./metrics.js";
+import { parseFirstPickMode, type FirstPickMode } from "./match-session.js";
 
 export interface ScoringConfig {
   pointsFor20Win: number;
@@ -30,6 +31,9 @@ export interface LeagueSettings {
   matchPolicy: MatchPolicy;
   matchInviteExpiryMinutes: number;
   reportAutoConfirmSeconds: number;
+  // League-wide default for who bans first in games 2+; see
+  // MatchSession.firstPickMode / match-session.ts's parseFirstPickMode.
+  firstPickMode: FirstPickMode;
 }
 
 export const DEFAULTS: LeagueSettings = {
@@ -37,6 +41,7 @@ export const DEFAULTS: LeagueSettings = {
   matchPolicy: { firstPlayerBans: 4, secondPlayerBans: 3, poolSize: 9, picksFromRemaining: 2 },
   matchInviteExpiryMinutes: 5,
   reportAutoConfirmSeconds: 120,
+  firstPickMode: "LOSER_CHOOSES",
 };
 
 const TTL_MS = 30 * 1000;
@@ -87,6 +92,7 @@ function templateToSettings(template: LeagueRulesTemplate | null | undefined): L
     matchPolicy: DEFAULTS.matchPolicy,
     matchInviteExpiryMinutes: template.matchInviteExpiryMinutes,
     reportAutoConfirmSeconds: template.reportAutoConfirmSeconds,
+    firstPickMode: parseFirstPickMode(template.firstPickMode),
   };
 }
 

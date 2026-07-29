@@ -16,6 +16,7 @@ export function composeChallengeInfoContent(): string {
     "- **no-repeats** -- once a deck+stake combo has been **played**, it can't be picked again for the rest of the series (no combo twice).",
     "- **no-ban-repeat** -- once a deck+stake combo has been **banned**, it also can't come back in a later game (no combo re-banned).",
     "- **bmp-style** -- draws the pool from a restricted deck/stake list with per-stake and per-deck caps and a guaranteed White stake, instead of the standard pool.",
+    "- **first-pick** -- who bans first in games 2+: **loser chooses** (default) or **alternate** each game automatically.",
     "",
     "**Each game** runs the normal ban -> pick flow, same as league matches: both players ban combos from the pool, then the picker chooses from what's left. A fresh pool is drawn each game.",
     "",

@@ -149,6 +149,9 @@ export async function createLeagueMatchInvite(opts: {
           expiresAt,
           isShootout,
           bestOf: isShootout ? 1 : 2,
+          // League matches follow this season's rules-template default —
+          // per-session /challenge picks its own instead.
+          firstPickMode: settings.firstPickMode,
         },
       });
       // Starting a match drops both players from the league queue — covers the

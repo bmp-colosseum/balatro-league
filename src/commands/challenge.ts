@@ -16,6 +16,7 @@ import { actorFromInteractionUser, recordAudit } from "../audit.js";
 import { resolveChallengesChannelId } from "../challenges-channel.js";
 import { prisma } from "../db.js";
 import { getLeagueSettings } from "../league-settings.js";
+import { parseFirstPickMode } from "../match-session.js";
 import { renderMatch } from "../match-render.js";
 import { postModerationNotice } from "../mod-log.js";
 import { getOrCreatePlayer, guildDisplayName } from "../players.js";
@@ -70,6 +71,16 @@ export const challenge: SlashCommand = {
         .setName("include-spectral")
         .setDescription("BMP-style only: include the Spectral+ stake in the pool (default yes)")
         .setRequired(false),
+    )
+    .addStringOption((opt) =>
+      opt
+        .setName("first-pick")
+        .setDescription("Who bans first in games 2+ (default: loser chooses)")
+        .setRequired(false)
+        .addChoices(
+          { name: "Loser chooses who bans first (default)", value: "LOSER_CHOOSES" },
+          { name: "Alternate each game", value: "ALTERNATE" },
+        ),
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
@@ -80,6 +91,9 @@ export const challenge: SlashCommand = {
     const bmpStyle = interaction.options.getBoolean("bmp-style") ?? false;
     // Default TRUE: Spectral+ is in the BMP pool unless explicitly turned off.
     const includeSpectral = interaction.options.getBoolean("include-spectral") ?? true;
+    // parseFirstPickMode's fallback also guards a somehow-unrecognized value,
+    // though the slash command's addChoices already restricts input to the two.
+    const firstPickMode = parseFirstPickMode(interaction.options.getString("first-pick"));
 
     if (opponentUser.id === interaction.user.id) {
       await interaction.reply({ content: "Can't challenge yourself.", flags: MessageFlags.Ephemeral });
@@ -142,6 +156,7 @@ export const challenge: SlashCommand = {
         noBanRepeat,
         bmpStyle,
         includeSpectral,
+        firstPickMode,
         expiresAt,
       },
     });
@@ -232,8 +247,17 @@ export const challenge: SlashCommand = {
       action: "match.create",
       targetType: "MatchSession",
       targetId: session.id,
-      summary: `Challenged ${opp.displayName} (casual best-of-${bestOf}${noRepeatCombos ? ", no repeats" : ""}${noBanRepeat ? ", no ban repeat" : ""}${bmpStyle ? ", BMP-style" : ""})`,
-      metadata: { isCasual: true, bestOf, noRepeatCombos, noBanRepeat, bmpStyle, opponentDiscordId: opponentUser.id, threadId },
+      summary: `Challenged ${opp.displayName} (casual best-of-${bestOf}${noRepeatCombos ? ", no repeats" : ""}${noBanRepeat ? ", no ban repeat" : ""}${bmpStyle ? ", BMP-style" : ""}${firstPickMode === "ALTERNATE" ? ", alternate first-pick" : ""})`,
+      metadata: {
+        isCasual: true,
+        bestOf,
+        noRepeatCombos,
+        noBanRepeat,
+        bmpStyle,
+        opponentDiscordId: opponentUser.id,
+        threadId,
+        ...(firstPickMode !== "LOSER_CHOOSES" ? { firstPickMode } : {}),
+      },
     });
 
     await interaction.editReply(

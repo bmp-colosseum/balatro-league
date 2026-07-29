@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin, requireOwnerOrDevops } from "@/lib/admin";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
-import { invalidateLeagueSettingsCache } from "@/lib/league-settings";
+import { invalidateLeagueSettingsCache, parseFirstPickMode } from "@/lib/league-settings";
 import { prisma } from "@/lib/prisma";
 import { formatSeasonLabel } from "@/lib/format-season";
 
@@ -39,7 +39,11 @@ export async function saveRulesTemplate(formData: FormData) {
   const { values, error } = parseFields(formData);
   if (error) redirect(`/admin/settings?err=${encodeURIComponent(error)}`);
 
-  const data = { name, ...values };
+  // Only the two known modes ever get through -- anything else (a stale form,
+  // a tampered submit) falls back to the safe default instead of erroring.
+  const firstPickMode = parseFirstPickMode(String(formData.get("firstPickMode") ?? ""));
+
+  const data = { name, ...values, firstPickMode };
   let resultId: string;
   if (id) {
     const updated = await prisma.leagueRulesTemplate.update({ where: { id }, data });
@@ -55,7 +59,7 @@ export async function saveRulesTemplate(formData: FormData) {
     targetType: "LeagueRulesTemplate",
     targetId: resultId,
     summary: `${id ? "Updated" : "Created"} rules template "${name}"`,
-    metadata: values,
+    metadata: { ...values, firstPickMode },
   });
 
   revalidatePath("/admin/settings");

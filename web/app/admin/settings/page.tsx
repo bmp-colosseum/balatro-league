@@ -3,11 +3,12 @@
 // constants and not editable from this page. Locked to OWNER + DEVOPS.
 
 import { requireOwnerOrDevops } from "@/lib/admin";
-import { DEFAULTS } from "@/lib/league-settings";
+import { DEFAULTS, parseFirstPickMode, type FirstPickMode } from "@/lib/league-settings";
 import { loadRulesTemplates } from "@/lib/loaders/admin-settings";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { FormSelect } from "@/components/FormSelect";
 import { Input } from "@/components/ui/input";
 import { SiteNav } from "@/components/SiteNav";
 import { Callout } from "@/components/Callout";
@@ -18,6 +19,16 @@ import {
 } from "./actions";
 
 export const dynamic = "force-dynamic";
+
+const FIRST_PICK_MODE_OPTIONS: { value: FirstPickMode; label: string }[] = [
+  { value: "LOSER_CHOOSES", label: "Loser chooses who bans first (default)" },
+  { value: "ALTERNATE", label: "Alternate each game" },
+];
+
+const FIRST_PICK_MODE_LABEL: Record<FirstPickMode, string> = {
+  LOSER_CHOOSES: "loser chooses",
+  ALTERNATE: "alternate",
+};
 
 export default async function AdminSettingsPage({
   searchParams,
@@ -68,6 +79,7 @@ export default async function AdminSettingsPage({
               <strong style={{ fontSize: 16 }}>{t.name}</strong>
               <span className="muted" style={{ fontSize: 11 }}>
                 Invite expires after {t.matchInviteExpiryMinutes} min · {t.reportAutoConfirmSeconds}s auto-confirm
+                {" · "}first pick: {FIRST_PICK_MODE_LABEL[parseFirstPickMode(t.firstPickMode)]}
                 {" · "}{t._count.seasons} season{t._count.seasons === 1 ? "" : "s"}
               </span>
             </summary>
@@ -95,6 +107,21 @@ export default async function AdminSettingsPage({
                   fallback={DEFAULTS.reportAutoConfirmSeconds}
                 />
               </Section>
+
+              <div style={{ marginTop: 12, padding: 12, border: "1px solid var(--border)", borderRadius: 6 }}>
+                <strong style={{ fontSize: 14 }}>Games 2+</strong>
+                <label style={{ display: "block", marginTop: 8 }}>
+                  <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
+                    Who bans first — league matches under this template use this default; a casual /challenge picks its own.
+                  </div>
+                  <FormSelect
+                    name="firstPickMode"
+                    defaultValue={parseFirstPickMode(t.firstPickMode)}
+                    options={FIRST_PICK_MODE_OPTIONS}
+                    triggerClassName="w-full"
+                  />
+                </label>
+              </div>
 
               <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
                 <Button type="submit">Save changes</Button>
@@ -149,6 +176,20 @@ export default async function AdminSettingsPage({
                 fallback={DEFAULTS.reportAutoConfirmSeconds}
               />
             </Section>
+            <div style={{ marginTop: 12, padding: 12, border: "1px solid var(--border)", borderRadius: 6 }}>
+              <strong style={{ fontSize: 14 }}>Games 2+</strong>
+              <label style={{ display: "block", marginTop: 8 }}>
+                <div className="muted" style={{ fontSize: 11, marginBottom: 4 }}>
+                  Who bans first — league matches under this template use this default; a casual /challenge picks its own.
+                </div>
+                <FormSelect
+                  name="firstPickMode"
+                  defaultValue={DEFAULTS.firstPickMode}
+                  options={FIRST_PICK_MODE_OPTIONS}
+                  triggerClassName="w-full"
+                />
+              </label>
+            </div>
             <Button type="submit" className="mt-4">Create template</Button>
           </form>
         </details>

@@ -478,6 +478,12 @@ model MatchSession {
   // h2h). Forces bestOf=1 and writes a Shootout row instead of a Pairing
   // at COMPLETE. Mutually exclusive with isCasual in practice.
   isShootout              Boolean            @default(false)
+  // Who bans first in games 2+. "LOSER_CHOOSES" (default) = the loser of the
+  // previous game picks who bans first, same as always. "ALTERNATE" = it
+  // auto-alternates from the previous game's first-banner, no CHOOSE_FIRST
+  // step. Plain string (not a Prisma enum) so an unrecognized/legacy value
+  // never breaks a live match -- see parseFirstPickMode in match-session.ts.
+  firstPickMode           String             @default("LOSER_CHOOSES")
   threadId                String? // Discord thread id (set once accepted)
   channelId               String? // parent channel of the thread
   // Discord message id of the public match embed. Stored so the
@@ -949,6 +955,11 @@ model LeagueRulesTemplate {
   // per-template.
   matchInviteExpiryMinutes Int @default(5)
   reportAutoConfirmSeconds Int @default(120)
+
+  // League-wide default for who bans first in games 2+ ("LOSER_CHOOSES" or
+  // "ALTERNATE" -- see MatchSession.firstPickMode). Stamped onto each league
+  // match session at create time via LeagueSettings.
+  firstPickMode String @default("LOSER_CHOOSES")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
