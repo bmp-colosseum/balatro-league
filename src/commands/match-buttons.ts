@@ -94,6 +94,36 @@ const winsToClinch = (bestOf: number): number =>
 // Every game field, in order — for tallying wins / scanning prior games.
 const ALL_GAME_FIELDS: readonly GameField[] = ["game1", "game2", "game3", "game4", "game5"];
 
+// What to keep OUT of game `gameNum`'s freshly-drawn pool, gathered from every
+// prior game: deck NAMES that already appeared (variety across games, always),
+// plus — when the session opts in — the EXACT combos that were played
+// (noRepeatCombos) and/or banned (noBanRepeat), so a "used up" combo can't come
+// back around. generatePool hard-drops the combos, relaxing only if excluding
+// them would starve the final pick.
+function collectPriorExclusions(
+  session: MatchSession,
+  gameNum: number,
+): { priorDecks: string[]; excludeCombos: DeckEntry[] } {
+  const priorDecks = new Set<string>();
+  const excludeCombos: DeckEntry[] = [];
+  for (const field of ALL_GAME_FIELDS.slice(0, gameNum - 1)) {
+    const g = parseGame(session[field]);
+    if (!g) continue;
+    if (g.pool) g.pool.forEach((e) => priorDecks.add(e.deck));
+    if (session.noRepeatCombos && g.pickedDeckIdx != null) {
+      const played = g.pool[g.pickedDeckIdx];
+      if (played) excludeCombos.push(played);
+    }
+    if (session.noBanRepeat && g.bans) {
+      for (const bi of g.bans) {
+        const banned = g.pool[bi];
+        if (banned) excludeCombos.push(banned);
+      }
+    }
+  }
+  return { priorDecks: [...priorDecks], excludeCombos };
+}
+
 async function loadSession(id: string) {
   return prisma.matchSession.findUnique({ where: { id } });
 }
@@ -612,21 +642,11 @@ async function handleReroll(interaction: ButtonInteraction, session: MatchSessio
   // Collect every deck NAME from prior games (variety) and, when the Bo5
   // "no repeats" rule is on, every EXACT combo actually played (hard-drop —
   // generatePool relaxes either exclusion only if it would starve the pool).
-  const priorFields = ALL_GAME_FIELDS.slice(0, gameNum - 1);
-  const priorDecks = new Set<string>();
-  const playedCombos: DeckEntry[] = [];
-  for (const field of priorFields) {
-    const g = parseGame(session[field]);
-    if (g?.pool) g.pool.forEach((e) => priorDecks.add(e.deck));
-    if (session.noRepeatCombos && g && g.pickedDeckIdx != null) {
-      const played = g.pool[g.pickedDeckIdx];
-      if (played) playedCombos.push(played);
-    }
-  }
+  const { priorDecks, excludeCombos } = collectPriorExclusions(session, gameNum);
   // Use the session's stamped pool size so a reroll honors whatever
   // policy was locked in at accept time, not the current admin config.
   const policy = parsePolicy(session.policy);
-  const newPool = generatePool(preset.decks, preset.stakes, policy.poolSize, undefined, [...priorDecks], playedCombos);
+  const newPool = generatePool(preset.decks, preset.stakes, policy.poolSize, undefined, priorDecks, excludeCombos);
   const rerolledGame: GameState = {
     firstId: game.firstId,
     bans: [],
@@ -1016,17 +1036,7 @@ async function handleChooseFirst(interaction: ButtonInteraction, session: MatchS
   // "no repeats" rule is on — every EXACT combo actually played, so it's
   // hard-dropped from later pools. generatePool relaxes either exclusion
   // only if it would starve the pool.
-  const priorFields = ALL_GAME_FIELDS.slice(0, gameNum - 1);
-  const priorDecks = new Set<string>();
-  const playedCombos: DeckEntry[] = [];
-  for (const field of priorFields) {
-    const g = parseGame(session[field]);
-    if (g?.pool) g.pool.forEach((e) => priorDecks.add(e.deck));
-    if (session.noRepeatCombos && g && g.pickedDeckIdx != null) {
-      const played = g.pool[g.pickedDeckIdx];
-      if (played) playedCombos.push(played);
-    }
-  }
+  const { priorDecks, excludeCombos } = collectPriorExclusions(session, gameNum);
   // Every game reuses the session's stamped pool size — same policy across
   // the whole match, even if admin tweaks config mid-series.
   const freshPool = generatePool(
@@ -1034,8 +1044,8 @@ async function handleChooseFirst(interaction: ButtonInteraction, session: MatchS
     preset.stakes,
     parsePolicy(session.policy).poolSize,
     undefined,
-    [...priorDecks],
-    playedCombos,
+    priorDecks,
+    excludeCombos,
   );
 
   const data = {

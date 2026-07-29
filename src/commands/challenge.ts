@@ -52,12 +52,19 @@ export const challenge: SlashCommand = {
         .setName("no-repeats")
         .setDescription("Once a deck+stake combo is played, it can't be picked again this series")
         .setRequired(false),
+    )
+    .addBooleanOption((opt) =>
+      opt
+        .setName("no-ban-repeat")
+        .setDescription("Once a deck+stake combo is banned, it can't come back in a later game this series")
+        .setRequired(false),
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
     const opponentUser = interaction.options.getUser("opponent", true);
     const bestOf = (interaction.options.getInteger("best-of") ?? 1) as 1 | 2 | 3 | 5;
     const noRepeatCombos = interaction.options.getBoolean("no-repeats") ?? false;
+    const noBanRepeat = interaction.options.getBoolean("no-ban-repeat") ?? false;
 
     if (opponentUser.id === interaction.user.id) {
       await interaction.reply({ content: "Can't challenge yourself.", flags: MessageFlags.Ephemeral });
@@ -117,6 +124,7 @@ export const challenge: SlashCommand = {
         isCasual: true,
         bestOf,
         noRepeatCombos,
+        noBanRepeat,
         expiresAt,
       },
     });
@@ -207,8 +215,8 @@ export const challenge: SlashCommand = {
       action: "match.create",
       targetType: "MatchSession",
       targetId: session.id,
-      summary: `Challenged ${opp.displayName} (casual best-of-${bestOf}${noRepeatCombos ? ", no repeats" : ""})`,
-      metadata: { isCasual: true, bestOf, noRepeatCombos, opponentDiscordId: opponentUser.id, threadId },
+      summary: `Challenged ${opp.displayName} (casual best-of-${bestOf}${noRepeatCombos ? ", no repeats" : ""}${noBanRepeat ? ", no ban repeat" : ""})`,
+      metadata: { isCasual: true, bestOf, noRepeatCombos, noBanRepeat, opponentDiscordId: opponentUser.id, threadId },
     });
 
     await interaction.editReply(

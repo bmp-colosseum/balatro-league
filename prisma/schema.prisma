@@ -451,10 +451,14 @@ model MatchSession {
   // a tie). 3/5 = odd series, first to ceil(bestOf/2) wins; later games are only
   // played while the series is still live. 5 = casual /challenge "playoff" mode.
   bestOf                  Int                @default(2)
-  // Bo5 "no repeats" rule (casual finals): once a deck+stake combo has been
-  // PLAYED in this series it's dropped from every later game's pool, so no combo
-  // can be picked twice. Off for normal matches.
+  // "No repeats" rule: once a deck+stake combo has been PLAYED in this series
+  // it's dropped from every later game's pool, so no combo can be picked twice.
+  // Off for normal matches.
   noRepeatCombos          Boolean            @default(false)
+  // "No ban repeat" rule: once a deck+stake combo has been BANNED in this series
+  // it's also dropped from every later game's pool (companion to noRepeatCombos,
+  // but for bans). Off for normal matches.
+  noBanRepeat             Boolean            @default(false)
   // True when this is a tiebreaker shootout (e.g. /start-match mode:shootout
   // between two players tied for promo/relegation after a 1-1 regular-season
   // h2h). Forces bestOf=1 and writes a Shootout row instead of a Pairing
