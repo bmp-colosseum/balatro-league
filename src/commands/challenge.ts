@@ -64,6 +64,12 @@ export const challenge: SlashCommand = {
         .setName("bmp-style")
         .setDescription("Use BMP-style bans: restricted deck/stake pool with stake caps and a guaranteed White")
         .setRequired(false),
+    )
+    .addBooleanOption((opt) =>
+      opt
+        .setName("include-spectral")
+        .setDescription("BMP-style only: include the Spectral+ stake in the pool (default yes)")
+        .setRequired(false),
     ),
 
   async execute(interaction: ChatInputCommandInteraction) {
@@ -72,6 +78,8 @@ export const challenge: SlashCommand = {
     const noRepeatCombos = interaction.options.getBoolean("no-repeats") ?? false;
     const noBanRepeat = interaction.options.getBoolean("no-ban-repeat") ?? false;
     const bmpStyle = interaction.options.getBoolean("bmp-style") ?? false;
+    // Default TRUE: Spectral+ is in the BMP pool unless explicitly turned off.
+    const includeSpectral = interaction.options.getBoolean("include-spectral") ?? true;
 
     if (opponentUser.id === interaction.user.id) {
       await interaction.reply({ content: "Can't challenge yourself.", flags: MessageFlags.Ephemeral });
@@ -133,6 +141,7 @@ export const challenge: SlashCommand = {
         noRepeatCombos,
         noBanRepeat,
         bmpStyle,
+        includeSpectral,
         expiresAt,
       },
     });

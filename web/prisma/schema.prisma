@@ -464,6 +464,9 @@ model MatchSession {
   // instead of the resolved preset. Set at /challenge time; doesn't require a
   // casual preset to exist. See src/match-config.ts's BMP_POOL.
   bmpStyle                Boolean            @default(false)
+  // Whether the Spectral+ stake is included in a BMP-style pool (default yes,
+  // at 0.5 weight). Only meaningful when bmpStyle=true; ignored otherwise.
+  includeSpectral         Boolean            @default(true)
   // True when this is a tiebreaker shootout (e.g. /start-match mode:shootout
   // between two players tied for promo/relegation after a 1-1 regular-season
   // h2h). Forces bestOf=1 and writes a Shootout row instead of a Pairing

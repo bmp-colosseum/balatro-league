@@ -41,6 +41,7 @@ import { logDiscordError } from "../log-discord-error.js";
 import {
   bootstrapPresetsAndPointers,
   BMP_POOL,
+  bmpPoolConfig,
   generatePool,
   presetForCasualMatch,
   presetForCustomCombo,
@@ -142,15 +143,16 @@ function collectPriorExclusions(
 // Returns null only for the ordinary path when no usable preset exists;
 // the BMP-style path always resolves.
 function resolvePoolSource(
-  session: Pick<MatchSession, "bmpStyle">,
+  session: Pick<MatchSession, "bmpStyle" | "includeSpectral">,
   preset: { decks: string[]; stakes: string[] } | null,
 ): { decks: string[]; stakes: string[]; deckWeights: DeckWeight[]; poolPolicy: PoolPolicy } | null {
   if (session.bmpStyle) {
+    const bmp = bmpPoolConfig(session.includeSpectral);
     return {
-      decks: BMP_POOL.decks,
-      stakes: BMP_POOL.stakes,
-      deckWeights: BMP_POOL.deckWeights,
-      poolPolicy: BMP_POOL.poolPolicy,
+      decks: bmp.decks,
+      stakes: bmp.stakes,
+      deckWeights: bmp.deckWeights,
+      poolPolicy: bmp.poolPolicy,
     };
   }
   if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) return null;

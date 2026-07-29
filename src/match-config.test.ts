@@ -12,6 +12,7 @@ import {
   enabledDecksFor,
   enabledStakesFor,
   BMP_POOL,
+  bmpPoolConfig,
   type DeckEntry,
   type DeckWeight,
   type StakeWeight,
@@ -354,6 +355,23 @@ describe("BMP_POOL", () => {
   it("includes Cocktail alongside the standard deck vocabulary", () => {
     expect(BMP_POOL.decks).toContain("Cocktail");
     expect(BMP_POOL.decks).toContain("Red");
+  });
+
+  it("bmpPoolConfig(true) is the full pool incl. Spectral+", () => {
+    const cfg = bmpPoolConfig(true);
+    expect(cfg).toBe(BMP_POOL);
+    expect(cfg.stakes).toContain("Spectral+");
+  });
+
+  it("bmpPoolConfig(false) drops Spectral+ from stakes AND its weight, and never draws it", () => {
+    const cfg = bmpPoolConfig(false);
+    expect(cfg.stakes).not.toContain("Spectral+");
+    expect((cfg.poolPolicy.stakeWeights ?? []).some((w) => w.stake === "Spectral+")).toBe(false);
+    expect(checkPoolPolicyFeasibility(cfg.decks, cfg.stakes, cfg.poolSize, cfg.deckWeights, cfg.poolPolicy)).toEqual({ ok: true, reasons: [] });
+    for (let seed = 1; seed <= 10; seed++) {
+      const pool = generatePool(cfg.decks, cfg.stakes, cfg.poolSize, mulberry32(seed), [], [], cfg.deckWeights, cfg.poolPolicy);
+      expect(pool.some((c) => c.stake === "Spectral+")).toBe(false);
+    }
   });
 
   it("generates a 9-combo pool respecting maxPerStake=4, maxPerDeck=3, and a guaranteed White, with uniform weights", () => {

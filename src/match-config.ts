@@ -304,6 +304,21 @@ export const BMP_POOL: BmpPoolConfig = {
   deckWeights: [],
 };
 
+// The BMP pool with or without the Spectral+ stake (per-match toggle, default
+// on). When excluded, Spectral+ drops out of both the stake list and its weight
+// entry so it can never be drawn.
+export function bmpPoolConfig(includeSpectral: boolean): BmpPoolConfig {
+  if (includeSpectral) return BMP_POOL;
+  return {
+    ...BMP_POOL,
+    stakes: BMP_POOL.stakes.filter((s) => s !== "Spectral+"),
+    poolPolicy: {
+      ...BMP_POOL.poolPolicy,
+      stakeWeights: (BMP_POOL.poolPolicy.stakeWeights ?? []).filter((w) => w.stake !== "Spectral+"),
+    },
+  };
+}
+
 // Cartesian product of (deck x stake), shuffled and sliced. No duplicate combos.
 // excludeDecks: deck NAMES to skip -- used by game 2/3 to avoid repeating any
 // deck that already showed up in a prior game's pool. If filtering would
