@@ -291,13 +291,15 @@ export interface BmpPoolConfig {
 
 export const BMP_POOL: BmpPoolConfig = {
   decks: [...defaults.decks, "Cocktail"],
-  stakes: ["White", "Green", "Black", "Purple", "Gold"],
+  // Spectral+ is a draftable stake but weighted to 0.5, so combos on it appear
+  // about half as often as the base stakes (all unlisted = weight 1).
+  stakes: ["White", "Green", "Black", "Purple", "Gold", "Spectral+"],
   poolSize: 9,
   poolPolicy: {
     maxPerStake: 4,
     maxPerDeck: 3,
     guaranteedStakes: [{ stake: "White", min: 1 }],
-    stakeWeights: [],
+    stakeWeights: [{ stake: "Spectral+", weight: 0.5 }],
   },
   deckWeights: [],
 };
