@@ -33,25 +33,32 @@ export interface RenderOptions {
   allowedStakes?: string[];
 }
 
+// Every game slot, in order. Games 4/5 only exist for a BO5.
+const ALL_GAMES = ["game1", "game2", "game3", "game4", "game5"] as const;
+
+// Game number (1..5) for any GAME_<n>_<PHASE> state; 0 for a non-game state.
+function gameNumFromState(state: string): number {
+  const m = /^GAME_(\d)_/.exec(state);
+  return m ? Number(m[1]) : 0;
+}
+
 export function renderMatch(
   session: MatchSession,
   playerA: Player,
   playerB: Player,
   opts: RenderOptions = {},
 ): { embeds: EmbedBuilder[]; components: ComponentRow[]; content: string; turnKey: string } {
-  const game1 = parseGame(session.game1);
-  const game2 = parseGame(session.game2);
-  const game3 = parseGame(session.game3);
+  // Games 1..5 (4 and 5 are BO5-only). Indexed so every render path works for
+  // any game number -- before this the dispatch hardcoded 1/2/3 and silently
+  // rendered game 3 for a BO5's games 4 and 5.
+  const games = ALL_GAMES.map((f) => parseGame(session[f]));
 
   const bare = (() => {
     if (session.state === "WAITING_ACCEPT") {
       return withHelperRow(session, renderWaitingAccept(session, playerA, playerB));
     }
-    if (session.state === "GAME_2_CHOOSE_FIRST") {
-      return withHelperRow(session, renderChooseFirst(session, playerA, playerB, game1));
-    }
     if (session.state === "COMPLETE") {
-      return renderComplete(session, playerA, playerB, game1, game2);
+      return renderComplete(session, playerA, playerB, games);
     }
     if (session.state === "CANCELLED") {
       return renderCancelled(session, playerA, playerB);
@@ -60,19 +67,19 @@ export function renderMatch(
       return renderPaused(session, playerA, playerB);
     }
 
-    // Game 1 / 2 / 3 phases
-    const gameNum: 1 | 2 | 3 = session.state.startsWith("GAME_1") ? 1
-      : session.state.startsWith("GAME_2") ? 2 : 3;
-    const game = gameNum === 1 ? game1 : gameNum === 2 ? game2 : game3;
-    // GAME_N_CHOOSE_FIRST is rendered by a separate path
-    if (session.state === "GAME_3_CHOOSE_FIRST") {
-      return withHelperRow(session, renderChooseFirst(session, playerA, playerB, game2));
+    const gameNum = gameNumFromState(session.state);
+    if (gameNum === 0) return renderError(session, playerA, playerB, "Unknown match state");
+    // GAME_N_CHOOSE_FIRST is its own path: it shows the PREVIOUS game's result
+    // while the loser picks who bans first in this one.
+    if (session.state.endsWith("_CHOOSE_FIRST")) {
+      return withHelperRow(session, renderChooseFirst(session, playerA, playerB, games[gameNum - 2] ?? null));
     }
+    const game = games[gameNum - 1] ?? null;
     if (!game) return renderError(session, playerA, playerB, "Game state missing");
     return withHelperRow(session, renderGame(session, playerA, playerB, game.pool, game, gameNum, opts));
   })();
 
-  const { content, turnKey } = computeActiveContent(session, playerA, playerB, game1, game2, game3);
+  const { content, turnKey } = computeActiveContent(session, playerA, playerB, games);
   return { embeds: bare.embeds, components: bare.components, content, turnKey };
 }
 
@@ -92,9 +99,7 @@ function computeActiveContent(
   s: MatchSession,
   a: Player,
   b: Player,
-  g1: GameState | null,
-  g2: GameState | null,
-  g3: GameState | null,
+  games: Array<GameState | null>,
 ): ActiveContent {
   // Cancel vote pending overrides the normal turn-based ping — the
   // OTHER player needs to either confirm and drop the match, or
@@ -118,23 +123,33 @@ function computeActiveContent(
     const opposingDc = s.dcInitiatorPlayerId === a.id ? b.discordId : a.discordId;
     return { content: `<@${opposingDc}> 🔌 **${sanitizeName(claimant.displayName)}** says you disconnected — **Confirm** to forfeit this game, or **Keep playing** if you're still here.`, turnKey: opposingDc };
   }
-  switch (s.state) {
-    case "WAITING_ACCEPT":
-      return { content: `<@${b.discordId}> 🎴 match invite from <@${a.discordId}> — accept or decline.`, turnKey: b.discordId };
-    case "GAME_2_CHOOSE_FIRST": {
-      if (!g1?.winnerId) return { content: "", turnKey: "" };
-      const loserDc = g1.winnerId === a.id ? b.discordId : a.discordId;
-      return { content: `<@${loserDc}> 🎯 you lost game 1 — pick who bans first in game 2.`, turnKey: loserDc };
+  if (s.state === "WAITING_ACCEPT") {
+    return { content: `<@${b.discordId}> 🎴 match invite from <@${a.discordId}> — accept or decline.`, turnKey: b.discordId };
+  }
+  // Any GAME_<n>_<PHASE> state, for n = 1..5. Derived from the state rather
+  // than enumerated per game number, so a BO5's games 4 and 5 get the same
+  // turn pings as 1-3 (they previously fell through to no ping at all).
+  const gameNum = gameNumFromState(s.state);
+  if (gameNum > 0) {
+    const game = games[gameNum - 1] ?? null;
+    const prevGame = games[gameNum - 2] ?? null;
+
+    if (s.state.endsWith("_CHOOSE_FIRST")) {
+      if (!prevGame?.winnerId) return { content: "", turnKey: "" };
+      const loserDc = prevGame.winnerId === a.id ? b.discordId : a.discordId;
+      // Only the format's LAST possible game is a guaranteed tiebreaker: an
+      // even best-of (Bo2) never clinches early (winsToClinch is Infinity for
+      // even values, see match-buttons.ts) so its final game is always just
+      // "game 2", never a decider; an odd best-of's last game is only ever
+      // reached tied, so it's always the tiebreaker.
+      const isTiebreaker = s.bestOf % 2 === 1 && gameNum === s.bestOf;
+      const label = isTiebreaker
+        ? `game ${gameNum} tiebreaker — pick who bans first.`
+        : `you lost game ${gameNum - 1} — pick who bans first in game ${gameNum}.`;
+      return { content: `<@${loserDc}> 🎯 ${label}`, turnKey: loserDc };
     }
-    case "GAME_3_CHOOSE_FIRST": {
-      if (!g2?.winnerId) return { content: "", turnKey: "" };
-      const loserDc = g2.winnerId === a.id ? b.discordId : a.discordId;
-      return { content: `<@${loserDc}> 🎯 game 3 tiebreaker — pick who bans first.`, turnKey: loserDc };
-    }
-    case "GAME_1_BAN":
-    case "GAME_2_BAN":
-    case "GAME_3_BAN": {
-      const game = s.state.startsWith("GAME_1") ? g1 : s.state.startsWith("GAME_2") ? g2 : g3;
+
+    if (s.state.endsWith("_BAN")) {
       if (!game) return { content: "", turnKey: "" };
       // A custom-combo proposal in flight changes who's expected to
       // act — the OTHER player has to accept/counter. Bare-ban phase
@@ -158,20 +173,16 @@ function computeActiveContent(
       const dc = phase.whoseBanId === a.id ? a.discordId : b.discordId;
       return { content: `<@${dc}> 🎯 your turn — ban ${phase.remainingForThem} combo(s).`, turnKey: dc };
     }
-    case "GAME_1_PICK":
-    case "GAME_2_PICK":
-    case "GAME_3_PICK": {
-      const game = s.state.startsWith("GAME_1") ? g1 : s.state.startsWith("GAME_2") ? g2 : g3;
+
+    if (s.state.endsWith("_PICK")) {
       if (!game) return { content: "", turnKey: "" };
       const phase = phaseFor(game, a.id, b.id, parsePolicy(s.policy), !s.isCasual);
       if (phase.kind !== "PICK") return { content: "", turnKey: "" };
       const dc = phase.pickerId === a.id ? a.discordId : b.discordId;
       return { content: `<@${dc}> 🎯 your turn — pick the deck/stake.`, turnKey: dc };
     }
-    case "GAME_1_PLAYING":
-    case "GAME_2_PLAYING":
-    case "GAME_3_PLAYING": {
-      const game = s.state.startsWith("GAME_1") ? g1 : s.state.startsWith("GAME_2") ? g2 : g3;
+
+    if (s.state.endsWith("_PLAYING")) {
       // After both winner votes agree, the game waits on the WINNER to record
       // their remaining lives before it advances — single them out so they get
       // a dedicated ping instead of the generic both-players "go play" nudge.
@@ -200,21 +211,23 @@ function computeActiveContent(
       // single "BOTH" key pings them both once on entry, then stays quiet.
       return { content: `<@${a.discordId}> <@${b.discordId}> 🎮 play the run, then vote for the winner.`, turnKey: "BOTH" };
     }
-    case "PAUSED": {
-      // Resume vote pending — ping the other player to agree.
-      if (s.resumeInitiatorPlayerId) {
-        const initiator = s.resumeInitiatorPlayerId === a.id ? a : b;
-        const opposingDc = s.resumeInitiatorPlayerId === a.id ? b.discordId : a.discordId;
-        return { content: `<@${opposingDc}> ▶️ **${sanitizeName(initiator.displayName)}** wants to resume — click **Resume** to continue.`, turnKey: opposingDc };
-      }
-      return { content: "", turnKey: "" };
-    }
-    case "COMPLETE":
-    case "CANCELLED":
-      return { content: "", turnKey: "" };
-    default:
-      return { content: "", turnKey: "" };
+
+    // Any other GAME_<n>_* phase we don't have a specific ping for.
+    return { content: "", turnKey: "" };
   }
+
+  if (s.state === "PAUSED") {
+    // Resume vote pending — ping the other player to agree.
+    if (s.resumeInitiatorPlayerId) {
+      const initiator = s.resumeInitiatorPlayerId === a.id ? a : b;
+      const opposingDc = s.resumeInitiatorPlayerId === a.id ? b.discordId : a.discordId;
+      return { content: `<@${opposingDc}> ▶️ **${sanitizeName(initiator.displayName)}** wants to resume — click **Resume** to continue.`, turnKey: opposingDc };
+    }
+    return { content: "", turnKey: "" };
+  }
+
+  // COMPLETE, CANCELLED, and any other non-game state: no active-turn ping.
+  return { content: "", turnKey: "" };
 }
 
 // Append the universal "🆘 Call helper" button as the LAST row on any
@@ -245,19 +258,11 @@ function withHelperRow(
         .setStyle(ButtonStyle.Danger),
     );
   }
-  // Pause is offered any time after game 1's winner is recorded — i.e.
-  // game-2 / game-3 phases. Before that, the right path is cancel.
-  // After PAUSED, the resume button lives on the paused embed.
-  if (
-    session.state === "GAME_2_CHOOSE_FIRST" ||
-    session.state === "GAME_2_BAN" ||
-    session.state === "GAME_2_PICK" ||
-    session.state === "GAME_2_PLAYING" ||
-    session.state === "GAME_3_CHOOSE_FIRST" ||
-    session.state === "GAME_3_BAN" ||
-    session.state === "GAME_3_PICK" ||
-    session.state === "GAME_3_PLAYING"
-  ) {
+  // Pause is offered any time after game 1's winner is recorded — i.e. any
+  // game-2..5 phase (derived from the state rather than enumerated per game
+  // number, so a BO5's games 4/5 offer it too). Before that, the right path
+  // is cancel. After PAUSED, the resume button lives on the paused embed.
+  if (gameNumFromState(session.state) >= 2) {
     extras.push(
       new ButtonBuilder()
         .setCustomId(`match:pause:${session.id}`)
@@ -307,7 +312,10 @@ function renderWaitingAccept(s: MatchSession, a: Player, b: Player) {
 
 function renderChooseFirst(s: MatchSession, a: Player, b: Player, prevGame: GameState | null) {
   if (!prevGame?.winnerId) return renderError(s, a, b, "Previous game winner missing");
-  const nextGameNum = s.state === "GAME_3_CHOOSE_FIRST" ? 3 : 2;
+  // Derived from the state so this works for any GAME_<n>_CHOOSE_FIRST,
+  // n = 2..5 (previously hardcoded to 2/3, which would have mislabeled a
+  // BO5's game 4/5 choose-first step).
+  const nextGameNum = gameNumFromState(s.state);
   const loserId = prevGame.winnerId === a.id ? b.id : a.id;
   const loser = loserId === a.id ? a : b;
   const embed = new EmbedBuilder()
@@ -332,18 +340,31 @@ function renderChooseFirst(s: MatchSession, a: Player, b: Player, prevGame: Game
   return { embeds: [embed], components: [row] };
 }
 
-function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], game: GameState, gameNumber: 1 | 2 | 3, opts: RenderOptions = {}) {
+// Per-game accent colors, keyed by game number (1..5 — 4/5 are BO5-only).
+// Flat-UI palette, same family as the rest of this file's embed colors.
+const GAME_COLORS: Record<number, number> = {
+  1: 0x3498db, // peter river
+  2: 0x9b59b6, // amethyst
+  3: 0xe67e22, // carrot
+  4: 0x27ae60, // nephritis (BO5 only)
+  5: 0xc0392b, // pomegranate (BO5 only)
+};
+// Fallback if gameNumber somehow misses the table above — should be
+// unreachable since ALL_GAMES only ever produces 1..5, but setColor can
+// never be handed undefined.
+const DEFAULT_GAME_COLOR = 0x5865f2;
+
+function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], game: GameState, gameNumber: number, opts: RenderOptions = {}) {
   const policy = parsePolicy(s.policy);
   const phase = phaseFor(game, a.id, b.id, policy, !s.isCasual);
   const first = game.firstId === a.id ? a : b;
   const otherPlayer = game.firstId === a.id ? b : a;
   const remaining = remainingCombos(pool, game.bans);
-  const colors = { 1: 0x3498db, 2: 0x9b59b6, 3: 0xe67e22 };
   const modeLabel = s.isCasual ? `Casual · Best of ${s.bestOf}` : "League";
 
   const embed = new EmbedBuilder()
     .setTitle(`🎮 Game ${gameNumber} — ${modeLabel}`)
-    .setColor(colors[gameNumber])
+    .setColor(GAME_COLORS[gameNumber] ?? DEFAULT_GAME_COLOR)
     .setFooter({ text: `Match ${s.id}` });
 
   // Game-1 ban phase: if a custom-combo proposal is in flight, replace
@@ -611,16 +632,13 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
   return { embeds: [embed], components: [] };
 }
 
-function renderComplete(s: MatchSession, a: Player, b: Player, g1: GameState | null, g2: GameState | null) {
-  const g3 = parseGame(s.game3);
-  const aWins =
-    (g1?.winnerId === a.id ? 1 : 0) +
-    (g2?.winnerId === a.id ? 1 : 0) +
-    (g3?.winnerId === a.id ? 1 : 0);
-  const bWins =
-    (g1?.winnerId === b.id ? 1 : 0) +
-    (g2?.winnerId === b.id ? 1 : 0) +
-    (g3?.winnerId === b.id ? 1 : 0);
+// Final embed. Counts EVERY played game (1..5 — a BO5 was previously scored off
+// only the first three) and lists the per-game breakdown: what was played and
+// who took it, so the thread shows the full story before it closes.
+function renderComplete(s: MatchSession, a: Player, b: Player, games: Array<GameState | null>) {
+  const played = games.filter((g): g is GameState => !!g);
+  const aWins = played.filter((g) => g.winnerId === a.id).length;
+  const bWins = played.filter((g) => g.winnerId === b.id).length;
   const verdict =
     aWins > bWins ? `🏆 ${sanitizeName(a.displayName)} ${aWins}-${bWins} ${sanitizeName(b.displayName)}` :
     bWins > aWins ? `🏆 ${sanitizeName(b.displayName)} ${bWins}-${aWins} ${sanitizeName(a.displayName)}` :
@@ -633,6 +651,21 @@ function renderComplete(s: MatchSession, a: Player, b: Player, g1: GameState | n
     .setDescription(`${verdict}\n${tail}`)
     .setColor(0x2ecc71)
     .setFooter({ text: `Match ${s.id}` });
+
+  const lines = played
+    .map((g, i) => {
+      const c = g.pickedDeckIdx !== undefined ? g.pool[g.pickedDeckIdx] : undefined;
+      const combo = c ? [c.deck, c.stake].filter(Boolean).join(" / ") : "_combo not recorded_";
+      const winner =
+        g.winnerId === a.id ? a.displayName : g.winnerId === b.id ? b.displayName : null;
+      const who = winner ? ` — **${sanitizeName(winner)}**` : "";
+      const lives = g.winnerLives != null ? ` _(${g.winnerLives} ${g.winnerLives === 1 ? "life" : "lives"} left)_` : "";
+      return `Game ${i + 1}: ${combo}${who}${lives}`;
+    })
+    .filter(Boolean);
+  if (lines.length > 0) {
+    embed.addFields({ name: "🃏 Games", value: lines.join("\n"), inline: false });
+  }
   return { embeds: [embed], components: [] };
 }
 
