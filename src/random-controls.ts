@@ -12,7 +12,7 @@ export function randomControlsRow(): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId("random:deck").setLabel("Random Deck").setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId("random:stake").setLabel("Random Stake").setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId("random:combo").setLabel("Random Combo").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId("random:combo").setLabel("Random Random").setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId("random:bans").setLabel("Random Bans").setStyle(ButtonStyle.Secondary),
   );
 }

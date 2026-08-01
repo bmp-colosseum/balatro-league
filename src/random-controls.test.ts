@@ -16,6 +16,6 @@ describe("randomControlsRow -- quick-roll button bar", () => {
   it("labels every button for a human, not just a customId", () => {
     const row = randomControlsRow();
     const labels = row.components.map((b) => b.toJSON()).map((b) => ("label" in b ? b.label : undefined));
-    expect(labels).toEqual(["Random Deck", "Random Stake", "Random Combo", "Random Bans"]);
+    expect(labels).toEqual(["Random Deck", "Random Stake", "Random Random", "Random Bans"]);
   });
 });
