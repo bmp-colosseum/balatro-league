@@ -13,7 +13,7 @@ import { setDiscordClient } from "./discord.js";
 import { env } from "./env.js";
 import { startHealthCheck } from "./healthcheck.js";
 import { startMatchSweep } from "./match-sweep.js";
-import { recordDivisionChannelMessage, startStickyActions } from "./sticky-actions.js";
+import { recordStickyChannelMessage, startStickyActions } from "./sticky-actions.js";
 import { startDmPanels } from "./dm-panel.js";
 import { startMatchControlBumper } from "./commands/match-buttons.js";
 import { bootstrapPresetsAndPointers } from "./match-config.js";
@@ -91,9 +91,10 @@ client.on(Events.MessageCreate, (message) => {
   // Capture inbound DMs players send the bot -> web DM console. Scoped to DMs
   // inside captureInboundDm; guild messages are ignored there.
   captureInboundDm(message).catch(() => {});
-  // Sticky quick-actions throttle bookkeeping (division channels only, no-op
-  // elsewhere). Synchronous + self-guarded -- never throws.
-  recordDivisionChannelMessage(message);
+  // Sticky quick-actions throttle bookkeeping (division channels + the
+  // bot-commands channel, no-op elsewhere). Synchronous + self-guarded --
+  // never throws.
+  recordStickyChannelMessage(message);
 });
 client.on(Events.MessageUpdate, (_oldMessage, newMessage) => {
   captureEdit(newMessage).catch(() => {});

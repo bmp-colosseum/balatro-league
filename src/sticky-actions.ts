@@ -1,14 +1,19 @@
-// "Sticky quick-actions" message kept near the bottom of every division
-// channel: schedule / start-match / status / standings / help, always one
-// click away. Deleted + reposted as conversation pushes it up -- but GENTLY:
-// see shouldRepostSticky for the full gate list. The overriding product rule
-// is "never interrupt an active conversation" -- better a little stale than
-// annoying.
+// "Sticky quick-actions" message kept near the bottom of a channel: schedule /
+// start-match / status / standings / help in every division channel, and a
+// quick-roll button bar (random deck/stake/combo/bans) in #bot-commands.
+// Deleted + reposted as conversation pushes it up -- but GENTLY: see
+// shouldRepostSticky for the full gate list. The overriding product rule is
+// "never interrupt an active conversation" -- better a little stale than
+// annoying. Both stickies are just different StickyTarget payloads run
+// through the SAME gated tick -- there is exactly one throttle/repost
+// implementation, keyed by an opaque stickyId instead of a division id.
 //
 // State:
 //   - The posted message id lives in LeagueConfig under a namespaced key
-//     (sticky_actions_msg:<divisionId>), same raw-key pattern as
-//     shootout.ts's noticeKey() -- no schema change needed.
+//     (sticky_actions_msg:<stickyId> -- <stickyId> is a divisionId for a
+//     division sticky, or the constant BOT_COMMANDS_STICKY_ID for the
+//     bot-commands one), same raw-key pattern as shootout.ts's noticeKey()
+//     -- no schema change needed.
 //   - Per-channel activity (last message time, new-message count since the
 //     last repost) is tracked in an in-memory Map -- no DB write per message.
 //     It resets on redeploy, which just means the throttle starts "ready"
@@ -26,6 +31,7 @@ import { activePublicSeason } from "./active-season.js";
 import { getConfig, LeagueConfigKey } from "./league-config.js";
 import { seasonTimelineLines, parseBufferDays } from "./season-timing.js";
 import { playerActionRows } from "./division-controls.js";
+import { randomControlsRow } from "./random-controls.js";
 import { prisma } from "./db.js";
 import { logDiscordError } from "./log-discord-error.js";
 
@@ -48,7 +54,14 @@ export const STICKY_LULL_MS = 30 * 1000;
 // How often the background tick walks divisions and reposts where allowed.
 const STICKY_TICK_MS = 60 * 1000;
 
-const stickyConfigKey = (divisionId: string): string => `sticky_actions_msg:${divisionId}`;
+// stickyId is a divisionId for a division sticky, or BOT_COMMANDS_STICKY_ID
+// for the bot-commands one -- opaque to everything below this point.
+export const stickyConfigKey = (stickyId: string): string => `sticky_actions_msg:${stickyId}`;
+
+// The bot-commands channel isn't a Division row, so it needs a stable id of
+// its own to key off of. "bot-commands" is not a valid cuid, so it can never
+// collide with a real divisionId.
+export const BOT_COMMANDS_STICKY_ID = "bot-commands";
 
 // ---- Pure decision core ---------------------------------------------------
 
@@ -88,10 +101,11 @@ interface ChannelActivity {
 
 // Keyed by Discord channel id.
 const channelActivity = new Map<string, ChannelActivity>();
-// Which channel ids are currently division channels, refreshed every tick
-// from the active season -- lets the MessageCreate listener do a plain Map
-// lookup instead of a DB query per message.
-const divisionChannelIds = new Map<string, string>(); // channelId -> divisionId
+// Which channel ids currently carry a sticky (division channels + the
+// bot-commands channel, if configured), refreshed every tick -- lets the
+// MessageCreate listener do a plain Map lookup instead of a DB query per
+// message. channelId -> stickyId.
+const stickyChannelIds = new Map<string, string>();
 
 function activityFor(channelId: string): ChannelActivity {
   const existing = channelActivity.get(channelId);
@@ -103,19 +117,18 @@ function activityFor(channelId: string): ChannelActivity {
 
 // Called from the MessageCreate listener for every message in the guild.
 // Fire-and-forget by construction (purely synchronous, never throws) --
-// counts a message toward a division channel's throttle state, skipping bot
-// messages (including our own sticky repost) so they never reset the lull
-// timer or inflate the "new messages" count.
-export function recordDivisionChannelMessage(message: Message): void {
+// counts a message toward a sticky channel's throttle state (division OR
+// bot-commands), skipping bot messages (including our own sticky repost) so
+// they never reset the lull timer or inflate the "new messages" count.
+export function recordStickyChannelMessage(message: Message): void {
   try {
     if (message.author.bot) return;
-    const divisionId = divisionChannelIds.get(message.channelId);
-    if (!divisionId) return;
+    if (!stickyChannelIds.has(message.channelId)) return;
     const activity = activityFor(message.channelId);
     activity.lastMessageAt = message.createdTimestamp;
     activity.newMessagesSincePost += 1;
   } catch (err) {
-    console.warn("[sticky-actions] recordDivisionChannelMessage failed:", err);
+    console.warn("[sticky-actions] recordStickyChannelMessage failed:", err);
   }
 }
 
@@ -131,13 +144,35 @@ export function buildStickyActionsMessage(timeline: string[] = []): BaseMessageO
   };
 }
 
+// The bot-commands sticky: a short quick-roll button bar. Kept deliberately
+// brief -- it reposts like the division sticky, so it must never read as
+// spammy.
+export function buildBotCommandsStickyMessage(): BaseMessageOptions {
+  return {
+    content: "🎲 **Quick rolls** -- need a deck, stake, or ban pool fast? Tap a button.",
+    components: [randomControlsRow()],
+    allowedMentions: { parse: [] },
+  };
+}
+
 // ---- Posting / reposting shell -------------------------------------------
 
-async function postSticky(channel: TextChannel, divisionId: string, timeline: string[]): Promise<void> {
-  const sent = await channel.send(buildStickyActionsMessage(timeline));
+// One sticky to manage: an opaque id (config-key + activity bookkeeping
+// scope), the channel it lives in, and how to build its payload. Division
+// stickies and the bot-commands sticky are both just a StickyTarget run
+// through the same tick -- no duplicated gating logic.
+export interface StickyTarget {
+  stickyId: string;
+  channelId: string;
+  buildPayload: () => BaseMessageOptions | Promise<BaseMessageOptions>;
+}
+
+async function postSticky(channel: TextChannel, target: StickyTarget): Promise<void> {
+  const payload = await target.buildPayload();
+  const sent = await channel.send(payload);
   await prisma.leagueConfig.upsert({
-    where: { key: stickyConfigKey(divisionId) },
-    create: { key: stickyConfigKey(divisionId), value: sent.id, updatedBy: "system" },
+    where: { key: stickyConfigKey(target.stickyId) },
+    create: { key: stickyConfigKey(target.stickyId), value: sent.id, updatedBy: "system" },
     update: { value: sent.id, updatedBy: "system" },
   });
   const activity = activityFor(channel.id);
@@ -156,9 +191,8 @@ async function deleteSticky(channel: TextChannel, messageId: string): Promise<vo
 // Refresh which channels are "division channels" for the active season, and
 // return the list to walk this tick. Cheap: one query per tick (not per
 // message).
-async function refreshDivisionChannelIds(): Promise<Array<{ id: string; channelId: string }>> {
+async function activeDivisionChannels(): Promise<Array<{ id: string; channelId: string }>> {
   const season = await activePublicSeason();
-  divisionChannelIds.clear();
   if (!season) return [];
   const divisions = await prisma.division.findMany({
     where: { seasonId: season.id, discordChannelId: { not: null } },
@@ -167,31 +201,29 @@ async function refreshDivisionChannelIds(): Promise<Array<{ id: string; channelI
   const result: Array<{ id: string; channelId: string }> = [];
   for (const d of divisions) {
     if (!d.discordChannelId) continue;
-    divisionChannelIds.set(d.discordChannelId, d.id);
     result.push({ id: d.id, channelId: d.discordChannelId });
   }
   return result;
 }
 
-async function tickDivision(
-  client: Client,
-  division: { id: string; channelId: string },
-  timeline: string[],
-): Promise<void> {
+// Run the full gated decision + delete/repost for exactly ONE sticky target
+// (division or bot-commands) -- the single implementation both callers share.
+async function tickSticky(client: Client, target: StickyTarget): Promise<void> {
   try {
-    const ch = await client.channels.fetch(division.channelId).catch(() => null);
+    const ch = await client.channels.fetch(target.channelId).catch(() => null);
     if (!ch || ch.type !== ChannelType.GuildText) return;
     const channel = ch as TextChannel;
 
-    const key = stickyConfigKey(division.id);
+    const key = stickyConfigKey(target.stickyId);
     const existing = await prisma.leagueConfig.findUnique({ where: { key } });
     const storedId = existing?.value ?? null;
 
-    // Never posted (fresh division, or the sticky was manually removed from
-    // config) -- post immediately, no throttle. There's nothing to interrupt
-    // by adding one message to a channel that has none of ours yet.
+    // Never posted (fresh division/channel, or the sticky was manually
+    // removed from config) -- post immediately, no throttle. There's
+    // nothing to interrupt by adding one message to a channel that has
+    // none of ours yet.
     if (!storedId) {
-      await postSticky(channel, division.id, timeline);
+      await postSticky(channel, target);
       return;
     }
 
@@ -213,15 +245,38 @@ async function tickDivision(
     if (!shouldRepostSticky(state, Date.now())) return;
 
     await deleteSticky(channel, storedId);
-    await postSticky(channel, division.id, timeline);
+    await postSticky(channel, target);
   } catch (err) {
-    logDiscordError("sticky-actions.tickDivision", err, { channelId: division.channelId });
+    logDiscordError("sticky-actions.tickSticky", err, { channelId: target.channelId });
   }
+}
+
+// Explicit, on-demand refresh of the bot-commands sticky -- called from boot
+// (via runStickyTick, below) and from /league refresh-messages. Reuses the
+// exact same gated tickSticky, so an admin mashing refresh-messages can't spam
+// a repost into the middle of a conversation either. No-ops cleanly when
+// BotCommandsChannelId is unset.
+export async function refreshBotCommandsSticky(client: Client): Promise<void> {
+  const channelId = await getConfig(LeagueConfigKey.BotCommandsChannelId);
+  if (!channelId) return;
+  await tickSticky(client, {
+    stickyId: BOT_COMMANDS_STICKY_ID,
+    channelId,
+    buildPayload: () => buildBotCommandsStickyMessage(),
+  });
 }
 
 async function runStickyTick(client: Client): Promise<void> {
   try {
-    const divisions = await refreshDivisionChannelIds();
+    const divisions = await activeDivisionChannels();
+    const botCommandsChannelId = await getConfig(LeagueConfigKey.BotCommandsChannelId);
+
+    // Rebuild the set of channels the MessageCreate listener should count
+    // activity for -- divisions AND bot-commands, if configured.
+    stickyChannelIds.clear();
+    for (const d of divisions) stickyChannelIds.set(d.channelId, d.id);
+    if (botCommandsChannelId) stickyChannelIds.set(botCommandsChannelId, BOT_COMMANDS_STICKY_ID);
+
     // Resolve the season timeline ONCE per tick (not per division) so every
     // division's sticky shows the same live deadline/countdown above the buttons.
     const season = await activePublicSeason();
@@ -230,7 +285,18 @@ async function runStickyTick(client: Client): Promise<void> {
       parseBufferDays(await getConfig(LeagueConfigKey.TiebreakBufferDays)),
     );
     for (const division of divisions) {
-      await tickDivision(client, division, timeline);
+      await tickSticky(client, {
+        stickyId: division.id,
+        channelId: division.channelId,
+        buildPayload: () => buildStickyActionsMessage(timeline),
+      });
+    }
+    if (botCommandsChannelId) {
+      await tickSticky(client, {
+        stickyId: BOT_COMMANDS_STICKY_ID,
+        channelId: botCommandsChannelId,
+        buildPayload: () => buildBotCommandsStickyMessage(),
+      });
     }
   } catch (err) {
     console.warn("[sticky-actions] tick failed:", err);

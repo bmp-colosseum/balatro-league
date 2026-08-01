@@ -49,10 +49,30 @@ function rollEmbed(opts: { deck?: string; stake?: string }): EmbedBuilder {
     .setDescription(blocks.join("\n\n"));
 }
 
+// ---- Roll + render -- shared by /random's subcommands AND the bot-commands
+// sticky's quick-roll buttons (commands/random-buttons.ts), so both surfaces
+// call the exact same logic and can never drift. Each returns the embed to
+// post; callers own the interaction.reply()/editReply() side.
+
+export async function rollDeck(): Promise<EmbedBuilder> {
+  const { decks } = await rollPool();
+  return rollEmbed({ deck: pick(decks) });
+}
+
+export async function rollStake(): Promise<EmbedBuilder> {
+  const { stakes } = await rollPool();
+  return rollEmbed({ stake: pick(stakes) });
+}
+
+export async function rollCombo(): Promise<EmbedBuilder> {
+  const { decks, stakes } = await rollPool();
+  return rollEmbed({ deck: pick(decks), stake: pick(stakes) });
+}
+
 // Roll a full ban pool (deck+stake combos) so two players can ban it down
 // themselves, outside the guided flow. Same pool size as a real league game
 // (matchPolicy.poolSize, default 9) and the same casual deck/stake set.
-async function rollBans(interaction: ChatInputCommandInteraction): Promise<void> {
+export async function rollBans(): Promise<EmbedBuilder> {
   const { decks, stakes } = await rollPool();
   const { matchPolicy } = await getLeagueSettings();
   // Random SELECTION of combos, then ordered by stake (difficulty) → deck so
@@ -67,12 +87,11 @@ async function rollBans(interaction: ChatInputCommandInteraction): Promise<void>
     const stake = `${stakeEmoji(c.stake) ?? ""} ${c.stake}`.trim();
     return `**${i + 1}.** ${deck} — ${stake}`;
   });
-  const embed = new EmbedBuilder()
+  return new EmbedBuilder()
     .setTitle(`🎲 Random ban pool — ${combos.length} combos`)
     .setColor(0x9b59b6)
     .setDescription(lines.join("\n"))
     .setFooter({ text: "Playing a league match? Use /start-match for the guided ban/pick + auto-record." });
-  await interaction.reply({ embeds: [embed] });
 }
 
 // One /random command with subcommands instead of /random-deck etc. — no dashes
@@ -89,17 +108,19 @@ export const random: SlashCommand = {
     .addSubcommand((s) => s.setName("combo").setDescription("Roll a random deck + stake together.")),
   async execute(interaction: ChatInputCommandInteraction) {
     const sub = interaction.options.getSubcommand();
-    if (sub === "bans") return rollBans(interaction);
-    const { decks, stakes } = await rollPool();
+    if (sub === "bans") {
+      await interaction.reply({ embeds: [await rollBans()] });
+      return;
+    }
     if (sub === "deck") {
-      await interaction.reply({ embeds: [rollEmbed({ deck: pick(decks) })] });
+      await interaction.reply({ embeds: [await rollDeck()] });
       return;
     }
     if (sub === "stake") {
-      await interaction.reply({ embeds: [rollEmbed({ stake: pick(stakes) })] });
+      await interaction.reply({ embeds: [await rollStake()] });
       return;
     }
     // combo
-    await interaction.reply({ embeds: [rollEmbed({ deck: pick(decks), stake: pick(stakes) })] });
+    await interaction.reply({ embeds: [await rollCombo()] });
   },
 };

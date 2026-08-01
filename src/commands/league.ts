@@ -21,6 +21,7 @@ import { webUrl, WEB_HOST } from "../web-url.js";
 import { clearConfig, getConfig, LeagueConfigKey, setConfig } from "../league-config.js";
 import { ensureQueueMessage, refreshQueueMessage } from "../league-queue.js";
 import { refreshChallengeInfoPinned } from "../channel-refresh.js";
+import { refreshBotCommandsSticky } from "../sticky-actions.js";
 import { ensureLeagueMatchesMessage } from "../league-matches-message.js";
 import { ensureLeagueMatchesPostable } from "../league-matches-channel.js";
 import { requireOwner } from "../permissions.js";
@@ -399,6 +400,12 @@ async function refreshMessages(interaction: ChatInputCommandInteraction) {
     done.push("challenges how-to message");
   } catch (err) {
     console.warn("[refresh-messages] challenge-info refresh failed:", err);
+  }
+  try {
+    await refreshBotCommandsSticky(interaction.client);
+    done.push("#bot-commands quick-roll sticky");
+  } catch (err) {
+    console.warn("[refresh-messages] bot-commands sticky refresh failed:", err);
   }
 
   const season = await activePublicSeason();

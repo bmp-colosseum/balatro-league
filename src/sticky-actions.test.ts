@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
+  BOT_COMMANDS_STICKY_ID,
+  buildBotCommandsStickyMessage,
+  buildStickyActionsMessage,
   shouldRepostSticky,
+  stickyConfigKey,
   STICKY_LULL_MS,
   STICKY_MIN_INTERVAL_MS,
   STICKY_MIN_NEW_MESSAGES,
@@ -114,5 +118,77 @@ describe("shouldRepostSticky -- throttle gates", () => {
       };
       expect(shouldRepostSticky(state, NOW)).toBe(false);
     });
+  });
+});
+
+// The gating decision (shouldRepostSticky) takes no divisionId/stickyId at
+// all -- it's a plain StickyChannelState -> boolean function. Generalizing
+// the sticky to also manage the bot-commands channel means BOTH targets run
+// through this exact same function with no branching by kind, so every gate
+// test above already covers the bot-commands sticky too. What's new below is
+// proving (a) the key derivation is generic/collision-safe and (b) the
+// bot-commands sticky's own gates behave identically to a division's, using
+// the same base-state fixture.
+describe("generalized sticky keying -- stickyId instead of divisionId", () => {
+  it("keys a division sticky exactly as before: sticky_actions_msg:<divisionId>", () => {
+    expect(stickyConfigKey("clxdivision123")).toBe("sticky_actions_msg:clxdivision123");
+  });
+
+  it("keys the bot-commands sticky under a distinct, non-cuid raw key", () => {
+    expect(stickyConfigKey(BOT_COMMANDS_STICKY_ID)).toBe("sticky_actions_msg:bot-commands");
+  });
+
+  it("the two key spaces never collide for realistic ids", () => {
+    const divisionKey = stickyConfigKey("some-division-cuid");
+    const botCommandsKey = stickyConfigKey(BOT_COMMANDS_STICKY_ID);
+    expect(divisionKey).not.toBe(botCommandsKey);
+  });
+});
+
+describe("bot-commands sticky obeys the exact same throttle gates as a division sticky", () => {
+  it("reposts when every gate passes -- same as a division sticky", () => {
+    expect(shouldRepostSticky(baseState(), NOW)).toBe(true);
+  });
+
+  it("does not repost inside the min-interval cooldown", () => {
+    const state = baseState({ lastPostAt: NOW - STICKY_MIN_INTERVAL_MS + 1 });
+    expect(shouldRepostSticky(state, NOW)).toBe(false);
+  });
+
+  it("requires STICKY_MIN_NEW_MESSAGES new messages before considering a repost", () => {
+    const state = baseState({ newMessagesSincePost: STICKY_MIN_NEW_MESSAGES - 1 });
+    expect(shouldRepostSticky(state, NOW)).toBe(false);
+  });
+
+  it("waits for a lull -- won't interrupt an active #bot-commands conversation", () => {
+    const state = baseState({ lastMessageAt: NOW - 1000 });
+    expect(shouldRepostSticky(state, NOW)).toBe(false);
+  });
+});
+
+describe("buildBotCommandsStickyMessage -- the quick-roll sticky payload", () => {
+  it("carries the four random: buttons and pings nobody", () => {
+    const msg = buildBotCommandsStickyMessage();
+    expect(msg.allowedMentions).toEqual({ parse: [] });
+    expect(msg.components).toHaveLength(1);
+    const row = msg.components?.[0] as unknown as { components: Array<{ toJSON(): { custom_id?: string } }> };
+    const customIds = row.components.map((b) => b.toJSON().custom_id);
+    expect(customIds).toEqual(["random:deck", "random:stake", "random:combo", "random:bans"]);
+  });
+
+  it("is short -- a repost must never read as spammy", () => {
+    const msg = buildBotCommandsStickyMessage();
+    expect(typeof msg.content).toBe("string");
+    expect((msg.content as string).length).toBeLessThan(200);
+  });
+});
+
+describe("buildStickyActionsMessage -- division sticky payload stays unchanged", () => {
+  it("still pings nobody and renders the player action rows", () => {
+    const msg = buildStickyActionsMessage(["Some timeline line"]);
+    expect(msg.allowedMentions).toEqual({ parse: [] });
+    expect(msg.content).toContain("Some timeline line");
+    expect(msg.content).toContain("**Quick actions**");
+    expect(msg.components?.length).toBeGreaterThan(0);
   });
 });
