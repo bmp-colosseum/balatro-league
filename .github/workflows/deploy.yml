@@ -148,7 +148,11 @@ jobs:
           # League dev web (separate project + dev env file).
           EDEV="--env-file /srv/balatro/versions.env --env-file /srv/balatro/secrets.dev.env"
           docker compose -p balatro-dev $EDEV -f docker-compose.dev.yml up -d league-web-dev || echo "[dev] league-web-dev roll skipped"
-          docker image prune -f
+          # Best-effort cleanup. league and tour share this box, so two overlapping
+          # deploys race here and the loser gets "a prune operation is already
+          # running" -- which would fail an otherwise-successful roll and train us
+          # to ignore red deploys. Never let cleanup fail the deploy.
+          docker image prune -f || echo "[cleanup] image prune skipped (another prune is running)"
 
       # Deploy visibility: post the outcome to the Discord devops channel. The
       # webhook URL lives box-local in secrets.env (never in git/GH secrets);
