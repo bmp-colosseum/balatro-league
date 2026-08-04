@@ -106,6 +106,10 @@ const channelActivity = new Map<string, ChannelActivity>();
 // MessageCreate listener do a plain Map lookup instead of a DB query per
 // message. channelId -> stickyId.
 const stickyChannelIds = new Map<string, string>();
+// channelId -> the message id of the sticky we most recently posted there, so
+// the activity counter can ignore the sticky's own post while still counting
+// every other message (including the bot's).
+const stickyMessageIds = new Map<string, string>();
 
 function activityFor(channelId: string): ChannelActivity {
   const existing = channelActivity.get(channelId);
@@ -122,8 +126,14 @@ function activityFor(channelId: string): ChannelActivity {
 // they never reset the lull timer or inflate the "new messages" count.
 export function recordStickyChannelMessage(message: Message): void {
   try {
-    if (message.author.bot) return;
     if (!stickyChannelIds.has(message.channelId)) return;
+    // Count BOT messages too -- everything except the sticky itself. Skipping
+    // all bot posts meant a channel whose traffic is mostly the bot (e.g.
+    // #bot-commands: match notifications, results) buried the sticky without
+    // ever incrementing the counter, so it never re-posted. The real "is it
+    // buried" test is stickyIsNotLastMessage (checked against Discord); this
+    // counter is only the anti-churn throttle.
+    if (stickyMessageIds.get(message.channelId) === message.id) return;
     const activity = activityFor(message.channelId);
     activity.lastMessageAt = message.createdTimestamp;
     activity.newMessagesSincePost += 1;
@@ -175,6 +185,7 @@ async function postSticky(channel: TextChannel, target: StickyTarget): Promise<v
     create: { key: stickyConfigKey(target.stickyId), value: sent.id, updatedBy: "system" },
     update: { value: sent.id, updatedBy: "system" },
   });
+  stickyMessageIds.set(channel.id, sent.id);
   const activity = activityFor(channel.id);
   activity.newMessagesSincePost = 0;
   activity.lastPostAt = Date.now();
