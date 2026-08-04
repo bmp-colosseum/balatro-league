@@ -8,6 +8,8 @@ import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
 import { composeLeagueInfoContent } from "./league-info-content.js";
 import { composeChallengeInfoContent } from "./challenge-info-content.js";
 import { composeStandingsEmbeds } from "./standings-channel-content.js";
+import type { BotHealth } from "./bot-health.js"; // type-only -- avoids a runtime import cycle with bot-health.ts
+import { buildHealthEmbed, buildBotStatusRenderKey } from "./bot-status-content.js";
 
 // Rebuild + edit the pinned #league-info message. Idempotent — pulls
 // fresh DB state via composeLeagueInfoContent every invocation, so
@@ -193,5 +195,110 @@ export async function refreshStandingsMessages(): Promise<void> {
     await setConfig(LeagueConfigKey.StandingsMessageIds, JSON.stringify(newIds), "standings.refresh");
   } catch (err) {
     console.warn(`[standings.refresh] failed: ${(err as Error).message}`);
+  }
+}
+
+// -- Bot-status channel message ---------------------------------------------
+//
+// Keeps a single self-updating embed in BotStatusChannelId current with a
+// BotHealth snapshot. Callers pass the snapshot BY VALUE (impure gather in
+// the caller, e.g. bot-health.ts's runHealthTick reading its own
+// cachedHealth, or league.ts's refresh-messages reading getCachedHealth())
+// rather than this module importing bot-health.ts itself -- that keeps this
+// a plain function of its inputs and avoids a channel-refresh <-> bot-health
+// import cycle. Same reconciliation as refreshLeagueInfoPinned/
+// refreshChallengeInfoPinned (edit a remembered message id -> adopt an
+// existing pinned bot message -> post + pin a new one), so it never
+// duplicates and heals a lost pin. No-ops cleanly when BotStatusChannelId is
+// unset or health is null (no snapshot cached yet, e.g. right after boot).
+//
+// THROTTLE: bot-health.ts's tick calls this every 60s, but editing a Discord
+// message on every tick (1440x/day) would be wasteful -- and actively
+// harmful during exactly the kind of incident this message reports (Discord
+// REST slowness), since editing more only adds load. buildBotStatusRenderKey
+// summarizes the MATERIAL parts of the snapshot (levels + coarse-rounded
+// numbers); this function only performs the edit when that key changes
+// since the last actual edit, mirroring bot-health.ts's lastPresenceKey
+// pattern. The embed's own "Last checked <t:...:R>" timestamp keeps the
+// message looking fresh between edits without needing one, client-side.
+// BOT_STATUS_MAX_STALENESS_MS is a backstop: if nothing material has
+// changed for that long, force an edit anyway so the message can't look
+// frozen forever on a very steady system.
+export const BOT_STATUS_MAX_STALENESS_MS = 30 * 60 * 1000; // 30 minutes
+
+let lastBotStatusRenderKey: string | null = null;
+let lastBotStatusEditAt: number | null = null;
+
+export async function refreshBotStatusMessage(health: BotHealth | null): Promise<void> {
+  if (!health) return; // no snapshot cached yet (e.g. right after boot)
+  const channelId = await getConfig(LeagueConfigKey.BotStatusChannelId);
+  if (!channelId) return; // bot-status feed not configured -- nothing to do
+
+  const key = buildBotStatusRenderKey(health);
+  const now = Date.now();
+  const stale = lastBotStatusEditAt === null || now - lastBotStatusEditAt > BOT_STATUS_MAX_STALENESS_MS;
+  if (key === lastBotStatusRenderKey && !stale) return; // nothing material changed and not overdue -- skip the edit
+
+  const client = tryGetDiscordClient();
+  if (!client) {
+    console.warn("[bot-status.refresh] Discord client not ready -- skipping");
+    return;
+  }
+  const channel = await client.channels.fetch(channelId).catch(() => null);
+  if (!channel || !channel.isTextBased() || !("send" in channel)) {
+    console.warn(`[bot-status.refresh] channel ${channelId} not found or unusable`);
+    return;
+  }
+  const embed = buildHealthEmbed(health);
+  const botId = client.user?.id;
+  type MiniMsg = {
+    id: string;
+    author: { id: string };
+    edit: (o: { embeds: [ReturnType<typeof buildHealthEmbed>] }) => Promise<unknown>;
+    pin: () => Promise<unknown>;
+  };
+  const messages = channel as {
+    messages: {
+      fetch: (id: string) => Promise<MiniMsg>;
+      fetchPinned: () => Promise<{ values: () => Iterable<MiniMsg> }>;
+    };
+    send: (o: { embeds: [ReturnType<typeof buildHealthEmbed>] }) => Promise<MiniMsg>;
+  };
+  try {
+    // 1. Edit the remembered message if it still exists -- keyed on a stored
+    //    id, NOT on pin state, so an unpinned message can't cause a dupe.
+    const storedId = await getConfig(LeagueConfigKey.BotStatusMessageId);
+    if (storedId) {
+      const existing = await messages.messages.fetch(storedId).catch(() => null);
+      if (existing && existing.author.id === botId) {
+        await existing.edit({ embeds: [embed] });
+        lastBotStatusRenderKey = key;
+        lastBotStatusEditAt = now;
+        return;
+      }
+    }
+    // 2. No stored id (or it's gone) -- adopt an existing pinned bot message
+    //    if there is one (migration path), so we don't post a duplicate.
+    const pinned = await messages.messages.fetchPinned().catch(() => null);
+    if (pinned) {
+      for (const msg of pinned.values()) {
+        if (msg.author.id === botId) {
+          await msg.edit({ embeds: [embed] });
+          await setConfig(LeagueConfigKey.BotStatusMessageId, msg.id, "bot-status.refresh");
+          lastBotStatusRenderKey = key;
+          lastBotStatusEditAt = now;
+          return;
+        }
+      }
+    }
+    // 3. Nothing to edit -- post + pin a new one and remember its id.
+    const sent = await messages.send({ embeds: [embed] });
+    await sent.pin().catch((err: unknown) => console.warn("[bot-status.refresh] pin failed:", err));
+    await setConfig(LeagueConfigKey.BotStatusMessageId, sent.id, "bot-status.refresh");
+    lastBotStatusRenderKey = key;
+    lastBotStatusEditAt = now;
+    console.log(`[bot-status.refresh] posted + pinned new message in ${channelId}`);
+  } catch (err) {
+    console.warn(`[bot-status.refresh] failed: ${(err as Error).message}`);
   }
 }

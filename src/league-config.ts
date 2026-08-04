@@ -192,10 +192,22 @@ export const LeagueConfigKey = {
   // place, posting/deleting only when the division count changes.
   StandingsMessageIds: "standings_message_ids",
 
-  // Public, read-only channel for automated deploy / bot status posts (e.g. the
-  // CI pipeline announcing "deploying…" / "back up" so players know when a brief
-  // restart is happening). Bot/webhook-only; @everyone can view but not post.
-  StatusChannelId: "status_channel_id",
+  // #league-bot-status: the bot maintains ONE self-updating message here with
+  // the live health snapshot (same embed /league-bot-status renders, sourced
+  // from bot-health.ts's getCachedHealth()) -- Discord/DB/queue status for
+  // whoever's watching, current without anyone running the command.
+  // Deliberately NOT a deploy/restart announcement feed: deploys are frequent
+  // and per-deploy posts would drown the one message that matters. Live state
+  // only, re-edited in place. Unset = the feed is off.
+  // (A `status_channel_id` key for discrete deploy/CI posts previously existed
+  // here but never had a writer -- nothing ever posted to it -- so it was
+  // removed rather than left as a misleading no-op.)
+  BotStatusChannelId: "bot_status_channel_id",
+  // Message id of the self-updating bot-status message in
+  // BotStatusChannelId. Edited in place on every material health change
+  // (see channel-refresh.ts's refreshBotStatusMessage) so a lost pin can't
+  // cause a duplicate post.
+  BotStatusMessageId: "bot_status_message_id",
 
   // Days between "finish all your games" (Season.scheduledEndAt) and the next
   // season kicking off - the window used to settle shootouts/tiebreakers and give

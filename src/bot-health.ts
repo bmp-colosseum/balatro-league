@@ -18,6 +18,7 @@ import { checkQueueStalls } from "./devops-alarm.js";
 import { activePublicSeason } from "./active-season.js";
 import { formatSeasonLabel } from "./format-season.js";
 import { onHealthTransition } from "./health-broadcast.js";
+import { refreshBotStatusMessage } from "./channel-refresh.js"; // takes the snapshot by value -- no import cycle
 
 export type HealthLevel = "ok" | "degraded" | "down";
 
@@ -272,6 +273,17 @@ async function runHealthTick(client: Client): Promise<void> {
   // internally, but the .catch() here is defense in depth.
   void onHealthTransition(client, prevLevel, cachedHealth.level, cachedHealth).catch((err) => {
     console.warn("[bot-health] health transition broadcast failed:", err);
+  });
+  // Fire-and-forget, best-effort, same as above -- refreshBotStatusMessage
+  // internally throttles on its own render key, so most of these calls are a
+  // cheap no-op edit-skip. This runs on EVERY tick, which already covers a
+  // level transition (ok<->degraded/down): the render key changes the
+  // instant `level` changes, in this same tick, so the channel message
+  // updates on the transition edge without a separate call from
+  // health-broadcast.ts (which would otherwise import this module and
+  // create a cycle back into bot-health.ts).
+  void refreshBotStatusMessage(cachedHealth).catch((err) => {
+    console.warn("[bot-health] bot-status channel refresh failed:", err);
   });
   await updatePresence(client, cachedHealth).catch((err) => {
     console.warn("[bot-health] presence update failed:", err);

@@ -20,7 +20,8 @@ import { PERM_PRESETS } from "../discord-helpers.js";
 import { webUrl, WEB_HOST } from "../web-url.js";
 import { clearConfig, getConfig, LeagueConfigKey, setConfig } from "../league-config.js";
 import { ensureQueueMessage, refreshQueueMessage } from "../league-queue.js";
-import { refreshChallengeInfoPinned } from "../channel-refresh.js";
+import { refreshChallengeInfoPinned, refreshBotStatusMessage } from "../channel-refresh.js";
+import { getCachedHealth } from "../bot-health.js";
 import { refreshBotCommandsSticky } from "../sticky-actions.js";
 import { ensureLeagueMatchesMessage } from "../league-matches-message.js";
 import { ensureLeagueMatchesPostable } from "../league-matches-channel.js";
@@ -402,6 +403,12 @@ async function refreshMessages(interaction: ChatInputCommandInteraction) {
     console.warn("[refresh-messages] challenge-info refresh failed:", err);
   }
   try {
+    await refreshBotStatusMessage(getCachedHealth());
+    done.push("bot-status message");
+  } catch (err) {
+    console.warn("[refresh-messages] bot-status refresh failed:", err);
+  }
+  try {
     await refreshBotCommandsSticky(interaction.client);
     done.push("#bot-commands quick-roll sticky");
   } catch (err) {
@@ -488,7 +495,11 @@ const ENSURED_CHANNELS: {
   { name: "league-chat", key: LeagueConfigKey.GeneralChannelId, type: ChannelType.GuildText, postable: true },
   { name: "league-bot-commands", key: LeagueConfigKey.BotCommandsChannelId, type: ChannelType.GuildText, postable: true },
   { name: "league-standings", key: LeagueConfigKey.StandingsChannelId, type: ChannelType.GuildText, postable: false },
-  { name: "league-bot-status", key: LeagueConfigKey.StatusChannelId, type: ChannelType.GuildText, postable: false },
+  // A single self-updating health-snapshot embed (bot-health.ts, refreshed by
+  // channel-refresh.ts's refreshBotStatusMessage). Deliberately NOT a deploy/
+  // restart announcement feed -- deploys are frequent and would drown the one
+  // message that matters. Live state only.
+  { name: "league-bot-status", key: LeagueConfigKey.BotStatusChannelId, type: ChannelType.GuildText, postable: false },
   { name: "league-help", key: LeagueConfigKey.HelpChannelId, type: ChannelType.GuildText, postable: false },
   { name: "league-announcements", key: LeagueConfigKey.AnnouncementsChannelId, type: ChannelType.GuildAnnouncement, postable: false },
   { name: "league-feedback", key: LeagueConfigKey.FeedbackChannelId, type: ChannelType.GuildText, postable: true },
@@ -862,7 +873,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
     const chatChan = await ensureChannel("league-chat", "General league chat. Match scheduling, banter, etc.", ChannelType.GuildText, LeagueConfigKey.GeneralChannelId);
     const botCmdChan = await ensureChannel("league-bot-commands", "General bot commands: /random, /profile, /standings, etc. Most replies are private (only you see them) so you can run commands from any channel.", ChannelType.GuildText, LeagueConfigKey.BotCommandsChannelId);
     const standingsChan = await ensureChannel("league-standings", "📊 Live standings for the active season — auto-updated by the bot. Read-only.", ChannelType.GuildText, LeagueConfigKey.StandingsChannelId);
-    const statusChan = await ensureChannel("league-bot-status", "🚀 Automated deploy + bot status — posts when the bot is updating / back up so you know about brief restarts. Read-only.", ChannelType.GuildText, LeagueConfigKey.StatusChannelId);
+    const statusChan = await ensureChannel("league-bot-status", "Live bot status (Discord / database / queue) -- one message, kept current. Read-only.", ChannelType.GuildText, LeagueConfigKey.BotStatusChannelId);
     const helpChan = await ensureChannel("league-help", "📖 All the bot commands. You can also type /help anywhere.", ChannelType.GuildText, LeagueConfigKey.HelpChannelId);
     const announcementsChan = await ensureChannel(
       "league-announcements",
@@ -902,6 +913,11 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       where: { key: "help_channel_id" },
       create: { key: "help_channel_id", value: helpChan.id, updatedBy: interaction.user.id },
       update: { value: helpChan.id, updatedBy: interaction.user.id },
+    });
+    await prisma.leagueConfig.upsert({
+      where: { key: "bot_status_channel_id" },
+      create: { key: "bot_status_channel_id", value: statusChan.id, updatedBy: interaction.user.id },
+      update: { value: statusChan.id, updatedBy: interaction.user.id },
     });
     await prisma.leagueConfig.upsert({
       where: { key: "announcements_channel_id" },
@@ -1527,6 +1543,7 @@ async function checkSetup(interaction: ChatInputCommandInteraction) {
   await checkChannel("announcements_channel_id", "Announcements");
   await checkChannel("devops_channel_id", "DevOps");
   await checkChannel("challenges_channel_id", "Challenges (casual)");
+  await checkChannel("bot_status_channel_id", "Bot-status snapshot");
 
   lines.push("\n__Results webhook__");
   const wh = await prisma.leagueConfig.findUnique({ where: { key: "results_webhook_url" } });

@@ -40,6 +40,7 @@ const CHANNEL_KEYS = [
   { key: "challenge_results_channel_id", label: "Challenge results channel ID", help: "Where casual /challenge results post as a browsable feed. Defaults to the #challenges channel if unset. Right-click channel → Copy Channel ID." },
   { key: "challenge_results_webhook_url", label: "Challenge results webhook URL", help: "Optional webhook for the casual /challenge result feed (avoids the bot's rate-limit budget). Takes priority over the channel ID. Channel → Edit → Integrations → Webhooks → copy URL." },
   { key: "devops_channel_id", label: "DevOps channel ID", help: "Queue-stall + rate-limit alerts. Tech-only." },
+  { key: "bot_status_channel_id", label: "Bot-status channel ID", help: "Read-only channel where the bot maintains one self-updating live status message (Discord/DB/queue — the same info as /league-bot-status). Live state only, not per-deploy announcements. Auto-created as #league-bot-status by /league bootstrap-server. Clear to turn the feed off." },
 ];
 
 const CATEGORY_KEYS = [
@@ -100,7 +101,7 @@ export default async function AdminConfigPage() {
 
         <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
           Tip: toggle <strong>Show Discord IDs</strong> per-browser from the ⚙️ menu (top-right) —
-          it's a personal display preference, not a server-wide setting.
+          it&apos;s a personal display preference, not a server-wide setting.
         </p>
 
         <ConfigSection title="Categories" keys={CATEGORY_KEYS} valueByKey={valueByKey} />

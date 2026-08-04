@@ -114,9 +114,23 @@ interface CategorySpec {
 | `admin_channel_id` | league-admin | league | text | staffOnly | — |
 | `backup_channel_id` | league-backups | league | text | staffOnly | — |
 | `devops_channel_id` | league-devops | league | text | devopsOnly | — |
+| `bot_status_channel_id` | league-bot-status | league | text | readOnly | ❌ |
 | `challenges_channel_id` | challenges | matches | text | open | — |
 
 Categories: `league_category_id` → "🃏 Balatro League", `matches_category_id` → "🎴 Matches".
+
+**Note -- `bot_status_channel_id` (channel `league-bot-status`)** holds ONE
+self-updating live status message (same content as `/league-bot-status`,
+refreshed by `src/channel-refresh.ts`'s `refreshBotStatusMessage`, message id
+tracked via `bot_status_message_id`). It is deliberately NOT a deploy/restart
+announcement feed -- deploys are frequent and per-deploy posts would drown the
+one message that matters.
+
+A second key, `status_channel_id`, briefly existed for discrete deploy/CI posts
+("deploying..." / "back up"). It never had a writer -- nothing ever posted to it,
+and bootstrap created the channel without persisting its id -- so it was removed
+in favour of this single live-state channel rather than left as a misleading
+no-op.
 
 **Out of registry (not channels):** `results_webhook_url`,
 `challenge_results_channel_id`, `challenge_results_webhook_url`. These are
