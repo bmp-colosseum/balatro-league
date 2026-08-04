@@ -4,13 +4,24 @@
 
 import { createServer } from "node:http";
 import { renderMetrics } from "./metrics.js";
+import { getCachedHealth } from "./bot-health.js";
 
 export function startHealthCheck(): void {
   const port = parseInt(process.env.PORT ?? "8080", 10);
   const server = createServer((req, res) => {
     if (req.url === "/health" || req.url === "/") {
+      // Railway only cares about the 200 -- never fail this on a "degraded"
+      // snapshot, that would get the whole container killed over e.g. slow
+      // Discord REST calls. The full snapshot lives at /health/status for
+      // anyone (us) who wants to actually read it.
       res.writeHead(200, { "Content-Type": "text/plain" });
       res.end("OK");
+      return;
+    }
+    if (req.url === "/health/status") {
+      const health = getCachedHealth();
+      res.writeHead(health ? 200 : 503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(health ?? { error: "no health snapshot cached yet" }));
       return;
     }
     if (req.url === "/metrics") {

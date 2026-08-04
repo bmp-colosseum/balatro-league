@@ -11,6 +11,7 @@ import { getConfig, LeagueConfigKey } from "./league-config.js";
 import { buttonHandlers, modalHandlers, selectMenuHandlers, slashCommands } from "./commands/index.js";
 import { setDiscordClient } from "./discord.js";
 import { env } from "./env.js";
+import { startBotHealth } from "./bot-health.js";
 import { startHealthCheck } from "./healthcheck.js";
 import { startMatchSweep } from "./match-sweep.js";
 import { recordStickyChannelMessage, startStickyActions } from "./sticky-actions.js";
@@ -363,6 +364,15 @@ startMatchSweep();
 startStickyActions(client);
 startDmPanels(client);
 startMatchControlBumper(client);
+// Continuous health monitor (DB latency, Discord REST/gateway timing, queue
+// stalls) -> cached snapshot + presence, read by /league-bot-status. Wrapped
+// defensively even though startBotHealth is designed to never throw --
+// best-effort, must never block or crash boot.
+try {
+  startBotHealth(client);
+} catch (err) {
+  console.warn("[bot-health] failed to start:", err);
+}
 // Start the pg-boss worker AFTER the Discord client is logged in — DM
 // jobs need the client to send. Errors here don't abort the bot.
 initQueue().catch((err) => console.warn("[pg-boss] init failed:", err));

@@ -23,6 +23,7 @@ import {
 } from "@discordjs/rest";
 import type { Client } from "discord.js";
 import { discordRestDurationSeconds, discordRestRequestsTotal, normalizeRestRoute } from "./metrics.js";
+import { recordDiscordRestSample } from "./bot-health.js";
 
 // Pull an HTTP status off a rejected REST call -- DiscordAPIError and
 // HTTPError both carry a numeric .status; anything else labels "error".
@@ -52,8 +53,13 @@ export function attachRestTiming(rest: REST): void {
     const route = normalizeRestRoute(options.fullRoute);
     const start = Date.now();
     const record = (status: string) => {
-      discordRestDurationSeconds.observe({ method, route }, (Date.now() - start) / 1000);
+      const durationMs = Date.now() - start;
+      discordRestDurationSeconds.observe({ method, route }, durationMs / 1000);
       discordRestRequestsTotal.inc({ method, route, status });
+      // Feed bot-health.ts's rolling window -- the smallest possible seam so
+      // the health monitor's REST p95/error-rate is measured in-process
+      // rather than awkwardly read back out of the prom-client histogram.
+      recordDiscordRestSample(durationMs, status === "ok");
     };
     return original(options).then(
       (result) => {

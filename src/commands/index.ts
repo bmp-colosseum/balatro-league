@@ -1,5 +1,6 @@
 // Central registry: every slash command and interaction handler is wired here.
 import { admin } from "./admin.js";
+import { botStatus } from "./bot-status.js";
 import { challenge } from "./challenge.js";
 import { disputeResolveSelect, disputeThreadButtonHandler } from "./dispute-buttons.js";
 import { adminHelp, help } from "./help.js";
@@ -35,7 +36,7 @@ import type { ButtonHandler, ModalHandler, SelectMenuHandler, SlashCommand } fro
 // /timezone removed — the messed-up autocomplete (Discord's 25-result cap on
 // IANA zones) wasn't worth it. Timezone is still settable on the website (/me, with
 // browser auto-detect) and shown to opponents in /schedule.
-export const slashCommands: SlashCommand[] = [help, adminHelp, helper, support, standings, schedule, status, profile, league, notify, startMatch, challenge, admin, random, pool];
+export const slashCommands: SlashCommand[] = [help, adminHelp, helper, support, standings, schedule, status, profile, league, notify, startMatch, challenge, admin, random, pool, botStatus];
 
 export const buttonHandlers: ButtonHandler[] = [reportButtons, signupHandlers, signupAskButtonHandler, matchButtons, disputeThreadButtonHandler, supportButtons, queueButtons, leagueMatchesButtons, divisionControlsButtons, rosterButtons, randomButtons];
 
