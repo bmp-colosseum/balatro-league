@@ -16,8 +16,13 @@ import { seasonTimelineLines, parseBufferDays } from "./season-timing.js";
 // opens an ephemeral dropdown of the clicker's remaining scheduled opponents
 // (see commands/league-matches-buttons.ts) so people can start a match without
 // typing /start-match. allowedMentions cleared so re-rendering never pings.
-function renderLeagueMatchesMessage(timeline: string[]): BaseMessageOptions {
+//
+// `banner` (optional) prepends a warning line -- e.g. health-broadcast.ts
+// during a degraded incident -- without disturbing the rest of the content;
+// pass undefined/omit to render the normal message.
+function renderLeagueMatchesMessage(timeline: string[], banner?: string): BaseMessageOptions {
   const lines = [
+    ...(banner ? [banner, ""] : []),
     ...(timeline.length ? [...timeline, ""] : []),
     "## 🎴 Start a League Match",
     "Ready to play? Hit **Start a match**, pick an opponent from your schedule, and I'll send them an invite to accept — no slash commands needed.",
@@ -36,7 +41,10 @@ function renderLeagueMatchesMessage(timeline: string[]): BaseMessageOptions {
 // Post (or refresh) the pinned "Start a match" message in #league-matches and
 // store its id. Idempotent — safe to call from bootstrap + /league refresh-messages.
 // Resolves (auto-creating) the channel itself, so callers don't need the id.
-export async function ensureLeagueMatchesMessage(client: Client): Promise<void> {
+// `banner` (optional): pass a warning line to prepend it, or omit/undefined
+// to render the normal (no-banner) content -- always edits the same message
+// id in place, never re-posts, so callers can freely flip it on and off.
+export async function ensureLeagueMatchesMessage(client: Client, banner?: string): Promise<void> {
   const channelId = await ensureLeagueMatchesChannel();
   if (!channelId) return;
   const ch = await client.channels.fetch(channelId).catch(() => null);
@@ -44,7 +52,7 @@ export async function ensureLeagueMatchesMessage(client: Client): Promise<void> 
   const tc = ch as TextChannel;
   const season = await activePublicSeason();
   const bufferDays = parseBufferDays(await getConfig(LeagueConfigKey.TiebreakBufferDays));
-  const payload = renderLeagueMatchesMessage(seasonTimelineLines(season?.scheduledEndAt ?? null, bufferDays));
+  const payload = renderLeagueMatchesMessage(seasonTimelineLines(season?.scheduledEndAt ?? null, bufferDays), banner);
 
   const existingId = await getConfig(LeagueConfigKey.LeagueMatchesMessageId);
   if (existingId) {

@@ -17,6 +17,7 @@ import { prisma } from "./db.js";
 import { checkQueueStalls } from "./devops-alarm.js";
 import { activePublicSeason } from "./active-season.js";
 import { formatSeasonLabel } from "./format-season.js";
+import { onHealthTransition } from "./health-broadcast.js";
 
 export type HealthLevel = "ok" | "degraded" | "down";
 
@@ -178,6 +179,10 @@ export function recordDiscordRestSample(durationMs: number, ok: boolean): void {
 let cachedHealth: BotHealth | null = null;
 let lastPresenceKey: string | null = null;
 let started = false;
+// The level from the PREVIOUS tick -- null until the first tick completes,
+// which is exactly what keeps the boot/redeploy tick from firing a
+// transition broadcast (see health-broadcast.ts's classifyTransition).
+let previousHealthLevel: HealthLevel | null = null;
 
 const TICK_INTERVAL_MS = 60_000;
 
@@ -259,7 +264,15 @@ async function runHealthTick(client: Client): Promise<void> {
     discord: { gatewayPingMs: gatewayPingMs(client), ...restStats },
     queue: { stalled },
   };
+  const prevLevel = previousHealthLevel;
   cachedHealth = deriveHealth(inputs, new Date());
+  previousHealthLevel = cachedHealth.level;
+  // Fire-and-forget, best-effort -- must never delay or break the tick or
+  // the presence update below. onHealthTransition guards every step
+  // internally, but the .catch() here is defense in depth.
+  void onHealthTransition(client, prevLevel, cachedHealth.level, cachedHealth).catch((err) => {
+    console.warn("[bot-health] health transition broadcast failed:", err);
+  });
   await updatePresence(client, cachedHealth).catch((err) => {
     console.warn("[bot-health] presence update failed:", err);
   });
