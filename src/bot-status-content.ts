@@ -1,19 +1,27 @@
-// Shared rendering for a BotHealth snapshot (bot-health.ts). Two surfaces
-// consume this: /league-bot-status (commands/bot-status.ts, an ephemeral
-// reply) and the self-updating #bot-status channel message
-// (channel-refresh.ts's refreshBotStatusMessage). Both call buildHealthEmbed
-// so they can never drift apart into two different renderings of the same
-// snapshot.
+// Shared rendering for a BotHealth snapshot (bot-health.ts). Two audiences
+// consume this, and they see DIFFERENT embeds so internal detail never
+// leaks to players:
+//   - buildHealthEmbed        -- full technical detail (gateway ping, REST
+//     p95/error-rate, db latency, stalled queue names). Admin/owner only:
+//     /league-bot-status when the caller passes the admin permission check
+//     (commands/bot-status.ts).
+//   - buildPublicHealthEmbed  -- plain-language, NUMBER-FREE status. Used by
+//     the self-updating #bot-status channel message (channel-refresh.ts's
+//     refreshBotStatusMessage, which every player can read) and by
+//     /league-bot-status for non-admin callers.
+// Both surfaces call into this module so admin and player views can never
+// silently drift, and so a fix to the wording only has one place to land.
 //
-// PURE module -- no Discord client, no I/O. buildHealthEmbed constructs a
-// (not-yet-sent) EmbedBuilder from plain data; buildBotStatusRenderKey
+// PURE module -- no Discord client, no I/O. buildBotStatusRenderKey
 // produces a short deterministic string used ONLY to decide whether the
-// channel message needs an edit at all (see channel-refresh.ts) -- it
-// deliberately rounds away sub-threshold jitter so a steady system doesn't
-// trigger an edit every 60s tick.
+// channel message needs an edit at all (see channel-refresh.ts) -- it's now
+// keyed off exactly what buildPublicHealthEmbed renders, so an internal-only
+// change (a queue backlog, ms/percent jitter) never triggers a pointless
+// edit for a message players read.
 
 import { EmbedBuilder } from "discord.js";
 import type { BotHealth, HealthLevel } from "./bot-health.js";
+import { isPlayerImpacting } from "./health-broadcast.js";
 
 const LEVEL_COLOR: Record<HealthLevel, number> = {
   ok: 0x57f287,
@@ -71,40 +79,58 @@ export function buildHealthEmbed(health: BotHealth): EmbedBuilder {
     );
 }
 
-// Buckets a millisecond value to the nearest ROUND_MS so a few ms of jitter
-// (or a rerun with a slightly different sample window) doesn't flip the key.
-const ROUND_MS = 100;
-// Buckets an error rate (0..1) to the nearest whole percentage point.
-const ROUND_ERROR_RATE = 0.01;
-
-function roundMs(v: number | null): number | null {
-  return v === null ? null : Math.round(v / ROUND_MS) * ROUND_MS;
-}
-
-function roundRate(v: number | null): number | null {
-  return v === null ? null : Math.round(v / ROUND_ERROR_RATE) * ROUND_ERROR_RATE;
-}
-
 // PURE. Deterministic summary of the MATERIAL parts of a health snapshot --
-// the overall + per-subsystem levels, coarse-rounded latency/error numbers,
-// and which queues are stalled. Two snapshots that differ only by exact
-// timestamp or by less than one rounding bucket produce the SAME key; a
-// snapshot that changes level, crosses a rounding bucket, or changes which
-// queue is stalled produces a DIFFERENT key. channel-refresh.ts's
+// material meaning "would change what buildPublicHealthEmbed renders".
+// That's just two things: the overall level, and (only when degraded)
+// whether the cause is player-impacting -- that's the one branch in
+// publicHealthCopy() below. Everything else (exact latency numbers, error
+// rates, db latency, which queue is stalled, the timestamp) is invisible to
+// players, so changing it must NOT change this key. channel-refresh.ts's
 // refreshBotStatusMessage compares this key tick-to-tick (mirroring
 // bot-health.ts's lastPresenceKey pattern) and skips the Discord edit when
-// it hasn't changed, so a steady system doesn't get edited 1440x/day.
+// it hasn't changed, so a steady system -- or one with a purely internal
+// hiccup -- doesn't get edited 1440x/day for something players can't see.
 export function buildBotStatusRenderKey(health: BotHealth): string {
-  const parts: unknown[] = [
-    health.level,
-    health.discord.level,
-    roundMs(health.discord.gatewayPingMs),
-    roundMs(health.discord.restP95Ms),
-    roundRate(health.discord.restErrorRate),
-    health.db.ok,
-    roundMs(health.db.latencyMs),
-    health.queue.ok,
-    [...health.queue.stalled].sort().join(","),
-  ];
+  const parts: unknown[] = [health.level, health.level === "degraded" ? isPlayerImpacting(health) : null];
   return parts.map((p) => String(p)).join("|");
+}
+
+// PURE. Friendly, number-free title + body for a health level. The
+// degraded case is the only one that branches on the CAUSE, and only
+// between two buckets: something a player would actually feel
+// (isPlayerImpacting -- shared with health-broadcast.ts so this copy can
+// never claim something different than what the incident broadcast said)
+// vs. a purely internal issue (e.g. a backlogged queue) that players never
+// touch.
+function publicHealthCopy(health: BotHealth): { title: string; description: string } {
+  if (health.level === "down") {
+    return {
+      title: "The bot is having problems",
+      description: "Admins have been notified.",
+    };
+  }
+  if (health.level === "degraded") {
+    const description = isPlayerImpacting(health)
+      ? "Discord is responding slowly, so buttons and results may lag. Your clicks are still landing."
+      : "We're working on a background issue. Matches are unaffected.";
+    return { title: "Some things may be slow", description };
+  }
+  return {
+    title: "Everything's working",
+    description: "Matches, reporting and commands are all running normally.",
+  };
+}
+
+// Builds the PLAYER-FACING embed -- plain language, no ms/percentage
+// figures, no subsystem/queue names. See the module header for who reads
+// this (the #bot-status channel message, and /league-bot-status for
+// non-admin callers). Same relative "Last checked" convention as
+// buildHealthEmbed so the message reads as fresh between edits.
+export function buildPublicHealthEmbed(health: BotHealth): EmbedBuilder {
+  const checkedAtUnix = Math.floor(health.checkedAt.getTime() / 1000);
+  const { title, description } = publicHealthCopy(health);
+  return new EmbedBuilder()
+    .setTitle(`${LEVEL_EMOJI[health.level]} ${title}`)
+    .setColor(LEVEL_COLOR[health.level])
+    .setDescription(`${description}\n\nLast checked <t:${checkedAtUnix}:R>`);
 }

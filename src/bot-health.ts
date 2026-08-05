@@ -203,14 +203,56 @@ async function measureDbLatency(): Promise<{ ok: boolean; latencyMs: number | nu
   }
 }
 
+// PURE. checkQueueStalls() flags a queue once its OLDEST job has sat past
+// STALL_THRESHOLD_SECONDS in devops-alarm.ts -- which false-positives on a
+// queue that's merely throttled-but-draining: e.g. snapshot.mmr sitting at
+// 682 completed / 36 queued and visibly shrinking (37 -> 36) tick to tick
+// still has an oldest job old enough to trip that threshold. A queue only
+// counts as GENUINELY stalled for health-level purposes when it is NOT
+// making progress: its queued job count is non-decreasing since the
+// previous tick. previousCounts holds each queue's jobCount as of the last
+// tick; a queue with no prior entry (first time it's ever been reported
+// stalled) is kept -- conservative, matches the pre-existing behavior for a
+// newly-stalled queue.
+export interface QueueStallCandidate {
+  name: string;
+  jobCount: number;
+}
+
+export function filterGenuinelyStalled(
+  candidates: readonly QueueStallCandidate[],
+  previousCounts: ReadonlyMap<string, number>,
+): QueueStallCandidate[] {
+  return candidates.filter((c) => {
+    const prev = previousCounts.get(c.name);
+    return prev === undefined || c.jobCount >= prev;
+  });
+}
+
+// -- Shell: tick-to-tick queued-count memory for filterGenuinelyStalled ---
+
+// name -> jobCount as of the last tick's checkQueueStalls() result.
+// Repopulated wholesale from THIS tick's raw result every call (not just the
+// genuinely-stalled subset), so a queue that drops off the stalled list
+// entirely (recovers) naturally falls out of this map too -- no separate
+// cleanup needed, and a queue that starts stalling again later is treated as
+// newly-seen (conservative, per filterGenuinelyStalled's doc above).
+const previousQueueJobCounts = new Map<string, number>();
+
 // checkQueueStalls() already runs on its own 5min pg-boss schedule
 // (queue.ts) with its own post-cooldown -- calling it again here is a
 // cheap read-only query and shares that same cooldown state, so it never
-// double-posts. If it throws, this degrades gracefully to "no stalls seen".
+// double-posts. Its raw result is further filtered by filterGenuinelyStalled
+// (above) so this health check's "stalled" verdict doesn't false-positive on
+// a queue that's merely throttled-but-draining. If it throws, this degrades
+// gracefully to "no stalls seen".
 async function gatherStalledQueueNames(): Promise<string[]> {
   try {
     const result = await checkQueueStalls();
-    return result.stalled.map((s) => s.name);
+    const genuinelyStalled = filterGenuinelyStalled(result.stalled, previousQueueJobCounts);
+    previousQueueJobCounts.clear();
+    for (const s of result.stalled) previousQueueJobCounts.set(s.name, s.jobCount);
+    return genuinelyStalled.map((s) => s.name);
   } catch (err) {
     console.warn("[bot-health] queue stall check failed:", err);
     return [];

@@ -2,12 +2,14 @@ import { describe, it, expect } from "vitest";
 import {
   computeRestStats,
   deriveHealth,
+  filterGenuinelyStalled,
   GATEWAY_PING_DEGRADED_MS,
   MIN_REST_SAMPLES_FOR_SIGNAL,
   percentile,
   REST_ERROR_RATE_DEGRADED,
   REST_P95_DEGRADED_MS,
   type HealthSampleInputs,
+  type QueueStallCandidate,
   type RestSample,
 } from "./bot-health.js";
 
@@ -230,5 +232,49 @@ describe("computeRestStats", () => {
   it("reports a 100% error rate when every sample failed", () => {
     const all = samples(Array.from({ length: 6 }, (_, i) => [50 + i, false] as [number, boolean]));
     expect(computeRestStats(all).restErrorRate).toBe(1);
+  });
+});
+
+describe("filterGenuinelyStalled", () => {
+  function candidate(name: string, jobCount: number): QueueStallCandidate {
+    return { name, jobCount };
+  }
+
+  it("drops a queue whose queued count DECREASED since the last tick -- it's draining, not stalled", () => {
+    // The real incident this guards against: snapshot.mmr at 37 queued last
+    // tick, 36 this tick -- visibly making progress despite its oldest job
+    // being old enough to trip devops-alarm's 5min threshold.
+    const previous = new Map([["snapshot.mmr", 37]]);
+    const result = filterGenuinelyStalled([candidate("snapshot.mmr", 36)], previous);
+    expect(result).toEqual([]);
+  });
+
+  it("keeps a queue whose queued count is unchanged since the last tick -- genuinely not moving", () => {
+    const previous = new Map([["notify.announce-result", 12]]);
+    const result = filterGenuinelyStalled([candidate("notify.announce-result", 12)], previous);
+    expect(result).toEqual([candidate("notify.announce-result", 12)]);
+  });
+
+  it("keeps a queue whose queued count INCREASED since the last tick -- a genuinely growing backlog", () => {
+    const previous = new Map([["email", 5]]);
+    const result = filterGenuinelyStalled([candidate("email", 9)], previous);
+    expect(result).toEqual([candidate("email", 9)]);
+  });
+
+  it("keeps a queue with no prior tick on record -- conservative on first sight", () => {
+    const result = filterGenuinelyStalled([candidate("brand-new-queue", 3)], new Map());
+    expect(result).toEqual([candidate("brand-new-queue", 3)]);
+  });
+
+  it("evaluates each queue independently against its own previous count", () => {
+    const previous = new Map([
+      ["draining", 40],
+      ["growing", 2],
+    ]);
+    const result = filterGenuinelyStalled(
+      [candidate("draining", 30), candidate("growing", 6)],
+      previous,
+    );
+    expect(result).toEqual([candidate("growing", 6)]);
   });
 });

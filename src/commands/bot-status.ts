@@ -1,29 +1,27 @@
-// /league-bot-status -- admin diagnostic that renders the cached BotHealth
-// snapshot (../bot-health.ts). Read-only: it never re-runs a check, so this
-// command answers instantly no matter how slow Discord/DB currently are.
-// The embed itself is built by ../bot-status-content.ts (buildHealthEmbed),
-// shared with the self-updating #bot-status channel message
-// (channel-refresh.ts's refreshBotStatusMessage) so the two surfaces render
-// identically and can never drift apart.
+// /league-bot-status -- renders the cached BotHealth snapshot (../bot-health.ts).
+// Read-only: it never re-runs a check, so this command answers instantly no
+// matter how slow Discord/DB currently are. Dual audience, same as the
+// #bot-status channel message: admins/owner (per permissions.ts's hasTier)
+// get the full technical embed (buildHealthEmbed); everyone else gets the
+// plain-language, number-free public embed (buildPublicHealthEmbed) -- both
+// built by ../bot-status-content.ts so this command and the channel message
+// can never render two different stories about the same snapshot.
 
 import {
   MessageFlags,
-  PermissionFlagsBits,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
+  type GuildMember,
 } from "discord.js";
 import { getCachedHealth } from "../bot-health.js";
-import { buildHealthEmbed } from "../bot-status-content.js";
+import { buildHealthEmbed, buildPublicHealthEmbed } from "../bot-status-content.js";
+import { hasTier } from "../permissions.js";
 import type { SlashCommand } from "./types.js";
 
 export const botStatus: SlashCommand = {
   data: new SlashCommandBuilder()
     .setName("league-bot-status")
-    .setDescription("Bot health snapshot -- Discord, database, and queue status (admin diagnostic).")
-    // Diagnostic tool, hidden from the player-facing command picker like
-    // /admin and /league -- the bot still just reads a cache, no elevated
-    // action, but there's no player-facing reason to see this.
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator.toString()),
+    .setDescription("Bot health snapshot -- is everything running normally right now?"),
 
   async execute(interaction: ChatInputCommandInteraction) {
     const health = getCachedHealth();
@@ -34,6 +32,10 @@ export const botStatus: SlashCommand = {
       });
       return;
     }
-    await interaction.reply({ embeds: [buildHealthEmbed(health)], flags: MessageFlags.Ephemeral });
+    const member =
+      interaction.member && "roles" in interaction.member ? (interaction.member as GuildMember) : null;
+    const isAdminOrOwner = await hasTier(member, interaction.user.id, "ADMIN");
+    const embed = isAdminOrOwner ? buildHealthEmbed(health) : buildPublicHealthEmbed(health);
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
   },
 };

@@ -12,6 +12,7 @@ import {
   buildThreadRecoveredNotice,
   classifyTransition,
   DEGRADED_BANNER_LINE,
+  isPlayerImpacting,
   ownerAllowedMentions,
   type HealthTransition,
 } from "./health-broadcast.js";
@@ -50,6 +51,45 @@ describe("classifyTransition", () => {
     ["down", "down", "none"],
   ] as [HealthLevel, HealthLevel, HealthTransition][])("%s -> %s is '%s'", (prev, next, expected) => {
     expect(classifyTransition(prev, next)).toBe(expected);
+  });
+});
+
+describe("isPlayerImpacting", () => {
+  it("is true when the database is unreachable", () => {
+    expect(isPlayerImpacting(health({ db: { latencyMs: null, ok: false } }))).toBe(true);
+  });
+
+  it("is true when Discord's own level is degraded (REST/gateway slow or erroring)", () => {
+    expect(
+      isPlayerImpacting(
+        health({ discord: { gatewayPingMs: 40, restP95Ms: 2500, restErrorRate: 0, level: "degraded" } }),
+      ),
+    ).toBe(true);
+  });
+
+  it("is false when only a queue is stalled -- db and Discord are both fine", () => {
+    expect(
+      isPlayerImpacting(
+        health({
+          discord: { gatewayPingMs: 40, restP95Ms: 150, restErrorRate: 0, level: "ok" },
+          db: { latencyMs: 5, ok: true },
+          queue: { stalled: ["snapshot.mmr"], ok: false },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("is false when everything is ok", () => {
+    expect(
+      isPlayerImpacting(
+        health({
+          level: "ok",
+          discord: { gatewayPingMs: 40, restP95Ms: 150, restErrorRate: 0, level: "ok" },
+          db: { latencyMs: 5, ok: true },
+          queue: { stalled: [], ok: true },
+        }),
+      ),
+    ).toBe(false);
   });
 });
 
@@ -106,23 +146,60 @@ describe("buildDegradedAlertContent", () => {
     expect(content).toContain("n/a");
     expect(content).toContain("none");
   });
+
+  it("says players were shown a banner + thread notices when the incident is player-impacting", () => {
+    const content = buildDegradedAlertContent(
+      health({ discord: { gatewayPingMs: 40, restP95Ms: 2500, restErrorRate: 0, level: "degraded" } }),
+      undefined,
+    );
+    expect(content).toContain("Players have been shown a heads-up banner");
+  });
+
+  it("says the incident is internal-only when it's just a stalled queue -- Discord/db both fine", () => {
+    const content = buildDegradedAlertContent(
+      health({
+        discord: { gatewayPingMs: 40, restP95Ms: 150, restErrorRate: 0, level: "ok" },
+        db: { latencyMs: 5, ok: true },
+        queue: { stalled: ["snapshot.mmr"], ok: false },
+        notes: ["Stalled queue(s): snapshot.mmr."],
+      }),
+      undefined,
+    );
+    expect(content).toContain("Internal only");
+    expect(content).not.toContain("Players have been shown");
+  });
 });
 
 describe("buildRecoveredAlertContent", () => {
   it("starts with the owner mention when configured", () => {
-    const content = buildRecoveredAlertContent(health({ level: "ok" }), "999");
+    const content = buildRecoveredAlertContent(health({ level: "ok" }), "999", true);
     expect(content.startsWith("<@999>")).toBe(true);
   });
 
   it("has no mention at all when no owner id is configured", () => {
-    const content = buildRecoveredAlertContent(health({ level: "ok" }), undefined);
+    const content = buildRecoveredAlertContent(health({ level: "ok" }), undefined, true);
     expect(content).not.toContain("<@");
   });
 
   it("reports the recovered level and the checkedAt timestamp", () => {
-    const content = buildRecoveredAlertContent(health({ level: "ok", checkedAt: new Date("2026-08-04T13:30:00.000Z") }), undefined);
+    const content = buildRecoveredAlertContent(
+      health({ level: "ok", checkedAt: new Date("2026-08-04T13:30:00.000Z") }),
+      undefined,
+      true,
+    );
     expect(content).toContain("`ok`");
     expect(content).toContain("2026-08-04T13:30:00.000Z");
+  });
+
+  it("says player-facing notices were cleared when the incident was player-impacting", () => {
+    const content = buildRecoveredAlertContent(health({ level: "ok" }), undefined, true);
+    expect(content).toContain("Player-facing notices (banner + thread notes) have been cleared.");
+  });
+
+  it("says internal-only, nothing to clear when the incident was never player-impacting", () => {
+    const content = buildRecoveredAlertContent(health({ level: "ok" }), undefined, false);
+    expect(content).toContain("Internal only");
+    expect(content).not.toContain("have been cleared");
   });
 });
 

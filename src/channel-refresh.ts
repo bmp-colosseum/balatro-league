@@ -9,7 +9,7 @@ import { composeLeagueInfoContent } from "./league-info-content.js";
 import { composeChallengeInfoContent } from "./challenge-info-content.js";
 import { composeStandingsEmbeds } from "./standings-channel-content.js";
 import type { BotHealth } from "./bot-health.js"; // type-only -- avoids a runtime import cycle with bot-health.ts
-import { buildHealthEmbed, buildBotStatusRenderKey } from "./bot-status-content.js";
+import { buildPublicHealthEmbed, buildBotStatusRenderKey } from "./bot-status-content.js";
 
 // Rebuild + edit the pinned #league-info message. Idempotent — pulls
 // fresh DB state via composeLeagueInfoContent every invocation, so
@@ -212,15 +212,20 @@ export async function refreshStandingsMessages(): Promise<void> {
 // duplicates and heals a lost pin. No-ops cleanly when BotStatusChannelId is
 // unset or health is null (no snapshot cached yet, e.g. right after boot).
 //
+// PLAYER-FACING: this channel is read by everyone, so it always renders
+// bot-status-content.ts's buildPublicHealthEmbed (plain language, no
+// ms/percentage numbers, no queue names) -- never the admin buildHealthEmbed.
+//
 // THROTTLE: bot-health.ts's tick calls this every 60s, but editing a Discord
 // message on every tick (1440x/day) would be wasteful -- and actively
 // harmful during exactly the kind of incident this message reports (Discord
 // REST slowness), since editing more only adds load. buildBotStatusRenderKey
-// summarizes the MATERIAL parts of the snapshot (levels + coarse-rounded
-// numbers); this function only performs the edit when that key changes
-// since the last actual edit, mirroring bot-health.ts's lastPresenceKey
-// pattern. The embed's own "Last checked <t:...:R>" timestamp keeps the
-// message looking fresh between edits without needing one, client-side.
+// summarizes the MATERIAL parts of the snapshot -- i.e. exactly what the
+// PUBLIC embed renders (level + player-impact for a degraded snapshot) --
+// this function only performs the edit when that key changes since the last
+// actual edit, mirroring bot-health.ts's lastPresenceKey pattern. The
+// embed's own "Last checked <t:...:R>" timestamp keeps the message looking
+// fresh between edits without needing one, client-side.
 // BOT_STATUS_MAX_STALENESS_MS is a backstop: if nothing material has
 // changed for that long, force an edit anyway so the message can't look
 // frozen forever on a very steady system.
@@ -249,12 +254,12 @@ export async function refreshBotStatusMessage(health: BotHealth | null): Promise
     console.warn(`[bot-status.refresh] channel ${channelId} not found or unusable`);
     return;
   }
-  const embed = buildHealthEmbed(health);
+  const embed = buildPublicHealthEmbed(health);
   const botId = client.user?.id;
   type MiniMsg = {
     id: string;
     author: { id: string };
-    edit: (o: { embeds: [ReturnType<typeof buildHealthEmbed>] }) => Promise<unknown>;
+    edit: (o: { embeds: [ReturnType<typeof buildPublicHealthEmbed>] }) => Promise<unknown>;
     pin: () => Promise<unknown>;
   };
   const messages = channel as {
@@ -262,7 +267,7 @@ export async function refreshBotStatusMessage(health: BotHealth | null): Promise
       fetch: (id: string) => Promise<MiniMsg>;
       fetchPinned: () => Promise<{ values: () => Iterable<MiniMsg> }>;
     };
-    send: (o: { embeds: [ReturnType<typeof buildHealthEmbed>] }) => Promise<MiniMsg>;
+    send: (o: { embeds: [ReturnType<typeof buildPublicHealthEmbed>] }) => Promise<MiniMsg>;
   };
   try {
     // 1. Edit the remembered message if it still exists -- keyed on a stored

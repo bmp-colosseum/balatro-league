@@ -1,7 +1,12 @@
 // Degradation broadcast layer for bot-health.ts. When the health monitor
-// transitions ok -> degraded/down, tell the owner (devops alert) + players
-// (a banner on the pinned #league-matches message + a heads-up in every live
-// match thread). When it recovers back to ok, undo all of it.
+// transitions ok -> degraded/down, tell the owner (devops alert, always) and,
+// when the incident is PLAYER-IMPACTING (isPlayerImpacting -- db down or
+// Discord itself slow/erroring), players too (a banner on the pinned
+// #league-matches message + a heads-up in every live match thread). An
+// internal-only incident (e.g. a backlogged pg-boss queue with Discord/db
+// fine) stays devops-only -- players were never shown anything, so there's
+// nothing to alarm them with. When it recovers back to ok, undo whatever was
+// actually applied.
 //
 // EDGE-TRIGGERED ONLY: the tick that calls onHealthTransition runs every
 // 60s, but a broadcast only fires on the two transition edges (see
@@ -62,10 +67,28 @@ function fmtPct(v: number | null): string {
   return v === null ? "n/a" : `${(v * 100).toFixed(1)}%`;
 }
 
+// PURE. True when a player would actually FEEL something is wrong -- the
+// database being unreachable (matches/reporting/commands all break) or
+// Discord's own gateway/REST being slow or erroring (buttons/results lag or
+// look stuck). A queue backlog ALONE is invisible to players: results still
+// land, just slightly delayed by a background worker draining its list --
+// so it does NOT count on its own. onHealthTransition below uses this to
+// decide whether an incident gets the banner + thread notices, or stays a
+// devops-only heads-up; bot-status-content.ts's buildPublicHealthEmbed uses
+// the same function so the player-facing status message can never claim a
+// different story than what actually got broadcast to players.
+export function isPlayerImpacting(health: BotHealth): boolean {
+  return health.db.ok === false || health.discord.level !== "ok";
+}
+
 // PURE. #devops content for the "we just went degraded/down" post. Starts
 // with the owner mention (when configured) so it actually pings per
 // ownerAllowedMentions above; when unset, the alert still posts, just
-// without a mention.
+// without a mention. The closing line only claims a player-facing banner/
+// thread notices were shown when isPlayerImpacting(health) says they
+// actually were (see onHealthTransition, which gates the real actions on
+// the same rule) -- an internal-only incident (e.g. a backlogged queue)
+// says so plainly instead.
 export function buildDegradedAlertContent(health: BotHealth, ownerDiscordId: string | undefined): string {
   const mention = ownerDiscordId ? `<@${ownerDiscordId}> ` : "";
   const lines = [
@@ -77,18 +100,30 @@ export function buildDegradedAlertContent(health: BotHealth, ownerDiscordId: str
     `DB latency: ${fmtMs(health.db.latencyMs)}`,
     `Stalled queue(s): ${health.queue.stalled.length > 0 ? health.queue.stalled.join(", ") : "none"}`,
     "",
-    "Players have been shown a heads-up banner on #league-matches and a notice in their live match threads.",
+    isPlayerImpacting(health)
+      ? "Players have been shown a heads-up banner on #league-matches and a notice in their live match threads."
+      : "Internal only -- no player-facing notices sent. Matches are unaffected.",
   ];
   return lines.join("\n");
 }
 
-// PURE. #devops content for the "back to ok" post.
-export function buildRecoveredAlertContent(health: BotHealth, ownerDiscordId: string | undefined): string {
+// PURE. #devops content for the "back to ok" post. `playerImpacting` is the
+// CALLER's job to supply (see sendDevopsRecoveredAlert) -- by the time this
+// runs, `health` itself is already back to `ok`, so isPlayerImpacting(health)
+// would always read false; the caller passes what was actually true DURING
+// the incident (health-broadcast.ts's sticky playerNoticesApplied tracking).
+export function buildRecoveredAlertContent(
+  health: BotHealth,
+  ownerDiscordId: string | undefined,
+  playerImpacting: boolean,
+): string {
   const mention = ownerDiscordId ? `<@${ownerDiscordId}> ` : "";
   return [
     `${mention}:white_check_mark: **Bot health has recovered -- back to \`ok\`.**`,
     `Checked at ${health.checkedAt.toISOString()}.`,
-    "Player-facing notices (banner + thread notes) have been cleared.",
+    playerImpacting
+      ? "Player-facing notices (banner + thread notes) have been cleared."
+      : "Internal only -- no player-facing notices were sent, so there was nothing to clear.",
   ].join("\n");
 }
 
@@ -126,6 +161,18 @@ const THREAD_POST_DELAY_MS = 250;
 // can't double-post to the same thread.
 let notifiedThreadSessionIds = new Set<string>();
 let currentIncidentId: string | null = null;
+// Sticky per-incident flag: true once ANY tick during the current incident
+// was player-impacting (isPlayerImpacting), updated every tick in
+// onHealthTransition -- not just on the transition edges. That's what makes
+// it restart-safe: even if the process restarts mid-incident (losing the
+// in-memory value), the very next tick re-derives it from the LIVE snapshot
+// before recovery can ever be classified, so a real player-facing banner can
+// never end up permanently un-clearable. Gates the recovery-side clear
+// below; only resets to false once that clear has actually run. The clear
+// calls themselves (setLeagueMatchesBanner/broadcastRecoveredToThreads) are
+// also cheap, idempotent no-ops when there's nothing to undo, so being wrong
+// in either direction here costs nothing.
+let playerNoticesApplied = false;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -210,9 +257,9 @@ async function sendDevopsDegradedAlert(health: BotHealth): Promise<void> {
   }
 }
 
-async function sendDevopsRecoveredAlert(health: BotHealth): Promise<void> {
+async function sendDevopsRecoveredAlert(health: BotHealth, playerImpacting: boolean): Promise<void> {
   try {
-    const content = buildRecoveredAlertContent(health, env.LEAGUE_OWNER_DISCORD_ID);
+    const content = buildRecoveredAlertContent(health, env.LEAGUE_OWNER_DISCORD_ID, playerImpacting);
     await postDevopsAlert(content, false, ownerAllowedMentions(env.LEAGUE_OWNER_DISCORD_ID));
   } catch (err) {
     console.warn("[health-broadcast] devops recovered alert failed:", err);
@@ -248,29 +295,48 @@ export async function onHealthTransition(
   next: HealthLevel,
   health: BotHealth,
 ): Promise<void> {
+  // Track player-impact for the CURRENT incident on every tick this function
+  // is called (bot-health.ts's runHealthTick calls it every 60s regardless
+  // of transition) -- see playerNoticesApplied's comment for why this must
+  // happen before the "none" early-return below, not only on the "degraded"
+  // edge.
+  if (next !== "ok" && isPlayerImpacting(health)) {
+    playerNoticesApplied = true;
+  }
+
   const transition = classifyTransition(prev, next);
   if (transition === "none") return;
 
   if (transition === "degraded") {
+    const playerImpacting = isPlayerImpacting(health);
     currentIncidentId = health.checkedAt.toISOString();
     notifiedThreadSessionIds.clear();
-    console.warn(`[health-broadcast] incident ${currentIncidentId} started (level=${next})`);
-    const results = await Promise.allSettled([
-      sendDevopsDegradedAlert(health),
-      setLeagueMatchesBanner(client, DEGRADED_BANNER_LINE),
-      broadcastDegradedToThreads(client),
-    ]);
+    console.warn(
+      `[health-broadcast] incident ${currentIncidentId} started (level=${next}, playerImpacting=${playerImpacting})`,
+    );
+    const tasks: Promise<void>[] = [sendDevopsDegradedAlert(health)];
+    // Banner + thread notices only for incidents a player would actually
+    // notice -- a stalled queue alone stays devops-only.
+    if (playerImpacting) {
+      tasks.push(setLeagueMatchesBanner(client, DEGRADED_BANNER_LINE), broadcastDegradedToThreads(client));
+    }
+    const results = await Promise.allSettled(tasks);
     logSettledFailures("degraded broadcast", results);
     return;
   }
 
-  // "recovered"
-  const results = await Promise.allSettled([
-    sendDevopsRecoveredAlert(health),
-    setLeagueMatchesBanner(client, undefined),
-    broadcastRecoveredToThreads(client),
-  ]);
+  // "recovered" -- devops always hears about it. The player-facing clear
+  // (banner + thread all-clears) only runs when notices were actually
+  // applied at some point during this incident (playerNoticesApplied).
+  const tasks: Promise<void>[] = [sendDevopsRecoveredAlert(health, playerNoticesApplied)];
+  if (playerNoticesApplied) {
+    tasks.push(setLeagueMatchesBanner(client, undefined), broadcastRecoveredToThreads(client));
+  }
+  const results = await Promise.allSettled(tasks);
   logSettledFailures("recovered broadcast", results);
-  console.warn(`[health-broadcast] incident ${currentIncidentId ?? "(unknown)"} recovered`);
+  console.warn(
+    `[health-broadcast] incident ${currentIncidentId ?? "(unknown)"} recovered (playerNoticesApplied=${playerNoticesApplied})`,
+  );
   currentIncidentId = null;
+  playerNoticesApplied = false;
 }
