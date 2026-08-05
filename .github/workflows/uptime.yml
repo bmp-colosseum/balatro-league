@@ -75,13 +75,16 @@ jobs:
           MENTION=""
           if [ -n "$OWNER" ]; then MENTION="<@${OWNER}> "; fi
           RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          # Build the message line by line. Every continuation stays indented --
+          # a line at column 0 would terminate this YAML literal block and make
+          # the whole workflow file unparseable (which is exactly what happened
+          # the first time).
+          MSG="${MENTION}:rotating_light: **Site unreachable from outside** -- no response after 3 attempts:${FAILED}"
+          MSG="${MSG}"$'\n'"This check runs on GitHub, not the box, so it still works when the host is off the network. The bot's own status cannot report this."
+          MSG="${MSG}"$'\n'"${RUN_URL}"
           # allowed_mentions restricted to the owner so this can never mass-ping.
-          jq -n --arg content "${MENTION}:rotating_light: **Site unreachable from outside** -- no response after 3 attempts:${FAILED}
-
-This check runs on GitHub, not the box, so it still works when the host is off the network. The bot's own status cannot report this.
-${RUN_URL}" \
-                --arg owner "$OWNER" \
-                '{content: $content, allowed_mentions: {parse: [], users: (if $owner == "" then [] else [$owner] end)}}' \
+          jq -n --arg content "$MSG" --arg owner "$OWNER" \
+            '{content: $content, allowed_mentions: {parse: [], users: (if $owner == "" then [] else [$owner] end)}}' \
             | curl -s -H "Content-Type: application/json" -X POST -d @- "$WEBHOOK" >/dev/null
           echo "alert sent"
 
