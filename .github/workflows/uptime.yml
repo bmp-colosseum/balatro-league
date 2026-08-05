@@ -1,0 +1,90 @@
+name: uptime
+
+# EXTERNAL watchdog. The bot's own health check runs ON the box, so it cannot
+# report that the box is unreachable -- exactly what happened during the
+# 2026-08-04 Netcup network outage (host up, every service fine, simply off the
+# network). This job answers "is it reachable from the outside?".
+#
+# runs-on MUST stay ubuntu-latest (a GitHub-hosted runner). The self-hosted
+# runner lives on the same box, so it would be down whenever this matters.
+#
+# Alerts go to a Discord WEBHOOK, not the bot -- the bot is the thing that may
+# be dead. Set the repo secret STATUS_WEBHOOK_URL (Discord: channel -> Edit
+# Channel -> Integrations -> Webhooks). Optionally set OWNER_DISCORD_ID to be
+# @-mentioned. With no secret set the job still runs and fails loudly in the
+# Actions log; it just can't post to Discord.
+
+on:
+  schedule:
+    # Every 5 minutes. GitHub's scheduler drifts under load -- treat this as
+    # "roughly every 5-10 min", which is fine for spotting a real outage.
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+# A slow/hung check must never pile up runs on top of each other.
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe public endpoints
+        id: probe
+        shell: bash
+        run: |
+          # Each target is checked 3 times, 20s apart. A single failed curl is
+          # usually a transient blip; requiring all three to fail is what keeps
+          # this from crying wolf every time a TLS handshake hiccups.
+          TARGETS="https://www.balatroleague.com/ https://balatroleague.com/"
+          FAILED=""
+          for url in $TARGETS; do
+            ok=0
+            for attempt in 1 2 3; do
+              code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 -L "$url" || echo "000")
+              echo "attempt $attempt: $url -> $code"
+              # Any 2xx/3xx means it answered. 000 = no response at all.
+              if [ "$code" != "000" ] && [ "$code" -lt 400 ]; then ok=1; break; fi
+              [ "$attempt" -lt 3 ] && sleep 20
+            done
+            if [ "$ok" -ne 1 ]; then FAILED="$FAILED $url"; fi
+          done
+          if [ -n "$FAILED" ]; then
+            echo "down=true" >> "$GITHUB_OUTPUT"
+            echo "failed=$FAILED" >> "$GITHUB_OUTPUT"
+            echo "::error::unreachable:$FAILED"
+          else
+            echo "down=false" >> "$GITHUB_OUTPUT"
+            echo "all targets reachable"
+          fi
+
+      - name: Alert Discord
+        if: steps.probe.outputs.down == 'true'
+        shell: bash
+        env:
+          WEBHOOK: ${{ secrets.STATUS_WEBHOOK_URL }}
+          OWNER: ${{ secrets.OWNER_DISCORD_ID }}
+          FAILED: ${{ steps.probe.outputs.failed }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "STATUS_WEBHOOK_URL not set -- cannot notify Discord."
+            exit 1
+          fi
+          MENTION=""
+          if [ -n "$OWNER" ]; then MENTION="<@${OWNER}> "; fi
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          # allowed_mentions restricted to the owner so this can never mass-ping.
+          jq -n --arg content "${MENTION}:rotating_light: **Site unreachable from outside** -- no response after 3 attempts:${FAILED}
+
+This check runs on GitHub, not the box, so it still works when the host is off the network. The bot's own status cannot report this.
+${RUN_URL}" \
+                --arg owner "$OWNER" \
+                '{content: $content, allowed_mentions: {parse: [], users: (if $owner == "" then [] else [$owner] end)}}' \
+            | curl -s -H "Content-Type: application/json" -X POST -d @- "$WEBHOOK" >/dev/null
+          echo "alert sent"
+
+      - name: Fail the run when down
+        if: steps.probe.outputs.down == 'true'
+        run: exit 1
