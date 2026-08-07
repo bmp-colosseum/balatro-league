@@ -20,7 +20,7 @@
 // edit for a message players read.
 
 import { EmbedBuilder } from "discord.js";
-import type { BotHealth, HealthLevel } from "./bot-health.js";
+import { describeAttribution, type BotHealth, type HealthLevel } from "./bot-health.js";
 import { isPlayerImpacting } from "./health-broadcast.js";
 
 const LEVEL_COLOR: Record<HealthLevel, number> = {
@@ -49,6 +49,15 @@ function fmtRate(rate: number | null): string {
 // fresh between edits without the bot needing to touch it every tick.
 export function buildHealthEmbed(health: BotHealth): EmbedBuilder {
   const checkedAtUnix = Math.floor(health.checkedAt.getTime() / 1000);
+  const stalledLowPriority = health.queue.stalledLowPriority ?? [];
+  const queueLines = [
+    health.queue.stalled.length
+      ? `${LEVEL_EMOJI.degraded} stalled: ${health.queue.stalled.join(", ")}`
+      : `${LEVEL_EMOJI.ok} ok`,
+  ];
+  if (stalledLowPriority.length) {
+    queueLines.push(`${LEVEL_EMOJI.ok} low-priority stalled (not alerted): ${stalledLowPriority.join(", ")}`);
+  }
   return new EmbedBuilder()
     .setTitle(`${LEVEL_EMOJI[health.level]} Bot health -- ${health.level.toUpperCase()}`)
     .setColor(LEVEL_COLOR[health.level])
@@ -68,9 +77,11 @@ export function buildHealthEmbed(health: BotHealth): EmbedBuilder {
       },
       {
         name: "Queue",
-        value: health.queue.stalled.length
-          ? `${LEVEL_EMOJI.degraded} stalled: ${health.queue.stalled.join(", ")}`
-          : `${LEVEL_EMOJI.ok} ok`,
+        value: queueLines.join("\n"),
+      },
+      {
+        name: "Likely cause",
+        value: describeAttribution(health.attribution, health.discordStatus),
       },
       {
         name: "Notes",

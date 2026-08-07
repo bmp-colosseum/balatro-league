@@ -1,16 +1,26 @@
 // Continuous health monitor for the bot. A 60s tick gathers plain
 // measurements (DB latency, Discord gateway ping, a rolling window of REST
-// call timings, pg-boss queue stalls), hands them to the pure deriveHealth()
+// call timings, pg-boss queue stalls, an at-most-once-per-5min poll of
+// Discord's own status page), hands them to the pure deriveHealth()
 // decision function, caches the resulting snapshot in memory, and reflects
 // it in the bot's Discord presence. /league-bot-status (commands/bot-status.ts)
 // reads ONLY the cache via getCachedHealth() -- it never re-runs checks, so
 // the command is instant no matter how slow the underlying systems are.
 //
-// Pure/shell split: deriveHealth() and computeRestStats()/percentile() are
-// the only places a raw number becomes a verdict -- unit-tested with zero
-// DB/Discord I/O. Everything else here (the tick, the presence update, the
-// REST sample seam) is the thin imperative shell that gathers data and
-// hands it to the pure core.
+// Two things beyond raw ok/degraded/down live here:
+//   - ALERT_EXEMPT_QUEUES -- low-priority background queues (snapshot.mmr)
+//     whose stalls are visible in the snapshot but never degrade `level`
+//     or page the owner. See isAlertExemptQueue.
+//   - attribution -- deriveAttribution's best guess at WHOSE fault a
+//     Discord-side degradation is (Discord itself, confirmed via
+//     discord-status.ts's corroboration, vs. our own network egress).
+//
+// Pure/shell split: deriveHealth(), deriveAttribution(), describeAttribution(),
+// isAlertExemptQueue(), and computeRestStats()/percentile() are the only
+// places a raw measurement becomes a verdict -- unit-tested with zero
+// DB/Discord/network I/O. Everything else here (the tick, the presence
+// update, the REST sample seam) is the thin imperative shell that gathers
+// data and hands it to the pure core.
 
 import { ActivityType, type Client } from "discord.js";
 import { prisma } from "./db.js";
@@ -19,8 +29,21 @@ import { activePublicSeason } from "./active-season.js";
 import { formatSeasonLabel } from "./format-season.js";
 import { onHealthTransition } from "./health-broadcast.js";
 import { refreshBotStatusMessage } from "./channel-refresh.js"; // takes the snapshot by value -- no import cycle
+import { fetchDiscordStatus } from "./discord-status.js";
 
 export type HealthLevel = "ok" | "degraded" | "down";
+
+// PURE data shape -- discord-status.ts (the shell that actually polls
+// discordstatus.com) imports this type back, never the reverse at runtime.
+export interface DiscordStatusInfo {
+  indicator: string;
+  description: string;
+}
+
+// Who's most likely at fault for the current `level`, in plain terms. See
+// deriveAttribution for the decision rules and describeAttribution for the
+// admin-facing text. ADMIN-ONLY -- never surfaced on the public embed.
+export type Attribution = "discord" | "network" | "database" | "queue" | "none" | "unknown";
 
 export interface BotHealth {
   level: HealthLevel;
@@ -32,8 +55,18 @@ export interface BotHealth {
     level: HealthLevel;
   };
   db: { latencyMs: number | null; ok: boolean };
-  queue: { stalled: string[]; ok: boolean };
+  // `stalled` is genuinely-stalled queues that are NOT alert-exempt -- these
+  // are what drive `level`/notes/the devops alert. `stalledLowPriority` is
+  // the alert-exempt subset (currently just snapshot.mmr): still reported
+  // for discoverability, never alerted on. Optional only so a hand-built
+  // BotHealth (tests, future call sites) doesn't have to spell out an empty
+  // array; deriveHealth always sets it explicitly.
+  queue: { stalled: string[]; stalledLowPriority?: string[]; ok: boolean };
   notes: string[];
+  // External corroboration from discordstatus.com (discord-status.ts), or
+  // null when it couldn't be reached / hasn't been polled yet ("unknown").
+  discordStatus: DiscordStatusInfo | null;
+  attribution: Attribution;
 }
 
 // -- Thresholds ------------------------------------------------------------
@@ -48,6 +81,25 @@ export const GATEWAY_PING_DEGRADED_MS = 1000;
 // reported as "insufficient data" rather than a number computed from 1-2
 // calls (which would be noise, not signal).
 export const MIN_REST_SAMPLES_FOR_SIGNAL = 5;
+
+// -- Alert-exempt queues ----------------------------------------------------
+// Queues in here are low-priority background work: never player-impacting,
+// and the owner does not want to be paged about them. Currently just
+// snapshot.mmr (a background balatromp.com stats refresh -- see queue.ts).
+// A stall in one of these queues stays fully visible in the BotHealth
+// snapshot (BotHealth.queue.stalledLowPriority, below) so a genuinely
+// broken refresh is still discoverable in the admin embed -- it just never
+// flips `level` to "degraded" and never fires the devops alert. Add a queue
+// name here ONLY when it's truly background/non-player-facing; everything
+// else should keep alerting.
+export const ALERT_EXEMPT_QUEUES: ReadonlySet<string> = new Set(["snapshot.mmr"]);
+
+// PURE. The explicit exemption rule ALERT_EXEMPT_QUEUES documents above --
+// pulled into its own function so the rule has one obvious place to read
+// and test, instead of an inline `.has()` scattered through deriveHealth.
+export function isAlertExemptQueue(queueName: string): boolean {
+  return ALERT_EXEMPT_QUEUES.has(queueName);
+}
 
 // -- Rolling REST window (pure aggregation, impure storage) ---------------
 
@@ -96,7 +148,14 @@ export function computeRestStats(samples: readonly RestSample[]): RestStats {
 export interface HealthSampleInputs {
   db: { ok: boolean; latencyMs: number | null };
   discord: { gatewayPingMs: number | null } & RestStats;
+  // Every GENUINELY stalled queue (already passed through
+  // filterGenuinelyStalled in the shell) -- both alert-exempt and not.
+  // deriveHealth is what splits them via isAlertExemptQueue.
   queue: { stalled: string[] };
+  // discordstatus.com's current indicator, or null when unknown/unreachable
+  // (see discord-status.ts). Only consulted when discordLevel !== "ok" --
+  // see deriveAttribution.
+  discordStatus: DiscordStatusInfo | null;
 }
 
 // PURE. Maps raw measurements -> a BotHealth verdict. Rules (in priority
@@ -106,11 +165,16 @@ export interface HealthSampleInputs {
 //   2. Discord REST p95 > REST_P95_DEGRADED_MS, OR REST error rate >
 //      REST_ERROR_RATE_DEGRADED, OR gateway ping > GATEWAY_PING_DEGRADED_MS
 //      -> "degraded", with a note naming Discord specifically.
-//   3. any stalled queue                           -> "degraded".
+//   3. any NON-exempt stalled queue (isAlertExemptQueue false)   -> "degraded".
+//      An alert-exempt queue (ALERT_EXEMPT_QUEUES) stalling alone never
+//      moves `level` -- it's still reported via queue.stalledLowPriority.
 //   4. otherwise                                   -> "ok".
 // REST p95/error-rate are trusted only once sampleCount >=
 // MIN_REST_SAMPLES_FOR_SIGNAL (computeRestStats already nulls them out
 // below that, and an "insufficient data" note is added here).
+// attribution (see deriveAttribution) is derived from the SAME inputs after
+// `level`/`discordLevel`/the non-exempt stall list are known, so it can
+// never disagree with what `level` actually says.
 export function deriveHealth(inputs: HealthSampleInputs, checkedAt: Date): BotHealth {
   const notes: string[] = [];
   const { gatewayPingMs, restP95Ms, restErrorRate, sampleCount } = inputs.discord;
@@ -135,9 +199,11 @@ export function deriveHealth(inputs: HealthSampleInputs, checkedAt: Date): BotHe
     notes.push(`Discord gateway ping ${Math.round(gatewayPingMs)}ms (over ${GATEWAY_PING_DEGRADED_MS}ms).`);
   }
 
-  const queueOk = inputs.queue.stalled.length === 0;
+  const nonExemptStalled = inputs.queue.stalled.filter((name) => !isAlertExemptQueue(name));
+  const exemptStalled = inputs.queue.stalled.filter((name) => isAlertExemptQueue(name));
+  const queueOk = nonExemptStalled.length === 0;
   if (!queueOk) {
-    notes.push(`Stalled queue(s): ${inputs.queue.stalled.join(", ")}.`);
+    notes.push(`Stalled queue(s): ${nonExemptStalled.join(", ")}.`);
   }
 
   let level: HealthLevel;
@@ -152,14 +218,78 @@ export function deriveHealth(inputs: HealthSampleInputs, checkedAt: Date): BotHe
 
   if (notes.length === 0) notes.push("All systems normal.");
 
+  const attribution = deriveAttribution({
+    db: { ok: inputs.db.ok },
+    discord: { level: discordLevel },
+    queue: { stalled: nonExemptStalled },
+    discordStatus: inputs.discordStatus,
+  });
+
   return {
     level,
     checkedAt,
     discord: { gatewayPingMs, restP95Ms, restErrorRate, level: discordLevel },
     db: { latencyMs: inputs.db.latencyMs, ok: inputs.db.ok },
-    queue: { stalled: [...inputs.queue.stalled], ok: queueOk },
+    queue: { stalled: nonExemptStalled, stalledLowPriority: exemptStalled, ok: queueOk },
     notes,
+    discordStatus: inputs.discordStatus,
+    attribution,
   };
+}
+
+// -- Attribution (pure) ------------------------------------------------------
+
+export interface AttributionInputs {
+  db: { ok: boolean };
+  discord: { level: HealthLevel };
+  // Non-exempt stalled queue names ONLY (the same list that drives `level`)
+  // -- an alert-exempt-only stall must never move attribution to "queue".
+  queue: { stalled: string[] };
+  discordStatus: DiscordStatusInfo | null;
+}
+
+// PURE. Best-guess "whose fault is this" for the admin surfaces (never the
+// public embed). Priority mirrors deriveHealth's own level priority so the
+// two can never tell a different story:
+//   1. db not ok                                            -> "database"
+//   2. discord.level !== "ok" AND discordStatus reports a
+//      real incident (indicator !== "none")                 -> "discord"
+//   3. discord.level !== "ok" AND discordStatus says
+//      operational (indicator === "none")                    -> "network"
+//      (their status page disagrees with what we're seeing --
+//      most likely OUR egress, not Discord itself)
+//   4. discord.level !== "ok" AND discordStatus is null
+//      (unreachable / never polled)                          -> "unknown"
+//   5. only non-exempt queues stalled (db/discord both fine)  -> "queue"
+//   6. otherwise                                              -> "none"
+export function deriveAttribution(inputs: AttributionInputs): Attribution {
+  if (!inputs.db.ok) return "database";
+  if (inputs.discord.level !== "ok") {
+    if (inputs.discordStatus === null) return "unknown";
+    return inputs.discordStatus.indicator !== "none" ? "discord" : "network";
+  }
+  if (inputs.queue.stalled.length > 0) return "queue";
+  return "none";
+}
+
+// PURE. Plain-language "likely cause" line for ADMIN surfaces ONLY --
+// health-broadcast.ts's devops alert and bot-status-content.ts's
+// buildHealthEmbed. Never call this from buildPublicHealthEmbed.
+export function describeAttribution(attribution: Attribution, discordStatus: DiscordStatusInfo | null): string {
+  switch (attribution) {
+    case "database":
+      return "Our database is unreachable.";
+    case "discord":
+      return `Discord-side incident (confirmed by discordstatus.com)${discordStatus ? ` -- ${discordStatus.description}.` : "."}`;
+    case "network":
+      return "Discord reports normal -- likely our network egress, not Discord.";
+    case "unknown":
+      return "Discord looks degraded, but discordstatus.com couldn't be reached to confirm either way.";
+    case "queue":
+      return "A background queue is stalled (not player-impacting).";
+    case "none":
+      return "No specific cause -- systems normal.";
+  }
 }
 
 // -- Shell: rolling window storage + the seam rate-limit-logger.ts feeds --
@@ -300,12 +430,20 @@ async function updatePresence(client: Client, health: BotHealth): Promise<void> 
 }
 
 async function runHealthTick(client: Client): Promise<void> {
-  const [db, stalled] = await Promise.all([measureDbLatency(), gatherStalledQueueNames()]);
+  // fetchDiscordStatus is internally cache-throttled (DISCORD_STATUS_CACHE_MS
+  // in discord-status.ts) so calling it every 60s tick is cheap -- most
+  // calls are a cache hit, not a real network request.
+  const [db, stalled, discordStatus] = await Promise.all([
+    measureDbLatency(),
+    gatherStalledQueueNames(),
+    fetchDiscordStatus(),
+  ]);
   const restStats = computeRestStats(restWindow);
   const inputs: HealthSampleInputs = {
     db,
     discord: { gatewayPingMs: gatewayPingMs(client), ...restStats },
     queue: { stalled },
+    discordStatus,
   };
   const prevLevel = previousHealthLevel;
   cachedHealth = deriveHealth(inputs, new Date());

@@ -28,7 +28,7 @@ import { env } from "./env.js";
 import { postDevopsAlert } from "./devops-alert.js";
 import { ensureLeagueMatchesMessage } from "./league-matches-message.js";
 import { logDiscordError } from "./log-discord-error.js";
-import type { BotHealth, HealthLevel } from "./bot-health.js";
+import { describeAttribution, type BotHealth, type HealthLevel } from "./bot-health.js";
 
 // -- Pure core ---------------------------------------------------------------
 
@@ -95,6 +95,8 @@ export function buildDegradedAlertContent(health: BotHealth, ownerDiscordId: str
     `${mention}:rotating_light: **Bot health is now \`${health.level}\`**`,
     "",
     ...health.notes.map((n) => `- ${n}`),
+    "",
+    `Likely cause: ${describeAttribution(health.attribution, health.discordStatus)}`,
     "",
     `Discord: gateway ${fmtMs(health.discord.gatewayPingMs)} | REST p95 ${fmtMs(health.discord.restP95Ms)} | REST error rate ${fmtPct(health.discord.restErrorRate)}`,
     `DB latency: ${fmtMs(health.db.latencyMs)}`,

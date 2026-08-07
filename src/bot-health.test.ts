@@ -1,19 +1,27 @@
 import { describe, it, expect } from "vitest";
 import {
+  ALERT_EXEMPT_QUEUES,
   computeRestStats,
+  deriveAttribution,
   deriveHealth,
+  describeAttribution,
   filterGenuinelyStalled,
   GATEWAY_PING_DEGRADED_MS,
+  isAlertExemptQueue,
   MIN_REST_SAMPLES_FOR_SIGNAL,
   percentile,
   REST_ERROR_RATE_DEGRADED,
   REST_P95_DEGRADED_MS,
+  type AttributionInputs,
+  type DiscordStatusInfo,
   type HealthSampleInputs,
   type QueueStallCandidate,
   type RestSample,
 } from "./bot-health.js";
 
 const now = new Date("2026-08-04T12:00:00.000Z");
+
+const OPERATIONAL_STATUS: DiscordStatusInfo = { indicator: "none", description: "All Systems Operational" };
 
 // A fully-healthy baseline -- individual tests override just the field(s)
 // under test so each case reads as "what changed from healthy".
@@ -22,6 +30,7 @@ function healthyInputs(overrides: Partial<HealthSampleInputs> = {}): HealthSampl
     db: { ok: true, latencyMs: 5 },
     discord: { gatewayPingMs: 40, restP95Ms: 150, restErrorRate: 0, sampleCount: 50 },
     queue: { stalled: [] },
+    discordStatus: OPERATIONAL_STATUS,
     ...overrides,
   };
 }
@@ -32,7 +41,7 @@ describe("deriveHealth", () => {
     expect(health.level).toBe("ok");
     expect(health.discord.level).toBe("ok");
     expect(health.db).toEqual({ ok: true, latencyMs: 5 });
-    expect(health.queue).toEqual({ stalled: [], ok: true });
+    expect(health.queue).toEqual({ stalled: [], stalledLowPriority: [], ok: true });
     expect(health.checkedAt).toBe(now);
     expect(health.notes).toEqual(["All systems normal."]);
   });
@@ -131,7 +140,7 @@ describe("deriveHealth", () => {
   it("degrades on a stalled queue and names it", () => {
     const health = deriveHealth(healthyInputs({ queue: { stalled: ["announce", "notify-dm"] } }), now);
     expect(health.level).toBe("degraded");
-    expect(health.queue).toEqual({ stalled: ["announce", "notify-dm"], ok: false });
+    expect(health.queue).toEqual({ stalled: ["announce", "notify-dm"], stalledLowPriority: [], ok: false });
     expect(health.notes.some((n) => n.includes("announce") && n.includes("notify-dm"))).toBe(true);
   });
 
@@ -276,5 +285,132 @@ describe("filterGenuinelyStalled", () => {
       previous,
     );
     expect(result).toEqual([candidate("growing", 6)]);
+  });
+});
+
+describe("isAlertExemptQueue / ALERT_EXEMPT_QUEUES", () => {
+  it("exempts snapshot.mmr", () => {
+    expect(isAlertExemptQueue("snapshot.mmr")).toBe(true);
+    expect(ALERT_EXEMPT_QUEUES.has("snapshot.mmr")).toBe(true);
+  });
+
+  it("does not exempt an arbitrary player-facing queue", () => {
+    expect(isAlertExemptQueue("notify.announce-result")).toBe(false);
+    expect(isAlertExemptQueue("report.post-pending")).toBe(false);
+  });
+});
+
+describe("deriveHealth: alert-exempt queue stalls", () => {
+  it("an exempt-only stall stays 'ok' and is reported under stalledLowPriority, not stalled", () => {
+    const health = deriveHealth(healthyInputs({ queue: { stalled: ["snapshot.mmr"] } }), now);
+    expect(health.level).toBe("ok");
+    expect(health.queue).toEqual({ stalled: [], stalledLowPriority: ["snapshot.mmr"], ok: true });
+    // No "Stalled queue(s)" note either -- an exempt stall must not read as
+    // a degrading factor.
+    expect(health.notes.some((n) => n.includes("Stalled queue"))).toBe(false);
+  });
+
+  it("a non-exempt stall still degrades level and lands in queue.stalled", () => {
+    const health = deriveHealth(healthyInputs({ queue: { stalled: ["notify.announce-result"] } }), now);
+    expect(health.level).toBe("degraded");
+    expect(health.queue).toEqual({ stalled: ["notify.announce-result"], stalledLowPriority: [], ok: false });
+    expect(health.notes.some((n) => n.includes("Stalled queue(s): notify.announce-result"))).toBe(true);
+  });
+
+  it("mixes exempt + non-exempt correctly: level degrades on the non-exempt one only, both are visible", () => {
+    const health = deriveHealth(
+      healthyInputs({ queue: { stalled: ["snapshot.mmr", "notify.announce-result"] } }),
+      now,
+    );
+    expect(health.level).toBe("degraded");
+    expect(health.queue.stalled).toEqual(["notify.announce-result"]);
+    expect(health.queue.stalledLowPriority).toEqual(["snapshot.mmr"]);
+    // The alert-worthy note names only the non-exempt queue.
+    const stallNote = health.notes.find((n) => n.startsWith("Stalled queue(s):"));
+    expect(stallNote).toBe("Stalled queue(s): notify.announce-result.");
+    expect(stallNote).not.toContain("snapshot.mmr");
+  });
+});
+
+describe("deriveAttribution", () => {
+  const DEGRADED_STATUS: DiscordStatusInfo = { indicator: "major", description: "Some systems affected" };
+
+  function attrInputs(overrides: Partial<AttributionInputs> = {}): AttributionInputs {
+    return {
+      db: { ok: true },
+      discord: { level: "ok" },
+      queue: { stalled: [] },
+      discordStatus: OPERATIONAL_STATUS,
+      ...overrides,
+    };
+  }
+
+  it("db not ok -> 'database', regardless of anything else", () => {
+    expect(
+      deriveAttribution(
+        attrInputs({ db: { ok: false }, discord: { level: "degraded" }, discordStatus: DEGRADED_STATUS }),
+      ),
+    ).toBe("database");
+  });
+
+  it("discord degraded + discordstatus.com reports a real incident -> 'discord'", () => {
+    expect(
+      deriveAttribution(attrInputs({ discord: { level: "degraded" }, discordStatus: DEGRADED_STATUS })),
+    ).toBe("discord");
+  });
+
+  it("discord degraded + discordstatus.com says operational -> 'network' (likely our own egress)", () => {
+    expect(
+      deriveAttribution(attrInputs({ discord: { level: "degraded" }, discordStatus: OPERATIONAL_STATUS })),
+    ).toBe("network");
+  });
+
+  it("discord degraded + discordstatus.com unreachable/unknown -> 'unknown'", () => {
+    expect(deriveAttribution(attrInputs({ discord: { level: "degraded" }, discordStatus: null }))).toBe(
+      "unknown",
+    );
+  });
+
+  it("only non-exempt queues stalled (db/discord fine) -> 'queue'", () => {
+    expect(
+      deriveAttribution(attrInputs({ queue: { stalled: ["notify.announce-result"] } })),
+    ).toBe("queue");
+  });
+
+  it("everything fine -> 'none'", () => {
+    expect(deriveAttribution(attrInputs())).toBe("none");
+  });
+
+  it("deriveHealth wires discordStatus and attribution straight through into the snapshot", () => {
+    const health = deriveHealth(
+      healthyInputs({
+        discord: { gatewayPingMs: 40, restP95Ms: 4300, restErrorRate: 0, sampleCount: 50 },
+        discordStatus: DEGRADED_STATUS,
+      }),
+      now,
+    );
+    expect(health.discordStatus).toEqual(DEGRADED_STATUS);
+    expect(health.attribution).toBe("discord");
+  });
+});
+
+describe("describeAttribution", () => {
+  it("returns distinct, non-empty text for every attribution value", () => {
+    const attributions = ["database", "discord", "network", "unknown", "queue", "none"] as const;
+    const texts = attributions.map((a) =>
+      describeAttribution(a, a === "discord" ? { indicator: "major", description: "Some systems affected" } : null),
+    );
+    for (const t of texts) expect(t.length).toBeGreaterThan(0);
+    expect(new Set(texts).size).toBe(texts.length);
+  });
+
+  it("names discordstatus.com as the corroboration source for a Discord-attributed incident", () => {
+    expect(describeAttribution("discord", { indicator: "major", description: "x" })).toContain(
+      "confirmed by discordstatus.com",
+    );
+  });
+
+  it("calls out our own egress for a network-attributed incident", () => {
+    expect(describeAttribution("network", OPERATIONAL_STATUS)).toContain("our network egress");
   });
 });

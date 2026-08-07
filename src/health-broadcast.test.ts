@@ -28,6 +28,8 @@ function health(overrides: Partial<BotHealth> = {}): BotHealth {
     db: { latencyMs: 5, ok: true },
     queue: { stalled: [], ok: true },
     notes: ["Discord REST is slow: p95 2500ms (over 2000ms)."],
+    discordStatus: null,
+    attribution: "unknown",
     ...overrides,
   };
 }
@@ -167,6 +169,30 @@ describe("buildDegradedAlertContent", () => {
     );
     expect(content).toContain("Internal only");
     expect(content).not.toContain("Players have been shown");
+  });
+
+  it("names Discord as the likely cause when discordstatus.com confirms a real incident", () => {
+    const content = buildDegradedAlertContent(
+      health({
+        discord: { gatewayPingMs: 40, restP95Ms: 2500, restErrorRate: 0, level: "degraded" },
+        discordStatus: { indicator: "major", description: "Some systems affected" },
+        attribution: "discord",
+      }),
+      undefined,
+    );
+    expect(content).toContain("Likely cause: Discord-side incident (confirmed by discordstatus.com)");
+  });
+
+  it("names our own network egress as the likely cause when discordstatus.com reports operational", () => {
+    const content = buildDegradedAlertContent(
+      health({
+        discord: { gatewayPingMs: 40, restP95Ms: 2500, restErrorRate: 0, level: "degraded" },
+        discordStatus: { indicator: "none", description: "All Systems Operational" },
+        attribution: "network",
+      }),
+      undefined,
+    );
+    expect(content).toContain("Likely cause: Discord reports normal -- likely our network egress");
   });
 });
 

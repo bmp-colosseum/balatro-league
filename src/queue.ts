@@ -397,14 +397,20 @@ export async function initQueue(): Promise<void> {
   );
 
   // Worker: scrape one player's stats from balatromp.com and store a
-  // PlayerMmrSnapshot row. Serial (batchSize 1) so a 50-player signup
-  // burst doesn't slam balatromp's CDN — drains at ~1 req/3sec. Always
-  // writes a row, even on parse/fetch failure — fetchError captures
+  // PlayerMmrSnapshot row. Serial (batchSize 1, pollingIntervalSeconds 3)
+  // so a 50-player signup burst -- or the daily refresh.active-mmrs
+  // fan-out of ~100 jobs -- actually drains at the documented ~1 req/3sec,
+  // not 1 req/60sec. That mismatch (pollingIntervalSeconds was 60, a 20x
+  // gap from the stated intent) was the root cause of a 1.5-2h daily
+  // backlog even though each job only does ~500ms of real work. The 3s
+  // floor itself is deliberate CDN politeness toward balatromp.com, not a
+  // knob to tune down further for throughput -- do NOT drop this below 3s.
+  // Always writes a row, even on parse/fetch failure — fetchError captures
   // what went wrong so admin can see "no balatromp account" vs "page
   // changed" vs "timeout".
   await boss.work<MmrSnapshotJob>(
     "snapshot.mmr",
-    { batchSize: 1, pollingIntervalSeconds: 60 },
+    { batchSize: 1, pollingIntervalSeconds: 3 },
     async (jobs: Job<MmrSnapshotJob>[]) => {
       for (const job of jobs) {
         // Per-job logging so a backlog reads as "slow but draining" rather than

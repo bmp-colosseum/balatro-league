@@ -17,6 +17,7 @@ import { ChannelType, type TextChannel } from "discord.js";
 import { prisma } from "./db.js";
 import { resolveDevopsChannelId } from "./devops-channel.js";
 import { tryGetDiscordClient } from "./discord.js";
+import { isAlertExemptQueue } from "./bot-health.js";
 
 const STALL_THRESHOLD_SECONDS = 300;
 const POST_COOLDOWN_MINUTES = 60;
@@ -56,11 +57,19 @@ export async function checkQueueStalls(): Promise<{
       ORDER BY oldest_age_seconds DESC`,
   );
 
-  const stalled: StalledQueue[] = rows.map((r) => ({
-    name: r.name,
-    oldestAgeSeconds: Number(r.oldest_age_seconds),
-    jobCount: Number(r.job_count),
-  }));
+  const stalled: StalledQueue[] = rows
+    .map((r) => ({
+      name: r.name,
+      oldestAgeSeconds: Number(r.oldest_age_seconds),
+      jobCount: Number(r.job_count),
+    }))
+    // Background queues nobody needs paging about (see ALERT_EXEMPT_QUEUES in
+    // bot-health.ts -- ONE list, so the two independent stall paths can't
+    // disagree). snapshot.mmr is a throttled stats refresh: never
+    // player-impacting, and a bulk enqueue legitimately sits above the age
+    // threshold while it drains. It stays visible on /admin/host and in the
+    // admin health embed; it just doesn't ping.
+    .filter((s) => !isAlertExemptQueue(s.name));
 
   if (stalled.length === 0) {
     return { checked: 1, stalled: [], posted: false };

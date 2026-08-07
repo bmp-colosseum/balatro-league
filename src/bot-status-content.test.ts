@@ -15,6 +15,8 @@ function healthyHealth(overrides: Partial<BotHealth> = {}): BotHealth {
     db: { latencyMs: 5, ok: true },
     queue: { stalled: [], ok: true },
     notes: ["All systems normal."],
+    discordStatus: { indicator: "none", description: "All Systems Operational" },
+    attribution: "none",
     ...overrides,
   };
 }
@@ -132,6 +134,31 @@ describe("buildHealthEmbed", () => {
     const discordField = embed.data.fields?.find((f) => f.name === "Discord");
     expect(discordField?.value).toContain("insufficient data");
   });
+
+  it("renders a 'Likely cause' field naming the attribution", () => {
+    const embed = buildHealthEmbed(
+      healthyHealth({
+        level: "degraded",
+        discord: { gatewayPingMs: 40, restP95Ms: 4300, restErrorRate: 0, level: "degraded" },
+        discordStatus: { indicator: "major", description: "Some systems affected" },
+        attribution: "discord",
+      }),
+    );
+    const causeField = embed.data.fields?.find((f) => f.name === "Likely cause");
+    expect(causeField?.value).toContain("confirmed by discordstatus.com");
+  });
+
+  it("shows alert-exempt stalled queues separately from alert-worthy ones in the Queue field", () => {
+    const embed = buildHealthEmbed(
+      healthyHealth({
+        queue: { stalled: ["email"], stalledLowPriority: ["snapshot.mmr"], ok: false },
+      }),
+    );
+    const queueField = embed.data.fields?.find((f) => f.name === "Queue");
+    expect(queueField?.value).toContain("email");
+    expect(queueField?.value).toContain("snapshot.mmr");
+    expect(queueField?.value).toContain("not alerted");
+  });
 });
 
 describe("buildPublicHealthEmbed", () => {
@@ -181,13 +208,15 @@ describe("buildPublicHealthEmbed", () => {
     expect(embed.data.description).toContain(`<t:${unix}:R>`);
   });
 
-  it("never contains raw ms/percentage numbers or queue names, even for a degraded-with-queue-stall snapshot", () => {
+  it("never contains raw ms/percentage numbers, queue names, or attribution, even for a degraded-with-queue-stall snapshot", () => {
     const embed = buildPublicHealthEmbed(
       healthyHealth({
         level: "degraded",
         discord: { gatewayPingMs: 1234, restP95Ms: 4300, restErrorRate: 0.42, level: "degraded" },
         db: { latencyMs: 999, ok: true },
-        queue: { stalled: ["snapshot.mmr", "notify.announce-result"], ok: false },
+        queue: { stalled: ["snapshot.mmr", "notify.announce-result"], stalledLowPriority: [], ok: false },
+        discordStatus: { indicator: "major", description: "Some systems affected" },
+        attribution: "discord",
       }),
     );
     const text = embedText(embed);
@@ -195,6 +224,10 @@ describe("buildPublicHealthEmbed", () => {
     expect(text).not.toMatch(/\d+(\.\d+)?%/);
     expect(text).not.toContain("snapshot.mmr");
     expect(text).not.toContain("notify.announce-result");
+    expect(text).not.toContain("discordstatus.com");
+    expect(text).not.toContain("Likely cause");
+    expect(text).not.toContain("attribution");
+    expect(text.toLowerCase()).not.toContain("network egress");
   });
 
   it("distinguishes ok, degraded, and down with three different titles", () => {
