@@ -41,7 +41,17 @@ function rest(): REST {
 export async function announceResult(pairingId: string): Promise<void> {
   const pairing = await prisma.match.findUnique({
     where: { id: pairingId },
-    include: { playerA: true, playerB: true, division: { include: { season: true } } },
+    include: {
+      playerA: true,
+      playerB: true,
+      division: { include: { season: true } },
+      // Per-game deck/stake lives on Game rows (the guided /start-match flow
+      // writes them via writeMatchGames). The legacy Match.reportedDeck/
+      // reportedStake columns are only populated by the old /report path and
+      // admin manual entry, so on a normally-played league match they are
+      // null -- which is why the "Played" field silently vanished.
+      games: { orderBy: { num: "asc" } },
+    },
   });
   if (!pairing || pairing.status !== "CONFIRMED") return;
 
@@ -82,7 +92,27 @@ export async function announceResult(pairingId: string): Promise<void> {
     .setColor(color)
     .setFooter({ text: `Match ${pairing.id}` })
     .setTimestamp(new Date());
-  if (pairing.reportedDeck || pairing.reportedStake) {
+  // Per-game breakdown: what was played and who took it. Prefer the real Game
+  // rows; fall back to the legacy reported* columns for matches recorded through
+  // the old /report path or admin manual entry (which have no Game deck/stake).
+  const gameLines = pairing.games
+    .map((g) => {
+      const combo = [g.deck, g.stake].filter(Boolean).join(" / ");
+      if (!combo && !g.winnerId) return null;
+      const winner =
+        g.winnerId === pairing.playerAId
+          ? pairing.playerA.displayName
+          : g.winnerId === pairing.playerBId
+            ? pairing.playerB.displayName
+            : null;
+      const who = winner ? ` — **${sanitizeName(winner)}**` : "";
+      return `Game ${g.num}: ${combo || "_combo not recorded_"}${who}`;
+    })
+    .filter((l): l is string => l !== null);
+
+  if (gameLines.length > 0) {
+    embed.addFields({ name: "🎴 Games", value: gameLines.join("\n"), inline: false });
+  } else if (pairing.reportedDeck || pairing.reportedStake) {
     embed.addFields({
       name: "🎴 Played",
       value: [pairing.reportedDeck, pairing.reportedStake].filter(Boolean).join(" / "),
