@@ -17,7 +17,7 @@ import { computeStandings } from "./standings";
 import { recordAudit, type AuditActor } from "./audit";
 import { enqueueLeagueInfoRefresh, enqueueDm } from "./queue";
 import { formatSeasonLabel } from "./format-season";
-import { deleteChannel, deleteGuildRole } from "./discord";
+import { deleteChannel, deleteGuildRole, removeGuildMemberRole } from "./discord";
 
 export interface DivisionForRating {
   tierPosition: number; // 1 = top tier
@@ -191,6 +191,7 @@ export interface DiscordTeardownResult {
   channelsDeleted: number;
   rolesDeleted: number;
   categoryDeleted: boolean;
+  playerRolesRemoved: number;
 }
 
 // DELETE a season's Discord footprint — every division channel + division
@@ -208,8 +209,16 @@ export async function teardownSeasonDiscord(seasonId: string): Promise<DiscordTe
     where: { id: seasonId },
     select: {
       discordCategoryId: true,
+      // Shared across seasons (bootstrap resolves "League Player" BY NAME), so
+      // we strip it from members rather than deleting the role itself -- next
+      // season's bootstrap re-adds it as players are placed.
+      leaguePlayerRoleId: true,
       divisions: {
-        select: { discordChannelId: true, discordRoleId: true },
+        select: {
+          discordChannelId: true,
+          discordRoleId: true,
+          members: { select: { player: { select: { discordId: true } } } },
+        },
       },
     },
   });
@@ -217,6 +226,25 @@ export async function teardownSeasonDiscord(seasonId: string): Promise<DiscordTe
 
   let channelsDeleted = 0;
   let rolesDeleted = 0;
+  let playerRolesRemoved = 0;
+
+  // Take the season's League Player role back off everyone who was in it. The
+  // per-division roles below get DELETED (they're season-scoped), but the
+  // League Player role is one shared server role, so deleting it would break
+  // future seasons -- remove the membership instead. Dedup by discord id: a
+  // player can only hold the role once even if they appear in two divisions
+  // (roster moves). Best-effort per member; one failure must not abort teardown.
+  if (season.leaguePlayerRoleId) {
+    const roleId = season.leaguePlayerRoleId;
+    const discordIds = new Set(
+      season.divisions.flatMap((d) => d.members.map((m) => m.player.discordId)).filter(Boolean),
+    );
+    for (const discordId of discordIds) {
+      if (await removeGuildMemberRole(guildId, discordId, roleId).catch(() => false)) {
+        playerRolesRemoved++;
+      }
+    }
+  }
 
   // Channels first — a category can't be deleted while it still has children.
   for (const div of season.divisions) {
@@ -243,7 +271,7 @@ export async function teardownSeasonDiscord(seasonId: string): Promise<DiscordTe
   });
   await prisma.season.update({ where: { id: seasonId }, data: { discordCategoryId: null } });
 
-  return { channelsDeleted, rolesDeleted, categoryDeleted };
+  return { channelsDeleted, rolesDeleted, categoryDeleted, playerRolesRemoved };
 }
 
 export interface EndSeasonResult {
@@ -339,7 +367,7 @@ export async function endSeasonCore(seasonId: string, actor: AuditActor): Promis
     summary:
       `Ended season "${formatSeasonLabel(season)}" (${season.divisions.length} divisions, ${deltas.length} rating updates` +
       (discordTeardown
-        ? `, deleted ${discordTeardown.channelsDeleted} channels + ${discordTeardown.rolesDeleted} roles`
+        ? `, deleted ${discordTeardown.channelsDeleted} channels + ${discordTeardown.rolesDeleted} roles, took the League Player role off ${discordTeardown.playerRolesRemoved} member(s)`
         : "") +
       ")",
     metadata: {
