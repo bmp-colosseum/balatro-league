@@ -14,6 +14,7 @@
 import { prisma } from "./db.js";
 import { formatSeasonLabel } from "./format-season.js";
 import { webUrl } from "./web-url.js";
+import { seasonEndsHammer, seasonStartsHammer } from "./season-timing.js";
 
 const STATIC_INTRO = [
   "# 🃏 Balatro League",
@@ -43,7 +44,8 @@ async function composeDynamicBlock(): Promise<string> {
   // next season open while the current one is still being played) — so we
   // build each block independently and show both. Order: live season first,
   // then "signups open for next". Falls through to ended/none when neither.
-  const [openRound, activeSeason] = await Promise.all([
+  const now = new Date();
+  const [openRound, activeSeason, fallbackUpcomingSeason] = await Promise.all([
     prisma.signupRound.findFirst({
       where: { status: "OPEN" },
       orderBy: { openedAt: "desc" },
@@ -58,33 +60,57 @@ async function composeDynamicBlock(): Promise<string> {
       where: { isActive: true },
       select: { id: true, number: true, subtitle: true, startedAt: true, scheduledEndAt: true },
     }),
+    // Fallback upcoming season when there's no open signup round to prefer
+    // (see below) — the earliest not-active, not-ended season with a
+    // scheduled start still in the future.
+    prisma.season.findFirst({
+      where: { isActive: false, endedAt: null, scheduledStartAt: { gt: now } },
+      orderBy: { scheduledStartAt: "asc" },
+      select: { id: true, number: true, subtitle: true, scheduledStartAt: true },
+    }),
   ]);
 
   const blocks: string[] = [];
 
   if (activeSeason) {
     const label = formatSeasonLabel(activeSeason);
-    const since = activeSeason.startedAt.toISOString().slice(0, 10);
-    const endsOn = activeSeason.scheduledEndAt ? activeSeason.scheduledEndAt.toISOString().slice(0, 10) : null;
+    const startH = seasonStartsHammer(activeSeason.startedAt);
+    const endH = seasonEndsHammer(activeSeason.scheduledEndAt);
     blocks.push(
       [
         "─────────────────────",
         `## 🏆 ${label} is live!`,
-        `Active since ${since}${endsOn ? ` - scheduled to end ${endsOn}` : ""}.`,
+        `Active since ${startH ? startH.full : "?"}${endH ? ` - scheduled to end ${endH.full}` : ""}.`,
         `**Standings:** <${webUrl("standings")}>`,
         "Use `/start-match @opponent` in your division channel to play.",
       ].join("\n"),
     );
   }
 
+  // Which season's start date to show alongside signups (if any). Preferring
+  // the open round's OWN resultingSeasonId keeps the signup block and this
+  // date in agreement — they're describing the same season.
+  let upcomingSeason: { id: string; number: number; subtitle: string | null; scheduledStartAt: Date | null } | null =
+    fallbackUpcomingSeason;
+
   if (openRound) {
     let seasonLabel = openRound.name;
     if (openRound.resultingSeasonId) {
       const s = await prisma.season.findUnique({
         where: { id: openRound.resultingSeasonId },
-        select: { number: true, subtitle: true },
+        select: { number: true, subtitle: true, isActive: true, endedAt: true, scheduledStartAt: true },
       });
-      if (s) seasonLabel = formatSeasonLabel(s);
+      if (s) {
+        seasonLabel = formatSeasonLabel(s);
+        if (!s.isActive && !s.endedAt) {
+          upcomingSeason = {
+            id: openRound.resultingSeasonId,
+            number: s.number,
+            subtitle: s.subtitle,
+            scheduledStartAt: s.scheduledStartAt,
+          };
+        }
+      }
     }
     blocks.push(
       [
@@ -96,6 +122,19 @@ async function composeDynamicBlock(): Promise<string> {
         `_Or sign up from <${webUrl("join")}>._`,
       ].join("\n"),
     );
+  }
+
+  if (upcomingSeason?.scheduledStartAt && upcomingSeason.scheduledStartAt.getTime() > now.getTime()) {
+    const startH = seasonStartsHammer(upcomingSeason.scheduledStartAt);
+    if (startH) {
+      const label = formatSeasonLabel(upcomingSeason);
+      blocks.push(
+        [
+          "─────────────────────",
+          `## ${label} starts ${startH.full} (${startH.relative})`,
+        ].join("\n"),
+      );
+    }
   }
 
   if (blocks.length > 0) return blocks.join("\n\n");

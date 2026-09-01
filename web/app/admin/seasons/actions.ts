@@ -19,7 +19,13 @@ import {
   sendDirectMessage,
 } from "@/lib/discord";
 import { enqueueLeagueInfoRefresh, enqueueMmrSnapshot, enqueueSignupAskKickoff, enqueueWelcomeRefresh } from "@/lib/queue";
-import { buildSignupPayload, buildClosedSignupPayload, buildSignupAskDmPreview, getSeasonLengthDays } from "@/lib/signup-discord";
+import {
+  buildSignupPayload,
+  buildClosedSignupPayload,
+  buildSignupAskDmPreview,
+  getSeasonLengthDays,
+  loadRoundSeasonScheduledStart,
+} from "@/lib/signup-discord";
 import { endSeasonCore } from "@/lib/end-season";
 
 interface TierConfig {
@@ -694,7 +700,14 @@ export async function sendSignupTestMessage(formData: FormData) {
   // post. Drop the channel-post components — the Sign Up / Withdraw buttons
   // wouldn't resolve for a non-existent round, and a preview shouldn't be
   // clickable anyway.
-  const round = { id: "preview", name: `${seasonLabel} Signups`, closesAt, seasonStartsAt, seasonEndsAt };
+  const round = {
+    id: "preview",
+    name: `${seasonLabel} Signups`,
+    closesAt,
+    seasonStartsAt,
+    seasonEndsAt,
+    seasonScheduledStartAt: season?.scheduledStartAt ?? null,
+  };
   const lengthDays = await getSeasonLengthDays();
   const { embeds } = buildSignupPayload(round, 0, lengthDays);
 
@@ -755,7 +768,10 @@ export async function openSignupsForSeason(formData: FormData) {
     },
   });
 
-  const messageId = await postChannelMessage(channelId, buildSignupPayload(round, 0, await getSeasonLengthDays()));
+  const messageId = await postChannelMessage(
+    channelId,
+    buildSignupPayload({ ...round, seasonScheduledStartAt: season!.scheduledStartAt }, 0, await getSeasonLengthDays()),
+  );
   if (!messageId) {
     await prisma.signupRound.delete({ where: { id: round.id } });
     redirect("/admin/seasons?err=signup-post-failed");
@@ -804,10 +820,15 @@ export async function updateSignupCloseDate(formData: FormData) {
   const updated = await prisma.signupRound.update({ where: { id: roundId }, data: { closesAt } });
 
   if (updated.messageId && updated.messageId !== "pending") {
-    const signupCount = await prisma.signup.count({ where: { roundId } });
-    await editChannelMessage(updated.channelId, updated.messageId, buildSignupPayload(updated, signupCount, await getSeasonLengthDays())).catch(
-      (err) => console.warn("[signups.update-close] message edit failed:", err),
-    );
+    const [signupCount, seasonScheduledStartAt] = await Promise.all([
+      prisma.signup.count({ where: { roundId } }),
+      loadRoundSeasonScheduledStart(updated.resultingSeasonId),
+    ]);
+    await editChannelMessage(
+      updated.channelId,
+      updated.messageId,
+      buildSignupPayload({ ...updated, seasonScheduledStartAt }, signupCount, await getSeasonLengthDays()),
+    ).catch((err) => console.warn("[signups.update-close] message edit failed:", err));
   }
 
   recordAudit({
@@ -852,10 +873,15 @@ export async function updateSeasonWindow(formData: FormData) {
   });
 
   if (updated.messageId && updated.messageId !== "pending") {
-    const signupCount = await prisma.signup.count({ where: { roundId } });
-    await editChannelMessage(updated.channelId, updated.messageId, buildSignupPayload(updated, signupCount, await getSeasonLengthDays())).catch(
-      (err) => console.warn("[signups.update-window] message edit failed:", err),
-    );
+    const [signupCount, seasonScheduledStartAt] = await Promise.all([
+      prisma.signup.count({ where: { roundId } }),
+      loadRoundSeasonScheduledStart(updated.resultingSeasonId),
+    ]);
+    await editChannelMessage(
+      updated.channelId,
+      updated.messageId,
+      buildSignupPayload({ ...updated, seasonScheduledStartAt }, signupCount, await getSeasonLengthDays()),
+    ).catch((err) => console.warn("[signups.update-window] message edit failed:", err));
   }
 
   recordAudit({
@@ -1000,9 +1026,15 @@ export async function reopenSignupsForSeason(formData: FormData) {
     data: { closedAt: null, ...(round.status === "CLOSED" ? { status: "OPEN" as const } : {}) },
   });
   if (round.messageId && round.messageId !== "pending") {
-    await editChannelMessage(round.channelId, round.messageId, buildSignupPayload(round, round.signups.length, await getSeasonLengthDays())).catch(
-      (err) => console.warn("[signups.reopen] Discord re-render failed:", err),
-    );
+    const [lengthDays, seasonScheduledStartAt] = await Promise.all([
+      getSeasonLengthDays(),
+      loadRoundSeasonScheduledStart(round.resultingSeasonId),
+    ]);
+    await editChannelMessage(
+      round.channelId,
+      round.messageId,
+      buildSignupPayload({ ...round, seasonScheduledStartAt }, round.signups.length, lengthDays),
+    ).catch((err) => console.warn("[signups.reopen] Discord re-render failed:", err));
   }
   recordAudit({
     actor: actorFromAdminUser(user),

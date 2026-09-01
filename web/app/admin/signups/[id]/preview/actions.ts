@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { actorFromAdminUser } from "@/lib/audit";
 import { buildSeasonFromContinuity } from "@/lib/build-season-continuity";
-import { buildSignupPayload } from "@/lib/signup-discord";
+import { buildSignupPayload, loadRoundSeasonScheduledStart } from "@/lib/signup-discord";
 import { editChannelMessage } from "@/lib/discord";
 import { setPlacementRules } from "@/lib/placement-rules";
 
@@ -49,7 +49,8 @@ export async function reopenSignupRound(formData: FormData) {
   await prisma.signupRound.update({ where: { id: roundId }, data: { status: "OPEN", closedAt: null } });
   if (round.channelId && round.messageId && round.messageId !== "pending") {
     try {
-      const payload = buildSignupPayload(round, round.signups.length);
+      const seasonScheduledStartAt = await loadRoundSeasonScheduledStart(round.resultingSeasonId);
+      const payload = buildSignupPayload({ ...round, seasonScheduledStartAt }, round.signups.length);
       await editChannelMessage(round.channelId, round.messageId, payload);
     } catch (err) {
       console.warn("[reopen-signups] Discord re-render failed:", err);

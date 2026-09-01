@@ -4,6 +4,7 @@ import { loadOpenSignupRoundId } from "@/lib/loaders/join";
 import { getShowBmpMmr } from "@/lib/preferences";
 import { SiteNav } from "@/components/SiteNav";
 import { DivisionStandingsTable, type StandingsRowExtras } from "@/components/DivisionStandingsTable";
+import { SeasonWindow } from "@/components/SeasonWindow";
 import { type StandingRow } from "@/lib/standings";
 
 // Clinch predictor: who is mathematically guaranteed to promote ("up") /
@@ -105,6 +106,7 @@ export default async function StandingsPage() {
         ) : (
           <>
             <h2>{data.season.name} — Standings</h2>
+            <SeasonWindow start={data.season.startedAt} end={data.season.scheduledEndAt} className="mb-2" />
             <div className="card" style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
                 <span style={{ fontSize: 15, whiteSpace: "nowrap" }}>

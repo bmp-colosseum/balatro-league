@@ -14,6 +14,7 @@ import { DraggableDivisionsEditor, type EditorMember, type EditorTier } from "@/
 import { LocalDateTimeField } from "@/components/LocalDateTimeField";
 import { LocalDateTime } from "@/components/LocalDateTime";
 import { DatePickerField } from "@/components/DatePickerField";
+import { SeasonWindow } from "@/components/SeasonWindow";
 import { SeasonDeckPresetPicker } from "@/components/SeasonDeckPresetPicker";
 import { tierColors } from "@/lib/tier-colors";
 import { DivisionStandingsTable, type StandingsRowExtras } from "@/components/DivisionStandingsTable";
@@ -143,9 +144,6 @@ async function PublicSummary({
   err?: string;
 }) {
   const isEnded = !season.isActive && season.endedAt != null;
-  const period = season.endedAt
-    ? `${season.startedAt.toISOString().slice(0, 10)} → ${season.endedAt.toISOString().slice(0, 10)}`
-    : `Started ${season.startedAt.toISOString().slice(0, 10)}`;
 
   // BMP MMR for the shared standings table (empty unless the preference is on).
   const showBmpMmr = await getShowBmpMmr();
@@ -155,16 +153,20 @@ async function PublicSummary({
   );
   return (
     <>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 8 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 4 }}>
         <h2 style={{ margin: 0 }}>{season.name}</h2>
         {season.isActive ? (
           <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--success)" }}>ACTIVE</span>
         ) : (
           <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "var(--muted)" }}>FINISHED</span>
         )}
-        <span className="muted">· {period}</span>
         <Link href="/seasons" style={{ marginLeft: "auto" }}>← all seasons</Link>
       </div>
+      <SeasonWindow
+        start={season.startedAt}
+        end={season.endedAt ?? season.scheduledEndAt}
+        className="mb-2"
+      />
 
       {ok && (
         <Callout type="success">✓ Final rank updated.</Callout>

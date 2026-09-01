@@ -18,6 +18,7 @@ export interface SeasonIndexEntry {
   isActive: boolean;
   startedAt: Date;
   endedAt: Date | null;
+  scheduledEndAt: Date | null;
   divisionCount: number;
   playerCount: number;
   pairingCount: number;
@@ -36,6 +37,7 @@ export async function loadSeasonsIndex(): Promise<SeasonIndexEntry[]> {
       isActive: true,
       startedAt: true,
       endedAt: true,
+      scheduledEndAt: true,
       _count: { select: { divisions: true } },
       divisions: { select: { _count: { select: { members: true, matches: { where: { format: "LEAGUE_BO2" } } } } } },
     },
@@ -47,6 +49,7 @@ export async function loadSeasonsIndex(): Promise<SeasonIndexEntry[]> {
     isActive: s.isActive,
     startedAt: s.startedAt,
     endedAt: s.endedAt,
+    scheduledEndAt: s.scheduledEndAt,
     divisionCount: s._count.divisions,
     playerCount: s.divisions.reduce((sum, d) => sum + d._count.members, 0),
     pairingCount: s.divisions.reduce((sum, d) => sum + d._count.matches, 0),
@@ -93,6 +96,7 @@ export interface SeasonDetailData {
   isActive: boolean;
   startedAt: Date;
   endedAt: Date | null;
+  scheduledEndAt: Date | null;
   tiers: SeasonDetailTier[];
 }
 
@@ -107,6 +111,7 @@ export async function loadSeasonDetail(seasonId: string): Promise<SeasonDetailDa
       isActive: true,
       startedAt: true,
       endedAt: true,
+      scheduledEndAt: true,
       tiers: {
         orderBy: { position: "asc" },
         select: {
@@ -171,6 +176,7 @@ export async function loadSeasonDetail(seasonId: string): Promise<SeasonDetailDa
     isActive: season.isActive,
     startedAt: season.startedAt,
     endedAt: season.endedAt,
+    scheduledEndAt: season.scheduledEndAt,
     tiers,
   };
 }

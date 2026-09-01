@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { loadSeasonsIndex } from "@/lib/loaders/seasons";
 import { SiteNav } from "@/components/SiteNav";
+import { SeasonWindow } from "@/components/SeasonWindow";
 
 export const dynamic = "force-dynamic";
 
@@ -17,9 +18,6 @@ export default async function SeasonsPage() {
         ) : (
           <div className="grid grid-2">
             {seasons.map((s) => {
-              const period = s.endedAt
-                ? `${s.startedAt.toISOString().slice(0, 10)} → ${s.endedAt.toISOString().slice(0, 10)}`
-                : `Started ${s.startedAt.toISOString().slice(0, 10)}`;
               return (
                 <Link
                   key={s.id}
@@ -33,7 +31,7 @@ export default async function SeasonsPage() {
                   ) : (
                     <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "var(--muted)" }}>FINISHED</span>
                   )}
-                  <div className="muted" style={{ marginTop: 6 }}>{period}</div>
+                  <SeasonWindow start={s.startedAt} end={s.endedAt ?? s.scheduledEndAt} className="mt-1" />
                   <div className="muted">
                     {s.divisionCount} {s.divisionCount === 1 ? "division" : "divisions"} ·{" "}
                     {s.playerCount} {s.playerCount === 1 ? "player" : "players"} ·{" "}

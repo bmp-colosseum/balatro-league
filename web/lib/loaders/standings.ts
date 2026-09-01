@@ -78,7 +78,7 @@ export interface StandingsMmrEntry {
 }
 
 export interface StandingsPageData {
-  season: { id: string; name: string } | null;
+  season: { id: string; name: string; startedAt: Date; scheduledEndAt: Date | null } | null;
   tiers: StandingsTierSummary[];
   minTierPosition: number;
   maxTierPosition: number;
@@ -99,6 +99,8 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
       number: true,
       subtitle: true,
       scheduleLocked: true,
+      startedAt: true,
+      scheduledEndAt: true,
       tiers: {
         orderBy: { position: "asc" },
         select: {
@@ -289,7 +291,12 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
   }));
 
   return {
-    season: { id: season.id, name: formatSeasonLabel(season) },
+    season: {
+      id: season.id,
+      name: formatSeasonLabel(season),
+      startedAt: season.startedAt,
+      scheduledEndAt: season.scheduledEndAt,
+    },
     tiers,
     minTierPosition,
     maxTierPosition,

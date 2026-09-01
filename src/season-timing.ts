@@ -17,6 +17,15 @@ export function seasonEndsHeader(endsAt: Date | null | undefined): string {
   return h ? `## ⏰ Season ends ${h.full} - ${h.relative}` : "";
 }
 
+// Same hammertime shape as seasonEndsHammer but for a season's START date —
+// either the scheduled (not-yet-active) start or the actual (already-active)
+// startedAt. Same computation either way, so one function covers both.
+export function seasonStartsHammer(startsAt: Date | null | undefined): { full: string; relative: string } | null {
+  if (!startsAt) return null;
+  const unix = Math.floor(startsAt.getTime() / 1000);
+  return { full: `<t:${unix}:F>`, relative: `<t:${unix}:R>` };
+}
+
 export const DEFAULT_TIEBREAK_BUFFER_DAYS = 2;
 
 // The full end-of-season timeline for a pinned message: the hard "finish your
@@ -44,6 +53,37 @@ export function seasonTimelineLines(
     head,
     `_Then we take **${days} ${dayWord}** to settle any shootouts/tiebreakers and give everyone a short break - the next season kicks off around <t:${nextUnix}:D>._`,
   ];
+}
+
+// The season window for a pinned/info message: when it starts (or started)
+// and when it's due to end. Distinct from seasonTimelineLines (the end-of-
+// season deadline/buffer/next-season countdown) — this answers "when does it
+// start / how long does it run", which players ask from day one, before any
+// end date matters. Always returns at least one line ([] only means "truly
+// nothing to say", which never actually happens here — every branch has a
+// line, even the TBA ones).
+export function seasonWindowLines(opts: {
+  scheduledStartAt?: Date | null;
+  startedAt?: Date | null;
+  scheduledEndAt?: Date | null;
+  isActive: boolean;
+}): string[] {
+  const { scheduledStartAt, startedAt, scheduledEndAt, isActive } = opts;
+
+  if (!isActive) {
+    const startH = seasonStartsHammer(scheduledStartAt);
+    if (startH) return [`Season starts ${startH.full} (${startH.relative})`];
+    return ["Season start date: **TBA** - nothing scheduled yet."];
+  }
+
+  // Active: always say when it started; then the end info (existing
+  // end-date rendering) if scheduledEndAt is set, else an explicit TBA.
+  const lines: string[] = [];
+  const startH = seasonStartsHammer(startedAt);
+  if (startH) lines.push(`Started ${startH.full}`);
+  const endH = seasonEndsHammer(scheduledEndAt);
+  lines.push(endH ? `Ends ${endH.full} (${endH.relative})` : "End date: **TBA**.");
+  return lines;
 }
 
 // Read the configured buffer, falling back to the default. Kept here so both

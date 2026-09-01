@@ -41,8 +41,40 @@ function playWindowValue(
   return seasonWindowValue(start, end);
 }
 
+// Full + relative hammertime tags for a single date. Duplicated (not
+// imported) from seasonStartsHammer in src/season-timing.ts — this file
+// lives in web/ and must not import across the bot/web workspace boundary;
+// it's the same two-line computation, kept in sync by hand.
+function hammerTags(d: Date): { full: string; relative: string } {
+  const unix = Math.floor(d.getTime() / 1000);
+  return { full: `<t:${unix}:F>`, relative: `<t:${unix}:R>` };
+}
+
+// Looks up the Season.scheduledStartAt behind a round's resultingSeasonId —
+// the auto-activation date, distinct from the round's own admin-typed
+// seasonStartsAt/seasonEndsAt "play window" fields. Callers pass the result
+// into buildSignupPayload's `seasonScheduledStartAt`. Returns null when the
+// round has no resulting season yet, or that season has no scheduled start.
+export async function loadRoundSeasonScheduledStart(resultingSeasonId: string | null | undefined): Promise<Date | null> {
+  if (!resultingSeasonId) return null;
+  const season = await prisma.season.findUnique({ where: { id: resultingSeasonId }, select: { scheduledStartAt: true } });
+  return season?.scheduledStartAt ?? null;
+}
+
 export function buildSignupPayload(
-  round: { id: string; name: string; closesAt: Date | null; seasonStartsAt: Date | null; seasonEndsAt: Date | null },
+  round: {
+    id: string;
+    name: string;
+    closesAt: Date | null;
+    seasonStartsAt: Date | null;
+    seasonEndsAt: Date | null;
+    // The linked Season's scheduledStartAt (resolved by the caller via
+    // loadRoundSeasonScheduledStart) — THE moment players ask "when does it
+    // start?", so it gets its own prominent field rather than being buried
+    // in the play-window text. Optional/omittable so existing callers that
+    // haven't resolved it yet just don't show the line.
+    seasonScheduledStartAt?: Date | null;
+  },
   signupCount = 0,
   lengthDays: number = DEFAULT_SEASON_LENGTH_DAYS,
 ): { embeds: MessageEmbed[]; components: ComponentActionRow[] } {
@@ -53,6 +85,10 @@ export function buildSignupPayload(
   const fields: NonNullable<MessageEmbed["fields"]> = [
     { name: "Status", value: `**${signupCount} signed up**`, inline: false },
   ];
+  if (round.seasonScheduledStartAt) {
+    const tags = hammerTags(round.seasonScheduledStartAt);
+    fields.push({ name: "Season starts", value: `${tags.full} (${tags.relative})`, inline: false });
+  }
   if (window) fields.push({ name: "🎮 Play your games", value: window, inline: false });
   const embed: MessageEmbed = {
     title: round.name,
@@ -134,9 +170,14 @@ export function buildClosedSignupPayload(
 export async function refreshSignupPost(roundId: string): Promise<void> {
   const round = await prisma.signupRound.findUnique({ where: { id: roundId } });
   if (!round || round.status !== "OPEN" || !round.messageId || round.messageId === "pending") return;
-  const count = await prisma.signup.count({ where: { roundId, withdrawn: false } });
-  const lengthDays = await getSeasonLengthDays();
-  await editChannelMessage(round.channelId, round.messageId, buildSignupPayload(round, count, lengthDays)).catch((err) =>
-    console.warn("[signup] Discord post refresh failed:", err),
-  );
+  const [count, lengthDays, seasonScheduledStartAt] = await Promise.all([
+    prisma.signup.count({ where: { roundId, withdrawn: false } }),
+    getSeasonLengthDays(),
+    loadRoundSeasonScheduledStart(round.resultingSeasonId),
+  ]);
+  await editChannelMessage(
+    round.channelId,
+    round.messageId,
+    buildSignupPayload({ ...round, seasonScheduledStartAt }, count, lengthDays),
+  ).catch((err) => console.warn("[signup] Discord post refresh failed:", err));
 }
