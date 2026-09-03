@@ -10,11 +10,11 @@ export function seasonEndsHammer(endsAt: Date | null | undefined): { full: strin
 }
 
 // A prominent (h2) header line for a pinned message; "" when no end date is set so
-// callers can drop it into a line array behind a truthiness check. ⏰ = alarm
+// callers can drop it into a line array behind a truthiness check. 🏁 = chequered flag
 // clock (kept as an escape so the source stays ASCII).
 export function seasonEndsHeader(endsAt: Date | null | undefined): string {
   const h = seasonEndsHammer(endsAt);
-  return h ? `## ⏰ Season ends ${h.full} - ${h.relative}` : "";
+  return h ? `## 🏁 Season ends ${h.full} - ${h.relative}` : "";
 }
 
 // Same hammertime shape as seasonEndsHammer but for a season's START date —
@@ -42,7 +42,7 @@ export function seasonTimelineLines(
   if (!h || !endsAt) return [];
   const days = Number.isFinite(bufferDays) && bufferDays >= 0 ? Math.floor(bufferDays) : DEFAULT_TIEBREAK_BUFFER_DAYS;
   const nextUnix = Math.floor((endsAt.getTime() + days * 24 * 60 * 60 * 1000) / 1000);
-  const head = `## ⏰ Finish all your games by ${h.full} (${h.relative})`;
+  const head = `## 🏁 Finish all your games by ${h.full} (${h.relative})`;
   // A 0-day buffer means we roll straight into the next season - don't promise a
   // settling window we aren't actually taking.
   if (days === 0) {

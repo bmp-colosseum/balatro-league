@@ -354,6 +354,15 @@ const GAME_COLORS: Record<number, number> = {
 // never be handed undefined.
 const DEFAULT_GAME_COLOR = 0x5865f2;
 
+// "Playing: <deck> / <stake> stake" for the in-game embeds. Prefixed with the
+// picked deck's OWN uploaded chip art when we have it, falling back to the
+// generic cards emoji -- so the line shows the ACTUAL deck instead of a
+// decorative prefix that just repeats the embed title.
+function playingLine(picked: DeckEntry | null | undefined): string {
+  const icon = (picked?.deck ? deckEmoji(picked.deck) : null) ?? "🎴";
+  return `${icon} Playing: **${picked?.deck ?? "?"} / ${picked?.stake ?? "?"} stake**`;
+}
+
 function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], game: GameState, gameNumber: number, opts: RenderOptions = {}) {
   const policy = parsePolicy(s.policy);
   const phase = phaseFor(game, a.id, b.id, policy, !s.isCasual);
@@ -363,7 +372,7 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
   const modeLabel = s.isCasual ? `Casual · Best of ${s.bestOf}` : "League";
 
   const embed = new EmbedBuilder()
-    .setTitle(`🃏 Game ${gameNumber} — ${modeLabel}`)
+    .setTitle(`🎴 Game ${gameNumber} — ${modeLabel}`)
     .setColor(GAME_COLORS[gameNumber] ?? DEFAULT_GAME_COLOR)
     .setFooter({ text: `Match ${s.id}` });
 
@@ -561,7 +570,7 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
       const claimant = s.dcInitiatorPlayerId === a.id ? a : b;
       const dcer = s.dcInitiatorPlayerId === a.id ? b : a;
       embed.setDescription(
-        `🎴 Playing: **${picked?.deck ?? "?"} / ${picked?.stake ?? "?"} stake**\n\n` +
+        `${playingLine(picked)}\n\n` +
           `🔌 **${sanitizeName(claimant.displayName)}** reports that **${sanitizeName(dcer.displayName)}** disconnected.\n\n` +
           `**${sanitizeName(dcer.displayName)}** — **Confirm** to give ${sanitizeName(claimant.displayName)} this game, or **Keep playing** if you're still here.\n` +
           `_If ${sanitizeName(dcer.displayName)} is gone for good, use \`/helper\` to get a mod._`,
@@ -588,7 +597,7 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
       const target = vote === a.id ? a.displayName : b.displayName;
       return `· **${sanitizeName(who.displayName)}**: voted ${sanitizeName(target)}`;
     };
-    let description = `🎴 Playing: **${picked?.deck ?? "?"} / ${picked?.stake ?? "?"} stake**\n\n`;
+    let description = `${playingLine(picked)}\n\n`;
     if (game.disputed) {
       description +=
         `⚠️ **Disputed** — players voted for different winners.\n` +

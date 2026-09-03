@@ -68,7 +68,7 @@ describe("renderMatch — BO5 games 4 and 5 render as themselves, not game 3", (
     const game4 = emptyGameState(A.id, pool());
     const session = makeSession({ state: "GAME_4_BAN", bestOf: 5 }, { game4 });
     const { embeds } = renderMatch(session, A, B);
-    expect(firstEmbed(embeds).data.title).toBe("🃏 Game 4 — League");
+    expect(firstEmbed(embeds).data.title).toBe("🎴 Game 4 — League");
   });
 
   it("GAME_5_PICK renders 'Game 5' and the picker's turn ping", () => {
@@ -78,7 +78,7 @@ describe("renderMatch — BO5 games 4 and 5 render as themselves, not game 3", (
     };
     const session = makeSession({ state: "GAME_5_PICK", bestOf: 5 }, { game5 });
     const { embeds, content, turnKey } = renderMatch(session, A, B);
-    expect(firstEmbed(embeds).data.title).toBe("🃏 Game 5 — League");
+    expect(firstEmbed(embeds).data.title).toBe("🎴 Game 5 — League");
     expect(content).toBe(`<@${A.discordId}> 🎯 your turn — pick the deck/stake.`);
     expect(turnKey).toBe(A.discordId);
   });
