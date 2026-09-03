@@ -209,7 +209,7 @@ function computeActiveContent(
       }
       // No votes yet → both players go play the run, then vote a winner. A
       // single "BOTH" key pings them both once on entry, then stays quiet.
-      return { content: `<@${a.discordId}> <@${b.discordId}> 🎮 play the run, then vote for the winner.`, turnKey: "BOTH" };
+      return { content: `<@${a.discordId}> <@${b.discordId}> 🃏 play the match, then vote for the winner.`, turnKey: "BOTH" };
     }
 
     // Any other GAME_<n>_* phase we don't have a specific ping for.
@@ -363,7 +363,7 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
   const modeLabel = s.isCasual ? `Casual · Best of ${s.bestOf}` : "League";
 
   const embed = new EmbedBuilder()
-    .setTitle(`🎮 Game ${gameNumber} — ${modeLabel}`)
+    .setTitle(`🃏 Game ${gameNumber} — ${modeLabel}`)
     .setColor(GAME_COLORS[gameNumber] ?? DEFAULT_GAME_COLOR)
     .setFooter({ text: `Match ${s.id}` });
 
@@ -561,7 +561,7 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
       const claimant = s.dcInitiatorPlayerId === a.id ? a : b;
       const dcer = s.dcInitiatorPlayerId === a.id ? b : a;
       embed.setDescription(
-        `🎲 Playing: **${picked?.deck ?? "?"} / ${picked?.stake ?? "?"} stake**\n\n` +
+        `🎴 Playing: **${picked?.deck ?? "?"} / ${picked?.stake ?? "?"} stake**\n\n` +
           `🔌 **${sanitizeName(claimant.displayName)}** reports that **${sanitizeName(dcer.displayName)}** disconnected.\n\n` +
           `**${sanitizeName(dcer.displayName)}** — **Confirm** to give ${sanitizeName(claimant.displayName)} this game, or **Keep playing** if you're still here.\n` +
           `_If ${sanitizeName(dcer.displayName)} is gone for good, use \`/helper\` to get a mod._`,
@@ -588,7 +588,7 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
       const target = vote === a.id ? a.displayName : b.displayName;
       return `· **${sanitizeName(who.displayName)}**: voted ${sanitizeName(target)}`;
     };
-    let description = `🎲 Playing: **${picked?.deck ?? "?"} / ${picked?.stake ?? "?"} stake**\n\n`;
+    let description = `🎴 Playing: **${picked?.deck ?? "?"} / ${picked?.stake ?? "?"} stake**\n\n`;
     if (game.disputed) {
       description +=
         `⚠️ **Disputed** — players voted for different winners.\n` +
