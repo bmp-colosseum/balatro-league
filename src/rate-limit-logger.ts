@@ -23,7 +23,7 @@ import {
 } from "@discordjs/rest";
 import type { Client } from "discord.js";
 import { discordRestDurationSeconds, discordRestRequestsTotal, normalizeRestRoute } from "./metrics.js";
-import { recordDiscordRestSample } from "./bot-health.js";
+import { recordDiscordRestSample, recordDiscordThrottle } from "./bot-health.js";
 
 // Pull an HTTP status off a rejected REST call -- DiscordAPIError and
 // HTTPError both carry a numeric .status; anything else labels "error".
@@ -80,6 +80,13 @@ export function attachRateLimitLogging(client: Client): void {
   attachRestTiming(rest);
 
   rest.on(RESTEvents.RateLimited, (info: RateLimitData) => {
+    // Tell the health monitor it was US. attachRestTiming clocks a request
+    // from the moment it is handed over, so everything queued behind this
+    // bucket is about to be recorded as slow -- without this signal the
+    // monitor reads our own burst as a Discord outage and (because Discord
+    // slowness is player-impacting) puts a banner in front of players. That
+    // is what fired at 07:02 every morning behind the daily member sync.
+    recordDiscordThrottle();
     console.warn("[rate-limit] hit:", {
       method: info.method,
       url: info.url,

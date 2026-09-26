@@ -90,7 +90,10 @@ export function isPlayerImpacting(health: BotHealth): boolean {
 // the same rule) -- an internal-only incident (e.g. a backlogged queue)
 // says so plainly instead.
 export function buildDegradedAlertContent(health: BotHealth, ownerDiscordId: string | undefined): string {
-  const mention = ownerDiscordId ? `<@${ownerDiscordId}> ` : "";
+  // Ping the owner only for `down`. A `degraded` post still lands in #devops for the record,
+  // but a slow-REST wobble is not worth a phone buzz -- 18 degraded/recovered pings in one
+  // week (2026-09-14..20) were all wobbles that cleared on their own.
+  const mention = ownerDiscordId && health.level === "down" ? `<@${ownerDiscordId}> ` : "";
   const lines = [
     `${mention}:rotating_light: **Bot health is now \`${health.level}\`**`,
     "",
@@ -119,9 +122,11 @@ export function buildRecoveredAlertContent(
   ownerDiscordId: string | undefined,
   playerImpacting: boolean,
 ): string {
-  const mention = ownerDiscordId ? `<@${ownerDiscordId}> ` : "";
+  // Never a mention: good news does not need to wake anyone. `ownerDiscordId` stays in the
+  // signature so the caller and tests do not change shape.
+  void ownerDiscordId;
   return [
-    `${mention}:white_check_mark: **Bot health has recovered -- back to \`ok\`.**`,
+    `:white_check_mark: **Bot health has recovered -- back to \`ok\`.**`,
     `Checked at ${health.checkedAt.toISOString()}.`,
     playerImpacting
       ? "Player-facing notices (banner + thread notes) have been cleared."

@@ -106,8 +106,14 @@ describe("ownerAllowedMentions", () => {
 });
 
 describe("buildDegradedAlertContent", () => {
-  it("starts with the owner mention when configured", () => {
+  it("does NOT mention the owner for a mere degraded", () => {
     const content = buildDegradedAlertContent(health(), "999");
+    expect(content).not.toContain("<@");
+    expect(content).toContain("`degraded`");
+  });
+
+  it("starts with the owner mention when the bot is down", () => {
+    const content = buildDegradedAlertContent(health({ level: "down" }), "999");
     expect(content.startsWith("<@999>")).toBe(true);
   });
 
@@ -197,9 +203,10 @@ describe("buildDegradedAlertContent", () => {
 });
 
 describe("buildRecoveredAlertContent", () => {
-  it("starts with the owner mention when configured", () => {
+  it("never mentions the owner, even when configured", () => {
     const content = buildRecoveredAlertContent(health({ level: "ok" }), "999", true);
-    expect(content.startsWith("<@999>")).toBe(true);
+    expect(content).not.toContain("<@");
+    expect(content).toContain("recovered");
   });
 
   it("has no mention at all when no owner id is configured", () => {

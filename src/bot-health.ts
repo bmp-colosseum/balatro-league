@@ -74,13 +74,57 @@ export interface BotHealth {
 // p95 on message edits. REST_P95_DEGRADED_MS is set well under that so this
 // monitor actually catches "Discord is having issues" instead of only
 // noticing after it's gotten far worse.
-export const REST_P95_DEGRADED_MS = 2000;
-export const REST_ERROR_RATE_DEGRADED = 0.05; // 5%
-export const GATEWAY_PING_DEGRADED_MS = 1000;
+//
+// LOOSENED 2026-09-05, after the monitor spent three days flagging a
+// player-impacting Discord incident at 07:02 every morning and recovering
+// from it within a tick. Nothing was wrong with Discord: our own daily
+// sync.guild-members / refresh.display-names burst (998 members) filled
+// discord.js's rate-limit buckets, and attachRestTiming measures a request
+// from the moment it is HANDED to the REST manager -- so the time each
+// request spent queued behind our own throttle landed in the p95 and read
+// as "Discord is slow". See recordDiscordThrottle for the fix to the
+// attribution; these numbers are the second, blunter layer.
+export const REST_P95_DEGRADED_MS = 3000;
+export const REST_ERROR_RATE_DEGRADED = 0.1; // 10%
+export const GATEWAY_PING_DEGRADED_MS = 2000;
 // Below this many REST samples in the rolling window, p95/error-rate are
-// reported as "insufficient data" rather than a number computed from 1-2
-// calls (which would be noise, not signal).
-export const MIN_REST_SAMPLES_FOR_SIGNAL = 5;
+// reported as "insufficient data" rather than a number computed from a
+// handful of calls (which would be noise, not signal). At 5 the "p95" was
+// effectively "the slowest of five" -- one slow call away from an incident,
+// which is exactly the shape of alert that gets ignored.
+export const MIN_REST_SAMPLES_FOR_SIGNAL = 20;
+
+// -- Confirmation before broadcasting ---------------------------------------
+// How many CONSECUTIVE ticks (60s each) a verdict must hold before it is
+// broadcast. The daily false alarm above started and recovered inside one
+// tick, so any confirmation at all would have swallowed it whole.
+//
+// Asymmetric on purpose. A degradation is the noisy direction (a burst, a
+// blip, one slow route) and can afford to wait; the database being gone is
+// both rarer and worse, so it waits half as long. RECOVERY is deliberately
+// NOT gated -- once players have been shown a banner, taking it down late is
+// worse than taking it down early, and a flapping recovery is at least
+// telling them the truth each time.
+export const DEGRADED_CONFIRM_TICKS = 3;
+export const DOWN_CONFIRM_TICKS = 2;
+
+/**
+ * PURE. The level to ACT on, given the most-recent-first run of raw verdicts.
+ *
+ * Returns "ok" until an unhealthy level has held for its confirmation count,
+ * so a single bad tick never reaches players. `history[0]` is this tick.
+ *
+ * A run that wobbles between "degraded" and "down" counts as continuously
+ * unhealthy (it is one incident changing severity, not two), and confirms at
+ * whichever threshold the CURRENT tick asks for.
+ */
+export function confirmedLevel(history: readonly HealthLevel[]): HealthLevel {
+  const current = history[0];
+  if (current === undefined || current === "ok") return "ok";
+  const needed = current === "down" ? DOWN_CONFIRM_TICKS : DEGRADED_CONFIRM_TICKS;
+  if (history.length < needed) return "ok";
+  return history.slice(0, needed).every((l) => l !== "ok") ? current : "ok";
+}
 
 // -- Alert-exempt queues ----------------------------------------------------
 // Queues in here are low-priority background work: never player-impacting,
@@ -148,6 +192,10 @@ export function computeRestStats(samples: readonly RestSample[]): RestStats {
 export interface HealthSampleInputs {
   db: { ok: boolean; latencyMs: number | null };
   discord: { gatewayPingMs: number | null } & RestStats;
+  // How many times discord.js throttled US since the last tick (see
+  // recordDiscordThrottle). Optional so a hand-built input (tests, older call
+  // sites) behaves exactly as it did before this existed.
+  selfThrottleEvents?: number;
   // Every GENUINELY stalled queue (already passed through
   // filterGenuinelyStalled in the shell) -- both alert-exempt and not.
   // deriveHealth is what splits them via isAlertExemptQueue.
@@ -183,16 +231,39 @@ export function deriveHealth(inputs: HealthSampleInputs, checkedAt: Date): BotHe
     notes.push(`Discord REST: insufficient data (${sampleCount} sample${sampleCount === 1 ? "" : "s"} so far).`);
   }
 
+  // Our own burst, not Discord's health. The REST window measures queue time
+  // as latency (see recordDiscordThrottle), so while discord.js is throttling
+  // us the p95 and the error rate are both measuring US. They stay in the
+  // notes -- a self-inflicted slowdown is real and worth seeing on
+  // /admin/host -- but they do not make Discord "degraded", which is what
+  // decides whether PLAYERS get told (isPlayerImpacting in
+  // health-broadcast.ts). The gateway ping below is unaffected: it is a
+  // websocket heartbeat that owes nothing to the REST buckets.
+  const selfThrottled = (inputs.selfThrottleEvents ?? 0) > 0;
+
   let discordLevel: HealthLevel = "ok";
   if (restP95Ms !== null && restP95Ms > REST_P95_DEGRADED_MS) {
-    discordLevel = "degraded";
-    notes.push(`Discord REST is slow: p95 ${Math.round(restP95Ms)}ms (over ${REST_P95_DEGRADED_MS}ms).`);
+    if (selfThrottled) {
+      notes.push(
+        `REST p95 ${Math.round(restP95Ms)}ms, but we were rate-limited ${inputs.selfThrottleEvents} time(s) this tick -- ` +
+          `that is our own request burst queueing, not Discord.`,
+      );
+    } else {
+      discordLevel = "degraded";
+      notes.push(`Discord REST is slow: p95 ${Math.round(restP95Ms)}ms (over ${REST_P95_DEGRADED_MS}ms).`);
+    }
   }
   if (restErrorRate !== null && restErrorRate > REST_ERROR_RATE_DEGRADED) {
-    discordLevel = "degraded";
-    notes.push(
-      `Discord REST error rate ${(restErrorRate * 100).toFixed(1)}% (over ${(REST_ERROR_RATE_DEGRADED * 100).toFixed(0)}%).`,
-    );
+    if (selfThrottled) {
+      notes.push(
+        `REST error rate ${(restErrorRate * 100).toFixed(1)}% while rate-limited -- 429s we caused, not a Discord fault.`,
+      );
+    } else {
+      discordLevel = "degraded";
+      notes.push(
+        `Discord REST error rate ${(restErrorRate * 100).toFixed(1)}% (over ${(REST_ERROR_RATE_DEGRADED * 100).toFixed(0)}%).`,
+      );
+    }
   }
   if (gatewayPingMs !== null && gatewayPingMs > GATEWAY_PING_DEGRADED_MS) {
     discordLevel = "degraded";
@@ -305,6 +376,28 @@ export function recordDiscordRestSample(durationMs: number, ok: boolean): void {
   if (restWindow.length > REST_WINDOW_SIZE) restWindow.shift();
 }
 
+// Rate-limit events since the last tick, reset by it. Fed from
+// rate-limit-logger.ts's RESTEvents.RateLimited handler -- the moment
+// discord.js decides a bucket is full and starts QUEUEING our requests.
+//
+// This is the difference between "Discord is slow" and "we asked for too
+// much at once", and the whole rolling window cannot tell them apart on its
+// own: attachRestTiming starts its clock when a request is handed over, so a
+// request that waits 3s in our own throttle queue and is then served in 40ms
+// is recorded as a 3s request. Burst hard enough and the p95 says outage.
+let throttleEventsThisTick = 0;
+
+export function recordDiscordThrottle(): void {
+  throttleEventsThisTick++;
+}
+
+/** Read and reset. Called once per tick, by the tick. */
+export function takeThrottleEvents(): number {
+  const n = throttleEventsThisTick;
+  throttleEventsThisTick = 0;
+  return n;
+}
+
 // -- Shell: the 60s tick, presence, and cache -------------------------------
 
 let cachedHealth: BotHealth | null = null;
@@ -314,6 +407,10 @@ let started = false;
 // which is exactly what keeps the boot/redeploy tick from firing a
 // transition broadcast (see health-broadcast.ts's classifyTransition).
 let previousHealthLevel: HealthLevel | null = null;
+// Raw verdicts, most-recent-first, for confirmedLevel. Only ever as long as
+// the largest confirmation window needs -- this is a debounce, not a log.
+const LEVEL_HISTORY_SIZE = Math.max(DEGRADED_CONFIRM_TICKS, DOWN_CONFIRM_TICKS);
+const levelHistory: HealthLevel[] = [];
 
 const TICK_INTERVAL_MS = 60_000;
 
@@ -444,14 +541,39 @@ async function runHealthTick(client: Client): Promise<void> {
     discord: { gatewayPingMs: gatewayPingMs(client), ...restStats },
     queue: { stalled },
     discordStatus,
+    // Read-and-reset, so this counts throttling since the LAST tick and the
+    // same burst is never blamed on two ticks running.
+    selfThrottleEvents: takeThrottleEvents(),
   };
-  const prevLevel = previousHealthLevel;
+  // RAW verdict: what is true this second. getCachedHealth() keeps returning
+  // it, because /league-bot-status and /admin/host are diagnostics -- an
+  // owner asking "what is wrong right now" must not be told "nothing" simply
+  // because it has only been wrong for a minute.
   cachedHealth = deriveHealth(inputs, new Date());
-  previousHealthLevel = cachedHealth.level;
+
+  // CONFIRMED verdict: what anyone gets TOLD about. A verdict has to hold for
+  // DEGRADED_CONFIRM_TICKS/DOWN_CONFIRM_TICKS consecutive ticks before it
+  // reaches a notification, a banner, or the bot's presence -- see
+  // confirmedLevel. Everything below this line uses it.
+  levelHistory.unshift(cachedHealth.level);
+  if (levelHistory.length > LEVEL_HISTORY_SIZE) levelHistory.pop();
+  const confirmed = confirmedLevel(levelHistory);
+  const prevLevel = previousHealthLevel;
+  previousHealthLevel = confirmed;
+  // The notes still describe the raw measurements -- they are what makes an
+  // alert actionable -- but the level they hang off is the confirmed one, so
+  // a notice can never say "degraded" while the thing that decided to send it
+  // said "ok".
+  const announced: BotHealth = { ...cachedHealth, level: confirmed };
+  if (confirmed !== cachedHealth.level) {
+    console.log(
+      `[bot-health] raw=${cachedHealth.level} announced=${confirmed} (awaiting confirmation; last ${levelHistory.length} tick(s): ${levelHistory.join(",")})`,
+    );
+  }
   // Fire-and-forget, best-effort -- must never delay or break the tick or
   // the presence update below. onHealthTransition guards every step
   // internally, but the .catch() here is defense in depth.
-  void onHealthTransition(client, prevLevel, cachedHealth.level, cachedHealth).catch((err) => {
+  void onHealthTransition(client, prevLevel, confirmed, announced).catch((err) => {
     console.warn("[bot-health] health transition broadcast failed:", err);
   });
   // Fire-and-forget, best-effort, same as above -- refreshBotStatusMessage
@@ -462,10 +584,10 @@ async function runHealthTick(client: Client): Promise<void> {
   // updates on the transition edge without a separate call from
   // health-broadcast.ts (which would otherwise import this module and
   // create a cycle back into bot-health.ts).
-  void refreshBotStatusMessage(cachedHealth).catch((err) => {
+  void refreshBotStatusMessage(announced).catch((err) => {
     console.warn("[bot-health] bot-status channel refresh failed:", err);
   });
-  await updatePresence(client, cachedHealth).catch((err) => {
+  await updatePresence(client, announced).catch((err) => {
     console.warn("[bot-health] presence update failed:", err);
   });
 }

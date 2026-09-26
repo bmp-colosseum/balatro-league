@@ -2,6 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   ALERT_EXEMPT_QUEUES,
   computeRestStats,
+  confirmedLevel,
+  DEGRADED_CONFIRM_TICKS,
+  DOWN_CONFIRM_TICKS,
   deriveAttribution,
   deriveHealth,
   describeAttribution,
@@ -96,13 +99,17 @@ describe("deriveHealth", () => {
   });
 
   it("degrades on a high gateway ping", () => {
+    // Derived from the constant, not a literal: this test hardcoded 1500ms
+    // and started passing vacuously the moment the threshold was loosened
+    // past it. A tuning change should move the input, never the meaning.
+    const ping = GATEWAY_PING_DEGRADED_MS + 500;
     const health = deriveHealth(
-      healthyInputs({ discord: { gatewayPingMs: 1500, restP95Ms: 150, restErrorRate: 0, sampleCount: 50 } }),
+      healthyInputs({ discord: { gatewayPingMs: ping, restP95Ms: 150, restErrorRate: 0, sampleCount: 50 } }),
       now,
     );
     expect(health.level).toBe("degraded");
     expect(health.discord.level).toBe("degraded");
-    expect(health.notes.some((n) => n.includes("Discord gateway ping") && n.includes("1500ms"))).toBe(true);
+    expect(health.notes.some((n) => n.includes("Discord gateway ping") && n.includes(`${ping}ms`))).toBe(true);
   });
 
   it("does not degrade a gateway ping right at the threshold", () => {
@@ -225,21 +232,27 @@ describe("computeRestStats", () => {
   });
 
   it("computes p95 + error rate on a known sample array at/above the floor", () => {
-    const durations = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
-    const all = samples(durations.map((d, i) => [d, i !== 9] as [number, boolean])); // last one failed
+    // Sized off MIN_REST_SAMPLES_FOR_SIGNAL so raising the floor cannot
+    // silently drop this back under it and null the stats out.
+    const n = MIN_REST_SAMPLES_FOR_SIGNAL;
+    const durations = Array.from({ length: n }, (_, i) => (i + 1) * 100);
+    const all = samples(durations.map((d, i) => [d, i !== n - 1] as [number, boolean])); // last one failed
     const stats = computeRestStats(all);
-    expect(stats.sampleCount).toBe(10);
-    expect(stats.restP95Ms).toBe(1000);
-    expect(stats.restErrorRate).toBeCloseTo(0.1, 10);
+    expect(stats.sampleCount).toBe(n);
+    // The p95 of n evenly-spaced samples is the ceil(0.95n)-th, which is only
+    // the LAST one while n <= 20 -- spelled out rather than assumed, since the
+    // original ten-sample version of this test could not tell the two apart.
+    expect(stats.restP95Ms).toBe(Math.ceil(0.95 * n) * 100);
+    expect(stats.restErrorRate).toBeCloseTo(1 / n, 10);
   });
 
   it("reports a 0% error rate when every sample succeeded", () => {
-    const all = samples(Array.from({ length: 8 }, (_, i) => [50 + i, true] as [number, boolean]));
+    const all = samples(Array.from({ length: MIN_REST_SAMPLES_FOR_SIGNAL }, (_, i) => [50 + i, true] as [number, boolean]));
     expect(computeRestStats(all).restErrorRate).toBe(0);
   });
 
   it("reports a 100% error rate when every sample failed", () => {
-    const all = samples(Array.from({ length: 6 }, (_, i) => [50 + i, false] as [number, boolean]));
+    const all = samples(Array.from({ length: MIN_REST_SAMPLES_FOR_SIGNAL }, (_, i) => [50 + i, false] as [number, boolean]));
     expect(computeRestStats(all).restErrorRate).toBe(1);
   });
 });
@@ -412,5 +425,114 @@ describe("describeAttribution", () => {
 
   it("calls out our own egress for a network-attributed incident", () => {
     expect(describeAttribution("network", OPERATIONAL_STATUS)).toContain("our network egress");
+  });
+});
+
+describe("confirmedLevel", () => {
+  // The monitor spent three days announcing a player-impacting Discord
+  // incident at 07:02 and recovering from it within one tick. Nothing here
+  // makes a real outage invisible -- it delays the announcement by minutes.
+  it("stays ok while a degradation is still unconfirmed", () => {
+    expect(confirmedLevel(["degraded"])).toBe("ok");
+    expect(confirmedLevel(["degraded", "degraded"])).toBe("ok");
+  });
+
+  it("confirms a degradation that holds", () => {
+    expect(confirmedLevel(Array(DEGRADED_CONFIRM_TICKS).fill("degraded"))).toBe("degraded");
+  });
+
+  it("confirms db-down sooner than a degradation", () => {
+    // Rarer and worse, so it waits half as long -- but still not one tick.
+    expect(DOWN_CONFIRM_TICKS).toBeLessThan(DEGRADED_CONFIRM_TICKS);
+    expect(confirmedLevel(Array(DOWN_CONFIRM_TICKS).fill("down"))).toBe("down");
+  });
+
+  it("swallows a single bad tick between healthy ones", () => {
+    // Exactly the 07:02 shape: one burst, one tick, gone.
+    expect(confirmedLevel(["degraded", "ok", "ok"])).toBe("ok");
+  });
+
+  it("does not restart the count when severity wobbles mid-incident", () => {
+    // One incident changing severity is not two incidents, so a run that
+    // flips degraded<->down still confirms rather than resetting forever.
+    expect(confirmedLevel(["degraded", "down", "degraded"])).toBe("degraded");
+    expect(confirmedLevel(["down", "degraded"])).toBe("down");
+  });
+
+  it("never delays a RECOVERY", () => {
+    // Once players have a banner up, taking it down late is worse than early.
+    expect(confirmedLevel(["ok", "degraded", "degraded"])).toBe("ok");
+  });
+
+  it("is ok on an empty history, i.e. the first tick after boot", () => {
+    expect(confirmedLevel([])).toBe("ok");
+  });
+
+  it("only ever reports the CURRENT tick's level", () => {
+    // It must not resurrect an older, worse verdict that has already passed.
+    const out = confirmedLevel(["degraded", "down", "down"]);
+    expect(out).not.toBe("down");
+  });
+});
+
+describe("deriveHealth: our own rate-limiting is not a Discord fault", () => {
+  // attachRestTiming clocks a request from the moment it is handed to the
+  // REST manager, so time spent queued behind OUR OWN full bucket is recorded
+  // as request latency. The daily member sync (998 members) made the p95 look
+  // like an outage, and because Discord slowness is player-impacting it put a
+  // banner in front of players every morning.
+  const slow = { gatewayPingMs: 40, restP95Ms: REST_P95_DEGRADED_MS + 5000, restErrorRate: 0, sampleCount: 50 };
+
+  it("calls Discord degraded when the slowness is NOT ours", () => {
+    const health = deriveHealth(healthyInputs({ discord: slow }), now);
+    expect(health.discord.level).toBe("degraded");
+    expect(health.level).toBe("degraded");
+  });
+
+  it("does not, when we were being throttled in the same window", () => {
+    const health = deriveHealth(healthyInputs({ discord: slow, selfThrottleEvents: 7 }), now);
+    expect(health.discord.level).toBe("ok");
+    expect(health.level).toBe("ok");
+  });
+
+  it("still SAYS so -- suppressed from alerting, not from the notes", () => {
+    // A self-inflicted slowdown is real and worth seeing on /admin/host; it
+    // just is not evidence about Discord.
+    const health = deriveHealth(healthyInputs({ discord: slow, selfThrottleEvents: 7 }), now);
+    expect(health.notes.join(" ")).toMatch(/rate-limited 7 time/);
+    expect(health.notes.join(" ")).not.toBe("All systems normal.");
+  });
+
+  it("treats a self-inflicted error rate the same way", () => {
+    // The 429s in that window are ours too.
+    const errs = { gatewayPingMs: 40, restP95Ms: 150, restErrorRate: 0.5, sampleCount: 50 };
+    expect(deriveHealth(healthyInputs({ discord: errs }), now).discord.level).toBe("degraded");
+    expect(deriveHealth(healthyInputs({ discord: errs, selfThrottleEvents: 3 }), now).discord.level).toBe("ok");
+  });
+
+  it("does NOT excuse a bad gateway ping", () => {
+    // The websocket heartbeat owes nothing to the REST buckets, so throttling
+    // is no explanation for it -- suppressing this would blind the monitor to
+    // a real disconnect during any busy minute.
+    const ping = { gatewayPingMs: GATEWAY_PING_DEGRADED_MS + 1000, restP95Ms: 150, restErrorRate: 0, sampleCount: 50 };
+    expect(deriveHealth(healthyInputs({ discord: ping, selfThrottleEvents: 9 }), now).discord.level).toBe("degraded");
+  });
+
+  it("does NOT excuse the database being unreachable", () => {
+    const health = deriveHealth(healthyInputs({ db: { ok: false, latencyMs: null }, selfThrottleEvents: 9 }), now);
+    expect(health.level).toBe("down");
+  });
+
+  it("does NOT excuse a stalled queue", () => {
+    const health = deriveHealth(healthyInputs({ queue: { stalled: ["match.remind"] }, selfThrottleEvents: 9 }), now);
+    expect(health.level).toBe("degraded");
+  });
+
+  it("behaves exactly as before when the field is absent", () => {
+    // Optional so older call sites and hand-built inputs are unaffected.
+    const withField = deriveHealth(healthyInputs({ discord: slow, selfThrottleEvents: 0 }), now);
+    const without = deriveHealth(healthyInputs({ discord: slow }), now);
+    expect(without.level).toBe(withField.level);
+    expect(without.notes).toEqual(withField.notes);
   });
 });
