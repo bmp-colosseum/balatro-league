@@ -3,10 +3,11 @@ import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { hasTier } from "@/lib/admin";
 import { loadProfileExtras } from "@/lib/loaders/profile-extras";
-import { loadPlayerTraits } from "@/lib/loaders/player-traits";
+import { loadPlayerTraitsCached } from "@/lib/loaders/player-traits-cache";
 import { deckImage, stakeImage } from "@/lib/balatro-slugs";
 import { getShowBmpMmr } from "@/lib/preferences";
-import { loadPlayerHistory, loadPlayerBanStats, type GamePlayed } from "@/lib/profile";
+import { loadPlayerHistory, type GamePlayed } from "@/lib/profile";
+import { ProfileAnalyticsSection } from "@/components/ProfileAnalyticsSection";
 import { tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { Callout } from "@/components/Callout";
@@ -26,7 +27,7 @@ import { TimezoneSetting } from "@/components/TimezoneSetting";
 import { NextSeasonCard } from "@/components/NextSeasonCard";
 import { prisma } from "@/lib/prisma";
 import { tourProfilePath, TOUR_PUBLIC_URL } from "@/lib/tour-profile";
-import type { SeasonHistoryEntry, FavoriteEntry, BanStatEntry } from "@/lib/profile";
+import type { SeasonHistoryEntry } from "@/lib/profile";
 
 // Builds the hover tooltip for a season card's "W-D-L" inline number.
 // Spells out the rates explicitly so a glance over a player's career
@@ -39,79 +40,8 @@ function seasonRateTooltip(h: SeasonHistoryEntry): string {
   return `${win}% W · ${draw}% D · ${loss}% L`;
 }
 
-// One "favourite" row — deck and/or stake thumbnail + name + a count
-// (× plays, or W for wins). Combos carry "Deck · Stake" so we split + show both.
-function favRow(r: FavoriteEntry, kind: "deck" | "stake" | "combo", metric: "played" | "won") {
-  const [deckName, stakeName] = kind === "combo" ? r.name.split(" · ") : [r.name, r.name];
-  // Win RATE is the headline, with the wins/plays record next to it for
-  // context — never a bare play count. e.g. "3W/5  60%".
-  const winRate = r.gamesPlayed > 0 ? Math.round((r.gamesWon / r.gamesPlayed) * 100) : 0;
-  const title =
-    metric === "won"
-      ? `${r.gamesWon} wins across ${r.gamesPlayed} games`
-      : `${r.gamesPlayed} games played, ${r.gamesWon} won`;
-  return (
-    <li key={r.name} title={title} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0" }}>
-      {(kind === "deck" || kind === "combo") && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={deckImage(deckName!)} alt="" width={16} height={16} style={{ borderRadius: 2 }} />
-      )}
-      {(kind === "stake" || kind === "combo") && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={stakeImage(kind === "combo" ? stakeName! : r.name)} alt="" width={16} height={16} style={{ borderRadius: 2 }} />
-      )}
-      <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</span>
-      <span className="muted" style={{ whiteSpace: "nowrap", fontSize: 11, fontVariantNumeric: "tabular-nums" }}>
-        {r.gamesWon}W/{r.gamesPlayed}
-      </span>
-      <span
-        style={{
-          whiteSpace: "nowrap",
-          fontVariantNumeric: "tabular-nums",
-          fontWeight: 600,
-          minWidth: 36,
-          textAlign: "right",
-          color: winRate >= 50 ? "var(--success)" : "var(--danger)",
-        }}
-      >
-        {winRate}%
-      </span>
-    </li>
-  );
-}
-// One "most-banned" row: icon, name, ban rate (how often this player bans it
-// when it appears) + the bans/appearances record. Ban rate isn't good/bad, so
-// it's a neutral orange, not win/loss colours.
-function banRow(r: BanStatEntry, kind: "deck" | "stake") {
-  return (
-    <li
-      key={r.name}
-      title={`Banned ${r.bans} of the ${r.appearances} times it appeared in your pool`}
-      style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0" }}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={kind === "deck" ? deckImage(r.name) : stakeImage(r.name)} alt="" width={16} height={16} style={{ borderRadius: 2 }} />
-      <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</span>
-      <span className="muted" style={{ whiteSpace: "nowrap", fontSize: 11, fontVariantNumeric: "tabular-nums" }}>
-        {r.bans}/{r.appearances}
-      </span>
-      <span style={{ whiteSpace: "nowrap", fontWeight: 600, fontVariantNumeric: "tabular-nums", minWidth: 36, textAlign: "right", color: "var(--admin)" }}>
-        {r.banRatePct}%
-      </span>
-    </li>
-  );
-}
-function favBlock(title: string, rows: FavoriteEntry[], kind: "deck" | "stake" | "combo", metric: "played" | "won") {
-  if (rows.length === 0) return null;
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <div className="muted" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>{title}</div>
-      <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 12, display: "flex", flexDirection: "column", gap: 2 }}>
-        {rows.map((r) => favRow(r, kind, metric))}
-      </ul>
-    </div>
-  );
-}
+// favRow/banRow/favBlock moved to ProfileAnalyticsSection (the deferred
+// deck/stake/ban-stats section) alongside the data they render.
 
 // Unified profile view, rendered by BOTH /profile/[id] and /me (no redirect).
 // It resolves the viewer itself (via auth) and branches the UI on the
@@ -191,7 +121,7 @@ export async function ProfileView({
     showBmpMmr,
   });
   const isOwnProfile = viewer.isOwnProfile;
-  const traits = await loadPlayerTraits(profile.player.id);
+  const traits = await loadPlayerTraitsCached(profile.player.id);
   // Own-profile-only personal settings (folded in from the old /me page).
   const myPrefs = isOwnProfile
     ? await prisma.player.findUnique({
@@ -223,8 +153,9 @@ export async function ProfileView({
   const shownTimezone =
     (isOwnProfile || viewerInGuild) && playerPrivacy?.timezone ? playerPrivacy.timezone : null;
 
-  // What this player bans (most-banned decks/stakes + their ban rate).
-  const banStats = await loadPlayerBanStats(profile.player.id);
+  // Ban stats (most-banned decks/stakes) are a second full game-table scan —
+  // deferred into ProfileAnalyticsSection, which fetches them only once the
+  // "Your deck & stake stats" section is opened (see analytics-actions.ts).
 
   // Current-season standing. activeSeasonEntry covers a dropped member too (so the
   // admin reinstate control can show); activeSeason is the ACTIVE-only subset used
@@ -629,136 +560,17 @@ export async function ProfileView({
         })()}
 
         {/* Personal deck/stake analytics — collapsed so they don't bury the
-            record above. These are YOUR numbers; league-wide stats live on /stats. */}
-        {(profile.deckPerformance.filter((d) => d.gamesTotal >= 5).length > 0
-          || profile.favorites.mostPlayed.decks.length > 0
-          || banStats.decks.length > 0
-          || banStats.stakes.length > 0) && (
-          <details className="card" style={{ marginTop: 16 }}>
-            <summary style={{ cursor: "pointer" }}><strong>Your deck &amp; stake stats</strong></summary>
-        {/* Deck + stake performance cards. Apply a minimum-games filter
-            (5+ games) so a 100%/1 deck doesn't shout louder than a
-            real signal. */}
-        {profile.deckPerformance.filter((d) => d.gamesTotal >= 5).length > 0 && (
-          <div className="grid grid-2" style={{ marginTop: 16 }}>
-            <div className="card">
-              <strong>Deck performance</strong>
-              <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
-                Per deck. Min 5 games.
-              </p>
-              <table className="table-dense" style={{ width: "100%", fontSize: 12 }}>
-                <tbody>
-                  {profile.deckPerformance
-                    .filter((d) => d.gamesTotal >= 5)
-                    .slice(0, 10)
-                    .map((d) => (
-                      <tr key={d.name}>
-                        <td>
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={deckImage(d.name)} alt="" width={20} height={20} style={{ verticalAlign: "middle", marginRight: 6, borderRadius: 3 }} />
-                          {d.name}
-                        </td>
-                        <td style={{ textAlign: "right" }} className="muted">
-                          {d.gamesWon}/{d.gamesTotal}
-                        </td>
-                        <td style={{ textAlign: "right", width: 50 }}>
-                          <strong style={{ color: d.winRatePct >= 50 ? "var(--success)" : "var(--danger)" }}>
-                            {d.winRatePct}%
-                          </strong>
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-            {profile.stakePerformance.filter((s) => s.gamesTotal >= 5).length > 0 && (
-              <div className="card">
-                <strong>Stake performance</strong>
-                <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
-                  Per stake. Min 5 games.
-                </p>
-                <table className="table-dense" style={{ width: "100%", fontSize: 12 }}>
-                  <tbody>
-                    {profile.stakePerformance
-                      .filter((s) => s.gamesTotal >= 5)
-                      .map((s) => (
-                        <tr key={s.name}>
-                          <td>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={stakeImage(s.name)} alt="" width={20} height={20} style={{ verticalAlign: "middle", marginRight: 6, borderRadius: 3 }} />
-                            {s.name}
-                          </td>
-                          <td style={{ textAlign: "right" }} className="muted">
-                            {s.gamesWon}/{s.gamesTotal}
-                          </td>
-                          <td style={{ textAlign: "right", width: 50 }}>
-                            <strong style={{ color: s.winRatePct >= 50 ? "var(--success)" : "var(--danger)" }}>
-                              {s.winRatePct}%
-                            </strong>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Favourites — top-5 by raw count (decks / stakes / combos), most-
-            played and (separately) most-won. */}
-        {profile.favorites.mostPlayed.decks.length > 0 && (
-          <div className="grid grid-2" style={{ marginTop: 16 }}>
-            <div className="card">
-              <strong>⭐ Most played</strong>
-              <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
-                By games played.
-              </p>
-              {favBlock("Decks", profile.favorites.mostPlayed.decks, "deck", "played")}
-              {favBlock("Stakes", profile.favorites.mostPlayed.stakes, "stake", "played")}
-              {favBlock("Combos", profile.favorites.mostPlayed.combos, "combo", "played")}
-            </div>
-            <div className="card">
-              <strong>🏆 Most won</strong>
-              <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
-                By games won.
-              </p>
-              {favBlock("Decks", profile.favorites.mostWon.decks, "deck", "won")}
-              {favBlock("Stakes", profile.favorites.mostWon.stakes, "stake", "won")}
-              {favBlock("Combos", profile.favorites.mostWon.combos, "combo", "won")}
-            </div>
-          </div>
-        )}
-
-        {/* What this player bans — their most-banned decks/stakes + ban rate. */}
-        {(banStats.decks.length > 0 || banStats.stakes.length > 0) && (
-          <div className="grid grid-2" style={{ marginTop: 16 }}>
-            {banStats.decks.length > 0 && (
-              <div className="card">
-                <strong>🚫 Most-banned decks</strong>
-                <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
-                  How often you ban each deck when it shows up.
-                </p>
-                <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 12, display: "flex", flexDirection: "column", gap: 2 }}>
-                  {banStats.decks.map((r) => banRow(r, "deck"))}
-                </ul>
-              </div>
-            )}
-            {banStats.stakes.length > 0 && (
-              <div className="card">
-                <strong>🚫 Most-banned stakes</strong>
-                <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
-                  How often you ban each stake when it shows up.
-                </p>
-                <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 12, display: "flex", flexDirection: "column", gap: 2 }}>
-                  {banStats.stakes.map((r) => banRow(r, "stake"))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-          </details>
-        )}
+            record above. These are YOUR numbers; league-wide stats live on
+            /stats. Ban stats are fetched only once this section is opened
+            (see ProfileAnalyticsSection) — deck/stake perf + favourites are
+            already-loaded byproducts of the match history above, passed in
+            directly. */}
+        <ProfileAnalyticsSection
+          playerId={profile.player.id}
+          deckPerformance={profile.deckPerformance}
+          stakePerformance={profile.stakePerformance}
+          favorites={profile.favorites}
+        />
 
         <h3 style={{ marginTop: 24 }}>Season history</h3>
         {profile.history.length === 0 ? (

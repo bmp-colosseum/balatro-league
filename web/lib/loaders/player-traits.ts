@@ -14,6 +14,9 @@
 // /admin/traits (stored in TraitOverride, keyed by the trait's registry key).
 
 import { prisma } from "@/lib/prisma";
+import { computeEarnedTraits, topStakeDeterministic, type EarnedTrait, type TraitGameRow } from "@/lib/trait-rules";
+
+export { topStakeDeterministic };
 
 export interface PlayerTrait {
   key: string;
@@ -117,39 +120,20 @@ function makeTrait(key: string, detail: string, overrides: Map<string, TraitOver
   };
 }
 
-type Counts = Record<string, number>;
-function bump(c: Counts, k: string): void {
-  c[k] = (c[k] ?? 0) + 1;
-}
-// Deterministic "top stake": highest `metric` count, ties broken by the
-// `tiebreak` count, then by stake name (alphabetical). Shared with the traits
-// page (traits-admin.ts) so a player's traits are IDENTICAL on both surfaces.
-// The old profile/page split used insertion order vs SQL row order and disagreed
-// whenever a player's most-won stake was tied (e.g. Gold 2 / Purple 2).
-export function topStakeDeterministic(
-  metric: Record<string, number>,
-  tiebreak: Record<string, number>,
-): string | null {
-  let best: { name: string; m: number; tb: number } | null = null;
-  for (const name of Object.keys(metric).sort()) {
-    const m = metric[name] ?? 0;
-    if (m <= 0) continue;
-    const tb = tiebreak[name] ?? 0;
-    if (!best || m > best.m || (m === best.m && tb > best.tb)) best = { name, m, tb };
-  }
-  return best?.name ?? null;
+// Layer admin overrides onto an already-decided earned-traits list (presentation
+// only — the earn/no-earn decision + detail text came from computeEarnedTraits).
+export function presentEarnedTraits(earned: EarnedTrait[], overrides: Map<string, TraitOverrideRow>): PlayerTrait[] {
+  return earned.map((t) => makeTrait(t.key, t.detail, overrides));
 }
 
-export async function loadPlayerTraits(
-  playerId: string,
-  overridesInput?: Map<string, TraitOverrideRow>,
-): Promise<PlayerTrait[]> {
-  const overrides = overridesInput ?? (await loadTraitOverrides());
-
-  // Read the player's games relationally (Game + its full GameDeck pool) —
-  // no JSON parsing. Shootouts fold in automatically (they're matches now).
-  // Only confirmed, non-DC games count.
-  const playerGames = await prisma.game.findMany({
+// The game-fetch shared by loadPlayerTraits (live) and the cache's cold path
+// (web/lib/loaders/player-traits-cache.ts) — reads the player's games
+// relationally (Game + its full GameDeck pool), no JSON parsing. Shootouts
+// fold in automatically (they're matches now). Only confirmed, non-DC games
+// count. This is the expensive full-game-table scan the cache exists to avoid
+// paying on every profile view.
+export async function fetchTraitGames(playerId: string): Promise<TraitGameRow[]> {
+  return prisma.game.findMany({
     where: {
       dcByPlayerId: null,
       match: { status: "CONFIRMED", OR: [{ playerAId: playerId }, { playerBId: playerId }] },
@@ -161,89 +145,18 @@ export async function loadPlayerTraits(
       pool: { select: { deck: true, stake: true, picked: true, bannedById: true } },
     },
   });
+}
 
-  const playedStakes: Counts = {}; // stake every game was played on (the picked combo)
-  const wonStakes: Counts = {}; // …of those, the ones this player won
-  let totalPicks = 0; // games this player was the picker (non-first)
-  let games = 0;
-  let randomPicks = 0; // …of those, picked via the random button
-  let randomPickWins = 0; // …of those, how many they won
-  let ghostAvailable = 0; // games where the Ghost deck was in the pool
-  let ghostBanned = 0; // …of those, how many this player banned it
-
-  for (const g of playerGames) {
-    if (g.pool.length === 0) continue;
-    games++;
-    const isFirst = g.firstPlayerId === playerId;
-
-    // Ghostbuster — Ghost available in the pool vs. this player banning it.
-    const ghostRow = g.pool.find((d) => d.deck === "Ghost");
-    if (ghostRow) {
-      ghostAvailable++;
-      if (ghostRow.bannedById === playerId) ghostBanned++;
-    }
-
-    // The picked combo (what the game was played on).
-    const picked = g.pool.find((d) => d.picked);
-    if (picked) {
-      bump(playedStakes, picked.stake);
-      if (g.winnerId === playerId) bump(wonStakes, picked.stake);
-      // Only the OTHER (non-first) player makes the final pick.
-      if (!isFirst) {
-        totalPicks++;
-        if (g.pickedRandomly) {
-          randomPicks++;
-          if (g.winnerId === playerId) randomPickWins++;
-        }
-      }
-    }
-  }
-
-  if (games < 10) return []; // 10-game floor — earned over a few seasons, not in one
-
-  const traits: PlayerTrait[] = [];
-  const topPlayedStake = topStakeDeterministic(playedStakes, wonStakes);
-  const topWonStake = topStakeDeterministic(wonStakes, playedStakes);
-
-  // 🤍 White Stake Warrior — White is BOTH their most-played and most-won
-  // stake. Will beat you… as long as it's on White (the gentle stake). The
-  // self-deprecating mirror of Dr. Spectred, who does it on Gold.
-  if (topPlayedStake === "White" && topWonStake === "White") {
-    traits.push(
-      makeTrait(
-        "white-warrior",
-        `${playedStakes["White"] ?? 0} games on White · ${wonStakes["White"] ?? 0} wins on it`,
-        overrides,
-      ),
-    );
-  }
-  // 🎓 Dr. Spectred — PhD in Gold Stake. Gold is BOTH most-played and most-won.
-  // Gold is the hardest stake → rare in practice.
-  if (topPlayedStake === "Gold" && topWonStake === "Gold") {
-    traits.push(
-      makeTrait(
-        "dr-spectred",
-        `${playedStakes["Gold"] ?? 0} games on Gold · ${wonStakes["Gold"] ?? 0} wins on it`,
-        overrides,
-      ),
-    );
-  }
-  // 👻 Ghostbuster — bans the Ghost deck most of the time it shows up.
-  if (ghostAvailable > 0 && ghostBanned / ghostAvailable >= 0.6) {
-    traits.push(
-      makeTrait(
-        "ghostbuster",
-        `banned Ghost in ${Math.round((ghostBanned / ghostAvailable) * 100)}% of games it appeared`,
-        overrides,
-      ),
-    );
-  }
-  // 🎲 Super Balatro Genius — random-picks more often than not AND wins the
-  // majority of those games. Doesn't care what the deck or stake is.
-  if (randomPicks > 0 && randomPicks / totalPicks >= 0.5 && randomPickWins / randomPicks >= 0.5) {
-    traits.push(
-      makeTrait("super-balatro-genius", `won ${randomPickWins} of ${randomPicks} random picks`, overrides),
-    );
-  }
-  return traits;
+// Live (uncached) trait computation — fetches + decides + presents every
+// call. Used by the cache's cold path and any caller that genuinely wants a
+// live read. Profile pages should prefer loadPlayerTraitsCached instead (see
+// player-traits-cache.ts) to avoid the full game-table scan on every view.
+export async function loadPlayerTraits(
+  playerId: string,
+  overridesInput?: Map<string, TraitOverrideRow>,
+): Promise<PlayerTrait[]> {
+  const overrides = overridesInput ?? (await loadTraitOverrides());
+  const playerGames = await fetchTraitGames(playerId);
+  const earned = computeEarnedTraits(playerId, playerGames);
+  return presentEarnedTraits(earned, overrides);
 }

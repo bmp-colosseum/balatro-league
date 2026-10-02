@@ -9,12 +9,8 @@
 // trait), so this stays bounded by the veteran count, not the whole roster.
 
 import { prisma } from "@/lib/prisma";
-import {
-  TRAIT_REGISTRY,
-  loadTraitOverrides,
-  loadPlayerTraits,
-  type TraitOverrideRow,
-} from "./player-traits";
+import { TRAIT_REGISTRY, loadTraitOverrides } from "./player-traits";
+import { loadEarnedTraitsCached } from "./player-traits-cache";
 
 export interface TraitHolder {
   id: string;
@@ -44,11 +40,8 @@ export interface TraitAdminRow {
 
 const GAMES_FLOOR = 10; // matches loadPlayerTraits — traits need 10+ games
 
-// Compute the holder set for every trait. Passes the pre-loaded overrides into
-// loadPlayerTraits so it isn't re-queried per player.
-async function computeTraitHolders(
-  overrides: Map<string, TraitOverrideRow>,
-): Promise<Map<string, TraitHolder[]>> {
+// Compute the holder set for every trait.
+async function computeTraitHolders(): Promise<Map<string, TraitHolder[]>> {
   // Candidate players: enough confirmed, non-DC games with a pool that they
   // COULD clear the floor. loadPlayerTraits re-applies the real >= 10 gate, so
   // this is just a cheap pre-filter (same game-counting rule, so no boundary
@@ -72,11 +65,18 @@ async function computeTraitHolders(
     "super-balatro-genius": new Set(),
   };
 
-  // ONE code path with the profile — compute each candidate's traits exactly as
-  // loadPlayerTraits does. Bounded by the veteran count (players with 10+ games).
-  for (const c of candidates) {
-    const traits = await loadPlayerTraits(c.player_id, overrides);
-    for (const t of traits) holderIds[t.key]?.add(c.player_id);
+  // ONE decision path with the profile (computeEarnedTraits via the same
+  // cache) — so the two surfaces can never disagree. Bounded by the veteran
+  // count (players with 10+ games), and run concurrently rather than one
+  // sequential full-game-scan per candidate: on a warm cache this is N cheap
+  // indexed reads in parallel instead of N serialized full table scans; on a
+  // cold cache it's N recomputes running together (same fan-out fix as
+  // loadManyDivisionStandings) instead of one after another.
+  const holdersPerCandidate = await Promise.all(
+    candidates.map(async (c) => ({ playerId: c.player_id, earned: await loadEarnedTraitsCached(c.player_id) })),
+  );
+  for (const { playerId, earned } of holdersPerCandidate) {
+    for (const t of earned) holderIds[t.key]?.add(playerId);
   }
 
   // Resolve display names for just the holders (one query).
@@ -114,7 +114,7 @@ export async function loadTraitsAdmin(): Promise<TraitAdminRow[]> {
   // catalog (labels/criteria/icons) always renders.
   let holdersByKey = new Map<string, TraitHolder[]>();
   try {
-    holdersByKey = await computeTraitHolders(overrides);
+    holdersByKey = await computeTraitHolders();
   } catch {
     holdersByKey = new Map();
   }

@@ -186,9 +186,22 @@ export async function loadManyDivisionStandings(
   });
   const playerById = new Map(players.map((p) => [p.id, p]));
 
-  for (const divisionId of divisionIds) {
-    const payload = parsedByDiv.get(divisionId);
-    out.set(divisionId, payload ? hydrateRows(payload, playerById) : await loadDivisionStandings(divisionId));
-  }
+  // Cold-cache divisions (no DivisionStandings row yet) each rebuild via
+  // loadDivisionStandings, which recomputes AND warms the cache (writes the
+  // row) so the next request is cheap. Run every cold rebuild concurrently
+  // instead of inside a sequential `for await` loop — with N cold divisions
+  // the old loop paid N sequential compute-and-write round trips; a locked
+  // season landing on a fully cold cache (e.g. right after build-season)
+  // could serialize dozens of these one after another. Warm divisions are
+  // already-resolved data (no await), so Promise.all costs nothing extra
+  // for them.
+  const entries = await Promise.all(
+    divisionIds.map(async (divisionId): Promise<readonly [string, StandingRow[]]> => {
+      const payload = parsedByDiv.get(divisionId);
+      const rows = payload ? hydrateRows(payload, playerById) : await loadDivisionStandings(divisionId);
+      return [divisionId, rows] as const;
+    }),
+  );
+  for (const [divisionId, rows] of entries) out.set(divisionId, rows);
   return out;
 }
