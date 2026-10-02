@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
   OPEN: { bg: "rgba(46,204,113,0.2)", fg: "var(--success)" },
   CLOSED: { bg: "rgba(241,196,15,0.2)", fg: "var(--accent)" },
-  BUILT: { bg: "rgba(88,101,242,0.18)", fg: "var(--accent-2)" },
+  BUILT: { bg: "rgba(88,101,242,0.18)", fg: "var(--accent-2-text)" },
   ENDED: { bg: "rgba(149,165,166,0.18)", fg: "var(--muted)" },
 };
 

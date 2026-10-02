@@ -86,7 +86,7 @@ export function ContinuityPreview({
           <strong> BMP</strong> (balatromp ranked) and our <strong>hidden MMR</strong> (right). To hand-move
           anyone, build it and drag on the season page. Nothing here is saved.
         </p>
-        <p style={{ fontSize: 11, margin: "6px 0 0", color: "var(--accent-2)" }}>
+        <p style={{ fontSize: 11, margin: "6px 0 0", color: "var(--accent-2-text)" }}>
           🔒 <strong>A returner only ever moves down by relegation</strong> — i.e. by actually finishing in the
           bottom of their division. If the people who finished below them just didn&apos;t sign up again, they are
           <strong> not</strong> the new bottom and they <strong>hold</strong> (tagged 🔒). The size-balancer (which

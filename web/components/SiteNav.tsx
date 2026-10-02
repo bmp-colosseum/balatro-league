@@ -1,6 +1,11 @@
 // Shared site nav. Server component — reads session + admin tier from helpers.
-// Tailwind utilities for layout (wraps on mobile); the settings menu stays a
-// native <details> for zero-JS accessibility.
+// Desktop (sm and up) keeps the inline links + a native <details> settings
+// menu, zero-JS. Below 640px there isn't room for the 7 links, the gear
+// dropdown, AND the account control on one line -- it used to wrap into three
+// rows (logo, then the links, then search/settings/login). Below sm, SiteNav
+// renders one row instead: logo, a labelled "Menu" trigger (SiteMobileMenu)
+// holding the links + settings rows, search, then sign-in/account -- same
+// shape as the Tour site's MoreMenu split.
 
 import Link from "next/link";
 import Image from "next/image";
@@ -11,6 +16,7 @@ import { toggleShowBmpMmr, toggleShowUsernames, toggleShowDiscordIds } from "@/a
 import { loadOpenSignupRoundId } from "@/lib/loaders/join";
 import { CommandButton } from "@/components/CommandButton";
 import { Button } from "@/components/ui/button";
+import { SiteMobileMenu } from "@/components/SiteMobileMenu";
 import { PRIMARY_LINKS } from "@/lib/nav-links";
 
 export async function SiteNav({ activePath }: { activePath: string }) {
@@ -32,14 +38,17 @@ export async function SiteNav({ activePath }: { activePath: string }) {
   if (isAdmin) primary.push({ href: "/admin", label: "Admin" });
 
   return (
-    <header className="flex flex-wrap items-center gap-3 border-b border-border bg-card px-4 py-2.5 md:gap-6 md:px-6 md:py-3">
+    <header className="flex flex-nowrap items-center gap-3 border-b border-border bg-card px-4 py-2.5 md:gap-6 md:px-6 md:py-3">
       <h1 className="m-0 text-base">
-        <Link href="/" className="flex items-center gap-2 text-foreground no-underline hover:opacity-80">
+        <Link href="/" className="flex min-h-11 items-center gap-2 text-foreground no-underline hover:opacity-80 sm:min-h-0">
           <Image src="/Balatro_League.png" alt="" width={24} height={24} className="rounded-sm" priority />
-          Balatro League
+          {/* Hides below sm -- the icon alone keeps the brand link recognizable
+              and tappable while leaving room for the Menu trigger, search, and
+              account control to fit on one row at 390px. */}
+          <span className="hidden sm:inline">Balatro League</span>
         </Link>
       </h1>
-      <nav className="pixel flex flex-wrap items-center gap-1 md:gap-2 text-[13px]">
+      <nav className="pixel hidden flex-wrap items-center gap-1 text-[13px] sm:flex md:gap-2">
         {primary.map((link) => {
           const isActive =
             link.href === "/admin" ? activePath.startsWith("/admin") : link.href === activePath;
@@ -60,9 +69,25 @@ export async function SiteNav({ activePath }: { activePath: string }) {
         })}
       </nav>
 
-      <span className="ml-auto flex items-center gap-3">
+      <span className="ml-auto flex flex-nowrap items-center gap-3">
+        {/* Phone-only -- folds the primary links + settings rows + login/logout
+            into one labelled trigger (see its own doc comment). */}
+        <SiteMobileMenu
+          links={primary}
+          activePath={activePath}
+          showingBmpMmr={showingBmpMmr}
+          showingUsernames={showingUsernames}
+          showingDiscordIds={showingDiscordIds}
+          inGuild={inGuild}
+          isAdmin={isAdmin}
+          isLoggedIn={isLoggedIn}
+          userName={user?.name ?? null}
+          toggleShowBmpMmr={toggleShowBmpMmr}
+          toggleShowUsernames={toggleShowUsernames}
+          toggleShowDiscordIds={toggleShowDiscordIds}
+        />
         <CommandButton />
-        <details className="relative">
+        <details className="relative hidden sm:block">
           <summary
             title="Settings"
             aria-label="Settings"
@@ -116,15 +141,18 @@ export async function SiteNav({ activePath }: { activePath: string }) {
 
         {isLoggedIn ? (
           <>
-            <Link href="/me" className="text-foreground">
+            <Link href="/me" className="flex min-h-11 items-center text-foreground sm:min-h-0">
               {user?.name ?? "(unknown)"}
             </Link>
-            <Link href="/api/auth/signout" className="muted text-xs">
+            {/* Hidden below sm -- the phone Menu folds in an equivalent Logout
+                row (see SiteMobileMenu), so the row doesn't also carry this
+                separate text link at 390px. */}
+            <Link href="/api/auth/signout" className="muted hidden text-xs sm:inline">
               logout
             </Link>
           </>
         ) : (
-          <Link href="/auth/signin" className="muted text-xs">
+          <Link href="/auth/signin" className="muted flex min-h-11 items-center text-xs sm:min-h-0">
             Login with Discord
           </Link>
         )}

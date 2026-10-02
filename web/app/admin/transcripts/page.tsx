@@ -92,7 +92,7 @@ export default async function TranscriptsPage({
                     </td>
                     <td className="muted">{fmt(r.lastAt)}</td>
                     <td>
-                      <Link href={`/admin/transcripts/${r.threadId}`} className="link-action" style={{ color: "var(--accent-2)" }}>
+                      <Link href={`/admin/transcripts/${r.threadId}`} className="link-action" style={{ color: "var(--accent-2-text)" }}>
                         View →
                       </Link>
                     </td>

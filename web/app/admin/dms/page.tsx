@@ -87,7 +87,7 @@ function InboxRow({ row }: { row: InboundDmRow }) {
               target="_blank"
               rel="noreferrer"
               className="link-action"
-              style={{ fontSize: 12, color: "var(--accent-2)" }}
+              style={{ fontSize: 12, color: "var(--accent-2-text)" }}
             >
               {a.filename}
             </a>

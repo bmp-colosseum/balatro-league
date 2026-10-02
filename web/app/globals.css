@@ -12,6 +12,16 @@
   --muted: #abb3c4;
   --accent: #f1c40f;
   --accent-2: #5865f2;
+  /* Text-only twin of --accent-2. The raw value is dual-purpose (solid button
+     fills + progress bars with white text on top, which already clears 4.5:1)
+     but as TEXT directly on the dark page/card backgrounds it measured
+     3.4-3.7:1 -- axe's color-contrast rule flagged it "serious" on 13 of 15
+     pages (the default `a` color plus a handful of inline accent call-outs),
+     since most of those are small 12-13px links/labels needing the full
+     4.5:1 floor, not the 3:1 large-text one. Same hue/saturation, lighter, so
+     links still read as "blurple" -- only text consumers use this; fills
+     keep --accent-2 unchanged so button contrast doesn't shift. */
+  --accent-2-text: #747ff4;
   --danger: #e74c3c;
   --success: #2ecc71;
   --info: #76c7ff;
@@ -55,7 +65,7 @@ body {
   background: var(--bg);
   color: var(--text);
 }
-a { color: var(--accent-2); text-decoration: none; }
+a { color: var(--accent-2-text); text-decoration: none; }
 a:hover { text-decoration: underline; }
 h1, h2, h3 { margin: 0 0 8px 0; }
 h2 { font-size: 24px; }
@@ -207,6 +217,48 @@ section[id]:target > h3 {
     margin-bottom: 4px;
   }
   table.responsive-table td.card-header::before { content: none; }
+}
+
+/* ----------------------------------------------------------------------
+   Phone touch targets -- 44px floor (measured at 390px on /standings:
+   visible sub-44px targets went from 122 down from here; same pattern as
+   the Tour site's globals.css, with the Tour-specific class names swapped
+   for the league's own: td a, .standings-card-name, .muted a, main p a,
+   .card > a / .card header links, summary, button, [role="button"]).
+   ---------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  /* Native controls + the kit's own buttons/menu triggers/disclosure
+     headers (settings gear, "System" dropdown, the new phone Menu triggers,
+     ConfirmButton/SubmitButton) -- min-height, not more padding, so a
+     caller's own compact padding still wins on that property; this only
+     adds what's missing. */
+  input[type="text"], input[type="number"], input[type="datetime-local"],
+  input[type="email"], input[type="password"], input[type="search"],
+  select, textarea,
+  summary, button, [role="button"] {
+    min-height: 44px;
+  }
+
+  /* Plain-text links with no visible border/background of their own --
+     growing the box via padding would be invisible, so a matching
+     negative margin claws the LAYOUT space back to roughly the original
+     line height; only the (invisible) hit area reaches into the row's own
+     padding/gap. Covers: table-cell links (dense standings/players/stats
+     tables), the standings mobile-card player name, muted inline links
+     (traits holders, admin notes), running-text paragraph links, and a
+     card's title link (division name on /standings, headings elsewhere). */
+  td a,
+  .standings-card-name,
+  .muted a,
+  main p a,
+  .card > a,
+  .card h1 a, .card h2 a, .card h3 a, .card strong a,
+  .link-action {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-block: -12.5px;
+  }
 }
 
 .grid { display: grid; gap: 16px; }

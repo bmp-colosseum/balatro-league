@@ -878,11 +878,11 @@ function LifecycleActions({
         />
         <LocalDateTimeField name="closesAt" label="Signups close (your time, optional)" />
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <span className="muted" style={{ fontSize: 12 }}>📅 Season starts <span style={{ color: "var(--accent-2)" }}>(shown in the signup message)</span></span>
+          <span className="muted" style={{ fontSize: 12 }}>📅 Season starts <span style={{ color: "var(--accent-2-text)" }}>(shown in the signup message)</span></span>
           <DatePickerField name="seasonStartsAt" placeholder="Pick a start date & time" />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <span className="muted" style={{ fontSize: 12 }}>🏁 Season ends <span style={{ color: "var(--accent-2)" }}>(shown in the signup message)</span></span>
+          <span className="muted" style={{ fontSize: 12 }}>🏁 Season ends <span style={{ color: "var(--accent-2-text)" }}>(shown in the signup message)</span></span>
           <DatePickerField name="seasonEndsAt" placeholder="Pick an end date & time" />
         </div>
         <SubmitButton disabled={channels.length === 0}>Open signups</SubmitButton>
