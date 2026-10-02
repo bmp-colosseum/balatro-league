@@ -9,6 +9,7 @@ import { auth } from "@/auth";
 import { hasDevOpsBinding } from "@/lib/admin";
 import { ADMIN_LINKS, type AdminNavLink } from "@/lib/nav-links";
 import { unreadDmCount } from "@/lib/loaders/dms";
+import { AdminMobileMenu } from "@/components/AdminMobileMenu";
 
 async function canSeeDevOpsLinks(): Promise<boolean> {
   const session = await auth();
@@ -22,7 +23,7 @@ async function canSeeDevOpsLinks(): Promise<boolean> {
 
 const linkClass = (isActive: boolean) =>
   "rounded px-2.5 py-1 text-[13px] transition-colors " +
-  (isActive ? "bg-[var(--bg)] text-[var(--accent-2)]" : "text-[var(--muted)] hover:text-foreground");
+  (isActive ? "bg-[var(--bg)] text-[var(--accent-2-text)]" : "text-[var(--muted)] hover:text-foreground");
 
 export async function AdminNav({ activePath }: { activePath: string }) {
   const [showDevOps, unreadDms] = await Promise.all([canSeeDevOpsLinks(), unreadDmCount()]);
@@ -31,10 +32,19 @@ export async function AdminNav({ activePath }: { activePath: string }) {
   const mainLinks = ADMIN_LINKS.filter((l) => !l.system && visible(l));
   const systemLinks = ADMIN_LINKS.filter((l) => l.system && visible(l));
   const systemActive = systemLinks.some(isActive);
+  // Plain `active` flags for AdminMobileMenu (a client component) -- isActive
+  // itself is a function and can't cross the server/client boundary.
+  const mobileMainLinks = mainLinks.map((l) => ({ ...l, active: isActive(l) }));
+  const mobileSystemLinks = systemLinks.map((l) => ({ ...l, active: isActive(l) }));
 
   return (
     <div className="border-b border-border bg-secondary px-4 py-2 md:px-6">
-      <nav className="pixel mx-auto flex max-w-[1100px] flex-wrap items-center gap-2 md:gap-3">
+      {/* Phone-only: every admin link (main + system), nothing hidden -- see
+          AdminMobileMenu's doc comment. Desktop (sm+) keeps the row below. */}
+      <div className="mx-auto flex max-w-[1100px] sm:hidden">
+        <AdminMobileMenu mainLinks={mobileMainLinks} systemLinks={mobileSystemLinks} unreadDms={unreadDms} />
+      </div>
+      <nav className="pixel mx-auto hidden max-w-[1100px] flex-wrap items-center gap-2 sm:flex md:gap-3">
         {mainLinks.map((link) => (
           <Link key={link.href} href={link.href} className={linkClass(isActive(link))}>
             {link.label}
@@ -61,7 +71,7 @@ export async function AdminNav({ activePath }: { activePath: string }) {
                   className={
                     "block rounded px-2 py-1.5 text-[13px] " +
                     (isActive(link)
-                      ? "bg-secondary text-[var(--accent-2)]"
+                      ? "bg-secondary text-[var(--accent-2-text)]"
                       : "text-foreground hover:bg-secondary")
                   }
                 >

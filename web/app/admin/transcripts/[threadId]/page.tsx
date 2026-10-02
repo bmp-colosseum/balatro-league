@@ -26,7 +26,7 @@ export default async function TranscriptDetailPage({
       <AdminNav activePath="/admin/transcripts" />
       <main>
         <p className="muted" style={{ marginBottom: 4 }}>
-          <Link href="/admin/transcripts" className="link-action" style={{ color: "var(--accent-2)" }}>← All transcripts</Link>
+          <Link href="/admin/transcripts" className="link-action" style={{ color: "var(--accent-2-text)" }}>← All transcripts</Link>
         </p>
         <h2>{header.kind === "dispute" ? "⚖ Dispute" : header.kind === "support" ? "🎫 Support" : "🎮 Match"} transcript</h2>
         <div className="card" style={{ marginBottom: 12 }}>
@@ -43,7 +43,7 @@ export default async function TranscriptDetailPage({
 
         <p className="muted" style={{ fontSize: 13, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
           <span>Edited and deleted messages are kept as evidence and marked below.</span>
-          <a href={htmlUrl} target="_blank" rel="noopener" className="link-action" style={{ color: "var(--accent-2)" }}>
+          <a href={htmlUrl} target="_blank" rel="noopener" className="link-action" style={{ color: "var(--accent-2-text)" }}>
             Open / download ↗
           </a>
         </p>

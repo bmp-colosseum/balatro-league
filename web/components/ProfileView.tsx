@@ -56,7 +56,7 @@ function picksBansDetails(games: GamePlayed[], opponentName: string) {
   if (withPool.length === 0) return null;
   return (
     <details style={{ marginTop: 3 }}>
-      <summary style={{ cursor: "pointer", fontSize: 10, color: "var(--accent-2)" }}>picks &amp; bans</summary>
+      <summary style={{ cursor: "pointer", fontSize: 10, color: "var(--accent-2-text)" }}>picks &amp; bans</summary>
       <div style={{ marginTop: 4, display: "grid", gap: 8 }}>
         {withPool.map((g) => {
           const bans = g.pool
@@ -181,7 +181,7 @@ export async function ProfileView({
         )}
         {tourPath && (
           <p style={{ fontSize: 13, marginTop: 2 }}>
-            <a href={`${TOUR_PUBLIC_URL}${tourPath}`} className="link-action" style={{ color: "var(--accent-2)" }}>
+            <a href={`${TOUR_PUBLIC_URL}${tourPath}`} className="link-action" style={{ color: "var(--accent-2-text)" }}>
               View on Team Tour ↗
             </a>
           </p>
