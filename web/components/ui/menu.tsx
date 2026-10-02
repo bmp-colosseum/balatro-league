@@ -55,8 +55,16 @@ function MenuItem({ className, ...props }: MenuPrimitive.Item.Props) {
   return (
     <MenuPrimitive.Item
       data-slot="menu-item"
+      // bg-transparent is explicit, not incidental: a MenuItem rendered via
+      // `render={<button type="submit" />}` (the settings toggles) is a real
+      // <button> under the hood, and globals.css's base `button` rule fills
+      // any <button> blurple unless something else sets background-color --
+      // Tailwind's layers only let a utility win when one is actually present
+      // to out-cascade it, so the row stayed solid blurple even after that
+      // base rule moved into @layer base. This row explicitly owns "no fill
+      // until highlighted" instead of relying on the absence of one.
       className={cn(
-        "relative flex w-full cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm text-popover-foreground outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "relative flex w-full cursor-default items-center gap-2 rounded-md bg-transparent px-2 py-1.5 text-sm text-popover-foreground outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}

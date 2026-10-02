@@ -65,8 +65,18 @@ body {
   background: var(--bg);
   color: var(--text);
 }
-a { color: var(--accent-2-text); text-decoration: none; }
-a:hover { text-decoration: underline; }
+/* Base link styles live in @layer base so Tailwind UTILITY classes win over
+   them. An unlayered rule beats ANY layered utility regardless of specificity
+   (Tailwind v4 cascade layers) -- unlayered, this `a` rule forced every link
+   to the blurple text color no matter what Tailwind color utility a caller
+   passed, e.g. the phone Menu's MenuLinkItem rows (text-popover-foreground)
+   and the Menu/Admin-menu triggers (text-[var(--muted)]) stayed blurple
+   regardless. Same reasoning applies to the `button` rule further down --
+   see its own comment. */
+@layer base {
+  a { color: var(--accent-2-text); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+}
 h1, h2, h3 { margin: 0 0 8px 0; }
 h2 { font-size: 24px; }
 h3 { font-size: 18px; }
@@ -292,18 +302,32 @@ input[type="email"], input[type="password"], select, textarea {
   font: inherit;
 }
 input:focus, select:focus, textarea:focus { outline: 1px solid var(--accent-2); border-color: var(--accent-2); }
-button {
-  background: var(--accent-2);
-  color: white;
-  border: none;
-  padding: 8px 14px;
-  border-radius: 4px;
-  cursor: pointer;
-  font: inherit;
+
+/* This bare `button` rule MUST live in @layer base, same reason as the `a`
+   rule above -- an unlayered rule beats ANY layered Tailwind utility
+   regardless of specificity (Tailwind v4 cascade layers). Unlayered, it
+   forced EVERY <button> -- including the phone Menu/Admin-menu triggers
+   (bg-transparent) and every MenuItem toggle row rendered as a <button>
+   (transparent until highlighted) -- to this same solid blurple fill, so
+   the "Menu" trigger and the "Show BMP MMR"/"Show Discord IDs" rows all
+   rendered as solid filled buttons instead of plain nav-coloured text.
+   Layered here, a caller's own Tailwind background/border classes correctly
+   win; this is just the plain-HTML <button> fallback for the rare unstyled
+   button. Do not unwrap this again. */
+@layer base {
+  button {
+    background: var(--accent-2);
+    color: white;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    font: inherit;
+  }
+  button.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+  button.danger { background: var(--danger); }
+  button:hover { filter: brightness(1.1); }
 }
-button.secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
-button.danger { background: var(--danger); }
-button:hover { filter: brightness(1.1); }
 
 /* Inline text-link action — the tiny "+ Add" / "remove" / "done" affordances
    inside editors. NOT a button (shadcn <Button> always carries height/padding);
