@@ -47,5 +47,11 @@ COPY --from=build /app/web/public ./public
 # queries work regardless.
 COPY --from=build /app/web/node_modules/.prisma ./node_modules/.prisma
 EXPOSE 3000
+# No curl in this slim image -- probe with node itself. Polled by Docker directly (feeds
+# `docker inspect --format '{{.State.Health.Status}}'`, which the deploy workflow's rolling
+# league-web-a/league-web-b sequence waits on -- see .github/workflows/deploy.yml and
+# app/api/health/route.ts).
+HEALTHCHECK --interval=10s --timeout=5s --start-period=60s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 # The bot owns league migrations (applied on its own boot), so web just serves.
 CMD ["node", "server.js"]
