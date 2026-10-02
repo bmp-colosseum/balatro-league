@@ -7,6 +7,28 @@ name: deploy
 # workflow only advances LEAGUE_BOT_TAG / LEAGUE_WEB_TAG in the box's versions.env and
 # recreates those containers. Tour images live in balatro-team-tour. Secrets stay
 # box-local at /srv/balatro/secrets.env.
+#
+# ROLLING WEB DEPLOY: the infra compose splits league-web into two identical services,
+# league-web-a and league-web-b (names below, via WEB_SERVICES), sitting behind one
+# Traefik weighted service that only routes to copies reporting healthy on GET
+# /api/health (see web/app/api/health/route.ts and the Dockerfile HEALTHCHECK). The
+# Deploy step below rolls them ONE AT A TIME -- recreate league-web-a, wait for Docker to
+# report it healthy, then do the same for league-web-b -- so at every point at least one
+# copy is serving behind Traefik and a bad image never takes the site down. If a copy
+# fails to go healthy within the timeout, LEAGUE_WEB_TAG is rolled back to the
+# previously-deployed tag and that copy is recreated on the old image before the job
+# fails. league-bot keeps its existing ban-phase-guarded restart (unrelated to this web
+# roll) and has no public HTTP surface to health-check from here.
+#
+# Migration ordering: the BOT container applies committed Prisma migrations on its own
+# boot (web never runs migrations -- see web/Dockerfile's final CMD, which just serves).
+# Web is rolled BEFORE the bot, so for the seconds between a web copy coming up on new
+# code and the bot finishing its migration, that web copy is running against the OLD
+# schema. Any web change that depends on a new column/table must stay backward-compatible
+# with the pre-migration schema for that window (e.g. ship the web read as optional /
+# feature-flagged, land the column in a prior deploy, or make the query tolerant of the
+# column's absence) -- the same discipline already required of expand/contract schema
+# changes elsewhere in this repo.
 on:
   workflow_dispatch:
     inputs:
@@ -35,6 +57,11 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      # Compose service names for the rolling web copies (see the header comment above).
+      # Configurable so the first run after the infra cutover -- or any future rename --
+      # is a one-line change here instead of an edit to the roll logic itself.
+      WEB_SERVICES: "league-web-a league-web-b"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -105,7 +132,7 @@ jobs:
           if [ "${{ steps.pick.outputs.league_bot }}" = 1 ]; then build balatro-league-bot Dockerfile.league-bot; else echo "skip league-bot"; fi
           if [ "${{ steps.pick.outputs.league_web }}" = 1 ]; then build balatro-league-web web/Dockerfile; else echo "skip league-web"; fi
 
-      - name: Deploy (roll league services only)
+      - name: Deploy (rolling web A/B, then bot)
         if: ${{ github.event_name == 'push' || inputs.deploy }}
         env:
           OWNER: ${{ steps.v.outputs.owner }}
@@ -116,21 +143,72 @@ jobs:
           # box. We advance only the two league tags here (a service we skipped keeps its
           # previously-deployed tag), preserving GHCR_OWNER + the tour tags. Then recreate
           # only the league containers -- Postgres / Traefik / tour services never move.
+          #
+          # See the header comment at the top of this file for the rolling-deploy shape.
+          # WEB_SERVICES (job env, default "league-web-a league-web-b") is recreated ONE AT
+          # A TIME, each gated on Docker's own health status (fed by the HEALTHCHECK in
+          # web/Dockerfile, which polls GET /api/health) -- never both at once, so Traefik
+          # always has at least one healthy copy to route to.
           PREV=/srv/balatro/versions.env
           prev() { grep -E "^$1=" "$PREV" 2>/dev/null | tail -1 | cut -d= -f2-; }
           pick() { if [ "$2" = 1 ]; then echo "$TAG"; else local p; p="$(prev "$1")"; echo "${p:-latest}"; fi; }
           LB_TAG=$(pick LEAGUE_BOT_TAG '${{ steps.pick.outputs.league_bot }}')
           LW_TAG=$(pick LEAGUE_WEB_TAG '${{ steps.pick.outputs.league_web }}')
-          # Rewrite only the two LEAGUE_* lines, preserving GHCR_OWNER + everything else.
-          tmp="$(mktemp)"
-          grep -vE '^(LEAGUE_BOT_TAG|LEAGUE_WEB_TAG)=' "$PREV" > "$tmp" || true
-          { echo "LEAGUE_BOT_TAG=$LB_TAG"; echo "LEAGUE_WEB_TAG=$LW_TAG"; } >> "$tmp"
-          mv "$tmp" "$PREV"
-          echo "rolling league: league-bot=$LB_TAG league-web=$LW_TAG"
+          LW_PREV_TAG="$(prev LEAGUE_WEB_TAG)"
+
+          # Rewrite only the two LEAGUE_* lines in the shared versions.env, preserving the
+          # rest. Takes the web tag as an argument so rollback can call it again with the
+          # previous tag without duplicating the rewrite logic.
+          write_versions() {
+            local tmp; tmp="$(mktemp)"
+            grep -vE '^(LEAGUE_BOT_TAG|LEAGUE_WEB_TAG)=' "$PREV" > "$tmp" || true
+            { echo "LEAGUE_BOT_TAG=$LB_TAG"; echo "LEAGUE_WEB_TAG=$1"; } >> "$tmp"
+            mv "$tmp" "$PREV"
+          }
+          write_versions "$LW_TAG"
+          echo "rolling league: league-bot=$LB_TAG, league-web=$LW_TAG (was ${LW_PREV_TAG:-none}) via [$WEB_SERVICES]"
+
           cd /srv/balatro/repo/infra/compose
           E="--env-file /srv/balatro/versions.env --env-file /srv/balatro/secrets.env"
-          # Web is safe to restart anytime.
-          docker compose -p balatro $E up -d league-web
+
+          # Poll `docker inspect`'s health status (set by the image's own HEALTHCHECK)
+          # rather than curling ourselves -- that keeps this script and the container
+          # agreeing on exactly one health definition (GET /api/health).
+          wait_healthy() { # container-name timeout-seconds
+            local name="$1" timeout="$2" waited=0 status
+            while true; do
+              status="$(docker inspect --format '{{.State.Health.Status}}' "$name" 2>/dev/null || echo "missing")"
+              [ "$status" = "healthy" ] && return 0
+              [ "$waited" -ge "$timeout" ] && { echo "last status: $status"; return 1; }
+              sleep 5
+              waited=$((waited + 5))
+            done
+          }
+
+          # A copy that never goes healthy on the new tag gets put back on the tag that
+          # was live before this run, so a bad image doesn't strand that copy down.
+          rollback_web() {
+            echo "::error::rolling web deploy failed -- rolling back LEAGUE_WEB_TAG to ${LW_PREV_TAG:-latest}"
+            write_versions "${LW_PREV_TAG:-latest}"
+            for svc in $WEB_SERVICES; do
+              docker compose -p balatro $E up -d "$svc" || true
+            done
+          }
+
+          for svc in $WEB_SERVICES; do
+            step_start=$SECONDS
+            echo "== rolling $svc to $LW_TAG =="
+            docker compose -p balatro $E up -d "$svc"
+            container="balatro-${svc}-1"
+            if ! wait_healthy "$container" 180; then
+              echo "::error::$container did not report healthy within 180s of the roll"
+              docker compose -p balatro $E logs --tail=200 "$svc" || true
+              rollback_web
+              exit 1
+            fi
+            echo "$svc healthy after $((SECONDS - step_start))s"
+          done
+
           # Ban-phase guard: if the bot is being rolled, don't interrupt a live ban/pick
           # phase. Wait for click-sensitive sessions to clear (re-check every 30s up to
           # ~10 min), then roll regardless (graceful shutdown makes a late roll a ~3s blip).
@@ -153,6 +231,34 @@ jobs:
           # running" -- which would fail an otherwise-successful roll and train us
           # to ignore red deploys. Never let cleanup fail the deploy.
           docker image prune -f || echo "[cleanup] image prune skipped (another prune is running)"
+
+      # Health gate: the step above only confirms the web containers were recreated and
+      # reported healthy INSIDE the docker network, not that the site is reachable from
+      # outside it (Traefik routing, DNS, TLS). Poll rather than a single immediate curl
+      # -- a freshly-recreated container legitimately needs a few seconds to pick up
+      # traffic.
+      - name: Verify league-web came up
+        if: ${{ github.event_name == 'push' || inputs.deploy }}
+        run: |
+          set -uo pipefail
+          wait_for() { # url
+            local url="$1" deadline=$((SECONDS + 90))
+            until curl -sf -o /dev/null -m 5 "$url"; do
+              [ "$SECONDS" -ge "$deadline" ] && return 1
+              sleep 3
+            done
+          }
+
+          echo "== waiting for league-web (https://balatroleague.com) =="
+          if ! wait_for "https://balatroleague.com"; then
+            echo "::error::league-web did not come up within 90s of the roll"
+            cd /srv/balatro/repo/infra/compose
+            E="--env-file /srv/balatro/versions.env --env-file /srv/balatro/secrets.env"
+            for svc in $WEB_SERVICES; do
+              docker compose -p balatro $E logs --tail=200 "$svc" || true
+            done
+            exit 1
+          fi
 
       # Deploy visibility: post the outcome to the Discord devops channel. The
       # webhook URL lives box-local in secrets.env (never in git/GH secrets);
