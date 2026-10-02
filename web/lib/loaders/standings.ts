@@ -12,7 +12,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { isScheduleLocked } from "@/lib/schedule-locked";
-import { byBestBmpSnapshot } from "@/lib/bmp-snapshots";
+import { loadBestBmpSnapshotsForPlayerIds } from "@/lib/bmp-snapshots";
 import { loadDivisionStandings, loadManyDivisionStandings } from "@/lib/standings-cache";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { getPlacementRules } from "@/lib/placement-rules";
@@ -323,24 +323,12 @@ export async function loadMmrForPlayerIds(
   const mmrByPlayerId = new Map<string, StandingsMmrEntry>();
   if (!showBmpMmr || playerIds.length === 0) return { mmrByPlayerId, bmpCurrentSeason };
 
-  const snapshots = await prisma.playerMmrSnapshot.findMany({
-    where: { playerId: { in: playerIds }, rankedMmr: { not: null } },
-    orderBy: { capturedAt: "desc" },
-    select: { playerId: true, bmpSeason: true, rankedMmr: true, capturedAt: true },
-  });
-  const byPlayer = new Map<string, typeof snapshots>();
-  for (const s of snapshots) {
-    if (!s.playerId) continue;
-    const arr = byPlayer.get(s.playerId) ?? [];
-    arr.push(s);
-    byPlayer.set(s.playerId, arr);
-  }
-  for (const [pid, arr] of byPlayer) {
-    arr.sort(byBestBmpSnapshot);
-    const best = arr[0];
-    if (best?.rankedMmr != null) {
-      mmrByPlayerId.set(pid, { mmr: best.rankedMmr, bmpSeason: best.bmpSeason });
-    }
+  // One row per player — the SQL DISTINCT ON query applies the same
+  // highest-bmpSeason-then-newest preference as byBestBmpSnapshot, so we no
+  // longer pull every snapshot a player ever captured just to keep one.
+  const best = await loadBestBmpSnapshotsForPlayerIds(playerIds, prisma);
+  for (const row of best) {
+    mmrByPlayerId.set(row.playerId, { mmr: row.rankedMmr, bmpSeason: row.bmpSeason });
   }
   return { mmrByPlayerId, bmpCurrentSeason };
 }
