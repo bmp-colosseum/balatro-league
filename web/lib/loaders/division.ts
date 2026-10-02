@@ -9,9 +9,9 @@
 // display names so the rendering doesn't need a second hydration pass.
 
 import { prisma } from "@/lib/prisma";
-import { isScheduleLocked } from "@/lib/schedule-locked";
 import { loadDivisionStandings } from "@/lib/standings-cache";
 import { formatSeasonLabel } from "@/lib/format-season";
+import { computeUnplayedPairs, pairKey } from "@/lib/unplayed-pairs";
 
 export interface DivisionStandingRow {
   player: { id: string; displayName: string; discordId: string; username: string | null };
@@ -143,27 +143,39 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
   // Unplayed matchups across ACTIVE members. With a locked schedule (graph or
   // pre-created round-robin) only the ASSIGNED pairs are real matchups; with no
   // locked schedule it's a full round-robin (every not-yet-played pair).
-  const playedKey = (a: string, b: string) => (a < b ? `${a}-${b}` : `${b}-${a}`);
-  const playedSet = new Set(pairings.map((p) => playedKey(p.playerAId, p.playerBId)));
-  // Load the pre-created schedule and treat the division as locked if it has any
-  // 0-0 PENDING match — robust against a stale/false season.scheduleLocked flag.
-  const scheduleMatches = await prisma.match.findMany({
-    where: { divisionId, format: "LEAGUE_BO2" },
-    select: { playerAId: true, playerBId: true, status: true, gamesWonA: true, gamesWonB: true },
-  });
-  const scheduleLocked = isScheduleLocked(division.season.scheduleLocked, scheduleMatches);
-  const assignedSet = new Set(scheduleMatches.map((p) => playedKey(p.playerAId, p.playerBId)));
-  const unplayed: DivisionUnplayed[] = [];
-  for (let i = 0; i < activeMembers.length; i++) {
-    for (let j = i + 1; j < activeMembers.length; j++) {
-      const a = activeMembers[i]!.player;
-      const b = activeMembers[j]!.player;
-      const key = playedKey(a.id, b.id);
-      if (playedSet.has(key)) continue;
-      if (scheduleLocked && !assignedSet.has(key)) continue; // not on the schedule
-      unplayed.push({ a, b });
-    }
+  const playedSet = new Set(pairings.map((p) => pairKey(p.playerAId, p.playerBId)));
+
+  // season.scheduleLocked is only a fast-path; the authoritative signal is a
+  // pre-created, never-played 0-0 PENDING match (see isScheduleLocked's own
+  // doc comment). When the flag is already true we trust it and skip the DB
+  // round trip entirely. When it's false we still need to rule out a stale
+  // flag, but a cheap existence check (hits the @@index([divisionId, status,
+  // confirmedAt]) prefix) answers that without pulling every match row in the
+  // division — the full row fetch below only happens for divisions that
+  // actually turn out to be locked, where we need it anyway to build the
+  // assigned-pairs set.
+  const scheduleLocked =
+    division.season.scheduleLocked ||
+    (await prisma.match.findFirst({
+      where: { divisionId, format: "LEAGUE_BO2", status: "PENDING", gamesWonA: 0, gamesWonB: 0 },
+      select: { id: true },
+    })) !== null;
+
+  const assignedSet = new Set<string>();
+  if (scheduleLocked) {
+    const scheduleMatches = await prisma.match.findMany({
+      where: { divisionId, format: "LEAGUE_BO2" },
+      select: { playerAId: true, playerBId: true },
+    });
+    for (const m of scheduleMatches) assignedSet.add(pairKey(m.playerAId, m.playerBId));
   }
+
+  const unplayed: DivisionUnplayed[] = computeUnplayedPairs({
+    activeMembers: activeMembers.map((m) => ({ id: m.player.id, data: m.player })),
+    playedKeys: playedSet,
+    scheduleLocked,
+    assignedKeys: assignedSet,
+  });
 
   // Shootouts — separate model from Pairing. We resolve the two players
   // through the active-member list (which is already loaded) so we
