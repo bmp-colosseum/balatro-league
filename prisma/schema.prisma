@@ -74,6 +74,7 @@ model Player {
   disputedMatches      Match[]             @relation("MatchDisputer")
   mmrSnapshots         PlayerMmrSnapshot[]
   strikes              Strike[]
+  traitsCache          PlayerTraitsCache?
   // Opt-OUT of "a new season is opening" reminder DMs. Default false = every
   // past player gets asked when signups open (they answer in/out from the DM).
   // Set true by the 🔕 "stop asking" button or the /me toggle. Replaces the old
@@ -716,6 +717,23 @@ model DivisionStandings {
   // Player rows so display name changes show immediately without a
   // cache rebuild.
   rowsJson   String
+}
+
+// Cache of which "fun" traits (see web/lib/loaders/player-traits.ts) a player
+// has earned, so /me and /profile/[id] don't re-scan every confirmed game of
+// theirs on every view. Same shape/convention as DivisionStandings: a cold
+// read computes once and writes this row; a warm read just hydrates it. Also
+// self-heals on a TTL (read side treats a row older than 24h as cold and
+// recomputes) so a trait earned by last night's games shows up without any
+// dedicated "recompute on confirm" hook. traitsJson holds ONLY the earned
+// subset (key + detail) — label/emoji/description still come from the
+// TRAIT_REGISTRY/TraitOverride layer at render time, so an admin override
+// takes effect immediately without invalidating this cache.
+model PlayerTraitsCache {
+  playerId   String   @id
+  player     Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  computedAt DateTime @default(now()) @updatedAt
+  traitsJson String
 }
 
 enum DivisionMemberStatus {
