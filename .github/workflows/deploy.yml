@@ -191,14 +191,14 @@ jobs:
             echo "::error::rolling web deploy failed -- rolling back LEAGUE_WEB_TAG to ${LW_PREV_TAG:-latest}"
             write_versions "${LW_PREV_TAG:-latest}"
             for svc in $WEB_SERVICES; do
-              docker compose -p balatro $E up -d "$svc" || true
+              docker compose -p balatro $E up -d --no-deps "$svc" || true
             done
           }
 
           for svc in $WEB_SERVICES; do
             step_start=$SECONDS
             echo "== rolling $svc to $LW_TAG =="
-            docker compose -p balatro $E up -d "$svc"
+            docker compose -p balatro $E up -d --no-deps "$svc"
             container="balatro-${svc}-1"
             if ! wait_healthy "$container" 180; then
               echo "::error::$container did not report healthy within 180s of the roll"
@@ -222,10 +222,10 @@ jobs:
               sleep 30
             done
           fi
-          docker compose -p balatro $E up -d league-bot
+          docker compose -p balatro $E up -d --no-deps league-bot
           # League dev web (separate project + dev env file).
           EDEV="--env-file /srv/balatro/versions.env --env-file /srv/balatro/secrets.dev.env"
-          docker compose -p balatro-dev $EDEV -f docker-compose.dev.yml up -d league-web-dev || echo "[dev] league-web-dev roll skipped"
+          docker compose -p balatro-dev $EDEV -f docker-compose.dev.yml up -d --no-deps league-web-dev || echo "[dev] league-web-dev roll skipped"
           # Best-effort cleanup. league and tour share this box, so two overlapping
           # deploys race here and the loser gets "a prune operation is already
           # running" -- which would fail an otherwise-successful roll and train us
