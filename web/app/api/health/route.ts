@@ -8,6 +8,7 @@
 // (apps/tour/app/api/health/route.ts, the model for this endpoint) returned a spurious
 // 503 on a single slow ping while a neighbouring migration was running, which is exactly
 // the kind of blip this rolling deploy must tolerate rather than fail a healthy copy over.
+import { existsSync } from "node:fs";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { buildHealthResult } from "@/lib/health-core";
@@ -33,7 +34,16 @@ async function pingDb(): Promise<boolean> {
   }
 }
 
+// Drain flag for the rolling deploy: the workflow touches this file inside the OLD copy and
+// waits two Traefik health intervals before recreating it, so Traefik has already taken the
+// copy out of rotation when the container stops (no 502s mid-roll). The recreated container
+// has a fresh filesystem, so the flag clears itself on the new copy.
+const DRAIN_FLAG_PATH = "/tmp/league-web.drain";
+
 export async function GET(): Promise<NextResponse> {
+  if (existsSync(DRAIN_FLAG_PATH)) {
+    return NextResponse.json({ status: "draining" }, { status: 503 });
+  }
   const dbReachable = await pingDb();
 
   const result = buildHealthResult({

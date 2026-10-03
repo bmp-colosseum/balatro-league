@@ -198,8 +198,16 @@ jobs:
           for svc in $WEB_SERVICES; do
             step_start=$SECONDS
             echo "== rolling $svc to $LW_TAG =="
-            docker compose -p balatro $E up -d --no-deps "$svc"
             container="balatro-${svc}-1"
+            # Drain first: flag the OLD copy so /api/health answers 503, then wait two Traefik
+            # health intervals (5s each) plus slack so it is out of rotation and in-flight
+            # requests have finished before the container is stopped. Without this, Traefik
+            # kept routing to the copy for up to one interval after it died -> 502s mid-roll.
+            if docker exec "$container" sh -c 'touch /tmp/league-web.drain' 2>/dev/null; then
+              echo "draining $container"
+              sleep 12
+            fi
+            docker compose -p balatro $E up -d --no-deps "$svc"
             if ! wait_healthy "$container" 180; then
               echo "::error::$container did not report healthy within 180s of the roll"
               docker compose -p balatro $E logs --tail=200 "$svc" || true
