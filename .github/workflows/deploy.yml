@@ -199,15 +199,26 @@ jobs:
             step_start=$SECONDS
             echo "== rolling $svc to $LW_TAG =="
             container="balatro-${svc}-1"
-            # Drain first: flag the OLD copy so /api/health answers 503, then wait two Traefik
-            # health intervals (5s each) plus slack so it is out of rotation and in-flight
-            # requests have finished before the container is stopped. Without this, Traefik
-            # kept routing to the copy for up to one interval after it died -> 502s mid-roll.
-            if docker exec "$container" sh -c 'touch /tmp/league-web.drain' 2>/dev/null; then
-              echo "draining $container"
+            current_tag="$(docker inspect -f '{{.Config.Image}}' "$container" 2>/dev/null | sed 's/.*://')"
+            # Drain first, but ONLY when this copy is actually about to be replaced: flag the
+            # OLD copy so /api/health answers 503, then wait two Traefik health intervals (5s
+            # each) plus slack so it is out of rotation and in-flight requests have finished
+            # before the container is stopped. Without this, Traefik kept routing to the copy
+            # for up to one interval after it died -> 502s mid-roll.
+            # The tag guard is load-bearing (2026-10-03 incident): a bot-only commit left the
+            # web tag unchanged, `up -d` kept the running container, the flag never cleared,
+            # the Docker health gate below passed before its status flipped, and both copies
+            # sat DOWN in Traefik for 16 minutes.
+            if [ "$current_tag" != "$LW_TAG" ] && docker exec "$container" sh -c 'touch /tmp/league-web.drain' 2>/dev/null; then
+              echo "draining $container (${current_tag:-none} -> $LW_TAG)"
               sleep 12
+            else
+              echo "$container already on $LW_TAG -- no drain"
             fi
             docker compose -p balatro $E up -d --no-deps "$svc"
+            # Safety net: whatever happened above, no copy may stay flagged. A recreated
+            # container has no flag (no-op); a kept one gets it removed here.
+            docker exec "$container" sh -c 'rm -f /tmp/league-web.drain' 2>/dev/null || true
             if ! wait_healthy "$container" 180; then
               echo "::error::$container did not report healthy within 180s of the roll"
               docker compose -p balatro $E logs --tail=200 "$svc" || true
