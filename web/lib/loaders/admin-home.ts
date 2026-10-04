@@ -88,7 +88,14 @@ export async function loadAdminDisputes(): Promise<AdminDisputeRow[]> {
 // ── /admin (dashboard) ───────────────────────────────────────────────
 
 export interface AdminHomeStats {
-  activeSeason: { id: string; name: string; divisionCount: number } | null;
+  activeSeason: {
+    id: string;
+    name: string;
+    divisionCount: number;
+    startedAt: Date;
+    scheduledEndAt: Date | null;
+    endedAt: Date | null;
+  } | null;
   totalPlayers: number;
   fakePlayerCount: number;
   confirmedPairings: number;
@@ -99,7 +106,15 @@ export async function loadAdminHomeStats(): Promise<AdminHomeStats> {
   const [activeSeason, totalPlayers, allDiscordIds, confirmed, disputed] = await Promise.all([
     prisma.season.findFirst({
       where: { isActive: true },
-      select: { id: true, number: true, subtitle: true, _count: { select: { divisions: true } } },
+      select: {
+        id: true,
+        number: true,
+        subtitle: true,
+        startedAt: true,
+        scheduledEndAt: true,
+        endedAt: true,
+        _count: { select: { divisions: true } },
+      },
     }),
     prisma.player.count(),
     prisma.player.findMany({ select: { discordId: true } }),
@@ -108,7 +123,14 @@ export async function loadAdminHomeStats(): Promise<AdminHomeStats> {
   ]);
   return {
     activeSeason: activeSeason
-      ? { id: activeSeason.id, name: formatSeasonLabel(activeSeason), divisionCount: activeSeason._count.divisions }
+      ? {
+          id: activeSeason.id,
+          name: formatSeasonLabel(activeSeason),
+          divisionCount: activeSeason._count.divisions,
+          startedAt: activeSeason.startedAt,
+          scheduledEndAt: activeSeason.scheduledEndAt,
+          endedAt: activeSeason.endedAt,
+        }
       : null,
     totalPlayers,
     fakePlayerCount: allDiscordIds.filter((p) => isMockId(p.discordId)).length,

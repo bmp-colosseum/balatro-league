@@ -25,6 +25,8 @@ import { resetToDiscordNameAction, setCustomNameAction, setShowUsernameAction } 
 import { dropPlayer, reinstatePlayer, movePlayer, setPlayerDiscordId } from "@/app/admin/players/actions";
 import { TimezoneSetting } from "@/components/TimezoneSetting";
 import { NextSeasonCard } from "@/components/NextSeasonCard";
+import { SeasonWindow } from "@/components/SeasonWindow";
+import { seasonCountdown } from "@/lib/season-countdown-core";
 import { prisma } from "@/lib/prisma";
 import { tourProfilePath, TOUR_PUBLIC_URL } from "@/lib/tour-profile";
 import type { SeasonHistoryEntry } from "@/lib/profile";
@@ -163,6 +165,24 @@ export async function ProfileView({
   const activeSeasonEntry = profile.history.find((h) => h.isActive);
   const activeSeason = activeSeasonEntry?.status === "ACTIVE" ? activeSeasonEntry : undefined;
 
+  // The league-wide active season's window/countdown, for the quick-actions
+  // strip on your OWN profile (/me) -- independent of activeSeason above,
+  // which only exists if you're currently placed in a division this season.
+  const activeSeasonWindow = isOwnProfile
+    ? await prisma.season.findFirst({
+        where: { isActive: true },
+        select: { startedAt: true, scheduledEndAt: true, endedAt: true },
+      })
+    : null;
+  const activeSeasonCountdown = activeSeasonWindow
+    ? seasonCountdown({
+        startMs: activeSeasonWindow.startedAt.getTime(),
+        scheduledEndMs: activeSeasonWindow.scheduledEndAt?.getTime() ?? null,
+        endedMs: activeSeasonWindow.endedAt?.getTime() ?? null,
+        nowMs: Date.now(),
+      })
+    : null;
+
   // Cross-link to this person's Team Tour profile, resolved server-side by Discord id (so the
   // raw id never lands in this page's source). Best-effort: null (no link) if the Tour is
   // unconfigured/unreachable or this person isn't in the Tour.
@@ -217,6 +237,13 @@ export async function ProfileView({
                 <Link href={`/divisions/${activeSeason.divisionId}`} style={{ color: "var(--info)" }}>see your matchups →</Link>
               </div>
             )}
+          </div>
+        )}
+
+        {isOwnProfile && activeSeasonWindow && activeSeasonCountdown && (
+          <div style={{ display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap", marginTop: 8 }}>
+            <SeasonWindow start={activeSeasonWindow.startedAt} end={activeSeasonWindow.scheduledEndAt} />
+            <span className="muted" style={{ fontSize: 12 }}>- {activeSeasonCountdown.label}</span>
           </div>
         )}
 
