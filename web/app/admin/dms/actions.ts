@@ -7,8 +7,22 @@ import { prisma } from "@/lib/prisma";
 import { recordAudit, actorFromAdminUser } from "@/lib/audit";
 import { enqueueDm } from "@/lib/queue";
 import { formatStaffReply, pickStaffDisplayName } from "@/lib/dm-format-core";
+import { selectUnansweredMessageIds } from "@/lib/dm-inbox-core";
 
 const PAGE = "/admin/dms";
+
+// Bulk/per-card actions redirect back to the same tab + search query the
+// staff member was looking at, instead of always bouncing to the default
+// view -- so archiving a page of results doesn't lose their place.
+function backToPage(view: string, q: string, params: { ok?: string; err?: string }): string {
+  const search = new URLSearchParams();
+  if (view) search.set("view", view);
+  if (q) search.set("q", q);
+  if (params.ok) search.set("ok", params.ok);
+  if (params.err) search.set("err", params.err);
+  const qs = search.toString();
+  return qs ? `${PAGE}?${qs}` : PAGE;
+}
 
 // Resolve how the player will see the replying staff member: the daily-synced
 // GuildMember cache (nickname > globalName > @handle) first, else the admin's
@@ -109,4 +123,115 @@ export async function markDmRead(formData: FormData) {
 
   revalidatePath(PAGE);
   redirect(`${PAGE}?ok=${encodeURIComponent("Marked read.")}`);
+}
+
+// Shared formData reader for the bulk/per-card actions below: the selected
+// discordIds, plus the view/q the toolbar form carries as hidden fields so
+// the redirect lands back on the same tab + search the staff member had open.
+function readBulkRequest(formData: FormData): { ids: string[]; view: string; q: string } {
+  const ids = [...new Set(formData.getAll("ids").map((v) => String(v).trim()).filter(Boolean))];
+  const view = String(formData.get("view") ?? "").trim();
+  const q = String(formData.get("q") ?? "").trim();
+  return { ids, view, q };
+}
+
+// Bulk/per-card "Mark read" (card-level button reads "Mark all read" --
+// it's this same action called with a single discordId): every unanswered
+// (unread or read, not yet replied) inbound row of each selected player ->
+// status "read". Gather (fetch candidate rows) -> decide (pure
+// selectUnansweredMessageIds) -> write (update exactly those ids), so which
+// rows qualify is a plain-data decision, not something re-derived inside a
+// DB WHERE clause.
+export async function markManyRead(formData: FormData) {
+  const { user } = await requireAdmin();
+  const { ids, view, q } = readBulkRequest(formData);
+  if (ids.length === 0) redirect(backToPage(view, q, { err: "Select at least one conversation." }));
+
+  const candidates = await prisma.inboundDm.findMany({
+    where: { authorDiscordId: { in: ids } },
+    select: { id: true, authorDiscordId: true, status: true },
+  });
+  const toMarkRead = selectUnansweredMessageIds(
+    candidates.map((c) => ({ id: c.id, authorDiscordId: c.authorDiscordId, status: c.status as "unread" | "read" | "replied" })),
+    ids,
+  );
+
+  if (toMarkRead.length > 0) {
+    await prisma.inboundDm.updateMany({
+      where: { id: { in: toMarkRead } },
+      data: { status: "read", readAt: new Date() },
+    });
+  }
+
+  const actor = actorFromAdminUser(user);
+  await recordAudit({
+    actor,
+    action: "dm.bulk-mark-read",
+    targetType: "InboundDm",
+    summary: `Marked ${toMarkRead.length} DM(s) read across ${ids.length} conversation(s)`,
+    metadata: { discordIds: ids, updatedCount: toMarkRead.length },
+  });
+
+  revalidatePath(PAGE);
+  redirect(backToPage(view, q, { ok: `Marked read for ${ids.length} conversation(s).` }));
+}
+
+// Archive: upserts a DmConversationState row per selected player with
+// archivedAt = now and the acting staff member's resolved name, same
+// resolution precedence replyToDm uses. A player writing again afterwards
+// un-archives them automatically (classifyConversation) -- no write needed.
+export async function archiveConversations(formData: FormData) {
+  const { user } = await requireAdmin();
+  const { ids, view, q } = readBulkRequest(formData);
+  if (ids.length === 0) redirect(backToPage(view, q, { err: "Select at least one conversation." }));
+
+  const staffName = await resolveStaffName(user.discordId, user.name);
+  const now = new Date();
+  await Promise.all(
+    ids.map((discordId) =>
+      prisma.dmConversationState.upsert({
+        where: { discordId },
+        create: { discordId, archivedAt: now, archivedBy: user.discordId, archivedByName: staffName },
+        update: { archivedAt: now, archivedBy: user.discordId, archivedByName: staffName },
+      }),
+    ),
+  );
+
+  const actor = actorFromAdminUser(user);
+  await recordAudit({
+    actor,
+    action: "dm.archive",
+    targetType: "DmConversationState",
+    summary: `Archived ${ids.length} conversation(s)`,
+    metadata: { discordIds: ids },
+  });
+
+  revalidatePath(PAGE);
+  redirect(backToPage(view, q, { ok: `Archived ${ids.length} conversation(s).` }));
+}
+
+// Unarchive: clears archivedAt on each selected player's state row. A no-op
+// for players with no row (never archived) -- nothing to clear.
+export async function unarchiveConversations(formData: FormData) {
+  const { user } = await requireAdmin();
+  const { ids, view, q } = readBulkRequest(formData);
+  if (ids.length === 0) redirect(backToPage(view, q, { err: "Select at least one conversation." }));
+
+  const staffName = await resolveStaffName(user.discordId, user.name);
+  await prisma.dmConversationState.updateMany({
+    where: { discordId: { in: ids } },
+    data: { archivedAt: null, archivedBy: user.discordId, archivedByName: staffName },
+  });
+
+  const actor = actorFromAdminUser(user);
+  await recordAudit({
+    actor,
+    action: "dm.unarchive",
+    targetType: "DmConversationState",
+    summary: `Unarchived ${ids.length} conversation(s)`,
+    metadata: { discordIds: ids },
+  });
+
+  revalidatePath(PAGE);
+  redirect(backToPage(view, q, { ok: `Unarchived ${ids.length} conversation(s).` }));
 }

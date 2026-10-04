@@ -9,6 +9,7 @@ import {
   type DeliveryStatus,
   type ThreadItem,
 } from "@/lib/dm-format-core";
+import { classifyConversation, type ConversationCategory, type ConversationStateLite } from "@/lib/dm-inbox-core";
 
 // Loaders for the web DM console (/admin/dms). Read-only reductions over the
 // InboundDm (what people sent us) + DmDelivery (what the bot tried to send)
@@ -37,6 +38,12 @@ export interface ConversationView {
   // What the reply form at the bottom of this thread will quote + mark
   // replied on send; null once everything's been answered.
   latestUnansweredContent: string | null;
+  // Which inbox tab this conversation belongs in (dm-inbox-core.classifyConversation).
+  category: ConversationCategory;
+  // DmConversationState fields, surfaced for the per-card Archive/Unarchive
+  // button and an "archived by" hint -- null means never archived.
+  archivedAt: Date | null;
+  archivedByName: string | null;
   items: ConversationItem[];
 }
 
@@ -76,6 +83,24 @@ async function resolvePlayers(discordIds: string[]): Promise<Map<string, Resolve
     select: { discordId: true, displayName: true, username: true },
   });
   return new Map(players.map((p) => [p.discordId, { displayName: p.displayName, username: p.username }]));
+}
+
+interface ArchiveStateRow {
+  archivedAt: Date | null;
+  archivedByName: string | null;
+}
+
+// Archive state rows are sparse -- most conversations never get one. Missing
+// from this map means "never archived" (classifyConversation treats a null
+// state the same as { archivedAt: null }).
+async function loadConversationStates(discordIds: string[]): Promise<Map<string, ArchiveStateRow>> {
+  const ids = [...new Set(discordIds)];
+  if (ids.length === 0) return new Map();
+  const rows = await prisma.dmConversationState.findMany({
+    where: { discordId: { in: ids } },
+    select: { discordId: true, archivedAt: true, archivedByName: true },
+  });
+  return new Map(rows.map((r) => [r.discordId, { archivedAt: r.archivedAt, archivedByName: r.archivedByName }]));
 }
 
 // One conversation per player: every InboundDm they've sent (capped 500,
@@ -122,10 +147,15 @@ export async function loadDmConversations(): Promise<ConversationView[]> {
   }));
 
   const conversations = buildDmThread(inbound, deliveries);
-  const byDiscordId = await resolvePlayers(conversations.map((c) => c.discordId));
+  const [byDiscordId, statesByDiscordId] = await Promise.all([
+    resolvePlayers(conversations.map((c) => c.discordId)),
+    loadConversationStates(conversations.map((c) => c.discordId)),
+  ]);
 
   return conversations.map((c) => {
     const p = byDiscordId.get(c.discordId);
+    const state = statesByDiscordId.get(c.discordId) ?? null;
+    const stateLite: ConversationStateLite | null = state ? { archivedAt: state.archivedAt } : null;
     return {
       discordId: c.discordId,
       displayName: p?.displayName ?? lastKnownAuthorName.get(c.discordId) ?? c.discordId,
@@ -133,6 +163,9 @@ export async function loadDmConversations(): Promise<ConversationView[]> {
       unreadCount: c.unreadCount,
       lastActivityAt: c.lastActivityAt,
       latestUnansweredContent: c.latestUnanswered?.content ?? null,
+      category: classifyConversation(c, stateLite),
+      archivedAt: state?.archivedAt ?? null,
+      archivedByName: state?.archivedByName ?? null,
       items: c.items.map((it) =>
         it.type === "player" ? { ...it, attachments: attachmentsById.get(it.id) ?? [] } : it,
       ) as ConversationItem[],

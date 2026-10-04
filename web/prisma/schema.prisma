@@ -1208,6 +1208,20 @@ model DmDelivery {
   @@index([discordId, sentAt])
 }
 
+// Archive state for one player's DM conversation (/admin/dms). A conversation
+// counts as archived when archivedAt is set AND no player message is newer
+// than archivedAt -- a newer inbound message brings it back to the inbox with
+// no write needed here (see web/lib/dm-inbox-core.ts classifyConversation).
+// Keyed by discordId since there's at most one state row per conversation;
+// no row at all means "never archived."
+model DmConversationState {
+  discordId      String    @id
+  archivedAt     DateTime?
+  archivedBy     String? // staff discordId who last archived/unarchived
+  archivedByName String? // staff display-name snapshot at that time
+  updatedAt      DateTime  @updatedAt
+}
+
 // A pair of players who must NEVER be scheduled against each other. Global +
 // permanent (applies to every season's schedule build), symmetric: stored in
 // canonical order (playerAId < playerBId) so the pair is unique regardless of
