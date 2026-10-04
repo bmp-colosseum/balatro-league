@@ -227,3 +227,13 @@ export async function enqueueAwardChampionRole(job: {
   await ensureStarted();
   await getBoss().send("award.champion-role", job, { retryLimit: 2, retryBackoff: true });
 }
+
+// Manual DM-attachment recovery: the bot's dm-attachments.backfill worker
+// re-fetches older InboundDm messages from Discord to re-download expired
+// attachment urls. Triggered by the /admin/ops "Recover DM attachments"
+// button; never run on a schedule. Low retry -- a failed sweep is re-run by
+// clicking the button again, not worth hammering.
+export async function enqueueDmAttachmentBackfill(limit?: number): Promise<void> {
+  await ensureStarted();
+  await getBoss().send("dm-attachments.backfill", { limit }, { retryLimit: 1 });
+}

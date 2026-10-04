@@ -9,7 +9,13 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { Callout } from "@/components/Callout";
 import { AdminNav } from "@/components/AdminNav";
 import { loadQueueSummaries, loadFailedJobs } from "@/lib/loaders/queue-status";
-import { runMatchSweepAction, retryFailedJob, dismissFailedJob, clearQueuePending } from "./actions";
+import {
+  runMatchSweepAction,
+  retryFailedJob,
+  dismissFailedJob,
+  clearQueuePending,
+  recoverDmAttachmentsAction,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -117,6 +123,19 @@ export default async function AdminOpsPage({
             >
               Run sweep now
             </ConfirmButton>
+          </form>
+        </div>
+
+        <div className="card">
+          <strong>DM attachments</strong>
+          <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            Attachments on inbound player DMs are downloaded and stored when the message arrives, because
+            Discord&apos;s CDN url for them expires after about a day. This re-fetches older messages from Discord
+            to recover attachments that were never stored (pre-feature rows, or a failed download) -- it can&apos;t
+            recover anything Discord itself no longer has.
+          </p>
+          <form action={recoverDmAttachmentsAction} style={{ marginTop: 8 }}>
+            <SubmitButton variant="secondary">Recover DM attachments</SubmitButton>
           </form>
         </div>
 

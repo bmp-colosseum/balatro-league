@@ -77,6 +77,7 @@ import { sanitizeName } from "./sanitize.js";
 import { runShootoutCheck, isDivisionComplete } from "./shootout.js";
 import { seasonTimelineLines, parseBufferDays } from "./season-timing.js";
 import { refreshAllDmPanels } from "./dm-panel.js";
+import { backfillDmAttachments } from "./dm-attachment-backfill.js";
 
 // One recipient of a roster-change schedule DM. "new" = the player just added;
 // "opponent" = someone whose matchup now points at the replacement.
@@ -170,6 +171,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("match.close-thread");
   await boss.createQueue("queue.notify-opponents");
   await boss.createQueue("dm-panel.blast");
+  await boss.createQueue("dm-attachments.backfill");
 
   // One-shot cleanup for retired queues. Their cron schedule rows +
   // accumulated jobs (no worker listens anymore) stay in pg-boss forever
@@ -712,6 +714,34 @@ export async function initQueue(): Promise<void> {
     const { processed, failed } = await refreshAllDmPanels(client);
     console.log(`[dm-panel.blast] processed ${processed}, failed ${failed}`);
   });
+
+  // Worker: re-fetch + store attachment bytes for OLDER InboundDm rows whose
+  // Discord CDN urls have (likely) expired, or where the live download at
+  // capture time failed. Manual-only -- triggered by the /admin/ops
+  // "Recover DM attachments" button, never on a schedule. batchSize 1 -- one
+  // bounded sweep per job, not many small ones.
+  await boss.work<{ limit?: number }>(
+    "dm-attachments.backfill",
+    { batchSize: 1, pollingIntervalSeconds: 15 },
+    async (jobs: Job<{ limit?: number }>[]) => {
+      const client = tryGetDiscordClient();
+      if (!client) throw new Error("Discord client not ready -- will retry");
+      for (const job of jobs) {
+        const r = await backfillDmAttachments(client, { limit: job.data.limit });
+        console.log(
+          `[dm-attachments.backfill] scanned ${r.scanned}, recovered ${r.recovered}, unavailable ${r.unavailable}, failed ${r.failed}`,
+        );
+      }
+    },
+  );
+}
+
+// Trigger a manual DM-attachment recovery pass (re-fetch older messages from
+// Discord to re-download expired attachments). Used by the /admin/ops
+// "Recover DM attachments" button via web/lib/queue.ts's mirror of this.
+export async function enqueueDmAttachmentBackfill(limit?: number): Promise<void> {
+  if (!boss) throw new Error("Queue not initialized -- initQueue() must run first");
+  await boss.send("dm-attachments.backfill", { limit }, { retryLimit: 1 });
 }
 
 // When signups open: kick off the interactive ask blast (audience compute +

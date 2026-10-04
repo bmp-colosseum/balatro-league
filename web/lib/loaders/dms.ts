@@ -3,11 +3,15 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import {
   buildDmThread,
+  buildAttachmentViews,
   type InboundDmLite,
   type DmDeliveryLite,
   type InboundDmStatus,
   type DeliveryStatus,
   type ThreadItem,
+  type DmAttachmentRef,
+  type DmAttachmentView,
+  type StoredDmAttachmentLite,
 } from "@/lib/dm-format-core";
 import { classifyConversation, type ConversationCategory, type ConversationStateLite } from "@/lib/dm-inbox-core";
 
@@ -16,10 +20,10 @@ import { classifyConversation, type ConversationCategory, type ConversationState
 // tables. Player display names are resolved best-effort so staff see a human
 // name next to the raw Discord id.
 
-export interface DmAttachment {
-  filename: string;
-  url: string;
-}
+// What the thread view renders per attachment: the original Discord link
+// (fallback only) merged with the downloaded-and-stored copy, when one
+// exists -- see buildAttachmentViews (dm-format-core.ts) for the pairing.
+export type DmAttachment = DmAttachmentView;
 
 // A player-message thread item, with its attachments joined back in (the
 // pure buildDmThread core doesn't know about attachments -- they're a
@@ -49,7 +53,7 @@ export interface ConversationView {
 
 // attachmentsJson is a nullable JSON string of [{ filename, url }]. Parse
 // defensively — a malformed blob must never break the console.
-function parseAttachments(json: string | null): DmAttachment[] {
+function parseAttachments(json: string | null): DmAttachmentRef[] {
   if (!json) return [];
   let parsed: unknown;
   try {
@@ -58,7 +62,7 @@ function parseAttachments(json: string | null): DmAttachment[] {
     return [];
   }
   if (!Array.isArray(parsed)) return [];
-  const out: DmAttachment[] = [];
+  const out: DmAttachmentRef[] = [];
   for (const item of parsed) {
     if (typeof item !== "object" || item === null) continue;
     const rec = item as Record<string, unknown>;
@@ -68,6 +72,30 @@ function parseAttachments(json: string | null): DmAttachment[] {
     out.push({ filename, url });
   }
   return out;
+}
+
+// One query for every stored DmAttachment row across the given InboundDm
+// ids (no N+1 -- the thread view needs this for every player message with
+// attachments, up to 500 conversations' worth at once).
+async function loadStoredAttachments(inboundDmIds: string[]): Promise<Map<string, StoredDmAttachmentLite[]>> {
+  const ids = [...new Set(inboundDmIds)];
+  if (ids.length === 0) return new Map();
+  const rows = await prisma.dmAttachment.findMany({
+    where: { inboundDmId: { in: ids } },
+    // Insertion order -- both attachmentsJson and the DmAttachment rows are
+    // built from the same per-message attachment list, in the same order
+    // (see src/inbound-dm.ts / src/dm-attachment-backfill.ts), so this is
+    // what buildAttachmentViews's positional pairing relies on.
+    orderBy: { createdAt: "asc" },
+    select: { id: true, inboundDmId: true, filename: true, contentType: true, size: true, error: true },
+  });
+  const map = new Map<string, StoredDmAttachmentLite[]>();
+  for (const r of rows) {
+    const arr = map.get(r.inboundDmId) ?? [];
+    arr.push({ id: r.id, filename: r.filename, contentType: r.contentType, size: r.size, error: r.error });
+    map.set(r.inboundDmId, arr);
+  }
+  return map;
 }
 
 interface ResolvedPlayer {
@@ -115,7 +143,12 @@ export async function loadDmConversations(): Promise<ConversationView[]> {
     prisma.dmDelivery.findMany({ where: { sentAt: { gte: deliveriesSince } }, orderBy: { sentAt: "desc" }, take: 3000 }),
   ]);
 
-  const attachmentsById = new Map(inboundRaw.map((r) => [r.id, parseAttachments(r.attachmentsJson)]));
+  const refsById = new Map(inboundRaw.map((r) => [r.id, parseAttachments(r.attachmentsJson)]));
+  const idsWithAttachments = inboundRaw.filter((r) => (refsById.get(r.id)?.length ?? 0) > 0).map((r) => r.id);
+  const storedById = await loadStoredAttachments(idsWithAttachments);
+  const attachmentsById = new Map(
+    inboundRaw.map((r) => [r.id, buildAttachmentViews(refsById.get(r.id) ?? [], storedById.get(r.id) ?? [])]),
+  );
   // inboundRaw is newest-first, so the first row per author we see is their
   // most recent -- a reasonable display-name fallback when there's no Player.
   const lastKnownAuthorName = new Map<string, string>();
@@ -175,6 +208,40 @@ export async function loadDmConversations(): Promise<ConversationView[]> {
 
 export async function unreadDmCount(): Promise<number> {
   return prisma.inboundDm.count({ where: { status: "unread" } });
+}
+
+export interface DmAttachmentFile {
+  filename: string;
+  contentType: string | null;
+  size: number;
+  // Prisma's raw Bytes scalar (Uint8Array<ArrayBuffer>) -- left as-is, not
+  // Buffer.from()'d here, so the route can wrap it in Buffer.from() itself
+  // right where it's needed, same as
+  // web/app/admin/transcripts/attachment/[id]/route.ts does for
+  // ThreadMessageAttachment.bytes. (Buffer.from() of a plain, already-typed
+  // Buffer re-widens its ArrayBuffer type parameter to ArrayBufferLike,
+  // which Response's BodyInit then rejects -- so the conversion has to
+  // happen exactly once, straight from the Prisma scalar.)
+  data: Uint8Array<ArrayBuffer>;
+  error: string | null;
+}
+
+// For the attachment-serving route (/admin/dms/attachments/[id]) -- the
+// stored bytes + metadata needed to stream a response, or null if no row
+// exists with this id.
+export async function loadDmAttachmentFile(id: string): Promise<DmAttachmentFile | null> {
+  const row = await prisma.dmAttachment.findUnique({
+    where: { id },
+    select: { filename: true, contentType: true, size: true, data: true, error: true },
+  });
+  if (!row) return null;
+  return {
+    filename: row.filename,
+    contentType: row.contentType,
+    size: row.size,
+    data: row.data,
+    error: row.error,
+  };
 }
 
 export interface DmBatchSummary {

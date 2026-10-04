@@ -5,9 +5,12 @@ import {
   truncateQuote,
   pickStaffDisplayName,
   buildDmThread,
+  buildAttachmentViews,
   type InboundDmLite,
   type DmDeliveryLite,
   type StaffMemberLite,
+  type DmAttachmentRef,
+  type StoredDmAttachmentLite,
 } from "./dm-format-core.js";
 
 describe("truncateQuote", () => {
@@ -298,5 +301,95 @@ describe("buildDmThread: replies recorded before deliveries carried content", ()
     );
     expect(conv.items.filter((i) => i.type === "staff")).toHaveLength(1);
     expect(conv.items.find((i) => i.type === "staff")?.id).toBe("d1");
+  });
+});
+
+describe("buildAttachmentViews", () => {
+  const ref = (filename: string, url: string): DmAttachmentRef => ({ filename, url });
+  const stored = (over: Partial<StoredDmAttachmentLite> = {}): StoredDmAttachmentLite => ({
+    id: "att1",
+    filename: "photo.png",
+    contentType: "image/png",
+    size: 1234,
+    error: null,
+    ...over,
+  });
+
+  it("returns [] for no refs", () => {
+    expect(buildAttachmentViews([], [])).toEqual([]);
+  });
+
+  it("marks a ref with a matching stored row as stored + an image", () => {
+    const [view] = buildAttachmentViews([ref("photo.png", "https://cdn/x")], [stored()]);
+    expect(view).toMatchObject({
+      filename: "photo.png",
+      url: "https://cdn/x",
+      stored: true,
+      storedId: "att1",
+      contentType: "image/png",
+      size: 1234,
+      error: null,
+      isImage: true,
+    });
+  });
+
+  it("marks a ref beyond the stored list as never-stored (legacy Discord-link fallback)", () => {
+    const [view] = buildAttachmentViews([ref("old.png", "https://cdn/old")], []);
+    expect(view).toEqual({
+      filename: "old.png",
+      url: "https://cdn/old",
+      stored: false,
+      storedId: null,
+      contentType: null,
+      size: null,
+      error: null,
+      isImage: false,
+    });
+  });
+
+  it("is not an image when the stored row has an error, even with an image content type", () => {
+    const [view] = buildAttachmentViews([ref("big.png", "https://cdn/big")], [stored({ error: "too large (15.0 MB, max 10.0 MB)" })]);
+    expect(view.isImage).toBe(false);
+    expect(view.error).toBe("too large (15.0 MB, max 10.0 MB)");
+  });
+
+  it("is not an image for a non-image content type", () => {
+    const [view] = buildAttachmentViews([ref("doc.pdf", "https://cdn/doc")], [stored({ contentType: "application/pdf" })]);
+    expect(view.isImage).toBe(false);
+  });
+
+  it("pairs multiple refs with multiple stored rows by position, in order", () => {
+    const views = buildAttachmentViews(
+      [ref("a.png", "https://cdn/a"), ref("b.pdf", "https://cdn/b")],
+      [stored({ id: "s1", filename: "a.png" }), stored({ id: "s2", filename: "b.pdf", contentType: "application/pdf" })],
+    );
+    expect(views.map((v) => v.storedId)).toEqual(["s1", "s2"]);
+    expect(views.map((v) => v.isImage)).toEqual([true, false]);
+  });
+
+  it("property: always returns exactly one view per ref, preserving filename+url", () => {
+    fc.assert(
+      fc.property(
+        fc.array(fc.record({ filename: fc.string(), url: fc.webUrl() }), { maxLength: 8 }),
+        fc.array(
+          fc.record({
+            id: fc.string(),
+            filename: fc.string(),
+            contentType: fc.option(fc.constantFrom("image/png", "application/pdf"), { nil: null }),
+            size: fc.nat(),
+            error: fc.option(fc.string(), { nil: null }),
+          }),
+          { maxLength: 8 },
+        ),
+        (refs, storedRows) => {
+          const views = buildAttachmentViews(refs, storedRows);
+          expect(views).toHaveLength(refs.length);
+          views.forEach((v, i) => {
+            expect(v.filename).toBe(refs[i]!.filename);
+            expect(v.url).toBe(refs[i]!.url);
+          });
+        },
+      ),
+    );
   });
 });
