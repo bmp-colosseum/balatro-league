@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAdmin } from "@/lib/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
@@ -5,6 +6,8 @@ import { Callout } from "@/components/Callout";
 import { LocalDateTime } from "@/components/LocalDateTime";
 import { SubmitButton } from "@/components/SubmitButton";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   loadDmConversations,
   loadDmDeliverySummary,
@@ -13,7 +16,35 @@ import {
   type DmBatchSummary,
   type FailedDeliveryRow,
 } from "@/lib/loaders/dms";
-import { replyToDm, markDmRead } from "./actions";
+import {
+  INBOX_VIEWS,
+  computeInboxCounts,
+  defaultView,
+  selectInboxConversations,
+  type InboxView,
+} from "@/lib/dm-inbox-core";
+import { replyToDm, markDmRead, markManyRead, archiveConversations, unarchiveConversations } from "./actions";
+
+const BULK_FORM_ID = "dm-bulk-form";
+
+const TAB_LABEL: Record<InboxView, string> = {
+  "needs-reply": "Needs reply",
+  open: "Open",
+  archived: "Archived",
+  "broadcast-only": "Broadcast only",
+  all: "All",
+};
+
+function tabHref(view: InboxView, q: string): string {
+  const sp = new URLSearchParams();
+  sp.set("view", view);
+  if (q) sp.set("q", q);
+  return `/admin/dms?${sp.toString()}`;
+}
+
+function isInboxView(value: string | undefined): value is InboxView {
+  return !!value && (INBOX_VIEWS as readonly string[]).includes(value);
+}
 
 // unread = accent, read = muted, replied = success. Backgrounds are token-mixed
 // (not hardcoded rgba) so the tint tracks the theme.
@@ -170,8 +201,9 @@ function ThreadItemRow({ item }: { item: ConversationItem }) {
   return <BotBubble item={item} />;
 }
 
-function ConversationCard({ conv }: { conv: ConversationView }) {
+function ConversationCard({ conv, view, q }: { conv: ConversationView; view: InboxView; q: string }) {
   const hasUnread = conv.unreadCount > 0;
+  const isArchived = conv.archivedAt !== null;
   return (
     <details className={"card" + (hasUnread ? " card-accent" : "")} open={hasUnread}>
       <summary style={{ cursor: "pointer", display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
@@ -193,11 +225,41 @@ function ConversationCard({ conv }: { conv: ConversationView }) {
             >
               {conv.unreadCount} unread
             </span>
+          ) : isArchived ? (
+            <span className="pill muted">Archived</span>
           ) : (
             <StatusPill status="replied" />
           )}
         </span>
       </summary>
+
+      <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+          <input type="checkbox" name="ids" value={conv.discordId} form={BULK_FORM_ID} />
+          Select
+        </label>
+        <form action={markManyRead} style={{ display: "inline" }}>
+          <input type="hidden" name="ids" value={conv.discordId} />
+          <input type="hidden" name="view" value={view} />
+          <input type="hidden" name="q" value={q} />
+          <SubmitButton variant="secondary" size="sm">
+            Mark all read
+          </SubmitButton>
+        </form>
+        <form action={isArchived ? unarchiveConversations : archiveConversations} style={{ display: "inline" }}>
+          <input type="hidden" name="ids" value={conv.discordId} />
+          <input type="hidden" name="view" value={view} />
+          <input type="hidden" name="q" value={q} />
+          <SubmitButton variant="secondary" size="sm">
+            {isArchived ? "Unarchive" : "Archive"}
+          </SubmitButton>
+        </form>
+        {isArchived && (
+          <span className="muted" style={{ fontSize: 11 }}>
+            Archived{conv.archivedByName ? ` by ${conv.archivedByName}` : ""}
+          </span>
+        )}
+      </div>
 
       <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
         {conv.items.map((item) => (
@@ -323,12 +385,16 @@ function FailuresTable({ failures }: { failures: FailedDeliveryRow[] }) {
 export default async function DmsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; err?: string }>;
+  searchParams: Promise<{ ok?: string; err?: string; view?: string; q?: string }>;
 }) {
   await requireAdmin();
-  const { ok, err } = await searchParams;
+  const sp = await searchParams;
+  const { ok, err } = sp;
+  const q = sp.q ?? "";
   const [conversations, delivery] = await Promise.all([loadDmConversations(), loadDmDeliverySummary()]);
-  const totalUnread = conversations.reduce((n, c) => n + c.unreadCount, 0);
+  const counts = computeInboxCounts(conversations);
+  const view: InboxView = isInboxView(sp.view) ? sp.view : defaultView(counts);
+  const visible = selectInboxConversations(conversations, view, q);
 
   return (
     <>
@@ -345,20 +411,95 @@ export default async function DmsPage({
         {err && <Callout type="danger">{err}</Callout>}
         {ok && <Callout type="success">{ok}</Callout>}
 
+        {/* ---- Tabs ---- */}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+          {INBOX_VIEWS.map((v) => (
+            <Link
+              key={v}
+              href={tabHref(v, q)}
+              className="pill"
+              style={{
+                textDecoration: "none",
+                background:
+                  v === view
+                    ? "color-mix(in oklch, var(--accent) 22%, transparent)"
+                    : "color-mix(in oklch, var(--muted) 12%, transparent)",
+                color: v === view ? "var(--accent)" : "var(--muted)",
+              }}
+            >
+              {TAB_LABEL[v]} ({v === "needs-reply" ? counts.needsReply : v === "open" ? counts.open : v === "archived" ? counts.archived : v === "broadcast-only" ? counts.broadcastOnly : counts.all})
+            </Link>
+          ))}
+        </div>
+
+        {/* ---- Search ---- */}
+        <form method="get" action="/admin/dms" style={{ display: "flex", gap: 8, marginBottom: 10, maxWidth: 420 }}>
+          <input type="hidden" name="view" value={view} />
+          <Input name="q" type="text" placeholder="Search name, @handle, or discordId..." defaultValue={q} />
+          <Button type="submit" variant="secondary">
+            Search
+          </Button>
+          {q && (
+            <Link href={tabHref(view, "")} className="secondary" style={{ alignSelf: "center", fontSize: 13 }}>
+              Clear
+            </Link>
+          )}
+        </form>
+
+        {/* ---- Bulk toolbar ---- */}
+        {/* Per-card checkboxes below aren't DOM descendants of this form -- they're
+            associated to it via the HTML `form` attribute, since they live inside
+            each card's own <details>/<form> markup and forms can't nest. */}
+        <form id={BULK_FORM_ID} action={markManyRead} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+          <input type="hidden" name="view" value={view} />
+          <input type="hidden" name="q" value={q} />
+          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+            <input type="checkbox" id="dm-select-all" />
+            Select all
+          </label>
+          <SubmitButton formAction={markManyRead} variant="secondary" size="sm">
+            Mark read
+          </SubmitButton>
+          <SubmitButton formAction={archiveConversations} variant="secondary" size="sm">
+            Archive
+          </SubmitButton>
+          <SubmitButton formAction={unarchiveConversations} variant="secondary" size="sm">
+            Unarchive
+          </SubmitButton>
+        </form>
+        <script
+          // Tiny progressive-enhancement toggle for "Select all" -- the only
+          // script on the page, no client component needed for this one wire-up.
+          // Keyed by view+q so a tab/search navigation remounts (not just
+          // re-renders) this node -- otherwise the browser won't re-run it
+          // against the freshly-rendered checkboxes.
+          key={`dm-select-all-script-${view}-${q}`}
+          dangerouslySetInnerHTML={{
+            __html:
+              "document.getElementById('dm-select-all').addEventListener('change', function (e) {" +
+              "document.querySelectorAll('input[form=\"" + BULK_FORM_ID + "\"][name=\"ids\"]').forEach(function (cb) {" +
+              "cb.checked = e.target.checked;" +
+              "});" +
+              "});",
+          }}
+        />
+
         {/* ---- Conversations ---- */}
         <div className="card">
           <strong>
-            Conversations
+            {TAB_LABEL[view]}
             <span className="muted" style={{ fontWeight: 400, marginLeft: 8, fontSize: 13 }}>
-              {totalUnread} unread / {conversations.length} total
+              {visible.length} shown / {counts.all} total conversations
             </span>
           </strong>
         </div>
 
         {conversations.length === 0 ? (
           <p className="muted" style={{ fontSize: 13 }}>No DM activity yet.</p>
+        ) : visible.length === 0 ? (
+          <p className="muted" style={{ fontSize: 13 }}>No conversations in this view.</p>
         ) : (
-          conversations.map((conv) => <ConversationCard key={conv.discordId} conv={conv} />)
+          visible.map((conv) => <ConversationCard key={conv.discordId} conv={conv} view={view} q={q} />)
         )}
 
         {/* ---- Delivery ---- */}
