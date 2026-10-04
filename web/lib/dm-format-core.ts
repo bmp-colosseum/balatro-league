@@ -254,3 +254,73 @@ export function buildDmThread(
   conversations.sort((a, b) => b.lastActivityAt.getTime() - a.lastActivityAt.getTime());
   return conversations;
 }
+
+// ---------------------------------------------------------------------------
+// 4: DM attachment display (pairs InboundDm.attachmentsJson entries with any
+// downloaded-and-stored DmAttachment rows for the admin console)
+// ---------------------------------------------------------------------------
+
+export interface DmAttachmentRef {
+  filename: string;
+  url: string;
+}
+
+export interface StoredDmAttachmentLite {
+  id: string;
+  filename: string;
+  contentType: string | null;
+  size: number;
+  error: string | null;
+}
+
+export interface DmAttachmentView {
+  filename: string;
+  // Original Discord CDN url -- shown only as a fallback link when there's
+  // no stored row (it may well be expired by then).
+  url: string;
+  stored: boolean;
+  storedId: string | null;
+  contentType: string | null;
+  size: number | null;
+  error: string | null;
+  isImage: boolean;
+}
+
+// Pairs each attachmentsJson ref with its stored DmAttachment row BY
+// POSITION: both lists are built in the same order (one DmAttachment row per
+// original attachment, created in receipt order -- see
+// src/inbound-dm.ts/src/dm-attachment-backfill.ts), so a positional zip
+// reliably matches the common case. A ref with no corresponding stored row
+// (index beyond `stored.length`) means never captured -- a pre-feature
+// message, or storage that hasn't run/finished yet -- rendered as a plain
+// (possibly-expired) Discord link.
+export function buildAttachmentViews(
+  refs: readonly DmAttachmentRef[],
+  stored: readonly StoredDmAttachmentLite[],
+): DmAttachmentView[] {
+  return refs.map((ref, i) => {
+    const row = stored[i];
+    if (!row) {
+      return {
+        filename: ref.filename,
+        url: ref.url,
+        stored: false,
+        storedId: null,
+        contentType: null,
+        size: null,
+        error: null,
+        isImage: false,
+      };
+    }
+    return {
+      filename: ref.filename,
+      url: ref.url,
+      stored: true,
+      storedId: row.id,
+      contentType: row.contentType,
+      size: row.size,
+      error: row.error,
+      isImage: !row.error && !!row.contentType && row.contentType.startsWith("image/"),
+    };
+  });
+}

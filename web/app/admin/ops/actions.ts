@@ -10,6 +10,7 @@ import { requireOwnerOrDevops } from "@/lib/admin";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { runMatchSweep } from "@/lib/match-sweep";
 import { prisma } from "@/lib/prisma";
+import { enqueueDmAttachmentBackfill } from "@/lib/queue";
 
 // Re-queue a FAILED pg-boss job by flipping it back to 'created' so a worker
 // picks it up again (full retries restored). Same-row retry — keeps the job id.
@@ -110,4 +111,23 @@ export async function runMatchSweepAction() {
   // we couldn't even look (no GUILD_ID, no parents, etc)".
   const diag = encodeURIComponent(JSON.stringify({ ...result, ...(o ?? {}) }));
   redirect(`/admin/ops?sweepDiag=${diag}`);
+}
+
+// Manual trigger for the DM-attachment recovery sweep: the bot re-fetches
+// older InboundDm messages from Discord to re-download attachments whose
+// Discord CDN url has since expired (or where the original capture-time
+// download failed). Fire-and-forget -- the bot processes it async; this
+// action only enqueues and records the audit entry.
+export async function recoverDmAttachmentsAction() {
+  const { user } = await requireOwnerOrDevops();
+  await enqueueDmAttachmentBackfill();
+  await recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "dm-attachments.backfill-enqueue",
+    targetType: "DmAttachment",
+    targetId: "all",
+    summary: "Enqueued a DM-attachment recovery sweep",
+    metadata: {},
+  });
+  redirect("/admin/ops?queueOk=dm-attachment-recovery-queued");
 }

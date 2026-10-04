@@ -1208,6 +1208,33 @@ model DmDelivery {
   @@index([discordId, sentAt])
 }
 
+// A file attached to a player's inbound DM, downloaded and stored at capture
+// time (or later by backfillDmAttachments for older rows) because the Discord
+// CDN url kept on InboundDm.attachmentsJson is SIGNED and expires after
+// roughly 24h -- without a local copy, every attachment on a DM older than a
+// day is a dead link. Bytes live in Postgres (the bot and web are separate
+// services with no shared disk); DMs are rare and the DB is already backed
+// up. `size`/`data` are always present (0 / empty when skipped or failed) so
+// a row always exists to explain what happened; `error` is null on a normal
+// successful store and set (with empty data) when the file was too large to
+// store or the download failed, so the admin console shows why instead of
+// nothing. No FK to InboundDm -- same loose-id convention as DmDelivery's
+// inReplyToInboundDmId -- the bot (capture + backfill) and web (serving) both
+// just key on the id string.
+model DmAttachment {
+  id          String   @id @default(cuid())
+  inboundDmId String
+  filename    String
+  contentType String?
+  size        Int
+  data        Bytes
+  discordUrl  String   @db.Text
+  error       String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  @@index([inboundDmId])
+}
+
 // Archive state for one player's DM conversation (/admin/dms). A conversation
 // counts as archived when archivedAt is set AND no player message is newer
 // than archivedAt -- a newer inbound message brings it back to the inbox with

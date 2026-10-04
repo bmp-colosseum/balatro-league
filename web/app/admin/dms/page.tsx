@@ -8,11 +8,13 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { formatBytes } from "@/lib/host-metrics-parsers";
 import {
   loadDmConversations,
   loadDmDeliverySummary,
   type ConversationView,
   type ConversationItem,
+  type DmAttachment,
   type DmBatchSummary,
   type FailedDeliveryRow,
 } from "@/lib/loaders/dms";
@@ -101,6 +103,46 @@ function ProfileLink({ discordId }: { discordId: string }) {
   );
 }
 
+function attachmentRouteUrl(storedId: string): string {
+  return `/admin/dms/attachments/${storedId}`;
+}
+
+function AttachmentView({ a }: { a: DmAttachment }) {
+  if (!a.stored) {
+    // Pre-feature message, or storage hasn't finished yet -- all we have is
+    // the original Discord CDN link, which may well have expired by now.
+    return (
+      <a href={a.url} target="_blank" rel="noreferrer" className="link-action" style={{ fontSize: 12, color: "var(--accent-2-text)" }}>
+        {a.filename} <span className="muted">(Discord link, may have expired)</span>
+      </a>
+    );
+  }
+  if (a.error) {
+    return (
+      <span style={{ fontSize: 12, color: "var(--danger)" }}>
+        {a.filename} - {a.error}
+      </span>
+    );
+  }
+  if (a.isImage) {
+    return (
+      <a href={attachmentRouteUrl(a.storedId!)} target="_blank" rel="noreferrer">
+        {/* eslint-disable-next-line @next/next/no-img-element -- admin-only, arbitrary player-uploaded content; next/image's optimizer isn't worth it here */}
+        <img
+          src={attachmentRouteUrl(a.storedId!)}
+          alt={a.filename}
+          style={{ maxWidth: 240, maxHeight: 240, borderRadius: 6, display: "block" }}
+        />
+      </a>
+    );
+  }
+  return (
+    <a href={attachmentRouteUrl(a.storedId!)} className="link-action" style={{ fontSize: 12, color: "var(--accent-2-text)" }}>
+      {a.filename} <span className="muted">({formatBytes(a.size ?? 0)})</span>
+    </a>
+  );
+}
+
 function PlayerBubble({ item }: { item: ConversationItem & { type: "player" } }) {
   return (
     <div className={"card" + (item.status === "unread" ? " card-accent" : "")} style={{ padding: "8px 10px" }}>
@@ -117,16 +159,7 @@ function PlayerBubble({ item }: { item: ConversationItem & { type: "player" } })
       {item.attachments.length > 0 && (
         <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 10 }}>
           {item.attachments.map((a, i) => (
-            <a
-              key={i}
-              href={a.url}
-              target="_blank"
-              rel="noreferrer"
-              className="link-action"
-              style={{ fontSize: 12, color: "var(--accent-2-text)" }}
-            >
-              {a.filename}
-            </a>
+            <AttachmentView key={i} a={a} />
           ))}
         </div>
       )}
