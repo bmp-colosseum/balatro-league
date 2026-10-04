@@ -54,6 +54,12 @@ export async function enqueueDm(job: {
   // the web DM console.
   batchId?: string;
   batchKind?: string;
+  // Richer delivery metadata for the admin DM-thread view (/admin/dms) - the
+  // bot's notify.dm worker writes these onto the DmDelivery row verbatim.
+  kind?: string;
+  senderDiscordId?: string;
+  senderName?: string;
+  inReplyToInboundDmId?: string;
 }): Promise<void> {
   await ensureStarted();
   await getBoss().send("notify.dm", job, {

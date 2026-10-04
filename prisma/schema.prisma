@@ -1174,6 +1174,7 @@ model InboundDm {
   readAt           DateTime?
   repliedAt        DateTime?
   repliedBy        String? // admin discordId who replied
+  repliedByName    String? // staff display-name snapshot at reply time (thread view)
   replyText        String?   @db.Text // what staff sent back (for the thread view)
 
   @@index([status, receivedAt])
@@ -1183,20 +1184,28 @@ model InboundDm {
 // One row per outbound DM the bot tried to send, so staff can see delivery on the
 // web (who got it, who couldn't be reached). status: sent | failed. errorCode is
 // the Discord code (50007 = recipient has DMs closed). batchId + batchKind group
-// a mass-send (e.g. season-start:<seasonId>) for a delivery summary.
+// a mass-send (e.g. season-start:<seasonId>) for a delivery summary. content/kind/
+// sender*/inReplyToInboundDmId let the admin DM-thread view show exactly what the
+// bot said and (for staff replies) who sent it and which inbound message it answers.
 model DmDelivery {
-  id        String   @id @default(cuid())
-  batchId   String? // groups a mass-send; null for one-offs
-  batchKind String? // season-start | reminder | reply | schedule-change | ...
-  discordId String
-  status    String // sent | failed
-  errorCode Int? // Discord error code on failure (50007 = DMs closed)
-  errorMsg  String?  @db.Text
-  sentAt    DateTime @default(now())
+  id                    String   @id @default(cuid())
+  batchId               String? // groups a mass-send; null for one-offs
+  batchKind             String? // season-start | reminder | reply | schedule-change | ...
+  discordId             String
+  status                String // sent | failed
+  errorCode             Int? // Discord error code on failure (50007 = DMs closed)
+  errorMsg              String?  @db.Text
+  sentAt                DateTime @default(now())
+  content               String?  @db.Text // what was actually sent (thread view)
+  kind                  String? // staff-reply | signup-ask | signup-reminder | schedule-change | season-start | roster-checkin | ...
+  senderDiscordId       String? // staff discordId, for a staff-reply; null for bot-originated sends
+  senderName            String? // staff display-name snapshot, for a staff-reply
+  inReplyToInboundDmId  String? // InboundDm.id this reply answers (staff-reply only); no FK, just a loose link
 
   @@index([batchId])
   @@index([status, sentAt])
   @@index([sentAt])
+  @@index([discordId, sentAt])
 }
 
 // A pair of players who must NEVER be scheduled against each other. Global +

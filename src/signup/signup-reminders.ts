@@ -25,6 +25,7 @@ import { deleteChannelMessage, isUndeliverableDm } from "../discord-helpers.js";
 import { getConfig, LeagueConfigKey } from "../league-config.js";
 import { isDiscordIdBanned, bannedDiscordIds } from "../bans.js";
 import { DEFAULT_SEASON_LENGTH_DAYS, playWindow, seasonWindowValue, signupEmbed, signupButtons } from "./signup.js";
+import { recordDmDelivery } from "../dm-delivery.js";
 
 // How long before close the "last call" reminder fires. 36h sits in the middle
 // of the 24–48h target — close enough to feel urgent, early enough to act on.
@@ -145,15 +146,24 @@ export async function sendOrRefreshAsk(roundId: string, discordId: string): Prom
   }
 
   const content = askContent(round, await seasonLengthDays(), variant);
+  const kind = variant === "initial" ? "signup-ask" : "signup-reminder";
   let sent: { id: string; channelId: string };
   try {
     sent = await user.send({ content, components: [askButtons(roundId)] });
+    await recordDmDelivery({ discordId, status: "sent", content, kind });
   } catch (err) {
     // Permanently undeliverable (DMs off / blocked / no mutual guilds / unknown
     // user) — leave PENDING (the next tick just skips again). Don't throw, or the
     // job retries forever and sits as a failure.
     if (isUndeliverableDm(err)) {
       console.warn(`[signup-ask] ${discordId} undeliverable — skipping:`, (err as Error)?.message);
+      await recordDmDelivery({
+        discordId,
+        status: "failed",
+        content,
+        kind,
+        errorMsg: (err as Error)?.message ?? null,
+      });
       return;
     }
     throw err; // transient — let pg-boss retry

@@ -31,6 +31,7 @@ import { checkQueueStalls } from "./devops-alarm.js";
 import { postDevopsAlert } from "./devops-alert.js";
 import { tryGetDiscordClient } from "./discord.js";
 import { planSignupAskKickoff, sendOrRefreshAsk, planReminderTick } from "./signup/signup-reminders.js";
+import { recordDmDelivery } from "./dm-delivery.js";
 
 // Preflight for the announce worker: is a results destination configured at
 // all (global webhook/channel via env or LeagueConfig)? Per-season overrides
@@ -198,7 +199,8 @@ export async function initQueue(): Promise<void> {
     { batchSize: 1, pollingIntervalSeconds: 5 },
     async (jobs: Job<DmJob>[]) => {
       for (const job of jobs) {
-        const { discordId, content, batchId, batchKind } = job.data;
+        const { discordId, content, batchId, batchKind, kind, senderDiscordId, senderName, inReplyToInboundDmId } =
+          job.data;
         const client = tryGetDiscordClient();
         if (!client) {
           // Enqueued during boot before login — throw so it retries rather
@@ -208,7 +210,17 @@ export async function initQueue(): Promise<void> {
         try {
           const user = await client.users.fetch(discordId);
           await user.send({ content });
-          await recordDmDelivery({ discordId, batchId, batchKind, status: "sent" });
+          await recordDmDelivery({
+            discordId,
+            batchId,
+            batchKind,
+            status: "sent",
+            content,
+            kind,
+            senderDiscordId,
+            senderName,
+            inReplyToInboundDmId,
+          });
         } catch (err) {
           // Permanently undeliverable (DMs off / blocked / no mutual guilds /
           // unknown user) - skip silently, don't retry (a retry can't succeed).
@@ -223,6 +235,11 @@ export async function initQueue(): Promise<void> {
               status: "failed",
               errorCode: typeof code === "number" ? code : null,
               errorMsg: (err as Error)?.message ?? null,
+              content,
+              kind,
+              senderDiscordId,
+              senderName,
+              inReplyToInboundDmId,
             });
             return;
           }
@@ -348,9 +365,18 @@ export async function initQueue(): Promise<void> {
         try {
           const user = await client.users.fetch(player.discordId);
           await user.send(embed ? { content, embeds: [embed] } : { content });
+          await recordDmDelivery({ discordId: player.discordId, status: "sent", content, kind: "schedule-change" });
         } catch (err) {
           if (isUndeliverableDm(err)) {
             console.warn(`[notify.schedule-change] ${player.discordId} undeliverable — skipping:`, (err as Error)?.message);
+            await recordDmDelivery({
+              discordId: player.discordId,
+              status: "failed",
+              content,
+              kind: "schedule-change",
+              errorCode: typeof (err as { code?: number })?.code === "number" ? (err as { code: number }).code : null,
+              errorMsg: (err as Error)?.message ?? null,
+            });
             return;
           }
           console.warn(`[notify.schedule-change] send to ${player.discordId} failed — will retry:`, err);
@@ -878,32 +904,11 @@ interface DmJob {
   // tagged to a mass-send (e.g. season-start:<seasonId>) or a web reply.
   batchId?: string;
   batchKind?: string;
-}
-
-// Best-effort record of one outbound DM attempt so the web DM console can show
-// delivery (who got it, who couldn't be reached). Never throws into the worker.
-async function recordDmDelivery(row: {
-  discordId: string;
-  batchId?: string;
-  batchKind?: string;
-  status: "sent" | "failed";
-  errorCode?: number | null;
-  errorMsg?: string | null;
-}): Promise<void> {
-  try {
-    await prisma.dmDelivery.create({
-      data: {
-        discordId: row.discordId,
-        batchId: row.batchId ?? null,
-        batchKind: row.batchKind ?? null,
-        status: row.status,
-        errorCode: row.errorCode ?? null,
-        errorMsg: row.errorMsg ?? null,
-      },
-    });
-  } catch (err) {
-    console.warn("[notify.dm] failed to record delivery:", err);
-  }
+  // Richer delivery metadata for the admin DM-thread view (see dm-delivery.ts).
+  kind?: string;
+  senderDiscordId?: string;
+  senderName?: string;
+  inReplyToInboundDmId?: string;
 }
 
 interface StripRoleJob {
@@ -1335,6 +1340,7 @@ async function queueSeasonOnboardingDms(seasonId: string): Promise<void> {
         content,
         batchId: `season-start:${seasonId}`,
         batchKind: "season-start",
+        kind: "season-start",
       }).catch((err) =>
         console.warn(`[season.onboard] enqueue DM failed for ${m.player.discordId}:`, err),
       );

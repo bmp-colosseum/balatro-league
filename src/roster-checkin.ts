@@ -10,6 +10,7 @@ import { getDiscordClient } from "./discord.js";
 import { getConfig, LeagueConfigKey } from "./league-config.js";
 import { env } from "./env.js";
 import { buildCheckinMessage } from "./checkin-message.js";
+import { recordDmDelivery } from "./dm-delivery.js";
 
 export async function runRosterCheckin(opts: { playerIds: string[]; seasonId: string }): Promise<number> {
   if (opts.playerIds.length === 0) return 0;
@@ -46,6 +47,7 @@ export async function runRosterCheckin(opts: { playerIds: string[]; seasonId: st
       const user = await client.users.fetch(member.player.discordId);
       await user.send({ content, components: [row] });
       await prisma.divisionMember.update({ where: { id: member.id }, data: { checkinStatus: "pending", checkinAt: new Date() } });
+      await recordDmDelivery({ discordId: member.player.discordId, status: "sent", content, kind: "roster-checkin" });
       sent++;
     } catch (err) {
       console.warn(`[roster-checkin] DM to ${member.player.discordId} failed:`, err);
@@ -53,6 +55,13 @@ export async function runRosterCheckin(opts: { playerIds: string[]; seasonId: st
       await prisma.divisionMember
         .update({ where: { id: member.id }, data: { checkinStatus: "dm-failed", checkinAt: new Date() } })
         .catch(() => {});
+      await recordDmDelivery({
+        discordId: member.player.discordId,
+        status: "failed",
+        content,
+        kind: "roster-checkin",
+        errorMsg: (err as Error)?.message ?? null,
+      });
     }
   }
   return sent;

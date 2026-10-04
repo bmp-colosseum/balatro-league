@@ -97,8 +97,10 @@ export async function runShootoutCheck(divisionId: string): Promise<number> {
       `🎯 **Shootout needed** — you and **${sanitizeName(opp.displayName)}** are tied for ${where} in ` +
       `**${division.name}**, and your head-to-head didn't settle it. Play **one game** to decide it: open ` +
       `**#league-matches** and hit **Start shootout**, or run \`/start-match mode:shootout\`.`;
-    if (isRealDiscordId(need.a.discordId)) await enqueueDm({ discordId: need.a.discordId, content: dm(need.a, need.b) });
-    if (isRealDiscordId(need.b.discordId)) await enqueueDm({ discordId: need.b.discordId, content: dm(need.b, need.a) });
+    if (isRealDiscordId(need.a.discordId))
+      await enqueueDm({ discordId: need.a.discordId, content: dm(need.a, need.b), kind: "shootout" });
+    if (isRealDiscordId(need.b.discordId))
+      await enqueueDm({ discordId: need.b.discordId, content: dm(need.b, need.a), kind: "shootout" });
 
     // Public @-ping in the division channel (posted directly so the two user
     // mentions actually notify -- postChannelMessage suppresses user pings).
