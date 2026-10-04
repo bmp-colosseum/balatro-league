@@ -1,6 +1,14 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
+import {
+  buildDmThread,
+  type InboundDmLite,
+  type DmDeliveryLite,
+  type InboundDmStatus,
+  type DeliveryStatus,
+  type ThreadItem,
+} from "@/lib/dm-format-core";
 
 // Loaders for the web DM console (/admin/dms). Read-only reductions over the
 // InboundDm (what people sent us) + DmDelivery (what the bot tried to send)
@@ -12,24 +20,24 @@ export interface DmAttachment {
   url: string;
 }
 
-export interface InboundDmRow {
-  id: string;
-  authorDiscordId: string;
-  authorName: string; // snapshot at receipt
-  displayName: string; // resolved Player.displayName, else authorName
-  username: string | null; // resolved Player.username (@handle) if known
-  content: string;
-  attachments: DmAttachment[];
-  receivedAt: Date;
-  status: string; // unread | read | replied
-  repliedAt: Date | null;
-  repliedBy: string | null;
-  replyText: string | null;
-}
+// A player-message thread item, with its attachments joined back in (the
+// pure buildDmThread core doesn't know about attachments -- they're a
+// loader-level concern, merged in after the merge/sort).
+export type ConversationItem =
+  | (ThreadItem & { type: "player"; attachments: DmAttachment[] })
+  | (ThreadItem & { type: "staff" })
+  | (ThreadItem & { type: "bot" });
 
-export interface DmInbox {
-  rows: InboundDmRow[];
-  counts: { unread: number; total: number };
+export interface ConversationView {
+  discordId: string;
+  displayName: string; // resolved Player.displayName, else last-known authorName snapshot, else discordId
+  username: string | null; // resolved Player.username (@handle) if known
+  unreadCount: number;
+  lastActivityAt: Date;
+  // What the reply form at the bottom of this thread will quote + mark
+  // replied on send; null once everything's been answered.
+  latestUnansweredContent: string | null;
+  items: ConversationItem[];
 }
 
 // attachmentsJson is a nullable JSON string of [{ filename, url }]. Parse
@@ -70,40 +78,66 @@ async function resolvePlayers(discordIds: string[]): Promise<Map<string, Resolve
   return new Map(players.map((p) => [p.discordId, { displayName: p.displayName, username: p.username }]));
 }
 
-// Inbound DMs, unread first then newest first, capped at 200. Counts are the
-// true totals (not the capped page) so the badge/summary stay accurate.
-export async function loadDmInbox(): Promise<DmInbox> {
-  const [raw, unread, total] = await Promise.all([
-    prisma.inboundDm.findMany({ orderBy: { receivedAt: "desc" }, take: 200 }),
-    prisma.inboundDm.count({ where: { status: "unread" } }),
-    prisma.inboundDm.count(),
+// One conversation per player: every InboundDm they've sent (capped 500,
+// newest first) merged with every DmDelivery addressed to them in the last 90
+// days (capped 3000) -- bot sends, failures, and staff replies all in one
+// time-ordered thread. The merge/sort/unread-bookkeeping is the pure
+// buildDmThread core; this just gathers the reads and resolves display names.
+export async function loadDmConversations(): Promise<ConversationView[]> {
+  const deliveriesSince = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const [inboundRaw, deliveriesRaw] = await Promise.all([
+    prisma.inboundDm.findMany({ orderBy: { receivedAt: "desc" }, take: 500 }),
+    prisma.dmDelivery.findMany({ where: { sentAt: { gte: deliveriesSince } }, orderBy: { sentAt: "desc" }, take: 3000 }),
   ]);
 
-  const byDiscordId = await resolvePlayers(raw.map((r) => r.authorDiscordId));
+  const attachmentsById = new Map(inboundRaw.map((r) => [r.id, parseAttachments(r.attachmentsJson)]));
+  // inboundRaw is newest-first, so the first row per author we see is their
+  // most recent -- a reasonable display-name fallback when there's no Player.
+  const lastKnownAuthorName = new Map<string, string>();
+  for (const r of inboundRaw) {
+    if (!lastKnownAuthorName.has(r.authorDiscordId)) lastKnownAuthorName.set(r.authorDiscordId, r.authorName);
+  }
 
-  const rows: InboundDmRow[] = raw.map((r) => {
-    const p = byDiscordId.get(r.authorDiscordId);
+  const inbound: InboundDmLite[] = inboundRaw.map((r) => ({
+    id: r.id,
+    authorDiscordId: r.authorDiscordId,
+    content: r.content,
+    receivedAt: r.receivedAt,
+    status: r.status as InboundDmStatus,
+    replyText: r.replyText,
+    repliedAt: r.repliedAt,
+    repliedByName: r.repliedByName,
+  }));
+  const deliveries: DmDeliveryLite[] = deliveriesRaw.map((d) => ({
+    id: d.id,
+    discordId: d.discordId,
+    status: d.status as DeliveryStatus,
+    sentAt: d.sentAt,
+    content: d.content,
+    kind: d.kind,
+    senderName: d.senderName,
+    inReplyToInboundDmId: d.inReplyToInboundDmId,
+    errorCode: d.errorCode,
+    errorMsg: d.errorMsg,
+  }));
+
+  const conversations = buildDmThread(inbound, deliveries);
+  const byDiscordId = await resolvePlayers(conversations.map((c) => c.discordId));
+
+  return conversations.map((c) => {
+    const p = byDiscordId.get(c.discordId);
     return {
-      id: r.id,
-      authorDiscordId: r.authorDiscordId,
-      authorName: r.authorName,
-      displayName: p?.displayName ?? r.authorName,
+      discordId: c.discordId,
+      displayName: p?.displayName ?? lastKnownAuthorName.get(c.discordId) ?? c.discordId,
       username: p?.username ?? null,
-      content: r.content,
-      attachments: parseAttachments(r.attachmentsJson),
-      receivedAt: r.receivedAt,
-      status: r.status,
-      repliedAt: r.repliedAt,
-      repliedBy: r.repliedBy,
-      replyText: r.replyText,
+      unreadCount: c.unreadCount,
+      lastActivityAt: c.lastActivityAt,
+      latestUnansweredContent: c.latestUnanswered?.content ?? null,
+      items: c.items.map((it) =>
+        it.type === "player" ? { ...it, attachments: attachmentsById.get(it.id) ?? [] } : it,
+      ) as ConversationItem[],
     };
   });
-
-  // Stable sort keeps the newest-first order within each status group, so this
-  // yields "unread (newest first), then the rest (newest first)".
-  rows.sort((a, b) => (a.status === "unread" ? 0 : 1) - (b.status === "unread" ? 0 : 1));
-
-  return { rows, counts: { unread, total } };
 }
 
 export async function unreadDmCount(): Promise<number> {
