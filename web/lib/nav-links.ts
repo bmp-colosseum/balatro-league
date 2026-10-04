@@ -42,6 +42,7 @@ export const ADMIN_LINKS: AdminNavLink[] = [
   { href: "/admin/dms", label: "DMs" },
   { href: "/admin/bans", label: "Bans" },
   { href: "/admin/activity", label: "Activity", system: true },
+  { href: "/admin/play-times", label: "Play Times", system: true },
   { href: "/admin/deck-bans", label: "Deck Bans" },
   { href: "/admin/traits", label: "Traits" },
   { href: "/admin/message", label: "Message", system: true },
