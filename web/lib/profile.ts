@@ -22,6 +22,7 @@
 // authoritative.
 
 import { prisma } from "./prisma";
+import { parseStandingsRows } from "@/lib/standings-cache";
 import { formatSeasonLabel } from "./format-season";
 
 // One combo in a game's pick/ban pool, in pool order. `picked` = the combo the
@@ -247,7 +248,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
   const standingsByDivision = new Map<string, CachedRow[]>();
   for (const s of standingsRows) {
     try {
-      standingsByDivision.set(s.divisionId, JSON.parse(s.rowsJson) as CachedRow[]);
+      standingsByDivision.set(s.divisionId, parseStandingsRows(s.rowsJson) as unknown as CachedRow[]);
     } catch {
       // Bad JSON — skip. UI falls back to rank=0.
     }

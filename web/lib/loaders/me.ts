@@ -10,6 +10,7 @@
 // the read that depends on it, not buried in the page's render flow.
 
 import { prisma } from "@/lib/prisma";
+import { parseStandingsRows } from "@/lib/standings-cache";
 import { isScheduleLocked } from "@/lib/schedule-locked";
 import { opponentSetsFor, owesResultAgainst } from "@/lib/opponents";
 import { getLeagueSettingsForSeason, type ScoringConfig } from "@/lib/league-settings";
@@ -140,7 +141,7 @@ async function loadActiveDivisionContext(
   let myStandings: MeStandingsRow | null = null;
   if (cached) {
     try {
-      const rows = JSON.parse(cached.rowsJson) as Array<
+      const rows = parseStandingsRows(cached.rowsJson) as unknown as Array<
         { playerId: string } & MeStandingsRow
       >;
       const row = rows.find((r) => r.playerId === playerId);

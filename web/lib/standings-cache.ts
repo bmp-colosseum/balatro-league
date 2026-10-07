@@ -40,6 +40,13 @@ interface CachedPayload {
   badge?: ScoringBadge;
 }
 
+// Exported so every reader of DivisionStandings.rowsJson goes through the one parser that
+// accepts both shapes (me.ts, profile.ts); reading the column raw as an array broke every
+// profile page the moment the first {rows, badge} payload was written.
+export function parseStandingsRows(rowsJson: string): CachedRow[] {
+  return parsePayload(rowsJson).rows;
+}
+
 function parsePayload(rowsJson: string): CachedPayload {
   const parsed = JSON.parse(rowsJson) as CachedRow[] | CachedPayload;
   return Array.isArray(parsed) ? { rows: parsed } : parsed;
