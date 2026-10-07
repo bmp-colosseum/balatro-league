@@ -204,15 +204,18 @@ export async function overrideResult(args: {
   return { ok: true, matchId: updated.id, divisionId: updated.divisionId };
 }
 
-// Award a 2-0 win by forfeit / DQ. Upserts so it records a new DQ or fixes a
-// wrong existing result in place. Reason is admin-only (forfeitReason + audit).
-export async function forfeitResult(args: {
+// The write-only half of forfeitResult (upsert + per-game cleanup + audit, no
+// standings recompute / announce). Factored out so a caller forfeiting MANY
+// matches in one pass (the admin bulk-resolve queue) can skip the automatic
+// per-match afterWrite and do it once per affected division instead.
+// forfeitResult below is this plus that automatic afterWrite -- its own
+// behavior/signature is unchanged.
+export async function writeForfeitResult(args: {
   divisionId: string;
   winnerId: string;
   loserId: string;
   reason: string;
   actor: AuditActor;
-  announce?: boolean;
 }): Promise<MatchAdminOutcome> {
   const { divisionId, winnerId, loserId, actor } = args;
   const reason = args.reason?.trim();
@@ -268,8 +271,73 @@ export async function forfeitResult(args: {
     summary: `Forfeit win (2-0 by DQ), winner ${winnerId}`,
     metadata: { winnerId, loserId, reason, divisionId },
   });
-  await afterWrite(match.id, divisionId, args.announce ?? true);
   return { ok: true, matchId: match.id, divisionId };
+}
+
+// Award a 2-0 win by forfeit / DQ. Upserts so it records a new DQ or fixes a
+// wrong existing result in place. Reason is admin-only (forfeitReason + audit).
+export async function forfeitResult(args: {
+  divisionId: string;
+  winnerId: string;
+  loserId: string;
+  reason: string;
+  actor: AuditActor;
+  announce?: boolean;
+}): Promise<MatchAdminOutcome> {
+  const outcome = await writeForfeitResult(args);
+  if (outcome.ok) await afterWrite(outcome.matchId, outcome.divisionId, args.announce ?? true);
+  return outcome;
+}
+
+// The write-only half of cancelMatch (update + audit, no standings recompute).
+// The single-match building block behind a CANCELLED write -- mirrors the
+// per-match shape voidPlayerInDivision's updateMany already writes for a DQ'd
+// player's matches (status CANCELLED + adminOverrideBy/Reason), factored out
+// here as its own helper since voidPlayerInDivision had no single-match piece
+// to reuse. voidPlayerInDivision itself is untouched -- its bulk updateMany
+// stays exactly as it was. `auditAction` lets a caller record a more specific
+// action key (e.g. the bulk queue's "double forfeit" void) without this
+// function hardcoding one meaning.
+export async function writeCancelMatch(args: {
+  matchId: string;
+  reason: string;
+  actor: AuditActor;
+  auditAction?: string;
+}): Promise<MatchAdminOutcome> {
+  const { matchId, actor } = args;
+  const reason = args.reason?.trim();
+  if (!matchId || !reason) return { ok: false, reason: "Need a match id and a reason." };
+  const existing = await prisma.match.findUnique({ where: { id: matchId }, select: { id: true, divisionId: true } });
+  if (!existing) return { ok: false, reason: "Match not found." };
+  const updated = await prisma.match.update({
+    where: { id: matchId },
+    data: { status: "CANCELLED", adminOverrideBy: actor.discordId, adminOverrideReason: reason },
+  });
+  await recordAudit({
+    actor,
+    action: args.auditAction ?? "match.cancel",
+    targetType: "Match",
+    targetId: updated.id,
+    summary: `Voided (cancelled): ${reason}`,
+    metadata: { matchId, divisionId: updated.divisionId, reason },
+  });
+  return { ok: true, matchId: updated.id, divisionId: updated.divisionId };
+}
+
+// Cancel a single match (status CANCELLED, no points either way). Unlike
+// voidGame (a CONFIRMED 0-0 -- counts as played, just worth nothing),
+// cancelling drops it from the schedule entirely, same as what
+// voidPlayerInDivision does to each of a DQ'd player's matches. Never
+// announces (nothing to celebrate about a cancellation).
+export async function cancelMatch(args: {
+  matchId: string;
+  reason: string;
+  actor: AuditActor;
+  auditAction?: string;
+}): Promise<MatchAdminOutcome> {
+  const outcome = await writeCancelMatch(args);
+  if (outcome.ok) await afterWrite(outcome.matchId, outcome.divisionId, false);
+  return outcome;
 }
 
 // DQ a NO-SHOW: award every one of the player's scheduled-but-UNPLAYED matches to
