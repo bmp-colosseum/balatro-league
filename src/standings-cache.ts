@@ -18,7 +18,7 @@
 // separately via loadDivisionScoringBadge (call AFTER the rows read in the
 // same request, so the cache is already warm).
 
-import type { Player } from "@prisma/client";
+import type { PairingStatus, Player } from "@prisma/client";
 import { prisma } from "./db.js";
 import { getLeagueSettingsForSeason } from "./league-settings.js";
 import { assignRanks, computeStandings, type StandingRow, type ShootoutInput } from "./standings.js";
@@ -63,6 +63,7 @@ interface DivisionForStandings {
   }[];
   matches: {
     format: string;
+    status: string;
     playerAId: string;
     playerBId: string;
     gamesWonA: number;
@@ -71,15 +72,21 @@ interface DivisionForStandings {
   }[];
 }
 
+const LIVE_MATCH_STATUSES: PairingStatus[] = ["CONFIRMED", "PENDING", "DISPUTED"];
+
 const DIVISION_FOR_STANDINGS_INCLUDE = {
   seasonId: true,
   opponentsPerPlayer: true,
   season: { select: { scoringMode: true } },
   members: { select: { playerId: true, status: true, joinedAt: true, droppedAt: true, player: true } },
   matches: {
-    where: { status: "CONFIRMED" },
+    // Live matches only: CONFIRMED feeds the engines; PENDING/DISPUTED count toward each
+    // player's schedule size for best-N (a CANCELLED match against a dropout does not --
+    // the refill that replaces it does).
+    where: { status: { in: LIVE_MATCH_STATUSES } },
     select: {
       format: true,
+      status: true,
       playerAId: true,
       playerBId: true,
       gamesWonA: true,
@@ -99,14 +106,14 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
   const selection = selectStandingsEngine(mode);
 
   const leagueMatches = div.matches.filter((m) => m.format === "LEAGUE_BO2");
-  const pairings: BestNPairing[] = leagueMatches.map((m) => ({
+  const pairings: BestNPairing[] = leagueMatches.filter((m) => m.status === "CONFIRMED").map((m) => ({
     playerAId: m.playerAId,
     playerBId: m.playerBId,
     gamesWonA: m.gamesWonA,
     gamesWonB: m.gamesWonB,
   }));
   const shootouts: ShootoutInput[] = div.matches
-    .filter((m) => m.format === "SHOOTOUT_BO1" && m.winnerId !== null)
+    .filter((m) => m.format === "SHOOTOUT_BO1" && m.status === "CONFIRMED" && m.winnerId !== null)
     .map((m) => ({ playerAId: m.playerAId, playerBId: m.playerBId, winnerId: m.winnerId! }));
 
   let rows: StandingRow[];

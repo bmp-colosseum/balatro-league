@@ -380,10 +380,12 @@ export async function loadStandingsPreview(
         });
       }
 
-      // Every member's total scheduled LEAGUE_BO2 games (any status) in
-      // this division -- only consulted for a replacement's effective cap.
+      // Every member's LIVE scheduled LEAGUE_BO2 matches (confirmed, pending or disputed;
+      // never a cancelled one against a dropout, whose refill takes its place) -- this is
+      // what the engine derives the division's matches-per-player from when the division
+      // has no explicit setting, and what caps a replacement.
       const scheduledGamesByPlayerId = new Map<string, number>();
-      for (const m of leagueMatches) {
+      for (const m of leagueMatches.filter((m) => m.status !== "CANCELLED")) {
         scheduledGamesByPlayerId.set(m.playerAId, (scheduledGamesByPlayerId.get(m.playerAId) ?? 0) + 1);
         scheduledGamesByPlayerId.set(m.playerBId, (scheduledGamesByPlayerId.get(m.playerBId) ?? 0) + 1);
       }
