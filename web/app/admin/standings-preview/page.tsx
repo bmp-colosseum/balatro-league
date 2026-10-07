@@ -205,7 +205,7 @@ function DivisionCard({
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
         <strong style={{ fontSize: 15 }}>{d.tierName} - {d.name}</strong>
         <span className="pill" style={{ fontSize: 11 }}>
-          counts best {d.n} of {Math.max(0, d.k - 1)}
+          counts best {d.n} of {Math.max(0, d.k - 1)} matches
         </span>
         <span className="muted" style={{ fontSize: 12 }}>
           {d.dropouts} unreplaced dropout{d.dropouts === 1 ? "" : "s"} - {d.k} players originally
@@ -295,7 +295,7 @@ function DropPickerPanel({
               defaultValue={maxPlayed}
               style={{ ...selectStyle, width: 54 }}
             />
-            <span className="muted">played games</span>
+            <span className="muted">played matches</span>
           </label>
           <Button type="submit" variant="secondary" size="sm">Recalculate</Button>
         </div>

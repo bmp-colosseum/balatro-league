@@ -132,7 +132,7 @@ export default async function PublicDivisionPage({
                 style={{ fontSize: 11 }}
                 title={`${scoringBadge.dropouts} unreplaced dropout${scoringBadge.dropouts === 1 ? "" : "s"} this season -- a result against ${scoringBadge.dropouts === 1 ? "them" : "them"} is ${scoringBadge.mode === "best-n-void" ? "erased for everyone" : "a normal result like any other"}.`}
               >
-                counts best {scoringBadge.n} of {Math.max(0, scoringBadge.k - 1)}
+                counts best {scoringBadge.n} of {Math.max(0, scoringBadge.k - 1)} matches
               </span>
             )}
           </div>
