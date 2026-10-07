@@ -48,6 +48,7 @@ export interface BestNStandingRow extends StandingRow {
 export interface BestNDivisionSummary {
   n: number;
   k: number;
+  scheduled: number;
   dropouts: number;
 }
 
@@ -76,13 +77,19 @@ export function computeBestNStandings(
   shootouts: ShootoutInput[] = [],
   scoring: ScoringConfig = DEFAULTS.scoring,
   dropoutGames: DropoutGamesMode = "count",
+  scheduledPerPlayer: number | null = null,
 ): BestNStandingsResult {
   const active = members.filter((m) => m.status === "ACTIVE");
   const droppedCount = members.filter((m) => m.status === "DROPPED").length;
   const replacementCount = active.filter((m) => m.isReplacement).length;
   const k = active.length + droppedCount;
   const dropouts = Math.max(0, droppedCount - replacementCount);
-  const n = Math.max(0, k - 1 - dropouts);
+  // The league schedules a fixed number of MATCHES per player, not a full round robin: a
+  // division of 6 may play 4 each. N is that schedule size minus the unreplaced dropouts,
+  // so "best 3 of 4 matches" in that case; a full round robin degrades to k-1-d as before.
+  const largestOriginalSchedule = Math.max(0, ...active.filter((m) => !m.isReplacement).map((m) => m.scheduledGames));
+  const scheduled = scheduledPerPlayer ?? (largestOriginalSchedule > 0 ? largestOriginalSchedule : Math.max(0, k - 1));
+  const n = Math.max(0, scheduled - dropouts);
 
   if (dropouts === 0) {
     const rows: BestNStandingRow[] = computeStandings(
@@ -91,7 +98,7 @@ export function computeBestNStandings(
       shootouts,
       scoring,
     ).map((row) => ({ ...row, counted: row.played, of: row.played, droppedResults: [] }));
-    return { rows, division: { n, k, dropouts } };
+    return { rows, division: { n, k, scheduled, dropouts } };
   }
 
   const droppedIds = new Set(members.filter((m) => m.status === "DROPPED").map((m) => m.player.id));
@@ -212,7 +219,7 @@ export function computeBestNStandings(
   }
 
   assignRanks(sorted);
-  return { rows: sorted, division: { n, k, dropouts } };
+  return { rows: sorted, division: { n, k, scheduled, dropouts } };
 }
 
 export interface RawMemberForBestN {

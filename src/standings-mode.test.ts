@@ -28,17 +28,17 @@ describe("selectStandingsEngine -- the live-standings-loader engine picker, DB-f
 
 describe("buildScoringBadge", () => {
   it("is null for mode 'all' regardless of dropouts", () => {
-    expect(buildScoringBadge("all", 4, 6, 2)).toBeNull();
+    expect(buildScoringBadge("all", 4, 6, 5, 2)).toBeNull();
   });
 
   it("is null for a best-n mode with zero dropouts (engine already bypassed)", () => {
-    expect(buildScoringBadge("best-n-count", 5, 6, 0)).toBeNull();
+    expect(buildScoringBadge("best-n-count", 5, 6, 5, 0)).toBeNull();
   });
 
   it.each([
     ["best-n-count"],
     ["best-n-void"],
   ] as const)("is the badge for a %s mode with at least one dropout", (mode) => {
-    expect(buildScoringBadge(mode, 4, 6, 2)).toEqual({ mode, n: 4, k: 6, dropouts: 2 });
+    expect(buildScoringBadge(mode, 4, 6, 5, 2)).toEqual({ mode, n: 4, k: 6, scheduled: 5, dropouts: 2 });
   });
 });

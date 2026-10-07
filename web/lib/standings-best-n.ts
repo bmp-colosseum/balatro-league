@@ -101,6 +101,9 @@ export interface BestNDivisionSummary {
   n: number;
   // Division size INCLUDING unreplaced dropouts (the original full roster).
   k: number;
+  // Matches each player is scheduled to play: the division's opponents-per-player setting,
+  // else the largest schedule any original member has, else k-1 for a full round robin.
+  scheduled: number;
   // Unreplaced dropouts (DROPPED members minus replacements), floored at 0.
   // 0 means best-N is NOT triggered for this division.
   dropouts: number;
@@ -139,13 +142,19 @@ export function computeBestNStandings(
   shootouts: ShootoutInput[] = [],
   scoring: ScoringConfig = DEFAULTS.scoring,
   dropoutGames: DropoutGamesMode = "count",
+  scheduledPerPlayer: number | null = null,
 ): BestNStandingsResult {
   const active = members.filter((m) => m.status === "ACTIVE");
   const droppedCount = members.filter((m) => m.status === "DROPPED").length;
   const replacementCount = active.filter((m) => m.isReplacement).length;
   const k = active.length + droppedCount;
   const dropouts = Math.max(0, droppedCount - replacementCount);
-  const n = Math.max(0, k - 1 - dropouts);
+  // The league schedules a fixed number of MATCHES per player, not a full round robin: a
+  // division of 6 may play 4 each. N is that schedule size minus the unreplaced dropouts,
+  // so "best 3 of 4 matches" in that case; a full round robin degrades to k-1-d as before.
+  const largestOriginalSchedule = Math.max(0, ...active.filter((m) => !m.isReplacement).map((m) => m.scheduledGames));
+  const scheduled = scheduledPerPlayer ?? (largestOriginalSchedule > 0 ? largestOriginalSchedule : Math.max(0, k - 1));
+  const n = Math.max(0, scheduled - dropouts);
 
   if (dropouts === 0) {
     // No unreplaced dropout anywhere in the division -- best-N doesn't
@@ -159,7 +168,7 @@ export function computeBestNStandings(
       shootouts,
       scoring,
     ).map((row) => ({ ...row, counted: row.played, of: row.played, droppedResults: [] }));
-    return { rows, division: { n, k, dropouts } };
+    return { rows, division: { n, k, scheduled, dropouts } };
   }
 
   // "void": strip every result touching a DROPPED member before anything
@@ -293,7 +302,7 @@ export function computeBestNStandings(
   }
 
   assignRanks(sorted);
-  return { rows: sorted, division: { n, k, dropouts } };
+  return { rows: sorted, division: { n, k, scheduled, dropouts } };
 }
 
 export interface RawMemberForBestN {

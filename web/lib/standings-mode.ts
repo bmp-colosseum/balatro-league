@@ -44,6 +44,7 @@ export interface ScoringBadge {
   mode: SeasonScoringMode;
   n: number;
   k: number;
+  scheduled: number;
   dropouts: number;
 }
 
@@ -51,8 +52,9 @@ export function buildScoringBadge(
   mode: SeasonScoringMode,
   n: number,
   k: number,
+  scheduled: number,
   dropouts: number,
 ): ScoringBadge | null {
   if (mode === "all" || dropouts <= 0) return null;
-  return { mode, n, k, dropouts };
+  return { mode, n, k, scheduled, dropouts };
 }

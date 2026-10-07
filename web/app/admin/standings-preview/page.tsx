@@ -205,7 +205,7 @@ function DivisionCard({
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
         <strong style={{ fontSize: 15 }}>{d.tierName} - {d.name}</strong>
         <span className="pill" style={{ fontSize: 11 }}>
-          counts best {d.n} of {Math.max(0, d.k - 1)} matches
+          counts best {d.n} of {d.scheduled} matches
         </span>
         <span className="muted" style={{ fontSize: 12 }}>
           {d.dropouts} unreplaced dropout{d.dropouts === 1 ? "" : "s"} - {d.k} players originally

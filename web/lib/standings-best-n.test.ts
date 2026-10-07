@@ -56,7 +56,7 @@ describe("computeBestNStandings -- no unreplaced dropout (bypass)", () => {
     const result = computeBestNStandings(members, pairings);
     const plain = computeStandings(members.map((m) => m.player), pairings);
 
-    expect(result.division).toEqual({ n: 2, k: 3, dropouts: 0 });
+    expect(result.division).toEqual({ n: 2, k: 3, scheduled: 2, dropouts: 0 });
     expect(stripBestNFields(result.rows)).toEqual(plain);
     for (const r of result.rows) {
       expect(r.counted).toBe(r.played);
@@ -117,7 +117,7 @@ describe("computeBestNStandings -- worked example (7-player division, one unrepl
   const result = computeBestNStandings(members, pairings);
 
   it("sizes the division correctly", () => {
-    expect(result.division).toEqual({ n: 5, k: 7, dropouts: 1 });
+    expect(result.division).toEqual({ n: 5, k: 7, scheduled: 6, dropouts: 1 });
   });
 
   it("drops Alice's worst (6th) result, keeping her best 5", () => {
@@ -167,7 +167,7 @@ describe("computeBestNStandings -- worked example (7-player division, one unrepl
     const voidResult = computeBestNStandings(members, pairings, [], undefined, "void");
 
     it("sizes the division the same way", () => {
-      expect(voidResult.division).toEqual({ n: 5, k: 7, dropouts: 1 });
+      expect(voidResult.division).toEqual({ n: 5, k: 7, scheduled: 6, dropouts: 1 });
     });
 
     it("Finn stays a clear first, Alice a clear second -- nothing to drop for anyone", () => {
@@ -222,7 +222,7 @@ describe("computeBestNStandings -- head-to-head only applies when both sides cou
       M("b", "x", 1, 1),
     ];
     const result = computeBestNStandings(members, pairings);
-    expect(result.division).toEqual({ n: 3, k: 5, dropouts: 1 });
+    expect(result.division).toEqual({ n: 3, k: 5, scheduled: 4, dropouts: 1 });
 
     const alice = result.rows.find((r) => r.player.id === "a")!;
     const bob = result.rows.find((r) => r.player.id === "b")!;
@@ -255,7 +255,7 @@ describe("computeBestNStandings -- replacement cap", () => {
       M("b", "replacement", 2, 0),
     ];
     const result = computeBestNStandings(members, pairings);
-    expect(result.division).toEqual({ n: 4, k: 6, dropouts: 1 });
+    expect(result.division).toEqual({ n: 4, k: 6, scheduled: 5, dropouts: 1 });
     const replacement = result.rows.find((r) => r.player.id === "replacement")!;
     expect(replacement.of).toBe(2);
     expect(replacement.counted).toBe(2);
@@ -462,5 +462,21 @@ describe("computeBestNStandings -- sanity", () => {
     const result = computeBestNStandings(members, pairings, shootouts);
     const order = ids(result.rows);
     expect(order[0]).toBe("a"); // shootout winner rises despite an all-draw tie
+  });
+});
+
+describe("computeBestNStandings: partial schedules", () => {
+  it("uses the division's matches-per-player, not k-1: 6 players, 4 matches each, one dropout -> best 3 of 4", () => {
+    const members: BestNMemberInput[] = ["a", "b", "c", "d", "e", "f"].map((id) => member(id, id.toUpperCase(), { scheduledGames: 4 }));
+    members[5] = { ...members[5], status: "DROPPED" };
+    const result = computeBestNStandings(members, [], [], undefined, "count", 4);
+    expect(result.division).toEqual({ n: 3, k: 6, scheduled: 4, dropouts: 1 });
+  });
+  it("falls back to the largest original schedule when the division has no explicit setting", () => {
+    const members: BestNMemberInput[] = ["a", "b", "c", "d", "e", "f"].map((id) => member(id, id.toUpperCase(), { scheduledGames: 4 }));
+    members[5] = { ...members[5], status: "DROPPED" };
+    const result = computeBestNStandings(members, [], [], undefined, "void", null);
+    expect(result.division.scheduled).toBe(4);
+    expect(result.division.n).toBe(3);
   });
 });

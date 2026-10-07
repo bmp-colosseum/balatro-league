@@ -57,7 +57,7 @@ export async function composeStandingsEmbeds(): Promise<EmbedBuilder[]> {
     );
     divisionEmbeds.push(
       new EmbedBuilder()
-        .setTitle(badge ? `${div.name} - counts best ${badge.n} of ${Math.max(0, badge.k - 1)} matches` : div.name)
+        .setTitle(badge ? `${div.name} - counts best ${badge.n} of ${badge.scheduled} matches` : div.name)
         .setDescription(lines.length > 0 ? lines.join("\n") : "_No results yet._")
         .setColor(tierColor(div.tier.position)),
     );

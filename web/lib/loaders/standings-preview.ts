@@ -92,6 +92,7 @@ export interface StandingsPreviewDivision {
   tierName: string;
   k: number;
   n: number;
+  scheduled: number;
   dropouts: number; // real + hypothetical unreplaced dropouts (same for both candidates -- mode doesn't change k/n/dropouts)
   // Of `dropouts`, how many are hypothetical (selected via the what-if panel,
   // not an actual DivisionMember.status === "DROPPED" yet) -- lets the UI
@@ -284,6 +285,7 @@ export async function loadStandingsPreview(
               id: true,
               name: true,
               promoteCount: true,
+              opponentsPerPlayer: true,
               relegateCount: true,
               members: {
                 select: {
@@ -413,11 +415,11 @@ export async function loadStandingsPreview(
 
       const activePlayers = effectiveMembers.filter((m) => m.status === "ACTIVE").map((m) => m.player);
       const currentRows = computeStandings(activePlayers, confirmedPairings, shootouts, scoring);
-      const bestNCount = computeBestNStandings(effectiveMembers, confirmedPairings, shootouts, scoring, "count");
+      const bestNCount = computeBestNStandings(effectiveMembers, confirmedPairings, shootouts, scoring, "count", d.opponentsPerPlayer ?? null);
 
       if (bestNCount.division.dropouts === 0) continue; // nothing to preview here (same for both modes)
 
-      const bestNVoid = computeBestNStandings(effectiveMembers, confirmedPairings, shootouts, scoring, "void");
+      const bestNVoid = computeBestNStandings(effectiveMembers, confirmedPairings, shootouts, scoring, "void", d.opponentsPerPlayer ?? null);
 
       const effectivePromote = tier.position === minTierPosition
         ? 0
@@ -442,6 +444,7 @@ export async function loadStandingsPreview(
         tierName: tier.name,
         k: bestNCount.division.k,
         n: bestNCount.division.n,
+        scheduled: bestNCount.division.scheduled,
         dropouts: bestNCount.division.dropouts,
         hypotheticalDrops,
         promoteCount: effectivePromote,

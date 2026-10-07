@@ -52,6 +52,7 @@ function parsePayload(rowsJson: string): CachedPayload {
 
 interface DivisionForStandings {
   seasonId: string;
+  opponentsPerPlayer: number | null;
   season: { scoringMode: string };
   members: {
     playerId: string;
@@ -72,6 +73,7 @@ interface DivisionForStandings {
 
 const DIVISION_FOR_STANDINGS_INCLUDE = {
   seasonId: true,
+  opponentsPerPlayer: true,
   season: { select: { scoringMode: true } },
   members: { select: { playerId: true, status: true, joinedAt: true, droppedAt: true, player: true } },
   matches: {
@@ -128,9 +130,9 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
       })),
       scheduledGamesByPlayerId,
     );
-    const result = computeBestNStandings(bestNMembers, pairings, shootouts, scoring, selection.dropoutGames);
+    const result = computeBestNStandings(bestNMembers, pairings, shootouts, scoring, selection.dropoutGames, div.opponentsPerPlayer ?? null);
     rows = result.rows;
-    badge = buildScoringBadge(mode, result.division.n, result.division.k, result.division.dropouts);
+    badge = buildScoringBadge(mode, result.division.n, result.division.k, result.division.scheduled, result.division.dropouts);
   }
 
   const payload: CachedPayload = {
