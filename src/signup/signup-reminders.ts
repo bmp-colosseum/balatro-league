@@ -162,7 +162,15 @@ export async function sendOrRefreshAsk(roundId: string, discordId: string): Prom
         status: "failed",
         content,
         kind,
+        errorCode: typeof (err as { code?: unknown })?.code === "number" ? ((err as { code: number }).code) : null,
         errorMsg: (err as Error)?.message ?? null,
+      });
+      // Count the attempt exactly like a delivered reminder: the tick's cadence keys off
+      // remindersSent/lastRemindedAt, so leaving them untouched made it re-send to a player
+      // who left the server every single hour until the round closed.
+      await prisma.signupAsk.update({
+        where: { id: ask.id },
+        data: { remindersSent: { increment: 1 }, lastRemindedAt: new Date() },
       });
       return;
     }

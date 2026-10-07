@@ -36,7 +36,9 @@ export async function recordDmDelivery(row: DmDeliveryRow): Promise<void> {
       data: {
         discordId: row.discordId,
         batchId: row.batchId ?? null,
-        batchKind: row.batchKind ?? null,
+        // A one-off DM has no batch; label it by its kind so the admin batches table never
+        // shows "(unlabelled)" for signup asks, reminders or staff replies.
+        batchKind: row.batchKind ?? row.kind ?? null,
         status: row.status,
         errorCode: row.errorCode ?? null,
         errorMsg: row.errorMsg ?? null,
