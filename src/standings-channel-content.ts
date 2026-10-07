@@ -52,9 +52,10 @@ export async function composeStandingsEmbeds(): Promise<EmbedBuilder[]> {
     // Read AFTER the rows above, which just warmed the cache -- the badge
     // read itself never recomputes.
     const badge = await loadDivisionScoringBadge(div.id).catch(() => null);
-    const lines = rows.map(
-      (r, i) => `${place(i)} ${sanitizeName(r.player.displayName)} — **${r.points}** pts · ${r.wins}-${r.draws}-${r.losses}`,
-    );
+    const lines = rows.map((r, i) => {
+      const countedNote = badge && r.counted !== undefined && r.of !== undefined ? ` (${r.counted} of ${r.of})` : "";
+      return `${place(i)} ${sanitizeName(r.player.displayName)} — **${r.points}** pts · ${r.wins}-${r.draws}-${r.losses}${countedNote}`;
+    });
     divisionEmbeds.push(
       new EmbedBuilder()
         .setTitle(badge ? `${div.name} - counts best ${badge.n} of ${badge.scheduled} matches` : div.name)

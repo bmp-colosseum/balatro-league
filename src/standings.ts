@@ -15,6 +15,11 @@ export interface StandingRow {
   gamesLost: number;
   played: number;     // confirmed pairings
   dropped?: boolean;  // marked when this row's member status is DROPPED
+  // Set only under a best-N scoring mode -- how many of this player's
+  // results counted toward their standing, and the cap ("of") selection was
+  // made against. Absent under "all" mode. Mirrors web.
+  counted?: number;
+  of?: number;
   // Ties are real: players equal on the whole chain (no shootout) SHARE a rank
   // rather than being force-ordered alphabetically. tiedWithPrev/Next mark the
   // group; rank is standard competition ranking (1, 2, 2, 4). Mirrors web.

@@ -13,6 +13,12 @@ export interface StandingRow {
   gamesLost: number;
   played: number;     // confirmed pairings
   dropped?: boolean;
+  // Set only under a best-N scoring mode (see standings-best-n.ts /
+  // standings-cache.ts): how many of this player's results counted toward
+  // their standing, and the cap ("of") selection was made against. Absent
+  // under "all" mode.
+  counted?: number;
+  of?: number;
   // True when this row ties with the row above on points/wins/draws AND
   // no shootout has been recorded between them. UI shows a ⚔ marker
   // prompting admin to record one (or for players to play + report).

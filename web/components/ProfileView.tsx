@@ -748,7 +748,14 @@ export async function ProfileView({
                               )}
                               {picksBansDetails(m.games, m.opponentDisplayName)}
                             </td>
-                            <td data-label="Result"><span className="pill" style={{ background: outcomePill.bg, color: outcomePill.fg, fontSize: isDisputed ? 10 : undefined }}>{outcomePill.label}</span></td>
+                            <td data-label="Result">
+                              <span className="pill" style={{ background: outcomePill.bg, color: outcomePill.fg, fontSize: isDisputed ? 10 : undefined }}>{outcomePill.label}</span>
+                              {m.uncounted && (
+                                <div className="muted" style={{ fontSize: 10, marginTop: 2 }} title={m.uncounted.title}>
+                                  {m.uncounted.label}
+                                </div>
+                              )}
+                            </td>
                             {isOwnProfile && h.isActive && isShootout && (
                               <td className="muted" style={{ fontSize: 11 }}>—</td>
                             )}

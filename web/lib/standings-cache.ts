@@ -19,6 +19,7 @@ import { getLeagueSettingsForSeason } from "@/lib/league-settings";
 import { assignRanks, computeStandings, type StandingRow, type ShootoutInput } from "@/lib/standings";
 import { computeBestNStandings, buildBestNMembers, type BestNPairing } from "@/lib/standings-best-n";
 import { normalizeScoringMode, selectStandingsEngine, buildScoringBadge, type ScoringBadge } from "@/lib/standings-mode";
+import { buildUncounted, type UncountedEntry } from "@/lib/uncounted-core";
 
 interface CachedRow {
   playerId: string;
@@ -30,6 +31,10 @@ interface CachedRow {
   gamesLost: number;
   played: number;
   tiedWithPrev?: boolean;
+  // Set only under a best-N scoring mode -- see StandingRow.counted/of in
+  // standings.ts. Absent for a legacy payload or an "all"-mode division.
+  counted?: number;
+  of?: number;
 }
 
 // On-disk shape of DivisionStandings.rowsJson. Legacy rows written before
@@ -38,6 +43,10 @@ interface CachedRow {
 interface CachedPayload {
   rows: CachedRow[];
   badge?: ScoringBadge;
+  // Which of this division's results are set aside under a best-N scoring
+  // mode, and why -- see web/lib/uncounted-core.ts. Absent (or empty) when
+  // nothing is set aside right now.
+  uncounted?: UncountedEntry[];
 }
 
 // Exported so every reader of DivisionStandings.rowsJson goes through the one parser that
@@ -45,6 +54,12 @@ interface CachedPayload {
 // profile page the moment the first {rows, badge} payload was written.
 export function parseStandingsRows(rowsJson: string): CachedRow[] {
   return parsePayload(rowsJson).rows;
+}
+
+// Same one-parser convention as parseStandingsRows, for readers (profile.ts)
+// that need to know which of a division's matches are set aside.
+export function parseStandingsUncounted(rowsJson: string): UncountedEntry[] {
+  return parsePayload(rowsJson).uncounted ?? [];
 }
 
 function parsePayload(rowsJson: string): CachedPayload {
@@ -120,6 +135,7 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
 
   let rows: StandingRow[];
   let badge: ScoringBadge | null = null;
+  let uncounted: UncountedEntry[] = [];
 
   if (selection.engine === "standard") {
     const activeMembers = div.members.filter((m) => m.status === "ACTIVE");
@@ -142,6 +158,12 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
     const result = computeBestNStandings(bestNMembers, pairings, shootouts, scoring, selection.dropoutGames, div.opponentsPerPlayer ?? null);
     rows = result.rows;
     badge = buildScoringBadge(mode, result.division.n, result.division.k, result.division.scheduled, result.division.dropouts);
+    uncounted = buildUncounted(
+      div.members.map((m) => ({ playerId: m.playerId, status: m.status === "DROPPED" ? "DROPPED" : "ACTIVE" })),
+      result.rows.map((r) => ({ playerId: r.player.id, droppedResults: r.droppedResults })),
+      pairings,
+      selection.dropoutGames,
+    );
   }
 
   const payload: CachedPayload = {
@@ -155,9 +177,12 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
       gamesLost: r.gamesLost,
       played: r.played,
       tiedWithPrev: r.tiedWithPrev,
+      counted: r.counted,
+      of: r.of,
     })),
   };
   if (badge) payload.badge = badge;
+  if (uncounted.length > 0) payload.uncounted = uncounted;
   return payload;
 }
 
@@ -245,6 +270,37 @@ export async function loadManyDivisionScoringBadges(
   return out;
 }
 
+// Reads the per-match "set aside, and why" list cached alongside a
+// division's rows -- see web/lib/uncounted-core.ts. Same warm-cache
+// contract as loadDivisionScoringBadge: never computes on its own, call
+// AFTER the rows read in the same request. Empty array (not null) when
+// there's nothing set aside, so callers can pass it straight to
+// uncountedTag without a null check.
+export async function loadDivisionUncounted(divisionId: string): Promise<UncountedEntry[]> {
+  const cached = await prisma.divisionStandings.findUnique({
+    where: { divisionId },
+    select: { rowsJson: true },
+  });
+  if (!cached) return [];
+  return parsePayload(cached.rowsJson).uncounted ?? [];
+}
+
+export async function loadManyDivisionUncounted(
+  divisionIds: string[],
+): Promise<Map<string, UncountedEntry[]>> {
+  const out = new Map<string, UncountedEntry[]>();
+  if (divisionIds.length === 0) return out;
+  const cached = await prisma.divisionStandings.findMany({
+    where: { divisionId: { in: divisionIds } },
+    select: { divisionId: true, rowsJson: true },
+  });
+  for (const c of cached) {
+    const u = parsePayload(c.rowsJson).uncounted;
+    if (u && u.length > 0) out.set(c.divisionId, u);
+  }
+  return out;
+}
+
 // Turn a cached payload + a player lookup into StandingRows. Pure — no DB.
 function hydrateRows(payload: CachedRow[], playerById: Map<string, Player>): StandingRow[] {
   const rows = payload
@@ -262,6 +318,8 @@ function hydrateRows(payload: CachedRow[], playerById: Map<string, Player>): Sta
         played: r.played,
       };
       if (r.tiedWithPrev) row.tiedWithPrev = true;
+      if (r.counted !== undefined) row.counted = r.counted;
+      if (r.of !== undefined) row.of = r.of;
       return row;
     })
     .filter((r): r is StandingRow => r !== null);

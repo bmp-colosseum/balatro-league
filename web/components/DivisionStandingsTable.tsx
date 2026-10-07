@@ -32,6 +32,12 @@ export interface StandingsTableRow {
   rank?: number;
   tiedWithPrev?: boolean;
   tiedWithNext?: boolean;
+  // Set only under a best-N scoring mode -- how many of this player's
+  // results counted toward their standing, and the cap selection was made
+  // against. Rendered as "counts N of M" next to the record when the
+  // caller passes showCountedBadge.
+  counted?: number;
+  of?: number;
 }
 
 type Row = StandingsTableRow;
@@ -133,6 +139,19 @@ function RecordCells({ r }: { r: StandingsTableRow }) {
   );
 }
 
+// "counts 3 of 4" next to the record under an active best-N scoring badge --
+// the record above stays the player's FULL record; this is the counted-points
+// cap it was scored against. Renders nothing when the caller isn't showing
+// the badge, or this row has no counted/of (standard-mode division).
+function CountedNote({ r, show }: { r: StandingsTableRow; show?: boolean }) {
+  if (!show || r.counted === undefined || r.of === undefined) return null;
+  return (
+    <span className="muted" style={{ fontSize: 11, marginLeft: 6, whiteSpace: "nowrap" }}>
+      counts {r.counted} of {r.of}
+    </span>
+  );
+}
+
 // Faint background band marking the promotion (blue) / relegation (amber) zone so
 // the stakes read at a glance — kept DISTINCT from the green-win / red-loss record
 // colours. Covers the decided state (promoting/relegating) and the mid-season clinch.
@@ -147,6 +166,7 @@ export function DivisionStandingsTable({
   extras,
   showBmpMmr = false,
   bmpCurrentSeason = null,
+  showCountedBadge = false,
   finalRankHeader,
   finalRankCell,
 }: {
@@ -154,6 +174,12 @@ export function DivisionStandingsTable({
   extras?: Map<string, StandingsRowExtras>;
   showBmpMmr?: boolean;
   bmpCurrentSeason?: string | null;
+  // True when this division's season-scoring badge is currently active (a
+  // best-N mode with at least one unreplaced dropout) -- shows each row's
+  // "counts N of M" next to its record. Off by default so callers that
+  // don't track the badge (e.g. /seasons/[id]'s ended-season view) render
+  // unchanged.
+  showCountedBadge?: boolean;
   // When both are set, a "Final rank" column is inserted after Player. The cell
   // render-prop lets the caller drop in an admin inline-edit form or plain text.
   finalRankHeader?: ReactNode;
@@ -197,7 +223,7 @@ export function DivisionStandingsTable({
                     <td>{r.dropped ? <s>{link}</s> : link}<DiscordId value={r.player.discordId} username={r.player.username} /></td>
                     {hasFinalRank && <td>{finalRankCell!(r)}</td>}
                     <td><strong>{r.points}</strong></td>
-                    <td title={standingRateTooltip(r)}><RecordCells r={r} /></td>
+                    <td title={standingRateTooltip(r)}><RecordCells r={r} /><CountedNote r={r} show={showCountedBadge} /></td>
                     <td className="muted" title={gameRateTooltip(r)}>{r.gamesWon}-{r.gamesLost}</td>
                     {showBmpMmr && <td>{renderMmrCell(ex?.mmr, bmpCurrentSeason)}</td>}
                   </tr>
@@ -226,7 +252,7 @@ export function DivisionStandingsTable({
                   <strong style={{ whiteSpace: "nowrap" }}>{r.points} pts</strong>
                 </div>
                 <div className="standings-card-sub muted">
-                  <RecordCells r={r} /> · {r.gamesWon}-{r.gamesLost} games · {r.played} played
+                  <RecordCells r={r} /><CountedNote r={r} show={showCountedBadge} /> · {r.gamesWon}-{r.gamesLost} games · {r.played} played
                   {showBmpMmr && ex?.mmr ? <> · MMR {renderMmrCell(ex.mmr, bmpCurrentSeason)}</> : null}
                 </div>
               </div>

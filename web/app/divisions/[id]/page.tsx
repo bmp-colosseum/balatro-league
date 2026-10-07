@@ -24,6 +24,7 @@ import { ReportForm } from "@/components/ReportForm";
 import { CANONICAL_DECKS, CANONICAL_STAKES } from "@/lib/balatro-info";
 import { FormSelect } from "@/components/FormSelect";
 import { Input } from "@/components/ui/input";
+import { uncountedTag, type UncountedEntry } from "@/lib/uncounted-core";
 import {
   addDivisionMemberByDiscordId,
   deleteShootout,
@@ -65,7 +66,7 @@ export default async function PublicDivisionPage({
 
   const data = await loadDivisionPageData(id);
   if (!data) notFound();
-  const { division, standings, scoringBadge, recentPairings, shootouts, unplayed } = data;
+  const { division, standings, scoringBadge, uncounted, recentPairings, shootouts, unplayed } = data;
   const tc = tierColors(division.tierPosition);
 
   // Viewer identity: drives the per-row reporting controls on
@@ -142,6 +143,7 @@ export default async function PublicDivisionPage({
               extras={standingsExtras}
               showBmpMmr={showBmpMmr}
               bmpCurrentSeason={bmpCurrentSeason}
+              showCountedBadge={!!scoringBadge}
             />
           </div>
         </div>
@@ -152,6 +154,7 @@ export default async function PublicDivisionPage({
           unplayed={unplayed}
           recentPairings={recentPairings}
           confirmedPairingCount={division.confirmedPairingCount}
+          uncounted={uncounted}
         />
 
         {shootouts.length > 0 && (
@@ -211,12 +214,14 @@ function MatchesSections({
   unplayed,
   recentPairings,
   confirmedPairingCount,
+  uncounted,
 }: {
   divisionId: string;
   viewerPlayerId: string | null;
   unplayed: DivisionUnplayed[];
   recentPairings: DivisionRecentPairing[];
   confirmedPairingCount: number;
+  uncounted: UncountedEntry[];
 }) {
   const involvesViewer = (aId: string, bId: string) =>
     viewerPlayerId !== null && (aId === viewerPlayerId || bId === viewerPlayerId);
@@ -252,7 +257,7 @@ function MatchesSections({
           <summary style={{ cursor: "pointer" }}>
             <strong>Recent matches ({confirmedPairingCount})</strong>
           </summary>
-          <PlayedTable rows={recentPairings} />
+          <PlayedTable rows={recentPairings} uncounted={uncounted} />
         </details>
       </>
     );
@@ -298,7 +303,7 @@ function MatchesSections({
       {myPlayed.length > 0 && (
         <div className="card">
           <strong>Your played ({myPlayed.length})</strong>
-          <YourPlayedTable rows={myPlayed} viewerPlayerId={viewerPlayerId!} />
+          <YourPlayedTable rows={myPlayed} viewerPlayerId={viewerPlayerId!} uncounted={uncounted} />
         </div>
       )}
 
@@ -323,7 +328,7 @@ function MatchesSections({
             other matches in this division
           </span>
         </summary>
-        <PlayedTable rows={otherPlayed} />
+        <PlayedTable rows={otherPlayed} uncounted={uncounted} />
       </details>
     </>
   );
@@ -361,9 +366,34 @@ function UnplayedList({ rows }: { rows: DivisionUnplayed[] }) {
   );
 }
 
+// Muted "not counted for standings" tag for one side of a match. Returns
+// null (renders nothing) when that side's result counts normally.
+function UncountedBadge({
+  uncounted,
+  playerAId,
+  playerBId,
+  forPlayerId,
+}: {
+  uncounted: UncountedEntry[];
+  playerAId: string;
+  playerBId: string;
+  forPlayerId: string;
+}) {
+  const tag = uncountedTag(uncounted, playerAId, playerBId, forPlayerId);
+  if (!tag) return null;
+  return (
+    <span className="muted" style={{ fontSize: 10, marginLeft: 6 }} title={tag.title}>
+      {tag.label}
+    </span>
+  );
+}
+
 // All-pairings table — date + raw A vs B result. Used for the
-// non-member view and the "other matches" collapsible.
-function PlayedTable({ rows }: { rows: DivisionRecentPairing[] }) {
+// non-member view and the "other matches" collapsible. Since there's no
+// single viewer here, each side's "not counted" status is tagged next to
+// that side's own name (a match can count for one player and not the
+// other under best-N selection).
+function PlayedTable({ rows, uncounted }: { rows: DivisionRecentPairing[]; uncounted: UncountedEntry[] }) {
   if (rows.length === 0) {
     return <p className="muted" style={{ marginTop: 8 }}>No matches played yet.</p>;
   }
@@ -379,9 +409,11 @@ function PlayedTable({ rows }: { rows: DivisionRecentPairing[] }) {
               <td>
                 <Link href={`/profile/${p.playerA.id}`} style={{ color: "var(--text)" }}>{p.playerA.displayName}</Link>
                 <DiscordId value={p.playerA.discordId} username={p.playerA.username} />
+                <UncountedBadge uncounted={uncounted} playerAId={p.playerA.id} playerBId={p.playerB.id} forPlayerId={p.playerA.id} />
                 {" "}<strong>{p.gamesWonA}-{p.gamesWonB}</strong>{" "}
                 <Link href={`/profile/${p.playerB.id}`} style={{ color: "var(--text)" }}>{p.playerB.displayName}</Link>
                 <DiscordId value={p.playerB.discordId} username={p.playerB.username} />
+                <UncountedBadge uncounted={uncounted} playerAId={p.playerA.id} playerBId={p.playerB.id} forPlayerId={p.playerB.id} />
                 {p.forfeit && (
                   <span className="muted" style={{ fontSize: 10, marginLeft: 6 }} title="Win by forfeit / disqualification">
                     by DQ
@@ -399,7 +431,15 @@ function PlayedTable({ rows }: { rows: DivisionRecentPairing[] }) {
 // Viewer-centric played table — opponent + score from viewer's POV +
 // W/D/L pill. More glanceable than the raw A-vs-B layout when you only
 // care about your own results.
-function YourPlayedTable({ rows, viewerPlayerId }: { rows: DivisionRecentPairing[]; viewerPlayerId: string }) {
+function YourPlayedTable({
+  rows,
+  viewerPlayerId,
+  uncounted,
+}: {
+  rows: DivisionRecentPairing[];
+  viewerPlayerId: string;
+  uncounted: UncountedEntry[];
+}) {
   return (
     <table style={{ marginTop: 8 }}>
       <thead>
@@ -441,6 +481,7 @@ function YourPlayedTable({ rows, viewerPlayerId }: { rows: DivisionRecentPairing
                     by DQ
                   </span>
                 )}
+                <UncountedBadge uncounted={uncounted} playerAId={p.playerA.id} playerBId={p.playerB.id} forPlayerId={viewerPlayerId} />
               </td>
             </tr>
           );

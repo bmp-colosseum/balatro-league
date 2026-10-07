@@ -9,10 +9,11 @@
 // display names so the rendering doesn't need a second hydration pass.
 
 import { prisma } from "@/lib/prisma";
-import { loadDivisionStandings, loadDivisionScoringBadge } from "@/lib/standings-cache";
+import { loadDivisionStandings, loadDivisionScoringBadge, loadDivisionUncounted } from "@/lib/standings-cache";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { computeUnplayedPairs, pairKey } from "@/lib/unplayed-pairs";
 import type { ScoringBadge } from "@/lib/standings-mode";
+import type { UncountedEntry } from "@/lib/uncounted-core";
 
 export interface DivisionStandingRow {
   player: { id: string; displayName: string; discordId: string; username: string | null };
@@ -25,6 +26,9 @@ export interface DivisionStandingRow {
   played: number;
   tiedWithPrev?: boolean;
   dropped: boolean;
+  // Set only under a best-N scoring mode -- see StandingRow.counted/of.
+  counted?: number;
+  of?: number;
 }
 
 export interface DivisionRecentPairing {
@@ -71,6 +75,11 @@ export interface DivisionPageData {
   // best N of K-1" badge. Null otherwise (standard scoring, or a best-n
   // season with nothing for it to change here right now).
   scoringBadge: ScoringBadge | null;
+  // Which of this division's matches are currently set aside under a
+  // best-N scoring mode, and why -- see web/lib/uncounted-core.ts. Always
+  // present (empty when nothing is set aside) so callers can pass it
+  // straight to uncountedTag without a null check.
+  uncounted: UncountedEntry[];
   recentPairings: DivisionRecentPairing[];
   shootouts: DivisionShootout[];
   unplayed: DivisionUnplayed[];
@@ -109,6 +118,7 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
   // on a cold miss -- loadDivisionScoringBadge itself never computes.
   const standingsRows = await loadDivisionStandings(divisionId);
   const scoringBadge = await loadDivisionScoringBadge(divisionId);
+  const uncounted = await loadDivisionUncounted(divisionId);
   const standings: DivisionStandingRow[] = standingsRows.map((r) => ({
     player: { id: r.player.id, displayName: r.player.displayName, discordId: r.player.discordId, username: r.player.username },
     points: r.points,
@@ -120,6 +130,8 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
     played: r.played,
     tiedWithPrev: r.tiedWithPrev,
     dropped: droppedIds.has(r.player.id),
+    counted: r.counted,
+    of: r.of,
   }));
 
   const pairings = await prisma.match.findMany({
@@ -223,6 +235,7 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
     },
     standings,
     scoringBadge,
+    uncounted,
     recentPairings,
     shootouts,
     unplayed,

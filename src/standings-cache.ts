@@ -24,6 +24,7 @@ import { getLeagueSettingsForSeason } from "./league-settings.js";
 import { assignRanks, computeStandings, type StandingRow, type ShootoutInput } from "./standings.js";
 import { computeBestNStandings, buildBestNMembers, type BestNPairing } from "./standings-best-n.js";
 import { normalizeScoringMode, selectStandingsEngine, buildScoringBadge, type ScoringBadge } from "./standings-mode.js";
+import { buildUncounted, type UncountedEntry } from "./uncounted-core.js";
 
 interface CachedRow {
   playerId: string;
@@ -35,6 +36,10 @@ interface CachedRow {
   gamesLost: number;
   played: number;
   tiedWithPrev?: boolean;
+  // Set only under a best-N scoring mode -- see StandingRow.counted/of in
+  // standings.ts. Absent for a legacy payload or an "all"-mode division.
+  counted?: number;
+  of?: number;
 }
 
 // On-disk shape of DivisionStandings.rowsJson. Legacy rows written before
@@ -43,6 +48,13 @@ interface CachedRow {
 interface CachedPayload {
   rows: CachedRow[];
   badge?: ScoringBadge;
+  // Which of this division's results are set aside under a best-N scoring
+  // mode, and why -- see uncounted-core.ts. Absent (or empty) when nothing
+  // is set aside right now. The bot itself never reads this back out (its
+  // live-standings post only needs each row's counted/of) -- written here
+  // purely so the cache payload stays byte-identical no matter which side
+  // (bot or web) last recomputed it.
+  uncounted?: UncountedEntry[];
 }
 
 function parsePayload(rowsJson: string): CachedPayload {
@@ -118,6 +130,7 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
 
   let rows: StandingRow[];
   let badge: ScoringBadge | null = null;
+  let uncounted: UncountedEntry[] = [];
 
   if (selection.engine === "standard") {
     const activeMembers = div.members.filter((m) => m.status === "ACTIVE");
@@ -140,6 +153,12 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
     const result = computeBestNStandings(bestNMembers, pairings, shootouts, scoring, selection.dropoutGames, div.opponentsPerPlayer ?? null);
     rows = result.rows;
     badge = buildScoringBadge(mode, result.division.n, result.division.k, result.division.scheduled, result.division.dropouts);
+    uncounted = buildUncounted(
+      div.members.map((m) => ({ playerId: m.playerId, status: m.status === "DROPPED" ? "DROPPED" : "ACTIVE" })),
+      result.rows.map((r) => ({ playerId: r.player.id, droppedResults: r.droppedResults })),
+      pairings,
+      selection.dropoutGames,
+    );
   }
 
   const payload: CachedPayload = {
@@ -153,9 +172,12 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
       gamesLost: r.gamesLost,
       played: r.played,
       tiedWithPrev: r.tiedWithPrev,
+      counted: r.counted,
+      of: r.of,
     })),
   };
   if (badge) payload.badge = badge;
+  if (uncounted.length > 0) payload.uncounted = uncounted;
   return payload;
 }
 
@@ -232,6 +254,8 @@ function hydrateRows(payload: CachedRow[], playerById: Map<string, Player>): Sta
         gamesLost: r.gamesLost,
         played: r.played,
         tiedWithPrev: r.tiedWithPrev,
+        counted: r.counted,
+        of: r.of,
       };
     })
     .filter((r): r is StandingRow => r !== null);

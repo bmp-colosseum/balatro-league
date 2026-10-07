@@ -22,7 +22,8 @@
 // authoritative.
 
 import { prisma } from "./prisma";
-import { parseStandingsRows } from "@/lib/standings-cache";
+import { parseStandingsRows, parseStandingsUncounted } from "@/lib/standings-cache";
+import { uncountedTag, type UncountedTag } from "@/lib/uncounted-core";
 import { formatSeasonLabel } from "./format-season";
 
 // One combo in a game's pick/ban pool, in pool order. `picked` = the combo the
@@ -69,6 +70,11 @@ export interface MatchEntry {
   // /start-match (MatchSession recorded). Empty array for /report-only
   // matches and admin record-set matches — no session = no deck data.
   games: GamePlayed[];
+  // Present when this result was set aside under a best-N scoring mode --
+  // either against an unreplaced dropout ("dropout") or simply this
+  // player's worst result ("worst"). Absent under "all" mode or when
+  // nothing was set aside. See web/lib/uncounted-core.ts.
+  uncounted?: UncountedTag;
 }
 
 export interface SeasonHistoryEntry {
@@ -246,9 +252,11 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
     select: { divisionId: true, rowsJson: true },
   });
   const standingsByDivision = new Map<string, CachedRow[]>();
+  const uncountedByDivision = new Map<string, ReturnType<typeof parseStandingsUncounted>>();
   for (const s of standingsRows) {
     try {
       standingsByDivision.set(s.divisionId, parseStandingsRows(s.rowsJson) as unknown as CachedRow[]);
+      uncountedByDivision.set(s.divisionId, parseStandingsUncounted(s.rowsJson));
     } catch {
       // Bad JSON — skip. UI falls back to rank=0.
     }
@@ -354,6 +362,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
     const myRank = cached
       ? cached.findIndex((r) => r.playerId === playerId) + 1
       : 0;
+    const uncountedForDivision = uncountedByDivision.get(m.divisionId) ?? [];
 
     // Both formats come from the unified Match query. A shootout (1-game) has
     // gamesWonA/B of 1/0 and no draw; a BO2 derives WIN/DRAW/LOSS from the
@@ -373,6 +382,12 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
           : myGames < oppGames
             ? "LOSS"
             : "DRAW";
+      // Shootouts are tiebreakers, not LEAGUE_BO2 results -- best-N never
+      // touches them, so never tag one (guards against a same-pair league
+      // match and shootout otherwise sharing a matchKey).
+      const uncounted = isShootout
+        ? undefined
+        : uncountedTag(uncountedForDivision, mm.playerAId, mm.playerBId, playerId) ?? undefined;
       return {
         pairingId: mm.id,
         status: mm.status === "DISPUTED" ? "DISPUTED" : "CONFIRMED",
@@ -384,6 +399,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
         confirmedAt: mm.confirmedAt,
         isShootout,
         games: gamesFromMatch(mm),
+        uncounted,
       };
     });
 
