@@ -76,9 +76,9 @@ export interface DivisionPageData {
   // season with nothing for it to change here right now).
   scoringBadge: ScoringBadge | null;
   // Which of this division's matches are currently set aside under a
-  // best-N scoring mode, and why -- see web/lib/uncounted-core.ts. Always
-  // present (empty when nothing is set aside) so callers can pass it
-  // straight to uncountedTag without a null check.
+  // best-N scoring mode -- see web/lib/uncounted-core.ts. Always present
+  // (empty when nothing is set aside) so callers can pass it straight to
+  // uncountedTag without a null check.
   uncounted: UncountedEntry[];
   recentPairings: DivisionRecentPairing[];
   shootouts: DivisionShootout[];

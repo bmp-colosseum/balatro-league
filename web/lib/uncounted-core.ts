@@ -1,20 +1,19 @@
-// Pure core for "why wasn't this match counted toward the standings" --
-// backs the muted match-row tag on the division page and the profile's
-// match history. A best-N scoring mode (season.scoringMode
-// "best-n-count" | "best-n-void", see standings-mode.ts) sets some of a
-// player's results aside: either because the opponent was an unreplaced
-// DROPPED member ("dropout" -- under the "void" variant this is set aside
-// for EVERYONE who played them, not just the one player) or simply because
-// the result was their worst ("worst" -- cut by best-N selection). "all"
-// mode, and a best-n mode with zero unreplaced dropouts, never produce any
-// uncounted entries at all.
+// Pure core for "was this match counted toward the standings" -- backs the
+// muted match-row tag on the division page and the profile's match
+// history. A best-N scoring mode (season.scoringMode "best-n-count" |
+// "best-n-void", see standings-mode.ts) sets some of a player's results
+// aside: either because the opponent was an unreplaced DROPPED member
+// (under the "void" variant this is set aside for EVERYONE who played
+// them, not just the one player) or simply because the result was their
+// worst (cut by best-N selection). Either way the UI shows the same single
+// tag -- why doesn't matter to the reader, only that it isn't counted.
+// "all" mode, and a best-n mode with zero unreplaced dropouts, never
+// produce any uncounted entries at all.
 //
 // Zero imports -- same convention as web/lib/standings-best-n.ts. Mirrored
 // (data shape + buildUncounted only, no display helper) at
 // src/uncounted-core.ts for the bot's identical cache-write path -- see
 // that file's header.
-
-export type UncountedReason = "dropout" | "worst";
 
 // On-disk shape of one entry in DivisionStandings.rowsJson's `uncounted`
 // list (see standings-cache.ts's CachedPayload).
@@ -26,14 +25,17 @@ export interface UncountedEntry {
   // cuids that can themselves contain "-".
   matchKey: string;
   forPlayerId: string;
-  reason: UncountedReason;
 }
 
 export interface UncountedTag {
-  reason: UncountedReason;
   label: string;
   title: string;
 }
+
+const TAG: UncountedTag = {
+  label: "not counted for standings",
+  title: "This result isn't counted toward the standings under this season's scoring rule.",
+};
 
 // Canonical matchKey for an unordered pair of player ids.
 export function uncountedMatchKey(playerAId: string, playerBId: string): string {
@@ -51,19 +53,8 @@ export function uncountedTag(
   forPlayerId: string,
 ): UncountedTag | null {
   const key = uncountedMatchKey(playerAId, playerBId);
-  const entry = uncounted.find((u) => u.matchKey === key && u.forPlayerId === forPlayerId);
-  if (!entry) return null;
-  return entry.reason === "dropout"
-    ? {
-        reason: "dropout",
-        label: "not counted for standings",
-        title: "Against a dropped player -- set aside for everyone.",
-      }
-    : {
-        reason: "worst",
-        label: "not counted for standings",
-        title: "Their worst result -- set aside under best N.",
-      };
+  const found = uncounted.some((u) => u.matchKey === key && u.forPlayerId === forPlayerId);
+  return found ? TAG : null;
 }
 
 // Inputs for buildUncounted below -- plain data, structurally compatible
@@ -86,8 +77,7 @@ export interface UncountedSourcePairing {
 // Derives the full `uncounted` list for a division's cache payload from the
 // best-N engine's own output. Two sources:
 //   1. Every row's droppedResults -- the results that engine already picked
-//      as NOT among that player's best N. "dropout" when the opponent is a
-//      DROPPED member, "worst" otherwise.
+//      as NOT among that player's best N.
 //   2. Under "void" mode only: a dropout's results are stripped from every
 //      player's candidate pool BEFORE best-N selection even runs (see
 //      standings-best-n.ts), so they never surface via droppedResults above
@@ -104,11 +94,7 @@ export function buildUncounted(
 
   for (const row of rows) {
     for (const dr of row.droppedResults) {
-      out.push({
-        matchKey: uncountedMatchKey(row.playerId, dr.opponentId),
-        forPlayerId: row.playerId,
-        reason: droppedIds.has(dr.opponentId) ? "dropout" : "worst",
-      });
+      out.push({ matchKey: uncountedMatchKey(row.playerId, dr.opponentId), forPlayerId: row.playerId });
     }
   }
 
@@ -119,11 +105,7 @@ export function buildUncounted(
       if (aDropped === bDropped) continue; // neither dropped (normal result), or both (ghost pairing)
       const activePlayerId = aDropped ? pr.playerBId : pr.playerAId;
       if (!activeIds.has(activePlayerId)) continue; // not a current standing row
-      out.push({
-        matchKey: uncountedMatchKey(pr.playerAId, pr.playerBId),
-        forPlayerId: activePlayerId,
-        reason: "dropout",
-      });
+      out.push({ matchKey: uncountedMatchKey(pr.playerAId, pr.playerBId), forPlayerId: activePlayerId });
     }
   }
 

@@ -44,8 +44,8 @@ interface CachedPayload {
   rows: CachedRow[];
   badge?: ScoringBadge;
   // Which of this division's results are set aside under a best-N scoring
-  // mode, and why -- see web/lib/uncounted-core.ts. Absent (or empty) when
-  // nothing is set aside right now.
+  // mode -- see web/lib/uncounted-core.ts. Absent (or empty) when nothing
+  // is set aside right now.
   uncounted?: UncountedEntry[];
 }
 
@@ -270,12 +270,12 @@ export async function loadManyDivisionScoringBadges(
   return out;
 }
 
-// Reads the per-match "set aside, and why" list cached alongside a
-// division's rows -- see web/lib/uncounted-core.ts. Same warm-cache
-// contract as loadDivisionScoringBadge: never computes on its own, call
-// AFTER the rows read in the same request. Empty array (not null) when
-// there's nothing set aside, so callers can pass it straight to
-// uncountedTag without a null check.
+// Reads the per-match "set aside" list cached alongside a division's rows
+// -- see web/lib/uncounted-core.ts. Same warm-cache contract as
+// loadDivisionScoringBadge: never computes on its own, call AFTER the rows
+// read in the same request. Empty array (not null) when there's nothing
+// set aside, so callers can pass it straight to uncountedTag without a
+// null check.
 export async function loadDivisionUncounted(divisionId: string): Promise<UncountedEntry[]> {
   const cached = await prisma.divisionStandings.findUnique({
     where: { divisionId },
@@ -283,22 +283,6 @@ export async function loadDivisionUncounted(divisionId: string): Promise<Uncount
   });
   if (!cached) return [];
   return parsePayload(cached.rowsJson).uncounted ?? [];
-}
-
-export async function loadManyDivisionUncounted(
-  divisionIds: string[],
-): Promise<Map<string, UncountedEntry[]>> {
-  const out = new Map<string, UncountedEntry[]>();
-  if (divisionIds.length === 0) return out;
-  const cached = await prisma.divisionStandings.findMany({
-    where: { divisionId: { in: divisionIds } },
-    select: { divisionId: true, rowsJson: true },
-  });
-  for (const c of cached) {
-    const u = parsePayload(c.rowsJson).uncounted;
-    if (u && u.length > 0) out.set(c.divisionId, u);
-  }
-  return out;
 }
 
 // Turn a cached payload + a player lookup into StandingRows. Pure — no DB.

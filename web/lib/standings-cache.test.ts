@@ -22,7 +22,7 @@ const NEW_PAYLOAD_WITH_BEST_N = JSON.stringify({
     { playerId: "a", points: 3, wins: 1, draws: 0, losses: 0, gamesWon: 2, gamesLost: 0, played: 2, counted: 1, of: 1 },
   ],
   badge: { mode: "best-n-count", n: 1, k: 3, scheduled: 2, dropouts: 1 },
-  uncounted: [{ matchKey: "a|b", forPlayerId: "a", reason: "worst" }],
+  uncounted: [{ matchKey: "a|b", forPlayerId: "a" }],
 });
 
 describe("parseStandingsRows", () => {
@@ -49,7 +49,7 @@ describe("parseStandingsUncounted", () => {
 
   it("reads the uncounted list through when present", () => {
     expect(parseStandingsUncounted(NEW_PAYLOAD_WITH_BEST_N)).toEqual([
-      { matchKey: "a|b", forPlayerId: "a", reason: "worst" },
+      { matchKey: "a|b", forPlayerId: "a" },
     ]);
   });
 });

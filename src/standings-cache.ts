@@ -49,8 +49,8 @@ interface CachedPayload {
   rows: CachedRow[];
   badge?: ScoringBadge;
   // Which of this division's results are set aside under a best-N scoring
-  // mode, and why -- see uncounted-core.ts. Absent (or empty) when nothing
-  // is set aside right now. The bot itself never reads this back out (its
+  // mode -- see uncounted-core.ts. Absent (or empty) when nothing is set
+  // aside right now. The bot itself never reads this back out (its
   // live-standings post only needs each row's counted/of) -- written here
   // purely so the cache payload stays byte-identical no matter which side
   // (bot or web) last recomputed it.

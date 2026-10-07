@@ -18,16 +18,19 @@ describe("uncountedMatchKey", () => {
 
 describe("uncountedTag", () => {
   const entries: UncountedEntry[] = [
-    { matchKey: uncountedMatchKey("alice", "dropout1"), forPlayerId: "alice", reason: "dropout" },
-    { matchKey: uncountedMatchKey("bob", "cara"), forPlayerId: "bob", reason: "worst" },
+    { matchKey: uncountedMatchKey("alice", "dropout1"), forPlayerId: "alice" },
+    { matchKey: uncountedMatchKey("bob", "cara"), forPlayerId: "bob" },
   ];
 
   it.each([
-    ["alice", "dropout1", "alice", "dropout"],
-    ["dropout1", "alice", "alice", "dropout"], // order-independent on the match side
-    ["bob", "cara", "bob", "worst"],
-  ] as const)("uncountedTag(%p, %p) for %p -> %p", (playerAId, playerBId, forPlayerId, reason) => {
-    expect(uncountedTag(entries, playerAId, playerBId, forPlayerId)?.reason).toBe(reason);
+    ["alice", "dropout1", "alice"],
+    ["dropout1", "alice", "alice"], // order-independent on the match side
+    ["bob", "cara", "bob"],
+  ] as const)("uncountedTag(%p, %p) for %p -> the single tag", (playerAId, playerBId, forPlayerId) => {
+    expect(uncountedTag(entries, playerAId, playerBId, forPlayerId)).toEqual({
+      label: "not counted for standings",
+      title: "This result isn't counted toward the standings under this season's scoring rule.",
+    });
   });
 
   it("is null when nothing is set aside for this match", () => {
@@ -51,26 +54,26 @@ describe("buildUncounted", () => {
     { playerId: "dave", status: "DROPPED" as const },
   ];
 
-  it("count mode: tags a dropped result against the DROPPED member as 'dropout'", () => {
+  it("count mode: tags a dropped result against the DROPPED member", () => {
     const rows = [
       { playerId: "alice", droppedResults: [{ opponentId: "dave" }] },
       { playerId: "bob", droppedResults: [] },
     ];
     const out = buildUncounted(members, rows, [], "count");
     expect(out).toEqual([
-      { matchKey: uncountedMatchKey("alice", "dave"), forPlayerId: "alice", reason: "dropout" },
+      { matchKey: uncountedMatchKey("alice", "dave"), forPlayerId: "alice" },
     ]);
   });
 
-  it("count mode: tags a dropped result against a still-active member as 'worst'", () => {
+  it("count mode: tags a dropped result against a still-active member", () => {
     const rows = [{ playerId: "alice", droppedResults: [{ opponentId: "bob" }] }];
     const out = buildUncounted(members, rows, [], "count");
     expect(out).toEqual([
-      { matchKey: uncountedMatchKey("alice", "bob"), forPlayerId: "alice", reason: "worst" },
+      { matchKey: uncountedMatchKey("alice", "bob"), forPlayerId: "alice" },
     ]);
   });
 
-  it("void mode: every result against the dropout is 'dropout' for the active side, even though it never appears in droppedResults", () => {
+  it("void mode: every result against the dropout is tagged for the active side, even though it never appears in droppedResults", () => {
     const rows = [
       { playerId: "alice", droppedResults: [] },
       { playerId: "bob", droppedResults: [] },
@@ -82,18 +85,18 @@ describe("buildUncounted", () => {
     ];
     const out = buildUncounted(members, rows, pairings, "void");
     expect(out).toEqual([
-      { matchKey: uncountedMatchKey("alice", "dave"), forPlayerId: "alice", reason: "dropout" },
+      { matchKey: uncountedMatchKey("alice", "dave"), forPlayerId: "alice" },
     ]);
   });
 
-  it("void mode: combines the voided-pairing entries with any other droppedResults (worst)", () => {
+  it("void mode: combines the voided-pairing entries with any other droppedResults", () => {
     const rows = [
       { playerId: "alice", droppedResults: [{ opponentId: "bob" }] }, // alice's worst, among survivors
     ];
     const pairings = [{ playerAId: "alice", playerBId: "dave" }];
     const out = buildUncounted(members, rows, pairings, "void");
-    expect(out).toContainEqual({ matchKey: uncountedMatchKey("alice", "bob"), forPlayerId: "alice", reason: "worst" });
-    expect(out).toContainEqual({ matchKey: uncountedMatchKey("alice", "dave"), forPlayerId: "alice", reason: "dropout" });
+    expect(out).toContainEqual({ matchKey: uncountedMatchKey("alice", "bob"), forPlayerId: "alice" });
+    expect(out).toContainEqual({ matchKey: uncountedMatchKey("alice", "dave"), forPlayerId: "alice" });
     expect(out).toHaveLength(2);
   });
 

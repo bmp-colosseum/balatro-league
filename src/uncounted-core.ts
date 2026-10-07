@@ -9,12 +9,9 @@
 //
 // Zero imports.
 
-export type UncountedReason = "dropout" | "worst";
-
 export interface UncountedEntry {
   matchKey: string;
   forPlayerId: string;
-  reason: UncountedReason;
 }
 
 // Canonical matchKey for an unordered pair of player ids. Uses "|" rather
@@ -49,11 +46,7 @@ export function buildUncounted(
 
   for (const row of rows) {
     for (const dr of row.droppedResults) {
-      out.push({
-        matchKey: uncountedMatchKey(row.playerId, dr.opponentId),
-        forPlayerId: row.playerId,
-        reason: droppedIds.has(dr.opponentId) ? "dropout" : "worst",
-      });
+      out.push({ matchKey: uncountedMatchKey(row.playerId, dr.opponentId), forPlayerId: row.playerId });
     }
   }
 
@@ -64,11 +57,7 @@ export function buildUncounted(
       if (aDropped === bDropped) continue;
       const activePlayerId = aDropped ? pr.playerBId : pr.playerAId;
       if (!activeIds.has(activePlayerId)) continue;
-      out.push({
-        matchKey: uncountedMatchKey(pr.playerAId, pr.playerBId),
-        forPlayerId: activePlayerId,
-        reason: "dropout",
-      });
+      out.push({ matchKey: uncountedMatchKey(pr.playerAId, pr.playerBId), forPlayerId: activePlayerId });
     }
   }
 
