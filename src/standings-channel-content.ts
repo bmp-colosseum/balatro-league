@@ -5,7 +5,7 @@
 
 import { EmbedBuilder } from "discord.js";
 import { prisma } from "./db.js";
-import { loadDivisionStandings, recomputeDivisionStandings } from "./standings-cache.js";
+import { loadDivisionStandings, loadDivisionScoringBadge, recomputeDivisionStandings } from "./standings-cache.js";
 import { formatSeasonLabel } from "./format-season.js";
 import { webUrl } from "./web-url.js";
 import { sanitizeName } from "./sanitize.js";
@@ -49,12 +49,15 @@ export async function composeStandingsEmbeds(): Promise<EmbedBuilder[]> {
     // the next refresh (every 15 min, or on-demand). Cheap per division.
     await recomputeDivisionStandings(div.id).catch(() => {});
     const rows = await loadDivisionStandings(div.id);
+    // Read AFTER the rows above, which just warmed the cache -- the badge
+    // read itself never recomputes.
+    const badge = await loadDivisionScoringBadge(div.id).catch(() => null);
     const lines = rows.map(
       (r, i) => `${place(i)} ${sanitizeName(r.player.displayName)} — **${r.points}** pts · ${r.wins}-${r.draws}-${r.losses}`,
     );
     divisionEmbeds.push(
       new EmbedBuilder()
-        .setTitle(div.name)
+        .setTitle(badge ? `${div.name} - counts best ${badge.n} of ${Math.max(0, badge.k - 1)}` : div.name)
         .setDescription(lines.length > 0 ? lines.join("\n") : "_No results yet._")
         .setColor(tierColor(div.tier.position)),
     );

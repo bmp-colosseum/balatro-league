@@ -264,6 +264,16 @@ model Season {
   resultsWebhookUrl String?
   resultsChannelId  String?
 
+  // Which standings engine this season's LIVE standings use, admin-switchable
+  // from /admin/standings-preview once they've previewed the effect there:
+  //   "all"            -- every CONFIRMED result counts (computeStandings).
+  //   "best-n-count"   -- computeBestNStandings with dropoutGames="count".
+  //   "best-n-void"    -- computeBestNStandings with dropoutGames="void".
+  // Free-text rather than a Prisma enum so flipping it back to "all" is a
+  // plain write, not a migration. See web/lib/standings-mode.ts for the
+  // pure (mode, dropouts) -> engine selector both the web and the bot read.
+  scoringMode String @default("all")
+
   divisions Division[]
   tiers     Tier[]
 

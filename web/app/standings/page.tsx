@@ -239,6 +239,11 @@ export default async function StandingsPage() {
                             <strong className="pixel" style={{ fontSize: 18 }}>
                               <Link href={`/divisions/${div.id}`} style={{ textDecoration: "none" }}>{div.name}</Link>
                             </strong>
+                            {div.scoringBadge && (
+                              <span className="pill" style={{ fontSize: 11 }} title="This season's active scoring rule">
+                                counts best {div.scoringBadge.n} of {Math.max(0, div.scoringBadge.k - 1)}
+                              </span>
+                            )}
                             <span
                               className="pill"
                               style={{

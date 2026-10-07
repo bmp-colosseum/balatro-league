@@ -3,15 +3,20 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Callout } from "@/components/Callout";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { rankLabel, type StandingRow } from "@/lib/standings";
 import type { BestNStandingRow } from "@/lib/standings-best-n";
 import {
   loadStandingsPreview,
   loadStandingsPreviewSeasonOptions,
   type StandingsPreviewCandidate,
+  type StandingsPreviewCandidateDivision,
   type StandingsPreviewDivision,
   type StandingsPreviewPlayerDiff,
 } from "@/lib/loaders/standings-preview";
+import { applyHypotheticalDropsAction, setSeasonScoringModeAction } from "./actions";
+import type { SeasonScoringMode } from "@/lib/standings-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +28,12 @@ const selectStyle = {
   background: "var(--surface-2, rgba(255,255,255,0.05))",
   color: "var(--text)",
 } as const;
+
+const MODE_LABEL: Record<SeasonScoringMode, string> = {
+  all: "counting every game",
+  "best-n-count": "best N (count)",
+  "best-n-void": "best N (void)",
+};
 
 // Compact table shared by the "Current" and "Best N" sides of each
 // division's comparison. `showOf` adds the counted/of column (only
@@ -94,9 +105,59 @@ function CompactTable({
   );
 }
 
-// One candidate's column: its compact table plus its own notes list (the
-// two candidates can disagree on who moves, so each gets its own notes).
-function CandidateColumn({ label, title, candidate }: { label: string; title: string; candidate: StandingsPreviewCandidate }) {
+// "Use this rule for season N" / "Back to counting every game" -- one tiny
+// POST form, reused under Current and both Best N columns. Disabled (and
+// relabeled) when its mode is already the season's active rule, so the
+// admin can see at a glance which one is live without a separate badge.
+function SetScoringModeForm({
+  seasonId,
+  seasonLabel,
+  mode,
+  currentMode,
+  label,
+}: {
+  seasonId: string;
+  seasonLabel: string;
+  mode: SeasonScoringMode;
+  currentMode: SeasonScoringMode;
+  label: string;
+}) {
+  const isCurrent = mode === currentMode;
+  return (
+    <form action={setSeasonScoringModeAction} style={{ marginTop: 8 }}>
+      <input type="hidden" name="season" value={seasonId} />
+      <input type="hidden" name="mode" value={mode} />
+      <ConfirmButton
+        message={`Switch ${seasonLabel}'s LIVE standings to "${label}"? This takes effect immediately for every division.`}
+        variant={isCurrent ? "secondary" : "default"}
+        size="sm"
+      >
+        {isCurrent ? "Current rule" : label}
+      </ConfirmButton>
+    </form>
+  );
+}
+
+// One candidate's column: its compact table, its own notes list (the two
+// candidates can disagree on who moves, so each gets its own notes), and
+// the switch to make this rule the season's live one.
+function CandidateColumn({
+  label,
+  title,
+  candidate,
+  seasonId,
+  seasonLabel,
+  mode,
+  currentMode,
+}: {
+  label: string;
+  title: string;
+  candidate: StandingsPreviewCandidate;
+  seasonId: string;
+  seasonLabel: string;
+  mode: SeasonScoringMode;
+  currentMode: SeasonScoringMode;
+}) {
   const diffByPlayerId = new Map(candidate.players.map((p) => [p.playerId, p]));
   const notes = candidate.players.filter((p) => p.boundaryChanged && p.boundaryNote);
 
@@ -115,11 +176,28 @@ function CandidateColumn({ label, title, candidate }: { label: string; title: st
           ))}
         </ul>
       )}
+      <SetScoringModeForm
+        seasonId={seasonId}
+        seasonLabel={seasonLabel}
+        mode={mode}
+        currentMode={currentMode}
+        label={`Use this rule for ${seasonLabel}`}
+      />
     </div>
   );
 }
 
-function DivisionCard({ d }: { d: StandingsPreviewDivision }) {
+function DivisionCard({
+  d,
+  seasonId,
+  seasonLabel,
+  currentMode,
+}: {
+  d: StandingsPreviewDivision;
+  seasonId: string;
+  seasonLabel: string;
+  currentMode: SeasonScoringMode;
+}) {
   const currentDiffByPlayerId = new Map<string, StandingsPreviewPlayerDiff>();
 
   return (
@@ -132,6 +210,15 @@ function DivisionCard({ d }: { d: StandingsPreviewDivision }) {
         <span className="muted" style={{ fontSize: 12 }}>
           {d.dropouts} unreplaced dropout{d.dropouts === 1 ? "" : "s"} - {d.k} players originally
         </span>
+        {d.hypotheticalDrops.length > 0 && (
+          <span
+            className="pill"
+            style={{ fontSize: 11, background: "rgba(241,196,15,0.18)" }}
+            title="Treated as dropped for THIS PREVIEW only -- nothing has been applied yet"
+          >
+            what-if: {d.hypotheticalDrops.map((h) => h.displayName).join(", ")}
+          </span>
+        )}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))", gap: 12, marginTop: 10 }}>
@@ -140,26 +227,206 @@ function DivisionCard({ d }: { d: StandingsPreviewDivision }) {
             Current
           </div>
           <CompactTable rows={d.currentRows} diffByPlayerId={currentDiffByPlayerId} showOf={false} />
+          <SetScoringModeForm
+            seasonId={seasonId}
+            seasonLabel={seasonLabel}
+            mode="all"
+            currentMode={currentMode}
+            label="Back to counting every game"
+          />
         </div>
         <CandidateColumn
           label="Best N - count (preview)"
           title="A result against the dropout is a normal result, eligible to count or be dropped like any other."
           candidate={d.countMode}
+          seasonId={seasonId}
+          seasonLabel={seasonLabel}
+          mode="best-n-count"
+          currentMode={currentMode}
         />
         <CandidateColumn
           label="Best N - void (preview)"
           title="Every result against the dropout is erased for everyone first; nobody gains or loses from having played them."
           candidate={d.voidMode}
+          seasonId={seasonId}
+          seasonLabel={seasonLabel}
+          mode="best-n-void"
+          currentMode={currentMode}
         />
       </div>
     </div>
   );
 }
 
+// "Who to treat as dropped" panel: a GET form so the three tables below
+// re-render against the chosen hypothetical drops without any client JS.
+// Candidates come pre-ticked from suggestDropCandidates; anyone else ACTIVE
+// is reachable via the collapsed "add someone else" list.
+function DropPickerPanel({
+  selectedSeasonId,
+  maxPlayed,
+  pickerTouched,
+  selectedIds,
+  candidateDivisions,
+}: {
+  selectedSeasonId: string;
+  maxPlayed: number;
+  pickerTouched: boolean;
+  selectedIds: Set<string>;
+  candidateDivisions: StandingsPreviewCandidateDivision[];
+}) {
+  const nothingToShow = candidateDivisions.every(
+    (cd) => cd.candidates.length === 0 && cd.otherActiveMembers.length === 0,
+  );
+
+  return (
+    <form method="get" style={{ marginTop: 12 }}>
+      <input type="hidden" name="season" value={selectedSeasonId} />
+      <input type="hidden" name="pickerTouched" value="1" />
+      <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <strong style={{ fontSize: 14 }}>Who to treat as dropped</strong>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+            <span className="muted">Players with at most</span>
+            <input
+              type="number"
+              name="maxPlayed"
+              min={0}
+              defaultValue={maxPlayed}
+              style={{ ...selectStyle, width: 54 }}
+            />
+            <span className="muted">played games</span>
+          </label>
+          <Button type="submit" variant="secondary" size="sm">Recalculate</Button>
+        </div>
+        <p className="muted" style={{ fontSize: 11, margin: 0 }}>
+          Tick who to treat as dropped, then Recalculate to update the three tables below. Nothing is applied until
+          you use &ldquo;Apply these drops&rdquo;.
+        </p>
+
+        {nothingToShow ? (
+          <div className="muted" style={{ fontSize: 12 }}>No active players this season.</div>
+        ) : (
+          candidateDivisions.map((cd) => {
+            if (cd.candidates.length === 0 && cd.otherActiveMembers.length === 0) return null;
+            return (
+              <div key={cd.id} style={{ borderTop: "1px solid var(--border, rgba(255,255,255,0.08))", paddingTop: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 600 }}>{cd.tierName} - {cd.name}</div>
+                {cd.candidates.length === 0 ? (
+                  <div className="muted" style={{ fontSize: 11 }}>No low-activity candidates.</div>
+                ) : (
+                  <ul style={{ margin: "4px 0", paddingLeft: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 2 }}>
+                    {cd.candidates.map((c) => (
+                      <li key={c.playerId} style={{ fontSize: 12 }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <input
+                            type="checkbox"
+                            name="drop"
+                            value={c.playerId}
+                            defaultChecked={pickerTouched ? selectedIds.has(c.playerId) : true}
+                          />
+                          <span>{c.displayName}</span>
+                          <span className="muted" style={{ fontSize: 11 }}>
+                            {c.playedCount} played{c.unplayedCount > 0 ? `, ${c.unplayedCount} scheduled` : ""}
+                            {" -- "}
+                            {c.reasons.join(", ")}
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {cd.otherActiveMembers.length > 0 && (
+                  <details style={{ marginTop: 4 }}>
+                    <summary className="muted" style={{ fontSize: 11, cursor: "pointer" }}>Add someone else...</summary>
+                    <ul style={{ margin: "4px 0", paddingLeft: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 2 }}>
+                      {cd.otherActiveMembers.map((m) => (
+                        <li key={m.playerId} style={{ fontSize: 12 }}>
+                          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <input
+                              type="checkbox"
+                              name="drop"
+                              value={m.playerId}
+                              defaultChecked={pickerTouched && selectedIds.has(m.playerId)}
+                            />
+                            <span>{m.displayName}</span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </form>
+  );
+}
+
+// "Apply these drops" panel: a SEPARATE, POST form -- ticking boxes above
+// and clicking Recalculate never applies anything by itself. Submitting
+// this form drops exactly the players currently selected, for real,
+// through dropDivisionMember (see ./actions.ts).
+function ApplyDropsForm({
+  selectedSeasonId,
+  selectedDrops,
+}: {
+  selectedSeasonId: string;
+  selectedDrops: { playerId: string; displayName: string; divisionId: string; divisionName: string; tierName: string }[];
+}) {
+  if (selectedDrops.length === 0) return null;
+  const n = selectedDrops.length;
+  return (
+    <form action={applyHypotheticalDropsAction} style={{ marginTop: 12 }}>
+      <input type="hidden" name="season" value={selectedSeasonId} />
+      {selectedDrops.map((d) => (
+        <input key={d.playerId} type="hidden" name="pair" value={`${d.divisionId}:${d.playerId}`} />
+      ))}
+      <div className="card card-danger" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <strong style={{ fontSize: 14 }}>Apply these drops</strong>
+        <div style={{ fontSize: 12 }}>
+          Drops the following {n} player{n === 1 ? "" : "s"} for real -- played results are kept, unplayed pairings
+          are voided, exactly like dropping one player at a time on the division page:
+        </div>
+        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12 }}>
+          {selectedDrops.map((d) => (
+            <li key={d.playerId}>
+              {d.displayName} -- {d.tierName} / {d.divisionName}
+            </li>
+          ))}
+        </ul>
+        <label style={{ display: "grid", gap: 4, fontSize: 12, maxWidth: 420 }}>
+          <span className="muted">Reason (required, admin-only)</span>
+          <Input type="text" name="reason" required placeholder="e.g. no activity all season" />
+        </label>
+        <div>
+          <ConfirmButton
+            message={`Drop ${n} player(s) for real? This applies immediately and cannot be undone from this page.`}
+            variant="destructive"
+          >
+            Apply {n} drop{n === 1 ? "" : "s"}
+          </ConfirmButton>
+        </div>
+      </div>
+    </form>
+  );
+}
+
 export default async function StandingsPreviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ season?: string }>;
+  searchParams: Promise<{
+    season?: string;
+    maxPlayed?: string;
+    drop?: string | string[];
+    pickerTouched?: string;
+    applyErr?: string;
+    applied?: string;
+    modeErr?: string;
+    modeOk?: string;
+  }>;
 }) {
   await requireAdmin();
   const sp = await searchParams;
@@ -180,7 +447,31 @@ export default async function StandingsPreviewPage({
 
   const defaultSeasonId = seasonOptions.find((s) => s.isActive)?.id ?? seasonOptions[0]!.id;
   const selectedSeasonId = sp.season && seasonOptions.some((s) => s.id === sp.season) ? sp.season : defaultSeasonId;
-  const preview = await loadStandingsPreview(selectedSeasonId);
+
+  const maxPlayedRaw = parseInt(sp.maxPlayed ?? "0", 10);
+  const maxPlayed = Number.isFinite(maxPlayedRaw) ? Math.max(0, maxPlayedRaw) : 0;
+  // Whether the "Who to treat as dropped" panel has ever been submitted.
+  // Until then, every suggested candidate is pre-ticked; once submitted,
+  // the checked boxes on that submit are the ONLY source of truth (so
+  // unchecking every box is a valid "drop nobody" choice, not ignored).
+  const pickerTouched = sp.pickerTouched === "1";
+  const submittedIds = new Set(sp.drop === undefined ? [] : Array.isArray(sp.drop) ? sp.drop : [sp.drop]);
+
+  // Pass 1: candidateDivisions don't depend on hypotheticalDroppedIds (they
+  // reflect the REAL roster), so this call just resolves the suggestion
+  // defaults when the picker hasn't been touched yet.
+  const suggestionPass = await loadStandingsPreview(selectedSeasonId, { candidateMaxPlayed: maxPlayed });
+  const hypotheticalDroppedIds = pickerTouched
+    ? submittedIds
+    : new Set(suggestionPass.candidateDivisions.flatMap((cd) => cd.candidates.map((c) => c.playerId)));
+
+  // Pass 2: the real render data, now that we know exactly who to treat as
+  // dropped. Keeping the existing behaviour when nothing is ticked falls
+  // out naturally -- an empty set here reproduces today's output exactly.
+  const preview = await loadStandingsPreview(selectedSeasonId, {
+    candidateMaxPlayed: maxPlayed,
+    hypotheticalDroppedIds,
+  });
 
   return (
     <>
@@ -190,9 +481,22 @@ export default async function StandingsPreviewPage({
         <h2>Best-N standings preview</h2>
         <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>
           Preview of the proposed &ldquo;best N&rdquo; dropout-adjusted scoring rule, side by side with the{" "}
-          <strong>current</strong> standings. <strong>Nothing is applied anywhere</strong> -- this page only reads
-          data; live standings are completely unaffected by visiting it.
+          <strong>current</strong> standings. Just viewing this page applies nothing -- the Apply/Use buttons below
+          are the only things that write anything, and each says exactly what it will do before you confirm.
         </p>
+
+        {sp.applyErr && <Callout type="danger" style={{ marginTop: 8 }}>Couldn&apos;t apply: {sp.applyErr}</Callout>}
+        {sp.applied && (
+          <Callout type="success" style={{ marginTop: 8 }}>
+            Dropped {sp.applied} player{sp.applied === "1" ? "" : "s"}.
+          </Callout>
+        )}
+        {sp.modeErr && <Callout type="danger" style={{ marginTop: 8 }}>Couldn&apos;t change the scoring rule: {sp.modeErr}</Callout>}
+        {sp.modeOk && (
+          <Callout type="success" style={{ marginTop: 8 }}>
+            Live standings now use &ldquo;{MODE_LABEL[sp.modeOk as SeasonScoringMode] ?? sp.modeOk}&rdquo; for this season.
+          </Callout>
+        )}
 
         <form method="get" style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", marginTop: 8 }}>
           <label style={{ display: "grid", gap: 4, fontSize: 12 }}>
@@ -212,6 +516,16 @@ export default async function StandingsPreviewPage({
           <div className="card muted" style={{ marginTop: 12 }}>Season not found.</div>
         ) : (
           <>
+            <DropPickerPanel
+              selectedSeasonId={selectedSeasonId}
+              maxPlayed={maxPlayed}
+              pickerTouched={pickerTouched}
+              selectedIds={hypotheticalDroppedIds}
+              candidateDivisions={preview.candidateDivisions}
+            />
+
+            <ApplyDropsForm selectedSeasonId={selectedSeasonId} selectedDrops={preview.selectedDrops} />
+
             <div className="card" style={{ marginTop: 12, display: "flex", gap: 16, flexWrap: "wrap", fontSize: 13 }}>
               <span>{preview.season.label}</span>
               <span className="muted">
@@ -219,6 +533,12 @@ export default async function StandingsPreviewPage({
                 <strong>{preview.summary.totalDivisions}</strong> division{preview.summary.totalDivisions === 1 ? "" : "s"} have
                 an unreplaced dropout
               </span>
+              {preview.selectedDrops.length > 0 && (
+                <span className="muted">
+                  <strong>{preview.selectedDrops.length}</strong> player{preview.selectedDrops.length === 1 ? "" : "s"} hypothetically
+                  dropped
+                </span>
+              )}
               <span className="muted">
                 count: <strong>{preview.summary.countMode.rankChanges}</strong> rank change{preview.summary.countMode.rankChanges === 1 ? "" : "s"},{" "}
                 <strong>{preview.summary.countMode.boundaryChanges}</strong> promotion/relegation change{preview.summary.countMode.boundaryChanges === 1 ? "" : "s"}
@@ -235,7 +555,15 @@ export default async function StandingsPreviewPage({
                 anywhere this season.
               </Callout>
             ) : (
-              preview.divisions.map((d) => <DivisionCard key={d.id} d={d} />)
+              preview.divisions.map((d) => (
+                <DivisionCard
+                  key={d.id}
+                  d={d}
+                  seasonId={preview.season!.id}
+                  seasonLabel={preview.season!.label}
+                  currentMode={preview.season!.scoringMode}
+                />
+              ))
             )}
           </>
         )}

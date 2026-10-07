@@ -46,6 +46,11 @@ const SYNC = [
   // never match-config.ts (which imports the bot's own prisma singleton and
   // can't resolve on the web side).
   { from: ["src", "deck-pool-config-core.ts"], to: ["lib", "deck-pool-config-core.ts"] },
+  // Pure season-scoring-mode selector ("all" vs "best-n-count" vs
+  // "best-n-void") -- shared by the bot's live standings post and the
+  // web's live standings path (web/lib/standings-cache.ts) + the
+  // /admin/standings-preview "apply this rule" writer.
+  { from: ["src", "standings-mode.ts"], to: ["lib", "standings-mode.ts"] },
 ];
 
 for (const { from, to } of SYNC) {

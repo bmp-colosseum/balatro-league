@@ -13,7 +13,8 @@
 import { prisma } from "@/lib/prisma";
 import { isScheduleLocked } from "@/lib/schedule-locked";
 import { loadBestBmpSnapshotsForPlayerIds } from "@/lib/bmp-snapshots";
-import { loadDivisionStandings, loadManyDivisionStandings } from "@/lib/standings-cache";
+import { loadDivisionStandings, loadManyDivisionStandings, loadManyDivisionScoringBadges } from "@/lib/standings-cache";
+import type { ScoringBadge } from "@/lib/standings-mode";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { getPlacementRules } from "@/lib/placement-rules";
 import { divisionMovement } from "@/lib/owen-placement";
@@ -53,6 +54,9 @@ export interface StandingsDivisionSummary {
   // count in a locked (graph) schedule, else N-1 for a full round-robin. The
   // clinch predictor needs this so "games remaining" is right per format.
   gamesByPlayer: Record<string, number>;
+  // Set only when this season's scoringMode is a best-n mode AND this
+  // division currently has at least one unreplaced dropout.
+  scoringBadge: ScoringBadge | null;
   rows: StandingsRowsForDivision;
   shootouts: StandingsShootout[];
 }
@@ -155,6 +159,9 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
   // read + one player fetch per division.
   const allDivIds = season.tiers.flatMap((t) => t.divisions.map((d) => d.id));
   const standingsByDivisionId = await loadManyDivisionStandings(allDivIds);
+  // Badges read AFTER the rows above, which warm any cold cache -- this
+  // never computes on its own.
+  const scoringBadgeByDivisionId = await loadManyDivisionScoringBadges(allDivIds);
 
   // All shootouts across this season's divisions in one round-trip.
   // Shootout has no Player relation in the schema, so we batch the
@@ -284,6 +291,7 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
         relegate: moveById.get(d.id)?.relegate ?? 0,
         format: moveById.get(d.id)?.format ?? "graph",
         gamesByPlayer,
+        scoringBadge: scoringBadgeByDivisionId.get(d.id) ?? null,
         rows: standingsByDivisionId.get(d.id) ?? [],
         shootouts: shootoutsByDivisionId.get(d.id) ?? [],
       };

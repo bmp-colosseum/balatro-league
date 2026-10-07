@@ -9,9 +9,10 @@
 // display names so the rendering doesn't need a second hydration pass.
 
 import { prisma } from "@/lib/prisma";
-import { loadDivisionStandings } from "@/lib/standings-cache";
+import { loadDivisionStandings, loadDivisionScoringBadge } from "@/lib/standings-cache";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { computeUnplayedPairs, pairKey } from "@/lib/unplayed-pairs";
+import type { ScoringBadge } from "@/lib/standings-mode";
 
 export interface DivisionStandingRow {
   player: { id: string; displayName: string; discordId: string; username: string | null };
@@ -65,6 +66,11 @@ export interface DivisionPageData {
     confirmedPairingCount: number;
   };
   standings: DivisionStandingRow[];
+  // Set only when this season's scoringMode is a best-n mode AND this
+  // division currently has at least one unreplaced dropout -- the "counts
+  // best N of K-1" badge. Null otherwise (standard scoring, or a best-n
+  // season with nothing for it to change here right now).
+  scoringBadge: ScoringBadge | null;
   recentPairings: DivisionRecentPairing[];
   shootouts: DivisionShootout[];
   unplayed: DivisionUnplayed[];
@@ -98,8 +104,11 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
   );
   const activeMembers = division.members.filter((m) => m.status === "ACTIVE");
 
-  // Cached standings — same source as /standings, no recompute.
+  // Cached standings — same source as /standings, no recompute. Read the
+  // badge AFTER (not before) loadDivisionStandings, which warms the cache
+  // on a cold miss -- loadDivisionScoringBadge itself never computes.
   const standingsRows = await loadDivisionStandings(divisionId);
+  const scoringBadge = await loadDivisionScoringBadge(divisionId);
   const standings: DivisionStandingRow[] = standingsRows.map((r) => ({
     player: { id: r.player.id, displayName: r.player.displayName, discordId: r.player.discordId, username: r.player.username },
     points: r.points,
@@ -213,6 +222,7 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
       confirmedPairingCount: pairings.length,
     },
     standings,
+    scoringBadge,
     recentPairings,
     shootouts,
     unplayed,

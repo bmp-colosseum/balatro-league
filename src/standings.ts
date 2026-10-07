@@ -194,7 +194,10 @@ function sortStandings(
   return assignRanks(sorted);
 }
 
-function shootoutBetween(xId: string, yId: string, shootouts: ShootoutInput[]): number {
+// Exported (alongside headToHead below) so src/standings-best-n.ts can reuse
+// the exact same tiebreak primitives instead of duplicating them. Mirrors
+// web/lib/standings.ts's identical exports.
+export function shootoutBetween(xId: string, yId: string, shootouts: ShootoutInput[]): number {
   const found = shootouts.find(
     (s) =>
       (s.playerAId === xId && s.playerBId === yId) ||
@@ -206,7 +209,9 @@ function shootoutBetween(xId: string, yId: string, shootouts: ShootoutInput[]): 
   return 0;
 }
 
-function headToHead(
+// Returns negative if x should sort BEFORE y (x won their match), positive
+// if y should sort before x, 0 if they haven't played or drew.
+export function headToHead(
   xId: string,
   yId: string,
   pairings: Array<Pick<Match, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,

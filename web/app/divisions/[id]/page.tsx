@@ -65,7 +65,7 @@ export default async function PublicDivisionPage({
 
   const data = await loadDivisionPageData(id);
   if (!data) notFound();
-  const { division, standings, recentPairings, shootouts, unplayed } = data;
+  const { division, standings, scoringBadge, recentPairings, shootouts, unplayed } = data;
   const tc = tierColors(division.tierPosition);
 
   // Viewer identity: drives the per-row reporting controls on
@@ -124,7 +124,18 @@ export default async function PublicDivisionPage({
         )}
 
         <div className="card">
-          <strong>Standings</strong>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+            <strong>Standings</strong>
+            {scoringBadge && (
+              <span
+                className="pill"
+                style={{ fontSize: 11 }}
+                title={`${scoringBadge.dropouts} unreplaced dropout${scoringBadge.dropouts === 1 ? "" : "s"} this season -- a result against ${scoringBadge.dropouts === 1 ? "them" : "them"} is ${scoringBadge.mode === "best-n-void" ? "erased for everyone" : "a normal result like any other"}.`}
+              >
+                counts best {scoringBadge.n} of {Math.max(0, scoringBadge.k - 1)}
+              </span>
+            )}
+          </div>
           <div style={{ marginTop: 8 }}>
             <DivisionStandingsTable
               rows={standings}

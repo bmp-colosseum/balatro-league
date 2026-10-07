@@ -1,50 +1,18 @@
-// Pure core for the "best N" dropout-adjusted standings preview. Zero
-// prisma/react imports (Player/Match are TYPE-only imports, erased at
-// compile time -- same convention as web/lib/standings.ts).
+// Pure core for the "best N" dropout-adjusted standings engine. Mirrors
+// web/lib/standings-best-n.ts EXACTLY (same algorithm, same tiebreak
+// primitives from ./standings.js, which mirrors web/lib/standings.ts) so the
+// bot's live standings post and the web's live standings path can never
+// silently disagree about what a season with scoringMode "best-n-count" /
+// "best-n-void" looks like. If you change one copy, change both.
 //
-// THE TO's RULE: in a division of k players with d UNREPLACED dropouts,
-// each player's standing counts only their best (k-1-d) results -- "best" by
-// points, then win > draw > loss among equal-point results (only relevant
-// under a non-default scoring config where a draw and a loss could tie on
-// points). Head-to-head in the tiebreak chain applies only when BOTH
-// players' COUNTED results include that particular game; otherwise skip to
-// the next criterion. A replacement who joined mid-season is capped at the
-// number of games they could actually have been scheduled for -- their
-// effective N is min(division N, their own scheduledGames).
-//
-// TWO CANDIDATE VARIANTS for what happens to a game that WAS played against
-// the dropout (dropoutGames param, default "count"):
-//   - "count": the existing behaviour above -- a result against the
-//     dropout is a real, earned result like any other, so it's just one
-//     more candidate for best-N selection (it can end up counted or dropped
-//     same as any other result). A player who beat the dropout can end up
-//     RISING relative to someone who never got the chance to play them.
-//   - "void": every result against an unreplaced dropout is removed for
-//     EVERYONE first, before best-N selection even runs. Nobody gains or
-//     loses anything from having played the dropout -- a survivor who beat
-//     them and one who never played them end up with the exact same
-//     opportunity set (best N of the SAME pool of remaining opponents).
-//     Tiebreak rules (h2h/shootout/wins/draws/name) are unchanged.
-//
-// This only triggers when d > 0. With zero unreplaced dropouts the division
-// bypasses best-N entirely and returns computeStandings' own rows verbatim
-// (see the early-return below) -- "Only triggers when a dropout is not
-// replaced."
-//
-// Nothing calls this yet -- it backs an admin-only PREVIEW page
-// (web/app/admin/standings-preview) so the TO can see the effect before
-// deciding whether to turn it on anywhere. Live standings
-// (web/lib/standings-cache.ts) still always calls computeStandings.
-//
-// TODO(best-n-switch): when the TO decides to enable this, the natural
-// switch point is a season-level `scoringMode: "STANDARD" | "BEST_N"` field
-// (Prisma schema), read by recomputeDivisionStandings /
-// loadDivisionStandings in web/lib/standings-cache.ts (and the bot's mirror,
-// src/standings-cache.ts) to pick computeStandings vs computeBestNStandings
-// per division. That's a small, separate follow-up -- not part of this leaf.
+// See web/lib/standings-best-n.ts's header for the full rule writeup (best-N
+// selection, the "count" vs "void" dropoutGames variants, tiebreak scoping).
+// buildBestNMembers below also mirrors that file's loader-side member
+// assembly (the isReplacement heuristic + scheduledGames cap), pulled in
+// here as a pure function so src/standings-cache.ts doesn't duplicate it.
 
 import type { Match, Player } from "@prisma/client";
-import { DEFAULTS, type ScoringConfig } from "@/lib/league-settings";
+import { DEFAULTS, type ScoringConfig } from "./league-settings.js";
 import {
   type StandingRow,
   type ShootoutInput,
@@ -52,27 +20,16 @@ import {
   assignRanks,
   headToHead,
   shootoutBetween,
-} from "@/lib/standings";
+} from "./standings.js";
 
 export type BestNPairing = Pick<Match, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">;
 
-// "count" (default) keeps today's behaviour: a result against an unreplaced
-// dropout is a normal candidate for best-N selection. "void" erases every
-// such result for everyone before selection runs -- see the header above.
 export type DropoutGamesMode = "count" | "void";
 
 export interface BestNMemberInput {
   player: Player;
   status: "ACTIVE" | "DROPPED";
-  // True for an ACTIVE member who slotted into the division mid-season to
-  // take over a DIFFERENT dropout's vacated slot (see
-  // web/lib/replace-division-player.ts, or an admin "add player" after a
-  // soft drop). Ignored for DROPPED rows. Determining this is a shell-side
-  // judgment call (based on join/drop timestamps) -- the core just trusts it.
   isReplacement: boolean;
-  // This member's total scheduled LEAGUE_BO2 games in the division (any
-  // status -- the full set of matches ever assigned to them). Only read when
-  // isReplacement is true, to cap their effective N below the division's.
   scheduledGames: number;
 }
 
@@ -83,26 +40,14 @@ export interface BestNDroppedResult {
 }
 
 export interface BestNStandingRow extends StandingRow {
-  // How many of this player's results counted toward their standing, and
-  // the cap ("of") that selection was made against -- e.g. counted: 5, of: 5
-  // reads as "counts best 5 of 5" for a replacement capped below the
-  // division's N, or "5 of 6" for a normal member in a 7-player/1-dropout
-  // division (division.n = 5, their actual games played could be 5 or 6).
   counted: number;
   of: number;
-  // This player's results that did NOT make the counted cut (their worst
-  // played - counted results), for the UI to show what got dropped.
   droppedResults: BestNDroppedResult[];
 }
 
 export interface BestNDivisionSummary {
-  // Results counted per player before any individual replacement cap:
-  // k - 1 - dropouts.
   n: number;
-  // Division size INCLUDING unreplaced dropouts (the original full roster).
   k: number;
-  // Unreplaced dropouts (DROPPED members minus replacements), floored at 0.
-  // 0 means best-N is NOT triggered for this division.
   dropouts: number;
 }
 
@@ -114,19 +59,11 @@ export interface BestNStandingsResult {
 interface PlayerResult {
   opponentId: string;
   points: number;
-  // 2 = win, 1 = draw, 0 = loss -- breaks a points tie when picking which
-  // results count (only matters under a non-default scoring config where a
-  // draw and a loss could score the same).
   rank: 2 | 1 | 0;
   gamesWon: number;
   gamesLost: number;
 }
 
-// Best-first: higher points first, then win > draw > loss, then opponent id
-// for a fully deterministic order. Among a genuine tie (same points AND
-// rank), which exact result gets dropped is immaterial to the counted sum --
-// any choice yields the same maximum (see the "maximum-points subset"
-// property this guarantees).
 function sortResultsBestFirst(results: PlayerResult[]): PlayerResult[] {
   return results
     .slice()
@@ -148,11 +85,6 @@ export function computeBestNStandings(
   const n = Math.max(0, k - 1 - dropouts);
 
   if (dropouts === 0) {
-    // No unreplaced dropout anywhere in the division -- best-N doesn't
-    // trigger (dropoutGames is moot: there's nothing to void or count
-    // differently). Reuse computeStandings verbatim rather than
-    // reimplementing the "everyone's N covers everything they played"
-    // degenerate case.
     const rows: BestNStandingRow[] = computeStandings(
       active.map((m) => m.player),
       pairings,
@@ -162,12 +94,6 @@ export function computeBestNStandings(
     return { rows, division: { n, k, dropouts } };
   }
 
-  // "void": strip every result touching a DROPPED member before anything
-  // else runs, so the dropout never existed as far as selection/points are
-  // concerned. (A cleanly pre-play replaceDivisionPlayer swap never leaves a
-  // DROPPED member with a confirmed result in the first place -- the only
-  // way a DROPPED member here has one is the mid-season soft-drop path, the
-  // exact "unreplaced dropout" case this whole feature is about.)
   const droppedIds = new Set(members.filter((m) => m.status === "DROPPED").map((m) => m.player.id));
   const effectivePairings = dropoutGames === "void"
     ? pairings.filter((pr) => !droppedIds.has(pr.playerAId) && !droppedIds.has(pr.playerBId))
@@ -176,10 +102,6 @@ export function computeBestNStandings(
     ? shootouts.filter((s) => !droppedIds.has(s.playerAId) && !droppedIds.has(s.playerBId))
     : shootouts;
 
-  // Build a full (ACTIVE + DROPPED) id -> Player lookup so a "count"-mode
-  // confirmed result against an already-dropped opponent still resolves and
-  // counts for whoever played it -- it was a real, earned result, even
-  // though the dropped player gets no standing row of their own.
   const playerById = new Map(members.map((m) => [m.player.id, m.player]));
 
   const resultsByPlayerId = new Map<string, PlayerResult[]>();
@@ -191,7 +113,7 @@ export function computeBestNStandings(
     if (!aIsActive && !bIsActive) continue;
     const aPlayer = playerById.get(pr.playerAId);
     const bPlayer = playerById.get(pr.playerBId);
-    if (!aPlayer || !bPlayer) continue; // ghost pairing -- unknown opponent
+    if (!aPlayer || !bPlayer) continue;
 
     let aPoints = 0, bPoints = 0;
     let aRank: 2 | 1 | 0 = 0, bRank: 2 | 1 | 0 = 0;
@@ -205,7 +127,7 @@ export function computeBestNStandings(
       aPoints = scoring.pointsFor11Draw; bPoints = scoring.pointsFor11Draw;
       aRank = 1; bRank = 1;
     } else {
-      continue; // not a valid BO2 result -- doesn't count as a "result"
+      continue;
     }
 
     if (aIsActive) {
@@ -255,9 +177,6 @@ export function computeBestNStandings(
     });
   }
 
-  // Both players' COUNTED sets must include their mutual game for h2h to
-  // apply -- a result dropped by either side's best-N selection doesn't
-  // break the tie, per the TO's rule.
   const bothCounted = (xId: string, yId: string): boolean =>
     (countedOpponentsByPlayerId.get(xId)?.has(yId) ?? false) &&
     (countedOpponentsByPlayerId.get(yId)?.has(xId) ?? false);
@@ -306,9 +225,10 @@ export interface RawMemberForBestN {
 // Builds BestNMemberInput[] from raw DivisionMember-shaped rows + each
 // member's total scheduled LEAGUE_BO2 game count. Centralizes the
 // "isReplacement" heuristic (joined after another member's earliest real
-// drop) so every caller -- the admin preview, and both the web's and the
-// bot's live standings cache (src/standings-best-n.ts mirrors this function
-// verbatim) -- agrees on who's a replacement. Pure: no DB, just data in.
+// drop) so every caller -- the web's admin preview, and both the web's and
+// the bot's live standings cache -- agrees on who's a replacement. Pure: no
+// DB, no Prisma query, just data in. Mirrors the inline heuristic that used
+// to live only in web/lib/loaders/standings-preview.ts.
 export function buildBestNMembers(
   members: RawMemberForBestN[],
   scheduledGamesByPlayerId: ReadonlyMap<string, number>,
