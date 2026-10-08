@@ -79,7 +79,7 @@ interface SP {
   ok?: string;
   err?: string;
   step?: string;
-  ids?: string;
+  ids?: string | string[];
   action?: string;
   reason?: string;
 }
@@ -342,7 +342,11 @@ function QueueRow({ row }: { row: BulkResolveQueueRow }) {
 
 function ConfirmStep({ sp, data }: { sp: SP; data: BulkResolveData }) {
   const backHref = filterQuery(sp);
-  const selectedIds = [...new Set((sp.ids ?? "").split(",").map((s) => s.trim()).filter(Boolean))];
+  // The toolbar posts one `ids` field per ticked row (ids=a&ids=b), which Next hands over
+  // as an array; a single tick arrives as a string. Accept both, plus a comma list.
+  const rawIds = sp.ids;
+  const idList = Array.isArray(rawIds) ? rawIds : (rawIds ?? "").split(",");
+  const selectedIds = [...new Set(idList.flatMap((v) => v.split(",")).map((s) => s.trim()).filter(Boolean))];
   const action = sp.action ?? "";
   const reason = (sp.reason ?? "").trim();
 
