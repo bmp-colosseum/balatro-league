@@ -92,6 +92,7 @@ const SEASON_SELECT = {
           adminOverrideBy: true,
           gamesWonA: true,
           gamesWonB: true,
+          recordedBy: true,
         },
       },
     },
@@ -159,6 +160,7 @@ async function buildSeasonAuditInput(season: SeasonForAudit): Promise<SeasonAudi
         adminOverrideBy: m.adminOverrideBy,
         gamesWonA: m.gamesWonA,
         gamesWonB: m.gamesWonB,
+        recordedBy: m.recordedBy,
       })),
     };
   });

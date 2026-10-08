@@ -18,7 +18,8 @@ import { prisma } from "@/lib/prisma";
 import { getLeagueSettingsForSeason } from "@/lib/league-settings";
 import { assignRanks, computeStandings, type StandingRow, type ShootoutInput } from "@/lib/standings";
 import { computeBestNStandings, buildBestNMembers, type BestNPairing } from "@/lib/standings-best-n";
-import { normalizeScoringMode, selectStandingsEngine, buildScoringBadge, type ScoringBadge } from "@/lib/standings-mode";
+import { normalizeScoringMode, selectStandingsEngine, buildScoringBadge, normalizeTiebreak, type ScoringBadge } from "@/lib/standings-mode";
+import { attachLivesToTiedRows } from "@/lib/standings-lives";
 import { buildUncounted, type UncountedEntry } from "@/lib/uncounted-core";
 
 interface CachedRow {
@@ -35,6 +36,14 @@ interface CachedRow {
   // standings.ts. Absent for a legacy payload or an "all"-mode division.
   counted?: number;
   of?: number;
+  // Set under season.tiebreak "lives" (every row), or under the default
+  // "chain" for a row that's part of a tie group (attachLivesToTiedRows,
+  // informational only -- see standings-lives.ts). Absent for every other
+  // chain-mode row, so a division with no ties stays byte-for-byte
+  // identical to before this field existed. See StandingRow.netLives/
+  // livesGamesMissing in standings.ts.
+  netLives?: number;
+  livesGamesMissing?: number;
 }
 
 // On-disk shape of DivisionStandings.rowsJson. Legacy rows written before
@@ -70,7 +79,7 @@ function parsePayload(rowsJson: string): CachedPayload {
 interface DivisionForStandings {
   seasonId: string;
   opponentsPerPlayer: number | null;
-  season: { scoringMode: string };
+  season: { scoringMode: string; tiebreak: string };
   members: {
     playerId: string;
     status: string;
@@ -86,6 +95,7 @@ interface DivisionForStandings {
     gamesWonA: number;
     gamesWonB: number;
     winnerId: string | null;
+    games: { winnerId: string | null; winnerLives: number | null }[];
   }[];
 }
 
@@ -94,7 +104,7 @@ const LIVE_MATCH_STATUSES: PairingStatus[] = ["CONFIRMED", "PENDING", "DISPUTED"
 const DIVISION_FOR_STANDINGS_INCLUDE = {
   seasonId: true,
   opponentsPerPlayer: true,
-  season: { select: { scoringMode: true } },
+  season: { select: { scoringMode: true, tiebreak: true } },
   members: { select: { playerId: true, status: true, joinedAt: true, droppedAt: true, player: true } },
   matches: {
     // Live matches only: CONFIRMED feeds the engines; PENDING/DISPUTED count toward each
@@ -109,6 +119,9 @@ const DIVISION_FOR_STANDINGS_INCLUDE = {
       gamesWonA: true,
       gamesWonB: true,
       winnerId: true,
+      // Per-game lives, only read when season.tiebreak is "lives" -- see
+      // @/lib/standings's PairingGameLives.
+      games: { select: { winnerId: true, winnerLives: true } },
     },
   },
 } as const;
@@ -121,6 +134,7 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
   const { scoring } = await getLeagueSettingsForSeason(div.seasonId);
   const mode = normalizeScoringMode(div.season.scoringMode);
   const selection = selectStandingsEngine(mode);
+  const tiebreak = normalizeTiebreak(div.season.tiebreak);
 
   const leagueMatches = div.matches.filter((m) => m.format === "LEAGUE_BO2");
   const pairings: BestNPairing[] = leagueMatches.filter((m) => m.status === "CONFIRMED").map((m) => ({
@@ -128,6 +142,7 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
     playerBId: m.playerBId,
     gamesWonA: m.gamesWonA,
     gamesWonB: m.gamesWonB,
+    games: m.games,
   }));
   const shootouts: ShootoutInput[] = div.matches
     .filter((m) => m.format === "SHOOTOUT_BO1" && m.status === "CONFIRMED" && m.winnerId !== null)
@@ -139,7 +154,7 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
 
   if (selection.engine === "standard") {
     const activeMembers = div.members.filter((m) => m.status === "ACTIVE");
-    rows = computeStandings(activeMembers.map((m) => m.player), pairings, shootouts, scoring);
+    rows = computeStandings(activeMembers.map((m) => m.player), pairings, shootouts, scoring, tiebreak);
   } else {
     const scheduledGamesByPlayerId = new Map<string, number>();
     for (const m of leagueMatches) {
@@ -155,7 +170,7 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
       })),
       scheduledGamesByPlayerId,
     );
-    const result = computeBestNStandings(bestNMembers, pairings, shootouts, scoring, selection.dropoutGames, div.opponentsPerPlayer ?? null);
+    const result = computeBestNStandings(bestNMembers, pairings, shootouts, scoring, selection.dropoutGames, div.opponentsPerPlayer ?? null, tiebreak);
     rows = result.rows;
     badge = buildScoringBadge(mode, result.division.n, result.division.k, result.division.scheduled, result.division.dropouts);
     uncounted = buildUncounted(
@@ -164,6 +179,16 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
       pairings,
       selection.dropoutGames,
     );
+  }
+
+  // Chain mode never reorders by lives, but a TIED player's net life
+  // differential is still shown as informational context -- see
+  // attachLivesToTiedRows's header. Under "lives", every row already carries
+  // netLives from the engine itself, so this is a no-op there (every row
+  // either already has it set, or isn't in a tie group and this would just
+  // recompute the same thing -- skip entirely to avoid the redundant work).
+  if (tiebreak === "chain") {
+    attachLivesToTiedRows(rows, pairings);
   }
 
   const payload: CachedPayload = {
@@ -179,6 +204,8 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
       tiedWithPrev: r.tiedWithPrev,
       counted: r.counted,
       of: r.of,
+      netLives: r.netLives,
+      livesGamesMissing: r.livesGamesMissing,
     })),
   };
   if (badge) payload.badge = badge;
@@ -314,6 +341,8 @@ function hydrateRows(payload: CachedRow[], playerById: Map<string, Player>): Sta
       if (r.tiedWithPrev) row.tiedWithPrev = true;
       if (r.counted !== undefined) row.counted = r.counted;
       if (r.of !== undefined) row.of = r.of;
+      if (r.netLives !== undefined) row.netLives = r.netLives;
+      if (r.livesGamesMissing !== undefined) row.livesGamesMissing = r.livesGamesMissing;
       return row;
     })
     .filter((r): r is StandingRow => r !== null);

@@ -274,6 +274,17 @@ model Season {
   // pure (mode, dropouts) -> engine selector both the web and the bot read.
   scoringMode String @default("all")
 
+  // How this season's standings break a tie that points + head-to-head +
+  // shootout can't resolve: "chain" (default) falls through to wins/draws/
+  // name, same as always. "lives" instead breaks ties by net life
+  // differential (see computeNetLives in web/lib/standings.ts /
+  // src/standings.ts) before falling through to wins/draws/name -- so the TO
+  // no longer has to record a fake shootout just to settle a lives tie.
+  // Free-text rather than a Prisma enum so flipping it back to "chain" is a
+  // plain write, not a migration. See web/lib/standings-mode.ts for the
+  // normalizer both the web and the bot read.
+  tiebreak String @default("chain")
+
   divisions Division[]
   tiers     Tier[]
 

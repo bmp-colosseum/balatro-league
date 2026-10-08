@@ -58,3 +58,16 @@ export function buildScoringBadge(
   if (mode === "all" || dropouts <= 0) return null;
   return { mode, n, k, scheduled, dropouts };
 }
+
+// Season.tiebreak is a free-text column (so flipping back to "chain" is a
+// plain write, not a migration). This is the known set of values the admin
+// UI (web/app/admin/standings-preview) can write.
+export type SeasonTiebreak = "chain" | "lives";
+
+// Normalizes the free-text column to the known literal union, defaulting to
+// "chain" (today's behaviour) for anything unrecognized -- the live
+// standings path must always resolve to SOME tiebreak, never throw on an
+// unexpected value.
+export function normalizeTiebreak(value: string | null | undefined): SeasonTiebreak {
+  return value === "lives" ? "lives" : "chain";
+}

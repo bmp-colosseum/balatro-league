@@ -12,7 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { loadDivisionStandings, loadDivisionScoringBadge, loadDivisionUncounted } from "@/lib/standings-cache";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { computeUnplayedPairs, pairKey } from "@/lib/unplayed-pairs";
-import type { ScoringBadge } from "@/lib/standings-mode";
+import { normalizeTiebreak, type ScoringBadge } from "@/lib/standings-mode";
 import type { UncountedEntry } from "@/lib/uncounted-core";
 
 export interface DivisionStandingRow {
@@ -29,6 +29,12 @@ export interface DivisionStandingRow {
   // Set only under a best-N scoring mode -- see StandingRow.counted/of.
   counted?: number;
   of?: number;
+  // Set when this row carries a net-lives value -- either because the
+  // season's tiebreak is "lives" (every row), or it's "chain" and this row
+  // is part of a tie group (see attachLivesToTiedRows). See
+  // StandingRow.netLives/livesGamesMissing.
+  netLives?: number;
+  livesGamesMissing?: number;
 }
 
 export interface DivisionRecentPairing {
@@ -83,6 +89,11 @@ export interface DivisionPageData {
   recentPairings: DivisionRecentPairing[];
   shootouts: DivisionShootout[];
   unplayed: DivisionUnplayed[];
+  // True when this season's tiebreak is "lives" (ties ARE broken by net
+  // lives) vs the default "chain" (net lives shown for tied players only as
+  // informational context -- see attachLivesToTiedRows). Drives the Lives
+  // column's footnote wording on DivisionStandingsTable.
+  livesBreaksTies: boolean;
 }
 
 const RECENT_PAIRINGS_LIMIT = 30;
@@ -95,7 +106,7 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
       name: true,
       seasonId: true,
       tier: { select: { name: true, position: true } },
-      season: { select: { number: true, subtitle: true, scheduleLocked: true } },
+      season: { select: { number: true, subtitle: true, scheduleLocked: true, tiebreak: true } },
       members: {
         select: {
           playerId: true,
@@ -132,6 +143,8 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
     dropped: droppedIds.has(r.player.id),
     counted: r.counted,
     of: r.of,
+    netLives: r.netLives,
+    livesGamesMissing: r.livesGamesMissing,
   }));
 
   const pairings = await prisma.match.findMany({
@@ -239,5 +252,6 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
     recentPairings,
     shootouts,
     unplayed,
+    livesBreaksTies: normalizeTiebreak(division.season.tiebreak) === "lives",
   };
 }

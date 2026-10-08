@@ -37,6 +37,16 @@ describe("parseStandingsRows", () => {
     const rows = parseStandingsRows(NEW_PAYLOAD_WITH_BEST_N);
     expect(rows[0]).toMatchObject({ playerId: "a", counted: 1, of: 1 });
   });
+
+  it("reads netLives/livesGamesMissing through when present (tiebreak: lives)", () => {
+    const json = JSON.stringify({
+      rows: [
+        { playerId: "a", points: 3, wins: 1, draws: 0, losses: 0, gamesWon: 2, gamesLost: 0, played: 1, netLives: 4, livesGamesMissing: 1 },
+      ],
+    });
+    const rows = parseStandingsRows(json);
+    expect(rows[0]).toMatchObject({ playerId: "a", netLives: 4, livesGamesMissing: 1 });
+  });
 });
 
 describe("parseStandingsUncounted", () => {

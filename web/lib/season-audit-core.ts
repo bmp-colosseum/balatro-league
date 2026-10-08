@@ -55,6 +55,14 @@ export interface SeasonAuditMatchInput {
   adminOverrideBy: string | null;
   gamesWonA: number;
   gamesWonB: number;
+  // Set on every shootout an admin records (web/lib/match-admin.ts's
+  // recordShowdown / resolveTieWithShowdowns), as opposed to a
+  // player-reported one. checkShootoutDangling skips these:
+  // resolveTieWithShowdowns deliberately writes a pairwise result for every
+  // pair in a tied group, including pairs that land on different points once
+  // the group's OTHER members' results come in, so "not tied on points" is
+  // expected there, not a sign of anything dangling.
+  recordedBy: string | null;
 }
 
 export interface SeasonAuditDivisionInput {
@@ -367,7 +375,10 @@ export function checkSeasonDiscordLeftovers(input: SeasonAuditInput): Finding[] 
 
 // shootout-dangling (info): a CONFIRMED shootout between two players who
 // turned out NOT to be tied on points (same cached rank). Harmless --
-// informational only, since the result still stands either way.
+// informational only, since the result still stands either way. Skips any
+// shootout an admin recorded (recordedBy set) -- resolveTieWithShowdowns
+// deliberately writes one per pair across a whole tied group, including
+// pairs that land on different points, so those are never "dangling".
 export function checkShootoutDangling(division: SeasonAuditDivisionInput): Finding[] {
   const rows = division.rows;
   if (!rows) return [];
@@ -377,6 +388,7 @@ export function checkShootoutDangling(division: SeasonAuditDivisionInput): Findi
   const findings: Finding[] = [];
   for (const m of division.matches) {
     if (m.format !== "SHOOTOUT_BO1" || m.status !== "CONFIRMED") continue;
+    if (m.recordedBy !== null) continue;
     const pointsA = pointsByPlayerId.get(m.playerAId);
     const pointsB = pointsByPlayerId.get(m.playerBId);
     if (pointsA === undefined || pointsB === undefined) continue;

@@ -16,7 +16,7 @@ import { requireAdmin } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
-import { normalizeScoringMode, type SeasonScoringMode } from "@/lib/standings-mode";
+import { normalizeScoringMode, normalizeTiebreak, type SeasonScoringMode, type SeasonTiebreak } from "@/lib/standings-mode";
 import { dropDivisionMember } from "@/app/divisions/[id]/actions";
 
 function backTo(seasonId: string, params: Record<string, string>): string {
@@ -94,4 +94,42 @@ export async function setSeasonScoringModeAction(formData: FormData): Promise<vo
   await Promise.all(divisions.map((d) => recomputeDivisionStandings(d.id)));
 
   redirect(backTo(seasonId, { modeOk: mode }));
+}
+
+const VALID_TIEBREAKS: readonly SeasonTiebreak[] = ["chain", "lives"];
+
+// "Break ties by net lives" / "Back to today's tiebreaks" -- writes
+// Season.tiebreak, audits it, and recomputes every division's cache in this
+// season so the LIVE standings reflect the new tiebreak immediately (not on
+// the next roster/match write). Modeled exactly on
+// setSeasonScoringModeAction above.
+export async function setSeasonTiebreakAction(formData: FormData): Promise<void> {
+  const { user } = await requireAdmin();
+  const seasonId = String(formData.get("season") ?? "");
+  const tiebreakRaw = String(formData.get("tiebreak") ?? "");
+  if (!seasonId || !VALID_TIEBREAKS.includes(tiebreakRaw as SeasonTiebreak)) {
+    redirect(backTo(seasonId, { tiebreakErr: "Not a valid tiebreak." }));
+  }
+  const tiebreak = tiebreakRaw as SeasonTiebreak;
+
+  const season = await prisma.season.findUnique({ where: { id: seasonId }, select: { tiebreak: true } });
+  if (!season) {
+    redirect(backTo(seasonId, { tiebreakErr: "Season not found." }));
+  }
+  const previousTiebreak = normalizeTiebreak(season.tiebreak);
+
+  await prisma.season.update({ where: { id: seasonId }, data: { tiebreak } });
+  await recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "season.tiebreak",
+    targetType: "Season",
+    targetId: seasonId,
+    summary: `Tiebreak: ${previousTiebreak} -> ${tiebreak}`,
+    metadata: { seasonId, previousTiebreak, tiebreak },
+  });
+
+  const divisions = await prisma.division.findMany({ where: { seasonId }, select: { id: true } });
+  await Promise.all(divisions.map((d) => recomputeDivisionStandings(d.id)));
+
+  redirect(backTo(seasonId, { tiebreakOk: tiebreak }));
 }

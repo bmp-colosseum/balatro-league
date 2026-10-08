@@ -38,6 +38,7 @@ function match(overrides: Partial<SeasonAuditMatchInput> = {}): SeasonAuditMatch
     adminOverrideBy: null,
     gamesWonA: 2,
     gamesWonB: 0,
+    recordedBy: null,
     ...overrides,
   };
 }
@@ -433,6 +434,15 @@ describe("checkShootoutDangling", () => {
     const d = division({
       rows: [row("p1", "Alice", 1), row("p2", "Bob", 2)],
       matches: [match({ format: "SHOOTOUT_BO1", status: "PENDING" })],
+    });
+    expect(checkShootoutDangling(d)).toEqual([]);
+  });
+
+  it("does not flag an admin-recorded shootout (recordedBy set), even when not tied on points", () => {
+    const d = division({
+      members: [member("p1", "Alice"), member("p2", "Bob")],
+      rows: [row("p1", "Alice", 1, { points: 9 }), row("p2", "Bob", 2, { points: 7 })],
+      matches: [match({ format: "SHOOTOUT_BO1", status: "CONFIRMED", recordedBy: "admin-discord-id" })],
     });
     expect(checkShootoutDangling(d)).toEqual([]);
   });

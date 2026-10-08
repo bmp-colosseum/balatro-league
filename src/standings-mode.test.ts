@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeScoringMode, selectStandingsEngine, buildScoringBadge } from "./standings-mode.js";
+import { normalizeScoringMode, selectStandingsEngine, buildScoringBadge, normalizeTiebreak } from "./standings-mode.js";
 
 describe("normalizeScoringMode", () => {
   it.each([
@@ -40,5 +40,19 @@ describe("buildScoringBadge", () => {
     ["best-n-void"],
   ] as const)("is the badge for a %s mode with at least one dropout", (mode) => {
     expect(buildScoringBadge(mode, 4, 6, 5, 2)).toEqual({ mode, n: 4, k: 6, scheduled: 5, dropouts: 2 });
+  });
+});
+
+describe("normalizeTiebreak", () => {
+  it.each([
+    ["chain", "chain"],
+    ["lives", "lives"],
+    ["", "chain"],
+    ["bogus", "chain"],
+    ["LIVES", "chain"],
+    [null, "chain"],
+    [undefined, "chain"],
+  ] as const)("normalizeTiebreak(%p) -> %p", (raw, expected) => {
+    expect(normalizeTiebreak(raw)).toBe(expected);
   });
 });
