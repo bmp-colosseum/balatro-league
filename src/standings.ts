@@ -26,6 +26,47 @@ export interface StandingRow {
   tiedWithPrev?: boolean;
   tiedWithNext?: boolean;
   rank?: number;
+  // Only set when computeStandings was called with tiebreak: "lives" -- net
+  // life differential from this row's counted games with a recorded
+  // winnerLives. Absent under the default "chain" tiebreak. Mirrors web
+  // (web/lib/standings.ts), currently unused by any bot caller -- nothing in
+  // the bot calls computeStandings with tiebreak: "lives" yet; this mirrors
+  // the web admin-preview feature's core so the two copies don't drift.
+  netLives?: number;
+  livesGamesMissing?: number;
+}
+
+// See web/lib/standings.ts's identical type for the full rationale.
+export type Tiebreak = "chain" | "lives";
+
+export interface PairingGameLives {
+  winnerId: string | null;
+  winnerLives: number | null;
+}
+
+export type PairingWithLives = Pick<Match, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB"> & {
+  games?: PairingGameLives[];
+};
+
+// Mirrors web/lib/standings.ts's computeNetLives verbatim.
+export function computeNetLives(
+  playerId: string,
+  pairings: Array<Pick<PairingWithLives, "playerAId" | "playerBId" | "games">>,
+): { netLives: number; livesGamesMissing: number } {
+  let netLives = 0;
+  let livesGamesMissing = 0;
+  for (const pr of pairings) {
+    if (pr.playerAId !== playerId && pr.playerBId !== playerId) continue;
+    for (const g of pr.games ?? []) {
+      if (!g.winnerId) continue;
+      if (g.winnerLives == null) {
+        livesGamesMissing++;
+        continue;
+      }
+      netLives += g.winnerId === playerId ? g.winnerLives : -g.winnerLives;
+    }
+  }
+  return { netLives, livesGamesMissing };
 }
 
 export interface ShootoutInput {
@@ -111,9 +152,10 @@ export function shootoutsNeeded(rows: StandingRow[], promote: number, relegate: 
 // defaults to 3/1/0 when not passed (sim/legacy callers).
 export function computeStandings(
   players: Player[],
-  pairings: Array<Pick<Match, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
+  pairings: Array<PairingWithLives>,
   shootouts: ShootoutInput[] = [],
   scoring: ScoringConfig = DEFAULTS.scoring,
+  tiebreak: Tiebreak = "chain",
 ): StandingRow[] {
   const byId = new Map<string, StandingRow>();
   for (const p of players) {
@@ -160,23 +202,36 @@ export function computeStandings(
     // any other combination is malformed; ignore.
   }
 
-  return sortStandings(Array.from(byId.values()), pairings, shootouts);
+  return sortStandings(Array.from(byId.values()), pairings, shootouts, tiebreak);
 }
 
 // Sort rules: points DESC → head-to-head (2-0 only) → shootout result →
-// wins DESC → draws DESC → displayName for stable order. Mirrors
-// web/lib/standings.ts.
+// [tiebreak "lives" only: net lives DESC] → wins DESC → draws DESC →
+// displayName for stable order. Mirrors web/lib/standings.ts.
 function sortStandings(
   rows: StandingRow[],
-  pairings: Array<Pick<Match, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
+  pairings: Array<PairingWithLives>,
   shootouts: ShootoutInput[],
+  tiebreak: Tiebreak,
 ): StandingRow[] {
+  if (tiebreak === "lives") {
+    for (const row of rows) {
+      const { netLives, livesGamesMissing } = computeNetLives(row.player.id, pairings);
+      row.netLives = netLives;
+      row.livesGamesMissing = livesGamesMissing;
+    }
+  }
+  const livesCompare = (x: StandingRow, y: StandingRow): number =>
+    tiebreak === "lives" ? (y.netLives ?? 0) - (x.netLives ?? 0) : 0;
+
   const sorted = rows.slice().sort((x, y) => {
     if (y.points !== x.points) return y.points - x.points;
     const h2h = headToHead(x.player.id, y.player.id, pairings);
     if (h2h !== 0) return h2h;
     const shoot = shootoutBetween(x.player.id, y.player.id, shootouts);
     if (shoot !== 0) return shoot;
+    const lives = livesCompare(x, y);
+    if (lives !== 0) return lives;
     if (y.wins !== x.wins) return y.wins - x.wins;
     if (y.draws !== x.draws) return y.draws - x.draws;
     return x.player.displayName.localeCompare(y.player.displayName);
@@ -190,6 +245,7 @@ function sortStandings(
       prev.points === cur.points &&
       headToHead(prev.player.id, cur.player.id, pairings) === 0 &&
       shootoutBetween(prev.player.id, cur.player.id, shootouts) === 0 &&
+      livesCompare(prev, cur) === 0 &&
       prev.wins === cur.wins &&
       prev.draws === cur.draws
     ) {

@@ -22,7 +22,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { getLeagueSettingsForSeason } from "@/lib/league-settings";
-import { computeStandings, type StandingRow, type ShootoutInput } from "@/lib/standings";
+import { computeStandings, type StandingRow, type ShootoutInput, type Tiebreak } from "@/lib/standings";
 import {
   computeBestNStandings,
   buildBestNMembers,
@@ -73,6 +73,36 @@ export interface StandingsPreviewPlayerDiff {
   // One-line explanation when boundaryChanged -- e.g. "Would be promoted
   // instead of <name>." Null when boundaryChanged is false.
   boundaryNote: string | null;
+  // True when the net-lives tiebreak (tiebreak: "lives") changed THIS
+  // player's rank on THIS table versus the same engine computed with the
+  // default "chain" tiebreak -- i.e. a rank change caused by lives, not by
+  // best-N selection. Always false when the page's tiebreak is "chain" (the
+  // default -- see loadStandingsPreview's `tiebreak` option).
+  livesRankChanged: boolean;
+}
+
+// One row's net-lives tiebreak detail, surfaced alongside a table so the UI
+// can show "N games without lives" -- only populated when the page's
+// tiebreak option is "lives".
+export interface StandingsPreviewLivesRow {
+  playerId: string;
+  displayName: string;
+  netLives: number;
+  livesGamesMissing: number;
+}
+
+// Net-lives effect on one table (current rows, or one best-N candidate's
+// rows), relative to the SAME rows computed with tiebreak: "chain". Only
+// meaningful -- and only non-zero/non-empty -- when the page's tiebreak
+// option is "lives"; always `{ tiesBroken: 0, missingLives: [] }` under the
+// default "chain".
+export interface StandingsPreviewLivesInfo {
+  // How many rows that were tiedWithPrev under "chain" are no longer tied
+  // under "lives" -- the TO's "lives broke N ties" count for this table.
+  tiesBroken: number;
+  // Every row (under "lives") with at least one counted game missing a
+  // recorded winnerLives.
+  missingLives: StandingsPreviewLivesRow[];
 }
 
 // One best-N candidate's rows + diff against the current table. The two
@@ -84,6 +114,10 @@ export interface StandingsPreviewCandidate {
   players: StandingsPreviewPlayerDiff[];
   rankChangeCount: number;
   boundaryChangeCount: number;
+  // Net-lives effect on THIS candidate's own table (rows vs the same
+  // candidate computed with tiebreak: "chain"). Always the zero value under
+  // the page's default "chain" tiebreak.
+  livesInfo: StandingsPreviewLivesInfo;
 }
 
 export interface StandingsPreviewDivision {
@@ -103,6 +137,13 @@ export interface StandingsPreviewDivision {
   currentRows: StandingRow[];
   countMode: StandingsPreviewCandidate;
   voidMode: StandingsPreviewCandidate;
+  // Net-lives effect on the Current table, and a diff map for its rows (the
+  // Current table has no OTHER per-player diff map today, unlike
+  // countMode/voidMode, which already diff against Current for the
+  // promotion/relegation notes). Always the zero value / empty map under
+  // the page's default "chain" tiebreak.
+  currentLivesInfo: StandingsPreviewLivesInfo;
+  currentLivesDiffByPlayerId: Map<string, StandingsPreviewPlayerDiff>;
 }
 
 // One division's "who to treat as dropped" picker contents -- every
@@ -139,6 +180,10 @@ export interface StandingsPreviewData {
     divisionsWithDropout: number;
     countMode: { rankChanges: number; boundaryChanges: number };
     voidMode: { rankChanges: number; boundaryChanges: number };
+    // Total ties broken by the net-lives tiebreak, summed across the
+    // Current + Best N (count) + Best N (void) tables of every division.
+    // Always 0 under the default "chain" tiebreak.
+    livesTiesBroken: number;
   };
 }
 
@@ -159,6 +204,11 @@ export interface LoadStandingsPreviewOptions {
   // mirrors the core's documented intent (0 = never played).
   candidateMaxPlayed?: number;
   candidateInactiveDays?: number;
+  // "chain" (default): today's tiebreak order, unchanged. "lives": preview
+  // breaking ties by net lives instead -- see web/lib/standings.ts's
+  // Tiebreak / computeNetLives. Purely a preview toggle (searchParams on
+  // /admin/standings-preview); nothing here writes anything.
+  tiebreak?: Tiebreak;
 }
 
 // Index-based zone membership (top `count` rows / bottom `count` rows of
@@ -174,6 +224,77 @@ function zoneSets(rowCount: number, promoteCount: number, relegateCount: number)
   return { promoteZone, relegateZone };
 }
 
+// Net-lives effect on one table: how many previously-tied rows got
+// separated, and which rows (under "lives") are missing winnerLives data on
+// a counted game. `chainRows`/`selectedRows` are the SAME engine/mode
+// computed with tiebreak "chain" and the page's actual tiebreak option,
+// respectively -- identical row sets (so zero effect) when the page's
+// tiebreak is "chain".
+function computeLivesTiebreakInfo(chainRows: StandingRow[], selectedRows: StandingRow[]): StandingsPreviewLivesInfo {
+  const chainTiedById = new Map(chainRows.map((r) => [r.player.id, Boolean(r.tiedWithPrev)]));
+  let tiesBroken = 0;
+  const missingLives: StandingsPreviewLivesRow[] = [];
+  for (const row of selectedRows) {
+    if (chainTiedById.get(row.player.id) && !row.tiedWithPrev) tiesBroken++;
+    if ((row.livesGamesMissing ?? 0) > 0) {
+      missingLives.push({
+        playerId: row.player.id,
+        displayName: row.player.displayName,
+        netLives: row.netLives ?? 0,
+        livesGamesMissing: row.livesGamesMissing!,
+      });
+    }
+  }
+  return { tiesBroken, missingLives };
+}
+
+// Player ids whose rank differs between the SAME table computed with
+// tiebreak "chain" vs the page's actual tiebreak option -- a rank change
+// caused specifically by lives, as opposed to by best-N selection.
+function livesRankChangedIds(chainRows: StandingRow[], selectedRows: StandingRow[]): Set<string> {
+  const chainRankById = new Map(chainRows.map((r) => [r.player.id, r.rank ?? null]));
+  const changed = new Set<string>();
+  for (const row of selectedRows) {
+    if ((chainRankById.get(row.player.id) ?? null) !== (row.rank ?? null)) changed.add(row.player.id);
+  }
+  return changed;
+}
+
+// The Current table has no OTHER-engine comparison (unlike count/void, which
+// already diff against Current for the promotion/relegation notes) -- this
+// builds a diff map with ONLY the lives-caused fields populated, reusing
+// StandingsPreviewPlayerDiff's bestNRank/currentRank as "selected"/"chain"
+// since that's the same "baseline vs alternate" meaning those fields
+// already carry.
+function buildLivesOnlyDiff(
+  chainRows: StandingRow[],
+  selectedRows: StandingRow[],
+  activePlayers: { id: string; displayName: string }[],
+): Map<string, StandingsPreviewPlayerDiff> {
+  const chainById = new Map(chainRows.map((r) => [r.player.id, r]));
+  const selectedById = new Map(selectedRows.map((r) => [r.player.id, r]));
+  const map = new Map<string, StandingsPreviewPlayerDiff>();
+  for (const p of activePlayers) {
+    const chainRow = chainById.get(p.id);
+    const selectedRow = selectedById.get(p.id);
+    map.set(p.id, {
+      playerId: p.id,
+      displayName: p.displayName,
+      currentRank: chainRow?.rank ?? null,
+      currentPoints: chainRow?.points ?? 0,
+      bestNRank: selectedRow?.rank ?? null,
+      bestNPoints: selectedRow?.points ?? 0,
+      bestNCounted: 0,
+      bestNOf: 0,
+      rankChanged: false,
+      boundaryChanged: false,
+      boundaryNote: null,
+      livesRankChanged: (chainRow?.rank ?? null) !== (selectedRow?.rank ?? null),
+    });
+  }
+  return map;
+}
+
 // Builds one best-N candidate's diff against `currentRows` -- shared by both
 // the "count" and "void" dropoutGames modes, which otherwise only differ in
 // which `bestNRows` they were computed from.
@@ -183,6 +304,8 @@ function buildCandidate(
   activePlayers: { id: string; displayName: string }[],
   effectivePromote: number,
   effectiveRelegate: number,
+  livesChangedIds: ReadonlySet<string>,
+  livesInfo: StandingsPreviewLivesInfo,
 ): StandingsPreviewCandidate {
   const currentZones = zoneSets(currentRows.length, effectivePromote, effectiveRelegate);
   const bestNZones = zoneSets(bestNRows.length, effectivePromote, effectiveRelegate);
@@ -248,6 +371,7 @@ function buildCandidate(
       rankChanged: (currentRow?.rank ?? null) !== (bestNRow?.rank ?? null),
       boundaryChanged: note !== null,
       boundaryNote: note,
+      livesRankChanged: livesChangedIds.has(p.id),
     };
   });
 
@@ -256,6 +380,7 @@ function buildCandidate(
     players,
     rankChangeCount: players.filter((p) => p.rankChanged).length,
     boundaryChangeCount: players.filter((p) => p.boundaryChanged).length,
+    livesInfo,
   };
 }
 
@@ -266,6 +391,7 @@ export async function loadStandingsPreview(
   const hypotheticalDroppedIds = options.hypotheticalDroppedIds ?? new Set<string>();
   const candidateMaxPlayed = options.candidateMaxPlayed ?? 0;
   const candidateInactiveDays = options.candidateInactiveDays;
+  const tiebreak = options.tiebreak ?? "chain";
   const season = await prisma.season.findUnique({
     where: { id: seasonId },
     select: {
@@ -308,6 +434,9 @@ export async function loadStandingsPreview(
                   confirmedAt: true,
                   reportedAt: true,
                   createdAt: true,
+                  // Per-game lives, only read when tiebreak: "lives" is
+                  // requested -- see web/lib/standings.ts's PairingGameLives.
+                  games: { select: { winnerId: true, winnerLives: true } },
                 },
               },
             },
@@ -328,6 +457,7 @@ export async function loadStandingsPreview(
         divisionsWithDropout: 0,
         countMode: { rankChanges: 0, boundaryChanges: 0 },
         voidMode: { rankChanges: 0, boundaryChanges: 0 },
+        livesTiesBroken: 0,
       },
     };
   }
@@ -356,7 +486,13 @@ export async function loadStandingsPreview(
       const leagueMatches = d.matches.filter((m) => m.format === "LEAGUE_BO2");
       const confirmedPairings: BestNPairing[] = leagueMatches
         .filter((m) => m.status === "CONFIRMED")
-        .map((m) => ({ playerAId: m.playerAId, playerBId: m.playerBId, gamesWonA: m.gamesWonA, gamesWonB: m.gamesWonB }));
+        .map((m) => ({
+          playerAId: m.playerAId,
+          playerBId: m.playerBId,
+          gamesWonA: m.gamesWonA,
+          gamesWonB: m.gamesWonB,
+          games: m.games,
+        }));
       const shootouts: ShootoutInput[] = d.matches
         .filter((m) => m.format === "SHOOTOUT_BO1" && m.status === "CONFIRMED" && m.winnerId !== null)
         .map((m) => ({ playerAId: m.playerAId, playerBId: m.playerBId, winnerId: m.winnerId! }));
@@ -416,12 +552,24 @@ export async function loadStandingsPreview(
       const effectiveMembers = withHypotheticalDrops(members, hypotheticalIdsInDivision);
 
       const activePlayers = effectiveMembers.filter((m) => m.status === "ACTIVE").map((m) => m.player);
-      const currentRows = computeStandings(activePlayers, confirmedPairings, shootouts, scoring);
-      const bestNCount = computeBestNStandings(effectiveMembers, confirmedPairings, shootouts, scoring, "count", d.opponentsPerPlayer ?? null);
+      // "chain" baseline is always computed (cheap, pure) so lives-caused
+      // rank changes/ties-broken can be diffed against it -- the DISPLAYED
+      // rows only differ from it when the page's tiebreak option is "lives".
+      const currentRowsChain = computeStandings(activePlayers, confirmedPairings, shootouts, scoring, "chain");
+      const currentRows = tiebreak === "lives"
+        ? computeStandings(activePlayers, confirmedPairings, shootouts, scoring, "lives")
+        : currentRowsChain;
+      const bestNCountChain = computeBestNStandings(effectiveMembers, confirmedPairings, shootouts, scoring, "count", d.opponentsPerPlayer ?? null, "chain");
 
-      if (bestNCount.division.dropouts === 0) continue; // nothing to preview here (same for both modes)
+      if (bestNCountChain.division.dropouts === 0) continue; // nothing to preview here (same for both modes)
 
-      const bestNVoid = computeBestNStandings(effectiveMembers, confirmedPairings, shootouts, scoring, "void", d.opponentsPerPlayer ?? null);
+      const bestNCount = tiebreak === "lives"
+        ? computeBestNStandings(effectiveMembers, confirmedPairings, shootouts, scoring, "count", d.opponentsPerPlayer ?? null, "lives")
+        : bestNCountChain;
+      const bestNVoidChain = computeBestNStandings(effectiveMembers, confirmedPairings, shootouts, scoring, "void", d.opponentsPerPlayer ?? null, "chain");
+      const bestNVoid = tiebreak === "lives"
+        ? computeBestNStandings(effectiveMembers, confirmedPairings, shootouts, scoring, "void", d.opponentsPerPlayer ?? null, "lives")
+        : bestNVoidChain;
 
       const effectivePromote = tier.position === minTierPosition
         ? 0
@@ -430,8 +578,18 @@ export async function loadStandingsPreview(
         ? 0
         : Math.min(d.relegateCount, currentRows.length);
 
-      const countMode = buildCandidate(currentRows, bestNCount.rows, activePlayers, effectivePromote, effectiveRelegate);
-      const voidMode = buildCandidate(currentRows, bestNVoid.rows, activePlayers, effectivePromote, effectiveRelegate);
+      const currentLivesInfo = computeLivesTiebreakInfo(currentRowsChain, currentRows);
+      const currentLivesDiffByPlayerId = buildLivesOnlyDiff(currentRowsChain, currentRows, activePlayers);
+      const countMode = buildCandidate(
+        currentRows, bestNCount.rows, activePlayers, effectivePromote, effectiveRelegate,
+        livesRankChangedIds(bestNCountChain.rows, bestNCount.rows),
+        computeLivesTiebreakInfo(bestNCountChain.rows, bestNCount.rows),
+      );
+      const voidMode = buildCandidate(
+        currentRows, bestNVoid.rows, activePlayers, effectivePromote, effectiveRelegate,
+        livesRankChangedIds(bestNVoidChain.rows, bestNVoid.rows),
+        computeLivesTiebreakInfo(bestNVoidChain.rows, bestNVoid.rows),
+      );
 
       const hypotheticalDrops = d.members
         .filter((m) => hypotheticalIdsInDivision.has(m.playerId))
@@ -454,6 +612,8 @@ export async function loadStandingsPreview(
         currentRows,
         countMode,
         voidMode,
+        currentLivesInfo,
+        currentLivesDiffByPlayerId,
       });
     }
   }
@@ -488,6 +648,10 @@ export async function loadStandingsPreview(
       rankChanges: divisions.reduce((sum, dd) => sum + dd.voidMode.rankChangeCount, 0),
       boundaryChanges: divisions.reduce((sum, dd) => sum + dd.voidMode.boundaryChangeCount, 0),
     },
+    livesTiesBroken: divisions.reduce(
+      (sum, dd) => sum + dd.currentLivesInfo.tiesBroken + dd.countMode.livesInfo.tiesBroken + dd.voidMode.livesInfo.tiesBroken,
+      0,
+    ),
   };
 
   return {

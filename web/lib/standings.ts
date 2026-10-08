@@ -28,6 +28,71 @@ export interface StandingRow {
   // instead of being force-ordered alphabetically. The row order is still
   // deterministic (alphabetical within a tie group) for stable display.
   rank?: number;
+  // Only set when computeStandings/computeBestNStandings was called with
+  // tiebreak: "lives" -- net life differential (livesInWins - livesConceded,
+  // see computeNetLives) from this row's counted games that have a recorded
+  // winnerLives. Absent entirely under the default "chain" tiebreak so chain
+  // output stays byte-for-byte identical to before this field existed.
+  netLives?: number;
+  // How many of this row's counted games lack a recorded winnerLives (so the
+  // UI can say "N games without lives"). Only set alongside netLives.
+  livesGamesMissing?: number;
+}
+
+// "chain" (default): today's tiebreak order -- points, head-to-head,
+// shootout, wins, draws, name. "lives" inserts net-lives comparison (see
+// computeNetLives) between shootout and wins/draws/name, for the admin
+// standings-preview page's "break 3+-way ties by net lives instead of by
+// hand" preview (web/app/admin/standings-preview). Not wired into live
+// standings anywhere -- see standings-best-n.ts's TODO for where a
+// season-level setting would eventually plug in.
+export type Tiebreak = "chain" | "lives";
+
+// One game's life data as needed for the net-lives tiebreak, independent of
+// deck/stake/num -- the subset of a Game row computeNetLives reads.
+export interface PairingGameLives {
+  winnerId: string | null;
+  winnerLives: number | null;
+}
+
+// A pairing shape carrying its per-game lives data, used by computeStandings
+// / computeBestNStandings and computeNetLives below. `games` is optional so
+// every existing caller that doesn't supply per-game lives data keeps
+// working unchanged (net lives for such pairings is simply 0, no missing
+// count -- there's nothing to be missing).
+export type PairingWithLives = Pick<Match, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB"> & {
+  games?: PairingGameLives[];
+};
+
+// Net life differential for one player across the given pairings: the sum of
+// the winner's remaining lives in games they won, minus the sum of the
+// winner's remaining lives in games they lost (i.e. the opponent's remaining
+// lives). A game with no winnerId (indeterminate) is skipped entirely; a
+// game with a winnerId but no recorded winnerLives contributes 0 to netLives
+// and increments livesGamesMissing instead. Pure: no I/O, just the supplied
+// pairings' games data. Callers are expected to pass only this player's own
+// COUNTED pairings (all of them, under "chain"/plain standings; the best-N
+// selection's countedResults under best-N) -- computeNetLives itself has no
+// opinion on what "counted" means, it just sums whatever pairings it's given
+// that mention the player.
+export function computeNetLives(
+  playerId: string,
+  pairings: Array<Pick<PairingWithLives, "playerAId" | "playerBId" | "games">>,
+): { netLives: number; livesGamesMissing: number } {
+  let netLives = 0;
+  let livesGamesMissing = 0;
+  for (const pr of pairings) {
+    if (pr.playerAId !== playerId && pr.playerBId !== playerId) continue;
+    for (const g of pr.games ?? []) {
+      if (!g.winnerId) continue; // indeterminate game -- not part of net lives
+      if (g.winnerLives == null) {
+        livesGamesMissing++;
+        continue;
+      }
+      netLives += g.winnerId === playerId ? g.winnerLives : -g.winnerLives;
+    }
+  }
+  return { netLives, livesGamesMissing };
 }
 
 // Assign display ranks via standard competition ranking: tied rows (tiedWithPrev)
@@ -72,9 +137,10 @@ export interface ShootoutInput {
 
 export function computeStandings(
   players: Player[],
-  pairings: Array<Pick<Match, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
+  pairings: Array<PairingWithLives>,
   shootouts: ShootoutInput[] = [],
   scoring: ScoringConfig = DEFAULTS.scoring,
+  tiebreak: Tiebreak = "chain",
 ): StandingRow[] {
   const byId = new Map<string, StandingRow>();
   for (const p of players) {
@@ -108,24 +174,42 @@ export function computeStandings(
     }
   }
 
-  return sortStandings(Array.from(byId.values()), pairings, shootouts);
+  return sortStandings(Array.from(byId.values()), pairings, shootouts, tiebreak);
 }
 
-// Sort: points DESC → head-to-head (if tied players already played) →
-// shootout result → wins DESC → draws DESC → displayName for stable
-// order. Unbreakable ties (after all tiebreakers, including any recorded
-// shootout) are flagged via tiedWithPrev so UI can render the ⚔ marker.
+// Sort: points DESC -> head-to-head (if tied players already played) ->
+// shootout result -> [tiebreak "lives" only: net lives DESC] -> wins DESC ->
+// draws DESC -> displayName for stable order. Unbreakable ties (after all
+// tiebreakers, including any recorded shootout and, under "lives", net
+// lives) are flagged via tiedWithPrev so UI can render the tie marker.
 function sortStandings(
   rows: StandingRow[],
-  pairings: Array<Pick<Match, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">>,
+  pairings: Array<PairingWithLives>,
   shootouts: ShootoutInput[],
+  tiebreak: Tiebreak,
 ): StandingRow[] {
+  // Only attach netLives/livesGamesMissing under "lives" -- keeps "chain"
+  // output exactly as it was before this field existed (no extra keys on
+  // the row at all), which is what the chain-mode-unchanged property relies
+  // on.
+  if (tiebreak === "lives") {
+    for (const row of rows) {
+      const { netLives, livesGamesMissing } = computeNetLives(row.player.id, pairings);
+      row.netLives = netLives;
+      row.livesGamesMissing = livesGamesMissing;
+    }
+  }
+  const livesCompare = (x: StandingRow, y: StandingRow): number =>
+    tiebreak === "lives" ? (y.netLives ?? 0) - (x.netLives ?? 0) : 0;
+
   const sorted = rows.slice().sort((x, y) => {
     if (y.points !== x.points) return y.points - x.points;
     const h2h = headToHead(x.player.id, y.player.id, pairings);
     if (h2h !== 0) return h2h;
     const shoot = shootoutBetween(x.player.id, y.player.id, shootouts);
     if (shoot !== 0) return shoot;
+    const lives = livesCompare(x, y);
+    if (lives !== 0) return lives;
     if (y.wins !== x.wins) return y.wins - x.wins;
     if (y.draws !== x.draws) return y.draws - x.draws;
     return x.player.displayName.localeCompare(y.player.displayName);
@@ -141,6 +225,7 @@ function sortStandings(
       prev.points === cur.points &&
       headToHead(prev.player.id, cur.player.id, pairings) === 0 &&
       shootoutBetween(prev.player.id, cur.player.id, shootouts) === 0 &&
+      livesCompare(prev, cur) === 0 &&
       prev.wins === cur.wins &&
       prev.draws === cur.draws
     ) {

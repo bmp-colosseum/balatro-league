@@ -5,7 +5,7 @@ import { Callout } from "@/components/Callout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { rankLabel, type StandingRow } from "@/lib/standings";
+import { rankLabel, type StandingRow, type Tiebreak } from "@/lib/standings";
 import type { BestNStandingRow } from "@/lib/standings-best-n";
 import {
   loadStandingsPreview,
@@ -13,10 +13,13 @@ import {
   type StandingsPreviewCandidate,
   type StandingsPreviewCandidateDivision,
   type StandingsPreviewDivision,
+  type StandingsPreviewLivesInfo,
   type StandingsPreviewPlayerDiff,
 } from "@/lib/loaders/standings-preview";
 import { applyHypotheticalDropsAction, setSeasonScoringModeAction } from "./actions";
 import type { SeasonScoringMode } from "@/lib/standings-mode";
+
+const TIEBREAK_LABEL: Record<Tiebreak, string> = { chain: "Chain (today)", lives: "Net lives" };
 
 export const dynamic = "force-dynamic";
 
@@ -43,11 +46,17 @@ function CompactTable({
   rows,
   diffByPlayerId,
   showOf,
+  showNetLives,
 }: {
   rows: (StandingRow | BestNStandingRow)[];
   diffByPlayerId: Map<string, StandingsPreviewPlayerDiff>;
   showOf: boolean;
+  // Only true when the page's tiebreak toggle is "lives" -- adds a Net
+  // lives column (netLives / livesGamesMissing come off the row itself;
+  // see web/lib/standings.ts's StandingRow).
+  showNetLives?: boolean;
 }) {
+  const columnCount = 4 + (showOf ? 1 : 0) + (showNetLives ? 1 : 0);
   return (
     <div className="table-scroll">
       <table className="table-dense" style={{ margin: 0 }}>
@@ -58,20 +67,23 @@ function CompactTable({
             <th>Pts</th>
             <th>Record</th>
             {showOf && <th title="Results counted toward this best-N standing">Of</th>}
+            {showNetLives && <th title="Net lives: sum of remaining lives in wins minus sum of remaining lives in losses">Net lives</th>}
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
-            <tr><td colSpan={showOf ? 5 : 4} className="muted">No rows.</td></tr>
+            <tr><td colSpan={columnCount} className="muted">No rows.</td></tr>
           ) : (
             rows.map((r, i) => {
               const diff = diffByPlayerId.get(r.player.id);
+              const rankChanged = diff?.rankChanged || diff?.livesRankChanged;
               const rowStyle = diff?.boundaryChanged
                 ? { background: "rgba(241,196,15,0.14)" }
-                : diff?.rankChanged
+                : rankChanged
                   ? { background: "rgba(118,199,255,0.08)" }
                   : undefined;
               const bestN = showOf ? (r as BestNStandingRow) : null;
+              const missing = r.livesGamesMissing ?? 0;
               return (
                 <tr key={r.player.id} style={rowStyle}>
                   <td>{rankLabel(r, i)}</td>
@@ -82,8 +94,8 @@ function CompactTable({
                         !
                       </span>
                     )}
-                    {!diff?.boundaryChanged && diff?.rankChanged && (
-                      <span style={{ marginLeft: 4, color: "var(--info)" }}>
+                    {!diff?.boundaryChanged && rankChanged && diff && (
+                      <span title={diff.livesRankChanged && !diff.rankChanged ? "Rank changed by the net-lives tiebreak" : undefined} style={{ marginLeft: 4, color: "var(--info)" }}>
                         {(diff.bestNRank ?? 0) < (diff.currentRank ?? 0) ? "^" : "v"}
                       </span>
                     )}
@@ -95,12 +107,40 @@ function CompactTable({
                   {showOf && bestN && (
                     <td className="muted">{bestN.counted} of {bestN.of}</td>
                   )}
+                  {showNetLives && (
+                    <td className="muted" title={missing > 0 ? `${missing} game${missing === 1 ? "" : "s"} without lives` : undefined}>
+                      {r.netLives ?? 0}{missing > 0 ? ` (${missing} missing)` : ""}
+                    </td>
+                  )}
                 </tr>
               );
             })
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// Short division-level note: "Lives broke N tie(s)" plus any rows missing
+// recorded lives data. Returns null when there's nothing to say (including
+// always, under the page's default "chain" tiebreak, since livesInfo is the
+// zero value there).
+function LivesNote({ livesInfo }: { livesInfo: StandingsPreviewLivesInfo }) {
+  if (livesInfo.tiesBroken === 0 && livesInfo.missingLives.length === 0) return null;
+  return (
+    <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
+      {livesInfo.tiesBroken > 0 && (
+        <div>Lives broke {livesInfo.tiesBroken} tie{livesInfo.tiesBroken === 1 ? "" : "s"}.</div>
+      )}
+      {livesInfo.missingLives.length > 0 && (
+        <div>
+          Missing lives data:{" "}
+          {livesInfo.missingLives
+            .map((m) => `${m.displayName} (${m.livesGamesMissing} game${m.livesGamesMissing === 1 ? "" : "s"})`)
+            .join(", ")}
+        </div>
+      )}
     </div>
   );
 }
@@ -149,6 +189,7 @@ function CandidateColumn({
   seasonLabel,
   mode,
   currentMode,
+  showNetLives,
 }: {
   label: string;
   title: string;
@@ -157,6 +198,7 @@ function CandidateColumn({
   seasonLabel: string;
   mode: SeasonScoringMode;
   currentMode: SeasonScoringMode;
+  showNetLives: boolean;
 }) {
   const diffByPlayerId = new Map(candidate.players.map((p) => [p.playerId, p]));
   const notes = candidate.players.filter((p) => p.boundaryChanged && p.boundaryNote);
@@ -166,7 +208,8 @@ function CandidateColumn({
       <div className="muted" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }} title={title}>
         {label}
       </div>
-      <CompactTable rows={candidate.rows} diffByPlayerId={diffByPlayerId} showOf={true} />
+      <CompactTable rows={candidate.rows} diffByPlayerId={diffByPlayerId} showOf={true} showNetLives={showNetLives} />
+      <LivesNote livesInfo={candidate.livesInfo} />
       {notes.length > 0 && (
         <ul style={{ margin: "8px 0 0", paddingLeft: 16, fontSize: 11 }}>
           {notes.map((n) => (
@@ -192,13 +235,15 @@ function DivisionCard({
   seasonId,
   seasonLabel,
   currentMode,
+  tiebreak,
 }: {
   d: StandingsPreviewDivision;
   seasonId: string;
   seasonLabel: string;
   currentMode: SeasonScoringMode;
+  tiebreak: Tiebreak;
 }) {
-  const currentDiffByPlayerId = new Map<string, StandingsPreviewPlayerDiff>();
+  const showNetLives = tiebreak === "lives";
 
   return (
     <div className="card" style={{ marginTop: 12 }}>
@@ -226,7 +271,8 @@ function DivisionCard({
           <div className="muted" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
             Current
           </div>
-          <CompactTable rows={d.currentRows} diffByPlayerId={currentDiffByPlayerId} showOf={false} />
+          <CompactTable rows={d.currentRows} diffByPlayerId={d.currentLivesDiffByPlayerId} showOf={false} showNetLives={showNetLives} />
+          <LivesNote livesInfo={d.currentLivesInfo} />
           <SetScoringModeForm
             seasonId={seasonId}
             seasonLabel={seasonLabel}
@@ -243,6 +289,7 @@ function DivisionCard({
           seasonLabel={seasonLabel}
           mode="best-n-count"
           currentMode={currentMode}
+          showNetLives={showNetLives}
         />
         <CandidateColumn
           label="Best N - void (preview)"
@@ -252,6 +299,7 @@ function DivisionCard({
           seasonLabel={seasonLabel}
           mode="best-n-void"
           currentMode={currentMode}
+          showNetLives={showNetLives}
         />
       </div>
     </div>
@@ -426,6 +474,7 @@ export default async function StandingsPreviewPage({
     applied?: string;
     modeErr?: string;
     modeOk?: string;
+    tiebreak?: string;
   }>;
 }) {
   await requireAdmin();
@@ -456,6 +505,12 @@ export default async function StandingsPreviewPage({
   // unchecking every box is a valid "drop nobody" choice, not ignored).
   const pickerTouched = sp.pickerTouched === "1";
   const submittedIds = new Set(sp.drop === undefined ? [] : Array.isArray(sp.drop) ? sp.drop : [sp.drop]);
+  // "chain" (default): today's tiebreak, unchanged. "lives": preview
+  // breaking ties by net lives (see web/lib/standings.ts's Tiebreak) --
+  // TODO(best-n-switch): this toggle is PREVIEW ONLY, same as the best-N
+  // engine option it rides alongside (see web/lib/standings-best-n.ts's
+  // header) -- no season-level setting exists yet to make "lives" live.
+  const tiebreak: Tiebreak = sp.tiebreak === "lives" ? "lives" : "chain";
 
   // Pass 1: candidateDivisions don't depend on hypotheticalDroppedIds (they
   // reflect the REAL roster), so this call just resolves the suggestion
@@ -471,7 +526,22 @@ export default async function StandingsPreviewPage({
   const preview = await loadStandingsPreview(selectedSeasonId, {
     candidateMaxPlayed: maxPlayed,
     hypotheticalDroppedIds,
+    tiebreak,
   });
+
+  // Preserves every OTHER current query param while toggling tiebreak, so
+  // the season/drop-picker selections survive clicking a pill.
+  function tiebreakHref(next: Tiebreak): string {
+    const params = new URLSearchParams();
+    params.set("season", selectedSeasonId);
+    if (sp.maxPlayed) params.set("maxPlayed", sp.maxPlayed);
+    if (pickerTouched) {
+      params.set("pickerTouched", "1");
+      for (const id of submittedIds) params.append("drop", id);
+    }
+    params.set("tiebreak", next);
+    return `?${params.toString()}`;
+  }
 
   return (
     <>
@@ -484,6 +554,30 @@ export default async function StandingsPreviewPage({
           <strong>current</strong> standings. Just viewing this page applies nothing -- the Apply/Use buttons below
           are the only things that write anything, and each says exactly what it will do before you confirm.
         </p>
+
+        <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 8 }}>
+          <span className="muted" style={{ fontSize: 12 }}>3+-way tie breaking:</span>
+          {(["chain", "lives"] as const).map((t) => (
+            <a
+              key={t}
+              href={tiebreakHref(t)}
+              className="pill"
+              style={{
+                fontSize: 12,
+                textDecoration: "none",
+                background: t === tiebreak ? "var(--accent, rgba(118,199,255,0.25))" : undefined,
+                fontWeight: t === tiebreak ? 600 : 400,
+              }}
+            >
+              {TIEBREAK_LABEL[t]}
+            </a>
+          ))}
+          {tiebreak === "lives" && (
+            <span className="muted" style={{ fontSize: 11 }} title="Preview only -- nothing live uses this yet">
+              preview only
+            </span>
+          )}
+        </div>
 
         {sp.applyErr && <Callout type="danger" style={{ marginTop: 8 }}>Couldn&apos;t apply: {sp.applyErr}</Callout>}
         {sp.applied && (
@@ -547,6 +641,11 @@ export default async function StandingsPreviewPage({
                 void: <strong>{preview.summary.voidMode.rankChanges}</strong> rank change{preview.summary.voidMode.rankChanges === 1 ? "" : "s"},{" "}
                 <strong>{preview.summary.voidMode.boundaryChanges}</strong> promotion/relegation change{preview.summary.voidMode.boundaryChanges === 1 ? "" : "s"}
               </span>
+              {tiebreak === "lives" && (
+                <span className="muted">
+                  ties broken by lives: <strong>{preview.summary.livesTiesBroken}</strong>
+                </span>
+              )}
             </div>
 
             {preview.divisions.length === 0 ? (
@@ -562,6 +661,7 @@ export default async function StandingsPreviewPage({
                   seasonId={preview.season!.id}
                   seasonLabel={preview.season!.label}
                   currentMode={preview.season!.scoringMode}
+                  tiebreak={tiebreak}
                 />
               ))
             )}
