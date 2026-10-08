@@ -20,6 +20,7 @@ import { deckEmoji, deckEmojiPartial, stakeEmoji, stakeEmojiPartial } from "./ba
 import { parseGame, parseProposal, parsePolicy, phaseFor, remainingCombos, MAX_GAME_LIVES, type GameState, type ComboProposal } from "./match-session.js";
 import type { DeckEntry } from "./match-config.js";
 import { sanitizeName } from "./sanitize.js";
+import { mentionWithHandle } from "./mention.js";
 
 // Components row can hold buttons OR a string-select menu — ban phase
 // renders both (a select menu row + a confirm button row), other phases
@@ -107,24 +108,24 @@ function computeActiveContent(
   // whoever's mid-turn, so it takes precedence.
   if (s.cancelInitiatorPlayerId && s.state !== "CANCELLED" && s.state !== "COMPLETE") {
     const initiator = s.cancelInitiatorPlayerId === a.id ? a : b;
-    const opposingDc = s.cancelInitiatorPlayerId === a.id ? b.discordId : a.discordId;
-    return { content: `<@${opposingDc}> ⛔ **${sanitizeName(initiator.displayName)}** wants to cancel — click **Cancel match** to agree, or just keep playing.`, turnKey: opposingDc };
+    const opposing = s.cancelInitiatorPlayerId === a.id ? b : a;
+    return { content: `${mentionWithHandle(opposing)} ⛔ **${sanitizeName(initiator.displayName)}** wants to cancel — click **Cancel match** to agree, or just keep playing.`, turnKey: opposing.discordId };
   }
   // Pause vote pending — ping the other player so it's not just a silent
   // button swap. Same precedence idea as cancel.
   if (s.pauseInitiatorPlayerId && s.state !== "PAUSED" && s.state !== "CANCELLED" && s.state !== "COMPLETE") {
     const initiator = s.pauseInitiatorPlayerId === a.id ? a : b;
-    const opposingDc = s.pauseInitiatorPlayerId === a.id ? b.discordId : a.discordId;
-    return { content: `<@${opposingDc}> ⏸️ **${sanitizeName(initiator.displayName)}** wants to pause — click **Pause** to agree, or keep playing.`, turnKey: opposingDc };
+    const opposing = s.pauseInitiatorPlayerId === a.id ? b : a;
+    return { content: `${mentionWithHandle(opposing)} ⏸️ **${sanitizeName(initiator.displayName)}** wants to pause — click **Pause** to agree, or keep playing.`, turnKey: opposing.discordId };
   }
   // DC claim pending — ping the player it's against to confirm or dispute.
   if (s.dcInitiatorPlayerId && s.state !== "CANCELLED" && s.state !== "COMPLETE") {
     const claimant = s.dcInitiatorPlayerId === a.id ? a : b;
-    const opposingDc = s.dcInitiatorPlayerId === a.id ? b.discordId : a.discordId;
-    return { content: `<@${opposingDc}> 🔌 **${sanitizeName(claimant.displayName)}** says you disconnected — **Confirm** to forfeit this game, or **Keep playing** if you're still here.`, turnKey: opposingDc };
+    const opposing = s.dcInitiatorPlayerId === a.id ? b : a;
+    return { content: `${mentionWithHandle(opposing)} 🔌 **${sanitizeName(claimant.displayName)}** says you disconnected — **Confirm** to forfeit this game, or **Keep playing** if you're still here.`, turnKey: opposing.discordId };
   }
   if (s.state === "WAITING_ACCEPT") {
-    return { content: `<@${b.discordId}> 🎴 match invite from <@${a.discordId}> — accept or decline.`, turnKey: b.discordId };
+    return { content: `${mentionWithHandle(b)} 🎴 match invite from ${mentionWithHandle(a)} — accept or decline.`, turnKey: b.discordId };
   }
   // Any GAME_<n>_<PHASE> state, for n = 1..5. Derived from the state rather
   // than enumerated per game number, so a BO5's games 4 and 5 get the same
@@ -136,7 +137,7 @@ function computeActiveContent(
 
     if (s.state.endsWith("_CHOOSE_FIRST")) {
       if (!prevGame?.winnerId) return { content: "", turnKey: "" };
-      const loserDc = prevGame.winnerId === a.id ? b.discordId : a.discordId;
+      const loser = prevGame.winnerId === a.id ? b : a;
       // Only the format's LAST possible game is a guaranteed tiebreaker: an
       // even best-of (Bo2) never clinches early (winsToClinch is Infinity for
       // even values, see match-buttons.ts) so its final game is always just
@@ -146,7 +147,7 @@ function computeActiveContent(
       const label = isTiebreaker
         ? `game ${gameNum} tiebreaker — pick who bans first.`
         : `you lost game ${gameNum - 1} — pick who bans first in game ${gameNum}.`;
-      return { content: `<@${loserDc}> 🎯 ${label}`, turnKey: loserDc };
+      return { content: `${mentionWithHandle(loser)} 🎯 ${label}`, turnKey: loser.discordId };
     }
 
     if (s.state.endsWith("_BAN")) {
@@ -156,8 +157,8 @@ function computeActiveContent(
       // pings the active banner.
       const proposal = parseProposal(s.customComboProposal);
       if (proposal?.status === "pending") {
-        const targetDc = proposal.by === a.id ? b.discordId : a.discordId;
-        return { content: `<@${targetDc}> 🎯 custom combo proposed — accept, counter, or cancel.`, turnKey: targetDc };
+        const target = proposal.by === a.id ? b : a;
+        return { content: `${mentionWithHandle(target)} 🎯 custom combo proposed — accept, counter, or cancel.`, turnKey: target.discordId };
       }
       // Reroll vote pending (exactly one player voted) — ping the OTHER
       // player to confirm or keep banning, instead of leaving it as a
@@ -165,21 +166,21 @@ function computeActiveContent(
       if (Boolean(game.rerollVoteByA) !== Boolean(game.rerollVoteByB)) {
         const voterIsA = Boolean(game.rerollVoteByA);
         const voter = voterIsA ? a : b;
-        const opposingDc = voterIsA ? b.discordId : a.discordId;
-        return { content: `<@${opposingDc}> 🔄 **${sanitizeName(voter.displayName)}** wants to reroll the pool — click **Confirm reroll** to agree, or keep banning.`, turnKey: opposingDc };
+        const opposing = voterIsA ? b : a;
+        return { content: `${mentionWithHandle(opposing)} 🔄 **${sanitizeName(voter.displayName)}** wants to reroll the pool — click **Confirm reroll** to agree, or keep banning.`, turnKey: opposing.discordId };
       }
       const phase = phaseFor(game, a.id, b.id, parsePolicy(s.policy), !s.isCasual);
       if (phase.kind !== "BAN") return { content: "", turnKey: "" };
-      const dc = phase.whoseBanId === a.id ? a.discordId : b.discordId;
-      return { content: `<@${dc}> 🎯 your turn — ban ${phase.remainingForThem} combo(s).`, turnKey: dc };
+      const banner = phase.whoseBanId === a.id ? a : b;
+      return { content: `${mentionWithHandle(banner)} 🎯 your turn — ban ${phase.remainingForThem} combo(s).`, turnKey: banner.discordId };
     }
 
     if (s.state.endsWith("_PICK")) {
       if (!game) return { content: "", turnKey: "" };
       const phase = phaseFor(game, a.id, b.id, parsePolicy(s.policy), !s.isCasual);
       if (phase.kind !== "PICK") return { content: "", turnKey: "" };
-      const dc = phase.pickerId === a.id ? a.discordId : b.discordId;
-      return { content: `<@${dc}> 🎯 your turn — pick the deck/stake.`, turnKey: dc };
+      const picker = phase.pickerId === a.id ? a : b;
+      return { content: `${mentionWithHandle(picker)} 🎯 your turn — pick the deck/stake.`, turnKey: picker.discordId };
     }
 
     if (s.state.endsWith("_PLAYING")) {
@@ -189,27 +190,27 @@ function computeActiveContent(
       if (game) {
         const phase = phaseFor(game, a.id, b.id, parsePolicy(s.policy), !s.isCasual);
         if (phase.kind === "AWAIT_LIVES") {
-          const winnerDc = phase.winnerId === a.id ? a.discordId : b.discordId;
-          return { content: `<@${winnerDc}> 🏆 you won the game — record your remaining lives to wrap it up.`, turnKey: winnerDc };
+          const winner = phase.winnerId === a.id ? a : b;
+          return { content: `${mentionWithHandle(winner)} 🏆 you won the game — record your remaining lives to wrap it up.`, turnKey: winner.discordId };
         }
         // Both voted but disagreed → they need to talk it out and re-vote (or
         // call a helper). Ping both, with a dedicated key so it fires once on
         // the dispute rather than on every failed re-vote.
         if (game.disputed) {
-          return { content: `<@${a.discordId}> <@${b.discordId}> ⚖️ you voted for different winners — talk it out and re-vote, or use 🆘 Call helper.`, turnKey: "DISPUTE" };
+          return { content: `${mentionWithHandle(a)} ${mentionWithHandle(b)} ⚖️ you voted for different winners — talk it out and re-vote, or use 🆘 Call helper.`, turnKey: "DISPUTE" };
         }
         // Exactly one player has voted → nudge the OTHER to cast their vote so
         // the result can lock in, instead of leaving them to notice silently.
         if (Boolean(game.voteByA) !== Boolean(game.voteByB)) {
           const aVoted = Boolean(game.voteByA);
           const voter = aVoted ? a : b;
-          const pendingDc = aVoted ? b.discordId : a.discordId;
-          return { content: `<@${pendingDc}> 🗳️ ${sanitizeName(voter.displayName)} reported the result — cast your vote to confirm the winner.`, turnKey: pendingDc };
+          const pending = aVoted ? b : a;
+          return { content: `${mentionWithHandle(pending)} 🗳️ ${sanitizeName(voter.displayName)} reported the result — cast your vote to confirm the winner.`, turnKey: pending.discordId };
         }
       }
       // No votes yet → both players go play the run, then vote a winner. A
       // single "BOTH" key pings them both once on entry, then stays quiet.
-      return { content: `<@${a.discordId}> <@${b.discordId}> 🃏 play the match, then vote for the winner.`, turnKey: "BOTH" };
+      return { content: `${mentionWithHandle(a)} ${mentionWithHandle(b)} 🃏 play the match, then vote for the winner.`, turnKey: "BOTH" };
     }
 
     // Any other GAME_<n>_* phase we don't have a specific ping for.
@@ -220,8 +221,8 @@ function computeActiveContent(
     // Resume vote pending — ping the other player to agree.
     if (s.resumeInitiatorPlayerId) {
       const initiator = s.resumeInitiatorPlayerId === a.id ? a : b;
-      const opposingDc = s.resumeInitiatorPlayerId === a.id ? b.discordId : a.discordId;
-      return { content: `<@${opposingDc}> ▶️ **${sanitizeName(initiator.displayName)}** wants to resume — click **Resume** to continue.`, turnKey: opposingDc };
+      const opposing = s.resumeInitiatorPlayerId === a.id ? b : a;
+      return { content: `${mentionWithHandle(opposing)} ▶️ **${sanitizeName(initiator.displayName)}** wants to resume — click **Resume** to continue.`, turnKey: opposing.discordId };
     }
     return { content: "", turnKey: "" };
   }
@@ -281,7 +282,7 @@ function withHelperRow(
 }
 
 function mention(player: Player): string {
-  return `<@${player.discordId}>`;
+  return mentionWithHandle(player);
 }
 
 function renderWaitingAccept(s: MatchSession, a: Player, b: Player) {

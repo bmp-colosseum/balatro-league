@@ -41,6 +41,7 @@ import { applyPendingMatchMmr } from "./mmr-live.js";
 import { sweepQueueMatches } from "./league-queue.js";
 import { tryGetDiscordClient } from "./discord.js";
 import { renderMatch } from "./match-render.js";
+import { mentionWithHandle } from "./mention.js";
 import type { MatchSession } from "@prisma/client";
 
 const SWEEP_INTERVAL_MS = 60 * 1000;
@@ -145,7 +146,7 @@ async function notifyAutoPaused(session: MatchSession): Promise<void> {
   await channel
     .send({
       content:
-        `⏸️ <@${playerA.discordId}> <@${playerB.discordId}> — this match was **auto-paused** after ` +
+        `⏸️ ${mentionWithHandle(playerA)} ${mentionWithHandle(playerB)} — this match was **auto-paused** after ` +
         `${AUTO_PAUSE_HOURS}h with no activity so it doesn't get cancelled. When you're both back, hit ` +
         `**Resume** on the match message above (or just report your result). It'll stay paused for up ` +
         `to ${PAUSED_CANCEL_DAYS} days.`,

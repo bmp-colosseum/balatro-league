@@ -59,6 +59,7 @@ import { hasTier } from "../permissions.js";
 import { backfillMatchId, postModerationNotice } from "../mod-log.js";
 import { postTranscriptSummary } from "../transcript-channel.js";
 import { sanitizeName } from "../sanitize.js";
+import { mentionWithHandle } from "../mention.js";
 import {
   emptyGameState,
   parseGame,
@@ -1061,7 +1062,7 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
       if (thread && thread.type === ChannelType.PrivateThread) {
         const { embeds, components, content } = renderMatch(updated, playerA, playerB, { allowedStakes });
         const sent = await thread.send({
-          content: content || `<@${playerA.discordId}> <@${playerB.discordId}> — your match thread.`,
+          content: content || `${mentionWithHandle(playerA)} ${mentionWithHandle(playerB)} — your match thread.`,
           embeds,
           components,
         });
