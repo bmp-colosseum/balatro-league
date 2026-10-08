@@ -779,6 +779,15 @@ export async function openSignupsForSeason(formData: FormData) {
   const seasonEndsAt = parseDate("seasonEndsAt");
 
   const seasonLabel = formatSeasonLabel(season!);
+  // Only ONE round may be OPEN: the join page, the bot's league-info post and
+  // every signup path pick "the open round", so a round that was built from but
+  // never closed (Season 5 sat OPEN until 2026-10-08) silently swallows later
+  // website signups and advertises the wrong season. Close any leftover first.
+  const stale = await prisma.signupRound.updateMany({
+    where: { status: "OPEN" },
+    data: { status: "CLOSED", closedAt: new Date() },
+  });
+  if (stale.count > 0) console.warn(`[signups.open] closed ${stale.count} stale OPEN round(s) before opening ${seasonLabel}`);
   const round = await prisma.signupRound.create({
     data: {
       name: `${seasonLabel} Signups`,
