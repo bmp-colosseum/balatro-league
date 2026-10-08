@@ -388,10 +388,17 @@ export async function endSeasonCore(seasonId: string, actor: AuditActor): Promis
   // so the message matches what actually happened. Best-effort via the notify.dm
   // queue (the bot drains it); a DM failure never affects the ended season.
   const seasonLabel = formatSeasonLabel(season);
+  // Tiers are ordered best-first. The top tier has nowhere to promote to and the
+  // bottom tier nowhere to relegate to (the rating math already clamps both), so the
+  // DMs must not promise a move that cannot happen: #1 in the top tier WON the league.
+  const topTierPosition = season.tiers[0]?.position;
+  const bottomTierPosition = season.tiers[season.tiers.length - 1]?.position;
   for (const d of season.divisions) {
-    const promoteCount = Math.max(0, d.promoteCount);
-    const relegateCount = Math.max(0, d.relegateCount);
-    if (promoteCount === 0 && relegateCount === 0) continue;
+    const isTopTier = d.tier.position === topTierPosition;
+    const isBottomTier = d.tier.position === bottomTierPosition;
+    const promoteCount = isTopTier ? 0 : Math.max(0, d.promoteCount);
+    const relegateCount = isBottomTier ? 0 : Math.max(0, d.relegateCount);
+    if (promoteCount === 0 && relegateCount === 0 && !isTopTier) continue;
     const droppedSet = new Set(d.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId));
     const active = computeStandings(d.members.map((m) => m.player), d.matches).filter(
       (row) => !droppedSet.has(row.player.id),
@@ -405,6 +412,12 @@ export async function endSeasonCore(seasonId: string, actor: AuditActor): Promis
     // player isn't confused if the layout looks different next season.
     const layoutCaveat =
       "\n_Heads up: next season's divisions are redrawn once signups close, so exactly where you land can shift._";
+    if (isTopTier && active.length > 0) {
+      await dmSeasonEnd(
+        active[0]!.player.discordId,
+        `**You won ${d.name}!** You finished #1 in the top tier (${seasonLabel}) -- the best in the league this season. Congratulations!`,
+      );
+    }
     for (let i = 0; i < promoteCount && i < active.length; i++) {
       await dmSeasonEnd(
         active[i]!.player.discordId,
