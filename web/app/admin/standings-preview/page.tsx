@@ -109,6 +109,9 @@ function CompactTable({
                         {(diff.bestNRank ?? 0) < (diff.currentRank ?? 0) ? "^" : "v"}
                       </span>
                     )}
+                    {r.tiebreakNote && (
+                      <div className="muted" style={{ fontSize: 11 }}>{r.tiebreakNote}</div>
+                    )}
                   </td>
                   <td><strong>{r.points}</strong></td>
                   <td className="muted" style={{ whiteSpace: "nowrap" }}>

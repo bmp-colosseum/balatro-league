@@ -307,6 +307,153 @@ function pairingsArbitrary(n: number) {
 
 const nAndPairings = fc.integer({ min: 2, max: 6 }).chain((n) => fc.tuple(fc.constant(n), pairingsArbitrary(n)));
 
+describe("computeStandings -- tiebreak: lives -- tiebreakNote audit", () => {
+  it("a shootout decided a 2-way tie -- note on both rows", () => {
+    const players = [P("alice", "Alice"), P("bob", "Bob")];
+    const shootouts: ShootoutInput[] = [{ playerAId: "alice", playerBId: "bob", winnerId: "bob" }];
+    const lives = computeStandings(players, [], shootouts, undefined, "lives");
+    const alice = lives.find((r) => r.player.id === "alice")!;
+    const bob = lives.find((r) => r.player.id === "bob")!;
+    expect(bob.tiebreakNote).toBe("Tied on points with Alice; shootout decided it");
+    expect(alice.tiebreakNote).toBe("Tied on points with Bob; shootout decided it");
+  });
+
+  it("head-to-head lives decided a 2-way tie after a 2-0 -- signed numbers, own value first", () => {
+    const players = [P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"), P("eve", "Eve"), P("dave", "Dave")];
+    const pairings = [
+      M("alice", "bob", 2, 0, [G("alice", 4), G("alice", 1)]), // h2h diff = +5 for alice
+      M("alice", "carol", 0, 2), // alice's compensating loss
+      M("carol", "eve", 1, 1), // keeps carol out of alice/bob's points group
+      M("bob", "dave", 2, 0), // bob's compensating win
+    ];
+    const lives = computeStandings(players, pairings, [], undefined, "lives");
+    const alice = lives.find((r) => r.player.id === "alice")!;
+    const bob = lives.find((r) => r.player.id === "bob")!;
+    expect(alice.tiebreakNote).toBe("Tied on points with Bob; head-to-head lives +5 vs -5 decided it");
+    expect(bob.tiebreakNote).toBe("Tied on points with Alice; head-to-head lives -5 vs +5 decided it");
+  });
+
+  it("total net lives decided a 2-way tie after the within-match differential was exactly zero", () => {
+    const players = [P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"), P("dave", "Dave")];
+    const pairings = [
+      M("alice", "bob", 1, 1, [G("alice", 3), G("bob", 3)]), // h2h diff = 0
+      M("alice", "carol", 1, 1, [G("alice", 5)]),
+      M("bob", "dave", 1, 1),
+    ];
+    const lives = computeStandings(players, pairings, [], undefined, "lives");
+    const alice = lives.find((r) => r.player.id === "alice")!;
+    const bob = lives.find((r) => r.player.id === "bob")!;
+    expect(alice.tiebreakNote).toBe("Tied on points with Bob; total net lives decided it (5 / 0)");
+    expect(bob.tiebreakNote).toBe("Tied on points with Alice; total net lives decided it (5 / 0)");
+  });
+
+  it("total net lives decided a 2-way tie when the two never played each other", () => {
+    const players = [P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"), P("dave", "Dave")];
+    const pairings = [
+      M("alice", "carol", 2, 0, [G("alice", 1)]),
+      M("bob", "dave", 2, 0, [G("bob", 3)]),
+    ];
+    const lives = computeStandings(players, pairings, [], undefined, "lives");
+    const alice = lives.find((r) => r.player.id === "alice")!;
+    const bob = lives.find((r) => r.player.id === "bob")!;
+    expect(bob.tiebreakNote).toBe("Tied on points with Alice; total net lives decided it (3 / 1)");
+    expect(alice.tiebreakNote).toBe("Tied on points with Bob; total net lives decided it (3 / 1)");
+  });
+
+  it("a real, unbreakable 2-way tie -- 'shares the place' note on both rows", () => {
+    const players = [P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"), P("dave", "Dave")];
+    const pairings = [
+      M("alice", "carol", 2, 0, [G("alice", 4)]),
+      M("bob", "dave", 2, 0, [G("bob", 4)]),
+    ];
+    const lives = computeStandings(players, pairings, [], undefined, "lives");
+    const alice = lives.find((r) => r.player.id === "alice")!;
+    const bob = lives.find((r) => r.player.id === "bob")!;
+    expect(alice.tiebreakNote).toBe("Tied with Bob on points and net lives -- shares the place");
+    expect(bob.tiebreakNote).toBe("Tied with Alice on points and net lives -- shares the place");
+  });
+
+  it("total net lives decided a fully-separated three-way tie -- note lists every other name and the whole group's final-order lives", () => {
+    const players = [
+      P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"),
+      P("dave", "Dave"), P("eve", "Eve"), P("frank", "Frank"),
+    ];
+    const pairings = [
+      M("alice", "dave", 2, 0, [G("alice", 5)]),
+      M("bob", "eve", 2, 0, [G("bob", 3)]),
+      M("carol", "frank", 2, 0, [G("carol", 1)]),
+    ];
+    const lives = computeStandings(players, pairings, [], undefined, "lives");
+    const alice = lives.find((r) => r.player.id === "alice")!;
+    const bob = lives.find((r) => r.player.id === "bob")!;
+    const carol = lives.find((r) => r.player.id === "carol")!;
+    expect(alice.tiebreakNote).toBe("Tied on points with Bob and Carol; total net lives decided it (5 / 3 / 1)");
+    expect(bob.tiebreakNote).toBe("Tied on points with Alice and Carol; total net lives decided it (5 / 3 / 1)");
+    expect(carol.tiebreakNote).toBe("Tied on points with Alice and Bob; total net lives decided it (5 / 3 / 1)");
+  });
+
+  it("a real three-way tie (also equal on net lives) -- 'shares the place' names only the other two", () => {
+    const players = [
+      P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"),
+      P("dave", "Dave"), P("eve", "Eve"), P("frank", "Frank"),
+    ];
+    const pairings = [
+      M("alice", "dave", 2, 0, [G("alice", 2)]),
+      M("bob", "eve", 2, 0, [G("bob", 2)]),
+      M("carol", "frank", 2, 0, [G("carol", 2)]),
+    ];
+    const lives = computeStandings(players, pairings, [], undefined, "lives");
+    const alice = lives.find((r) => r.player.id === "alice")!;
+    const bob = lives.find((r) => r.player.id === "bob")!;
+    const carol = lives.find((r) => r.player.id === "carol")!;
+    expect(alice.tiebreakNote).toBe("Tied with Bob and Carol on points and net lives -- shares the place");
+    expect(bob.tiebreakNote).toBe("Tied with Alice and Carol on points and net lives -- shares the place");
+    expect(carol.tiebreakNote).toBe("Tied with Alice and Bob on points and net lives -- shares the place");
+  });
+
+  it("a mixed four-way group: one decided row, two sharing a real tie, one more decided row", () => {
+    // Points-tied group of 4 (alice/bob/carol/dave), net lives: 10 / 5 / 5 / 1.
+    // Alice and dave are each uniquely placed by net lives; bob and carol
+    // remain genuinely tied with each other.
+    const players = [
+      P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"), P("dave", "Dave"),
+      P("w", "W"), P("x", "X"), P("y", "Y"), P("z", "Z"),
+    ];
+    const pairings = [
+      M("alice", "w", 2, 0, [G("alice", 10)]),
+      M("bob", "x", 2, 0, [G("bob", 5)]),
+      M("carol", "y", 2, 0, [G("carol", 5)]),
+      M("dave", "z", 2, 0, [G("dave", 1)]),
+    ];
+    const lives = computeStandings(players, pairings, [], undefined, "lives");
+    const alice = lives.find((r) => r.player.id === "alice")!;
+    const bob = lives.find((r) => r.player.id === "bob")!;
+    const carol = lives.find((r) => r.player.id === "carol")!;
+    const dave = lives.find((r) => r.player.id === "dave")!;
+    expect(alice.tiebreakNote).toBe("Tied on points with Bob, Carol and Dave; total net lives decided it (10 / 5 / 5 / 1)");
+    expect(dave.tiebreakNote).toBe("Tied on points with Alice, Bob and Carol; total net lives decided it (10 / 5 / 5 / 1)");
+    expect(bob.tiebreakNote).toBe("Tied with Carol on points and net lives -- shares the place");
+    expect(carol.tiebreakNote).toBe("Tied with Bob on points and net lives -- shares the place");
+  });
+
+  it("never sets tiebreakNote for a row alone on its points, even under tiebreak lives", () => {
+    const players = [P("alice", "Alice"), P("bob", "Bob")];
+    const pairings = [M("alice", "bob", 2, 0)];
+    const lives = computeStandings(players, pairings, [], undefined, "lives");
+    expect(lives.every((r) => r.tiebreakNote === undefined)).toBe(true);
+  });
+
+  it("never sets tiebreakNote under the default chain tiebreak, even for a tied group", () => {
+    const players = [P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"), P("dave", "Dave")];
+    const pairings = [
+      M("alice", "carol", 2, 0, [G("alice", 4)]),
+      M("bob", "dave", 2, 0, [G("bob", 4)]),
+    ];
+    const chain = computeStandings(players, pairings);
+    expect(chain.every((r) => r.tiebreakNote === undefined)).toBe(true);
+  });
+});
+
 describe("computeStandings -- properties", () => {
   it("chain mode's output is identical whether or not pairings carry games data", () => {
     fc.assert(

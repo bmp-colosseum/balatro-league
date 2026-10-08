@@ -35,6 +35,9 @@ export interface DivisionStandingRow {
   // StandingRow.netLives/livesGamesMissing.
   netLives?: number;
   livesGamesMissing?: number;
+  // See StandingRow.tiebreakNote -- plain-English audit of which step
+  // decided this row's tie, present under the same conditions as netLives.
+  tiebreakNote?: string;
 }
 
 export interface DivisionRecentPairing {
@@ -145,6 +148,7 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
     of: r.of,
     netLives: r.netLives,
     livesGamesMissing: r.livesGamesMissing,
+    tiebreakNote: r.tiebreakNote,
   }));
 
   const pairings = await prisma.match.findMany({

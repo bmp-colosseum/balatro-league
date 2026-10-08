@@ -78,6 +78,9 @@ export interface SeasonDetailStandingRow {
   // StandingRow.netLives/livesGamesMissing and SeasonDetailData.livesBreaksTies.
   netLives?: number;
   livesGamesMissing?: number;
+  // See StandingRow.tiebreakNote -- plain-English audit of which step
+  // decided this row's tie, present under the same conditions as netLives.
+  tiebreakNote?: string;
 }
 
 export interface SeasonDetailDivision {
@@ -177,6 +180,7 @@ export async function loadSeasonDetail(seasonId: string): Promise<SeasonDetailDa
         tiedWithNext: r.tiedWithNext,
         netLives: r.netLives,
         livesGamesMissing: r.livesGamesMissing,
+        tiebreakNote: r.tiebreakNote,
       }));
       return { id: d.id, name: d.name, groupNumber: d.groupNumber, rows };
     }),

@@ -49,6 +49,10 @@ interface CachedRow {
   // livesGamesMissing in standings.ts.
   netLives?: number;
   livesGamesMissing?: number;
+  // See StandingRow.tiebreakNote in standings.ts. Absent exactly when
+  // netLives is -- same presence rule, same byte-identical-chain-payload
+  // guarantee.
+  tiebreakNote?: string;
 }
 
 // On-disk shape of DivisionStandings.rowsJson. Legacy rows written before
@@ -201,6 +205,7 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
       of: r.of,
       netLives: r.netLives,
       livesGamesMissing: r.livesGamesMissing,
+      tiebreakNote: r.tiebreakNote,
     })),
   };
   if (badge) payload.badge = badge;
@@ -285,6 +290,7 @@ function hydrateRows(payload: CachedRow[], playerById: Map<string, Player>): Sta
         of: r.of,
         netLives: r.netLives,
         livesGamesMissing: r.livesGamesMissing,
+        tiebreakNote: r.tiebreakNote,
       };
     })
     .filter((r): r is StandingRow => r !== null);

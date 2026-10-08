@@ -41,6 +41,14 @@ export interface StandingRow {
   // (the UI can show it); absent for every other row. Mirrors web
   // (web/lib/standings.ts).
   h2hLives?: number;
+  // Only set under tiebreak "lives", on every row that was part of an
+  // ORIGINAL points-tied group of 2 or more (never set for a row alone on
+  // its points, and never set under the default "chain" tiebreak) --
+  // a plain-English audit of exactly which step decided (or failed to
+  // decide) this row's place: a shootout, the head-to-head lives inside one
+  // match, total net lives across the group, or a real, unbreakable tie.
+  // Built by orderLivesPointsGroup. Mirrors web (web/lib/standings.ts).
+  tiebreakNote?: string;
 }
 
 // See web/lib/standings.ts's identical type for the full rationale.
@@ -309,23 +317,48 @@ export function livesDisplayOrder<T extends StandingRow>(rows: T[]): T[] {
   });
 }
 
+// "+N"/"-N" for a tiebreakNote's signed lives numbers -- a negative value
+// already carries its own "-", a non-negative one needs "+" added (0 reads
+// as "+0", never produced by the only caller below since that branch is
+// gated on a nonzero differential). Mirrors web/lib/standings.ts's
+// identical helper.
+function formatSignedLives(n: number): string {
+  return n > 0 ? `+${n}` : `${n}`;
+}
+
+// "A" / "A and B" / "A, B and C" -- the player-name list inside a
+// tiebreakNote. Mirrors web/lib/standings.ts's identical helper.
+function joinNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
 // The "lives" tiebreak's rule for ONE group of rows already tied on points
 // (and nothing else -- sortStandingsLives below forms these groups). Mutates
 // tiedWithPrev (and, for an exactly-two group, h2hLives) directly on the
 // rows it returns in their final order, mirroring assignRanks's convention.
-// Exported for direct unit testing. Mirrors web/lib/standings.ts's identical
-// export.
+// Also sets tiebreakNote on every row (a plain-English record of exactly
+// which step decided -- or failed to decide -- that row's place), EXCEPT
+// when group.length <= 1 (alone on points, nothing to explain). Exported for
+// direct unit testing. Mirrors web/lib/standings.ts's identical export.
 //
-//   - 1 player: nothing to decide.
-//   - 3+ players: order by total net lives DESC. Players still equal after
-//     that are a REAL tie (tiedWithPrev) sharing a rank -- wins/draws/name
-//     only pick a stable DISPLAY order among them, never break the tie.
+//   - 1 player: nothing to decide, no note.
+//   - 3+ players: order by total net lives DESC. A row uniquely placed by
+//     that sort gets a "total net lives decided it" note naming every OTHER
+//     row in the ORIGINAL group, with every row's final-order net lives
+//     listed. Players still equal after net lives form a REAL tie
+//     (tiedWithPrev) sharing a rank -- wins/draws/name only pick a stable
+//     DISPLAY order among them, never break the tie -- and get a "real tie"
+//     note naming only their own rank-mates (the cluster that's actually
+//     tied), not the whole original group.
 //   - exactly 2 players: (1) a CONFIRMED shootout between them decides;
 //     else (2) if they played each other, the lives differential INSIDE
 //     that one match decides (h2hLives is recorded on both rows whenever
 //     they played, whether or not it ends up deciding anything); else, or
 //     if that differential is exactly zero, (3) total net lives decides;
-//     still equal -> REAL tie, same as the 3+ case.
+//     still equal -> REAL tie, same as the 3+ case. Each branch sets its own
+//     note phrasing on both rows.
 export function orderLivesPointsGroup<T extends StandingRow>(
   group: T[],
   shootoutBetween: (xId: string, yId: string) => number,
@@ -336,23 +369,39 @@ export function orderLivesPointsGroup<T extends StandingRow>(
   if (group.length === 2) {
     const [a, b] = group as [T, T];
     const shoot = shootoutBetween(a.player.id, b.player.id);
-    if (shoot !== 0) return shoot < 0 ? [a, b] : [b, a];
+    if (shoot !== 0) {
+      a.tiebreakNote = `Tied on points with ${b.player.displayName}; shootout decided it`;
+      b.tiebreakNote = `Tied on points with ${a.player.displayName}; shootout decided it`;
+      return shoot < 0 ? [a, b] : [b, a];
+    }
 
     const diff = h2hLivesDiff(a.player.id, b.player.id);
     if (diff !== null) {
       a.h2hLives = diff;
       b.h2hLives = diff === 0 ? 0 : -diff; // avoid -0 when the match netted exactly even
-      if (diff !== 0) return diff > 0 ? [a, b] : [b, a];
+      if (diff !== 0) {
+        a.tiebreakNote = `Tied on points with ${b.player.displayName}; head-to-head lives ${formatSignedLives(a.h2hLives)} vs ${formatSignedLives(b.h2hLives)} decided it`;
+        b.tiebreakNote = `Tied on points with ${a.player.displayName}; head-to-head lives ${formatSignedLives(b.h2hLives)} vs ${formatSignedLives(a.h2hLives)} decided it`;
+        return diff > 0 ? [a, b] : [b, a];
+      }
     }
 
     const na = a.netLives ?? 0;
     const nb = b.netLives ?? 0;
-    if (na !== nb) return na > nb ? [a, b] : [b, a];
+    if (na !== nb) {
+      const [first, second] = na > nb ? [a, b] : [b, a];
+      const list = `${first.netLives ?? 0} / ${second.netLives ?? 0}`;
+      first.tiebreakNote = `Tied on points with ${second.player.displayName}; total net lives decided it (${list})`;
+      second.tiebreakNote = `Tied on points with ${first.player.displayName}; total net lives decided it (${list})`;
+      return [first, second];
+    }
 
     const ordered = livesDisplayOrder([a, b]);
     const first = ordered[0]!;
     const second = ordered[1]!;
     second.tiedWithPrev = true;
+    first.tiebreakNote = `Tied with ${second.player.displayName} on points and net lives -- shares the place`;
+    second.tiebreakNote = `Tied with ${first.player.displayName} on points and net lives -- shares the place`;
     return [first, second];
   }
 
@@ -367,6 +416,30 @@ export function orderLivesPointsGroup<T extends StandingRow>(
     if ((byLives[i]!.netLives ?? 0) === (byLives[i - 1]!.netLives ?? 0)) {
       byLives[i]!.tiedWithPrev = true;
     }
+  }
+
+  // Partition into maximal runs of consecutive rows sharing identical net
+  // lives (a tiedWithPrev chain): a run of 1 was separated from the whole
+  // group by net lives (gets the "decided" note, naming every OTHER
+  // original group member and the whole group's final-order lives list); a
+  // run of 2+ remains a genuine tie SHARING A RANK (gets the "real tie"
+  // note, naming only its own rank-mates).
+  const livesList = byLives.map((r) => `${r.netLives ?? 0}`).join(" / ");
+  let clusterStart = 0;
+  for (let i = 1; i <= byLives.length; i++) {
+    if (i < byLives.length && byLives[i]!.tiedWithPrev) continue;
+    const cluster = byLives.slice(clusterStart, i);
+    if (cluster.length === 1) {
+      const row = cluster[0]!;
+      const others = byLives.filter((r) => r !== row).map((r) => r.player.displayName);
+      row.tiebreakNote = `Tied on points with ${joinNames(others)}; total net lives decided it (${livesList})`;
+    } else {
+      for (const row of cluster) {
+        const otherNames = cluster.filter((r) => r !== row).map((r) => r.player.displayName);
+        row.tiebreakNote = `Tied with ${joinNames(otherNames)} on points and net lives -- shares the place`;
+      }
+    }
+    clusterStart = i;
   }
   return byLives;
 }

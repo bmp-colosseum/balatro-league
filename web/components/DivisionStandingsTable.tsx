@@ -44,6 +44,12 @@ export interface StandingsTableRow {
   // ANY row in the table carries netLives.
   netLives?: number;
   livesGamesMissing?: number;
+  // Set alongside netLives when this row was part of a points-tied group of
+  // 2+ under the "lives" tiebreak -- a plain-English audit of exactly which
+  // step decided (or failed to decide) this row's place. See
+  // StandingRow.tiebreakNote in @/lib/standings. Shown as the Lives cell's
+  // tooltip and as a small muted line under the player's name.
+  tiebreakNote?: string;
 }
 
 type Row = StandingsTableRow;
@@ -168,10 +174,23 @@ function LivesCell({ r }: { r: StandingsTableRow }) {
   if (r.netLives === undefined) return <span className="muted">-</span>;
   const sign = r.netLives > 0 ? "+" : "";
   return (
-    <span className="muted">
+    <span className="muted" title={r.tiebreakNote}>
       {sign}{r.netLives}
       {r.livesGamesMissing ? ` (${r.livesGamesMissing} missing)` : ""}
     </span>
+  );
+}
+
+// Small muted line under a player's name explaining exactly which step
+// decided their tie -- the same text as the Lives cell's tooltip, but
+// visible on phones where hover tooltips don't exist. Renders nothing when
+// the row carries no tiebreakNote.
+function TiebreakNoteLine({ r }: { r: StandingsTableRow }) {
+  if (!r.tiebreakNote) return null;
+  return (
+    <div className="muted" style={{ fontSize: 11 }}>
+      {r.tiebreakNote}
+    </div>
   );
 }
 
@@ -266,7 +285,10 @@ export function DivisionStandingsTable({
                 return (
                   <tr key={r.player.id} style={rowTint(ex)}>
                     <td><RowBadges medal={medal} promoting={ex?.promoting} relegating={ex?.relegating} clinchStatus={ex?.clinchStatus} showdown={ex?.showdown} /></td>
-                    <td>{r.dropped ? <s>{link}</s> : link}<DiscordId value={r.player.discordId} username={r.player.username} /></td>
+                    <td>
+                      {r.dropped ? <s>{link}</s> : link}<DiscordId value={r.player.discordId} username={r.player.username} />
+                      <TiebreakNoteLine r={r} />
+                    </td>
                     {hasFinalRank && <td>{finalRankCell!(r)}</td>}
                     <td><strong>{r.points}</strong></td>
                     <td title={standingRateTooltip(r)}><RecordCells r={r} /><CountedNote r={r} show={showCountedBadge} /></td>
@@ -298,6 +320,7 @@ export function DivisionStandingsTable({
                   </Link>
                   <strong style={{ whiteSpace: "nowrap" }}>{r.points} pts</strong>
                 </div>
+                <TiebreakNoteLine r={r} />
                 <div className="standings-card-sub muted">
                   <RecordCells r={r} /><CountedNote r={r} show={showCountedBadge} /> · {r.gamesWon}-{r.gamesLost} games · {r.played} played
                   {showLives && <> - <LivesCell r={r} /> lives</>}
