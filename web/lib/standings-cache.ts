@@ -214,6 +214,16 @@ export async function refreshStandingsCacheIfWarm(divisionId: string): Promise<b
   return true;
 }
 
+// Recompute, then return the rows -- for end-of-season, where the rating math and
+// the promo/relegation DMs must rank EXACTLY as /standings does (shootouts, scoring
+// mode, dropouts). Season 8 ended ranking from LEAGUE_BO2 matches alone, so every
+// shootout-broken tie was re-broken alphabetically and the wrong players were told
+// they promoted / relegated and got the wrong final rank.
+export async function loadDivisionStandingsFresh(divisionId: string): Promise<StandingRow[]> {
+  await recomputeDivisionStandings(divisionId);
+  return loadDivisionStandings(divisionId);
+}
+
 export async function loadDivisionStandings(divisionId: string): Promise<StandingRow[]> {
   const cached = await prisma.divisionStandings.findUnique({ where: { divisionId } });
   if (!cached) {

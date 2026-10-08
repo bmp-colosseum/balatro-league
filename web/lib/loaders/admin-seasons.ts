@@ -12,7 +12,8 @@ import { prisma } from "@/lib/prisma";
 import { bannedDiscordIdSet } from "@/lib/bans";
 import { isScheduleLocked } from "@/lib/schedule-locked";
 import { byBestBmpSnapshot } from "@/lib/bmp-snapshots";
-import { computeStandings } from "@/lib/standings";
+import type { StandingRow } from "@/lib/standings";
+import { loadDivisionStandings } from "@/lib/standings-cache";
 import { computeRatingDeltas, type DivisionForRating } from "@/lib/end-season";
 import { formatSeasonLabel } from "@/lib/format-season";
 import {
@@ -68,7 +69,7 @@ export interface EndSeasonDivisionRow {
   divisionName: string;
   tierName: string;
   tierPosition: number;
-  standings: ReturnType<typeof computeStandings>;
+  standings: StandingRow[];
   members: Array<{ playerId: string; status: "ACTIVE" | "DROPPED"; currentRating: number | null }>;
 }
 
@@ -96,9 +97,11 @@ export async function loadEndSeasonPreview(seasonId: string): Promise<EndSeasonP
   });
   if (!season) return null;
 
-  const divisionsForRating: DivisionForRating[] = season.divisions.map((d) => {
-    const players = d.members.map((m) => m.player);
-    return {
+  // Same engine as /standings (shootouts, scoring mode, dropouts) so the preview shows
+  // exactly who endSeasonCore will promote / relegate / rate.
+  const divisionsForRating: DivisionForRating[] = [];
+  for (const d of season.divisions) {
+    divisionsForRating.push({
       tierPosition: d.tier.position,
       divisionGroupNumber: d.groupNumber,
       promoteCount: d.promoteCount,
@@ -108,9 +111,9 @@ export async function loadEndSeasonPreview(seasonId: string): Promise<EndSeasonP
         status: m.status,
         currentRating: m.player.rating,
       })),
-      standings: computeStandings(players, d.matches),
-    };
-  });
+      standings: await loadDivisionStandings(d.id),
+    });
+  }
   const deltas = computeRatingDeltas(season.tiers.length, divisionsForRating);
   const deltasByPlayer = new Map(deltas.map((d) => [d.playerId, d]));
 
@@ -340,10 +343,6 @@ export async function loadBuildSeasonPage(roundId: string): Promise<BuildSeasonR
           tier: true,
           season: { select: { id: true, number: true, subtitle: true, startedAt: true } },
           members: { where: { status: "ACTIVE" }, include: { player: true } },
-          matches: {
-            where: { status: "CONFIRMED", format: "LEAGUE_BO2" },
-            select: { playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true },
-          },
         },
       },
     },
@@ -356,12 +355,12 @@ export async function loadBuildSeasonPage(roundId: string): Promise<BuildSeasonR
     }
   }
   const priorByPlayerId = new Map<string, BuildSeasonPriorInfo>();
-  const standingsByDivisionId = new Map<string, ReturnType<typeof computeStandings>>();
+  const standingsByDivisionId = new Map<string, StandingRow[]>();
   for (const m of mostRecentMembershipByPlayerId.values()) {
     const div = m.division;
     let rows = standingsByDivisionId.get(div.id);
     if (!rows) {
-      rows = computeStandings(div.members.map((mm) => mm.player), div.matches);
+      rows = await loadDivisionStandings(div.id);
       standingsByDivisionId.set(div.id, rows);
     }
     const rank = rows.findIndex((r) => r.player.id === m.playerId) + 1;

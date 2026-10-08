@@ -13,7 +13,7 @@
 
 import type { StandingRow } from "./standings";
 import { prisma } from "./prisma";
-import { computeStandings } from "./standings";
+import { loadDivisionStandingsFresh } from "./standings-cache";
 import { recordAudit, type AuditActor } from "./audit";
 import { enqueueLeagueInfoRefresh, enqueueDm } from "./queue";
 import { formatSeasonLabel } from "./format-season";
@@ -298,7 +298,6 @@ export async function endSeasonCore(seasonId: string, actor: AuditActor): Promis
         include: {
           tier: true,
           members: { include: { player: true } },
-          matches: { where: { status: "CONFIRMED", format: "LEAGUE_BO2" } },
         },
       },
     },
@@ -314,9 +313,12 @@ export async function endSeasonCore(seasonId: string, actor: AuditActor): Promis
     };
   }
 
-  const divisionsForRating: DivisionForRating[] = season.divisions.map((d) => {
-    const players = d.members.map((m) => m.player);
-    return {
+  // Rank with the SAME engine as /standings (shootouts, the season's scoring mode,
+  // dropouts) -- never a bare computeStandings over LEAGUE_BO2 matches, which
+  // ignores recorded shootouts and re-breaks those ties alphabetically.
+  const divisionsForRating: DivisionForRating[] = [];
+  for (const d of season.divisions) {
+    divisionsForRating.push({
       tierPosition: d.tier.position,
       divisionGroupNumber: d.groupNumber,
       promoteCount: d.promoteCount,
@@ -326,9 +328,9 @@ export async function endSeasonCore(seasonId: string, actor: AuditActor): Promis
         status: m.status,
         currentRating: m.player.rating,
       })),
-      standings: computeStandings(players, d.matches),
-    };
-  });
+      standings: await loadDivisionStandingsFresh(d.id),
+    });
+  }
 
   const deltas = computeRatingDeltas(season.tiers.length, divisionsForRating);
 
@@ -395,16 +397,14 @@ export async function endSeasonCore(seasonId: string, actor: AuditActor): Promis
   // happen for those two.
   const first = season.divisions[0];
   const last = season.divisions[season.divisions.length - 1];
-  for (const d of season.divisions) {
+  for (const [divIdx, d] of season.divisions.entries()) {
     const isTopTier = d.id === first?.id;
     const isBottomTier = d.id === last?.id;
     const promoteCount = isTopTier ? 0 : Math.max(0, d.promoteCount);
     const relegateCount = isBottomTier ? 0 : Math.max(0, d.relegateCount);
     if (promoteCount === 0 && relegateCount === 0 && !isTopTier) continue;
     const droppedSet = new Set(d.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId));
-    const active = computeStandings(d.members.map((m) => m.player), d.matches).filter(
-      (row) => !droppedSet.has(row.player.id),
-    );
+    const active = divisionsForRating[divIdx]!.standings.filter((row) => !droppedSet.has(row.player.id));
     const dmSeasonEnd = (discordId: string, content: string) =>
       enqueueDm({ discordId, content, batchId: `season-end:${season.id}`, batchKind: "season-end" }).catch((err) =>
         console.warn(`[season.end] promo/releg DM failed for ${discordId}:`, err),
