@@ -124,6 +124,7 @@ async function buildSeasonAuditInput(season: SeasonForAudit): Promise<SeasonAudi
           playerId: r.player.id,
           displayName: r.player.displayName,
           rank: r.rank ?? 1,
+          points: r.points,
           tiedWithPrev: r.tiedWithPrev,
           dropped: r.dropped,
         }))

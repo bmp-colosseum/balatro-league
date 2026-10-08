@@ -24,7 +24,7 @@ function member(playerId: string, displayName: string, overrides: Partial<Season
 }
 
 function row(playerId: string, displayName: string, rank: number, overrides: Partial<SeasonAuditStandingRowInput> = {}): SeasonAuditStandingRowInput {
-  return { playerId, displayName, rank, ...overrides };
+  return { playerId, displayName, rank, points: 0, ...overrides };
 }
 
 function match(overrides: Partial<SeasonAuditMatchInput> = {}): SeasonAuditMatchInput {
@@ -250,8 +250,13 @@ describe("checkChampion", () => {
     expect(checkChampion(d, false, SEASON_ID)).toEqual([]);
   });
 
-  it("flags no-champion (warn) when championPlayerId is null but rows exist", () => {
-    const d = division({ rows: [row("p1", "Alice", 1)], championPlayerId: null });
+  it("is silent when championPlayerId is null but #1 is unique (champion is derived)", () => {
+    const d = division({ rows: [row("p1", "Alice", 1), row("p2", "Bob", 2)], championPlayerId: null });
+    expect(checkChampion(d, true, SEASON_ID)).toEqual([]);
+  });
+
+  it("flags no-champion (warn) when championPlayerId is null and #1 is tied", () => {
+    const d = division({ rows: [row("p1", "Alice", 1), row("p2", "Bob", 1, { tiedWithPrev: true })], championPlayerId: null });
     const findings = checkChampion(d, true, SEASON_ID);
     expect(findings).toEqual([
       {
@@ -259,7 +264,7 @@ describe("checkChampion", () => {
         code: "no-champion",
         divisionId: "div-1",
         divisionName: "Legendary",
-        message: "No champion recorded for Legendary",
+        message: "Tie for #1 in Legendary and no champion recorded -- pick the winner on the winners page",
         href: "/admin/seasons/season-1/winners",
       },
     ]);
@@ -400,7 +405,7 @@ describe("checkShootoutDangling", () => {
   it("flags a CONFIRMED shootout between players who are not tied on points", () => {
     const d = division({
       members: [member("p1", "Alice"), member("p2", "Bob")],
-      rows: [row("p1", "Alice", 1), row("p2", "Bob", 2)],
+      rows: [row("p1", "Alice", 1, { points: 9 }), row("p2", "Bob", 2, { points: 7 })],
       matches: [match({ format: "SHOOTOUT_BO1", status: "CONFIRMED" })],
     });
     const findings = checkShootoutDangling(d);
@@ -408,9 +413,17 @@ describe("checkShootoutDangling", () => {
     expect(findings[0]).toMatchObject({ severity: "info", code: "shootout-dangling" });
   });
 
+  it("does not flag a shootout that broke a points tie (equal points, different rank)", () => {
+    const d = division({
+      rows: [row("p1", "Alice", 1, { points: 7 }), row("p2", "Bob", 2, { points: 7 })],
+      matches: [match({ format: "SHOOTOUT_BO1", status: "CONFIRMED" })],
+    });
+    expect(checkShootoutDangling(d)).toEqual([]);
+  });
+
   it("does not flag a shootout between players who are actually tied", () => {
     const d = division({
-      rows: [row("p1", "Alice", 1), row("p2", "Bob", 1, { tiedWithPrev: true })],
+      rows: [row("p1", "Alice", 1, { points: 7 }), row("p2", "Bob", 1, { points: 7, tiedWithPrev: true })],
       matches: [match({ format: "SHOOTOUT_BO1", status: "CONFIRMED" })],
     });
     expect(checkShootoutDangling(d)).toEqual([]);
@@ -465,7 +478,7 @@ describe("auditSeason -- composed", () => {
           name: "Legendary",
           isFirst: true,
           isLast: true,
-          championPlayerId: null, // no-champion: warn
+          championPlayerId: null, // unique #1 -> derived champion, no finding
           members: [member("p1", "Alice", { finalGlobalRank: null })], // rank-missing: warn
           rows: [row("p1", "Alice", 1)],
           matches: [match({ status: "PENDING", playerAId: "p1", playerBId: "p1x" })],
@@ -473,8 +486,8 @@ describe("auditSeason -- composed", () => {
       ],
     });
     // playerBId "p1x" isn't an active member, so open-match should NOT fire;
-    // only the two warns above plus the season-level discord-leftover info.
+    // only the rank-missing warn plus the season-level discord-leftover info.
     const report = auditSeason(input);
-    expect(report.countsBySeverity).toEqual({ error: 0, warn: 2, info: 1 });
+    expect(report.countsBySeverity).toEqual({ error: 0, warn: 1, info: 1 });
   });
 });

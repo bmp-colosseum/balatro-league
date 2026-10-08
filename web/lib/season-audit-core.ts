@@ -37,6 +37,7 @@ export interface SeasonAuditStandingRowInput {
   playerId: string;
   displayName: string;
   rank: number;
+  points: number;
   tiedWithPrev?: boolean;
   dropped?: boolean;
 }
@@ -169,6 +170,8 @@ export function checkTies(division: SeasonAuditDivisionInput): Finding[] {
     const posPrev = i; // 1-indexed position of prev
     const posCur = i + 1;
     const includesRankOne = posPrev === 1;
+    // A tie for #1 that the TO settled by recording the champion is resolved.
+    if (includesRankOne && division.championPlayerId !== null) continue;
     const straddlesPromotion = promote > 0 && posPrev === promote && posCur === promote + 1;
     const straddlesRelegation = relegate > 0 && posPrev === size - relegate && posCur === size - relegate + 1;
     const critical = includesRankOne || straddlesPromotion || straddlesRelegation;
@@ -180,8 +183,8 @@ export function checkTies(division: SeasonAuditDivisionInput): Finding[] {
       divisionId: division.divisionId,
       divisionName: division.name,
       message: critical
-        ? `Tie for ${line} between ${prev.displayName} and ${cur.displayName} unresolved -- play or record a shootout`
-        : `Tie between ${prev.displayName} and ${cur.displayName} unresolved (does not affect promotion/relegation)`,
+        ? `Tie for ${line} between ${prev.displayName} and ${cur.displayName} unresolved -- record a shootout${includesRankOne ? " or set the champion on the winners page" : ""}`
+        : `Tie between ${prev.displayName} and ${cur.displayName} stands (no effect on promotion/relegation)`,
       href: `/divisions/${division.divisionId}`,
     });
   }
@@ -189,7 +192,10 @@ export function checkTies(division: SeasonAuditDivisionInput): Finding[] {
 }
 
 // no-champion (warn, ended only) / champion-mismatch (error): the ended
-// season's rank-1 finisher(s) should match Division.championPlayerId.
+// season's rank-1 finisher(s) should match Division.championPlayerId. A
+// division with a UNIQUE #1 and no recorded champion is fine -- every reader
+// (hall of fame, winners page, role audit) derives the champion from the
+// standings in that case; only a tie at the top needs the TO's call.
 export function checkChampion(division: SeasonAuditDivisionInput, ended: boolean, seasonId: string): Finding[] {
   if (!ended) return [];
   const rows = division.rows;
@@ -198,19 +204,20 @@ export function checkChampion(division: SeasonAuditDivisionInput, ended: boolean
   if (active.length === 0) return [];
   const href = `/admin/seasons/${seasonId}/winners`;
 
+  const topRank = active[0]!.rank;
+  const winners = active.filter((r) => r.rank === topRank);
   if (division.championPlayerId === null) {
+    if (winners.length < 2) return [];
     return [{
       severity: "warn",
       code: "no-champion",
       divisionId: division.divisionId,
       divisionName: division.name,
-      message: `No champion recorded for ${division.name}`,
+      message: `Tie for #1 in ${division.name} and no champion recorded -- pick the winner on the winners page`,
       href,
     }];
   }
 
-  const topRank = active[0]!.rank;
-  const winners = active.filter((r) => r.rank === topRank);
   if (winners.some((w) => w.playerId === division.championPlayerId)) return [];
 
   return [{
@@ -364,14 +371,16 @@ export function checkSeasonDiscordLeftovers(input: SeasonAuditInput): Finding[] 
 export function checkShootoutDangling(division: SeasonAuditDivisionInput): Finding[] {
   const rows = division.rows;
   if (!rows) return [];
-  const rankByPlayerId = new Map(rows.filter((r) => !r.dropped).map((r) => [r.playerId, r.rank]));
+  // Compare POINTS, not rank: a shootout that did its job leaves the two players
+  // on equal points but different ranks, which is exactly the healthy case.
+  const pointsByPlayerId = new Map(rows.filter((r) => !r.dropped).map((r) => [r.playerId, r.points]));
   const findings: Finding[] = [];
   for (const m of division.matches) {
     if (m.format !== "SHOOTOUT_BO1" || m.status !== "CONFIRMED") continue;
-    const rankA = rankByPlayerId.get(m.playerAId);
-    const rankB = rankByPlayerId.get(m.playerBId);
-    if (rankA === undefined || rankB === undefined) continue;
-    if (rankA === rankB) continue;
+    const pointsA = pointsByPlayerId.get(m.playerAId);
+    const pointsB = pointsByPlayerId.get(m.playerBId);
+    if (pointsA === undefined || pointsB === undefined) continue;
+    if (pointsA === pointsB) continue;
     findings.push({
       severity: "info",
       code: "shootout-dangling",
