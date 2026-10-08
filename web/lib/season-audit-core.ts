@@ -15,6 +15,14 @@ export type FindingSeverity = "error" | "warn" | "info";
 export interface Finding {
   severity: FindingSeverity;
   code: string;
+  // Deterministic identity for this finding, stable across re-audits of the
+  // same underlying condition -- `${code}:${divisionId ?? "season"}[:...]`,
+  // the trailing segment (when present) disambiguating within a division:
+  // sorted player ids for a tie, a match id for a match-scoped check. Used
+  // as half of SeasonAuditReview's unique key (the other half is `code`) so
+  // a TO's "mark reviewed" sticks to THIS finding and drops automatically
+  // once the condition is actually fixed and the finding stops appearing.
+  key: string;
   divisionId?: string;
   divisionName?: string;
   message: string;
@@ -124,6 +132,7 @@ export function checkOpenMatches(division: SeasonAuditDivisionInput, ended: bool
     findings.push({
       severity: "error",
       code: "open-match",
+      key: `open-match:${division.divisionId}:${m.id}`,
       divisionId: division.divisionId,
       divisionName: division.name,
       message: `Open match (${m.status}) between ${displayNameOf(division, m.playerAId)} and ${displayNameOf(division, m.playerBId)} was never resolved`,
@@ -147,6 +156,7 @@ export function checkUnsettledCancels(division: SeasonAuditDivisionInput): Findi
     findings.push({
       severity: "warn",
       code: "unsettled-cancel",
+      key: `unsettled-cancel:${division.divisionId}:${m.id}`,
       divisionId: division.divisionId,
       divisionName: division.name,
       message: `Cancelled match between ${displayNameOf(division, m.playerAId)} and ${displayNameOf(division, m.playerBId)} has no recorded admin reason`,
@@ -185,9 +195,12 @@ export function checkTies(division: SeasonAuditDivisionInput): Finding[] {
     const critical = includesRankOne || straddlesPromotion || straddlesRelegation;
 
     const line = includesRankOne ? "#1" : straddlesPromotion ? "the promotion line" : "the relegation line";
+    const code = critical ? "tie-on-line" : "tie-elsewhere";
+    const pairKey = [prev.playerId, cur.playerId].sort().join(",");
     findings.push({
       severity: critical ? "error" : "info",
-      code: critical ? "tie-on-line" : "tie-elsewhere",
+      code,
+      key: `${code}:${division.divisionId}:${pairKey}`,
       divisionId: division.divisionId,
       divisionName: division.name,
       message: critical
@@ -219,6 +232,7 @@ export function checkChampion(division: SeasonAuditDivisionInput, ended: boolean
     return [{
       severity: "warn",
       code: "no-champion",
+      key: `no-champion:${division.divisionId}`,
       divisionId: division.divisionId,
       divisionName: division.name,
       message: `Tie for #1 in ${division.name} and no champion recorded -- pick the winner on the winners page`,
@@ -231,6 +245,7 @@ export function checkChampion(division: SeasonAuditDivisionInput, ended: boolean
   return [{
     severity: "error",
     code: "champion-mismatch",
+    key: `champion-mismatch:${division.divisionId}`,
     divisionId: division.divisionId,
     divisionName: division.name,
     message: `Recorded champion for ${division.name} is not the current rank-1 finisher`,
@@ -270,6 +285,7 @@ export function checkFinalRanks(division: SeasonAuditDivisionInput, ended: boole
       findings.push({
         severity: "warn",
         code: "rank-missing",
+        key: `rank-missing:${division.divisionId}`,
         divisionId: division.divisionId,
         divisionName: division.name,
         message: `${m.displayName} has no final global rank recorded`,
@@ -299,6 +315,7 @@ export function checkFinalRanks(division: SeasonAuditDivisionInput, ended: boole
       findings.push({
         severity: "error",
         code: "rank-order",
+        key: `rank-order:${division.divisionId}`,
         divisionId: division.divisionId,
         divisionName: division.name,
         message: `Final global rank order for ${division.name} disagrees with the standings order`,
@@ -317,6 +334,7 @@ export function checkStandingsMissing(division: SeasonAuditDivisionInput): Findi
   return [{
     severity: "warn",
     code: "standings-missing",
+    key: `standings-missing:${division.divisionId}`,
     divisionId: division.divisionId,
     divisionName: division.name,
     message: `No cached standings for ${division.name} -- rank/tie/champion checks were skipped`,
@@ -334,6 +352,7 @@ export function checkDivisionDiscordLeftovers(division: SeasonAuditDivisionInput
     findings.push({
       severity: "info",
       code: "discord-leftover",
+      key: `discord-leftover:${division.divisionId}`,
       divisionId: division.divisionId,
       divisionName: division.name,
       message: `Division Discord channel still exists for ${division.name}`,
@@ -344,6 +363,7 @@ export function checkDivisionDiscordLeftovers(division: SeasonAuditDivisionInput
     findings.push({
       severity: "info",
       code: "discord-leftover",
+      key: `discord-leftover:${division.divisionId}`,
       divisionId: division.divisionId,
       divisionName: division.name,
       message: `Division Discord role still exists for ${division.name}`,
@@ -363,6 +383,7 @@ export function checkSeasonDiscordLeftovers(input: SeasonAuditInput): Finding[] 
     findings.push({
       severity: "info",
       code: "discord-leftover",
+      key: "discord-leftover:season",
       message: `Season Discord category still exists for ${input.seasonLabel}`,
       href,
     });
@@ -396,6 +417,7 @@ export function checkShootoutDangling(division: SeasonAuditDivisionInput): Findi
     findings.push({
       severity: "info",
       code: "shootout-dangling",
+      key: `shootout-dangling:${division.divisionId}:${m.id}`,
       divisionId: division.divisionId,
       divisionName: division.name,
       message: `Shootout between ${displayNameOf(division, m.playerAId)} and ${displayNameOf(division, m.playerBId)} recorded, but they are not tied on points`,
@@ -428,4 +450,40 @@ export function auditSeason(input: SeasonAuditInput): SeasonAuditReport {
   }
   findings.push(...checkSeasonDiscordLeftovers(input));
   return { findings, countsBySeverity: countBySeverity(findings) };
+}
+
+// A stored SeasonAuditReview row's identity half -- (code, key) is what a TO's
+// "mark reviewed" is keyed by (see Finding.key); the note/reviewedBy/createdAt
+// metadata lives only in the DB row and isn't needed by this pure function.
+export interface SeasonAuditReviewKey {
+  code: string;
+  key: string;
+}
+
+export interface AppliedSeasonAudit {
+  // Findings still outstanding -- what the overview counts and the page's
+  // main findings list shows.
+  active: Finding[];
+  // Findings a TO has dismissed (code+key matched a review) -- still
+  // computed fresh every audit, so one disappears on its own the moment
+  // the underlying condition is actually fixed, instead of staying
+  // reviewed forever against a finding that no longer exists.
+  reviewed: Finding[];
+  // Severity counts over `active` ONLY -- a reviewed finding never counts
+  // toward "season needs attention."
+  countsBySeverity: Record<FindingSeverity, number>;
+}
+
+// Splits a freshly-computed report into still-active vs TO-reviewed findings.
+// A review with no matching finding (stale -- the condition it was written
+// against no longer reproduces) is silently ignored, not an error.
+export function applyReviews(report: SeasonAuditReport, reviews: SeasonAuditReviewKey[]): AppliedSeasonAudit {
+  const reviewedKeys = new Set(reviews.map((r) => `${r.code}\u0000${r.key}`));
+  const active: Finding[] = [];
+  const reviewed: Finding[] = [];
+  for (const f of report.findings) {
+    if (reviewedKeys.has(`${f.code}\u0000${f.key}`)) reviewed.push(f);
+    else active.push(f);
+  }
+  return { active, reviewed, countsBySeverity: countBySeverity(active) };
 }

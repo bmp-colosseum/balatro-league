@@ -13,13 +13,17 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { loadManyDivisionStandings } from "@/lib/standings-cache";
 import { formatSeasonLabel } from "@/lib/format-season";
+import type { SeasonAuditReview } from "@prisma/client";
 import {
+  applyReviews,
   auditSeason,
+  type Finding,
   type SeasonAuditDivisionInput,
   type SeasonAuditInput,
   type SeasonAuditMatchFormat,
   type SeasonAuditMatchStatus,
   type SeasonAuditReport,
+  type SeasonAuditReviewKey,
   type SeasonAuditStandingRowInput,
 } from "@/lib/season-audit-core";
 
@@ -42,14 +46,45 @@ export interface SeasonAuditDivisionSummary {
   name: string;
 }
 
+// A reviewed finding plus the review's own metadata (note/reviewer), for the
+// page's collapsed "Reviewed" section. The finding is recomputed fresh every
+// load (see applyReviews) -- only note/reviewedBy/reviewedAt come from the
+// stored SeasonAuditReview row.
+export interface SeasonAuditReviewedFinding extends Finding {
+  note: string | null;
+  reviewedBy: string;
+  reviewedAt: string;
+}
+
 export interface SeasonAuditPageData {
   seasonId: string;
   seasonLabel: string;
   ended: boolean;
   report: SeasonAuditReport;
+  reviewed: SeasonAuditReviewedFinding[];
   // Ladder order, for grouping findings by division on the page even when a
   // division has zero findings of its own.
   divisions: SeasonAuditDivisionSummary[];
+}
+
+// One query, grouped by seasonId -- used both for the single-season page
+// and the overview (which audits every ended + active season).
+async function loadReviewsForSeasons(seasonIds: string[]): Promise<Map<string, SeasonAuditReview[]>> {
+  if (seasonIds.length === 0) return new Map();
+  const rows = await prisma.seasonAuditReview.findMany({
+    where: { seasonId: { in: seasonIds } },
+  });
+  const bySeasonId = new Map<string, SeasonAuditReview[]>();
+  for (const r of rows) {
+    const arr = bySeasonId.get(r.seasonId) ?? [];
+    arr.push(r);
+    bySeasonId.set(r.seasonId, arr);
+  }
+  return bySeasonId;
+}
+
+function toReviewKeys(reviews: SeasonAuditReview[]): SeasonAuditReviewKey[] {
+  return reviews.map((r) => ({ code: r.code, key: r.key }));
 }
 
 const SEASON_SELECT = {
@@ -180,11 +215,21 @@ export async function loadSeasonAudit(seasonId: string): Promise<SeasonAuditPage
   if (!season) return null;
   const input = await buildSeasonAuditInput(season);
   const report = auditSeason(input);
+
+  const reviews = (await loadReviewsForSeasons([seasonId])).get(seasonId) ?? [];
+  const applied = applyReviews(report, toReviewKeys(reviews));
+  const reviewByCodeKey = new Map(reviews.map((r) => [`${r.code}\u0000${r.key}`, r]));
+  const reviewed: SeasonAuditReviewedFinding[] = applied.reviewed.map((f) => {
+    const r = reviewByCodeKey.get(`${f.code}\u0000${f.key}`)!;
+    return { ...f, note: r.note, reviewedBy: r.reviewedBy, reviewedAt: r.createdAt.toISOString() };
+  });
+
   return {
     seasonId: input.seasonId,
     seasonLabel: input.seasonLabel,
     ended: input.ended,
-    report,
+    report: { findings: applied.active, countsBySeverity: applied.countsBySeverity },
+    reviewed,
     divisions: input.divisions.map((d) => ({ divisionId: d.divisionId, name: d.name })),
   };
 }
@@ -205,15 +250,18 @@ export async function loadSeasonAuditOverview(): Promise<SeasonAuditOverview> {
     return b.startedAt.getTime() - a.startedAt.getTime();
   });
 
+  const reviewsBySeasonId = await loadReviewsForSeasons(sorted.map((s) => s.id));
+
   const rows: SeasonAuditOverviewRow[] = [];
   for (const season of sorted) {
     const input = await buildSeasonAuditInput(season);
     const report = auditSeason(input);
+    const applied = applyReviews(report, toReviewKeys(reviewsBySeasonId.get(season.id) ?? []));
     rows.push({
       seasonId: input.seasonId,
       seasonLabel: input.seasonLabel,
       ended: input.ended,
-      countsBySeverity: report.countsBySeverity,
+      countsBySeverity: applied.countsBySeverity,
     });
   }
 

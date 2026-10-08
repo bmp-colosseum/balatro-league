@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   auditSeason,
+  applyReviews,
   checkOpenMatches,
   checkUnsettledCancels,
   checkTies,
@@ -10,6 +11,7 @@ import {
   checkDivisionDiscordLeftovers,
   checkSeasonDiscordLeftovers,
   checkShootoutDangling,
+  type Finding,
   type SeasonAuditDivisionInput,
   type SeasonAuditInput,
   type SeasonAuditMatchInput,
@@ -104,6 +106,7 @@ describe("checkOpenMatches", () => {
       {
         severity: "error",
         code: "open-match",
+        key: "open-match:div-1:m1",
         divisionId: "div-1",
         divisionName: "Legendary",
         message: "Open match (PENDING) between Alice and Bob was never resolved",
@@ -263,6 +266,7 @@ describe("checkChampion", () => {
       {
         severity: "warn",
         code: "no-champion",
+        key: "no-champion:div-1",
         divisionId: "div-1",
         divisionName: "Legendary",
         message: "Tie for #1 in Legendary and no champion recorded -- pick the winner on the winners page",
@@ -313,6 +317,7 @@ describe("checkFinalRanks", () => {
       {
         severity: "warn",
         code: "rank-missing",
+        key: "rank-missing:div-1",
         divisionId: "div-1",
         divisionName: "Legendary",
         message: "Alice has no final global rank recorded",
@@ -499,5 +504,52 @@ describe("auditSeason -- composed", () => {
     // only the rank-missing warn plus the season-level discord-leftover info.
     const report = auditSeason(input);
     expect(report.countsBySeverity).toEqual({ error: 0, warn: 1, info: 1 });
+  });
+});
+
+describe("applyReviews", () => {
+  function finding(overrides: Partial<Finding> = {}): Finding {
+    return {
+      severity: "warn",
+      code: "rank-missing",
+      key: "rank-missing:div-1",
+      divisionId: "div-1",
+      divisionName: "Legendary",
+      message: "Alice has no final global rank recorded",
+      ...overrides,
+    };
+  }
+
+  it("removes a reviewed finding from active and from counts", () => {
+    const f1 = finding();
+    const f2 = finding({ code: "standings-missing", key: "standings-missing:div-1", severity: "warn" });
+    const report = { findings: [f1, f2], countsBySeverity: { error: 0, warn: 2, info: 0 } };
+
+    const applied = applyReviews(report, [{ code: "rank-missing", key: "rank-missing:div-1" }]);
+
+    expect(applied.active).toEqual([f2]);
+    expect(applied.reviewed).toEqual([f1]);
+    expect(applied.countsBySeverity).toEqual({ error: 0, warn: 1, info: 0 });
+  });
+
+  it("ignores a review with no matching finding", () => {
+    const f1 = finding();
+    const report = { findings: [f1], countsBySeverity: { error: 0, warn: 1, info: 0 } };
+
+    const applied = applyReviews(report, [{ code: "rank-missing", key: "rank-missing:div-99" }]);
+
+    expect(applied.active).toEqual([f1]);
+    expect(applied.reviewed).toEqual([]);
+    expect(applied.countsBySeverity).toEqual({ error: 0, warn: 1, info: 0 });
+  });
+
+  it("matches on BOTH code and key -- a key collision across codes is not a match", () => {
+    const f1 = finding({ code: "rank-missing", key: "div-1" });
+    const report = { findings: [f1], countsBySeverity: { error: 0, warn: 1, info: 0 } };
+
+    const applied = applyReviews(report, [{ code: "rank-order", key: "div-1" }]);
+
+    expect(applied.active).toEqual([f1]);
+    expect(applied.reviewed).toEqual([]);
   });
 });

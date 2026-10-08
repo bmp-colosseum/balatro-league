@@ -1289,3 +1289,26 @@ model AvoidedPair {
   @@index([playerAId])
   @@index([playerBId])
 }
+
+// A TO's dismissal of one /admin/season-audit finding that can never be
+// fixed (e.g. a relegation-line tie in a season with no lives data) or has
+// already been handled out of band. Keyed by (seasonId, code, key) where
+// key is the finding's own deterministic identity computed by
+// web/lib/season-audit-core.ts -- so a review stays attached to the SAME
+// finding across re-audits and is dropped automatically once the
+// underlying condition is actually fixed and the finding stops appearing.
+// No relations (same loose-id convention as AvoidedPair/DmAttachment) --
+// season/division/match ids are plain strings here, never joined.
+model SeasonAuditReview {
+  id         String   @id @default(cuid())
+  seasonId   String
+  divisionId String?
+  code       String
+  key        String
+  note       String?
+  reviewedBy String
+  createdAt  DateTime @default(now())
+
+  @@unique([seasonId, code, key])
+  @@index([seasonId])
+}

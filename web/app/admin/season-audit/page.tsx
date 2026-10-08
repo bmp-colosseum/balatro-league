@@ -13,10 +13,23 @@ import {
   loadSeasonAudit,
   loadSeasonAuditOverview,
   type SeasonAuditOverviewRow,
+  type SeasonAuditReviewedFinding,
 } from "@/lib/loaders/season-audit";
 import type { Finding, FindingSeverity } from "@/lib/season-audit-core";
+import { markReviewedAction, recomputeFinalRanksAction, unmarkReviewedAction } from "./actions";
 
 export const dynamic = "force-dynamic";
+
+const OK_MESSAGES: Record<string, string> = {
+  reviewed: "Finding marked reviewed.",
+  unreviewed: "Finding restored to active.",
+};
+
+const ERR_MESSAGES: Record<string, string> = {
+  "missing-fields": "Missing required fields.",
+  "season-not-found": "Season not found.",
+  "not-ended": "Only an ended season's final ranks can be recomputed.",
+};
 
 const SEVERITY_LABEL: Record<FindingSeverity, string> = {
   error: "Error",
@@ -61,14 +74,20 @@ function CountsCell({ counts }: { counts: SeasonAuditOverviewRow["countsBySeveri
 export default async function SeasonAuditPage({
   searchParams,
 }: {
-  searchParams: Promise<{ season?: string }>;
+  searchParams: Promise<{ season?: string; ok?: string; err?: string }>;
 }) {
   await requireAdmin();
-  const { season: seasonParam } = await searchParams;
+  const { season: seasonParam, ok, err } = await searchParams;
 
   const overview = await loadSeasonAuditOverview();
   const selectedSeasonId = seasonParam || overview.defaultSeasonId;
   const data = selectedSeasonId ? await loadSeasonAudit(selectedSeasonId) : null;
+  const okMessage = ok?.startsWith("ranks-")
+    ? `Recomputed final ranks for ${ok.slice("ranks-".length)} member(s).`
+    : ok
+      ? OK_MESSAGES[ok]
+      : undefined;
+  const errMessage = err ? (ERR_MESSAGES[err] ?? err) : undefined;
 
   const findingsByDivisionId = new Map<string, Finding[]>();
   const seasonLevelFindings: Finding[] = [];
@@ -95,6 +114,13 @@ export default async function SeasonAuditPage({
           recorded, final ranks consistent with the standings, Discord leftovers cleaned. A finding is shown
           even when it no longer affects anything; that&apos;s the point of an audit trail.
         </p>
+
+        {okMessage && (
+          <Callout type="success" style={{ marginBottom: 12 }}>{okMessage}</Callout>
+        )}
+        {errMessage && (
+          <Callout type="danger" style={{ marginBottom: 12 }}>{errMessage}</Callout>
+        )}
 
         {overview.seasons.length === 0 ? (
           <Callout type="info">No ended or active seasons to audit yet.</Callout>
@@ -130,20 +156,39 @@ export default async function SeasonAuditPage({
         {data && (
           <>
             <h3 style={{ margin: "18px 0 4px" }}>{data.seasonLabel}</h3>
+
+            {data.ended && data.report.findings.some((f) => f.code === "rank-order") && (
+              <Callout type="admin" style={{ marginBottom: 12 }}>
+                <p style={{ margin: "0 0 8px" }}>
+                  Stored final ranks disagree with today&apos;s standings order. Recomputing rewrites only each
+                  active member&apos;s final placement from the current standings -- it never touches player
+                  ratings.
+                </p>
+                <form action={recomputeFinalRanksAction}>
+                  <input type="hidden" name="seasonId" value={data.seasonId} />
+                  <button type="submit">Recompute final ranks from standings</button>
+                </form>
+              </Callout>
+            )}
+
             {data.report.findings.length === 0 ? (
               <Callout type="success">No findings -- season fully closed out.</Callout>
             ) : (
               <>
                 {seasonLevelFindings.length > 0 && (
-                  <FindingGroup title="Season" findings={seasonLevelFindings} />
+                  <FindingGroup title="Season" seasonId={data.seasonId} findings={seasonLevelFindings} />
                 )}
                 {data.divisions.map((d) => {
                   const findings = findingsByDivisionId.get(d.divisionId) ?? [];
                   if (findings.length === 0) return null;
-                  return <FindingGroup key={d.divisionId} title={d.name} findings={findings} />;
+                  return (
+                    <FindingGroup key={d.divisionId} title={d.name} seasonId={data.seasonId} findings={findings} />
+                  );
                 })}
               </>
             )}
+
+            <ReviewedSection seasonId={data.seasonId} reviewed={data.reviewed} />
           </>
         )}
       </main>
@@ -151,7 +196,15 @@ export default async function SeasonAuditPage({
   );
 }
 
-function FindingGroup({ title, findings }: { title: string; findings: Finding[] }) {
+function FindingGroup({
+  title,
+  seasonId,
+  findings,
+}: {
+  title: string;
+  seasonId: string;
+  findings: Finding[];
+}) {
   return (
     <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 12 }}>
       <div style={{ padding: "8px 12px", fontWeight: 600, borderBottom: "1px solid var(--border, rgba(255,255,255,0.08))" }}>
@@ -163,6 +216,7 @@ function FindingGroup({ title, findings }: { title: string; findings: Finding[] 
             <th>Severity</th>
             <th>Finding</th>
             <th></th>
+            <th>Mark reviewed</th>
           </tr>
         </thead>
         <tbody>
@@ -173,10 +227,77 @@ function FindingGroup({ title, findings }: { title: string; findings: Finding[] 
               </td>
               <td>{f.message}</td>
               <td>{f.href && <Link href={f.href}>Fix</Link>}</td>
+              <td>
+                <form action={markReviewedAction} style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                  <input type="hidden" name="seasonId" value={seasonId} />
+                  <input type="hidden" name="code" value={f.code} />
+                  <input type="hidden" name="key" value={f.key} />
+                  {f.divisionId && <input type="hidden" name="divisionId" value={f.divisionId} />}
+                  <input
+                    type="text"
+                    name="note"
+                    placeholder="Optional note"
+                    style={{ fontSize: 12, width: 140 }}
+                  />
+                  <button type="submit" className="secondary" style={{ padding: "4px 8px", fontSize: 12 }}>
+                    Mark reviewed
+                  </button>
+                </form>
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+function ReviewedSection({
+  seasonId,
+  reviewed,
+}: {
+  seasonId: string;
+  reviewed: SeasonAuditReviewedFinding[];
+}) {
+  if (reviewed.length === 0) return null;
+  return (
+    <details style={{ marginTop: 12 }}>
+      <summary style={{ cursor: "pointer" }}>Reviewed ({reviewed.length})</summary>
+      <div className="card" style={{ padding: 0, overflow: "hidden", marginTop: 8 }}>
+        <table style={{ margin: 0 }}>
+          <thead>
+            <tr>
+              <th>Severity</th>
+              <th>Finding</th>
+              <th>Note</th>
+              <th>Reviewed by</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {reviewed.map((f, i) => (
+              <tr key={`${f.code}-${f.key}-${i}`}>
+                <td>
+                  <SeverityPill severity={f.severity} />
+                </td>
+                <td>{f.message}</td>
+                <td className="muted">{f.note ?? "--"}</td>
+                <td className="muted">{f.reviewedBy}</td>
+                <td>
+                  <form action={unmarkReviewedAction}>
+                    <input type="hidden" name="seasonId" value={seasonId} />
+                    <input type="hidden" name="code" value={f.code} />
+                    <input type="hidden" name="key" value={f.key} />
+                    <button type="submit" className="secondary" style={{ padding: "4px 8px", fontSize: 12 }}>
+                      Unmark
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
   );
 }
