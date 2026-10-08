@@ -1030,12 +1030,37 @@ export async function renderDivisionWelcome(
   const playBullet = assignedSubset
     ? `- Play **${deg} other people** (2 games each) - run \`/schedule\` to see exactly who you play.`
     : `- Play **every other person** in this list once - 2 games each (**${N - 1} matchups**, ${rrTotal} total in this division).`;
-  const queueChannelId = await getConfig(LeagueConfigKey.LeagueQueueChannelId);
-  const queueRef = queueChannelId ? `<#${queueChannelId}>` : "#league-queue";
+  // Promotion / relegation line for THIS division: its own counts, with the
+  // ceiling (first division of the season) and floor (last) suppressed so the
+  // message never promises a move that cannot happen.
   const seasonRow = await prisma.division.findUnique({
     where: { id: div.id },
-    select: { season: { select: { scheduledEndAt: true } } },
+    select: {
+      promoteCount: true,
+      relegateCount: true,
+      season: {
+        select: {
+          scheduledEndAt: true,
+          divisions: { orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }], select: { id: true } },
+        },
+      },
+    },
   });
+  const ladder = seasonRow?.season?.divisions ?? [];
+  const isFirst = ladder.length > 0 && ladder[0]!.id === div.id;
+  const isLast = ladder.length > 0 && ladder[ladder.length - 1]!.id === div.id;
+  const promote = isFirst ? 0 : Math.max(0, seasonRow?.promoteCount ?? 0);
+  const relegate = isLast ? 0 : Math.max(0, seasonRow?.relegateCount ?? 0);
+  const spots = (n: number) => (n === 1 ? "the top finisher" : `the top ${n} finishers`);
+  const drops = (n: number) => (n === 1 ? "last place" : `the bottom ${n}`);
+  const moveBullet =
+    promote > 0 && relegate > 0
+      ? `- At the end of the season **${spots(promote)} move up** a division and **${drops(relegate)} move down** one.`
+      : promote > 0
+        ? `- At the end of the season **${spots(promote)} move up** a division. Nobody drops out of this one -- it is the bottom of the ladder.`
+        : relegate > 0
+          ? `- At the end of the season **${drops(relegate)} move down** a division. This is the top of the ladder -- finish first and you are the league champion.`
+          : "";
   const timeline = seasonTimelineLines(
     seasonRow?.season?.scheduledEndAt ?? null,
     parseBufferDays(await getConfig(LeagueConfigKey.TiebreakBufferDays)),
@@ -1052,10 +1077,11 @@ export async function renderDivisionWelcome(
     ``,
     `**How it works**`,
     playBullet,
-    `• Run \`/start-match @opponent\` and you'll both be guided through everything — banning, picking the deck/stake, and recording each game. No manual reporting.`,
-    `• Each matchup is **2 games**, each with a **fresh pool** — the combos from game 1 won't show up again in game 2. The **winner records their leftover lives** at the end of each game (used for possible future tiebreakers).`,
-    `• **Scheduling your matches is your responsibility.** Reach out to each opponent — here in the channel or by DM — and get your games played. The league won't chase anyone down for you.`,
-    `• Around right now? You can *also* hit **Queue up** in ${queueRef} — if a scheduled opponent is online too, I'll open the match automatically. It's a convenience for when you're free, **not a substitute for scheduling**.`,
+    `- To play, click **Start a match** at the bottom of this channel and pick your opponent -- the bot runs you both through the pick/ban and records each game. No slash commands or manual reporting needed.`,
+    `- Each matchup is **2 games**. The deck and stake never repeat within a matchup -- game 2 draws from a fresh pool. The **winner records the lives they had left** after each game; those count for tiebreaks at the end of the season.`,
+    ...(moveBullet ? [moveBullet] : []),
+    `- **Ties:** if two players finish level we encourage an extra game, a **shootout**, to decide it. If no shootout is played, or three or more are tied, **net lives** (lives left in your wins minus lives your opponents had left when they beat you) decide promotion and relegation.`,
+    `- **Scheduling your matches is your responsibility.** Reach out to each opponent here or by DM and agree a time -- use **Schedule a time** below (Hammertime) to post a timestamp that shows in everyone's own time zone. The league will not chase anyone down for you.`,
     ``,
     `**Standings + your schedule:** <${webUrl(`divisions/${div.id}`)}>`,
     ``,
