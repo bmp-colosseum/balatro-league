@@ -1028,7 +1028,7 @@ export async function renderDivisionWelcome(
   const deg = lockedCount > 0 && N > 0 ? Math.round((2 * lockedCount) / N) : null;
   const assignedSubset = deg != null && deg < N - 1;
   const playBullet = assignedSubset
-    ? `- Play **${deg} other people** (2 games each) - the bot DMs you your matchups; if you need a reminder, click **Who do I play?** under the quick actions at the bottom of this channel.`
+    ? `- You play **${deg} other people** in this division, 2 games each. The bot DMs you your matchups. Need a reminder? Click **Who do I play?** at the bottom of this channel.`
     : `- Play **every other person** in this list once - 2 games each (**${N - 1} matchups**, ${rrTotal} total in this division).`;
   // Promotion / relegation line for THIS division: its own counts, with the
   // ceiling (first division of the season) and floor (last) suppressed so the
@@ -1077,11 +1077,11 @@ export async function renderDivisionWelcome(
     ``,
     `**How it works**`,
     playBullet,
-    `- To play, click **Start a match** at the bottom of this channel and pick your opponent -- the bot facilitates the pick/ban phase and records each game.`,
-    `- Each matchup is **2 games**. The deck/stake combo does not repeat within a matchup -- game 2 draws from a fresh pool. The **winner records the lives they had left** after each game; those count for tiebreaks at the end of the season.`,
+    `- To play, click **Start a match** at the bottom of this channel and pick your opponent. The bot facilitates the pick/ban phase and records each game.`,
+    `- Each matchup is **2 games**. The deck/stake combo does not repeat within a matchup. The **winner records how many lives they had left** after each game. Lives are used for tiebreaks at the end of the season.`,
     ...(moveBullet ? [moveBullet] : []),
-    `- **Ties:** if two players finish level we encourage an extra game, a **shootout**, to decide it. If no shootout is played, or three or more are tied, **net lives** (lives left in your wins minus lives your opponents had left when they beat you) decide promotion and relegation.`,
-    `- **Scheduling your matches is your responsibility.** Reach out to each opponent here or by DM and agree a time -- use **Schedule a time** below (Hammertime) to post a timestamp that shows in everyone's own time zone. The league will not chase anyone down for you.`,
+    `- **Ties:** if two players are tied, we encourage them to play one extra game (a **shootout**) to decide it. If no shootout is played, or more than two players are tied, **net lives** decide who promotes or relegates. Net lives = the lives you had left in your wins, minus the lives your opponents had left in your losses.`,
+    `- **Scheduling is on you.** Message each opponent here or by DM and agree on a time. Use **Schedule a time** below (Hammertime) to post a time that shows correctly in everyone's time zone. Nobody will chase you down.`,
     ``,
     `**Standings + your schedule:** <${webUrl(`divisions/${div.id}`)}>`,
     ``,
