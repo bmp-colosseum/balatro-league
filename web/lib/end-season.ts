@@ -388,14 +388,16 @@ export async function endSeasonCore(seasonId: string, actor: AuditActor): Promis
   // so the message matches what actually happened. Best-effort via the notify.dm
   // queue (the bot drains it); a DM failure never affects the ended season.
   const seasonLabel = formatSeasonLabel(season);
-  // Tiers are ordered best-first. The top tier has nowhere to promote to and the
-  // bottom tier nowhere to relegate to (the rating math already clamps both), so the
-  // DMs must not promise a move that cannot happen: #1 in the top tier WON the league.
-  const topTierPosition = season.tiers[0]?.position;
-  const bottomTierPosition = season.tiers[season.tiers.length - 1]?.position;
+  // Divisions are ordered best-first by (tier, group): Common 1 sits above Common 2, so
+  // dropping from Common 1 is a real relegation. Only the very FIRST division of the
+  // season has nowhere to promote to (its #1 won the league) and only the very LAST
+  // division has nowhere to relegate to; the DMs must not promise a move that cannot
+  // happen for those two.
+  const first = season.divisions[0];
+  const last = season.divisions[season.divisions.length - 1];
   for (const d of season.divisions) {
-    const isTopTier = d.tier.position === topTierPosition;
-    const isBottomTier = d.tier.position === bottomTierPosition;
+    const isTopTier = d.id === first?.id;
+    const isBottomTier = d.id === last?.id;
     const promoteCount = isTopTier ? 0 : Math.max(0, d.promoteCount);
     const relegateCount = isBottomTier ? 0 : Math.max(0, d.relegateCount);
     if (promoteCount === 0 && relegateCount === 0 && !isTopTier) continue;
@@ -415,7 +417,7 @@ export async function endSeasonCore(seasonId: string, actor: AuditActor): Promis
     if (isTopTier && active.length > 0) {
       await dmSeasonEnd(
         active[0]!.player.discordId,
-        `**You won ${d.name}!** You finished #1 in the top tier (${seasonLabel}) -- the best in the league this season. Congratulations!`,
+        `**You won ${d.name}!** You finished #1 in the top division (${seasonLabel}) -- the best in the league this season. Congratulations!`,
       );
     }
     for (let i = 0; i < promoteCount && i < active.length; i++) {
