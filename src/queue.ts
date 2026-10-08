@@ -81,12 +81,15 @@ import { backfillDmAttachments } from "./dm-attachment-backfill.js";
 
 // One recipient of a roster-change schedule DM. "new" = the player just added;
 // "opponent" = someone whose matchup now points at the replacement.
+// "regenerated" = the division's schedule was rebuilt (no roster change
+// implied) and this player's opponent set came out different; departedName/
+// newName don't apply to that role.
 interface ScheduleChangeJob {
   playerId: string;
-  role: "new" | "opponent";
+  role: "new" | "opponent" | "regenerated";
   divisionName: string;
-  departedName: string;
-  newName: string;
+  departedName?: string;
+  newName?: string;
 }
 
 let boss: PgBoss | null = null;
@@ -362,8 +365,10 @@ export async function initQueue(): Promise<void> {
         const embed = await buildScheduleEmbed(playerId);
         const content =
           role === "new"
-            ? `👋 You've been added to **${divisionName}**, taking **${sanitizeName(departedName)}**'s spot. Here's your schedule — reach out to your opponents to set up games:`
-            : `🔄 **Schedule update — ${divisionName}.** **${sanitizeName(departedName)}** was dropped and replaced by **${sanitizeName(newName)}**, so one of your matchups is now against ${sanitizeName(newName)}. Your current schedule:`;
+            ? `👋 You've been added to **${divisionName}**, taking **${sanitizeName(departedName ?? "")}**'s spot. Here's your schedule — reach out to your opponents to set up games:`
+            : role === "opponent"
+              ? `🔄 **Schedule update — ${divisionName}.** **${sanitizeName(departedName ?? "")}** was dropped and replaced by **${sanitizeName(newName ?? "")}**, so one of your matchups is now against ${sanitizeName(newName ?? "")}. Your current schedule:`
+              : `\u{1F504} **Schedule update -- ${divisionName}.** The division's schedule was rebuilt, so your opponents changed. Here is your current schedule -- reach out to your new opponents to set up your matches.`;
         try {
           const user = await client.users.fetch(player.discordId);
           await user.send(embed ? { content, embeds: [embed] } : { content });

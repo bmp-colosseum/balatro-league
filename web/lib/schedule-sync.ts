@@ -11,6 +11,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { planDivisionResync, needsCleanRegenerate, scheduleDegree, type ExistingMatch } from "@/lib/schedule";
 import { lockOneDivision } from "@/lib/lock-schedule";
+import { notifyScheduleRegenerated } from "@/lib/schedule-regenerate";
 import { getPlacementRules } from "@/lib/placement-rules";
 import { loadAvoidedPairIdPairs } from "@/lib/loaders/avoided-pairs";
 
@@ -34,6 +35,7 @@ export async function resyncSeasonSchedules(seasonId: string): Promise<{ pruned:
         orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
         select: {
           id: true,
+          name: true,
           opponentsPerPlayer: true,
           members: { where: { status: "ACTIVE" }, select: { playerId: true } },
           matches: {
@@ -74,9 +76,13 @@ export async function resyncSeasonSchedules(seasonId: string): Promise<{ pruned:
     // the SoS-balanced graph instead of patching -- the same thing the
     // "Regenerate schedule" button does, applied automatically while it is safe.
     if (needsCleanRegenerate(memberIds, matches, target)) {
+      // `matches` is this division's pre-wipe LEAGUE_BO2 pairings -- exactly
+      // what notifyScheduleRegenerated needs as the "before" snapshot.
+      const pairingsBefore = matches;
       const wiped = await prisma.match.deleteMany({ where: { divisionId: d.id, format: "LEAGUE_BO2" } });
       pruned += wiped.count;
       created += await lockOneDivision(d.id);
+      await notifyScheduleRegenerated(d.id, d.name, pairingsBefore);
       continue;
     }
     const plan = planDivisionResync(memberIds, matches, target, forbidden);

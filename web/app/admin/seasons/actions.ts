@@ -9,6 +9,7 @@ import { isDiscordIdBanned, isPlayerIdBanned } from "@/lib/bans";
 import { performSeasonActivation } from "@/lib/season-activation";
 import { resyncSeasonSchedules } from "@/lib/schedule-sync";
 import { lockDivisionSchedules, lockOneDivision } from "@/lib/lock-schedule";
+import { captureDivisionPairings, notifyScheduleRegenerated } from "@/lib/schedule-regenerate";
 import { getPlacementRules, setPlacementRules } from "@/lib/placement-rules";
 import { formatSeasonLabel, formatDivisionName, nextSeasonNumber } from "@/lib/format-season";
 import {
@@ -522,6 +523,16 @@ export async function regenerateSchedules(formData: FormData) {
     redirect("/admin/divisions?err=games-already-played");
   }
 
+  // Capture every division's pairings before the delete so we can DM whoever's
+  // opponents come out different once the schedule's rebuilt.
+  const divisionsBefore = await prisma.division.findMany({
+    where: { seasonId },
+    select: { id: true, name: true },
+  });
+  const pairingsBefore = new Map(
+    await Promise.all(divisionsBefore.map(async (d) => [d.id, await captureDivisionPairings(d.id)] as const)),
+  );
+
   const deleted = await prisma.match.deleteMany({ where: { division: { seasonId }, format: "LEAGUE_BO2" } });
   const { created, divisions, unavoidable } = await lockDivisionSchedules(seasonId);
   if (unavoidable.length) {
@@ -532,13 +543,19 @@ export async function regenerateSchedules(formData: FormData) {
   // Refresh the division welcome messages (rosters/formats updated) — silent.
   await enqueueWelcomeRefresh(seasonId).catch(() => {});
 
+  // DM every ACTIVE player whose opponents changed, per division.
+  let dmRecipients = 0;
+  for (const d of divisionsBefore) {
+    dmRecipients += await notifyScheduleRegenerated(d.id, d.name, pairingsBefore.get(d.id) ?? []);
+  }
+
   recordAudit({
     actor: actorFromAdminUser(user),
     action: "season.regenerate-schedules",
     targetType: "Season",
     targetId: seasonId,
     summary: `Regenerated schedules: cleared ${deleted.count}, created ${created} match(es) across ${divisions} division(s)`,
-    metadata: { seasonId, cleared: deleted.count, created, divisions },
+    metadata: { seasonId, cleared: deleted.count, created, divisions, dmRecipients },
   });
 
   revalidatePath("/admin/divisions");
@@ -565,11 +582,19 @@ export async function regenerateDivisionSchedule(formData: FormData) {
     redirect("/admin/divisions?err=games-already-played");
   }
 
+  const divBefore = await prisma.division.findUnique({ where: { id: divisionId }, select: { name: true, seasonId: true } });
+  const pairingsBefore = await captureDivisionPairings(divisionId);
+
   const deleted = await prisma.match.deleteMany({ where: { divisionId, format: "LEAGUE_BO2" } });
   const created = await lockOneDivision(divisionId);
   // Refresh the division welcome messages (rosters/formats updated) — silent.
   const div = await prisma.division.findUnique({ where: { id: divisionId }, select: { seasonId: true } });
   if (div) await enqueueWelcomeRefresh(div.seasonId).catch(() => {});
+
+  // DM every ACTIVE player in this division whose opponents changed.
+  const dmRecipients = divBefore
+    ? await notifyScheduleRegenerated(divisionId, divBefore.name, pairingsBefore)
+    : 0;
 
   recordAudit({
     actor: actorFromAdminUser(user),
@@ -577,7 +602,7 @@ export async function regenerateDivisionSchedule(formData: FormData) {
     targetType: "Division",
     targetId: divisionId,
     summary: `Regenerated one division's schedule: cleared ${deleted.count}, created ${created} match(es)`,
-    metadata: { divisionId, cleared: deleted.count, created },
+    metadata: { divisionId, cleared: deleted.count, created, dmRecipients },
   });
 
   revalidatePath("/admin/divisions");
