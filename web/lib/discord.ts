@@ -464,6 +464,46 @@ export async function listGuildRoles(guildId: string): Promise<Array<{
   }
 }
 
+// List EVERY member of the guild (requires the privileged GuildMembers
+// intent, which this bot has enabled). Discord caps a single page at 1000;
+// we page with `after` (the highest user id seen so far) until a page comes
+// back short of 1000, which means we've reached the end. Used by the role
+// audit, which needs the full member -> roles map to compare against DB
+// expectations -- there's no per-user lookup that scales to a whole guild.
+export async function listAllGuildMembers(guildId: string): Promise<Array<{
+  id: string;
+  roles: string[];
+  nick: string | null;
+  username: string;
+}>> {
+  const collected: Array<{ id: string; roles: string[]; nick: string | null; username: string }> = [];
+  let after: string | undefined;
+  try {
+    for (;;) {
+      const query = new URLSearchParams({ limit: "1000" });
+      if (after) query.set("after", after);
+      const page = (await rest().get(Routes.guildMembers(guildId), { query })) as APIGuildMember[];
+      for (const m of page) {
+        if (!m.user) continue;
+        collected.push({
+          id: m.user.id,
+          roles: m.roles,
+          nick: m.nick ?? null,
+          username: m.user.username,
+        });
+      }
+      if (page.length < 1000) break;
+      const last = page[page.length - 1];
+      if (!last?.user) break;
+      after = last.user.id;
+    }
+    return collected;
+  } catch (err) {
+    console.warn(`Discord listAllGuildMembers failed:`, err);
+    return [];
+  }
+}
+
 export async function deleteGuildRole(guildId: string, roleId: string): Promise<boolean> {
   try {
     await rest().delete(Routes.guildRole(guildId, roleId));
