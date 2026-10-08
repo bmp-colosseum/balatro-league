@@ -1051,15 +1051,17 @@ export async function renderDivisionWelcome(
   const isLast = ladder.length > 0 && ladder[ladder.length - 1]!.id === div.id;
   const promote = isFirst ? 0 : Math.max(0, seasonRow?.promoteCount ?? 0);
   const relegate = isLast ? 0 : Math.max(0, seasonRow?.relegateCount ?? 0);
-  const spots = (n: number) => (n === 1 ? "the top finisher" : `the top ${n} finishers`);
-  const drops = (n: number) => (n === 1 ? "last place" : `the bottom ${n}`);
+  // Singular / plural agree with the count: "the top finisher moves up" vs
+  // "the top 2 finishers move up"; "last place moves down" vs "the bottom 2 move down".
+  const up = (n: number) => (n === 1 ? "the top finisher moves up" : `the top ${n} finishers move up`);
+  const down = (n: number) => (n === 1 ? "last place moves down" : `the bottom ${n} move down`);
   const moveBullet =
     promote > 0 && relegate > 0
-      ? `- At the end of the season **${spots(promote)} move up** a division and **${drops(relegate)} move down** one.`
+      ? `- At the end of the season **${up(promote)}** a division and **${down(relegate)}** one.`
       : promote > 0
-        ? `- At the end of the season **${spots(promote)} move up** a division. Nobody drops out of this one -- it is the bottom of the ladder.`
+        ? `- At the end of the season **${up(promote)}** a division. Nobody drops out of this one -- it is the bottom of the ladder.`
         : relegate > 0
-          ? `- At the end of the season **${drops(relegate)} move down** a division. This is the top of the ladder -- finish first and you are the league champion.`
+          ? `- At the end of the season **${down(relegate)}** a division. This is the top of the ladder -- finish first and you are the league champion.`
           : "";
   const timeline = seasonTimelineLines(
     seasonRow?.season?.scheduledEndAt ?? null,
