@@ -15,6 +15,7 @@ import { loadDivisionStandings } from "./standings-cache.js";
 import { shootoutsNeeded, type ShootoutNeed } from "./standings.js";
 import { enqueueDm } from "./queue.js";
 import { sanitizeName } from "./sanitize.js";
+import { mentionWithHandle, type MentionSubject } from "./mention.js";
 
 // A stable id for a player pair, order-independent, so (a,b) and (b,a) collide.
 export function pairKey(aId: string, bId: string): string {
@@ -35,8 +36,8 @@ export async function isDivisionComplete(divisionId: string): Promise<boolean> {
 }
 
 export interface ResolvedShootoutNeed extends ShootoutNeed {
-  a: { id: string; discordId: string; displayName: string };
-  b: { id: string; discordId: string; displayName: string };
+  a: { id: string; displayName: string } & MentionSubject;
+  b: { id: string; displayName: string } & MentionSubject;
 }
 
 interface DivisionShootouts {
@@ -57,7 +58,9 @@ export async function computeDivisionShootoutNeeds(divisionId: string): Promise<
   const byId = new Map(rows.map((r) => [r.player.id, r.player]));
   const resolve = (id: string) => {
     const p = byId.get(id);
-    return p ? { id: p.id, discordId: p.discordId, displayName: p.displayName } : null;
+    return p
+      ? { id: p.id, discordId: p.discordId, displayName: p.displayName, username: p.username, showUsername: p.showUsername }
+      : null;
   };
   const needs: ResolvedShootoutNeed[] = [];
   for (const n of bare) {
@@ -105,7 +108,7 @@ export async function runShootoutCheck(divisionId: string): Promise<number> {
     // Public @-ping in the division channel (posted directly so the two user
     // mentions actually notify -- postChannelMessage suppresses user pings).
     if (client && division.discordChannelId) {
-      const mentions = [need.a, need.b].filter((p) => isRealDiscordId(p.discordId)).map((p) => `<@${p.discordId}>`);
+      const mentions = [need.a, need.b].filter((p) => isRealDiscordId(p.discordId)).map((p) => mentionWithHandle(p));
       const names = `${sanitizeName(need.a.displayName)} & ${sanitizeName(need.b.displayName)}`;
       const content =
         `🎯 ${mentions.length ? mentions.join(" ") + " — " : ""}${mentions.length ? "you're" : names + " are"} ` +

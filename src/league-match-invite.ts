@@ -13,6 +13,7 @@ import { ensureLeagueMatchesChannel } from "./league-matches-channel.js";
 import { recordAudit } from "./audit.js";
 import { bannedPlayerIds, BANNED_MESSAGE } from "./bans.js";
 import { sanitizeName } from "./sanitize.js";
+import { mentionWithHandle } from "./mention.js";
 import type { Player } from "@prisma/client";
 
 export interface CreateLeagueMatchInviteResult {
@@ -216,7 +217,7 @@ export async function createLeagueMatchInvite(opts: {
       const sent = await thread.send({
         content:
           content ||
-          `<@${opp.discordId}> — <@${me.discordId}> wants to play. Accept within ${expiryMinutes} min.`,
+          `${mentionWithHandle(opp)} — ${mentionWithHandle(me)} wants to play. Accept within ${expiryMinutes} min.`,
         embeds,
         components,
       });

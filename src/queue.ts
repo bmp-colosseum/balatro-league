@@ -74,6 +74,7 @@ import { runRosterCheckin } from "./roster-checkin.js";
 import { MODLOG_RETENTION_DAYS } from "./mod-log.js";
 import { buildScheduleEmbed } from "./schedule-embed.js";
 import { sanitizeName } from "./sanitize.js";
+import { mentionWithHandle, handleOf, type MentionSubject } from "./mention.js";
 import { runShootoutCheck, isDivisionComplete } from "./shootout.js";
 import { seasonTimelineLines, parseBufferDays } from "./season-timing.js";
 import { refreshAllDmPanels } from "./dm-panel.js";
@@ -1006,15 +1007,15 @@ interface WelcomeRefreshJob {
 // ASSIGNED subset of opponents (the graph); a full round-robin or no locked
 // schedule (legacy) = play everyone.
 export async function renderDivisionWelcome(
-  div: { id: string; name: string; members: { player: { discordId: string } }[] },
+  div: { id: string; name: string; members: { player: MentionSubject }[] },
   seasonLabel: string,
   roleId: string | null,
 ): Promise<string> {
   // One @role for the division (pings everyone in it) instead of a blob of
   // individual @mentions — the names are already in the list below. Falls back to
   // individual mentions only if the role somehow isn't set.
-  const groupTag = roleId ? `<@&${roleId}>` : div.members.map((m) => `<@${m.player.discordId}>`).join(" ");
-  const memberList = div.members.map((m, i) => `${i + 1}. <@${m.player.discordId}>`).join("\n");
+  const groupTag = roleId ? `<@&${roleId}>` : div.members.map((m) => mentionWithHandle(m.player)).join(" ");
+  const memberList = div.members.map((m, i) => `${i + 1}. ${mentionWithHandle(m.player)}`).join("\n");
   const N = div.members.length;
   const rrTotal = (N * (N - 1)) / 2;
   const lockedCount = await prisma.match.count({ where: { divisionId: div.id, format: "LEAGUE_BO2" } });
@@ -1083,7 +1084,7 @@ export async function refreshDivisionWelcomes(
       discordChannelId: true,
       discordRoleId: true,
       welcomeMessageId: true,
-      members: { where: { status: "ACTIVE" }, select: { player: { select: { discordId: true } } } },
+      members: { where: { status: "ACTIVE" }, select: { player: { select: { discordId: true, username: true, showUsername: true } } } },
     },
   });
   let edited = 0;
@@ -1334,7 +1335,10 @@ async function queueSeasonOnboardingDms(seasonId: string): Promise<void> {
         select: {
           name: true,
           discordChannelId: true,
-          members: { where: { status: "ACTIVE" }, select: { player: { select: { id: true, discordId: true, displayName: true } } } },
+          members: {
+            where: { status: "ACTIVE" },
+            select: { player: { select: { id: true, discordId: true, displayName: true, username: true, showUsername: true } } },
+          },
           matches: { where: { format: "LEAGUE_BO2" }, select: { playerAId: true, playerBId: true } },
         },
       },
@@ -1344,25 +1348,34 @@ async function queueSeasonOnboardingDms(seasonId: string): Promise<void> {
   const label = formatSeasonLabel(season);
 
   for (const div of season.divisions) {
-    const nameById = new Map(div.members.map((m) => [m.player.id, m.player.displayName]));
-    const oppsById = new Map<string, string[]>();
-    const add = (pid: string, name: string) => {
+    const playerById = new Map(div.members.map((m) => [m.player.id, m.player]));
+    const oppsById = new Map<string, (typeof div.members)[number]["player"][]>();
+    const add = (pid: string, opp: (typeof div.members)[number]["player"]) => {
       const arr = oppsById.get(pid) ?? [];
-      arr.push(name);
+      arr.push(opp);
       oppsById.set(pid, arr);
     };
     for (const mt of div.matches) {
-      const aN = nameById.get(mt.playerAId);
-      const bN = nameById.get(mt.playerBId);
-      if (aN && bN) {
-        add(mt.playerAId, bN);
-        add(mt.playerBId, aN);
+      const aP = playerById.get(mt.playerAId);
+      const bP = playerById.get(mt.playerBId);
+      if (aP && bP) {
+        add(mt.playerAId, bP);
+        add(mt.playerBId, aP);
       }
     }
     for (const m of div.members) {
       const opps = oppsById.get(m.player.id) ?? [];
+      // Handle alongside the name -- this DM has no @mention (DMs don't
+      // resolve the recipient's guild member cache the way a channel
+      // message does), so the handle is the only thing the player can
+      // type to find their opponent.
       const oppLine = opps.length
-        ? opps.map((o) => `• ${sanitizeName(o)}`).join("\n")
+        ? opps
+            .map((o) => {
+              const handle = handleOf(o);
+              return `• ${sanitizeName(o.displayName)}${handle ? ` (${handle})` : ""}`;
+            })
+            .join("\n")
         : "_(your matchups will show with_ `/schedule`_)_";
       const content =
         `🎴 **Welcome to ${label}!**\n` +

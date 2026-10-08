@@ -26,6 +26,7 @@ import { disputeThreadButtons } from "./commands/dispute-buttons.js";
 import { webUrl } from "./web-url.js";
 import { postModerationNotice } from "./mod-log.js";
 import { sanitizeName } from "./sanitize.js";
+import { mentionWithHandle } from "./mention.js";
 
 export async function spawnDisputeThread(
   pairingId: string,
@@ -149,7 +150,7 @@ export async function spawnDisputeThread(
       ? `\n\n**Reason:** ${pairing.disputeReason}`
       : "";
     const disputerLine = pairing.disputer
-      ? `<@${pairing.disputer.discordId}> disputed the result.`
+      ? `${mentionWithHandle(pairing.disputer)} disputed the result.`
       : `The result was disputed.`;
 
     const hasProposal =
@@ -157,7 +158,7 @@ export async function spawnDisputeThread(
     await thread.send({
       content:
         `${staffMentions ? staffMentions + "\n" : ""}` +
-        `<@${reporter.discordId}> reported **${sanitizeName(reporter.displayName)} ${pairing.gamesWonA}-${pairing.gamesWonB} ${sanitizeName(opponent.displayName)}** in **${pairing.division.name}**.\n` +
+        `${mentionWithHandle(reporter)} reported **${sanitizeName(reporter.displayName)} ${pairing.gamesWonA}-${pairing.gamesWonB} ${sanitizeName(opponent.displayName)}** in **${pairing.division.name}**.\n` +
         disputerLine +
         proposalLine +
         reasonLine +

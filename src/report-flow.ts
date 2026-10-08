@@ -24,6 +24,7 @@ import { env } from "./env.js";
 import { resolveBotCommandsChannelId } from "./bot-commands-channel.js";
 import { getConfig, LeagueConfigKey } from "./league-config.js";
 import { sanitizeName } from "./sanitize.js";
+import { mentionWithHandle, type MentionSubject } from "./mention.js";
 
 // Resolve the results channel id with the same precedence the announce
 // path uses: season override → global LeagueConfig → env. Falls back
@@ -50,8 +51,8 @@ async function resolveReportChannelId(seasonId: string | null): Promise<string |
 // AUTO_CONFIRMED / DISPUTED). Used by both initial post + every edit.
 export function buildReportEmbed(args: {
   status: "PENDING" | "CONFIRMED" | "AUTO_CONFIRMED" | "DISPUTED";
-  reporter: { displayName: string; discordId: string };
-  opponent: { displayName: string; discordId: string };
+  reporter: { displayName: string } & MentionSubject;
+  opponent: { displayName: string } & MentionSubject;
   divisionName: string;
   result: { gamesWonA: number; gamesWonB: number };
   reporterIsA: boolean;
@@ -76,7 +77,7 @@ export function buildReportEmbed(args: {
       color = 0xf1c40f;
       description =
         `${scoreline}\n_in **${divisionName}**_\n\n` +
-        `<@${opponent.discordId}>, please **Confirm** or **Dispute** within 2 minutes.\n` +
+        `${mentionWithHandle(opponent)}, please **Confirm** or **Dispute** within 2 minutes.\n` +
         `_If no action, the result auto-confirms._`;
       break;
     case "CONFIRMED":
@@ -96,7 +97,7 @@ export function buildReportEmbed(args: {
       color = 0xe74c3c;
       description =
         `${scoreline}\n_in **${divisionName}**_\n\n` +
-        `<@${opponent.discordId}> disputed the result. A helper has been pinged in the thread below.`;
+        `${mentionWithHandle(opponent)} disputed the result. A helper has been pinged in the thread below.`;
       break;
   }
   const embed = new EmbedBuilder()
@@ -170,7 +171,7 @@ export async function postPendingReport(pairingId: string): Promise<void> {
       combo: { deck: pairing.reportedDeck, stake: pairing.reportedStake },
     });
     const message = await (channel as TextChannel).send({
-      content: `<@${opponent.discordId}> match reported against you`,
+      content: `${mentionWithHandle(opponent)} match reported against you`,
       embeds: [embed],
       components: [pendingButtons(pairingId)],
     });

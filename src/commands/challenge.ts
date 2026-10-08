@@ -22,6 +22,7 @@ import { postModerationNotice } from "../mod-log.js";
 import { getOrCreatePlayer, guildDisplayName } from "../players.js";
 import { bannedPlayerIds, BANNED_MESSAGE } from "../bans.js";
 import { sanitizeName } from "../sanitize.js";
+import { mentionWithHandle } from "../mention.js";
 import type { SlashCommand } from "./types.js";
 
 const BO_CHOICES = [
@@ -228,7 +229,7 @@ export const challenge: SlashCommand = {
       const thread = await interaction.client.channels.fetch(threadId);
       if (thread && thread.type === ChannelType.PrivateThread) {
         const sent = await thread.send({
-          content: `<@${opp.discordId}> — <@${me.discordId}> wants to play. Invite expires in ${settings.matchInviteExpiryMinutes} min.`,
+          content: `${mentionWithHandle(opp)} — ${mentionWithHandle(me)} wants to play. Invite expires in ${settings.matchInviteExpiryMinutes} min.`,
           embeds,
           components,
         });
