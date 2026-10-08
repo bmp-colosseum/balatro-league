@@ -8,6 +8,7 @@
 // the way to fix one match by hand, and every row links there.
 
 import Link from "next/link";
+import { SelectAllCheckbox } from "@/components/SelectAllCheckbox";
 import { requireAdmin } from "@/lib/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
@@ -269,10 +270,7 @@ function QueueStep({ sp, filters, data }: { sp: SP; filters: BulkResolveFilters;
             {sp.dropped === "1" && <input type="hidden" name="dropped" value="1" />}
 
             <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
-                <input type="checkbox" id="resolve-select-all" />
-                Select all ({data.rows.length})
-              </label>
+              <SelectAllCheckbox formId={BULK_FORM_ID} label={`Select all (${data.rows.length})`} />
               <FormSelect
                 name="action"
                 placeholder="Choose an action..."
@@ -305,21 +303,6 @@ function QueueStep({ sp, filters, data }: { sp: SP; filters: BulkResolveFilters;
               </table>
             </div>
           </form>
-          <script
-            // Tiny progressive-enhancement toggle for "Select all" -- same pattern
-            // as /admin/dms. Keyed by the filter query so a filter navigation
-            // remounts (not just re-renders) this node and re-runs against the
-            // freshly-rendered checkboxes.
-            key={`resolve-select-all-${filterQuery(sp)}`}
-            dangerouslySetInnerHTML={{
-              __html:
-                "document.getElementById('resolve-select-all').addEventListener('change', function (e) {" +
-                "document.querySelectorAll('#" + BULK_FORM_ID + " input[name=\"ids\"]').forEach(function (cb) {" +
-                "cb.checked = e.target.checked;" +
-                "});" +
-                "});",
-            }}
-          />
         </>
       )}
     </>

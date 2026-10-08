@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SelectAllCheckbox } from "@/components/SelectAllCheckbox";
 import { requireAdmin } from "@/lib/admin";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
@@ -486,10 +487,7 @@ export default async function DmsPage({
         <form id={BULK_FORM_ID} action={markManyRead} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
           <input type="hidden" name="view" value={view} />
           <input type="hidden" name="q" value={q} />
-          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
-            <input type="checkbox" id="dm-select-all" />
-            Select all
-          </label>
+          <SelectAllCheckbox formId={BULK_FORM_ID} label="Select all" />
           <SubmitButton formAction={markManyRead} variant="secondary" size="sm">
             Mark read
           </SubmitButton>
@@ -500,22 +498,6 @@ export default async function DmsPage({
             Unarchive
           </SubmitButton>
         </form>
-        <script
-          // Tiny progressive-enhancement toggle for "Select all" -- the only
-          // script on the page, no client component needed for this one wire-up.
-          // Keyed by view+q so a tab/search navigation remounts (not just
-          // re-renders) this node -- otherwise the browser won't re-run it
-          // against the freshly-rendered checkboxes.
-          key={`dm-select-all-script-${view}-${q}`}
-          dangerouslySetInnerHTML={{
-            __html:
-              "document.getElementById('dm-select-all').addEventListener('change', function (e) {" +
-              "document.querySelectorAll('input[form=\"" + BULK_FORM_ID + "\"][name=\"ids\"]').forEach(function (cb) {" +
-              "cb.checked = e.target.checked;" +
-              "});" +
-              "});",
-          }}
-        />
 
         {/* ---- Conversations ---- */}
         <div className="card">
