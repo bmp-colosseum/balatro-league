@@ -71,6 +71,7 @@ const ACTION_LABEL: Record<BulkAction, string> = {
 };
 
 interface SP {
+  season?: string;
   division?: string;
   status?: string;
   suggested?: string;
@@ -101,6 +102,7 @@ function isBulkAction(v: string | undefined): v is BulkAction {
 // into a half-finished confirmation.
 function filterQuery(sp: SP): string {
   const q = new URLSearchParams();
+  if (sp.season) q.set("season", sp.season);
   if (sp.division) q.set("division", sp.division);
   if (sp.status && sp.status !== "all") q.set("status", sp.status);
   if (sp.suggested && sp.suggested !== "all") q.set("suggested", sp.suggested);
@@ -150,6 +152,7 @@ export default async function BulkResolvePage({ searchParams }: { searchParams: 
   const sp = await searchParams;
 
   const filters: BulkResolveFilters = {
+    seasonId: sp.season || undefined,
     divisionId: sp.division || undefined,
     status: isRowStatusFilter(sp.status) ? sp.status : "all",
     suggested: isSuggestedFilter(sp.suggested) ? sp.suggested : "all",
@@ -175,7 +178,24 @@ export default async function BulkResolvePage({ searchParams }: { searchParams: 
         {sp.err && <Callout type="danger">{sp.err}</Callout>}
         {sp.ok && <Callout type="success">{sp.ok}</Callout>}
 
-        {!data.hasActiveSeason && <Callout type="info">No active season right now.</Callout>}
+        {!data.hasActiveSeason && <Callout type="info">No active season right now -- pick an ended season below to close out its matches.</Callout>}
+        {!data.hasActiveSeason && data.seasons.length > 0 && (
+          <form method="get" action={PAGE} className="card" style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+            <div>
+              <label className="muted" style={{ fontSize: 12, display: "block" }}>
+                Season
+              </label>
+              <FormSelect
+                name="season"
+                defaultValue=""
+                placeholder="Pick a season"
+                triggerClassName="min-w-[220px]"
+                options={data.seasons.map((s) => ({ value: s.id, label: s.ended ? `${s.label} (ended)` : s.label }))}
+              />
+            </div>
+            <button type="submit" className="secondary">Show</button>
+          </form>
+        )}
 
         {data.hasActiveSeason && isConfirmStep && <ConfirmStep sp={sp} data={data} />}
         {data.hasActiveSeason && !isConfirmStep && <QueueStep sp={sp} filters={filters} data={data} />}
@@ -190,6 +210,17 @@ function QueueStep({ sp, filters, data }: { sp: SP; filters: BulkResolveFilters;
   return (
     <>
       <form method="get" action={PAGE} className="card" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div>
+          <label className="muted" style={{ fontSize: 12, display: "block" }}>
+            Season
+          </label>
+          <FormSelect
+            name="season"
+            defaultValue={data.seasonId ?? ""}
+            triggerClassName="min-w-[200px]"
+            options={data.seasons.map((s) => ({ value: s.id, label: s.ended ? `${s.label} (ended)` : s.label }))}
+          />
+        </div>
         <div>
           <label className="muted" style={{ fontSize: 12, display: "block" }}>
             Division
@@ -263,6 +294,7 @@ function QueueStep({ sp, filters, data }: { sp: SP; filters: BulkResolveFilters;
         <>
           <form id={BULK_FORM_ID} method="get" action={PAGE}>
             <input type="hidden" name="step" value="confirm" />
+            {data.seasonId && <input type="hidden" name="season" value={data.seasonId} />}
             {sp.division && <input type="hidden" name="division" value={sp.division} />}
             {filters.status !== "all" && <input type="hidden" name="status" value={filters.status} />}
             {filters.suggested !== "all" && <input type="hidden" name="suggested" value={filters.suggested} />}

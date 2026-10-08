@@ -22,6 +22,9 @@ import {
 export type RowStatusFilter = "all" | "pending" | "disputed" | "unplayed-scheduled";
 
 export interface BulkResolveFilters {
+  // Which season's queue to show. Defaults to the active season; an ENDED
+  // season can be picked to close out matches that were never zeroed out.
+  seasonId?: string;
   divisionId?: string;
   status?: RowStatusFilter;
   suggested?: SuggestedActionKind | "all";
@@ -40,9 +43,18 @@ export interface BulkResolveQueueRow extends UnresolvedRow {
   tierName: string;
 }
 
+export interface BulkResolveSeasonOption {
+  id: string;
+  label: string;
+  ended: boolean;
+}
+
 export interface BulkResolveData {
+  // True when a season was resolved (the active one, or the picked ended one).
   hasActiveSeason: boolean;
+  seasonId: string | null;
   seasonLabel: string | null;
+  seasons: BulkResolveSeasonOption[];
   divisions: BulkResolveDivisionOption[];
   rows: BulkResolveQueueRow[];
   // Count before any filter in BulkResolveFilters is applied -- lets the page
@@ -57,12 +69,23 @@ const STATUS_WANTED: Record<Exclude<RowStatusFilter, "all">, UnresolvedRow["stat
 };
 
 export async function loadBulkResolveQueue(filters: BulkResolveFilters): Promise<BulkResolveData> {
-  const season = await prisma.season.findFirst({
-    where: { isActive: true },
-    select: { id: true, number: true, subtitle: true },
+  // Active season first, then ended seasons newest first -- the picker lets a TO
+  // close out old seasons' unplayed matches with the same bulk tooling.
+  const seasonRows = await prisma.season.findMany({
+    where: { OR: [{ isActive: true }, { endedAt: { not: null } }] },
+    orderBy: [{ isActive: "desc" }, { number: "desc" }],
+    select: { id: true, number: true, subtitle: true, isActive: true, endedAt: true },
   });
+  const seasons: BulkResolveSeasonOption[] = seasonRows.map((s) => ({
+    id: s.id,
+    label: formatSeasonLabel(s),
+    ended: s.endedAt !== null,
+  }));
+  const season = filters.seasonId
+    ? seasonRows.find((s) => s.id === filters.seasonId) ?? null
+    : seasonRows.find((s) => s.isActive) ?? null;
   if (!season) {
-    return { hasActiveSeason: false, seasonLabel: null, divisions: [], rows: [], totalUnfiltered: 0 };
+    return { hasActiveSeason: false, seasonId: null, seasonLabel: null, seasons, divisions: [], rows: [], totalUnfiltered: 0 };
   }
 
   const divisionsRaw = await prisma.division.findMany({
@@ -155,5 +178,5 @@ export async function loadBulkResolveQueue(filters: BulkResolveFilters): Promise
   // the top regardless of which division they're in.
   rows = [...rows].sort((a, b) => b.daysSinceTouch - a.daysSinceTouch);
 
-  return { hasActiveSeason: true, seasonLabel: formatSeasonLabel(season), divisions, rows, totalUnfiltered };
+  return { hasActiveSeason: true, seasonId: season.id, seasonLabel: formatSeasonLabel(season), seasons, divisions, rows, totalUnfiltered };
 }
