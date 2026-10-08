@@ -13,6 +13,7 @@ import { prisma } from "./db.js";
 import { tryGetDiscordClient } from "./discord.js";
 import { loadDivisionStandings } from "./standings-cache.js";
 import { shootoutsNeeded, type ShootoutNeed } from "./standings.js";
+import { normalizeTiebreak, type SeasonTiebreak } from "./standings-mode.js";
 import { enqueueDm } from "./queue.js";
 import { sanitizeName } from "./sanitize.js";
 import { mentionWithHandle, type MentionSubject } from "./mention.js";
@@ -43,6 +44,12 @@ export interface ResolvedShootoutNeed extends ShootoutNeed {
 interface DivisionShootouts {
   division: { id: string; name: string; discordChannelId: string | null };
   needs: ResolvedShootoutNeed[];
+  // This division's season's tiebreak -- drives the ping wording in
+  // runShootoutCheck below (a shootout is MANDATORY to settle a chain-mode
+  // head-to-head split, but merely OPTIONAL under "lives", where net lives
+  // already decide any 2-way tie that reaches this point; a shared rank is
+  // a legitimate final answer there). See standings-mode.ts's normalizeTiebreak.
+  tiebreak: SeasonTiebreak;
 }
 
 // Compute the shootouts a complete division owes right now (empty if incomplete
@@ -50,7 +57,14 @@ interface DivisionShootouts {
 export async function computeDivisionShootoutNeeds(divisionId: string): Promise<DivisionShootouts | null> {
   const div = await prisma.division.findUnique({
     where: { id: divisionId },
-    select: { id: true, name: true, discordChannelId: true, promoteCount: true, relegateCount: true },
+    select: {
+      id: true,
+      name: true,
+      discordChannelId: true,
+      promoteCount: true,
+      relegateCount: true,
+      season: { select: { tiebreak: true } },
+    },
   });
   if (!div) return null;
   const rows = await loadDivisionStandings(divisionId);
@@ -68,7 +82,11 @@ export async function computeDivisionShootoutNeeds(divisionId: string): Promise<
     const b = resolve(n.bId);
     if (a && b) needs.push({ ...n, a, b });
   }
-  return { division: { id: div.id, name: div.name, discordChannelId: div.discordChannelId }, needs };
+  return {
+    division: { id: div.id, name: div.name, discordChannelId: div.discordChannelId },
+    needs,
+    tiebreak: normalizeTiebreak(div.season.tiebreak),
+  };
 }
 
 // legacy:<slug> ids are unlinked players who can't be @-mentioned / DM'd.
@@ -85,7 +103,7 @@ export async function runShootoutCheck(divisionId: string): Promise<number> {
   if (!(await isDivisionComplete(divisionId))) return 0;
   const result = await computeDivisionShootoutNeeds(divisionId);
   if (!result || result.needs.length === 0) return 0;
-  const { division, needs } = result;
+  const { division, needs, tiebreak } = result;
 
   const client = tryGetDiscordClient();
   let sent = 0;
@@ -95,10 +113,21 @@ export async function runShootoutCheck(divisionId: string): Promise<number> {
     if (already) continue;
 
     const where = boundaryPhrase(need.boundary);
+    // Under "lives" this pair already made it through net lives without
+    // separating -- a shootout is a voluntary way to settle it, not owed.
+    // Under "chain" (default) it's the only thing left that can.
+    const unresolvedReason =
+      tiebreak === "lives"
+        ? "and net lives didn't settle it either"
+        : "and your head-to-head didn't settle it";
+    const callToAction =
+      tiebreak === "lives"
+        ? "A shootout is **optional** -- play **one game** if you'd rather not share the rank: open"
+        : "Play **one game** to decide it: open";
     // DM each player (framed from their side).
     const dm = (me: typeof need.a, opp: typeof need.b) =>
       `🎯 **Shootout needed** — you and **${sanitizeName(opp.displayName)}** are tied for ${where} in ` +
-      `**${division.name}**, and your head-to-head didn't settle it. Play **one game** to decide it: open ` +
+      `**${division.name}**, ${unresolvedReason}. ${callToAction} ` +
       `**#league-matches** and hit **Start shootout**, or run \`/start-match mode:shootout\`.`;
     if (isRealDiscordId(need.a.discordId))
       await enqueueDm({ discordId: need.a.discordId, content: dm(need.a, need.b), kind: "shootout" });
@@ -110,9 +139,14 @@ export async function runShootoutCheck(divisionId: string): Promise<number> {
     if (client && division.discordChannelId) {
       const mentions = [need.a, need.b].filter((p) => isRealDiscordId(p.discordId)).map((p) => mentionWithHandle(p));
       const names = `${sanitizeName(need.a.displayName)} & ${sanitizeName(need.b.displayName)}`;
+      const splitPhrase = tiebreak === "lives" ? "and net lives tied too" : "and split your head-to-head";
+      const decidesPhrase =
+        tiebreak === "lives"
+          ? "An optional **shootout game** can settle it (otherwise the shared rank stands) --"
+          : "**One shootout game** decides it —";
       const content =
         `🎯 ${mentions.length ? mentions.join(" ") + " — " : ""}${mentions.length ? "you're" : names + " are"} ` +
-        `tied for ${where} in **${division.name}** and split your head-to-head. **One shootout game** decides it — ` +
+        `tied for ${where} in **${division.name}** ${splitPhrase}. ${decidesPhrase} ` +
         `hit **Start shootout** in #league-matches (or \`/start-match mode:shootout\`).`;
       try {
         const ch = await client.channels.fetch(division.discordChannelId);

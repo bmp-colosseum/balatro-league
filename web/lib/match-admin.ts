@@ -10,9 +10,10 @@
 
 import { prisma } from "@/lib/prisma";
 import { enqueueAnnounceResult } from "@/lib/queue";
-import { recomputeDivisionStandings } from "@/lib/standings-cache";
+import { recomputeDivisionStandings, loadDivisionStandings } from "@/lib/standings-cache";
 import { resyncSeasonSchedules } from "@/lib/schedule-sync";
 import { recordAudit, type AuditActor } from "@/lib/audit";
+import { normalizeTiebreak } from "@/lib/standings-mode";
 
 export type ResultStr = "2-0" | "1-1" | "0-2";
 
@@ -538,6 +539,26 @@ export async function recordShowdown(args: {
   if (winnerId !== p1Id && winnerId !== p2Id) {
     return { ok: false, reason: "Winner must be one of the two players." };
   }
+  // Under the lives tiebreak a hand-recorded shootout is only legitimate as the
+  // record of a game two players ACTUALLY tied on points chose to play. Refuse
+  // anything else, so the Season 8 pattern (pairwise shootouts stamped across a
+  // whole group, including pairs that were never tied) cannot recur.
+  const divisionForGuard = await prisma.division.findUnique({
+    where: { id: divisionId },
+    select: { season: { select: { tiebreak: true } } },
+  });
+  if (divisionForGuard && normalizeTiebreak(divisionForGuard.season.tiebreak) === "lives") {
+    const rows = await loadDivisionStandings(divisionId);
+    const rowA = rows.find((r) => r.player.id === p1Id);
+    const rowB = rows.find((r) => r.player.id === p2Id);
+    if (!rowA || !rowB || rowA.points !== rowB.points) {
+      return {
+        ok: false,
+        reason:
+          "This season breaks ties by net lives -- a shootout can only be recorded between two players who are currently tied on points.",
+      };
+    }
+  }
   const [canonA, canonB] = canonicalPair(p1Id, p2Id);
   const gamesWonA = winnerId === canonA ? 1 : 0;
   const gamesWonB = winnerId === canonB ? 1 : 0;
@@ -592,6 +613,25 @@ export async function resolveTieWithShowdowns(args: {
   actor: AuditActor;
 }): Promise<{ ok: true; divisionId: string; showdownsWritten: number } | { ok: false; reason: string }> {
   const { divisionId, actor } = args;
+
+  // Writing a showdown is pointless (and misleading) once the season breaks
+  // ties by net lives instead -- shootouts are a chain-mode-only concept and
+  // sortStandings never consults them under tiebreak "lives" (see
+  // web/lib/standings.ts's sortStandingsLives). Refuse up front with a clear
+  // message rather than silently recording something standings will ignore.
+  const division = await prisma.division.findUnique({
+    where: { id: divisionId },
+    select: { season: { select: { tiebreak: true } } },
+  });
+  if (division && normalizeTiebreak(division.season.tiebreak) === "lives") {
+    return {
+      ok: false,
+      reason:
+        "This season breaks ties by net lives -- shootouts are not recorded by hand. " +
+        "Switch the season back to chain on /admin/standings-preview if you really need to.",
+    };
+  }
+
   // First place per player wins; drop blanks/dupes.
   const byPlayer = new Map<string, number>();
   for (const p of args.placements) {

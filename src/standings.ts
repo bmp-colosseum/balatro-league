@@ -34,6 +34,13 @@ export interface StandingRow {
   // the web admin-preview feature's core so the two copies don't drift.
   netLives?: number;
   livesGamesMissing?: number;
+  // Only set under tiebreak "lives", and only on a row that was part of an
+  // EXACTLY-TWO-tied points group whose two members actually played each
+  // other -- the signed lives differential from THIS row's own perspective
+  // across that one match's games (see headToHeadLivesDiff). Informational
+  // (the UI can show it); absent for every other row. Mirrors web
+  // (web/lib/standings.ts).
+  h2hLives?: number;
 }
 
 // See web/lib/standings.ts's identical type for the full rationale.
@@ -205,9 +212,15 @@ export function computeStandings(
   return sortStandings(Array.from(byId.values()), pairings, shootouts, tiebreak);
 }
 
-// Sort rules: points DESC → head-to-head (2-0 only) → shootout result →
-// [tiebreak "lives" only: net lives DESC] → wins DESC → draws DESC →
-// displayName for stable order. Mirrors web/lib/standings.ts.
+// Sort rules (tiebreak "chain", the default): points DESC -> head-to-head
+// (2-0 only) -> shootout result -> wins DESC -> draws DESC -> displayName
+// for stable order. This is the ORIGINAL chain-mode algorithm, untouched by
+// the "lives" tiebreak below. Mirrors web/lib/standings.ts.
+//
+// Under tiebreak "lives" every row first gets netLives/livesGamesMissing
+// (as before), then ordering is delegated entirely to sortStandingsLives --
+// a different grouping algorithm (see its header), NOT this pairwise
+// comparator. The chain path never sees a "lives" branch inserted into it.
 function sortStandings(
   rows: StandingRow[],
   pairings: Array<PairingWithLives>,
@@ -220,9 +233,13 @@ function sortStandings(
       row.netLives = netLives;
       row.livesGamesMissing = livesGamesMissing;
     }
+    const ordered = sortStandingsLives(
+      rows,
+      (xId, yId) => shootoutBetween(xId, yId, shootouts),
+      (xId, yId) => headToHeadLivesDiff(xId, yId, pairings),
+    );
+    return assignRanks(ordered);
   }
-  const livesCompare = (x: StandingRow, y: StandingRow): number =>
-    tiebreak === "lives" ? (y.netLives ?? 0) - (x.netLives ?? 0) : 0;
 
   const sorted = rows.slice().sort((x, y) => {
     if (y.points !== x.points) return y.points - x.points;
@@ -230,8 +247,6 @@ function sortStandings(
     if (h2h !== 0) return h2h;
     const shoot = shootoutBetween(x.player.id, y.player.id, shootouts);
     if (shoot !== 0) return shoot;
-    const lives = livesCompare(x, y);
-    if (lives !== 0) return lives;
     if (y.wins !== x.wins) return y.wins - x.wins;
     if (y.draws !== x.draws) return y.draws - x.draws;
     return x.player.displayName.localeCompare(y.player.displayName);
@@ -245,7 +260,6 @@ function sortStandings(
       prev.points === cur.points &&
       headToHead(prev.player.id, cur.player.id, pairings) === 0 &&
       shootoutBetween(prev.player.id, cur.player.id, shootouts) === 0 &&
-      livesCompare(prev, cur) === 0 &&
       prev.wins === cur.wins &&
       prev.draws === cur.draws
     ) {
@@ -253,6 +267,135 @@ function sortStandings(
     }
   }
   return assignRanks(sorted);
+}
+
+// Signed lives differential between two players from their SINGLE pairing's
+// per-game winnerLives (a game's winner's recorded winnerLives counts FOR
+// them and AGAINST the loser, so a 2-0 naturally outweighs a 1-1 split; a
+// game missing winnerLives contributes 0, same as computeNetLives). Returns
+// null when the two never played each other at all, so the caller can tell
+// "didn't play" (-> fall back to total net lives) apart from "played and
+// netted exactly zero" (a real 0). Exported so standings-best-n.ts can reuse
+// it with its own "both sides counted this result" gating. Mirrors
+// web/lib/standings.ts's identical export.
+export function headToHeadLivesDiff(
+  xId: string,
+  yId: string,
+  pairings: Array<Pick<PairingWithLives, "playerAId" | "playerBId" | "games">>,
+): number | null {
+  const meeting = pairings.find(
+    (p) => (p.playerAId === xId && p.playerBId === yId) || (p.playerAId === yId && p.playerBId === xId),
+  );
+  if (!meeting) return null;
+  let diff = 0;
+  for (const g of meeting.games ?? []) {
+    if (!g.winnerId) continue;
+    if (g.winnerLives == null) continue;
+    diff += g.winnerId === xId ? g.winnerLives : -g.winnerLives;
+  }
+  return diff;
+}
+
+// Display-only secondary order within a group that's otherwise fully tied
+// (wins DESC, draws DESC, name ASC) -- never used to BREAK the tie, only to
+// give tied rows a stable, deterministic row order. Exported alongside
+// sortStandingsLives/orderLivesPointsGroup for direct unit testing. Mirrors
+// web/lib/standings.ts's identical export.
+export function livesDisplayOrder<T extends StandingRow>(rows: T[]): T[] {
+  return rows.slice().sort((x, y) => {
+    if (y.wins !== x.wins) return y.wins - x.wins;
+    if (y.draws !== x.draws) return y.draws - x.draws;
+    return x.player.displayName.localeCompare(y.player.displayName);
+  });
+}
+
+// The "lives" tiebreak's rule for ONE group of rows already tied on points
+// (and nothing else -- sortStandingsLives below forms these groups). Mutates
+// tiedWithPrev (and, for an exactly-two group, h2hLives) directly on the
+// rows it returns in their final order, mirroring assignRanks's convention.
+// Exported for direct unit testing. Mirrors web/lib/standings.ts's identical
+// export.
+//
+//   - 1 player: nothing to decide.
+//   - 3+ players: order by total net lives DESC. Players still equal after
+//     that are a REAL tie (tiedWithPrev) sharing a rank -- wins/draws/name
+//     only pick a stable DISPLAY order among them, never break the tie.
+//   - exactly 2 players: (1) a CONFIRMED shootout between them decides;
+//     else (2) if they played each other, the lives differential INSIDE
+//     that one match decides (h2hLives is recorded on both rows whenever
+//     they played, whether or not it ends up deciding anything); else, or
+//     if that differential is exactly zero, (3) total net lives decides;
+//     still equal -> REAL tie, same as the 3+ case.
+export function orderLivesPointsGroup<T extends StandingRow>(
+  group: T[],
+  shootoutBetween: (xId: string, yId: string) => number,
+  h2hLivesDiff: (xId: string, yId: string) => number | null,
+): T[] {
+  if (group.length <= 1) return group.slice();
+
+  if (group.length === 2) {
+    const [a, b] = group as [T, T];
+    const shoot = shootoutBetween(a.player.id, b.player.id);
+    if (shoot !== 0) return shoot < 0 ? [a, b] : [b, a];
+
+    const diff = h2hLivesDiff(a.player.id, b.player.id);
+    if (diff !== null) {
+      a.h2hLives = diff;
+      b.h2hLives = diff === 0 ? 0 : -diff; // avoid -0 when the match netted exactly even
+      if (diff !== 0) return diff > 0 ? [a, b] : [b, a];
+    }
+
+    const na = a.netLives ?? 0;
+    const nb = b.netLives ?? 0;
+    if (na !== nb) return na > nb ? [a, b] : [b, a];
+
+    const ordered = livesDisplayOrder([a, b]);
+    const first = ordered[0]!;
+    const second = ordered[1]!;
+    second.tiedWithPrev = true;
+    return [first, second];
+  }
+
+  const byLives = group.slice().sort((x, y) => {
+    const diff = (y.netLives ?? 0) - (x.netLives ?? 0);
+    if (diff !== 0) return diff;
+    if (y.wins !== x.wins) return y.wins - x.wins;
+    if (y.draws !== x.draws) return y.draws - x.draws;
+    return x.player.displayName.localeCompare(y.player.displayName);
+  });
+  for (let i = 1; i < byLives.length; i++) {
+    if ((byLives[i]!.netLives ?? 0) === (byLives[i - 1]!.netLives ?? 0)) {
+      byLives[i]!.tiedWithPrev = true;
+    }
+  }
+  return byLives;
+}
+
+// Top-level tiebreak "lives" ordering: group rows by equal points (best
+// group first), then order each group via orderLivesPointsGroup. Points
+// alone decide group membership, so two rows in different groups are never
+// tied (matches tiedWithPrev's existing "equal on everything above it"
+// meaning) -- the caller still needs to assignRanks afterward, same as the
+// chain path. Pure: both comparison functions are closures the caller
+// builds over its own pairings/shootouts (and, for best-N, its own
+// counted-results gating) -- this function touches neither directly.
+// Exported for direct unit testing. Mirrors web/lib/standings.ts's
+// identical export.
+export function sortStandingsLives<T extends StandingRow>(
+  rows: T[],
+  shootoutBetween: (xId: string, yId: string) => number,
+  h2hLivesDiff: (xId: string, yId: string) => number | null,
+): T[] {
+  const byPoints = rows.slice().sort((x, y) => y.points - x.points);
+  const result: T[] = [];
+  let i = 0;
+  while (i < byPoints.length) {
+    let j = i + 1;
+    while (j < byPoints.length && byPoints[j]!.points === byPoints[i]!.points) j++;
+    result.push(...orderLivesPointsGroup(byPoints.slice(i, j), shootoutBetween, h2hLivesDiff));
+    i = j;
+  }
+  return result;
 }
 
 // Exported (alongside headToHead below) so src/standings-best-n.ts can reuse

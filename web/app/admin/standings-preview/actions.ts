@@ -185,6 +185,62 @@ export async function convertSeasonToLivesTiebreakAction(formData: FormData): Pr
   redirect(backTo(seasonId, { shootoutOk: String(deleteIds.length) }));
 }
 
+// "Switch to lives and remove ALL recorded shootouts" -- a blunter version
+// of convertSeasonToLivesTiebreakAction above for a TO who's decided every
+// admin-recorded showdown is redundant now, not just the ones lives happens
+// to agree with. Switches Season.tiebreak to "lives" (if it isn't already)
+// and deletes EVERY admin-recorded shootout (recordedBy not null, see
+// web/lib/shootout-cleanup-core.ts's "player-reported" verdict for the only
+// kind kept) regardless of verdict -- lives-disagree, lives-tied, and
+// no-lives-data rows are removed right alongside the "same" ones.
+// Player-reported shootouts (self-played, not an admin tie-break recording)
+// are never touched by either button. Re-loads the plan server-side (never
+// trusts the submitted form) for the same reason convertSeasonToLivesTiebreakAction
+// does.
+export async function convertSeasonToLivesTiebreakRemoveAllAction(formData: FormData): Promise<void> {
+  const { user } = await requireAdmin();
+  const seasonId = String(formData.get("season") ?? "");
+  if (!seasonId) {
+    redirect(backTo(seasonId, { shootoutErr: "Season not found." }));
+  }
+
+  const season = await prisma.season.findUnique({ where: { id: seasonId }, select: { tiebreak: true } });
+  if (!season) {
+    redirect(backTo(seasonId, { shootoutErr: "Season not found." }));
+  }
+  const previousTiebreak = normalizeTiebreak(season.tiebreak);
+
+  const plan = await loadShootoutCleanup(seasonId);
+  const deleteIds = plan.divisions
+    .flatMap((d) => d.entries)
+    .filter((e) => e.verdict !== "player-reported")
+    .map((e) => e.id);
+  const keptCount = plan.summary.playerReported;
+
+  await prisma.$transaction(async (tx) => {
+    if (previousTiebreak !== "lives") {
+      await tx.season.update({ where: { id: seasonId }, data: { tiebreak: "lives" } });
+    }
+    if (deleteIds.length > 0) {
+      await tx.match.deleteMany({ where: { id: { in: deleteIds } } });
+    }
+  });
+
+  await recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "season.shootout-cleanup-all",
+    targetType: "Season",
+    targetId: seasonId,
+    summary: `Converted ${plan.season?.label ?? seasonId} to lives tiebreak: removed ALL ${deleteIds.length} admin-recorded shootouts, kept ${keptCount} player-reported`,
+    metadata: { seasonId, previousTiebreak, deleted: deleteIds.length, kept: keptCount },
+  });
+
+  const divisions = await prisma.division.findMany({ where: { seasonId }, select: { id: true } });
+  await Promise.all(divisions.map((d) => recomputeDivisionStandings(d.id)));
+
+  redirect(backTo(seasonId, { shootoutOk: String(deleteIds.length) }));
+}
+
 // Per-row "Delete anyway" on a KEPT shootout -- for a TO who's read the
 // verdict and decided the recorded shootout should go regardless (e.g. it
 // was a mistake). Deletes exactly the one match; does not touch

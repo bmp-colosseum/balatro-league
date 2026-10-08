@@ -535,4 +535,46 @@ describe("computeBestNStandings -- tiebreak: lives", () => {
     expect(alice.netLives).toBe(0);
     expect(alice.livesGamesMissing).toBe(1);
   });
+
+  it("the 2-way h2h-lives rule only applies when BOTH sides counted the shared result", () => {
+    // n = scheduledPerPlayer(2) - dropouts(1) = 1 -- each player's standing
+    // counts only their single BEST result.
+    //
+    // Alice's best (kept) result is vs "aa" (a draw worth lives +80 for
+    // her); her draw against Bob (lives +50 for BOB within that same match)
+    // is her WORSE result by opponent-id tie-break and gets DROPPED. Bob's
+    // best (kept) result IS the shared draw against Alice; his other draw
+    // (vs "aa") is dropped. So the shared alice-vs-bob match is counted by
+    // Bob but NOT by Alice -- bothCounted must be false, so the pair's h2h
+    // lives differential (which would favor Bob, +50) must be IGNORED and
+    // the tie must fall back to each player's own counted-only net lives
+    // (alice +80 vs bob +50) -- the opposite winner from what the raw
+    // match differential alone would suggest.
+    const members = [
+      member("a", "Alice"), member("b", "Bob"),
+      member("aa", "Departed", { status: "DROPPED" }),
+    ];
+    const pairings: BestNPairing[] = [
+      { playerAId: "a", playerBId: "aa", gamesWonA: 1, gamesWonB: 1, games: [{ winnerId: "a", winnerLives: 80 }] },
+      { playerAId: "a", playerBId: "b", gamesWonA: 1, gamesWonB: 1, games: [{ winnerId: "b", winnerLives: 50 }] },
+      { playerAId: "b", playerBId: "aa", gamesWonA: 1, gamesWonB: 1 },
+    ];
+    const result = computeBestNStandings(members, pairings, [], undefined, "count", 2, "lives");
+    expect(result.division.n).toBe(1);
+
+    const alice = result.rows.find((r) => r.player.id === "a")!;
+    const bob = result.rows.find((r) => r.player.id === "b")!;
+    expect(alice.counted).toBe(1);
+    expect(bob.counted).toBe(1);
+    expect(alice.points).toBe(bob.points); // tied -- both counted a single 1pt draw
+    expect(alice.netLives).toBe(80);
+    expect(bob.netLives).toBe(50);
+    // The pair's own match favored Bob (+50); gated out, since Alice didn't
+    // count it, so no h2hLives is recorded for either side.
+    expect(alice.h2hLives).toBeUndefined();
+    expect(bob.h2hLives).toBeUndefined();
+    // Correct winner is Alice (higher COUNTED-only net lives), not Bob (who
+    // would win if the raw, ungated match differential had been used).
+    expect(result.rows.indexOf(alice)).toBeLessThan(result.rows.indexOf(bob));
+  });
 });

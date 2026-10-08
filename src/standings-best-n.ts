@@ -22,7 +22,9 @@ import {
   computeNetLives,
   assignRanks,
   headToHead,
+  headToHeadLivesDiff,
   shootoutBetween,
+  sortStandingsLives,
 } from "./standings.js";
 
 export type BestNPairing = Pick<Match, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB"> & {
@@ -221,43 +223,49 @@ export function computeBestNStandings(
     });
   }
 
+  // Both players' COUNTED sets must include their mutual game for h2h (chain)
+  // or the h2h-lives differential (lives) to apply -- a result dropped by
+  // either side's best-N selection doesn't break the tie, per the TO's rule.
   const bothCounted = (xId: string, yId: string): boolean =>
     (countedOpponentsByPlayerId.get(xId)?.has(yId) ?? false) &&
     (countedOpponentsByPlayerId.get(yId)?.has(xId) ?? false);
 
-  const livesCompare = (x: BestNStandingRow, y: BestNStandingRow): number =>
-    tiebreak === "lives" ? (y.netLives ?? 0) - (x.netLives ?? 0) : 0;
+  let sorted: BestNStandingRow[];
+  if (tiebreak === "lives") {
+    sorted = sortStandingsLives(
+      rows,
+      (xId, yId) => shootoutBetween(xId, yId, effectiveShootouts),
+      (xId, yId) => (bothCounted(xId, yId) ? headToHeadLivesDiff(xId, yId, effectivePairings) : null),
+    );
+  } else {
+    sorted = rows.slice().sort((x, y) => {
+      if (y.points !== x.points) return y.points - x.points;
+      if (bothCounted(x.player.id, y.player.id)) {
+        const h2h = headToHead(x.player.id, y.player.id, effectivePairings);
+        if (h2h !== 0) return h2h;
+      }
+      const shoot = shootoutBetween(x.player.id, y.player.id, effectiveShootouts);
+      if (shoot !== 0) return shoot;
+      if (y.wins !== x.wins) return y.wins - x.wins;
+      if (y.draws !== x.draws) return y.draws - x.draws;
+      return x.player.displayName.localeCompare(y.player.displayName);
+    });
 
-  const sorted = rows.slice().sort((x, y) => {
-    if (y.points !== x.points) return y.points - x.points;
-    if (bothCounted(x.player.id, y.player.id)) {
-      const h2h = headToHead(x.player.id, y.player.id, effectivePairings);
-      if (h2h !== 0) return h2h;
-    }
-    const shoot = shootoutBetween(x.player.id, y.player.id, effectiveShootouts);
-    if (shoot !== 0) return shoot;
-    const lives = livesCompare(x, y);
-    if (lives !== 0) return lives;
-    if (y.wins !== x.wins) return y.wins - x.wins;
-    if (y.draws !== x.draws) return y.draws - x.draws;
-    return x.player.displayName.localeCompare(y.player.displayName);
-  });
-
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = sorted[i - 1]!;
-    const cur = sorted[i]!;
-    const h2h = bothCounted(prev.player.id, cur.player.id)
-      ? headToHead(prev.player.id, cur.player.id, effectivePairings)
-      : 0;
-    if (
-      prev.points === cur.points &&
-      h2h === 0 &&
-      shootoutBetween(prev.player.id, cur.player.id, effectiveShootouts) === 0 &&
-      livesCompare(prev, cur) === 0 &&
-      prev.wins === cur.wins &&
-      prev.draws === cur.draws
-    ) {
-      cur.tiedWithPrev = true;
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1]!;
+      const cur = sorted[i]!;
+      const h2h = bothCounted(prev.player.id, cur.player.id)
+        ? headToHead(prev.player.id, cur.player.id, effectivePairings)
+        : 0;
+      if (
+        prev.points === cur.points &&
+        h2h === 0 &&
+        shootoutBetween(prev.player.id, cur.player.id, effectiveShootouts) === 0 &&
+        prev.wins === cur.wins &&
+        prev.draws === cur.draws
+      ) {
+        cur.tiedWithPrev = true;
+      }
     }
   }
 

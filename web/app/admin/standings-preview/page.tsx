@@ -21,6 +21,7 @@ import {
   setSeasonScoringModeAction,
   setSeasonTiebreakAction,
   convertSeasonToLivesTiebreakAction,
+  convertSeasonToLivesTiebreakRemoveAllAction,
   deleteShootoutAction,
 } from "./actions";
 import type { SeasonScoringMode, SeasonTiebreak } from "@/lib/standings-mode";
@@ -552,6 +553,15 @@ function ShootoutCleanupSection({
     : `Convert to lives tiebreak + remove ${removableCount}`;
   const buttonDisabled = removableCount === 0 && alreadyLives;
 
+  // Blunter sibling: drop EVERY admin-recorded shootout (any verdict), not
+  // just the ones lives happens to already agree with. Player-reported
+  // results (recordedBy null) are never touched by either button.
+  const allAdminRecordedCount = summary.total - summary.playerReported;
+  const removeAllButtonLabel = alreadyLives
+    ? `Remove ALL ${allAdminRecordedCount} recorded shootout${allAdminRecordedCount === 1 ? "" : "s"}`
+    : `Switch to lives and remove ALL ${allAdminRecordedCount} recorded shootout${allAdminRecordedCount === 1 ? "" : "s"}`;
+  const removeAllButtonDisabled = allAdminRecordedCount === 0;
+
   return (
     <div className="card" style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
       <strong style={{ fontSize: 14 }}>Shootout clean-up</strong>
@@ -563,20 +573,34 @@ function ShootoutCleanupSection({
         <strong>{summary.playerReported}</strong> player-reported.
       </div>
 
-      {buttonDisabled ? (
-        <div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {buttonDisabled ? (
           <Button variant="secondary" disabled>{buttonLabel}</Button>
-        </div>
-      ) : (
-        <form action={convertSeasonToLivesTiebreakAction}>
-          <input type="hidden" name="season" value={seasonId} />
-          <ConfirmButton
-            message={`Switch ${seasonLabel} to the lives tiebreak and remove ${removableCount} admin-recorded shootout(s) lives decide the same way? This takes effect immediately for every division.`}
-          >
-            {buttonLabel}
-          </ConfirmButton>
-        </form>
-      )}
+        ) : (
+          <form action={convertSeasonToLivesTiebreakAction}>
+            <input type="hidden" name="season" value={seasonId} />
+            <ConfirmButton
+              message={`Switch ${seasonLabel} to the lives tiebreak and remove ${removableCount} admin-recorded shootout(s) lives decide the same way? This takes effect immediately for every division.`}
+            >
+              {buttonLabel}
+            </ConfirmButton>
+          </form>
+        )}
+
+        {removeAllButtonDisabled ? (
+          <Button variant="destructive" disabled>{removeAllButtonLabel}</Button>
+        ) : (
+          <form action={convertSeasonToLivesTiebreakRemoveAllAction}>
+            <input type="hidden" name="season" value={seasonId} />
+            <ConfirmButton
+              variant="destructive"
+              message={`Switch ${seasonLabel} to the lives tiebreak and remove ALL ${allAdminRecordedCount} admin-recorded shootout(s), regardless of verdict (lives-disagree and lives-tied ones included)? Player-reported results are kept. This takes effect immediately for every division and cannot be undone from this page.`}
+            >
+              {removeAllButtonLabel}
+            </ConfirmButton>
+          </form>
+        )}
+      </div>
 
       {data.divisions.map((d) => (
         <div key={d.id}>

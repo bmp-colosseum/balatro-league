@@ -6,6 +6,7 @@ import {
   computeNetLives,
   type PairingGameLives,
   type PairingWithLives,
+  type ShootoutInput,
 } from "./standings";
 
 // computeStandings only reads id + displayName off Player.
@@ -115,6 +116,152 @@ describe("computeStandings -- tiebreak: lives", () => {
     const alice = lives.find((r) => r.player.id === "alice")!;
     expect(alice.netLives).toBe(0);
     expect(alice.livesGamesMissing).toBe(1);
+  });
+
+  it("a 3-way tie that's ALSO equal on net lives stays a genuine shared-rank tie", () => {
+    // Same shape as "breaks a three-way tie by net lives" above, but every
+    // winner banked the same lives -- the group can't be separated, so all
+    // three share a rank. wins/draws/name only pick a stable DISPLAY order,
+    // they never break the tie.
+    const players = [
+      P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"),
+      P("dave", "Dave"), P("eve", "Eve"), P("frank", "Frank"),
+    ];
+    const pairings = [
+      M("alice", "dave", 2, 0, [G("alice", 2)]),
+      M("bob", "eve", 2, 0, [G("bob", 2)]),
+      M("carol", "frank", 2, 0, [G("carol", 2)]),
+    ];
+    const lives = computeStandings(players, pairings, [], undefined, "lives");
+    const top3 = lives.slice(0, 3);
+    expect(ids(top3)).toEqual(["alice", "bob", "carol"]); // alphabetical display order
+    expect(top3.map((r) => r.netLives)).toEqual([2, 2, 2]);
+    expect(top3[0]!.tiedWithPrev).toBeFalsy();
+    expect(top3[1]!.tiedWithPrev).toBe(true);
+    expect(top3[2]!.tiedWithPrev).toBe(true);
+    expect(top3.map((r) => r.rank)).toEqual([1, 1, 1]);
+  });
+});
+
+describe("computeStandings -- tiebreak: lives -- exactly-two-tied group rule", () => {
+  it("a confirmed shootout decides a 2-way tie regardless of net lives", () => {
+    const players = [P("alice", "Alice"), P("bob", "Bob")];
+    const pairings: PairingWithLives[] = [];
+    const shootouts: ShootoutInput[] = [{ playerAId: "alice", playerBId: "bob", winnerId: "bob" }];
+    const lives = computeStandings(players, pairings, shootouts, undefined, "lives");
+    expect(ids(lives)).toEqual(["bob", "alice"]);
+    expect(lives.find((r) => r.player.id === "alice")!.tiedWithPrev).toBeFalsy();
+  });
+
+  it("the within-match lives differential decides a 2-way tie after a 2-0", () => {
+    // Alice beats Bob 2-0 with a big lives swing; Alice's loss to Carol and
+    // Bob's win over Dave keep them level on points (3 each) despite the
+    // decisive result between them.
+    const players = [P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"), P("eve", "Eve"), P("dave", "Dave")];
+    const pairings = [
+      M("alice", "bob", 2, 0, [G("alice", 4), G("alice", 1)]), // h2h diff = +5 for alice
+      M("alice", "carol", 0, 2), // alice's compensating loss
+      M("carol", "eve", 1, 1),
+      M("bob", "dave", 2, 0), // bob's compensating win
+    ];
+    const lives = computeStandings(players, pairings, [], undefined, "lives");
+    const alice = lives.find((r) => r.player.id === "alice")!;
+    const bob = lives.find((r) => r.player.id === "bob")!;
+    expect(alice.points).toBe(3);
+    expect(bob.points).toBe(3);
+    expect(lives.indexOf(alice)).toBeLessThan(lives.indexOf(bob));
+    expect(alice.h2hLives).toBe(5);
+    expect(bob.h2hLives).toBe(-5);
+    expect(alice.netLives).toBe(5);
+    expect(bob.netLives).toBe(-5);
+    expect(bob.tiedWithPrev).toBeFalsy();
+  });
+
+  it("the within-match lives differential decides a 2-way tie even when the match itself was a 1-1 draw", () => {
+    const players = [P("alice", "Alice"), P("bob", "Bob")];
+    const pairings = [M("alice", "bob", 1, 1, [G("alice", 5), G("bob", 2)])]; // h2h diff = +3 for alice
+    const lives = computeStandings(players, pairings, [], undefined, "lives");
+    expect(ids(lives)).toEqual(["alice", "bob"]);
+    expect(lives.find((r) => r.player.id === "alice")!.h2hLives).toBe(3);
+    expect(lives.find((r) => r.player.id === "bob")!.h2hLives).toBe(-3);
+    expect(lives.find((r) => r.player.id === "bob")!.tiedWithPrev).toBeFalsy();
+  });
+
+  it("falls back to total net lives when the within-match differential is exactly zero", () => {
+    const players = [P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"), P("dave", "Dave")];
+    const pairings = [
+      M("alice", "bob", 1, 1, [G("alice", 3), G("bob", 3)]), // h2h diff = 0
+      M("alice", "carol", 1, 1, [G("alice", 5)]), // alice's extra net lives
+      M("bob", "dave", 1, 1), // bob's compensating draw, no lives
+    ];
+    const lives = computeStandings(players, pairings, [], undefined, "lives");
+    const alice = lives.find((r) => r.player.id === "alice")!;
+    const bob = lives.find((r) => r.player.id === "bob")!;
+    expect(alice.points).toBe(bob.points);
+    expect(alice.h2hLives).toBe(0);
+    expect(bob.h2hLives).toBe(0);
+    expect(alice.netLives).toBe(5);
+    expect(bob.netLives).toBe(0);
+    expect(lives.indexOf(alice)).toBeLessThan(lives.indexOf(bob));
+    expect(bob.tiedWithPrev).toBeFalsy();
+  });
+
+  it("falls back to total net lives when the two never played each other", () => {
+    const players = [P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"), P("dave", "Dave")];
+    const pairings = [
+      M("alice", "carol", 2, 0, [G("alice", 1)]),
+      M("bob", "dave", 2, 0, [G("bob", 3)]),
+    ];
+    const lives = computeStandings(players, pairings, [], undefined, "lives");
+    expect(ids(lives).slice(0, 2)).toEqual(["bob", "alice"]);
+    expect(lives.find((r) => r.player.id === "alice")!.tiedWithPrev).toBeFalsy();
+    expect(lives.find((r) => r.player.id === "alice")!.netLives).toBe(1);
+    expect(lives.find((r) => r.player.id === "bob")!.netLives).toBe(3);
+  });
+
+  it("a real, unbreakable 2-way tie when total net lives also match", () => {
+    const players = [P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"), P("dave", "Dave")];
+    const pairings = [
+      M("alice", "carol", 2, 0, [G("alice", 4)]),
+      M("bob", "dave", 2, 0, [G("bob", 4)]),
+    ];
+    const lives = computeStandings(players, pairings, [], undefined, "lives");
+    const top2 = lives.slice(0, 2);
+    expect(ids(top2)).toEqual(["alice", "bob"]); // alphabetical display order
+    expect(top2.map((r) => r.netLives)).toEqual([4, 4]);
+    expect(top2[0]!.tiedWithPrev).toBeFalsy();
+    expect(top2[1]!.tiedWithPrev).toBe(true);
+    expect(top2.map((r) => r.rank)).toEqual([1, 1]);
+  });
+
+  it("differing wins/draws don't break a lives-mode tie -- unlike chain mode", () => {
+    // Alice: one win (3pts, 1W-0D). Bob: three draws (1pt each = 3pts, 0W-3D).
+    // Equal points, equal (zero) net lives, never played each other -- a
+    // REAL tie in lives mode even though wins differ. Under chain mode
+    // today's tiebreak would have used wins to separate them; lives mode
+    // must not.
+    const players = [
+      P("alice", "Alice"), P("bob", "Bob"),
+      P("c", "C"), P("d", "D"), P("e", "E"), P("f", "F"),
+    ];
+    const pairings = [
+      M("alice", "c", 2, 0),
+      M("bob", "d", 1, 1),
+      M("bob", "e", 1, 1),
+      M("bob", "f", 1, 1),
+    ];
+    const chain = computeStandings(players, pairings);
+    const chainTop2 = chain.slice(0, 2);
+    expect(ids(chainTop2)).toEqual(["alice", "bob"]);
+    expect(chainTop2.some((r) => r.tiedWithPrev)).toBe(false); // chain breaks it via wins
+
+    const lives = computeStandings(players, pairings, [], undefined, "lives");
+    const livesTop2 = lives.slice(0, 2);
+    expect(ids(livesTop2)).toEqual(["alice", "bob"]); // display order: more wins first
+    expect(livesTop2.map((r) => r.netLives)).toEqual([0, 0]);
+    expect(livesTop2[0]!.tiedWithPrev).toBeFalsy();
+    expect(livesTop2[1]!.tiedWithPrev).toBe(true);
+    expect(livesTop2.map((r) => r.rank)).toEqual([1, 1]);
   });
 });
 

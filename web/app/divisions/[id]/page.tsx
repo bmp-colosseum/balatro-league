@@ -198,7 +198,7 @@ export default async function PublicDivisionPage({
         )}
 
         {isAdmin && adminData && (
-          <AdminSection divisionId={id} adminData={adminData} tieGroups={tieGroups} />
+          <AdminSection divisionId={id} adminData={adminData} tieGroups={tieGroups} livesBreaksTies={livesBreaksTies} />
         )}
       </main>
     </>
@@ -496,10 +496,12 @@ function AdminSection({
   divisionId,
   adminData,
   tieGroups,
+  livesBreaksTies,
 }: {
   divisionId: string;
   adminData: NonNullable<Awaited<ReturnType<typeof loadAdminDivisionDetail>>>;
   tieGroups: TieGroup[];
+  livesBreaksTies: boolean;
 }) {
   const { division, members, pairings, shootouts, unplayed, playerById, lifeDiffByPlayer } = adminData;
   return (
@@ -756,38 +758,51 @@ function AdminSection({
 
       {/* Resolve a tie of ANY size (3-way+) — type a placement per tied player;
           equal numbers stay tied with each other, so you can pick the winner
-          and leave the rest level. Writes the showdowns that encode it. */}
+          and leave the rest level. Writes the showdowns that encode it. Locked
+          out under tiebreak "lives" -- see resolveTieWithShowdowns's guard in
+          web/lib/match-admin.ts; a hand-recorded showdown would be silently
+          ignored by sortStandingsLives, so the form is replaced with a note
+          instead of letting an admin submit something standings won't use. */}
       <div className="card">
         <strong>⚖ Resolve a tie (any size)</strong>
-        <p className="muted" style={{ fontSize: 12 }}>
-          For a 3-way+ tie the single shootout above can&apos;t express. Type a placement for the
-          tied players — <strong>1 = winner</strong>. Players with the <strong>same number stay tied</strong>{" "}
-          with each other (e.g. <code>1, 2, 2</code> = one winner, the other two left level). Leave
-          everyone else blank. Re-submitting overwrites this group.
-        </p>
-        <form action={resolveTieAction} style={{ display: "grid", gap: 4, maxWidth: 380 }}>
-          <input type="hidden" name="divisionId" value={division.id} />
-          {members.map((m) => {
-            const diff = lifeDiffByPlayer[m.playerId];
-            return (
-              <label key={m.playerId} style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 13 }}>
-                  {m.player.displayName}
-                  {diff !== undefined && (
-                    <span
-                      title="Net lives across the division's confirmed games (lives kept in wins − opponents' lives in your losses)"
-                      style={{ fontSize: 11, marginLeft: 6, fontVariantNumeric: "tabular-nums", color: diff > 0 ? "var(--success)" : diff < 0 ? "var(--danger)" : "var(--muted)" }}
-                    >
-                      {diff > 0 ? `+${diff}` : diff} ♥
+        {livesBreaksTies ? (
+          <p className="muted" style={{ fontSize: 12 }}>
+            This season breaks ties by net lives -- shootouts are not recorded by hand. Switch the
+            season back to chain on <code>/admin/standings-preview</code> if you really need to.
+          </p>
+        ) : (
+          <>
+            <p className="muted" style={{ fontSize: 12 }}>
+              For a 3-way+ tie the single shootout above can&apos;t express. Type a placement for the
+              tied players — <strong>1 = winner</strong>. Players with the <strong>same number stay tied</strong>{" "}
+              with each other (e.g. <code>1, 2, 2</code> = one winner, the other two left level). Leave
+              everyone else blank. Re-submitting overwrites this group.
+            </p>
+            <form action={resolveTieAction} style={{ display: "grid", gap: 4, maxWidth: 380 }}>
+              <input type="hidden" name="divisionId" value={division.id} />
+              {members.map((m) => {
+                const diff = lifeDiffByPlayer[m.playerId];
+                return (
+                  <label key={m.playerId} style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 13 }}>
+                      {m.player.displayName}
+                      {diff !== undefined && (
+                        <span
+                          title="Net lives across the division's confirmed games (lives kept in wins − opponents' lives in your losses)"
+                          style={{ fontSize: 11, marginLeft: 6, fontVariantNumeric: "tabular-nums", color: diff > 0 ? "var(--success)" : diff < 0 ? "var(--danger)" : "var(--muted)" }}
+                        >
+                          {diff > 0 ? `+${diff}` : diff} ♥
+                        </span>
+                      )}
                     </span>
-                  )}
-                </span>
-                <Input type="number" name={`place_${m.playerId}`} min={1} placeholder="—" className="w-16" />
-              </label>
-            );
-          })}
-          <Button type="submit" variant="secondary" style={{ marginTop: 4 }}>Resolve tie</Button>
-        </form>
+                    <Input type="number" name={`place_${m.playerId}`} min={1} placeholder="—" className="w-16" />
+                  </label>
+                );
+              })}
+              <Button type="submit" variant="secondary" style={{ marginTop: 4 }}>Resolve tie</Button>
+            </form>
+          </>
+        )}
       </div>
 
     </>
