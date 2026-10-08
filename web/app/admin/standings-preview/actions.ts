@@ -18,6 +18,7 @@ import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
 import { normalizeScoringMode, normalizeTiebreak, type SeasonScoringMode, type SeasonTiebreak } from "@/lib/standings-mode";
 import { dropDivisionMember } from "@/app/divisions/[id]/actions";
+import { loadShootoutCleanup } from "@/lib/loaders/shootout-cleanup";
 
 function backTo(seasonId: string, params: Record<string, string>): string {
   const qs = new URLSearchParams({ season: seasonId, ...params });
@@ -132,4 +133,88 @@ export async function setSeasonTiebreakAction(formData: FormData): Promise<void>
   await Promise.all(divisions.map((d) => recomputeDivisionStandings(d.id)));
 
   redirect(backTo(seasonId, { tiebreakOk: tiebreak }));
+}
+
+// "Convert to lives tiebreak + remove N" -- the shootout clean-up tool's
+// one-click action. Switches Season.tiebreak to "lives" (if it isn't
+// already) AND deletes every admin-recorded shootout (see
+// resolveTieWithShowdowns in web/lib/match-admin.ts) that the lives
+// tiebreak would have decided the same way -- see
+// web/lib/shootout-cleanup-core.ts's planShootoutCleanup for exactly which
+// ones qualify. The plan is re-loaded server-side here (never trusted from
+// the submitted form) so a stale page can't delete something that no
+// longer qualifies.
+export async function convertSeasonToLivesTiebreakAction(formData: FormData): Promise<void> {
+  const { user } = await requireAdmin();
+  const seasonId = String(formData.get("season") ?? "");
+  if (!seasonId) {
+    redirect(backTo(seasonId, { shootoutErr: "Season not found." }));
+  }
+
+  const season = await prisma.season.findUnique({ where: { id: seasonId }, select: { tiebreak: true } });
+  if (!season) {
+    redirect(backTo(seasonId, { shootoutErr: "Season not found." }));
+  }
+  const previousTiebreak = normalizeTiebreak(season.tiebreak);
+
+  const plan = await loadShootoutCleanup(seasonId);
+  const deleteIds = plan.deletableIds;
+  const keptCount = plan.summary.total - deleteIds.length;
+
+  await prisma.$transaction(async (tx) => {
+    if (previousTiebreak !== "lives") {
+      await tx.season.update({ where: { id: seasonId }, data: { tiebreak: "lives" } });
+    }
+    if (deleteIds.length > 0) {
+      await tx.match.deleteMany({ where: { id: { in: deleteIds } } });
+    }
+  });
+
+  await recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "season.shootout-cleanup",
+    targetType: "Season",
+    targetId: seasonId,
+    summary: `Converted ${plan.season?.label ?? seasonId} to lives tiebreak: removed ${deleteIds.length} admin-recorded shootouts lives decide the same way, kept ${keptCount}`,
+    metadata: { seasonId, previousTiebreak, deleted: deleteIds.length, kept: keptCount },
+  });
+
+  const divisions = await prisma.division.findMany({ where: { seasonId }, select: { id: true } });
+  await Promise.all(divisions.map((d) => recomputeDivisionStandings(d.id)));
+
+  redirect(backTo(seasonId, { shootoutOk: String(deleteIds.length) }));
+}
+
+// Per-row "Delete anyway" on a KEPT shootout -- for a TO who's read the
+// verdict and decided the recorded shootout should go regardless (e.g. it
+// was a mistake). Deletes exactly the one match; does not touch
+// Season.tiebreak.
+export async function deleteShootoutAction(formData: FormData): Promise<void> {
+  const { user } = await requireAdmin();
+  const seasonId = String(formData.get("season") ?? "");
+  const matchId = String(formData.get("id") ?? "");
+  if (!matchId) {
+    redirect(backTo(seasonId, { shootoutErr: "Missing shootout id." }));
+  }
+
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: { id: true, divisionId: true, format: true, playerAId: true, playerBId: true, winnerId: true },
+  });
+  if (!match || match.format !== "SHOOTOUT_BO1") {
+    redirect(backTo(seasonId, { shootoutErr: "Shootout not found." }));
+  }
+
+  await prisma.match.delete({ where: { id: matchId } });
+  await recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "shootout.delete",
+    targetType: "Match",
+    targetId: matchId,
+    summary: `Deleted shootout between ${match.playerAId} and ${match.playerBId}`,
+    metadata: { matchId, divisionId: match.divisionId, playerAId: match.playerAId, playerBId: match.playerBId, winnerId: match.winnerId },
+  });
+  await recomputeDivisionStandings(match.divisionId);
+
+  redirect(backTo(seasonId, { shootoutOk: "1" }));
 }

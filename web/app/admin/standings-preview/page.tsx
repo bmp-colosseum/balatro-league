@@ -16,8 +16,16 @@ import {
   type StandingsPreviewLivesInfo,
   type StandingsPreviewPlayerDiff,
 } from "@/lib/loaders/standings-preview";
-import { applyHypotheticalDropsAction, setSeasonScoringModeAction, setSeasonTiebreakAction } from "./actions";
+import {
+  applyHypotheticalDropsAction,
+  setSeasonScoringModeAction,
+  setSeasonTiebreakAction,
+  convertSeasonToLivesTiebreakAction,
+  deleteShootoutAction,
+} from "./actions";
 import type { SeasonScoringMode, SeasonTiebreak } from "@/lib/standings-mode";
+import { loadShootoutCleanup, type ShootoutCleanupData } from "@/lib/loaders/shootout-cleanup";
+import type { ShootoutCleanupVerdict } from "@/lib/shootout-cleanup-core";
 
 const TIEBREAK_LABEL: Record<Tiebreak, string> = { chain: "Today's tiebreaks", lives: "Add net lives" };
 const SEASON_TIEBREAK_LABEL: Record<SeasonTiebreak, string> = { chain: "Today's tiebreaks", lives: "Break ties by net lives" };
@@ -499,6 +507,130 @@ function ApplyDropsForm({
   );
 }
 
+const VERDICT_LABEL: Record<ShootoutCleanupVerdict, string> = {
+  same: "Lives agrees (removable)",
+  "lives-disagree": "Lives disagrees",
+  "lives-tied": "Lives tied",
+  "no-lives-data": "No lives data",
+  "player-reported": "Player-reported",
+};
+
+// "Shootout clean-up": the TO used to break lives ties by hand-recording
+// pairwise SHOOTOUT_BO1 matches (resolveTieWithShowdowns, web/lib/match-admin.ts).
+// Now that Season.tiebreak can be "lives", any such recording that lives
+// would have decided the SAME way is redundant -- removing it changes no
+// standings order (see web/lib/shootout-cleanup-core.ts's header). This
+// section shows the audit (per division: pair, recorded winner, each
+// player's net lives, and the verdict) and one button that converts the
+// season to the lives tiebreak and removes every redundant recording in
+// one step, plus a per-row "Delete anyway" for a kept one.
+function ShootoutCleanupSection({
+  seasonId,
+  seasonLabel,
+  data,
+}: {
+  seasonId: string;
+  seasonLabel: string;
+  data: ShootoutCleanupData;
+}) {
+  if (!data.season || data.divisions.length === 0) {
+    return (
+      <div className="card" style={{ marginTop: 12 }}>
+        <strong style={{ fontSize: 14 }}>Shootout clean-up</strong>
+        <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+          No admin-recorded shootouts in {seasonLabel}.
+        </div>
+      </div>
+    );
+  }
+
+  const { summary } = data;
+  const alreadyLives = data.season.tiebreak === "lives";
+  const removableCount = summary.same;
+  const buttonLabel = alreadyLives
+    ? `Remove ${removableCount} redundant shootout${removableCount === 1 ? "" : "s"}`
+    : `Convert to lives tiebreak + remove ${removableCount}`;
+  const buttonDisabled = removableCount === 0 && alreadyLives;
+
+  return (
+    <div className="card" style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+      <strong style={{ fontSize: 14 }}>Shootout clean-up</strong>
+      <div style={{ fontSize: 12 }}>
+        <strong>{summary.total}</strong> admin-recorded shootout{summary.total === 1 ? "" : "s"}:{" "}
+        <strong>{summary.same}</strong> lives decide{summary.same === 1 ? "s" : ""} the same (removable),{" "}
+        <strong>{summary.livesDisagree}</strong> lives disagree{summary.livesDisagree === 1 ? "s" : ""},{" "}
+        <strong>{summary.livesTied}</strong> lives tied, <strong>{summary.noLivesData}</strong> no lives data,{" "}
+        <strong>{summary.playerReported}</strong> player-reported.
+      </div>
+
+      {buttonDisabled ? (
+        <div>
+          <Button variant="secondary" disabled>{buttonLabel}</Button>
+        </div>
+      ) : (
+        <form action={convertSeasonToLivesTiebreakAction}>
+          <input type="hidden" name="season" value={seasonId} />
+          <ConfirmButton
+            message={`Switch ${seasonLabel} to the lives tiebreak and remove ${removableCount} admin-recorded shootout(s) lives decide the same way? This takes effect immediately for every division.`}
+          >
+            {buttonLabel}
+          </ConfirmButton>
+        </form>
+      )}
+
+      {data.divisions.map((d) => (
+        <div key={d.id}>
+          <div style={{ fontSize: 12, fontWeight: 600, marginTop: 8 }}>
+            {d.tierName} - {d.name}
+          </div>
+          <div className="table-scroll">
+            <table className="table-dense" style={{ margin: 0 }}>
+              <thead>
+                <tr>
+                  <th>Pair</th>
+                  <th>Winner</th>
+                  <th>Lives A</th>
+                  <th>Lives B</th>
+                  <th>Verdict</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.entries.map((e) => (
+                  <tr key={e.id}>
+                    <td>
+                      {e.playerAName} vs {e.playerBName}
+                    </td>
+                    <td className="muted">{e.winnerName ?? "-"}</td>
+                    <td className="muted">{e.livesA ?? "-"}</td>
+                    <td className="muted">{e.livesB ?? "-"}</td>
+                    <td>{VERDICT_LABEL[e.verdict]}</td>
+                    <td>
+                      {e.verdict !== "same" && (
+                        <form action={deleteShootoutAction}>
+                          <input type="hidden" name="season" value={seasonId} />
+                          <input type="hidden" name="id" value={e.id} />
+                          <ConfirmButton
+                            message={`Delete the recorded shootout between ${e.playerAName} and ${e.playerBName}? This cannot be undone from this page.`}
+                            variant="destructive"
+                            size="sm"
+                          >
+                            Delete anyway
+                          </ConfirmButton>
+                        </form>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default async function StandingsPreviewPage({
   searchParams,
 }: {
@@ -514,6 +646,8 @@ export default async function StandingsPreviewPage({
     tiebreakErr?: string;
     tiebreakOk?: string;
     tiebreak?: string;
+    shootoutErr?: string;
+    shootoutOk?: string;
   }>;
 }) {
   await requireAdmin();
@@ -567,6 +701,10 @@ export default async function StandingsPreviewPage({
     hypotheticalDroppedIds,
     tiebreak,
   });
+
+  // Independent of the drop picker / tiebreak preview toggle above -- this
+  // only depends on the selected season's actual recorded shootouts.
+  const shootoutCleanup = await loadShootoutCleanup(selectedSeasonId);
 
   // Preserves every OTHER current query param while toggling tiebreak, so
   // the season/drop-picker selections survive clicking a pill.
@@ -657,6 +795,20 @@ export default async function StandingsPreviewPage({
           <Callout type="success" style={{ marginTop: 8 }}>
             Live standings now use &ldquo;{SEASON_TIEBREAK_LABEL[sp.tiebreakOk as SeasonTiebreak] ?? sp.tiebreakOk}&rdquo; for this season.
           </Callout>
+        )}
+        {sp.shootoutErr && <Callout type="danger" style={{ marginTop: 8 }}>Couldn&apos;t clean up shootouts: {sp.shootoutErr}</Callout>}
+        {sp.shootoutOk && (
+          <Callout type="success" style={{ marginTop: 8 }}>
+            Removed {sp.shootoutOk} shootout{sp.shootoutOk === "1" ? "" : "s"}.
+          </Callout>
+        )}
+
+        {preview.season && (
+          <ShootoutCleanupSection
+            seasonId={preview.season.id}
+            seasonLabel={preview.season.label}
+            data={shootoutCleanup}
+          />
         )}
 
         <form method="get" style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", marginTop: 8 }}>
