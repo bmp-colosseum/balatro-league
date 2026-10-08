@@ -120,14 +120,28 @@ export async function loadEndSeasonPreview(seasonId: string): Promise<EndSeasonP
     season.divisions.map((d) => [d.id, new Set(d.members.filter((m) => m.status === "ACTIVE").map((m) => m.playerId))]),
   );
   const expectedByDivision = await expectedMatchesBySeason(seasonId, activeByDivision, season.scheduleLocked);
+  // Matches an admin settled without a result (bulk void / double forfeit from the Resolve
+  // queue write CANCELLED + adminOverrideBy). They are decided, not unplayed, so they must
+  // not keep the "still unplayed" warning alive after the TO has resolved them.
+  const settledCancelled = await prisma.match.findMany({
+    where: { division: { seasonId }, status: "CANCELLED", format: "LEAGUE_BO2", adminOverrideBy: { not: null } },
+    select: { divisionId: true, playerAId: true, playerBId: true },
+  });
+  const settledByDivision = new Map<string, number>();
+  for (const m of settledCancelled) {
+    const activeIds = activeByDivision.get(m.divisionId);
+    if (!activeIds || !activeIds.has(m.playerAId) || !activeIds.has(m.playerBId)) continue;
+    settledByDivision.set(m.divisionId, (settledByDivision.get(m.divisionId) ?? 0) + 1);
+  }
   const unfinishedPairings = season.divisions.reduce((sum, d) => {
     // Active players only — a void-dropped player's missing games shouldn't read
     // as "unfinished". d.matches is CONFIRMED, and a voided game is a CONFIRMED
-    // 0-0, so it correctly counts as finished here too.
+    // 0-0, so it correctly counts as finished here too; admin-settled cancellations
+    // count as finished via settledByDivision.
     const activeIds = activeByDivision.get(d.id)!;
     const expected = expectedByDivision.get(d.id) ?? 0;
     const playedActive = d.matches.filter((m) => activeIds.has(m.playerAId) && activeIds.has(m.playerBId)).length;
-    return sum + Math.max(0, expected - playedActive);
+    return sum + Math.max(0, expected - playedActive - (settledByDivision.get(d.id) ?? 0));
   }, 0);
 
   const divisions: EndSeasonDivisionRow[] = season.divisions.map((d, i): EndSeasonDivisionRow => ({
