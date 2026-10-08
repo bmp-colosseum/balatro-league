@@ -1,4 +1,5 @@
 import "server-only";
+import { lineDecisions } from "@/lib/lives-line-core";
 
 // Loader for the admin-only /admin/standings-preview page. For a given
 // season, loads what BOTH the current (computeStandings) and best-N
@@ -94,9 +95,11 @@ export interface StandingsPreviewLivesRow {
 // Net-lives effect on one table (current rows, or one best-N candidate's
 // rows), relative to the SAME rows computed with tiebreak: "chain". Only
 // meaningful -- and only non-zero/non-empty -- when the page's tiebreak
-// option is "lives"; always `{ tiesBroken: 0, missingLives: [] }` under the
+// option is "lives"; always `{ tiesBroken: 0, missingLives: [], lineDecisions: [] }` under the
 // default "chain".
 export interface StandingsPreviewLivesInfo {
+  // One sentence per promotion/relegation line that lives decided (or left tied).
+  lineDecisions: string[];
   // How many rows that were tiedWithPrev under "chain" are no longer tied
   // under "lives" -- the TO's "lives broke N ties" count for this table.
   tiesBroken: number;
@@ -230,7 +233,7 @@ function zoneSets(rowCount: number, promoteCount: number, relegateCount: number)
 // computed with tiebreak "chain" and the page's actual tiebreak option,
 // respectively -- identical row sets (so zero effect) when the page's
 // tiebreak is "chain".
-function computeLivesTiebreakInfo(chainRows: StandingRow[], selectedRows: StandingRow[]): StandingsPreviewLivesInfo {
+function computeLivesTiebreakInfo(chainRows: StandingRow[], selectedRows: StandingRow[], promoteCount = 0, relegateCount = 0): StandingsPreviewLivesInfo {
   const chainTiedById = new Map(chainRows.map((r) => [r.player.id, Boolean(r.tiedWithPrev)]));
   let tiesBroken = 0;
   const missingLives: StandingsPreviewLivesRow[] = [];
@@ -245,7 +248,9 @@ function computeLivesTiebreakInfo(chainRows: StandingRow[], selectedRows: Standi
       });
     }
   }
-  return { tiesBroken, missingLives };
+  const toLine = (r: StandingRow) => ({ playerId: r.player.id, displayName: r.player.displayName, tiedWithPrev: r.tiedWithPrev, netLives: r.netLives });
+  const decisions = tiesBroken > 0 ? lineDecisions(chainRows.map(toLine), selectedRows.map(toLine), promoteCount, relegateCount) : [];
+  return { tiesBroken, missingLives, lineDecisions: decisions };
 }
 
 // Player ids whose rank differs between the SAME table computed with
@@ -578,17 +583,17 @@ export async function loadStandingsPreview(
         ? 0
         : Math.min(d.relegateCount, currentRows.length);
 
-      const currentLivesInfo = computeLivesTiebreakInfo(currentRowsChain, currentRows);
+      const currentLivesInfo = computeLivesTiebreakInfo(currentRowsChain, currentRows, effectivePromote, effectiveRelegate);
       const currentLivesDiffByPlayerId = buildLivesOnlyDiff(currentRowsChain, currentRows, activePlayers);
       const countMode = buildCandidate(
         currentRows, bestNCount.rows, activePlayers, effectivePromote, effectiveRelegate,
         livesRankChangedIds(bestNCountChain.rows, bestNCount.rows),
-        computeLivesTiebreakInfo(bestNCountChain.rows, bestNCount.rows),
+        computeLivesTiebreakInfo(bestNCountChain.rows, bestNCount.rows, effectivePromote, effectiveRelegate),
       );
       const voidMode = buildCandidate(
         currentRows, bestNVoid.rows, activePlayers, effectivePromote, effectiveRelegate,
         livesRankChangedIds(bestNVoidChain.rows, bestNVoid.rows),
-        computeLivesTiebreakInfo(bestNVoidChain.rows, bestNVoid.rows),
+        computeLivesTiebreakInfo(bestNVoidChain.rows, bestNVoid.rows, effectivePromote, effectiveRelegate),
       );
 
       const hypotheticalDrops = d.members
@@ -649,7 +654,7 @@ export async function loadStandingsPreview(
       boundaryChanges: divisions.reduce((sum, dd) => sum + dd.voidMode.boundaryChangeCount, 0),
     },
     livesTiesBroken: divisions.reduce(
-      (sum, dd) => sum + dd.currentLivesInfo.tiesBroken + dd.countMode.livesInfo.tiesBroken + dd.voidMode.livesInfo.tiesBroken,
+      (sum, dd) => sum + dd.currentLivesInfo.lineDecisions.length + dd.countMode.livesInfo.lineDecisions.length + dd.voidMode.livesInfo.lineDecisions.length,
       0,
     ),
   };

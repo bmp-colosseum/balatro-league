@@ -19,7 +19,7 @@ import {
 import { applyHypotheticalDropsAction, setSeasonScoringModeAction } from "./actions";
 import type { SeasonScoringMode } from "@/lib/standings-mode";
 
-const TIEBREAK_LABEL: Record<Tiebreak, string> = { chain: "Chain (today)", lives: "Net lives" };
+const TIEBREAK_LABEL: Record<Tiebreak, string> = { chain: "Today's tiebreaks", lives: "Add net lives" };
 
 export const dynamic = "force-dynamic";
 
@@ -130,8 +130,11 @@ function LivesNote({ livesInfo }: { livesInfo: StandingsPreviewLivesInfo }) {
   if (livesInfo.tiesBroken === 0 && livesInfo.missingLives.length === 0) return null;
   return (
     <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>
-      {livesInfo.tiesBroken > 0 && (
-        <div>Lives broke {livesInfo.tiesBroken} tie{livesInfo.tiesBroken === 1 ? "" : "s"}.</div>
+      {livesInfo.lineDecisions.map((line) => (
+        <div key={line}><strong>{line}</strong></div>
+      ))}
+      {livesInfo.tiesBroken > 0 && livesInfo.lineDecisions.length === 0 && (
+        <div>Lives broke {livesInfo.tiesBroken} tie{livesInfo.tiesBroken === 1 ? "" : "s"}, none on a promotion or relegation line.</div>
       )}
       {livesInfo.missingLives.length > 0 && (
         <div>
@@ -643,7 +646,7 @@ export default async function StandingsPreviewPage({
               </span>
               {tiebreak === "lives" && (
                 <span className="muted">
-                  ties broken by lives: <strong>{preview.summary.livesTiesBroken}</strong>
+                  promotion/relegation lines decided by lives: <strong>{preview.summary.livesTiesBroken}</strong>
                 </span>
               )}
             </div>
