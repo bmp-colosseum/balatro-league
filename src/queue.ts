@@ -1028,7 +1028,7 @@ export async function renderDivisionWelcome(
   const deg = lockedCount > 0 && N > 0 ? Math.round((2 * lockedCount) / N) : null;
   const assignedSubset = deg != null && deg < N - 1;
   const playBullet = assignedSubset
-    ? `- Play **${deg} other people** (2 games each) - run \`/schedule\` to see exactly who you play.`
+    ? `- Play **${deg} other people** (2 games each) - click **Who do I play?** under the quick actions at the bottom of this channel to see exactly who.`
     : `- Play **every other person** in this list once - 2 games each (**${N - 1} matchups**, ${rrTotal} total in this division).`;
   // Promotion / relegation line for THIS division: its own counts, with the
   // ceiling (first division of the season) and floor (last) suppressed so the
@@ -1337,7 +1337,7 @@ async function announceSeasonStartIfComplete(seasonId: string): Promise<void> {
   const client = tryGetDiscordClient();
   if (!client) return;
   // Ping-free: no more @everyone-go-play. The matchups went out as DMs.
-  const content = `🃏 **${formatSeasonLabel(season)}** is live! Check your **DMs** for your matchups, or run \`/schedule\` anytime. Good luck.`;
+  const content = `🃏 **${formatSeasonLabel(season)}** is live! Check your **DMs** for your matchups, or click **Who do I play?** under the quick actions in your division channel anytime. Good luck.`;
   try {
     const channel = await client.channels.fetch(channelId);
     if (channel && channel.isTextBased() && "send" in channel) {
@@ -1402,13 +1402,13 @@ async function queueSeasonOnboardingDms(seasonId: string): Promise<void> {
               return `• ${sanitizeName(o.displayName)}${handle ? ` (${handle})` : ""}`;
             })
             .join("\n")
-        : "_(your matchups will show with_ `/schedule`_)_";
+        : "_(click **Who do I play?** in your division channel to see your matchups)_";
       const content =
         `🎴 **Welcome to ${label}!**\n` +
         `You're in **${div.name}**.${div.discordChannelId ? ` Head to your division channel: <#${div.discordChannelId}>.` : ""}\n\n` +
         `**Your matchups this season:**\n${oppLine}\n\n` +
-        `Play each **2 games** — just run \`/start-match @opponent\` and it guides you through it. ` +
-        `Track your progress with \`/standings\`, and run \`/help\` anytime for how it all works. Good luck!`;
+        `Play each **2 games** — click **Start a match** under the quick actions at the bottom of your division channel and the bot facilitates the pick/ban and records each game. ` +
+        `**My standings** and **Help** sit right next to it. Good luck!`;
       await enqueueDm({
         discordId: m.player.discordId,
         content,

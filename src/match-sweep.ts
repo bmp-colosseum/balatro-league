@@ -460,7 +460,7 @@ export async function sweepScheduledStarts(): Promise<number> {
       // Best-effort announcement post.
       const channelId = await resolveAnnouncementsChannelId().catch(() => null);
       if (channelId) {
-        const content = `🃏 **${label}** is now live! Run /schedule to see your matchups and /start-match to play. Good luck.`;
+        const content = `🃏 **${label}** is now live! In your division channel, click **Who do I play?** to see your matchups and **Start a match** to play. Good luck.`;
         try {
           await rest().post(Routes.channelMessages(channelId), { body: { content } });
         } catch (err) {

@@ -1177,7 +1177,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       "**Slash commands**",
       "• `/standings` — current division table",
       "• `/profile` — your match history & ranks",
-      "• `/schedule` — matches you still need to play",
+      "• **Who do I play?** button (or `/schedule`) — matches you still need to play",
       "• **Start a match** button (or `/start-match @opponent`) - guided ban/pick for each game; the result is recorded automatically",
       "• `/help` — full command list",
       "",

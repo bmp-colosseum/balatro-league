@@ -82,7 +82,7 @@ async function composeDynamicBlock(): Promise<string> {
         `## 🏆 ${label} is live!`,
         `Active since ${startH ? startH.full : "?"}${endH ? ` - scheduled to end ${endH.full}` : ""}.`,
         `**Standings:** <${webUrl("standings")}>`,
-        "Use `/start-match @opponent` in your division channel to play.",
+        "Click **Start a match** at the bottom of your division channel to play.",
       ].join("\n"),
     );
   }
