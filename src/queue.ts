@@ -1028,7 +1028,7 @@ export async function renderDivisionWelcome(
   const deg = lockedCount > 0 && N > 0 ? Math.round((2 * lockedCount) / N) : null;
   const assignedSubset = deg != null && deg < N - 1;
   const playBullet = assignedSubset
-    ? `- Play **${deg} other people** (2 games each) - click **Who do I play?** under the quick actions at the bottom of this channel to see exactly who.`
+    ? `- Play **${deg} other people** (2 games each) - the bot DMs you your matchups; if you need a reminder, click **Who do I play?** under the quick actions at the bottom of this channel.`
     : `- Play **every other person** in this list once - 2 games each (**${N - 1} matchups**, ${rrTotal} total in this division).`;
   // Promotion / relegation line for THIS division: its own counts, with the
   // ceiling (first division of the season) and floor (last) suppressed so the
@@ -1337,7 +1337,7 @@ async function announceSeasonStartIfComplete(seasonId: string): Promise<void> {
   const client = tryGetDiscordClient();
   if (!client) return;
   // Ping-free: no more @everyone-go-play. The matchups went out as DMs.
-  const content = `🃏 **${formatSeasonLabel(season)}** is live! Check your **DMs** for your matchups, or click **Who do I play?** under the quick actions in your division channel anytime. Good luck.`;
+  const content = `🃏 **${formatSeasonLabel(season)}** is live! Your matchups are in your **DMs**; if you need a reminder, click **Who do I play?** under the quick actions in your division channel. Good luck.`;
   try {
     const channel = await client.channels.fetch(channelId);
     if (channel && channel.isTextBased() && "send" in channel) {

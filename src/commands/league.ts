@@ -1166,7 +1166,7 @@ async function bootstrapServer(interaction: ChatInputCommandInteraction) {
       "",
       "**How it works**",
       "• Each season splits players into tiers + divisions by rating.",
-      "• Inside a division you play a set of opponents, **2 games each** - click **Who do I play?** in your division channel to see them, and **Start a match** at the bottom of the channel to play: the bot facilitates the pick/ban phase and records each game. The deck/stake combo does not repeat within a matchup. The winner records their leftover lives.",
+      "• Inside a division you play a set of opponents, **2 games each** - the bot DMs you your matchups (click **Who do I play?** in your division channel for a reminder), and **Start a match** at the bottom of the channel to play: the bot facilitates the pick/ban phase and records each game. The deck/stake combo does not repeat within a matchup. The winner records their leftover lives.",
       "• Divisions of 8 or more send 2 up and 2 down; smaller ones send 1 each way. Two-way ties: play a shootout if you can; otherwise, and for 3+-way ties, net lives decide.",
       "",
       "**Scoring**",

@@ -19,7 +19,7 @@ import { seasonEndsHammer, seasonStartsHammer } from "./season-timing.js";
 const STATIC_INTRO = [
   "# 🃏 Balatro League",
   "",
-  "Each season you're placed in a division by skill, then play a set of **assigned opponents** - **2 games each**. Click **Who do I play?** in your division channel to see exactly who you play.",
+  "Each season you're placed in a division by skill, then play a set of **assigned opponents** - **2 games each**. The bot DMs you your matchups; if you need a reminder, click **Who do I play?** in your division channel.",
   "",
   "**Playing a match:** click **Start a match** at the bottom of your division channel and pick your opponent. The bot facilitates the **pick/ban** phase, then records each game. The deck/stake combo does not repeat within a matchup (game 2 draws from a fresh pool), and the **winner records the lives they had left** after each game.",
   "",
