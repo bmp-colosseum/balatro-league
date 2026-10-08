@@ -66,7 +66,7 @@ export default async function PublicDivisionPage({
 
   const data = await loadDivisionPageData(id);
   if (!data) notFound();
-  const { division, standings, scoringBadge, uncounted, recentPairings, shootouts, unplayed } = data;
+  const { division, standings, scoringBadge, uncounted, recentPairings, shootouts, unplayed, livesBreaksTies } = data;
   const tc = tierColors(division.tierPosition);
 
   // Viewer identity: drives the per-row reporting controls on
@@ -144,6 +144,7 @@ export default async function PublicDivisionPage({
               showBmpMmr={showBmpMmr}
               bmpCurrentSeason={bmpCurrentSeason}
               showCountedBadge={!!scoringBadge}
+              livesBreaksTies={livesBreaksTies}
             />
           </div>
         </div>

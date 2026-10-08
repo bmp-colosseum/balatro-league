@@ -11,6 +11,7 @@
 import { prisma } from "@/lib/prisma";
 import { loadManyDivisionStandings } from "@/lib/standings-cache";
 import { formatSeasonLabel } from "@/lib/format-season";
+import { normalizeTiebreak } from "@/lib/standings-mode";
 
 export interface SeasonIndexEntry {
   id: string;
@@ -73,6 +74,10 @@ export interface SeasonDetailStandingRow {
   rank?: number;
   tiedWithPrev?: boolean;
   tiedWithNext?: boolean;
+  // Set when this row carries a net-lives value -- see
+  // StandingRow.netLives/livesGamesMissing and SeasonDetailData.livesBreaksTies.
+  netLives?: number;
+  livesGamesMissing?: number;
 }
 
 export interface SeasonDetailDivision {
@@ -98,6 +103,10 @@ export interface SeasonDetailData {
   endedAt: Date | null;
   scheduledEndAt: Date | null;
   tiers: SeasonDetailTier[];
+  // True when this season's tiebreak is "lives" (ties ARE broken by net
+  // lives) vs the default "chain" (net lives shown for tied players only as
+  // informational context). Drives the Lives column's footnote wording.
+  livesBreaksTies: boolean;
 }
 
 export async function loadSeasonDetail(seasonId: string): Promise<SeasonDetailData | null> {
@@ -112,6 +121,7 @@ export async function loadSeasonDetail(seasonId: string): Promise<SeasonDetailDa
       startedAt: true,
       endedAt: true,
       scheduledEndAt: true,
+      tiebreak: true,
       tiers: {
         orderBy: { position: "asc" },
         select: {
@@ -165,6 +175,8 @@ export async function loadSeasonDetail(seasonId: string): Promise<SeasonDetailDa
         rank: r.rank,
         tiedWithPrev: r.tiedWithPrev,
         tiedWithNext: r.tiedWithNext,
+        netLives: r.netLives,
+        livesGamesMissing: r.livesGamesMissing,
       }));
       return { id: d.id, name: d.name, groupNumber: d.groupNumber, rows };
     }),
@@ -178,5 +190,6 @@ export async function loadSeasonDetail(seasonId: string): Promise<SeasonDetailDa
     endedAt: season.endedAt,
     scheduledEndAt: season.scheduledEndAt,
     tiers,
+    livesBreaksTies: normalizeTiebreak(season.tiebreak) === "lives",
   };
 }

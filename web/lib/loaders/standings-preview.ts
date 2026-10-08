@@ -38,7 +38,7 @@ import {
   type DropCandidateMatchInput,
   type DropCandidateMemberInput,
 } from "@/lib/drop-candidates-core";
-import { normalizeScoringMode, type SeasonScoringMode } from "@/lib/standings-mode";
+import { normalizeScoringMode, normalizeTiebreak, type SeasonScoringMode, type SeasonTiebreak } from "@/lib/standings-mode";
 
 export interface StandingsPreviewSeasonOption {
   id: string;
@@ -165,7 +165,7 @@ export interface StandingsPreviewCandidateDivision {
 }
 
 export interface StandingsPreviewData {
-  season: { id: string; label: string; scoringMode: SeasonScoringMode } | null;
+  season: { id: string; label: string; scoringMode: SeasonScoringMode; tiebreak: SeasonTiebreak } | null;
   // Only divisions with at least one unreplaced (real or hypothetical)
   // dropout -- that's the only case where the tables can possibly differ.
   // Divisions with no dropout are counted in totalDivisions but not
@@ -404,6 +404,7 @@ export async function loadStandingsPreview(
       number: true,
       subtitle: true,
       scoringMode: true,
+      tiebreak: true,
       tiers: {
         orderBy: { position: "asc" },
         select: {
@@ -660,7 +661,12 @@ export async function loadStandingsPreview(
   };
 
   return {
-    season: { id: season.id, label: formatSeasonLabel(season), scoringMode: normalizeScoringMode(season.scoringMode) },
+    season: {
+      id: season.id,
+      label: formatSeasonLabel(season),
+      scoringMode: normalizeScoringMode(season.scoringMode),
+      tiebreak: normalizeTiebreak(season.tiebreak),
+    },
     divisions,
     candidateDivisions,
     selectedDrops,

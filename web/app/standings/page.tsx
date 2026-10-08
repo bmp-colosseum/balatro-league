@@ -269,6 +269,7 @@ export default async function StandingsPage() {
                             showBmpMmr={showBmpMmr}
                             bmpCurrentSeason={data.bmpCurrentSeason}
                             showCountedBadge={!!div.scoringBadge}
+                            livesBreaksTies={data.season?.tiebreak === "lives"}
                           />
                           {div.shootouts.length > 0 && (
                             <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>

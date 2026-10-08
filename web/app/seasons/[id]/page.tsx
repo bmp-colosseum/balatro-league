@@ -208,6 +208,7 @@ async function PublicSummary({
                     extras={extras}
                     showBmpMmr={showBmpMmr}
                     bmpCurrentSeason={bmpCurrentSeason}
+                    livesBreaksTies={season.livesBreaksTies}
                     finalRankHeader={isEnded ? "Final rank" : undefined}
                     finalRankCell={
                       isEnded

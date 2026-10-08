@@ -16,10 +16,11 @@ import {
   type StandingsPreviewLivesInfo,
   type StandingsPreviewPlayerDiff,
 } from "@/lib/loaders/standings-preview";
-import { applyHypotheticalDropsAction, setSeasonScoringModeAction } from "./actions";
-import type { SeasonScoringMode } from "@/lib/standings-mode";
+import { applyHypotheticalDropsAction, setSeasonScoringModeAction, setSeasonTiebreakAction } from "./actions";
+import type { SeasonScoringMode, SeasonTiebreak } from "@/lib/standings-mode";
 
 const TIEBREAK_LABEL: Record<Tiebreak, string> = { chain: "Today's tiebreaks", lives: "Add net lives" };
+const SEASON_TIEBREAK_LABEL: Record<SeasonTiebreak, string> = { chain: "Today's tiebreaks", lives: "Break ties by net lives" };
 
 export const dynamic = "force-dynamic";
 
@@ -176,6 +177,39 @@ function SetScoringModeForm({
         size="sm"
       >
         {isCurrent ? "Current rule" : label}
+      </ConfirmButton>
+    </form>
+  );
+}
+
+// "Break ties by net lives for season N" / "Back to today's tiebreaks" --
+// the LIVE, persisted season setting (Season.tiebreak), distinct from the
+// "3+-way tie breaking" pills above (which only toggle this PAGE's preview
+// and write nothing). Modeled exactly on SetScoringModeForm.
+function SetTiebreakForm({
+  seasonId,
+  seasonLabel,
+  tiebreak,
+  currentTiebreak,
+  label,
+}: {
+  seasonId: string;
+  seasonLabel: string;
+  tiebreak: SeasonTiebreak;
+  currentTiebreak: SeasonTiebreak;
+  label: string;
+}) {
+  const isCurrent = tiebreak === currentTiebreak;
+  return (
+    <form action={setSeasonTiebreakAction}>
+      <input type="hidden" name="season" value={seasonId} />
+      <input type="hidden" name="tiebreak" value={tiebreak} />
+      <ConfirmButton
+        message={`Switch ${seasonLabel}'s LIVE standings tiebreak to "${label}"? This takes effect immediately for every division.`}
+        variant={isCurrent ? "secondary" : "default"}
+        size="sm"
+      >
+        {isCurrent ? "Current tiebreak" : label}
       </ConfirmButton>
     </form>
   );
@@ -477,6 +511,8 @@ export default async function StandingsPreviewPage({
     applied?: string;
     modeErr?: string;
     modeOk?: string;
+    tiebreakErr?: string;
+    tiebreakOk?: string;
     tiebreak?: string;
   }>;
 }) {
@@ -576,11 +612,33 @@ export default async function StandingsPreviewPage({
             </a>
           ))}
           {tiebreak === "lives" && (
-            <span className="muted" style={{ fontSize: 11 }} title="Preview only -- nothing live uses this yet">
+            <span className="muted" style={{ fontSize: 11 }} title="This toggle only affects the tables below -- see the LIVE tiebreak control below to actually switch it on">
               preview only
             </span>
           )}
         </div>
+
+        {preview.season && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" }}>
+            <span className="muted" style={{ fontSize: 12 }}>
+              Live tiebreak for {preview.season.label}: <strong>{SEASON_TIEBREAK_LABEL[preview.season.tiebreak]}</strong>
+            </span>
+            <SetTiebreakForm
+              seasonId={preview.season.id}
+              seasonLabel={preview.season.label}
+              tiebreak="chain"
+              currentTiebreak={preview.season.tiebreak}
+              label={SEASON_TIEBREAK_LABEL.chain}
+            />
+            <SetTiebreakForm
+              seasonId={preview.season.id}
+              seasonLabel={preview.season.label}
+              tiebreak="lives"
+              currentTiebreak={preview.season.tiebreak}
+              label={SEASON_TIEBREAK_LABEL.lives}
+            />
+          </div>
+        )}
 
         {sp.applyErr && <Callout type="danger" style={{ marginTop: 8 }}>Couldn&apos;t apply: {sp.applyErr}</Callout>}
         {sp.applied && (
@@ -592,6 +650,12 @@ export default async function StandingsPreviewPage({
         {sp.modeOk && (
           <Callout type="success" style={{ marginTop: 8 }}>
             Live standings now use &ldquo;{MODE_LABEL[sp.modeOk as SeasonScoringMode] ?? sp.modeOk}&rdquo; for this season.
+          </Callout>
+        )}
+        {sp.tiebreakErr && <Callout type="danger" style={{ marginTop: 8 }}>Couldn&apos;t change the tiebreak: {sp.tiebreakErr}</Callout>}
+        {sp.tiebreakOk && (
+          <Callout type="success" style={{ marginTop: 8 }}>
+            Live standings now use &ldquo;{SEASON_TIEBREAK_LABEL[sp.tiebreakOk as SeasonTiebreak] ?? sp.tiebreakOk}&rdquo; for this season.
           </Callout>
         )}
 

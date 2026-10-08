@@ -16,13 +16,23 @@ import { DEFAULTS, type ScoringConfig } from "./league-settings.js";
 import {
   type StandingRow,
   type ShootoutInput,
+  type Tiebreak,
+  type PairingGameLives,
   computeStandings,
+  computeNetLives,
   assignRanks,
   headToHead,
   shootoutBetween,
 } from "./standings.js";
 
-export type BestNPairing = Pick<Match, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB">;
+export type BestNPairing = Pick<Match, "playerAId" | "playerBId" | "gamesWonA" | "gamesWonB"> & {
+  // Optional per-game lives data, only read when tiebreak: "lives" is passed
+  // to computeBestNStandings -- see ./standings.js's PairingGameLives /
+  // computeNetLives for the shape and the rule (counted results only, games
+  // missing winnerLives contribute 0 + a livesGamesMissing count). Mirrors
+  // web/lib/standings-best-n.ts's identical type.
+  games?: PairingGameLives[];
+};
 
 export type DropoutGamesMode = "count" | "void";
 
@@ -63,6 +73,11 @@ interface PlayerResult {
   rank: 2 | 1 | 0;
   gamesWon: number;
   gamesLost: number;
+  // Carried through from the originating BestNPairing so netLives can be
+  // computed from exactly the results that ended up COUNTED (see the
+  // tiebreak: "lives" branch below) -- undefined when the pairing had no
+  // games data.
+  games?: PairingGameLives[];
 }
 
 function sortResultsBestFirst(results: PlayerResult[]): PlayerResult[] {
@@ -78,6 +93,7 @@ export function computeBestNStandings(
   scoring: ScoringConfig = DEFAULTS.scoring,
   dropoutGames: DropoutGamesMode = "count",
   scheduledPerPlayer: number | null = null,
+  tiebreak: Tiebreak = "chain",
 ): BestNStandingsResult {
   const active = members.filter((m) => m.status === "ACTIVE");
   const droppedCount = members.filter((m) => m.status === "DROPPED").length;
@@ -97,6 +113,7 @@ export function computeBestNStandings(
       pairings,
       shootouts,
       scoring,
+      tiebreak,
     ).map((row) => ({ ...row, counted: row.played, of: row.played, droppedResults: [] }));
     return { rows, division: { n, k, scheduled, dropouts } };
   }
@@ -141,12 +158,14 @@ export function computeBestNStandings(
       resultsByPlayerId.get(pr.playerAId)!.push({
         opponentId: pr.playerBId, points: aPoints, rank: aRank,
         gamesWon: pr.gamesWonA, gamesLost: pr.gamesWonB,
+        games: pr.games,
       });
     }
     if (bIsActive) {
       resultsByPlayerId.get(pr.playerBId)!.push({
         opponentId: pr.playerAId, points: bPoints, rank: bRank,
         gamesWon: pr.gamesWonB, gamesLost: pr.gamesWonA,
+        games: pr.games,
       });
     }
   }
@@ -171,11 +190,29 @@ export function computeBestNStandings(
       else losses++;
     }
 
+    // Net lives only from the COUNTED results, per the TO's rule -- a result
+    // dropped by best-N selection doesn't contribute lives either. Each
+    // countedResult becomes a synthetic one-sided pairing (playerAId: me) so
+    // computeNetLives (which only cares whether playerId appears, not which
+    // side) can read its games data directly.
+    let netLives: number | undefined;
+    let livesGamesMissing: number | undefined;
+    if (tiebreak === "lives") {
+      const nl = computeNetLives(
+        m.player.id,
+        countedResults.map((r) => ({ playerAId: m.player.id, playerBId: r.opponentId, games: r.games })),
+      );
+      netLives = nl.netLives;
+      livesGamesMissing = nl.livesGamesMissing;
+    }
+
     rows.push({
       player: m.player,
       points, wins, draws, losses, gamesWon, gamesLost,
       played: results.length,
       counted, of,
+      netLives,
+      livesGamesMissing,
       droppedResults: droppedResults.map((r) => ({
         opponentId: r.opponentId,
         opponent: playerById.get(r.opponentId)?.displayName ?? r.opponentId,
@@ -188,6 +225,9 @@ export function computeBestNStandings(
     (countedOpponentsByPlayerId.get(xId)?.has(yId) ?? false) &&
     (countedOpponentsByPlayerId.get(yId)?.has(xId) ?? false);
 
+  const livesCompare = (x: BestNStandingRow, y: BestNStandingRow): number =>
+    tiebreak === "lives" ? (y.netLives ?? 0) - (x.netLives ?? 0) : 0;
+
   const sorted = rows.slice().sort((x, y) => {
     if (y.points !== x.points) return y.points - x.points;
     if (bothCounted(x.player.id, y.player.id)) {
@@ -196,6 +236,8 @@ export function computeBestNStandings(
     }
     const shoot = shootoutBetween(x.player.id, y.player.id, effectiveShootouts);
     if (shoot !== 0) return shoot;
+    const lives = livesCompare(x, y);
+    if (lives !== 0) return lives;
     if (y.wins !== x.wins) return y.wins - x.wins;
     if (y.draws !== x.draws) return y.draws - x.draws;
     return x.player.displayName.localeCompare(y.player.displayName);
@@ -211,6 +253,7 @@ export function computeBestNStandings(
       prev.points === cur.points &&
       h2h === 0 &&
       shootoutBetween(prev.player.id, cur.player.id, effectiveShootouts) === 0 &&
+      livesCompare(prev, cur) === 0 &&
       prev.wins === cur.wins &&
       prev.draws === cur.draws
     ) {

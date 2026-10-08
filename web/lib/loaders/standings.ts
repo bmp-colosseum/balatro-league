@@ -14,7 +14,7 @@ import { prisma } from "@/lib/prisma";
 import { isScheduleLocked } from "@/lib/schedule-locked";
 import { loadBestBmpSnapshotsForPlayerIds } from "@/lib/bmp-snapshots";
 import { loadDivisionStandings, loadManyDivisionStandings, loadManyDivisionScoringBadges } from "@/lib/standings-cache";
-import type { ScoringBadge } from "@/lib/standings-mode";
+import { normalizeTiebreak, type ScoringBadge, type SeasonTiebreak } from "@/lib/standings-mode";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { getPlacementRules } from "@/lib/placement-rules";
 import { divisionMovement } from "@/lib/owen-placement";
@@ -82,7 +82,7 @@ export interface StandingsMmrEntry {
 }
 
 export interface StandingsPageData {
-  season: { id: string; name: string; startedAt: Date; scheduledEndAt: Date | null } | null;
+  season: { id: string; name: string; startedAt: Date; scheduledEndAt: Date | null; tiebreak: SeasonTiebreak } | null;
   tiers: StandingsTierSummary[];
   minTierPosition: number;
   maxTierPosition: number;
@@ -105,6 +105,7 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
       scheduleLocked: true,
       startedAt: true,
       scheduledEndAt: true,
+      tiebreak: true,
       tiers: {
         orderBy: { position: "asc" },
         select: {
@@ -304,6 +305,7 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
       name: formatSeasonLabel(season),
       startedAt: season.startedAt,
       scheduledEndAt: season.scheduledEndAt,
+      tiebreak: normalizeTiebreak(season.tiebreak),
     },
     tiers,
     minTierPosition,

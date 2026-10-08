@@ -38,6 +38,12 @@ export interface StandingsTableRow {
   // caller passes showCountedBadge.
   counted?: number;
   of?: number;
+  // Set only when the season's tiebreak is "lives" -- net life differential
+  // and how many of this row's counted games have no recorded winnerLives.
+  // See computeNetLives in @/lib/standings. Renders a "Lives" column when
+  // ANY row in the table carries netLives.
+  netLives?: number;
+  livesGamesMissing?: number;
 }
 
 type Row = StandingsTableRow;
@@ -152,6 +158,23 @@ function CountedNote({ r, show }: { r: StandingsTableRow; show?: boolean }) {
   );
 }
 
+// Net life differential cell -- a row carries netLives either because the
+// season's tiebreak is "lives" (every row) or it's "chain" and this row is
+// part of a tie group (attachLivesToTiedRows; informational only). Signed
+// so the direction reads at a glance; "(n missing)" flags counted games
+// with no recorded winnerLives, same wording the admin standings-preview
+// page uses.
+function LivesCell({ r }: { r: StandingsTableRow }) {
+  if (r.netLives === undefined) return <span className="muted">-</span>;
+  const sign = r.netLives > 0 ? "+" : "";
+  return (
+    <span className="muted">
+      {sign}{r.netLives}
+      {r.livesGamesMissing ? ` (${r.livesGamesMissing} missing)` : ""}
+    </span>
+  );
+}
+
 // Faint background band marking the promotion (blue) / relegation (amber) zone so
 // the stakes read at a glance — kept DISTINCT from the green-win / red-loss record
 // colours. Covers the decided state (promoting/relegating) and the mid-season clinch.
@@ -167,6 +190,7 @@ export function DivisionStandingsTable({
   showBmpMmr = false,
   bmpCurrentSeason = null,
   showCountedBadge = false,
+  livesBreaksTies = false,
   finalRankHeader,
   finalRankCell,
 }: {
@@ -180,13 +204,24 @@ export function DivisionStandingsTable({
   // don't track the badge (e.g. /seasons/[id]'s ended-season view) render
   // unchanged.
   showCountedBadge?: boolean;
+  // True when this season's tiebreak is "lives" (ties ARE broken by net
+  // lives) vs the default "chain" (net lives shown for tied players only as
+  // informational context -- see attachLivesToTiedRows). Only changes the
+  // Lives column's footnote wording below -- which rows carry netLives is
+  // already decided by the caller's data, not this flag.
+  livesBreaksTies?: boolean;
   // When both are set, a "Final rank" column is inserted after Player. The cell
   // render-prop lets the caller drop in an admin inline-edit form or plain text.
   finalRankHeader?: ReactNode;
   finalRankCell?: (r: Row) => ReactNode;
 }) {
   const hasFinalRank = !!finalRankHeader && !!finalRankCell;
-  const colCount = 5 + (showBmpMmr ? 1 : 0) + (hasFinalRank ? 1 : 0);
+  // The Lives column shows whenever ANY row carries netLives -- under the
+  // "lives" tiebreak every row has it; under "chain" only rows in a tie
+  // group do (see attachLivesToTiedRows), so a division with no ties simply
+  // doesn't render this column at all.
+  const showLives = rows.some((r) => r.netLives !== undefined);
+  const colCount = 5 + (showBmpMmr ? 1 : 0) + (hasFinalRank ? 1 : 0) + (showLives ? 1 : 0);
 
   return (
     <>
@@ -200,6 +235,17 @@ export function DivisionStandingsTable({
               <th>Pts</th>
               <th>Record</th>
               <th title="Individual games won-lost">Games</th>
+              {showLives && (
+                <th
+                  title={
+                    livesBreaksTies
+                      ? "Net life differential -- this season's ties are broken by it instead of today's wins/draws/name chain"
+                      : "Net life differential for tied players -- informational only, not used to break ties this season"
+                  }
+                >
+                  Lives
+                </th>
+              )}
               {showBmpMmr && (
                 <th title="Ranked MMR from balatromp.com. Separate from league rank.">BMP MMR</th>
               )}
@@ -225,6 +271,7 @@ export function DivisionStandingsTable({
                     <td><strong>{r.points}</strong></td>
                     <td title={standingRateTooltip(r)}><RecordCells r={r} /><CountedNote r={r} show={showCountedBadge} /></td>
                     <td className="muted" title={gameRateTooltip(r)}>{r.gamesWon}-{r.gamesLost}</td>
+                    {showLives && <td><LivesCell r={r} /></td>}
                     {showBmpMmr && <td>{renderMmrCell(ex?.mmr, bmpCurrentSeason)}</td>}
                   </tr>
                 );
@@ -253,6 +300,7 @@ export function DivisionStandingsTable({
                 </div>
                 <div className="standings-card-sub muted">
                   <RecordCells r={r} /><CountedNote r={r} show={showCountedBadge} /> · {r.gamesWon}-{r.gamesLost} games · {r.played} played
+                  {showLives && <> - <LivesCell r={r} /> lives</>}
                   {showBmpMmr && ex?.mmr ? <> · MMR {renderMmrCell(ex.mmr, bmpCurrentSeason)}</> : null}
                 </div>
               </div>
@@ -264,6 +312,9 @@ export function DivisionStandingsTable({
         <strong>3</strong> pts per win · <strong>1</strong> per draw · Record = wins·draws·losses ·{" "}
         <span style={{ color: "var(--info)" }}>↑ blue = promoting</span> ·{" "}
         <span style={{ color: "var(--admin)" }}>↓ amber = relegating</span>
+        {showLives && (
+          <> -- {livesBreaksTies ? "Ties broken by net lives" : "Lives shown for tied players (informational -- ties are not broken by lives this season)"}</>
+        )}
       </p>
     </>
   );
