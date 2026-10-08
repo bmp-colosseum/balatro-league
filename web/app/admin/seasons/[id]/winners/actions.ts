@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { loadManyDivisionStandings } from "@/lib/standings-cache";
 import { pickDivisionWinners } from "@/lib/loaders/admin-winners";
+import { recordAudit, actorFromAdminUser } from "@/lib/audit";
 import type { ActionResult } from "@/lib/action-result";
 
 export async function setDivisionAwarded(
@@ -63,4 +64,47 @@ export async function setDivisionAwarded(
     ok: true,
     message: `${division.name}: marked awarded to ${winner.player.displayName}.`,
   };
+}
+
+// Record the champion of a division whose standings still show a tie for #1 --
+// for ended seasons where the tie was settled outside the system (or never
+// recorded) and the shootout tool no longer applies. The pick MUST be one of the
+// currently tied players; a clear winner uses setDivisionAwarded instead. Pure
+// bookkeeping: writes championPlayerId only, never touches Discord roles. The
+// role audit (/admin/roles) and the Nx <Tier> Winner counts read this field, so
+// every unresolved old tie silently costs its winner a title until it is set.
+export async function setDivisionChampionManual(
+  _prev: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  const { user } = await requireAdmin();
+  const divisionId = String(formData.get("divisionId") ?? "");
+  const winnerPlayerId = String(formData.get("winnerPlayerId") ?? "");
+  if (!divisionId || !winnerPlayerId) return { ok: false, message: "Pick a player first." };
+
+  const division = await prisma.division.findUnique({
+    where: { id: divisionId },
+    select: { id: true, name: true, seasonId: true, season: { select: { number: true, subtitle: true } } },
+  });
+  if (!division) return { ok: false, message: "Division not found." };
+
+  const standings = (await loadManyDivisionStandings([divisionId])).get(divisionId) ?? [];
+  const tied = pickDivisionWinners(standings);
+  if (tied.length < 2) {
+    return { ok: false, message: `${division.name}: no tie for #1 -- use Mark awarded.` };
+  }
+  const winner = tied.find((r) => r.player.id === winnerPlayerId);
+  if (!winner) return { ok: false, message: `${division.name}: that player is not among the tied leaders.` };
+
+  await prisma.division.update({ where: { id: divisionId }, data: { championPlayerId: winner.player.id } });
+  recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "division.set-champion",
+    targetType: "Division",
+    targetId: divisionId,
+    summary: `Set ${division.name} champion to ${winner.player.displayName} (tie for #1 among ${tied.length}, settled by hand)`,
+    metadata: { divisionId, seasonId: division.seasonId, winnerPlayerId: winner.player.id, tiedPlayerIds: tied.map((r) => r.player.id) },
+  });
+  revalidatePath(`/admin/seasons/${division.seasonId}/winners`);
+  return { ok: true, message: `${division.name}: champion set to ${winner.player.displayName}.` };
 }

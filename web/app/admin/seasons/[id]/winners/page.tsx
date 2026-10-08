@@ -21,7 +21,7 @@ import {
   type SeasonWinnerDivision,
   type WinnerAwardStatus,
 } from "@/lib/loaders/admin-winners";
-import { setDivisionAwarded } from "./actions";
+import { setDivisionAwarded, setDivisionChampionManual } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -270,8 +270,33 @@ function AwardStatusCell({
   status: WinnerAwardStatus;
   label: { text: string; color: string };
 }) {
-  if (status === "no-winner" || status === "tied") {
+  if (status === "no-winner") {
     return <span style={{ color: label.color }}>{label.text}</span>;
+  }
+  // A tie for #1 that the standings cannot break: let the TO record who actually
+  // won from the tied names (old seasons settled off-system). Bookkeeping only.
+  if (status === "tied") {
+    return (
+      <div style={{ display: "grid", gap: 4, justifyItems: "start" }}>
+        <span style={{ color: label.color }}>{label.text}</span>
+        <ActionFlashForm action={setDivisionChampionManual} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <input type="hidden" name="divisionId" value={d.divisionId} />
+          <select name="winnerPlayerId" defaultValue="" required style={{ fontSize: 12 }} aria-label="Champion">
+            <option value="" disabled>
+              Who won?
+            </option>
+            {d.winners.map((w) => (
+              <option key={w.playerId} value={w.playerId}>
+                {w.displayName}
+              </option>
+            ))}
+          </select>
+          <SubmitButton size="sm" variant="secondary">
+            Set champion
+          </SubmitButton>
+        </ActionFlashForm>
+      </div>
+    );
   }
   const isAwarded = status === "awarded";
   return (
