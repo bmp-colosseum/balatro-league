@@ -54,5 +54,6 @@ export const ADMIN_LINKS: AdminNavLink[] = [
   { href: "/admin/host", label: "Host", system: true },
   { href: "/admin/audit", label: "Audit", system: true },
   { href: "/admin/schedule-audit", label: "Data Audit", system: true },
+  { href: "/admin/season-audit", label: "Season Audit", system: true },
   { href: "/admin/transcripts", label: "Transcripts", system: true },
 ];
