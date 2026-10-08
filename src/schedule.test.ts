@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateSchedule, summariseSchedule, planDivisionResync, type SchedulePlayer, type ExistingMatch } from "./schedule.js";
+import { generateSchedule, summariseSchedule, planDivisionResync, needsCleanRegenerate, type SchedulePlayer, type ExistingMatch } from "./schedule.js";
 
 // A realistic-ish division: 16 players banded on Owen's 2200 scale, spaced ~15.
 function division(n: number, top = 2200, step = 15): SchedulePlayer[] {
@@ -298,5 +298,55 @@ describe("planDivisionResync", () => {
     // Remaining 5 are now a complete graph among themselves (degree 4) → nothing to add.
     const deg = degrees(remaining, plan.createPairs, existing, plan.pruneIds);
     for (const id of remaining) expect(deg.get(id)).toBe(4);
+  });
+});
+
+// --- needsCleanRegenerate: untouched division -> rebuild instead of patch ---
+
+describe("needsCleanRegenerate", () => {
+  const slot = (id: string, a: string, b: string, extra: Partial<ExistingMatch> = {}): ExistingMatch => ({
+    id,
+    playerAId: a < b ? a : b,
+    playerBId: a < b ? b : a,
+    status: "PENDING",
+    gamesWonA: 0,
+    gamesWonB: 0,
+    ...extra,
+  });
+  // 5-player complete round robin: everyone already has 4.
+  const five = ["p1", "p2", "p3", "p4", "p5"];
+  const roundRobin: ExistingMatch[] = [];
+  for (let i = 0; i < five.length; i++) {
+    for (let j = i + 1; j < five.length; j++) roundRobin.push(slot(`m${i}${j}`, five[i]!, five[j]!));
+  }
+
+  it("is false for a balanced untouched division", () => {
+    expect(needsCleanRegenerate(five, roundRobin, 4)).toBe(false);
+  });
+
+  it("is true when a 6th player joins a full 5-player round robin (Season 9 Rare 1)", () => {
+    expect(needsCleanRegenerate([...five, "p6"], roundRobin, 4)).toBe(true);
+  });
+
+  it("is true when a player leaves and the leftovers are uneven", () => {
+    expect(needsCleanRegenerate(five.slice(0, 4), roundRobin, 4)).toBe(false); // 4 left, cap 3, all have 3 -> balanced
+    const sixPlayers = [...five, "p6"];
+    const withSixth = [...roundRobin, slot("x1", "p1", "p6"), slot("x2", "p2", "p6"), slot("x3", "p3", "p6"), slot("x4", "p4", "p6")];
+    expect(needsCleanRegenerate(sixPlayers, withSixth, 4)).toBe(true); // p1..p4 at 5
+  });
+
+  it("is false once anything has been played, even if uneven", () => {
+    const played = roundRobin.map((m, i) => (i === 0 ? { ...m, status: "CONFIRMED", gamesWonA: 2 } : m));
+    expect(needsCleanRegenerate([...five, "p6"], played, 4)).toBe(false);
+    const reported = roundRobin.map((m, i) => (i === 0 ? { ...m, gamesWonA: 1, gamesWonB: 1 } : m));
+    expect(needsCleanRegenerate([...five, "p6"], reported, 4)).toBe(false);
+  });
+
+  it("is true for a division with members but no schedule yet", () => {
+    expect(needsCleanRegenerate(five, [], 4)).toBe(true);
+  });
+
+  it("is false with fewer than two members", () => {
+    expect(needsCleanRegenerate(["p1"], [], 4)).toBe(false);
   });
 });

@@ -448,3 +448,35 @@ export function summariseSchedule(result: ScheduleResult, players: SchedulePlaye
     stdev: Math.sqrt(variance),
   };
 }
+
+// Should a roster change in this division be handled by regenerating its whole
+// schedule instead of patching it? True when NOTHING has been played yet (every
+// existing LEAGUE_BO2 row is an unplayed 0-0 PENDING slot) and the remaining
+// valid matchups do not already give every active member exactly their target
+// opponent count. Patching an untouched division can only ADD edges, so moving
+// a player into a division where everyone already has their 4 hands 4 opponents
+// a 5th match (Season 9, Rare 1/3/4); a clean regenerate keeps the slate even.
+// Once a single match has a result, patching is the only option -- return false.
+export function needsCleanRegenerate(
+  activeMemberIds: string[],
+  matches: ExistingMatch[],
+  target: number,
+): boolean {
+  if (activeMemberIds.length < 2) return false;
+  if (!matches.every(isUnplayedPending)) return false;
+  const active = new Set(activeMemberIds);
+  const cap = Math.min(target, activeMemberIds.length - 1);
+  const key = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+  const seen = new Set<string>();
+  const deg = new Map<string, number>();
+  for (const id of activeMemberIds) deg.set(id, 0);
+  for (const m of matches) {
+    if (!active.has(m.playerAId) || !active.has(m.playerBId)) continue;
+    const k = key(m.playerAId, m.playerBId);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    deg.set(m.playerAId, deg.get(m.playerAId)! + 1);
+    deg.set(m.playerBId, deg.get(m.playerBId)! + 1);
+  }
+  return activeMemberIds.some((id) => deg.get(id) !== cap);
+}

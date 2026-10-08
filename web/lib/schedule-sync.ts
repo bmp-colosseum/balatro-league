@@ -9,7 +9,8 @@ import "server-only";
 // roster action and to expose as a manual "re-sync" button.
 
 import { prisma } from "@/lib/prisma";
-import { planDivisionResync, scheduleDegree, type ExistingMatch } from "@/lib/schedule";
+import { planDivisionResync, needsCleanRegenerate, scheduleDegree, type ExistingMatch } from "@/lib/schedule";
+import { lockOneDivision } from "@/lib/lock-schedule";
 import { getPlacementRules } from "@/lib/placement-rules";
 import { loadAvoidedPairIdPairs } from "@/lib/loaders/avoided-pairs";
 
@@ -68,6 +69,16 @@ export async function resyncSeasonSchedules(seasonId: string): Promise<{ pruned:
       memberIds.length < 2
         ? 0
         : scheduleDegree(d.opponentsPerPlayer, rules.defaultOpponentsPerPlayer, memberIds.length);
+    // Nothing played in this division yet and the roster change left the slate
+    // uneven (someone would end up with a 5th match, or short): wipe and rebuild
+    // the SoS-balanced graph instead of patching -- the same thing the
+    // "Regenerate schedule" button does, applied automatically while it is safe.
+    if (needsCleanRegenerate(memberIds, matches, target)) {
+      const wiped = await prisma.match.deleteMany({ where: { divisionId: d.id, format: "LEAGUE_BO2" } });
+      pruned += wiped.count;
+      created += await lockOneDivision(d.id);
+      continue;
+    }
     const plan = planDivisionResync(memberIds, matches, target, forbidden);
 
     if (plan.pruneIds.length) {
