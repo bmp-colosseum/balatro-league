@@ -1,0 +1,42 @@
+/* v2 "Card Table" styling for /stats (app/stats/page.tsx). design-system/
+   MASTER.md is the spec: no emoji, a rank tile like the standings player
+   card's .player-card-rank. Off by default so it has zero effect without
+   the admin preview cookie -- same convention as the rest of the v2
+   stylesheet (globals.css): the v1 medal/number stays the default, and
+   this new tile only takes over under html[data-ui="v2"]. */
+
+.stats-rank-v1 { }
+.stats-rank-tile { display: none; }
+
+html[data-ui="v2"] .stats-rank-v1 { display: none; }
+
+html[data-ui="v2"] .stats-rank-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 2px;
+  border-radius: 5px;
+  font-family: var(--font-body-v2), "Segoe UI", sans-serif;
+  font-weight: 800;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--paper);
+}
+/* Gold for 1st, paper-dim for 2nd/3rd (no fill), plain number after that --
+   see .stats-rank-tile-plain below. */
+html[data-ui="v2"] .stats-rank-tile[data-rank="1"] {
+  background: var(--gold);
+  color: var(--gold-ink);
+}
+html[data-ui="v2"] .stats-rank-tile[data-rank="2"],
+html[data-ui="v2"] .stats-rank-tile[data-rank="3"] {
+  background: transparent;
+  color: var(--paper-dim);
+}
+html[data-ui="v2"] .stats-rank-tile-plain {
+  background: transparent;
+  font-weight: 400;
+  color: var(--paper-faint);
+}

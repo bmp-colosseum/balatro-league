@@ -117,10 +117,18 @@ function LeaderCard({
         <table className="table-dense" style={{ width: "100%", fontSize: 13 }}>
           <tbody>
             {rows.map((r, i) => {
-              const medal = i < 3 ? ["🥇", "🥈", "🥉"][i] : `${i + 1}.`;
+              const rank = i + 1;
+              const medal = i < 3 ? ["\u{1F947}", "\u{1F948}", "\u{1F949}"][i] : `${rank}.`;
               return (
                 <tr key={r.playerId}>
-                  <td style={{ width: 24 }}>{medal}</td>
+                  <td style={{ width: 28 }}>
+                    <span className="stats-rank-v1">{medal}</span>
+                    {rank <= 3 ? (
+                      <span className="stats-rank-tile" data-rank={rank}>{rank}</span>
+                    ) : (
+                      <span className="stats-rank-tile stats-rank-tile-plain">{rank}.</span>
+                    )}
+                  </td>
                   <td>
                     <Link href={`/profile/${r.playerId}`} style={{ color: "var(--text)" }}>{r.displayName}</Link>
                     <DiscordId value={r.discordId} username={r.username} />
