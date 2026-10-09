@@ -209,7 +209,10 @@ section[id]:target > h3 {
     -webkit-overflow-scrolling: touch;
     max-width: 100%;
   }
-  .table-scroll > table { display: table; }
+  /* Same specificity as the rule above and later in the file, so it wins;
+     the bare .table-scroll > table selector lost to main table:not(...)
+     and every wrapped table still became a shrunken scroll box on phones. */
+  main .table-scroll > table { display: table; width: 100%; overflow: visible; }
 
   table.responsive-table thead { display: none; }
   table.responsive-table,
