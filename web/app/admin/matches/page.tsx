@@ -29,17 +29,20 @@ import { MatchActionsPanel } from "@/components/MatchActionsPanel";
 import { CANONICAL_DECKS, CANONICAL_STAKES } from "@/lib/balatro-info";
 import { resultLabelByName } from "@/lib/result-labels";
 import { RarityText } from "@/components/RarityText";
+import { DiscordId } from "@/components/DiscordId";
 import { loadAdminMatchesPage, type AdminMatchesMember, type AdminMatchesPageData } from "@/lib/loaders/admin-matches";
 import {
   filterMatchRows,
   groupMatchRows,
   parseOlderThanDays,
+  parsePlayerFilter,
   parseStatusFilter,
   toUnresolvedRow,
   type MatchPageFilters,
   type MatchPageGroup,
   type MatchPageRow,
   type MatchPageStatus,
+  type PlayerHandleInfo,
   type StatusFilter,
 } from "@/lib/matches-page-core";
 import { planBulkAction, type BulkAction } from "@/lib/bulk-resolve-core";
@@ -112,6 +115,7 @@ interface SP {
   status?: string;
   olderThan?: string;
   dropped?: string;
+  player?: string;
   ok?: string;
   err?: string;
   step?: string;
@@ -134,6 +138,7 @@ function filterQuery(sp: SP): string {
   if (sp.status && sp.status !== "all") q.set("status", sp.status);
   if (sp.olderThan) q.set("olderThan", sp.olderThan);
   if (sp.dropped === "1") q.set("dropped", "1");
+  if (sp.player) q.set("player", sp.player);
   const qs = q.toString();
   return qs ? `${PAGE}?${qs}` : PAGE;
 }
@@ -152,8 +157,9 @@ export default async function AdminMatchesPage({ searchParams }: { searchParams:
     status: parseStatusFilter(sp.status),
     olderThanDays: parseOlderThanDays(sp.olderThan),
     droppedOnly: sp.dropped === "1",
+    player: parsePlayerFilter(sp.player),
   };
-  const filteredRows = filterMatchRows(data.rows, filters);
+  const filteredRows = filterMatchRows(data.rows, filters, data.handlesByPlayerId);
   const groups = groupMatchRows(filteredRows);
   const isConfirmStep = sp.step === "confirm";
   const returnTo = filterQuery(sp);
@@ -203,7 +209,9 @@ export default async function AdminMatchesPage({ searchParams }: { searchParams:
 }
 
 function FilterBar({ sp, data, filters }: { sp: SP; data: AdminMatchesPageData; filters: MatchPageFilters }) {
-  const hasAnyFilter = Boolean(filters.divisionId || filters.olderThanDays != null || filters.droppedOnly) || filters.status !== "all";
+  const hasAnyFilter =
+    Boolean(filters.divisionId || filters.olderThanDays != null || filters.droppedOnly || filters.player) ||
+    filters.status !== "all";
   return (
     <form method="get" action={PAGE} className="card" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
       <div>
@@ -237,6 +245,10 @@ function FilterBar({ sp, data, filters }: { sp: SP; data: AdminMatchesPageData; 
       <div>
         <label className="muted" style={{ fontSize: 12, display: "block" }}>Older than (days)</label>
         <Input type="number" name="olderThan" min={0} defaultValue={sp.olderThan ?? ""} style={{ width: 90 }} />
+      </div>
+      <div>
+        <label className="muted" style={{ fontSize: 12, display: "block" }}>Player name or handle</label>
+        <Input name="player" placeholder="Search players..." defaultValue={sp.player ?? ""} style={{ width: 170 }} />
       </div>
       <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
         <input type="checkbox" name="dropped" value="1" defaultChecked={sp.dropped === "1"} />
@@ -297,6 +309,7 @@ function QueueView({ sp, data, groups, returnTo }: { sp: SP; data: AdminMatchesP
       {sp.status && sp.status !== "all" && <input type="hidden" name="status" value={sp.status} />}
       {sp.olderThan && <input type="hidden" name="olderThan" value={sp.olderThan} />}
       {sp.dropped === "1" && <input type="hidden" name="dropped" value="1" />}
+      {sp.player && <input type="hidden" name="player" value={sp.player} />}
 
       <div className="card" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
         <SelectAllCheckbox formId={BULK_FORM_ID} label="Select all shown" />
@@ -339,6 +352,11 @@ function SuggestionPill({ action, reason }: { action: string; reason: string }) 
   );
 }
 
+function PlayerChip({ playerId, handles }: { playerId: string; handles: Map<string, PlayerHandleInfo> }) {
+  const handle = handles.get(playerId);
+  return <DiscordId value={handle?.discordId} username={handle?.username} />;
+}
+
 function MatchRowCard({ row, data, returnTo }: { row: MatchPageRow; data: AdminMatchesPageData; returnTo: string }) {
   const members = data.membersByDivision.get(row.divisionId) ?? [];
   const isRecordedLeague = row.pageStatus === "RECORDED" && row.format === "LEAGUE_BO2";
@@ -359,9 +377,11 @@ function MatchRowCard({ row, data, returnTo }: { row: MatchPageRow; data: AdminM
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
             <strong style={{ fontSize: 13 }}>
               {row.playerA.displayName}
+              <PlayerChip playerId={row.playerA.playerId} handles={data.handlesByPlayerId} />
               {row.playerA.memberStatus === "DROPPED" && <span style={{ color: "var(--danger)", fontSize: 11 }}> (dropped)</span>}
               {" vs "}
               {row.playerB.displayName}
+              <PlayerChip playerId={row.playerB.playerId} handles={data.handlesByPlayerId} />
               {row.playerB.memberStatus === "DROPPED" && <span style={{ color: "var(--danger)", fontSize: 11 }}> (dropped)</span>}
             </strong>
             <span className="muted" style={{ fontSize: 12 }}>
@@ -411,7 +431,9 @@ function MatchRowCard({ row, data, returnTo }: { row: MatchPageRow; data: AdminM
             </form>
           )}
 
-          {row.pageStatus === "DISPUTED" && <DisputeProposalBlock row={row} returnTo={returnTo} />}
+          {row.pageStatus === "DISPUTED" && (
+            <DisputeProposalBlock row={row} returnTo={returnTo} handles={data.handlesByPlayerId} />
+          )}
 
           {row.pageStatus !== "RECORDED" && (
             <MatchActionsPanel
@@ -438,7 +460,15 @@ function MatchRowCard({ row, data, returnTo }: { row: MatchPageRow; data: AdminM
 // Disputed row's current result vs the disputer's proposed correction, side
 // by side, with the Disputes page's one-click actions -- shown inline
 // (always visible, not behind the expand) per the merged page's spec.
-function DisputeProposalBlock({ row, returnTo }: { row: MatchPageRow; returnTo: string }) {
+function DisputeProposalBlock({
+  row,
+  returnTo,
+  handles,
+}: {
+  row: MatchPageRow;
+  returnTo: string;
+  handles: Map<string, PlayerHandleInfo>;
+}) {
   const d = row.dispute;
   if (!d) return null;
   const hasProposal = d.proposedGamesWonA != null && d.proposedGamesWonB != null;
@@ -448,7 +478,10 @@ function DisputeProposalBlock({ row, returnTo }: { row: MatchPageRow; returnTo: 
         <div>
           <div className="muted" style={{ fontSize: 11 }}>Recorded</div>
           <div style={{ fontSize: 16, fontWeight: 600 }}>
-            {row.playerA.displayName} <strong>{row.gamesWonA}-{row.gamesWonB}</strong> {row.playerB.displayName}
+            {row.playerA.displayName}
+            <PlayerChip playerId={row.playerA.playerId} handles={handles} />{" "}
+            <strong>{row.gamesWonA}-{row.gamesWonB}</strong> {row.playerB.displayName}
+            <PlayerChip playerId={row.playerB.playerId} handles={handles} />
           </div>
           {d.reporter && <div className="muted" style={{ fontSize: 11, marginTop: 4 }}>Reported by {d.reporter.displayName}</div>}
         </div>
@@ -456,7 +489,10 @@ function DisputeProposalBlock({ row, returnTo }: { row: MatchPageRow; returnTo: 
           <div className="muted" style={{ fontSize: 11 }}>Disputer says it should be</div>
           {hasProposal ? (
             <div style={{ fontSize: 16, fontWeight: 600 }}>
-              {row.playerA.displayName} <strong>{d.proposedGamesWonA}-{d.proposedGamesWonB}</strong> {row.playerB.displayName}
+              {row.playerA.displayName}
+              <PlayerChip playerId={row.playerA.playerId} handles={handles} />{" "}
+              <strong>{d.proposedGamesWonA}-{d.proposedGamesWonB}</strong> {row.playerB.displayName}
+              <PlayerChip playerId={row.playerB.playerId} handles={handles} />
             </div>
           ) : (
             <div className="muted">-- no specific proposal --</div>
