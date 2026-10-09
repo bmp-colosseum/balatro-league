@@ -114,6 +114,11 @@ function LeaderCard({
       {rows.length === 0 ? (
         <div className="muted" style={{ fontSize: 12 }}>No data yet.</div>
       ) : (
+        <div className="table-scroll">
+        {/* Wrapped like the other stats tables so the phone rule that turns
+            bare tables into display:block scroll boxes leaves this one as a
+            real full-width table (it was shrinking to content width with a
+            stray vertical scrollbar). */}
         <table className="table-dense" style={{ width: "100%", fontSize: 13 }}>
           <tbody>
             {rows.map((r, i) => {
@@ -141,6 +146,7 @@ function LeaderCard({
             })}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );
