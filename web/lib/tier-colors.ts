@@ -12,3 +12,13 @@ export function tierColors(position: number): { bg: string; fg: string } {
   const idx = (position - 1) % PALETTE.length;
   return PALETTE[idx]!;
 }
+
+// Same cycle as tierColors, exposed as a plain 0-3 index so callers can key
+// off it instead of a color pair -- used to attach a stable `data-rarity`
+// attribute to tier-pill markup, which the v2 "Card Table" stylesheet maps
+// onto the Balatro rarity colors (0 legendary, 1 rare, 2 uncommon, 3 common).
+// Pure + separate from tierColors so a v2-aware caller doesn't need the v1
+// color pair at all.
+export function rarityIndex(position: number): number {
+  return (position - 1) % PALETTE.length;
+}

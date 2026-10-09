@@ -14,6 +14,7 @@ import type { ReactNode, CSSProperties } from "react";
 import { rankLabel } from "@/lib/standings";
 import { DiscordId } from "@/components/DiscordId";
 import type { StandingsMmrEntry } from "@/lib/loaders/standings";
+import { boundaryBelow, zoneOf, type Zone } from "@/lib/standings-zone";
 
 // Minimal row shape the table needs. Every standings source — the /standings
 // cache, computeStandings, the division loader — is structurally compatible
@@ -139,9 +140,14 @@ function RowBadges({
 
 // Spelled-out, color-coded W/D/L so the record reads itself — no need to know
 // the column order. Win green, loss red, draws muted.
+//
+// `record-cells` is a plain hook for the v2 stylesheet (dims the whole
+// record to a single muted tone instead of the green/red win/loss colors --
+// see globals.css); v1 renders identically since the class carries no CSS of
+// its own outside html[data-ui="v2"].
 function RecordCells({ r }: { r: StandingsTableRow }) {
   return (
-    <span style={{ whiteSpace: "nowrap" }}>
+    <span className="record-cells" style={{ whiteSpace: "nowrap" }}>
       <span style={{ color: "var(--success)" }}>{r.wins}W</span>
       <span className="muted"> · </span>
       <span className="muted">{r.draws}D</span>
@@ -173,8 +179,12 @@ function CountedNote({ r, show }: { r: StandingsTableRow; show?: boolean }) {
 function LivesCell({ r }: { r: StandingsTableRow }) {
   if (r.netLives === undefined) return <span className="muted">-</span>;
   const sign = r.netLives > 0 ? "+" : "";
+  // `data-sign` is a plain hook for the v2 stylesheet (colors the cell by
+  // sign -- uncommon positive / rare negative / faint zero); v1 ignores it
+  // and keeps the single muted tone it already uses.
+  const dataSign = r.netLives > 0 ? "pos" : r.netLives < 0 ? "neg" : "zero";
   return (
-    <span className="muted" title={r.tiebreakNote}>
+    <span className="muted lives-cell" data-sign={dataSign} title={r.tiebreakNote}>
       {sign}{r.netLives}
       {r.livesGamesMissing ? ` (${r.livesGamesMissing} missing)` : ""}
     </span>
@@ -188,7 +198,7 @@ function LivesCell({ r }: { r: StandingsTableRow }) {
 function TiebreakNoteLine({ r }: { r: StandingsTableRow }) {
   if (!r.tiebreakNote) return null;
   return (
-    <div className="muted" style={{ fontSize: 11 }}>
+    <div className="muted tiebreak-note" style={{ fontSize: 11 }}>
       {r.tiebreakNote}
     </div>
   );
@@ -242,6 +252,15 @@ export function DivisionStandingsTable({
   const showLives = rows.some((r) => r.netLives !== undefined);
   const colCount = 5 + (showBmpMmr ? 1 : 0) + (hasFinalRank ? 1 : 0) + (showLives ? 1 : 0);
 
+  // Precompute each row's zone once so boundaryBelow can look at the NEXT
+  // row's zone without recomputing it -- feeds the v2 stylesheet's zone
+  // stripe + dashed-divider hooks below (see lib/standings-zone.ts). Zero
+  // effect under v1: these become data attributes the v1 CSS never selects.
+  const zones: Zone[] = rows.map((r) => zoneOf(extras?.get(r.player.id)));
+  const anyPromoteZone = zones.includes("promote");
+  const anyRelegateZone = zones.includes("relegate");
+  const anyTiebreakNote = rows.some((r) => !!r.tiebreakNote);
+
   return (
     <>
       <div className="table-scroll standings-table-wrap" style={{ marginTop: 8 }}>
@@ -282,15 +301,22 @@ export function DivisionStandingsTable({
                     {r.player.displayName}
                   </Link>
                 );
+                // data-zone / data-boundary are plain hooks for the v2
+                // stylesheet (gold/rare inset stripe on the first cell, and
+                // a dashed divider under the last row of a zone -- see
+                // globals.css + lib/standings-zone.ts). v1 CSS never selects
+                // them, so this changes nothing without the cookie.
+                const zone = zones[i];
+                const boundary = boundaryBelow(zones, i);
                 return (
-                  <tr key={r.player.id} style={rowTint(ex)}>
+                  <tr key={r.player.id} style={rowTint(ex)} data-zone={zone} data-boundary={boundary}>
                     <td><RowBadges medal={medal} promoting={ex?.promoting} relegating={ex?.relegating} clinchStatus={ex?.clinchStatus} showdown={ex?.showdown} /></td>
                     <td>
                       {r.dropped ? <s>{link}</s> : link}<DiscordId value={r.player.discordId} username={r.player.username} />
                       <TiebreakNoteLine r={r} />
                     </td>
                     {hasFinalRank && <td>{finalRankCell!(r)}</td>}
-                    <td><strong>{r.points}</strong></td>
+                    <td className="pts-cell"><strong>{r.points}</strong></td>
                     <td title={standingRateTooltip(r)}><RecordCells r={r} /><CountedNote r={r} show={showCountedBadge} /></td>
                     <td className="muted" title={gameRateTooltip(r)}>{r.gamesWon}-{r.gamesLost}</td>
                     {showLives && <td><LivesCell r={r} /></td>}
@@ -310,19 +336,28 @@ export function DivisionStandingsTable({
           rows.map((r, i) => {
             const ex = extras?.get(r.player.id);
             const medal = rankLabel(r, i);
+            // Same v2-only hook as the desktop row -- see the comment there.
+            const zone = zones[i];
             return (
-              <div key={r.player.id} className="standings-card" style={rowTint(ex)}>
+              <div key={r.player.id} className="standings-card" style={rowTint(ex)} data-zone={zone}>
                 <div className="standings-card-head">
                   <span><RowBadges medal={medal} promoting={ex?.promoting} relegating={ex?.relegating} clinchStatus={ex?.clinchStatus} showdown={ex?.showdown} /></span>
                   <Link href={`/profile/${r.player.id}`} className="standings-card-name" style={{ color: "var(--text)" }}>
                     {r.dropped ? <s>{r.player.displayName}</s> : r.player.displayName}
                     <DiscordId value={r.player.discordId} username={r.player.username} />
                   </Link>
-                  <strong style={{ whiteSpace: "nowrap" }}>{r.points} pts</strong>
+                  <strong className="pts-cell" style={{ whiteSpace: "nowrap" }}>{r.points} pts</strong>
                 </div>
                 <TiebreakNoteLine r={r} />
                 <div className="standings-card-sub muted">
-                  <RecordCells r={r} /><CountedNote r={r} show={showCountedBadge} /> · {r.gamesWon}-{r.gamesLost} games · {r.played} played
+                  {/* card-wdl / card-pl wrap the record and the played count
+                      (with their own leading separator dot) so the v2
+                      stylesheet can drop them at <=480px without leaving a
+                      stray separator dot behind -- see globals.css. Renders
+                      identically to before under v1, same text, same order. */}
+                  <span className="card-wdl"><RecordCells r={r} /><CountedNote r={r} show={showCountedBadge} /> · </span>
+                  {r.gamesWon}-{r.gamesLost} games
+                  <span className="card-pl"> · {r.played} played</span>
                   {showLives && <> - <LivesCell r={r} /> lives</>}
                   {showBmpMmr && ex?.mmr ? <> · MMR {renderMmrCell(ex.mmr, bmpCurrentSeason)}</> : null}
                 </div>
@@ -331,7 +366,14 @@ export function DivisionStandingsTable({
           })
         )}
       </div>
-      <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>
+      {/* zone-key-v1 is the footnote as it's always rendered; zone-key-v2 is
+          the v2 "Card Table" replacement (swatches instead of colored
+          words). Both are always in the DOM -- globals.css shows exactly one
+          of them depending on html[data-ui="v2"], so v1 stays byte-for-byte
+          unchanged without the cookie. The loader doesn't pass neighboring
+          division names into this component, so the v2 key says "Promotes" /
+          "Drops" rather than naming the division above/below. */}
+      <p className="muted zone-key-v1" style={{ fontSize: 11, marginTop: 8 }}>
         <strong>3</strong> pts per win · <strong>1</strong> per draw · Record = wins·draws·losses ·{" "}
         <span style={{ color: "var(--info)" }}>↑ blue = promoting</span> ·{" "}
         <span style={{ color: "var(--admin)" }}>↓ amber = relegating</span>
@@ -339,6 +381,17 @@ export function DivisionStandingsTable({
           <> -- {livesBreaksTies ? "Ties broken by net lives" : "Lives shown for tied players (informational -- ties are not broken by lives this season)"}</>
         )}
       </p>
+      <div className="zone-key-v2">
+        {anyPromoteZone && (
+          <span><span className="zone-key-swatch zone-key-swatch-promote" />Promotes</span>
+        )}
+        {anyRelegateZone && (
+          <span><span className="zone-key-swatch zone-key-swatch-relegate" />Drops</span>
+        )}
+        {anyTiebreakNote && (
+          <span><em>Italic note</em> = how a tie was broken</span>
+        )}
+      </div>
     </>
   );
 }

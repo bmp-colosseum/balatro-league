@@ -3,12 +3,15 @@ import { loadAdminHomeStats } from "@/lib/loaders/admin";
 import { seasonCountdown } from "@/lib/season-countdown-core";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
+import { getUiPreviewV2 } from "@/lib/preferences";
+import { enableUiPreviewAction, disableUiPreviewAction } from "@/app/admin/ui-preview-actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminHome() {
   await requireAdmin();
   const stats = await loadAdminHomeStats();
+  const uiV2 = await getUiPreviewV2();
   const countdown = stats.activeSeason
     ? seasonCountdown({
         startMs: stats.activeSeason.startedAt.getTime(),
@@ -24,6 +27,22 @@ export default async function AdminHome() {
       <AdminNav activePath="/admin" />
       <main>
         <h2>Admin dashboard</h2>
+
+        {/* v2 "Card Table" redesign preview -- admin-only, cookie-gated.
+            Lets a TO judge the new look on the live site with real data
+            before anyone else sees it (see ui-preview-actions.ts). */}
+        <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <strong style={{ marginRight: "auto" }}>New look: {uiV2 ? "previewing" : "off"}</strong>
+          {uiV2 ? (
+            <form action={disableUiPreviewAction}>
+              <button type="submit" className="secondary">Back to current</button>
+            </form>
+          ) : (
+            <form action={enableUiPreviewAction}>
+              <button type="submit">Preview</button>
+            </form>
+          )}
+        </div>
 
         {stats.activeSeason ? (
           <>
