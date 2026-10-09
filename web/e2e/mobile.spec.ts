@@ -56,12 +56,11 @@ test("admin nav folds every link into one Admin menu trigger at 390px", async ({
   const trigger = page.getByRole("button", { name: /^Admin menu$/ });
   await expect(trigger).toBeVisible();
   await trigger.click();
-  // Dashboard, Seasons, Signups, MMR, Divisions, Avoided Pairs, Participation,
-  // At Stake, Results, Resolve All, Disputes, DMs, Bans, Deck Bans, Traits
-  // (main) + Activity, Message, Config, Host, Audit, Data Audit, Transcripts
-  // (system) -- Rules & Settings/Ops are devOps-gated and not visible to a
-  // plain test-auth owner without that binding.
-  await expect(page.getByRole("menuitem", { name: "Dashboard" })).toBeVisible();
+  // Inbox + the Matches / Messages / Settings groups' children (main) and
+  // the System group's children (Activity ... Transcripts). Rules & Settings
+  // and Ops are devOps-gated and not visible to a plain test-auth owner
+  // without that binding.
+  await expect(page.getByRole("menuitem", { name: "Inbox" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Transcripts" })).toBeVisible();
 });
 
