@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "./v2/standings-cards.css";
 @import "./v2/hall-of-fame.css";
+@import "./v2/profile.css";
 
 :root {
   --bg: #0f1115;
