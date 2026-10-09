@@ -217,7 +217,7 @@ html[data-ui="v2"] .player-card-points-label {
     grid-template-columns: 36px 28px 1fr auto;
     grid-template-areas:
       "rank avatar name points"
-      "rank avatar hand lives";
+      "rank avatar hand hand";
     padding: 6px 10px;
     row-gap: 2px;
     column-gap: 8px;
@@ -255,14 +255,26 @@ html[data-ui="v2"] .player-card-points-label {
   html[data-ui="v2"] .player-card-points-label {
     font-size: 9px;
   }
-  html[data-ui="v2"] .player-card-lives {
-    justify-self: end;
-    font-size: 12px;
+  /* Form pips and lives share the second line: pips at the left, lives as a
+     small pill at the right edge under the points tile. Both are auto-sized
+     in the same grid cell, so they sit side by side without overlapping. */
+  html[data-ui="v2"] .player-card-hand {
+    grid-area: hand;
+    justify-self: start;
+    align-self: center;
   }
-  /* Icon + number only on phone -- "lives" spelled out is a desktop-only
-     label (see the base rule above). */
-  html[data-ui="v2"] .player-card-lives-label {
-    display: none;
+  html[data-ui="v2"] .player-card-lives {
+    grid-area: hand;
+    justify-self: end;
+    align-self: center;
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.28);
+  }
+  html[data-ui="v2"] .player-card-lives svg {
+    width: 10px;
+    height: 10px;
   }
 }
 

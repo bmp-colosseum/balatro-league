@@ -807,6 +807,8 @@ html[data-ui="v2"] .tier-heading[data-rarity="2"],
 html[data-ui="v2"] .division-name[data-rarity="2"] { color: var(--uncommon); }
 html[data-ui="v2"] .tier-heading[data-rarity="3"],
 html[data-ui="v2"] .division-name[data-rarity="3"] { color: var(--common); }
+/* The name is a link to the division page; keep the rarity colour, not link blue. */
+html[data-ui="v2"] .division-name a { color: inherit; }
 html[data-ui="v2"] .division-name {
   font-size: 22px;
 }
