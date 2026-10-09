@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { rarityIndex, tierColors } from "./tier-colors";
+import { rarityIndex, tierColors, tierSlug } from "./tier-colors";
 
 describe("rarityIndex", () => {
   test.each([
@@ -23,5 +23,17 @@ describe("rarityIndex", () => {
         expect(a).toEqual(b);
       }
     }
+  });
+});
+
+describe("tierSlug", () => {
+  test.each([
+    ["Legendary", "legendary"],
+    ["Common 2", "common-2"],
+    ["Rare  A", "rare-a"],
+    ["Uncommon/Tier!", "uncommon-tier"],
+    ["--Weird--", "weird"],
+  ])("%s -> %s", (name, expected) => {
+    expect(tierSlug(name)).toBe(expected);
   });
 });

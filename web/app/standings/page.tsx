@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { auth } from "@/auth";
 import { loadStandingsPageData } from "@/lib/loaders/standings";
 import { loadOpenSignupRoundId } from "@/lib/loaders/join";
 import { getShowBmpMmr } from "@/lib/preferences";
@@ -6,6 +7,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { DivisionStandingsTable, type StandingsRowExtras } from "@/components/DivisionStandingsTable";
 import { SeasonWindow } from "@/components/SeasonWindow";
 import { type StandingRow } from "@/lib/standings";
+import { rarityIndex, tierColors, tierSlug } from "@/lib/tier-colors";
 
 // Clinch predictor: who is mathematically guaranteed to promote ("up") /
 // relegate ("down") regardless of how the remaining matches play out.
@@ -59,8 +61,12 @@ export const dynamic = "force-dynamic"; // Always fresh — DB writes happen out
 
 export default async function StandingsPage() {
   const showBmpMmr = await getShowBmpMmr();
+  // Viewer's Discord id (for the v2 "you" badge) -- undefined when signed
+  // out, same session shape SiteNav/the /me page already read.
+  const session = await auth();
+  const viewerDiscordId = (session?.user as { discordId?: string } | undefined)?.discordId;
   const [data, openRound] = await Promise.all([
-    loadStandingsPageData({ showBmpMmr }),
+    loadStandingsPageData({ showBmpMmr, viewerDiscordId }),
     loadOpenSignupRoundId(),
   ]);
 
@@ -75,6 +81,23 @@ export default async function StandingsPage() {
   }
   const totalRemaining = Math.max(0, totalExpected - totalPlayed);
   const pctPlayed = totalExpected > 0 ? Math.round((totalPlayed / totalExpected) * 100) : 0;
+
+  // Flattened ladder order (tiers already ordered by position, divisions by
+  // groupNumber -- see loadStandingsPageData) so each division can look up
+  // the name of the division immediately above/below it for the v2 zone
+  // key's "Promotes to <X>" / "Drops to <X>" wording. Undefined at either
+  // end of the whole ladder.
+  const tiersWithDivisions = data.tiers.filter((t) => t.divisions.length > 0);
+  const flatDivisions = tiersWithDivisions.flatMap((t) => t.divisions);
+  const neighborNamesByDivisionId = new Map<string, { above?: string; below?: string }>(
+    flatDivisions.map((d, i) => [
+      d.id,
+      {
+        above: i > 0 ? flatDivisions[i - 1]!.name : undefined,
+        below: i < flatDivisions.length - 1 ? flatDivisions[i + 1]!.name : undefined,
+      },
+    ]),
+  );
 
   return (
     <>
@@ -106,6 +129,24 @@ export default async function StandingsPage() {
         ) : (
           <>
             <h2>{data.season.name} — Standings</h2>
+            {/* v2 "Card Table" tier tabs -- jump links to each tier's
+                section below, chunky and rarity-colored per MASTER.md. Brand
+                new element, hidden under v1 by a base `.tier-tabs { display:
+                none; }` rule (see globals.css) rather than trying to make it
+                look native to the current design -- least invasive way to
+                guarantee v1 stays byte-for-byte unchanged. */}
+            <nav className="tier-tabs" aria-label="Jump to tier">
+              {tiersWithDivisions.map((tier) => (
+                <a
+                  key={tier.id}
+                  href={`#tier-${tierSlug(tier.name)}`}
+                  className="tier-tab"
+                  data-rarity={rarityIndex(tier.position)}
+                >
+                  {tier.name} <span className="tier-tab-count">{tier.divisions.length}</span>
+                </a>
+              ))}
+            </nav>
             <SeasonWindow start={data.season.startedAt} end={data.season.scheduledEndAt} className="mb-2" />
             <div className="card" style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
@@ -129,12 +170,16 @@ export default async function StandingsPage() {
                 </div>
               </details>
             </div>
-            {data.tiers.filter((t) => t.divisions.length > 0).map((tier) => {
+            {tiersWithDivisions.map((tier) => {
               const isTopTier = tier.position === data.minTierPosition;
               const isBottomTier = tier.position === data.maxTierPosition;
               return (
-                <section key={tier.id} style={{ marginTop: 24 }}>
-                  <h3>{tier.name}</h3>
+                <section key={tier.id} id={`tier-${tierSlug(tier.name)}`} className="tier-section" style={{ marginTop: 24 }}>
+                  {/* `pixel` + `data-rarity` give v2 the colored display-face
+                      heading per MASTER.md ("section headings for tiers in
+                      the pixel face coloured by rarity"); both are no-ops
+                      under v1 (see globals.css). */}
+                  <h3 className="pixel tier-heading" data-rarity={rarityIndex(tier.position)}>{tier.name}</h3>
                   <div className="grid grid-2">
                     {tier.divisions.map((div, divIndex) => {
                       // Relegation/promotion is a CHAIN across every division
@@ -231,37 +276,67 @@ export default async function StandingsPage() {
                           clinchStatus: complete ? undefined : clinch.get(r.player.id),
                           showdown: complete && (promoTieRowSet.has(i) || relegationTieRowSet.has(i)),
                           mmr: data.mmrByPlayerId.get(r.player.id),
+                          isViewer: data.viewerPlayerId !== null && r.player.id === data.viewerPlayerId,
                         }]),
                       );
+                      const neighbors = neighborNamesByDivisionId.get(div.id);
                       return (
                         <div key={div.id} className="card">
-                          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                            <strong className="pixel" style={{ fontSize: 18 }}>
-                              <Link href={`/divisions/${div.id}`} style={{ textDecoration: "none" }}>{div.name}</Link>
-                            </strong>
-                            {div.scoringBadge && (
-                              <span className="pill" style={{ fontSize: 11 }} title="This season's active scoring rule">
-                                counts best {div.scoringBadge.n} of {div.scoringBadge.scheduled} matches
+                          {/* `card-header` is a no-op under v1 (no bare
+                              `.card-header` rule outside a responsive-table
+                              cell -- see globals.css); under v2 it becomes
+                              the panel header strip (panel-2 bg, bottom
+                              border) per MASTER.md. */}
+                          <div className="card-header">
+                            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                              <strong className="pixel division-name" data-rarity={rarityIndex(tier.position)}>
+                                <Link href={`/divisions/${div.id}`} style={{ textDecoration: "none" }}>{div.name}</Link>
+                              </strong>
+                              {/* Rarity chip -- same render as the TierPill helper
+                                  used on /players and the winners page, reusing
+                                  tierColors/rarityIndex so it carries data-rarity.
+                                  New element: hidden under v1 (see globals.css). */}
+                              <span
+                                className="pill division-chip"
+                                data-rarity={rarityIndex(tier.position)}
+                                style={{ background: tierColors(tier.position).bg, color: tierColors(tier.position).fg }}
+                              >
+                                {tier.name}
                               </span>
-                            )}
-                            <span
-                              className="pill"
-                              style={{
-                                background: complete ? "rgba(46,204,113,0.15)" : "rgba(149,165,166,0.15)",
-                                color: complete ? "var(--success)" : "var(--muted)",
-                                fontSize: 11,
-                                marginLeft: "auto",
-                              }}
-                              title={complete ? "All matches played" : "In progress"}
-                            >
-                              {complete ? "✅" : ""} {playedMatches}/{expectedMatches} matches
-                            </span>
-                          </div>
-                          <div className="muted" style={{ fontSize: 11, marginTop: 2, marginBottom: 8, display: "flex", flexWrap: "wrap", gap: "2px 10px" }}>
-                            <span>👤 {activeCount} player{activeCount === 1 ? "" : "s"}</span>
-                            {promoteN > 0 && <span><span style={{ color: "var(--info)" }}>↑ {promoteN}</span> promote</span>}
-                            {relegateN > 0 && <span><span style={{ color: "var(--admin)" }}>↓ {relegateN}</span> relegate</span>}
-                            <span>{div.format === "round-robin" ? "🔁 Round robin (play everyone)" : "🎯 4 assigned opponents"}</span>
+                              {div.scoringBadge && (
+                                <span className="pill" style={{ fontSize: 11 }} title="This season's active scoring rule">
+                                  counts best {div.scoringBadge.n} of {div.scoringBadge.scheduled} matches
+                                </span>
+                              )}
+                              <span
+                                className="pill matches-chip"
+                                style={{
+                                  background: complete ? "rgba(46,204,113,0.15)" : "rgba(149,165,166,0.15)",
+                                  color: complete ? "var(--success)" : "var(--muted)",
+                                  fontSize: 11,
+                                  marginLeft: "auto",
+                                }}
+                                title={complete ? "All matches played" : "In progress"}
+                              >
+                                {complete ? "✅" : ""} {playedMatches}/{expectedMatches} matches
+                              </span>
+                            </div>
+                            <div className="muted meta-v1" style={{ fontSize: 11, marginTop: 2, marginBottom: 8, display: "flex", flexWrap: "wrap", gap: "2px 10px" }}>
+                              <span>👤 {activeCount} player{activeCount === 1 ? "" : "s"}</span>
+                              {promoteN > 0 && <span><span style={{ color: "var(--info)" }}>↑ {promoteN}</span> promote</span>}
+                              {relegateN > 0 && <span><span style={{ color: "var(--admin)" }}>↓ {relegateN}</span> relegate</span>}
+                              <span>{div.format === "round-robin" ? "🔁 Round robin (play everyone)" : "🎯 4 assigned opponents"}</span>
+                            </div>
+                            {/* v2-only wording ("N players" / "N up" / "N down")
+                                per the brief -- both variants always render,
+                                CSS shows exactly one depending on
+                                html[data-ui="v2"] (same pattern as the zone
+                                key), so v1's text never moves. */}
+                            <div className="muted meta-v2">
+                              <span>{activeCount} player{activeCount === 1 ? "" : "s"}</span>
+                              {promoteN > 0 && <span>{promoteN} up</span>}
+                              {relegateN > 0 && <span>{relegateN} down</span>}
+                            </div>
                           </div>
                           <DivisionStandingsTable
                             rows={rows}
@@ -270,6 +345,8 @@ export default async function StandingsPage() {
                             bmpCurrentSeason={data.bmpCurrentSeason}
                             showCountedBadge={!!div.scoringBadge}
                             livesBreaksTies={data.season?.tiebreak === "lives"}
+                            aboveDivisionName={neighbors?.above}
+                            belowDivisionName={neighbors?.below}
                           />
                           {div.shootouts.length > 0 && (
                             <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>

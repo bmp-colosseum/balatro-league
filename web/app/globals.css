@@ -360,6 +360,22 @@ form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
    default, not re-pointed from something that already existed. */
 .zone-key-v2 { display: none; }
 
+/* Same "brand-new, off by default" treatment for the rest of wave 2's new
+   elements (standings page tier tabs, the per-division rarity chip, the
+   viewer's "you" badge) -- see app/standings/page.tsx and
+   components/DivisionStandingsTable.tsx. */
+.tier-tabs { display: none; }
+.division-chip { display: none; }
+.you-badge { display: none; }
+/* The v2-only "N players / N up / N down" wording for a division's meta
+   line (see app/standings/page.tsx) -- v1 keeps its own .meta-v1 line,
+   always rendered, never hidden outside html[data-ui="v2"] below. */
+.meta-v2 { display: none; }
+/* .division-name used to carry its font-size as an inline style (18px);
+   moved to a plain class so the v2 override below (22px) doesn't need
+   !important to beat it. Same computed value, so v1 is unaffected. */
+.division-name { font-size: 18px; }
+
 /* ========================================================================
    v2 "Card Table" design system -- design-system/MASTER.md is the spec.
    Every rule below is scoped under html[data-ui="v2"] (set by layout.tsx
@@ -687,5 +703,132 @@ html[data-ui="v2"] .zone-key-swatch-relegate { background: var(--rare); }
   html[data-ui="v2"] .standings-card .card-wdl,
   html[data-ui="v2"] .standings-card .card-pl {
     display: none;
+  }
+}
+
+/* ------------------------------------------------------------------------
+   Wave 2: standings page composition (tier tabs, division panel header,
+   "you" badge, zone key wording, hover/polish) -- see
+   app/standings/page.tsx and components/DivisionStandingsTable.tsx.
+   ------------------------------------------------------------------------ */
+
+/* Tier tabs -- chunky rarity-colored jump links to each #tier-<slug>
+   section, same chunky-button recipe as MASTER.md's primary button (dark
+   ink, hard offset shadow, 3px press). */
+html[data-ui="v2"] .tier-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+html[data-ui="v2"] .tier-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: #0b1b1a;
+  text-decoration: none;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.45);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+html[data-ui="v2"] .tier-tab:hover { text-decoration: none; filter: brightness(1.08); }
+html[data-ui="v2"] .tier-tab:active {
+  transform: translateY(3px);
+  box-shadow: none;
+}
+html[data-ui="v2"] .tier-tab[data-rarity="0"] { background: var(--legendary); }
+html[data-ui="v2"] .tier-tab[data-rarity="1"] { background: var(--rare); }
+html[data-ui="v2"] .tier-tab[data-rarity="2"] { background: var(--uncommon); }
+html[data-ui="v2"] .tier-tab[data-rarity="3"] { background: var(--common); }
+html[data-ui="v2"] .tier-tab-count {
+  background: rgba(11, 27, 26, 0.25);
+  border-radius: 999px;
+  padding: 1px 6px;
+  font-size: 11px;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui="v2"] .tier-tab { transition: none; }
+}
+
+/* Tier section anchors -- clears room above the jump target. No sticky bar
+   exists yet on this page, but this is cheap insurance against one landing
+   flush under the viewport edge in a later wave. */
+html[data-ui="v2"] .tier-section {
+  scroll-margin-top: 80px;
+}
+
+/* Tier heading + division name, colored by the tier's rarity (text color,
+   not a fill -- the rarity chip below already carries the fill). */
+html[data-ui="v2"] .tier-heading[data-rarity="0"],
+html[data-ui="v2"] .division-name[data-rarity="0"] { color: var(--legendary); }
+html[data-ui="v2"] .tier-heading[data-rarity="1"],
+html[data-ui="v2"] .division-name[data-rarity="1"] { color: var(--rare); }
+html[data-ui="v2"] .tier-heading[data-rarity="2"],
+html[data-ui="v2"] .division-name[data-rarity="2"] { color: var(--uncommon); }
+html[data-ui="v2"] .tier-heading[data-rarity="3"],
+html[data-ui="v2"] .division-name[data-rarity="3"] { color: var(--common); }
+html[data-ui="v2"] .division-name {
+  font-size: 22px;
+}
+
+/* Division panel header strip -- .card-header already gives the panel-2
+   full-bleed strip (see the Panel rules above); this chip is the one piece
+   that needs re-enabling (off by default per the base rule above). Already
+   picked up by the existing `.pill[data-rarity]` rule for its fill/ink/face. */
+html[data-ui="v2"] .division-chip {
+  display: inline-block;
+}
+/* The "N/M matches" counter reads as a quiet chip under v2 instead of the
+   v1 green/grey completion color -- !important needed, same reasoning as
+   `.pill[data-rarity]` above (an inline style otherwise always wins). */
+html[data-ui="v2"] .pill.matches-chip {
+  background: var(--panel-2) !important;
+  color: var(--paper-faint) !important;
+}
+
+/* v1's meta line (player-count emoji, promote/relegate arrows, format text)
+   swaps for the v2 wording ("N players" / "N up" / "N down") -- both always
+   render, this just toggles which one shows, same pattern as the zone key. */
+html[data-ui="v2"] .meta-v1 { display: none; }
+html[data-ui="v2"] .meta-v2 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  font-size: 11px;
+  margin-top: 2px;
+  margin-bottom: 8px;
+}
+
+/* "You" badge on the viewer's own standings row. */
+html[data-ui="v2"] .you-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--gold);
+  color: var(--gold-ink);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  vertical-align: middle;
+}
+
+/* Hover row highlight -- higher specificity than the zone rows' `background:
+   transparent !important` above (adds `tbody` to the selector), so a
+   promoting/relegating row highlights on hover too, not just plain rows. */
+html[data-ui="v2"] .standings-table-wrap tbody tr {
+  transition: background 150ms ease;
+}
+html[data-ui="v2"] .standings-table-wrap tbody tr:hover {
+  background: var(--panel-2) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui="v2"] .standings-table-wrap tbody tr {
+    transition: none;
   }
 }

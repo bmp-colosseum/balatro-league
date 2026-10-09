@@ -14,7 +14,7 @@ import type { ReactNode, CSSProperties } from "react";
 import { rankLabel } from "@/lib/standings";
 import { DiscordId } from "@/components/DiscordId";
 import type { StandingsMmrEntry } from "@/lib/loaders/standings";
-import { boundaryBelow, zoneOf, type Zone } from "@/lib/standings-zone";
+import { boundaryBelow, zoneKeyLines, zoneOf, type Zone } from "@/lib/standings-zone";
 
 // Minimal row shape the table needs. Every standings source — the /standings
 // cache, computeStandings, the division loader — is structurally compatible
@@ -61,6 +61,9 @@ export interface StandingsRowExtras {
   clinchStatus?: "up" | "down";
   showdown?: boolean;
   mmr?: StandingsMmrEntry;
+  // True for the signed-in viewer's own row -- see the v2 "you" badge below.
+  // false/absent under v1 too, but v1 never reads it.
+  isViewer?: boolean;
 }
 
 function formatBmpSeason(tag: string | null): string {
@@ -191,6 +194,16 @@ function LivesCell({ r }: { r: StandingsTableRow }) {
   );
 }
 
+// v2 "Card Table" badge marking the signed-in viewer's own row -- a brand
+// new element with no v1 equivalent, so it's always in the DOM (hidden by a
+// base `.you-badge { display: none; }` rule) and only shown under
+// html[data-ui="v2"] (see globals.css). Renders nothing at all when this
+// isn't the viewer's row.
+function YouBadge({ isViewer }: { isViewer?: boolean }) {
+  if (!isViewer) return null;
+  return <span className="you-badge pixel">you</span>;
+}
+
 // Small muted line under a player's name explaining exactly which step
 // decided their tie -- the same text as the Lives cell's tooltip, but
 // visible on phones where hover tooltips don't exist. Renders nothing when
@@ -222,6 +235,8 @@ export function DivisionStandingsTable({
   livesBreaksTies = false,
   finalRankHeader,
   finalRankCell,
+  aboveDivisionName,
+  belowDivisionName,
 }: {
   rows: Row[];
   extras?: Map<string, StandingsRowExtras>;
@@ -243,6 +258,14 @@ export function DivisionStandingsTable({
   // render-prop lets the caller drop in an admin inline-edit form or plain text.
   finalRankHeader?: ReactNode;
   finalRankCell?: (r: Row) => ReactNode;
+  // Names of the divisions immediately above/below this one in ladder order
+  // (across tier boundaries too), for the v2 zone key's "Promotes to <X>" /
+  // "Drops to <X>" wording -- see lib/standings-zone.ts' zoneKeyLines.
+  // Undefined at either end of the ladder (nothing above the top division,
+  // nothing below the bottom one), and for callers that don't track ladder
+  // order (e.g. /seasons/[id]) -- the v2 key then falls back to the bare verb.
+  aboveDivisionName?: string;
+  belowDivisionName?: string;
 }) {
   const hasFinalRank = !!finalRankHeader && !!finalRankCell;
   // The Lives column shows whenever ANY row carries netLives -- under the
@@ -260,6 +283,13 @@ export function DivisionStandingsTable({
   const anyPromoteZone = zones.includes("promote");
   const anyRelegateZone = zones.includes("relegate");
   const anyTiebreakNote = rows.some((r) => !!r.tiebreakNote);
+  const keyLines = zoneKeyLines({
+    promote: anyPromoteZone,
+    relegate: anyRelegateZone,
+    above: aboveDivisionName,
+    below: belowDivisionName,
+    hasTieNotes: anyTiebreakNote,
+  });
 
   return (
     <>
@@ -308,11 +338,14 @@ export function DivisionStandingsTable({
                 // them, so this changes nothing without the cookie.
                 const zone = zones[i];
                 const boundary = boundaryBelow(zones, i);
+                // data-you is a plain hook for the v2 stylesheet/future
+                // selectors; v1 CSS never selects it. The badge itself is
+                // rendered by YouBadge, hidden by default (see globals.css).
                 return (
-                  <tr key={r.player.id} style={rowTint(ex)} data-zone={zone} data-boundary={boundary}>
+                  <tr key={r.player.id} style={rowTint(ex)} data-zone={zone} data-boundary={boundary} data-you={ex?.isViewer ? "1" : undefined}>
                     <td><RowBadges medal={medal} promoting={ex?.promoting} relegating={ex?.relegating} clinchStatus={ex?.clinchStatus} showdown={ex?.showdown} /></td>
                     <td>
-                      {r.dropped ? <s>{link}</s> : link}<DiscordId value={r.player.discordId} username={r.player.username} />
+                      {r.dropped ? <s>{link}</s> : link}<DiscordId value={r.player.discordId} username={r.player.username} /><YouBadge isViewer={ex?.isViewer} />
                       <TiebreakNoteLine r={r} />
                     </td>
                     {hasFinalRank && <td>{finalRankCell!(r)}</td>}
@@ -339,12 +372,12 @@ export function DivisionStandingsTable({
             // Same v2-only hook as the desktop row -- see the comment there.
             const zone = zones[i];
             return (
-              <div key={r.player.id} className="standings-card" style={rowTint(ex)} data-zone={zone}>
+              <div key={r.player.id} className="standings-card" style={rowTint(ex)} data-zone={zone} data-you={ex?.isViewer ? "1" : undefined}>
                 <div className="standings-card-head">
                   <span><RowBadges medal={medal} promoting={ex?.promoting} relegating={ex?.relegating} clinchStatus={ex?.clinchStatus} showdown={ex?.showdown} /></span>
                   <Link href={`/profile/${r.player.id}`} className="standings-card-name" style={{ color: "var(--text)" }}>
                     {r.dropped ? <s>{r.player.displayName}</s> : r.player.displayName}
-                    <DiscordId value={r.player.discordId} username={r.player.username} />
+                    <DiscordId value={r.player.discordId} username={r.player.username} /><YouBadge isViewer={ex?.isViewer} />
                   </Link>
                   <strong className="pts-cell" style={{ whiteSpace: "nowrap" }}>{r.points} pts</strong>
                 </div>
@@ -370,9 +403,10 @@ export function DivisionStandingsTable({
           the v2 "Card Table" replacement (swatches instead of colored
           words). Both are always in the DOM -- globals.css shows exactly one
           of them depending on html[data-ui="v2"], so v1 stays byte-for-byte
-          unchanged without the cookie. The loader doesn't pass neighboring
-          division names into this component, so the v2 key says "Promotes" /
-          "Drops" rather than naming the division above/below. */}
+          unchanged without the cookie. keyLines (lib/standings-zone.ts'
+          zoneKeyLines) decides which lines apply and their wording -- when
+          the caller passes aboveDivisionName/belowDivisionName it names the
+          neighboring division, else it falls back to the bare verb. */}
       <p className="muted zone-key-v1" style={{ fontSize: 11, marginTop: 8 }}>
         <strong>3</strong> pts per win · <strong>1</strong> per draw · Record = wins·draws·losses ·{" "}
         <span style={{ color: "var(--info)" }}>↑ blue = promoting</span> ·{" "}
@@ -382,15 +416,19 @@ export function DivisionStandingsTable({
         )}
       </p>
       <div className="zone-key-v2">
-        {anyPromoteZone && (
-          <span><span className="zone-key-swatch zone-key-swatch-promote" />Promotes</span>
-        )}
-        {anyRelegateZone && (
-          <span><span className="zone-key-swatch zone-key-swatch-relegate" />Drops</span>
-        )}
-        {anyTiebreakNote && (
-          <span><em>Italic note</em> = how a tie was broken</span>
-        )}
+        {keyLines.map((line) => {
+          if (line.kind === "promote") {
+            return (
+              <span key="promote"><span className="zone-key-swatch zone-key-swatch-promote" />{line.text}</span>
+            );
+          }
+          if (line.kind === "relegate") {
+            return (
+              <span key="relegate"><span className="zone-key-swatch zone-key-swatch-relegate" />{line.text}</span>
+            );
+          }
+          return <span key="tieNote"><em>Italic note</em> = how a tie was broken</span>;
+        })}
       </div>
     </>
   );

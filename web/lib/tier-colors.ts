@@ -22,3 +22,15 @@ export function tierColors(position: number): { bg: string; fg: string } {
 export function rarityIndex(position: number): number {
   return (position - 1) % PALETTE.length;
 }
+
+// URL-anchor-safe slug for a tier name -- used by the v2 "Card Table" tier
+// tabs nav (standings page) to link to each tier's #tier-<slug> section.
+// Pure + deterministic: lowercase, non-alphanumeric runs collapse to a
+// single hyphen, leading/trailing hyphens trimmed. Two tiers with the same
+// name would collide; the league's tier names are unique by construction.
+export function tierSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
