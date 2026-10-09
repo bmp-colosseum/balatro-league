@@ -82,3 +82,24 @@ uncommon, `--info` = common, `--admin` keeps its orange. Tailwind/shadcn
   page never scrolls sideways.
 - Contrast: paper on panel >= 7:1; paper-faint on panel >= 4.5:1; dark ink on
   every rarity colour and on gold >= 4.5:1.
+
+## Product variants (League and Team Tour share this system)
+
+The two products share the base: felt ground + weave, panels with the hard
+offset shadow, Pixelify Sans display / Nunito Sans body, buttons, chips,
+tables, form controls and the top bar. Each owns an accent and a few
+signature elements, so they read as rooms in one building:
+
+| | League | Team Tour |
+|---|---|---|
+| felt | green (#1b443f / #12302d) | burgundy (#4a1d24 / #2e1116) |
+| semantic colour set | rarity colours for tiers (Common blue, Uncommon green, Rare red, Legendary purple) | team colours for teams; rarity colours only where a league rarity genuinely appears |
+| gold | champion, promotion, "you" | captain, pick'em leader, "your team" |
+| signature element | tier tabs, zone stripes, tiebreak notes | team cards with the team colour as the panel edge, matchup "vs" blocks, pick'em cards |
+
+Rules: never recolour the base tokens per product beyond the felt pair and
+the semantic set above; the top bar, buttons, panels and type are identical
+so a shared top bar with a product switcher is a drop-in when both products
+move to one domain. Until the repos merge, this file and the token block are
+copied between repos by hand (same convention as the schema sync script);
+once merged they become one shared package.
