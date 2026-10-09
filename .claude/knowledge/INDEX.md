@@ -12,3 +12,4 @@ Durable design context lives in `docs/` (arch/, ops/, player/).
 (Prior note: the Team Tour research moved to the `balatro-team-tour` repo during
 the 2026-07 monorepo split.)
 - [ux-audit](ux-audit/) - Deep usability/overwhelm audit (2026-10-09): public pages browsed at phone+desktop, admin IA from source (29 nav links -> 5; weekly routine in Inbox/Matches/Messages + Season Tools hub), signup/report/end-season flows reduced to minimum steps, 39-item prioritised backlog.
+- [ux-cohesion](ux-cohesion/) - UI polish round 2 + League/Team Tour cohesion (2026-10-09): both live sites shot at 390/1280 (80 shots in ux-cohesion/shots/); Tour is still on the pre-Card-Table v1 look; side-by-side token table, shared-shell proposal (fonts, tokens, one top bar with product switcher, merged URL options), per-page polish for both products with files, 45-row ranked backlog (league S no-decision items first).
