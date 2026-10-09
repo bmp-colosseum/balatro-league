@@ -38,3 +38,38 @@ export function boundaryBelow(zones: readonly Zone[], i: number): Zone {
   if (zone !== "relegate" && nextZone === "relegate") return "relegate";
   return undefined;
 }
+
+// Which lines the v2 "Card Table" zone key under a standings table should
+// show, and in what order -- promote, then relegate, then the tiebreak-note
+// legend. `above`/`below` are the neighboring divisions' names in ladder
+// order (the division this one promotes into / relegates into); when a line
+// applies but no neighbor name is available, it falls back to the bare verb
+// instead of guessing a name. The caller (DivisionStandingsTable) renders
+// each line's markup (swatch color, <em> on the tiebreak line) by `kind` --
+// this function only decides WHICH lines apply and their exact wording.
+export interface ZoneKeyLinesInput {
+  promote: boolean;
+  relegate: boolean;
+  above?: string;
+  below?: string;
+  hasTieNotes: boolean;
+}
+
+export type ZoneKeyLine =
+  | { kind: "promote"; text: string }
+  | { kind: "relegate"; text: string }
+  | { kind: "tieNote"; text: string };
+
+export function zoneKeyLines(input: ZoneKeyLinesInput): ZoneKeyLine[] {
+  const lines: ZoneKeyLine[] = [];
+  if (input.promote) {
+    lines.push({ kind: "promote", text: input.above ? `Promotes to ${input.above}` : "Promotes" });
+  }
+  if (input.relegate) {
+    lines.push({ kind: "relegate", text: input.below ? `Drops to ${input.below}` : "Drops" });
+  }
+  if (input.hasTieNotes) {
+    lines.push({ kind: "tieNote", text: "Italic note = how a tie was broken" });
+  }
+  return lines;
+}

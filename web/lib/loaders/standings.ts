@@ -5,6 +5,9 @@
 //   - Cached standings rows for every division at once
 //   - BMP MMR snapshots for visible players (opt-in via cookie; skipped
 //     when the viewer has the toggle off)
+//   - The viewer's own playerId (for the v2 "Card Table" "you" badge), when
+//     signed in and linked to a Player row -- one extra findUnique by the
+//     indexed discordId column, skipped entirely when signed out
 //
 // computeStandings is NOT called here — the cache is authoritative for
 // the standings rows. loadDivisionStandings transparently fills cold-cache
@@ -93,9 +96,18 @@ export interface StandingsPageData {
   // "season6"). Auto-detected from balatromp.com daily. Null when not
   // detected yet — UI falls back to never annotating in that case.
   bmpCurrentSeason: string | null;
+  // The signed-in viewer's own Player id, for the v2 "you" badge. Null when
+  // signed out, or signed in but not yet linked to a Player row.
+  viewerPlayerId: string | null;
 }
 
-export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Promise<StandingsPageData> {
+export async function loadStandingsPageData(opts: {
+  showBmpMmr: boolean;
+  // Signed-in viewer's Discord id (session.user.discordId), or undefined
+  // when signed out -- see the page's auth() call. Resolved to a Player id
+  // here via one indexed findUnique, skipped entirely when absent.
+  viewerDiscordId?: string;
+}): Promise<StandingsPageData> {
   const season = await prisma.season.findFirst({
     where: { isActive: true },
     select: {
@@ -148,6 +160,7 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
       maxTierPosition: 0,
       mmrByPlayerId: new Map(),
       bmpCurrentSeason: null,
+      viewerPlayerId: null,
     };
   }
 
@@ -215,6 +228,19 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
     allPlayerIds,
     opts.showBmpMmr,
   );
+
+  // Viewer's own Player id for the v2 "you" badge -- one indexed lookup,
+  // skipped entirely when signed out. Not batched with allPlayerIds above:
+  // the viewer may not be a member of ANY division shown here (e.g. dropped
+  // out, or never joined), so this has to be its own independent lookup.
+  const viewerPlayerId = opts.viewerDiscordId
+    ? (
+        await prisma.player.findUnique({
+          where: { discordId: opts.viewerDiscordId },
+          select: { id: true },
+        })
+      )?.id ?? null
+    : null;
 
   // Per-division promote/relegate + format over the whole ladder (tier position,
   // then group number). promote/relegate are the division's OWN independent counts —
@@ -312,6 +338,7 @@ export async function loadStandingsPageData(opts: { showBmpMmr: boolean }): Prom
     maxTierPosition,
     mmrByPlayerId,
     bmpCurrentSeason,
+    viewerPlayerId,
   };
 }
 
