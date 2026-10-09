@@ -1,0 +1,180 @@
+/* Hall of Fame "trophy shelf" -- v2 "Card Table" only. design-system/MASTER.md
+   is the spec; this file owns every v2-only rule for /hall-of-fame so
+   app/globals.css doesn't have to grow for a single page. Imported once
+   from globals.css, right after the existing @import lines.
+
+   The page (app/hall-of-fame/page.tsx) always renders BOTH the v1 markup
+   (.hof-v1) and this v2 markup (.hof-v2) -- same dual-render + CSS-toggle
+   pattern as the standings page's .meta-v1/.meta-v2 (see globals.css). The
+   unscoped rule below hides .hof-v2 by default so v1 is unaffected; every
+   other rule in this file is scoped under html[data-ui="v2"] so none of it
+   ever applies outside the admin-only preview cookie. */
+
+.hof-v2 { display: none; }
+
+html[data-ui="v2"] .hof-v1 { display: none !important; }
+html[data-ui="v2"] .hof-v2 { display: block; }
+
+html[data-ui="v2"] .hof-header {
+  margin-bottom: 20px;
+}
+html[data-ui="v2"] .hof-title {
+  margin: 0 0 4px;
+}
+html[data-ui="v2"] .hof-count {
+  margin: 0;
+  font-size: 13px;
+}
+
+html[data-ui="v2"] .hof-shelves {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* Felt-deep band carrying the season label + its dates. */
+html[data-ui="v2"] .hof-shelf-band {
+  background: var(--felt-deep);
+  border: 2px solid var(--panel-edge);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 10px 16px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+html[data-ui="v2"] .hof-shelf-label {
+  font-size: 16px;
+  color: var(--paper);
+}
+html[data-ui="v2"] .hof-shelf-dates {
+  font-size: 12px;
+  color: var(--paper-dim);
+}
+
+html[data-ui="v2"] .hof-shelf-deck {
+  background: var(--panel);
+  border: 2px solid var(--panel-edge);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  padding: 18px 16px 16px;
+}
+html[data-ui="v2"] .hof-shelf-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  position: relative;
+  z-index: 2;
+  /* Pulls the row's bottom 6px over the shelf line below it, so the cards
+     read as standing ON the shelf instead of floating above it. */
+  margin-bottom: -6px;
+}
+html[data-ui="v2"] .hof-shelf-line {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--panel-edge);
+}
+
+/* Card: 150px wide (two fit per row on a phone-width shelf with room to
+   spare), panel-2 face, rarity-coloured 3px border -- same four Balatro
+   rarity colours + data-rarity convention as the rest of v2 (see
+   lib/tier-colors.ts / MASTER.md). Default border below is the Common
+   colour so an unexpected/custom tier position still reads as "colored",
+   never unstyled. */
+html[data-ui="v2"] .hof-card {
+  position: relative;
+  display: block;
+  width: 150px;
+  background: var(--panel-2);
+  border: 3px solid var(--common);
+  border-radius: 8px;
+  padding: 10px 10px 12px;
+  color: var(--paper);
+  text-decoration: none;
+  box-shadow: 0 4px 0 var(--panel-edge);
+  animation: hofDealIn 200ms ease-out both;
+}
+html[data-ui="v2"] .hof-card:hover {
+  text-decoration: none;
+  filter: brightness(1.08);
+}
+html[data-ui="v2"] .hof-card[data-rarity="1"] { border-color: var(--rare); }
+html[data-ui="v2"] .hof-card[data-rarity="2"] { border-color: var(--uncommon); }
+html[data-ui="v2"] .hof-card[data-rarity="3"] { border-color: var(--common); }
+/* Legendary: a slightly larger card plus a subtle gold glow. */
+html[data-ui="v2"] .hof-card[data-rarity="0"] {
+  width: 170px;
+  border-color: var(--legendary);
+  box-shadow: 0 4px 0 var(--panel-edge), 0 0 0 3px rgba(241, 181, 58, 0.18);
+}
+
+html[data-ui="v2"] .hof-card-trophy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+/* Gold "xN" sticker for a champion with more than one title overall
+   (titleCount from lib/hall-of-fame-core.ts via the loader). */
+html[data-ui="v2"] .hof-card-sticker {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: var(--gold);
+  color: var(--gold-ink);
+  font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+html[data-ui="v2"] .hof-card-division {
+  font-size: 14px;
+  margin-top: 18px;
+}
+html[data-ui="v2"] .hof-card-division[data-rarity="0"] { color: var(--legendary); }
+html[data-ui="v2"] .hof-card-division[data-rarity="1"] { color: var(--rare); }
+html[data-ui="v2"] .hof-card-division[data-rarity="2"] { color: var(--uncommon); }
+html[data-ui="v2"] .hof-card-division[data-rarity="3"] { color: var(--common); }
+
+html[data-ui="v2"] .hof-card-name {
+  font-size: 15px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+/* Deal-in: cards settle from 8px down to their resting position, ending
+   fully visible. */
+@keyframes hofDealIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 25ms stagger per card, capped at the 12th -- every card from the 12th on
+   shares that same final delay instead of staggering indefinitely. */
+html[data-ui="v2"] .hof-shelf-row > .hof-card:nth-child(1) { animation-delay: 0ms; }
+html[data-ui="v2"] .hof-shelf-row > .hof-card:nth-child(2) { animation-delay: 25ms; }
+html[data-ui="v2"] .hof-shelf-row > .hof-card:nth-child(3) { animation-delay: 50ms; }
+html[data-ui="v2"] .hof-shelf-row > .hof-card:nth-child(4) { animation-delay: 75ms; }
+html[data-ui="v2"] .hof-shelf-row > .hof-card:nth-child(5) { animation-delay: 100ms; }
+html[data-ui="v2"] .hof-shelf-row > .hof-card:nth-child(6) { animation-delay: 125ms; }
+html[data-ui="v2"] .hof-shelf-row > .hof-card:nth-child(7) { animation-delay: 150ms; }
+html[data-ui="v2"] .hof-shelf-row > .hof-card:nth-child(8) { animation-delay: 175ms; }
+html[data-ui="v2"] .hof-shelf-row > .hof-card:nth-child(9) { animation-delay: 200ms; }
+html[data-ui="v2"] .hof-shelf-row > .hof-card:nth-child(10) { animation-delay: 225ms; }
+html[data-ui="v2"] .hof-shelf-row > .hof-card:nth-child(11) { animation-delay: 250ms; }
+html[data-ui="v2"] .hof-shelf-row > .hof-card:nth-child(n+12) { animation-delay: 275ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui="v2"] .hof-card {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+html[data-ui="v2"] .hof-empty {
+  margin-top: 4px;
+}

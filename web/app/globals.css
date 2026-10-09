@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "./v2/hall-of-fame.css";
 
 :root {
   --bg: #0f1115;
