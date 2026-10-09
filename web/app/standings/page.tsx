@@ -393,7 +393,10 @@ export default async function StandingsPage() {
                               hidden under v2 phone too once expanded (see
                               globals.css) so it never duplicates the full
                               header below. */}
-                          <summary className="division-summary-v2">{summaryText}</summary>
+                          <summary className="division-summary-v2">
+                            <span className="division-summary-text">{summaryText}</span>
+                            <span className="division-summary-hide">Hide</span>
+                          </summary>
                           <div className="division-body-v2">
                           {/* `card-header` is a no-op under v1 (no bare
                               `.card-header` rule outside a responsive-table

@@ -879,11 +879,23 @@ html[data-ui="v2"] .progress-v2 {
     padding: 10px 14px;
   }
 }
-/* Expanded (phone, viewer's own division or an opened one) or desktop at
-   any width: the one-line summary would just repeat the full header right
-   below it, so it's hidden rather than shown twice. */
-html[data-ui="v2"] .division-details-v2[open] > .division-summary-v2 {
-  display: none;
+/* Expanded on a phone: the summary stays as the tap target (otherwise there
+   is no way to collapse the card again) but shows a small "Hide" row instead
+   of repeating the header right below it. Desktop never shows it. */
+.division-summary-hide { display: none; }
+@media (max-width: 640px) {
+  html[data-ui="v2"] .division-details-v2[open] > .division-summary-v2 {
+    display: block;
+    cursor: pointer;
+    padding: 8px 14px;
+    text-align: right;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--paper-faint);
+  }
+  html[data-ui="v2"] .division-details-v2[open] > .division-summary-v2 > .division-summary-text { display: none; }
+  html[data-ui="v2"] .division-details-v2[open] > .division-summary-v2 > .division-summary-hide { display: inline; }
 }
 @media (min-width: 641px) {
   html[data-ui="v2"] .division-details-v2 > .division-summary-v2 {

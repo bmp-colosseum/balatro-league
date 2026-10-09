@@ -42,7 +42,7 @@ import type { SeasonHistoryEntry } from "@/lib/profile";
 // Spells out the rates explicitly so a glance over a player's career
 // can answer "is that win count from a few seasons or one good one".
 function seasonRateTooltip(h: SeasonHistoryEntry): string {
-  if (h.played === 0) return "No matches yet.";
+  if (h.played === 0) return "None played.";
   const win = Math.round((h.wins / h.played) * 100);
   const draw = Math.round((h.draws / h.played) * 100);
   const loss = Math.round((h.losses / h.played) * 100);
@@ -1082,7 +1082,7 @@ export async function ProfileView({
               {currentSeasonHands.length > 0 ? (
                 currentSeasonHands.map(renderMatchHand)
               ) : (
-                <div className="card muted">No matches yet this season.</div>
+                <div className="card muted">None played this season.</div>
               )}
               {pastSeasonHands.length > 0 && (
                 <details className="profile-match-hands-disclosure">

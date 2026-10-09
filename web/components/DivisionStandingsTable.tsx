@@ -97,7 +97,7 @@ function renderMmrCell(entry: StandingsMmrEntry | undefined, currentBmpSeason: s
 }
 
 function standingRateTooltip(r: StandingsTableRow): string {
-  if (r.played === 0) return "No matches yet.";
+  if (r.played === 0) return "None played.";
   const win = Math.round((r.wins / r.played) * 100);
   const draw = Math.round((r.draws / r.played) * 100);
   const loss = Math.round((r.losses / r.played) * 100);
@@ -493,7 +493,7 @@ export function DivisionStandingsTable({
             {/* Early season (0 played): one line for the whole division
                 instead of every row's misleadingly-confident "1" rank and
                 "0 PTS" tile (both dropped below, per row). */}
-            {noMatchesYet && <p className="no-matches-yet-v2">No matches yet</p>}
+            {noMatchesYet && <p className="no-matches-yet-v2">None played</p>}
             {rows.map((r, i) => {
               const ex = extras?.get(r.player.id);
               const medal = rankLabel(r, i);

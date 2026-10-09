@@ -138,16 +138,16 @@ describe("groupTiebreakNotes", () => {
 });
 
 describe("divisionSummaryLine", () => {
-  test("no matches played -> no matches yet, regardless of leader", () => {
+  test("no matches played -> none played, regardless of leader", () => {
     expect(
       divisionSummaryLine({ divisionName: "Rare 2", playedMatches: 0, expectedMatches: 10 }),
-    ).toBe("Rare 2 - no matches yet");
+    ).toBe("Rare 2 - none played");
   });
 
-  test("no leader name available -> no matches yet fallback", () => {
+  test("no leader name available -> none played fallback", () => {
     expect(
       divisionSummaryLine({ divisionName: "Rare 2", playedMatches: 4, expectedMatches: 10 }),
-    ).toBe("Rare 2 - no matches yet");
+    ).toBe("Rare 2 - none played");
   });
 
   test("matches played with a leader -> full summary line", () => {

@@ -113,7 +113,7 @@ export function groupTiebreakNotes(rows: readonly TiebreakNoteRow[]): TiebreakNo
   return groups;
 }
 
-// "Rare 2 - leader Birb 9 pts - 4/10 played" (or "Rare 2 - no matches yet"
+// "Rare 2 - leader Birb 9 pts - 4/10 played" (or "Rare 2 - none played"
 // before anything's been played) -- the phone-collapsed one-line summary for
 // a division that isn't the viewer's own (see app/standings/page.tsx). Pure
 // string composition from already-derived plain values; the caller decides
@@ -127,7 +127,7 @@ export function divisionSummaryLine(input: {
   expectedMatches: number;
 }): string {
   if (input.playedMatches === 0 || !input.leaderName) {
-    return `${input.divisionName} - no matches yet`;
+    return `${input.divisionName} - none played`;
   }
   const pts = input.leaderPoints ?? 0;
   return `${input.divisionName} - leader ${input.leaderName} ${pts} ${pts === 1 ? "pt" : "pts"} - ${input.playedMatches}/${input.expectedMatches} played`;
