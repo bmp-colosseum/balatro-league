@@ -347,6 +347,7 @@ export default async function StandingsPage() {
                             bmpCurrentSeason={data.bmpCurrentSeason}
                             showCountedBadge={!!div.scoringBadge}
                             livesBreaksTies={data.season?.tiebreak === "lives"}
+                            tierRarity={rarityIndex(tier.position)}
                             aboveDivisionName={neighbors?.above}
                             belowDivisionName={neighbors?.below}
                           />

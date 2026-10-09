@@ -15,6 +15,7 @@ import { rankLabel } from "@/lib/standings";
 import { DiscordId } from "@/components/DiscordId";
 import type { StandingsMmrEntry } from "@/lib/loaders/standings";
 import { boundaryBelow, zoneKeyLines, zoneOf, type Zone } from "@/lib/standings-zone";
+import { initials, recordPips } from "@/lib/standings-cards-core";
 
 // Minimal row shape the table needs. Every standings source — the /standings
 // cache, computeStandings, the division loader — is structurally compatible
@@ -219,6 +220,59 @@ function TiebreakNoteLine({ r }: { r: StandingsTableRow }) {
   );
 }
 
+// v2 "Card Table" player card -- see the three helpers below and the
+// `.standings-cards-v2` block in the render. Brand new markup with no v1
+// equivalent (same "always in the DOM, hidden by default" pattern as the
+// zone key / you-badge above), styled entirely from
+// app/v2/standings-cards.css (imported once from globals.css).
+
+// Avatar slot: extras.avatarUrl when present (a later leaf fills it from
+// Discord), else the initials() fallback on a plain circle. Never renders a
+// broken <img> -- no avatarUrl at all means no <img> tag is emitted.
+function CardAvatar({ displayName, avatarUrl }: { displayName: string; avatarUrl?: string | null }) {
+  if (avatarUrl) {
+    return (
+      <span className="player-card-avatar">
+        <img src={avatarUrl} alt="" className="player-card-avatar-img" />
+      </span>
+    );
+  }
+  return <span className="player-card-avatar player-card-avatar-initials">{initials(displayName)}</span>;
+}
+
+// Record "hand" -- one small pip per match result (recordPips,
+// lib/standings-cards-core.ts), coloured by result kind. The card's
+// replacement for RecordCells' "3W . 1D . 2L" text; the same counts are
+// still spelled out in the tooltip for anyone who needs the exact numbers.
+function CardHand({ r }: { r: StandingsTableRow }) {
+  const pips = recordPips(r.wins, r.draws, r.losses);
+  return (
+    <span className="player-card-hand" title={`${r.wins}W ${r.draws}D ${r.losses}L`}>
+      {pips.map((kind, i) => (
+        <span key={i} className="player-card-pip" data-kind={kind} />
+      ))}
+    </span>
+  );
+}
+
+// Net life differential as an inline heart glyph (one <path>, no icon
+// library -- design-system/MASTER.md: "no emoji as icons; use inline SVG")
+// plus the signed number, coloured by sign exactly like LivesCell above.
+// Renders nothing when this row has no lives data.
+function CardLives({ r }: { r: StandingsTableRow }) {
+  if (r.netLives === undefined) return null;
+  const sign = r.netLives > 0 ? "+" : "";
+  const dataSign = r.netLives > 0 ? "pos" : r.netLives < 0 ? "neg" : "zero";
+  return (
+    <span className="player-card-lives" data-sign={dataSign} title={r.tiebreakNote}>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 21s-6.7-4.35-9.33-8.36C.37 9.77 1.4 6 5 6c2.06 0 3.46 1.24 4.2 2.3C9.94 7.24 11.34 6 13.4 6c3.6 0 4.63 3.77 2.33 6.64C18.7 16.65 12 21 12 21z" />
+      </svg>
+      {sign}{r.netLives}
+    </span>
+  );
+}
+
 // Faint background band marking the promotion (blue) / relegation (amber) zone so
 // the stakes read at a glance — kept DISTINCT from the green-win / red-loss record
 // colours. Covers the decided state (promoting/relegating) and the mid-season clinch.
@@ -239,6 +293,7 @@ export function DivisionStandingsTable({
   finalRankCell,
   aboveDivisionName,
   belowDivisionName,
+  tierRarity,
 }: {
   rows: Row[];
   extras?: Map<string, StandingsRowExtras>;
@@ -268,6 +323,12 @@ export function DivisionStandingsTable({
   // order (e.g. /seasons/[id]) -- the v2 key then falls back to the bare verb.
   aboveDivisionName?: string;
   belowDivisionName?: string;
+  // This division's tier rarity, 0-3 (0 legendary, 1 rare, 2 uncommon, 3
+  // common -- same convention as lib/tier-colors.ts' rarityIndex), used to
+  // colour the v2 player card's rank badge. Undefined for callers that
+  // don't track it -- the badge then falls back to a plain panel-edge
+  // background (see app/v2/standings-cards.css).
+  tierRarity?: number;
 }) {
   const hasFinalRank = !!finalRankHeader && !!finalRankCell;
   // The Lives column shows whenever ANY row carries netLives -- under the
@@ -395,6 +456,56 @@ export function DivisionStandingsTable({
                   <span className="card-pl"> · {r.played} played</span>
                   {showLives && <> - <LivesCell r={r} /> lives</>}
                   {showBmpMmr && ex?.mmr ? <> · MMR {renderMmrCell(ex.mmr, bmpCurrentSeason)}</> : null}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+      {/* v2 "Card Table": a stack of player cards that replaces the table
+          above at EVERY width (not just phones) -- see
+          app/v2/standings-cards.css. Always in the DOM (off by default, like
+          the zone key / you-badge), shown only under html[data-ui="v2"], so
+          v1 renders the table + the .standings-cards mobile block exactly as
+          before, unaffected by this block's presence. */}
+      <div className="standings-cards-v2">
+        {rows.length === 0 ? (
+          <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>No matches played yet.</p>
+        ) : (
+          rows.map((r, i) => {
+            const ex = extras?.get(r.player.id);
+            const medal = rankLabel(r, i);
+            // Same zone/boundary hooks as the desktop table row above --
+            // see lib/standings-zone.ts.
+            const zone = zones[i];
+            const boundary = boundaryBelow(zones, i);
+            return (
+              <div
+                key={r.player.id}
+                className="player-card"
+                data-zone={zone}
+                data-boundary={boundary}
+                data-you={ex?.isViewer ? "1" : undefined}
+              >
+                {/* Rank badge -- the medal string is "N" normally or "#N"
+                    for a tied row (rankLabel); the card shows the bare
+                    number either way, so tied rows show the same number. */}
+                <span className="player-card-rank pixel" data-rarity={tierRarity}>
+                  {medal.replace(/^#/, "")}
+                </span>
+                <CardAvatar displayName={r.player.displayName} avatarUrl={ex?.avatarUrl} />
+                <div className="player-card-name-block">
+                  <Link href={`/profile/${r.player.id}`} className="player-card-name" style={{ color: "var(--text)" }}>
+                    {r.dropped ? <s>{r.player.displayName}</s> : r.player.displayName}
+                    <DiscordId value={r.player.discordId} username={r.player.username} /><YouBadge isViewer={ex?.isViewer} />
+                  </Link>
+                  <TiebreakNoteLine r={r} />
+                </div>
+                <CardHand r={r} />
+                <CardLives r={r} />
+                <div className="player-card-points">
+                  <div className="player-card-points-value">{r.points}</div>
+                  <div className="player-card-points-label">pts</div>
                 </div>
               </div>
             );

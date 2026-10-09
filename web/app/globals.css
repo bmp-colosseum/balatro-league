@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "./v2/standings-cards.css";
 
 :root {
   --bg: #0f1115;
