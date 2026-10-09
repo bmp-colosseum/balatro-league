@@ -42,11 +42,12 @@ uncommon, `--info` = common, `--admin` keeps its orange. Tailwind/shadcn
 
 ## Type
 
-- Display: **Pixelify Sans** 700 (self-hosted from `web/app/fonts/`, see
+- Display: **Jersey 10** 400 with `font-size-adjust: 0.58` (self-hosted from `web/app/fonts/`, see
   `web/app/layout.tsx`) for h1/h2, division names, tier chips, buttons, the
-  "you" badge. Never for body copy, nav links or numbers in tables (pixel
+  "you" badge; **Silkscreen** 400/700 for the small pixel eyebrow labels.
+  Never for body copy, nav links or numbers in tables (pixel
   digits read as blocks at table sizes; points use the body face at 800 weight).
-- Body: **Nunito Sans** 400/600/700 (self-hosted from `web/app/fonts/`) for
+- Body: **Nunito Sans** variable 200-1000 (self-hosted from `web/app/fonts/`) for
   everything else. 15px base, line-height 1.5.
 - Numbers in columns: `font-variant-numeric: tabular-nums`.
 - Uppercase labels (table headers, eyebrows): 11px, letter-spacing .8px, paper-faint.
@@ -87,7 +88,7 @@ uncommon, `--info` = common, `--admin` keeps its orange. Tailwind/shadcn
 ## Product variants (League and Team Tour share this system)
 
 The two products share the base: felt ground + weave, panels with the hard
-offset shadow, Pixelify Sans display / Nunito Sans body, buttons, chips,
+offset shadow, Jersey 10 display / Nunito Sans body, buttons, chips,
 tables, form controls and the top bar. Each owns an accent and a few
 signature elements, so they read as rooms in one building:
 
