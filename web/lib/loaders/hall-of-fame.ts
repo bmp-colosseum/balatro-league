@@ -13,6 +13,7 @@ import { loadManyDivisionStandings } from "@/lib/standings-cache";
 import { pickDivisionWinners } from "@/lib/loaders/admin-winners";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { titleCounts } from "@/lib/hall-of-fame-core";
+import { discordAvatarUrl } from "@/lib/avatar";
 
 export interface HofMatch {
   opponentId: string;
@@ -58,6 +59,10 @@ export interface HofDivisionChampion {
   // only counts LEAGUE (top-division) titles for the v1 view. Always >= 1.
   // Patched below, once every season's division champions are known.
   titleCount: number;
+  // Discord avatar URL (web/lib/avatar.ts), null = no custom avatar (caller
+  // falls back to initials/a placeholder). Patched below, same batched
+  // lookup pattern as division.ts/standings.ts.
+  avatarUrl: string | null;
 }
 
 export interface HofSeason {
@@ -196,6 +201,8 @@ export async function loadHallOfFame(): Promise<HofSeason[]> {
         record: `${row.wins}-${row.losses}-${row.draws}`,
         // Patched below, once every season's division champions are known.
         titleCount: 1,
+        // Patched below, once avatars are batch-loaded.
+        avatarUrl: null,
       });
     }
 
@@ -226,6 +233,20 @@ export async function loadHallOfFame(): Promise<HofSeason[]> {
   const divisionCounts = titleCounts(allDivisionChampions);
   for (const dc of allDivisionChampions) {
     dc.titleCount = divisionCounts.get(dc.playerId) ?? 1;
+  }
+
+  // Discord avatars for every division champion -- ONE query by discordId,
+  // same batched pattern as division.ts/standings.ts (never per-row).
+  const championDiscordIds = allDivisionChampions.map((dc) => dc.discordId);
+  const championAvatarGuildMembers = championDiscordIds.length === 0
+    ? []
+    : await prisma.guildMember.findMany({
+        where: { discordId: { in: championDiscordIds } },
+        select: { discordId: true, avatar: true },
+      });
+  const championAvatarHashByDiscordId = new Map(championAvatarGuildMembers.map((g) => [g.discordId, g.avatar]));
+  for (const dc of allDivisionChampions) {
+    dc.avatarUrl = discordAvatarUrl(dc.discordId, championAvatarHashByDiscordId.get(dc.discordId));
   }
 
   return out;
