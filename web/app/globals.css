@@ -477,6 +477,7 @@ html[data-ui="v2"] h2,
 html[data-ui="v2"] .pixel {
   font-family: var(--font-display-v2), var(--font-pixel), "Segoe UI", sans-serif;
   font-weight: 400; /* Jersey 10 ships one weight; faux bold blurs pixel fonts */
+  font-size-adjust: 0.5; /* Jersey 10 is condensed: normalise its x-height so set sizes read as intended */
   letter-spacing: 0.5px;
   text-wrap: balance;
 }
@@ -509,6 +510,7 @@ html[data-ui="v2"] .card-header {
 html[data-ui="v2"] button:not([data-slot="button"]) {
   font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
   font-weight: 400; /* Jersey 10 ships one weight; faux bold blurs pixel fonts */
+  font-size-adjust: 0.5; /* Jersey 10 is condensed: normalise its x-height so set sizes read as intended */
   font-size: 15px;
   border-radius: 8px;
   background: var(--gold);
@@ -534,6 +536,7 @@ html[data-ui="v2"] [data-slot="button"][class*="bg-secondary"],
 html[data-ui="v2"] [data-slot="button"][class*="destructive"] {
   font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
   font-weight: 400; /* Jersey 10 ships one weight; faux bold blurs pixel fonts */
+  font-size-adjust: 0.5; /* Jersey 10 is condensed: normalise its x-height so set sizes read as intended */
   border-radius: 8px;
   box-shadow: 0 4px 0 rgba(0, 0, 0, 0.45);
   transition: transform 150ms ease, box-shadow 150ms ease;
@@ -587,6 +590,7 @@ html[data-ui="v2"] header {
 html[data-ui="v2"] header h1 a {
   font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
   font-weight: 400; /* Jersey 10 ships one weight; faux bold blurs pixel fonts */
+  font-size-adjust: 0.5; /* Jersey 10 is condensed: normalise its x-height so set sizes read as intended */
   gap: 8px;
 }
 /* Paper card chip drawn in CSS -- a little rounded rectangle with a hard
@@ -624,6 +628,7 @@ html[data-ui="v2"] header nav a[class*="bg-secondary"] {
 html[data-ui="v2"] .pill[data-rarity] {
   font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
   font-weight: 400; /* Jersey 10 ships one weight; faux bold blurs pixel fonts */
+  font-size-adjust: 0.5; /* Jersey 10 is condensed: normalise its x-height so set sizes read as intended */
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.6px;
@@ -736,6 +741,7 @@ html[data-ui="v2"] .tier-tab {
   gap: 6px;
   font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
   font-weight: 400; /* Jersey 10 ships one weight; faux bold blurs pixel fonts */
+  font-size-adjust: 0.5; /* Jersey 10 is condensed: normalise its x-height so set sizes read as intended */
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.4px;
