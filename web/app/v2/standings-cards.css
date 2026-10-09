@@ -1,0 +1,244 @@
+/* v2 "Card Table" standings player cards (components/DivisionStandingsTable.tsx).
+   Replaces the plain table with a stack of player cards at EVERY width, not
+   just phones. Scoped under html[data-ui="v2"] per the design system
+   (design-system/MASTER.md); off by default so it has zero effect without
+   the admin preview cookie. Imported once from app/globals.css. */
+
+/* New markup -- off by default, same "always in the DOM" pattern as the
+   existing zone-key-v2 / you-badge / tier-tabs blocks in globals.css. */
+.standings-cards-v2 { display: none; }
+
+html[data-ui="v2"] .standings-cards-v2 { display: block; }
+
+/* Under v2 the stack replaces BOTH the desktop table and the old v1 mobile
+   card block at every width -- higher specificity than each one's own
+   width-scoped rule (an `html[data-ui]` + class selector beats a bare class
+   selector regardless of the media query either one is inside), so no
+   !important is needed. */
+html[data-ui="v2"] .standings-table-wrap,
+html[data-ui="v2"] .standings-cards {
+  display: none;
+}
+
+html[data-ui="v2"] .player-card {
+  display: grid;
+  grid-template-columns: 44px 40px 1fr auto auto auto;
+  grid-template-areas: "rank avatar name hand lives points";
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 4px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  background: var(--panel-2);
+  border: 2px solid var(--panel-edge);
+  border-radius: var(--radius);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+html[data-ui="v2"] .player-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
+}
+
+/* Promotion / relegation zone border + soft outer glow -- the card
+   equivalent of the table's inset stripe, see design-system/MASTER.md. */
+html[data-ui="v2"] .player-card[data-zone="promote"] {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(241, 181, 58, 0.18);
+}
+html[data-ui="v2"] .player-card[data-zone="relegate"] {
+  border-color: var(--rare);
+  box-shadow: 0 0 0 3px rgba(255, 98, 89, 0.18);
+}
+html[data-ui="v2"] .player-card[data-zone="promote"]:hover {
+  box-shadow: 0 0 0 3px rgba(241, 181, 58, 0.18), 0 4px 10px rgba(0, 0, 0, 0.35);
+}
+html[data-ui="v2"] .player-card[data-zone="relegate"]:hover {
+  box-shadow: 0 0 0 3px rgba(255, 98, 89, 0.18), 0 4px 10px rgba(0, 0, 0, 0.35);
+}
+
+/* Dashed divider between the zone and the rest of the stack -- same
+   boundary hook (lib/standings-zone.ts) as the table's dashed row border. */
+html[data-ui="v2"] .player-card[data-boundary="promote"] {
+  border-bottom: 2px dashed var(--gold);
+}
+html[data-ui="v2"] .player-card[data-boundary="relegate"] {
+  border-bottom: 2px dashed var(--rare);
+}
+
+/* Rank badge -- pixel face, the bare number, 44px square. Falls back to a
+   plain panel-edge tile when no tierRarity was passed; data-rarity follows
+   the same 0-3 convention as lib/tier-colors.ts' rarityIndex (0 legendary,
+   1 rare, 2 uncommon, 3 common) and the existing .pill[data-rarity] rule. */
+html[data-ui="v2"] .player-card-rank {
+  grid-area: rank;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  border-radius: 8px;
+  background: var(--panel-edge);
+  color: var(--paper);
+}
+html[data-ui="v2"] .player-card-rank[data-rarity="0"] { background: var(--legendary); color: #0b1b1a; }
+html[data-ui="v2"] .player-card-rank[data-rarity="1"] { background: var(--rare); color: #0b1b1a; }
+html[data-ui="v2"] .player-card-rank[data-rarity="2"] { background: var(--uncommon); color: #0b1b1a; }
+html[data-ui="v2"] .player-card-rank[data-rarity="3"] { background: var(--common); color: #0b1b1a; }
+
+/* Avatar slot -- 40px circle, extras.avatarUrl image or the initials()
+   fallback (CardAvatar never emits a broken <img>, so there's no onerror
+   case to style here). */
+html[data-ui="v2"] .player-card-avatar {
+  grid-area: avatar;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--panel-edge);
+}
+html[data-ui="v2"] .player-card-avatar-initials {
+  color: var(--paper);
+  font-size: 13px;
+  font-weight: 700;
+}
+html[data-ui="v2"] .player-card-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Name block -- display face stays off (body face, 700 weight) per
+   MASTER.md's "never for body copy" rule; the tiebreak note below reuses
+   the existing .tiebreak-note styling from globals.css. */
+html[data-ui="v2"] .player-card-name-block {
+  grid-area: name;
+  min-width: 0;
+}
+html[data-ui="v2"] .player-card-name {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--paper);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Record "hand" -- one pip per match result, 10x14px, 3px radius/gap. */
+html[data-ui="v2"] .player-card-hand {
+  grid-area: hand;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+html[data-ui="v2"] .player-card-pip {
+  width: 10px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+html[data-ui="v2"] .player-card-pip[data-kind="win"] { background: var(--uncommon); }
+html[data-ui="v2"] .player-card-pip[data-kind="draw"] { background: var(--paper-faint); }
+html[data-ui="v2"] .player-card-pip[data-kind="loss"] { background: var(--rare); }
+
+/* Lives -- inline heart + signed number, coloured by sign exactly like the
+   table's .lives-cell. */
+html[data-ui="v2"] .player-card-lives {
+  grid-area: lives;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 13px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+html[data-ui="v2"] .player-card-lives svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+html[data-ui="v2"] .player-card-lives[data-sign="pos"] { color: var(--uncommon); }
+html[data-ui="v2"] .player-card-lives[data-sign="neg"] { color: var(--rare); }
+html[data-ui="v2"] .player-card-lives[data-sign="zero"] { color: var(--paper-faint); }
+
+/* Points tile -- 56px wide, body face 800 at 22px (never pixel face --
+   MASTER.md flags pixel digits as unreadable at this size). */
+html[data-ui="v2"] .player-card-points {
+  grid-area: points;
+  width: 56px;
+  text-align: center;
+  padding: 4px 0;
+  border-radius: 8px;
+  background: var(--panel-edge);
+  flex-shrink: 0;
+}
+html[data-ui="v2"] .player-card-points-value {
+  font-family: var(--font-body-v2), "Segoe UI", sans-serif;
+  font-weight: 800;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--paper);
+  font-variant-numeric: tabular-nums;
+}
+html[data-ui="v2"] .player-card-points-label {
+  margin-top: 2px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--paper-faint);
+}
+
+/* Phone: the hand wraps onto its own row under the name, spanning the
+   name/hand/lives columns -- rank and avatar stay put by repeating their
+   area names across both grid rows. */
+@media (max-width: 480px) {
+  html[data-ui="v2"] .player-card {
+    grid-template-columns: 44px 40px 1fr auto auto;
+    grid-template-areas:
+      "rank avatar name lives points"
+      "rank avatar hand hand hand";
+  }
+}
+
+/* Deal-in on load: cards settle from 10px down / near-zero opacity, 220ms
+   ease-out, staggered 30ms up to 12 cards. `backwards` only applies the
+   "from" state before the animation starts -- once it finishes the card
+   falls back to its normal (fully opaque, untransformed) styling, so
+   nothing is ever left at opacity 0. */
+@keyframes player-card-deal-in {
+  from { transform: translateY(10px); opacity: 0.001; }
+  to { transform: translateY(0); opacity: 1; }
+}
+html[data-ui="v2"] .player-card {
+  animation: player-card-deal-in 220ms ease-out backwards;
+}
+html[data-ui="v2"] .player-card:nth-child(1) { animation-delay: 0ms; }
+html[data-ui="v2"] .player-card:nth-child(2) { animation-delay: 30ms; }
+html[data-ui="v2"] .player-card:nth-child(3) { animation-delay: 60ms; }
+html[data-ui="v2"] .player-card:nth-child(4) { animation-delay: 90ms; }
+html[data-ui="v2"] .player-card:nth-child(5) { animation-delay: 120ms; }
+html[data-ui="v2"] .player-card:nth-child(6) { animation-delay: 150ms; }
+html[data-ui="v2"] .player-card:nth-child(7) { animation-delay: 180ms; }
+html[data-ui="v2"] .player-card:nth-child(8) { animation-delay: 210ms; }
+html[data-ui="v2"] .player-card:nth-child(9) { animation-delay: 240ms; }
+html[data-ui="v2"] .player-card:nth-child(10) { animation-delay: 270ms; }
+html[data-ui="v2"] .player-card:nth-child(11) { animation-delay: 300ms; }
+html[data-ui="v2"] .player-card:nth-child(n+12) { animation-delay: 330ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui="v2"] .player-card {
+    animation: none;
+    transition: none;
+  }
+  html[data-ui="v2"] .player-card:hover {
+    transform: none;
+  }
+}
