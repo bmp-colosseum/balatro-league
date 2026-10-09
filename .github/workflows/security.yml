@@ -1,0 +1,31 @@
+name: security
+on:
+  push: { branches: [master] }
+  pull_request:
+  schedule: [{ cron: "17 6 * * 1" }]
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  audit:
+    name: npm audit (production deps)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: [".", "web"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .node-version }
+      - name: Audit production dependencies (fails on critical; Renovate works the rest down)
+        working-directory: ${{ matrix.dir }}
+        run: npm audit --omit=dev --audit-level=critical
+  codeql:
+    name: CodeQL (JavaScript/TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with: { languages: javascript-typescript }
+      - uses: github/codeql-action/analyze@v3

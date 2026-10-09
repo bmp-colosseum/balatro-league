@@ -1,0 +1,44 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits", ":preserveSemverRanges"],
+  "timezone": "America/New_York",
+  "schedule": ["before 9am on monday"],
+  "prConcurrentLimit": 6,
+  "labels": ["dependencies"],
+  "lockFileMaintenance": { "enabled": true, "schedule": ["before 9am on the first day of the month"] },
+  "vulnerabilityAlerts": { "enabled": true, "labels": ["security"], "schedule": ["at any time"] },
+  "osvVulnerabilityAlerts": true,
+  "packageRules": [
+    {
+      "description": "Group routine minor/patch bumps per tree so a quiet week is one PR each",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "{{parentDir}} minor and patch updates"
+    },
+    {
+      "description": "Dev tooling (lint, types, test runners, CLIs) can automerge once CI is green",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "description": "Framework and auth majors get their own PR and a human eye",
+      "matchPackageNames": ["next", "react", "react-dom", "next-auth", "@auth/core", "prisma", "@prisma/client", "discord.js", "pg-boss"],
+      "matchUpdateTypes": ["major"],
+      "groupName": null,
+      "labels": ["dependencies", "needs-review"]
+    },
+    {
+      "description": "Docker base images in the Dockerfiles and compose files: pin and track digests",
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "pinDigests": true
+    },
+    {
+      "description": "GitHub Actions: minor/patch automerge, majors reviewed",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    }
+  ]
+}
