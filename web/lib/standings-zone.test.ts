@@ -72,56 +72,47 @@ describe("boundaryBelow", () => {
 
 describe("zoneKeyLines", () => {
   test("nothing applies -> no lines", () => {
-    const input: ZoneKeyLinesInput = { promote: false, relegate: false, hasTieNotes: false };
+    const input: ZoneKeyLinesInput = { promote: false, relegate: false };
     expect(zoneKeyLines(input)).toEqual([]);
   });
 
   test("promote only, with a neighbor name -> names the division above", () => {
-    const input: ZoneKeyLinesInput = { promote: true, relegate: false, above: "Rare 1", hasTieNotes: false };
+    const input: ZoneKeyLinesInput = { promote: true, relegate: false, above: "Rare 1" };
     expect(zoneKeyLines(input)).toEqual([{ kind: "promote", text: "Promotes to Rare 1" }]);
   });
 
   test("promote only, no neighbor name -> bare verb fallback", () => {
-    const input: ZoneKeyLinesInput = { promote: true, relegate: false, hasTieNotes: false };
+    const input: ZoneKeyLinesInput = { promote: true, relegate: false };
     expect(zoneKeyLines(input)).toEqual([{ kind: "promote", text: "Promotes" }]);
   });
 
   test("relegate only, with a neighbor name -> names the division below", () => {
-    const input: ZoneKeyLinesInput = { promote: false, relegate: true, below: "Common 2", hasTieNotes: false };
+    const input: ZoneKeyLinesInput = { promote: false, relegate: true, below: "Common 2" };
     expect(zoneKeyLines(input)).toEqual([{ kind: "relegate", text: "Drops to Common 2" }]);
   });
 
   test("relegate only, no neighbor name -> bare verb fallback", () => {
-    const input: ZoneKeyLinesInput = { promote: false, relegate: true, hasTieNotes: false };
+    const input: ZoneKeyLinesInput = { promote: false, relegate: true };
     expect(zoneKeyLines(input)).toEqual([{ kind: "relegate", text: "Drops" }]);
   });
 
-  test("tie notes only -> just the tie-note line", () => {
-    const input: ZoneKeyLinesInput = { promote: false, relegate: false, hasTieNotes: true };
-    expect(zoneKeyLines(input)).toEqual([
-      { kind: "tieNote", text: "Italic note = how a tie was broken" },
-    ]);
-  });
-
-  test("everything applies -> promote, then relegate, then tie notes, in that order", () => {
+  test("everything applies -> promote, then relegate, in that order", () => {
     const input: ZoneKeyLinesInput = {
       promote: true,
       relegate: true,
       above: "Legendary",
       below: "Uncommon 1",
-      hasTieNotes: true,
     };
     expect(zoneKeyLines(input)).toEqual([
       { kind: "promote", text: "Promotes to Legendary" },
       { kind: "relegate", text: "Drops to Uncommon 1" },
-      { kind: "tieNote", text: "Italic note = how a tie was broken" },
     ]);
   });
 
   test("top division overall: no above name even if promote were somehow true -> falls back", () => {
     // Defensive case -- the page never sets promote=true without an `above`
     // once a division isn't first-overall, but the helper stays safe either way.
-    const input: ZoneKeyLinesInput = { promote: true, relegate: false, above: undefined, hasTieNotes: false };
+    const input: ZoneKeyLinesInput = { promote: true, relegate: false, above: undefined };
     expect(zoneKeyLines(input)[0]!.text).toBe("Promotes");
   });
 });

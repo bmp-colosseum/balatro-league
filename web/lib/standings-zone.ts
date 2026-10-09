@@ -40,25 +40,29 @@ export function boundaryBelow(zones: readonly Zone[], i: number): Zone {
 }
 
 // Which lines the v2 "Card Table" zone key under a standings table should
-// show, and in what order -- promote, then relegate, then the tiebreak-note
-// legend. `above`/`below` are the neighboring divisions' names in ladder
-// order (the division this one promotes into / relegates into); when a line
-// applies but no neighbor name is available, it falls back to the bare verb
-// instead of guessing a name. The caller (DivisionStandingsTable) renders
-// each line's markup (swatch color, <em> on the tiebreak line) by `kind` --
-// this function only decides WHICH lines apply and their exact wording.
+// show, and in what order -- promote, then relegate. `above`/`below` are
+// the neighboring divisions' names in ladder order (the division this one
+// promotes into / relegates into); when a line applies but no neighbor name
+// is available, it falls back to the bare verb instead of guessing a name.
+// The caller (DivisionStandingsTable) renders each line's markup (swatch
+// color) by `kind` -- this function only decides WHICH lines apply and
+// their exact wording.
+//
+// No longer carries a tie-note legend line -- the v2 player-card stack now
+// shows one merged footnote per tie GROUP right under that group (see
+// groupTiebreakNotes in standings-cards-core.ts), which is self-explanatory,
+// so the repeated "Italic note = how a tie was broken" key line this used
+// to add is gone.
 export interface ZoneKeyLinesInput {
   promote: boolean;
   relegate: boolean;
   above?: string;
   below?: string;
-  hasTieNotes: boolean;
 }
 
 export type ZoneKeyLine =
   | { kind: "promote"; text: string }
-  | { kind: "relegate"; text: string }
-  | { kind: "tieNote"; text: string };
+  | { kind: "relegate"; text: string };
 
 export function zoneKeyLines(input: ZoneKeyLinesInput): ZoneKeyLine[] {
   const lines: ZoneKeyLine[] = [];
@@ -67,9 +71,6 @@ export function zoneKeyLines(input: ZoneKeyLinesInput): ZoneKeyLine[] {
   }
   if (input.relegate) {
     lines.push({ kind: "relegate", text: input.below ? `Drops to ${input.below}` : "Drops" });
-  }
-  if (input.hasTieNotes) {
-    lines.push({ kind: "tieNote", text: "Italic note = how a tie was broken" });
   }
   return lines;
 }

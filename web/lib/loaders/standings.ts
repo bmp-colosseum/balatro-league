@@ -23,6 +23,7 @@ import { formatSeasonLabel } from "@/lib/format-season";
 import { getPlacementRules } from "@/lib/placement-rules";
 import { divisionMovement } from "@/lib/owen-placement";
 import { scheduleDegree } from "@/lib/schedule";
+import { computeUnplayedPairs, pairKey } from "@/lib/unplayed-pairs";
 
 export type StandingsRowsForDivision = Awaited<ReturnType<typeof loadDivisionStandings>>;
 
@@ -85,6 +86,28 @@ export interface StandingsMmrEntry {
   bmpSeason: string | null;
 }
 
+// The signed-in viewer's own division this season -- feeds the /standings
+// "Your division" card (web/app/standings/page.tsx). `rank` is the SAME
+// shared-rank value the standings table shows (StandingRow.rank), not a
+// positional index, so a tied viewer reads the same rank here as in their
+// division's row. unplayedOpponentNames is derived from this division's
+// OWN already-loaded match rows (computeUnplayedPairs, also used by
+// /divisions/[id]) -- no extra query beyond what loadStandingsPageData
+// already fetches for the division's "X/Y matches" pill.
+export interface ViewerDivisionSummary {
+  divisionId: string;
+  divisionName: string;
+  tierName: string;
+  tierPosition: number;
+  rank: number;
+  points: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  played: number;
+  unplayedOpponentNames: string[];
+}
+
 export interface StandingsPageData {
   season: { id: string; name: string; startedAt: Date; scheduledEndAt: Date | null; tiebreak: SeasonTiebreak } | null;
   tiers: StandingsTierSummary[];
@@ -100,6 +123,11 @@ export interface StandingsPageData {
   // The signed-in viewer's own Player id, for the v2 "you" badge. Null when
   // signed out, or signed in but not yet linked to a Player row.
   viewerPlayerId: string | null;
+  // The viewer's own division summary for the "Your division" card -- see
+  // ViewerDivisionSummary. Null when signed out, not a member of ANY
+  // division this season (dropped out / never joined), or there's no
+  // active season at all.
+  viewerDivision: ViewerDivisionSummary | null;
   // Map of playerId -> Discord avatar URL (web/lib/avatar.ts), for every
   // player visible on this page. null = no custom avatar (caller falls
   // back to initials/a placeholder); a playerId absent from the map was
@@ -167,6 +195,7 @@ export async function loadStandingsPageData(opts: {
       mmrByPlayerId: new Map(),
       bmpCurrentSeason: null,
       viewerPlayerId: null,
+      viewerDivision: null,
       avatarUrlByPlayerId: new Map(),
     };
   }
@@ -269,6 +298,61 @@ export async function loadStandingsPageData(opts: {
       )?.id ?? null
     : null;
 
+  // Viewer's own division summary for the "Your division" card -- computed
+  // from data already loaded above (this division's cached standings row +
+  // its own match rows), no extra query. Stops at the first division whose
+  // ACTIVE members include the viewer (a player is active in at most one
+  // division per season).
+  let viewerDivision: ViewerDivisionSummary | null = null;
+  if (viewerPlayerId) {
+    viewerDivisionSearch:
+    for (const t of season.tiers) {
+      for (const d of t.divisions) {
+        const activeSet = new Set(d.members.filter((m) => m.status === "ACTIVE").map((m) => m.playerId));
+        if (!activeSet.has(viewerPlayerId)) continue;
+        const rows = standingsByDivisionId.get(d.id) ?? [];
+        const myRow = rows.find((r) => r.player.id === viewerPlayerId);
+        if (!myRow) break viewerDivisionSearch; // shouldn't happen -- active member always has a row
+        const betweenActive = (m: (typeof d.matches)[number]) =>
+          activeSet.has(m.playerAId) && activeSet.has(m.playerBId);
+        const playedKeys = new Set(
+          d.matches
+            .filter((m) => (m.status === "CONFIRMED" || m.status === "CANCELLED") && betweenActive(m))
+            .map((m) => pairKey(m.playerAId, m.playerBId)),
+        );
+        const divLocked = isScheduleLocked(season.scheduleLocked, d.matches);
+        const assignedKeys = new Set(
+          d.matches.filter(betweenActive).map((m) => pairKey(m.playerAId, m.playerBId)),
+        );
+        const nameById = new Map(rows.map((r) => [r.player.id, r.player.displayName]));
+        const unplayedPairs = computeUnplayedPairs({
+          activeMembers: [...activeSet].map((id) => ({ id, data: id })),
+          playedKeys,
+          scheduleLocked: divLocked,
+          assignedKeys,
+        });
+        const unplayedOpponentNames = unplayedPairs
+          .filter((p) => p.a === viewerPlayerId || p.b === viewerPlayerId)
+          .map((p) => (p.a === viewerPlayerId ? p.b : p.a))
+          .map((id) => nameById.get(id) ?? "?");
+        viewerDivision = {
+          divisionId: d.id,
+          divisionName: d.name,
+          tierName: t.name,
+          tierPosition: t.position,
+          rank: myRow.rank ?? rows.indexOf(myRow) + 1,
+          points: myRow.points,
+          wins: myRow.wins,
+          draws: myRow.draws,
+          losses: myRow.losses,
+          played: myRow.played,
+          unplayedOpponentNames,
+        };
+        break viewerDivisionSearch;
+      }
+    }
+  }
+
   // Per-division promote/relegate + format over the whole ladder (tier position,
   // then group number). promote/relegate are the division's OWN independent counts —
   // its top promoteCount rise, its bottom relegateCount drop. Capped to the division's
@@ -366,6 +450,7 @@ export async function loadStandingsPageData(opts: {
     mmrByPlayerId,
     bmpCurrentSeason,
     viewerPlayerId,
+    viewerDivision,
     avatarUrlByPlayerId,
   };
 }
