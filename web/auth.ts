@@ -52,6 +52,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Discord({
       clientId: process.env.DISCORD_CLIENT_ID,
       clientSecret: process.env.DISCORD_CLIENT_SECRET,
+      // Discord now sends an RFC 9207 "iss" on the callback; Auth.js checks it
+      // against the provider issuer, which otherwise falls back to a placeholder
+      // (https://authjs.dev) and rejects every sign-in with "Configuration".
+      issuer: "https://discord.com",
       // We only need identity — no servers list, no DM access
       authorization: { params: { scope: "identify" } },
     }),
