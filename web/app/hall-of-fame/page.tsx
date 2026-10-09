@@ -118,7 +118,7 @@ function HallOfFameTrophyShelf({ seasons: allSeasons, showAll }: { seasons: HofS
   // division's winner is a lot of cards; "All divisions" opts into them.
   const seasons = showAll
     ? allSeasons
-    : allSeasons.map((s) => ({ ...s, divisionChampions: s.divisionChampions.filter((c) => c.tierPosition === 0) }));
+    : allSeasons.map((s) => ({ ...s, divisionChampions: s.divisionChampions.filter((c) => rarityIndex(c.tierPosition) === 0) }));
   if (seasons.length === 0) {
     return (
       <div className="card muted hof-empty">
