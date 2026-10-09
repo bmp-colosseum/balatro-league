@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { SiteNav } from "@/components/SiteNav";
-import { loadHallOfFame, type HofMatch } from "@/lib/loaders/hall-of-fame";
+import { loadHallOfFame, type HofMatch, type HofSeason } from "@/lib/loaders/hall-of-fame";
+import { rarityIndex } from "@/lib/tier-colors";
 
 export const dynamic = "force-dynamic";
 
@@ -25,68 +26,174 @@ export default async function HallOfFamePage() {
     <>
       <SiteNav activePath="/hall-of-fame" />
       <main>
-        <h2>🏆 Hall of Fame</h2>
-        <p className="muted" style={{ marginTop: -4, marginBottom: 16 }}>
-          The top division&apos;s winner is the league champion.
-        </p>
+        {/* v1: unchanged -- hidden only when the v2 preview cookie sets
+            html[data-ui="v2"] (app/globals.css). See the v2 trophy shelf
+            below for the "Card Table" redesign of this same data. */}
+        <div className="hof-v1">
+          <h2>🏆 Hall of Fame</h2>
+          <p className="muted" style={{ marginTop: -4, marginBottom: 16 }}>
+            The top division&apos;s winner is the league champion.
+          </p>
 
-        {withChampions.length === 0 ? (
-          <div className="card muted">
-            No champions yet — the first season&apos;s winners will be enshrined here the moment it ends. Check back!
-          </div>
-        ) : (
-          <div className="grid grid-2">
-            {withChampions.map((s) => {
-            const champ = s.champion!;
-            return (
-              <section key={s.seasonId} className="card card-accent" style={{ marginBottom: 0 }}>
-                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-                  <strong className="pixel" style={{ fontSize: 18 }}>{s.seasonLabel}</strong>
-                  <span className="muted" style={{ fontSize: 12 }}>Ended {endedLabel(s.endedAt)}</span>
-                </div>
+          {withChampions.length === 0 ? (
+            <div className="card muted">
+              No champions yet — the first season&apos;s winners will be enshrined here the moment it ends. Check back!
+            </div>
+          ) : (
+            <div className="grid grid-2">
+              {withChampions.map((s) => {
+                const champ = s.champion!;
+                return (
+                  <section key={s.seasonId} className="card card-accent" style={{ marginBottom: 0 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                      <strong className="pixel" style={{ fontSize: 18 }}>{s.seasonLabel}</strong>
+                      <span className="muted" style={{ fontSize: 12 }}>Ended {endedLabel(s.endedAt)}</span>
+                    </div>
 
-                {/* Champion */}
-                <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 32 }}>🏆</span>
-                  <div>
-                    <div style={{ fontSize: 20, fontWeight: 700 }}>
-                      <Link href={`/profile/${champ.playerId}`} style={{ color: "var(--accent)", textDecoration: "none" }}>
-                        {champ.playerName}
-                      </Link>
+                    {/* Champion */}
+                    <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 32 }}>🏆</span>
+                      <div>
+                        <div style={{ fontSize: 20, fontWeight: 700 }}>
+                          <Link href={`/profile/${champ.playerId}`} style={{ color: "var(--accent)", textDecoration: "none" }}>
+                            {champ.playerName}
+                          </Link>
+                        </div>
+                        <div className="muted" style={{ fontSize: 13 }}>
+                          Champion · {champ.divisionName} · <strong>{champ.record}</strong> (W-L-D) · {champ.points} pts
+                        </div>
+                      </div>
                     </div>
-                    <div className="muted" style={{ fontSize: 13 }}>
-                      Champion · {champ.divisionName} · <strong>{champ.record}</strong> (W-L-D) · {champ.points} pts
-                    </div>
-                  </div>
-                </div>
 
-                {/* Champion's match log */}
-                {s.championMatches.length > 0 && (
-                  <div style={{ marginTop: 12 }}>
-                    <div className="muted" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
-                      Road to the title
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      {s.championMatches.map((m) => {
-                        const o = OUTCOME[m.outcome];
-                        return (
-                          <div key={m.opponentId} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
-                            <span style={{ width: 18, fontWeight: 700, color: o.color }}>{o.tag}</span>
-                            <span style={{ width: 56, fontVariantNumeric: "tabular-nums" }}>{m.myGames}-{m.oppGames}</span>
-                            <span className="muted">vs</span>
-                            <Link href={`/profile/${m.opponentId}`} style={{ color: "var(--text)" }}>{m.opponentName}</Link>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </section>
-            );
-          })}
-          </div>
-        )}
+                    {/* Champion's match log */}
+                    {s.championMatches.length > 0 && (
+                      <div style={{ marginTop: 12 }}>
+                        <div className="muted" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+                          Road to the title
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {s.championMatches.map((m) => {
+                            const o = OUTCOME[m.outcome];
+                            return (
+                              <div key={m.opponentId} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
+                                <span style={{ width: 18, fontWeight: 700, color: o.color }}>{o.tag}</span>
+                                <span style={{ width: 56, fontVariantNumeric: "tabular-nums" }}>{m.myGames}-{m.oppGames}</span>
+                                <span className="muted">vs</span>
+                                <Link href={`/profile/${m.opponentId}`} style={{ color: "var(--text)" }}>{m.opponentName}</Link>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* v2 "Card Table": the Hall of Fame as a trophy shelf, one shelf per
+            season. Same data as the v1 block above, just always rendered and
+            toggled by CSS (app/v2/hall-of-fame.css) so v1 never sees it. */}
+        <div className="hof-v2">
+          <HallOfFameTrophyShelf seasons={withChampions} />
+        </div>
       </main>
     </>
+  );
+}
+
+// Trophy shelf: one felt-deep band per season carrying its label/dates, with
+// that season's champion(s) as cards standing on the shelf line beneath it.
+function HallOfFameTrophyShelf({ seasons }: { seasons: HofSeason[] }) {
+  if (seasons.length === 0) {
+    return (
+      <div className="card muted hof-empty">
+        No champions yet -- the first season&apos;s winners will be enshrined here the moment it ends. Check back!
+      </div>
+    );
+  }
+
+  const distinctChampions = new Set(seasons.map((s) => s.champion!.playerId)).size;
+
+  return (
+    <>
+      <div className="hof-header">
+        <h2 className="pixel hof-title">Hall of Fame</h2>
+        <p className="muted hof-count">
+          {seasons.length} season{seasons.length === 1 ? "" : "s"}, {distinctChampions} champion{distinctChampions === 1 ? "" : "s"}
+        </p>
+      </div>
+
+      <div className="hof-shelves">
+        {seasons.map((s) => (
+          <HallOfFameShelf key={s.seasonId} season={s} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function HallOfFameShelf({ season: s }: { season: HofSeason }) {
+  const champ = s.champion!;
+  const rarity = rarityIndex(champ.tierPosition);
+
+  return (
+    <section className="hof-shelf">
+      <div className="hof-shelf-band">
+        <strong className="pixel hof-shelf-label">{s.seasonLabel}</strong>
+        <span className="hof-shelf-dates">Ended {endedLabel(s.endedAt)}</span>
+      </div>
+      <div className="hof-shelf-deck">
+        <div className="hof-shelf-row">
+          <HallOfFameCard champion={champ} rarity={rarity} />
+        </div>
+        <div className="hof-shelf-line" />
+      </div>
+    </section>
+  );
+}
+
+function HallOfFameCard({
+  champion: champ,
+  rarity,
+}: {
+  champion: NonNullable<HofSeason["champion"]>;
+  rarity: number;
+}) {
+  return (
+    <Link href={`/profile/${champ.playerId}`} className="hof-card" data-rarity={rarity}>
+      <HofTrophyIcon />
+      {champ.titleCount > 1 && <span className="hof-card-sticker">x{champ.titleCount}</span>}
+      <div className="pixel hof-card-division" data-rarity={rarity}>
+        {champ.divisionName}
+      </div>
+      <div className="hof-card-name">{champ.playerName}</div>
+    </Link>
+  );
+}
+
+// Single-path gold trophy glyph -- see design-system/MASTER.md ("no emoji as
+// icons in the UI; use inline SVG"). One <path> element (several subpaths:
+// the cup/stem/base silhouette plus its two handles) instead of a multi-path
+// icon set, per the trophy-shelf spec.
+function HofTrophyIcon() {
+  return (
+    <svg
+      className="hof-card-trophy"
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        fill="var(--gold)"
+        d="M7 3h10v2h2a1 1 0 0 1 1 1v2a4 4 0 0 1-4 4.9A6 6 0 0 1 13 16.74V19h2a1 1 0 0 1 1 1v1H8v-1a1 1 0 0 1 1-1h2v-2.26A6 6 0 0 1 4 12.9 4 4 0 0 1 4 9V6a1 1 0 0 1 1-1h2V3Z
+           M5 7v2a2 2 0 0 0 2 2 8 8 0 0 1-1-4H5Z
+           M19 7h-1a8 8 0 0 1-1 4 2 2 0 0 0 2-2V7Z"
+      />
+    </svg>
   );
 }

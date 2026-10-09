@@ -7,6 +7,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { computeStandings, assignRanks } from "@/lib/standings";
 import { formatSeasonLabel } from "@/lib/format-season";
+import { titleCounts } from "@/lib/hall-of-fame-core";
 
 export interface HofMatch {
   opponentId: string;
@@ -22,6 +23,14 @@ export interface HofChampion {
   divisionName: string;
   record: string;
   points: number;
+  // Tier ladder position (1 = top, e.g. Legendary) of the division this title
+  // was won in -- drives the v2 trophy shelf's rarity-coloured card border
+  // and "is this a Legendary title" check. See lib/tier-colors.ts.
+  tierPosition: number;
+  // Career title count: how many of loadHallOfFame's OWN seasons this same
+  // player has won (titleCounts, lib/hall-of-fame-core.ts) -- always >= 1
+  // for a champion. Drives the v2 trophy shelf's "x2"/"x3" sticker.
+  titleCount: number;
 }
 export interface HofSeason {
   seasonId: string;
@@ -44,6 +53,7 @@ export async function loadHallOfFame(): Promise<HofSeason[]> {
       tiers: {
         orderBy: { position: "asc" },
         select: {
+          position: true,
           divisions: {
             orderBy: { groupNumber: "asc" },
             select: {
@@ -71,13 +81,17 @@ export async function loadHallOfFame(): Promise<HofSeason[]> {
   const out: HofSeason[] = [];
   for (const s of seasons) {
     // The top of the league: first division in ladder order (tier position, then
-    // group number). Its winner is the overall champion.
-    const topDiv = s.tiers.flatMap((t) => t.divisions)[0];
+    // group number). Its winner is the overall champion. Paired with its tier's
+    // position (not just the division) so the champion record can carry the
+    // rarity this title was won at -- flatMap over divisions alone would lose
+    // which tier each division came from.
+    const topEntry = s.tiers.flatMap((t) => t.divisions.map((division) => ({ division, tierPosition: t.position })))[0];
+    const topDiv = topEntry?.division;
     let champion: HofChampion | null = null;
     let championMatches: HofMatch[] = [];
 
     const players = topDiv?.members.map((m) => m.player) ?? [];
-    if (topDiv && players.length > 0) {
+    if (topDiv && topEntry && players.length > 0) {
       const bo2 = topDiv.matches.filter((m) => m.format === "LEAGUE_BO2");
       const shootouts = topDiv.matches
         .filter((m) => m.format === "SHOOTOUT_BO1" && m.winnerId)
@@ -91,6 +105,9 @@ export async function loadHallOfFame(): Promise<HofSeason[]> {
           divisionName: topDiv.name,
           record: `${top.wins}-${top.losses}-${top.draws}`,
           points: top.points,
+          tierPosition: topEntry.tierPosition,
+          // Patched below, once every season's champion is known.
+          titleCount: 1,
         };
         const nameById = new Map(players.map((p) => [p.id, p.displayName]));
         championMatches = bo2
@@ -122,5 +139,15 @@ export async function loadHallOfFame(): Promise<HofSeason[]> {
       championMatches,
     });
   }
+
+  // Second pass: every season's champion is now known, so their career title
+  // count (titleCounts, lib/hall-of-fame-core.ts) can be computed across the
+  // whole Hall of Fame and patched onto each champion record.
+  const champions = out.flatMap((s) => (s.champion ? [s.champion] : []));
+  const counts = titleCounts(champions);
+  for (const champion of champions) {
+    champion.titleCount = counts.get(champion.playerId) ?? 1;
+  }
+
   return out;
 }
