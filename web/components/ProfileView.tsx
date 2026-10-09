@@ -6,9 +6,15 @@ import { loadProfileExtras } from "@/lib/loaders/profile-extras";
 import { loadPlayerTraitsCached } from "@/lib/loaders/player-traits-cache";
 import { deckImage, stakeImage } from "@/lib/balatro-slugs";
 import { getShowBmpMmr } from "@/lib/preferences";
-import { loadPlayerHistory, type GamePlayed } from "@/lib/profile";
+import { loadPlayerHistory, type GamePlayed, type MatchEntry } from "@/lib/profile";
 import { ProfileAnalyticsSection } from "@/components/ProfileAnalyticsSection";
-import { tierColors } from "@/lib/tier-colors";
+import { tierColors, rarityIndex } from "@/lib/tier-colors";
+import {
+  titleStickers,
+  netLivesForGames,
+  initialsFor,
+  flattenMatchesNewestFirst,
+} from "@/lib/profile-card-core";
 import { SiteNav } from "@/components/SiteNav";
 import { Callout } from "@/components/Callout";
 import { DiscordId } from "@/components/DiscordId";
@@ -44,6 +50,22 @@ function seasonRateTooltip(h: SeasonHistoryEntry): string {
 
 // favRow/banRow/favBlock moved to ProfileAnalyticsSection (the deferred
 // deck/stake/ban-stats section) alongside the data they render.
+
+// The result pill's colors/label for one match -- shared by the v1 season
+// table and the v2 "hand" cards so the two never drift. isVoid/isDisputed
+// are passed in rather than recomputed here since both callers already
+// derive them (isVoid from myGames/opponentGames, isDisputed from status).
+function outcomeBadge(
+  m: MatchEntry,
+  isDisputed: boolean,
+  isVoid: boolean,
+): { bg: string; fg: string; label: string } {
+  if (isDisputed) return { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)", label: "DISPUTED" };
+  if (isVoid) return { bg: "rgba(149,165,166,0.18)", fg: "var(--muted)", label: "V" };
+  if (m.outcome === "WIN") return { bg: "rgba(46,204,113,0.15)", fg: "var(--success)", label: "W" };
+  if (m.outcome === "LOSS") return { bg: "rgba(231,76,60,0.15)", fg: "var(--danger)", label: "L" };
+  return { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)", label: "D" };
+}
 
 // Unified profile view, rendered by BOTH /profile/[id] and /me (no redirect).
 // It resolves the viewer itself (via auth) and branches the UI on the
@@ -108,6 +130,15 @@ export async function ProfileView({
 
   const t = profile.totals;
 
+  // v2 "Card Table" player card -- avatarUrl is read defensively since
+  // another leaf is adding it to loadPlayerHistory's player selection in
+  // parallel; until/unless it lands, this is always null and the hero falls
+  // back to the initials circle below.
+  const avatarUrl = (profile.player as { avatarUrl?: string | null }).avatarUrl ?? null;
+  const heroInitials = initialsFor(profile.player.displayName);
+  const titleStickerList = titleStickers(profile.history);
+  const matchHands = flattenMatchesNewestFirst(profile.history);
+
   const viewerSession = await auth();
   const viewerDiscordId =
     (viewerSession?.user as { discordId?: string } | undefined)?.discordId ?? null;
@@ -165,6 +196,20 @@ export async function ProfileView({
   const activeSeasonEntry = profile.history.find((h) => h.isActive);
   const activeSeason = activeSeasonEntry?.status === "ACTIVE" ? activeSeasonEntry : undefined;
 
+  // v2 hero stat strip -- the active season's numbers when the player is
+  // currently placed in a division; falls back to career totals (and net
+  // lives across every recorded game) when they're not, so the strip is
+  // never empty for a past or currently-unplaced player.
+  const heroRarity = activeSeason ? rarityIndex(activeSeason.tierPosition) : undefined;
+  const heroPoints = activeSeason ? activeSeason.points : t.points;
+  const heroRecord = activeSeason
+    ? { wins: activeSeason.wins, draws: activeSeason.draws, losses: activeSeason.losses }
+    : { wins: t.wins, draws: t.draws, losses: t.losses };
+  const heroGames = (activeSeason ? activeSeason.matches : profile.history.flatMap((h) => h.matches)).flatMap(
+    (m) => m.games,
+  );
+  const heroNetLives = netLivesForGames(heroGames);
+
   // The league-wide active season's window/countdown, for the quick-actions
   // strip on your OWN profile (/me) -- independent of activeSeason above,
   // which only exists if you're currently placed in a division this season.
@@ -195,7 +240,7 @@ export async function ProfileView({
         <p style={{ marginBottom: 4 }}>
           <Link href="/standings" className="muted" style={{ fontSize: 13 }}>← Standings</Link>
         </p>
-        <h2>{profile.player.displayName}<DiscordId value={profile.player.discordId} username={profile.player.username} /></h2>
+        <h2 className="profile-header-v1">{profile.player.displayName}<DiscordId value={profile.player.discordId} username={profile.player.username} /></h2>
         {shownTimezone && (
           <p className="muted" style={{ fontSize: 13, marginTop: -4 }}>🕐 {shownTimezone}</p>
         )}
@@ -206,6 +251,49 @@ export async function ProfileView({
             </a>
           </p>
         )}
+
+        {/* v2 "Card Table" player card -- a Balatro-joker-style hero that
+            replaces the plain name heading above under html[data-ui="v2"]
+            (profile-header-v1 is hidden there; see app/v2/profile.css).
+            Card border color = current-tier rarity, panel-edge when the
+            player isn't currently placed in a division. */}
+        <div className="profile-hero-v2">
+          <div className="profile-hero-card" data-rarity={heroRarity}>
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className="profile-hero-avatar" src={avatarUrl} alt="" width={72} height={72} />
+            ) : (
+              <div className="profile-hero-avatar-fallback" aria-hidden="true">{heroInitials}</div>
+            )}
+            <div className="profile-hero-name pixel">{profile.player.displayName}</div>
+            <div className="profile-hero-handle">
+              <DiscordId value={profile.player.discordId} username={profile.player.username} />
+            </div>
+            {activeSeason && (
+              <span
+                className="pill profile-hero-division"
+                data-rarity={heroRarity}
+                style={{ background: tierColors(activeSeason.tierPosition).bg, color: tierColors(activeSeason.tierPosition).fg }}
+              >
+                {activeSeason.divisionName}
+              </span>
+            )}
+            <div className="profile-hero-stats">
+              <div className="profile-hero-stat"><div className="label">Points</div><div className="value">{heroPoints}</div></div>
+              <div className="profile-hero-stat"><div className="label">Record</div><div className="value">{heroRecord.wins}-{heroRecord.draws}-{heroRecord.losses}</div></div>
+              <div className="profile-hero-stat"><div className="label">Net lives</div><div className="value">{heroNetLives > 0 ? `+${heroNetLives}` : heroNetLives}</div></div>
+            </div>
+            {titleStickerList.length > 0 && (
+              <div className="profile-hero-stickers">
+                {titleStickerList.map((s) => (
+                  <span key={s.tierName} className="pill profile-sticker" data-rarity={s.rarity}>
+                    {s.tierName} x{s.count}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
 
         {activeSeason && (
           <div className="card card-info" style={{ marginTop: 12 }}>
@@ -601,13 +689,13 @@ export async function ProfileView({
 
         <h3 style={{ marginTop: 24 }}>Season history</h3>
         {profile.history.length === 0 ? (
-          <div className="card muted">No season history yet.</div>
+          <div className="card muted profile-history-v1">No season history yet.</div>
         ) : (
           profile.history.map((h) => {
             const rankStr = h.rank > 0 ? `#${h.rank}/${h.totalMembers}` : "—";
             const color = tierColors(h.tierPosition);
             return (
-              <div key={h.seasonId} className="card">
+              <div key={h.seasonId} className="card profile-history-v1">
                 <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
                   <Link href={`/seasons/${h.seasonId}`} style={{ color: "var(--text)", fontWeight: 600, fontSize: 16 }}>
                     {h.seasonName}
@@ -688,12 +776,7 @@ export async function ProfileView({
                         const isShootout = m.isShootout === true;
                         // A 0-0 is a void (finished, no points) — distinct from a 1-1 draw.
                         const isVoid = m.myGames === 0 && m.opponentGames === 0;
-                        const outcomePill =
-                          isDisputed ? { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)", label: "DISPUTED" }
-                          : isVoid ? { bg: "rgba(149,165,166,0.18)", fg: "var(--muted)", label: "V" }
-                          : m.outcome === "WIN" ? { bg: "rgba(46,204,113,0.15)", fg: "var(--success)", label: "W" }
-                          : m.outcome === "LOSS" ? { bg: "rgba(231,76,60,0.15)", fg: "var(--danger)", label: "L" }
-                          : { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)", label: "D" };
+                        const outcomePill = outcomeBadge(m, isDisputed, isVoid);
                         return (
                           <tr key={i} style={isDisputed ? { opacity: 0.7 } : undefined}>
                             <td data-label="Date">{date}</td>
@@ -780,6 +863,127 @@ export async function ProfileView({
             );
           })
         )}
+
+        {/* v2 "Card Table" season-history grid -- a trophy-case summary per
+            season (label, division chip, finish, points), replacing the
+            per-season match tables above under html[data-ui="v2"]. The full
+            match list moves to the flattened "Match history" below instead
+            of staying nested per season. */}
+        {profile.history.length === 0 ? (
+          <div className="card muted profile-season-empty-v2">No season history yet.</div>
+        ) : (
+          <div className="profile-season-grid-v2">
+            {profile.history.map((h) => {
+              const won = h.rank === 1 && h.totalMembers > 0;
+              const color = tierColors(h.tierPosition);
+              return (
+                <div
+                  key={h.seasonId}
+                  className="card profile-season-card-v2"
+                  data-won={won ? "true" : undefined}
+                >
+                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                    <Link href={`/seasons/${h.seasonId}`} style={{ color: "var(--text)", fontWeight: 600, fontSize: 14 }}>
+                      {h.seasonName}
+                    </Link>
+                    <span
+                      className="pill"
+                      data-rarity={rarityIndex(h.tierPosition)}
+                      style={{ background: color.bg, color: color.fg }}
+                    >
+                      {h.divisionName}
+                    </span>
+                  </div>
+                  <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+                    {h.rank > 0 ? `#${h.rank} of ${h.totalMembers}` : "unranked"}
+                  </div>
+                  <div className="profile-season-points" style={{ marginTop: 4 }}>{h.points} pts</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* v2 "Card Table" match history -- every match across every season,
+            newest first, as a "hand": two mini cards (this player vs the
+            opponent) with the score between them. Keeps every v1 action/
+            data point (dispute form, uncounted tag, pick/ban details,
+            shootout marker, disputed/void styling) alongside the new look. */}
+        <div className="profile-match-hands-v2">
+          <h3>Match history</h3>
+          {matchHands.length === 0 ? (
+            <div className="card muted">No matches played yet.</div>
+          ) : (
+            matchHands.map((hand) => {
+              const m = hand.match;
+              const isDisputed = m.status === "DISPUTED";
+              const isShootout = m.isShootout === true;
+              const isVoid = m.myGames === 0 && m.opponentGames === 0;
+              const badge = outcomeBadge(m, isDisputed, isVoid);
+              const date = m.confirmedAt ? m.confirmedAt.toISOString().slice(0, 10) : "-";
+              const repGame = m.games.find((g) => g.deck && g.stake);
+              return (
+                <div
+                  key={m.pairingId}
+                  className="card profile-hand-v2"
+                  data-outcome={m.outcome.toLowerCase()}
+                  style={isDisputed ? { opacity: 0.75 } : undefined}
+                >
+                  <div className="muted" style={{ fontSize: 11 }}>
+                    {date} - {hand.context.seasonName} - {hand.context.divisionName}
+                    {isShootout && <span style={{ marginLeft: 6 }}>(shootout)</span>}
+                  </div>
+                  <div className="profile-hand-players">
+                    <div className="profile-hand-mini-card">
+                      <div className="profile-hand-mini-name">{profile.player.displayName}</div>
+                    </div>
+                    <div className="profile-hand-vs">vs</div>
+                    <div className="profile-hand-mini-card">
+                      <div className="profile-hand-mini-name">
+                        <Link href={`/profile/${m.opponentPlayerId}`} style={{ color: "inherit" }}>
+                          {m.opponentDisplayName}
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="profile-hand-score" style={{ textAlign: "center" }}>
+                    {m.myGames}-{m.opponentGames}
+                  </div>
+                  {repGame && repGame.deck && repGame.stake && (
+                    <div className="profile-hand-chips">
+                      <span className="profile-hand-chip">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={deckImage(repGame.deck)} alt="" width={14} height={14} style={{ borderRadius: 2 }} />
+                        {repGame.deck}
+                      </span>
+                      <span className="profile-hand-chip">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={stakeImage(repGame.stake)} alt="" width={14} height={14} style={{ borderRadius: 2 }} />
+                        {repGame.stake}
+                      </span>
+                    </div>
+                  )}
+                  <div className="profile-hand-meta">
+                    <span className="pill" style={{ background: badge.bg, color: badge.fg, fontSize: isDisputed ? 10 : undefined }}>
+                      {badge.label}
+                    </span>
+                    {m.uncounted && <span title={m.uncounted.title}>{m.uncounted.label}</span>}
+                    {picksBansDetails(m.games, m.opponentDisplayName)}
+                    {isOwnProfile && hand.context.isActiveSeason && !isShootout && (
+                      <DisputeForm
+                        action={submitProfileDispute}
+                        pairingId={m.pairingId}
+                        opponentName={m.opponentDisplayName}
+                        isDisputed={isDisputed}
+                        hiddenFields={{ profileId: profile.player.id }}
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
       </main>
     </>
   );

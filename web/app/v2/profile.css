@@ -1,0 +1,227 @@
+/* v2 "Card Table" -- player profile hero card + season/match panels.
+   See design-system/MASTER.md and ProfileView.tsx. Every rule below is
+   scoped under html[data-ui="v2"] except the plain "-v1"/"-v2" visibility
+   toggles, which mirror the existing meta-v1/meta-v2 and zone-key-v1/
+   zone-key-v2 pattern elsewhere in globals.css: both variants always
+   render, and only the active one is shown, so v1 stays completely
+   unaffected without the admin preview cookie. */
+
+/* ---- v1 content that the v2 hero/panels replace -------------------- */
+.profile-history-v1 { display: block; }
+html[data-ui="v2"] .profile-history-v1 { display: none; }
+
+/* ---- hero card ------------------------------------------------------ */
+.profile-hero-v2 { display: none; }
+html[data-ui="v2"] .profile-hero-v2 {
+  display: flex;
+  justify-content: center;
+  margin: 12px 0 20px;
+}
+html[data-ui="v2"] .profile-hero-card {
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel-2);
+  border: 3px solid var(--panel-edge);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px 16px 16px;
+  text-align: center;
+  animation: profileHeroDealIn 220ms ease-out;
+}
+@media (min-width: 641px) {
+  html[data-ui="v2"] .profile-hero-card { aspect-ratio: 5 / 7; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui="v2"] .profile-hero-card { animation: none; }
+}
+@keyframes profileHeroDealIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+html[data-ui="v2"] .profile-hero-card[data-rarity="0"] { border-color: var(--legendary); }
+html[data-ui="v2"] .profile-hero-card[data-rarity="1"] { border-color: var(--rare); }
+html[data-ui="v2"] .profile-hero-card[data-rarity="2"] { border-color: var(--uncommon); }
+html[data-ui="v2"] .profile-hero-card[data-rarity="3"] { border-color: var(--common); }
+
+html[data-ui="v2"] .profile-hero-avatar,
+html[data-ui="v2"] .profile-hero-avatar-fallback {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+html[data-ui="v2"] .profile-hero-avatar-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel-edge);
+  color: var(--paper);
+  font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
+  font-size: 22px;
+}
+html[data-ui="v2"] .profile-hero-name {
+  font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
+  font-size: 26px;
+  line-height: 1.2;
+  color: var(--paper);
+  margin-top: 4px;
+}
+html[data-ui="v2"] .profile-hero-handle {
+  font-size: 13px;
+  color: var(--paper-dim);
+  margin-top: -2px;
+}
+html[data-ui="v2"] .profile-hero-division {
+  margin-top: 2px;
+}
+
+html[data-ui="v2"] .profile-hero-stats {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  margin-top: 8px;
+}
+html[data-ui="v2"] .profile-hero-stat {
+  flex: 1 1 0;
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 8px;
+  padding: 8px 6px;
+}
+html[data-ui="v2"] .profile-hero-stat .label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--paper-faint);
+}
+html[data-ui="v2"] .profile-hero-stat .value {
+  font-family: var(--font-body-v2), "Segoe UI", sans-serif;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-size: 16px;
+  color: var(--paper);
+  margin-top: 2px;
+}
+
+html[data-ui="v2"] .profile-hero-stickers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 8px;
+  margin-top: 14px;
+}
+html[data-ui="v2"] .profile-sticker {
+  font-size: 10px;
+}
+html[data-ui="v2"] .profile-sticker:nth-child(odd) { transform: rotate(-3deg); }
+html[data-ui="v2"] .profile-sticker:nth-child(even) { transform: rotate(2deg); }
+
+/* ---- season history grid --------------------------------------------- */
+.profile-season-empty-v2 { display: none; }
+html[data-ui="v2"] .profile-season-empty-v2 { display: block; }
+.profile-season-grid-v2 { display: none; }
+html[data-ui="v2"] .profile-season-grid-v2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+html[data-ui="v2"] .profile-season-card-v2 {
+  padding: 12px;
+}
+html[data-ui="v2"] .profile-season-card-v2[data-won="true"] {
+  border-color: var(--gold);
+  box-shadow: inset 4px 0 0 var(--gold), var(--shadow);
+}
+html[data-ui="v2"] .profile-season-card-v2 .profile-season-points {
+  font-family: var(--font-body-v2), "Segoe UI", sans-serif;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- match history "hands" -------------------------------------------- */
+.profile-match-hands-v2 { display: none; }
+html[data-ui="v2"] .profile-match-hands-v2 {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+html[data-ui="v2"] .profile-hand-v2 {
+  border-width: 2px;
+}
+html[data-ui="v2"] .profile-hand-v2[data-outcome="win"] { border-color: var(--uncommon); }
+html[data-ui="v2"] .profile-hand-v2[data-outcome="loss"] { border-color: var(--rare); }
+html[data-ui="v2"] .profile-hand-v2[data-outcome="draw"] { border-color: var(--paper-faint); }
+
+html[data-ui="v2"] .profile-hand-players {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+html[data-ui="v2"] .profile-hand-mini-card {
+  flex: 1 1 120px;
+  min-width: 0;
+  background: var(--panel-2);
+  border: 1px solid var(--panel-edge);
+  border-radius: 8px;
+  padding: 8px 10px;
+  text-align: center;
+}
+html[data-ui="v2"] .profile-hand-mini-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--paper);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+html[data-ui="v2"] .profile-hand-score {
+  font-family: var(--font-body-v2), "Segoe UI", sans-serif;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-size: 18px;
+  margin-top: 2px;
+}
+html[data-ui="v2"] .profile-hand-vs {
+  align-self: center;
+  font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--paper-faint);
+  padding: 0 2px;
+}
+html[data-ui="v2"] .profile-hand-chips {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+html[data-ui="v2"] .profile-hand-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--paper-faint);
+}
+html[data-ui="v2"] .profile-hand-meta {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--panel-edge);
+  font-size: 11px;
+  color: var(--paper-faint);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
