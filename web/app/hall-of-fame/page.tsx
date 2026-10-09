@@ -5,6 +5,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { loadHallOfFame, type HofMatch, type HofSeason, type HofDivisionChampion } from "@/lib/loaders/hall-of-fame";
 import { rarityIndex } from "@/lib/tier-colors";
 import { RarityText } from "@/components/RarityText";
+import { CardAvatar } from "@/components/DivisionStandingsTable";
 
 export const dynamic = "force-dynamic";
 
@@ -149,12 +150,77 @@ function HallOfFameTrophyShelf({ seasons: allSeasons, showAll }: { seasons: HofS
         </nav>
       </div>
 
-      <div className="hof-shelves">
-        {seasons.map((s) => (
-          <HallOfFameShelf key={s.seasonId} season={s} />
-        ))}
-      </div>
+      {showAll ? (
+        <div className="hof-shelves">
+          {seasons.map((s) => (
+            <HallOfFameShelf key={s.seasonId} season={s} />
+          ))}
+        </div>
+      ) : (
+        <HallOfFameChampionGrid seasons={seasons} />
+      )}
     </>
+  );
+}
+
+// Legendary-only default view: one flat grid of every season's Legendary
+// champion, newest season first (the loader already orders seasons that
+// way), instead of one near-empty one-card shelf per season. Each card
+// carries its season label (in place of the division name the All-divisions
+// cards show -- every card here IS the Legendary division already) plus the
+// champion's avatar and the same x2/x3 title sticker.
+function HallOfFameChampionGrid({ seasons }: { seasons: HofSeason[] }) {
+  const champions = seasons
+    .map((s) => (s.divisionChampions[0] ? { season: s, champ: s.divisionChampions[0] } : null))
+    .filter((e): e is { season: HofSeason; champ: HofDivisionChampion } => e !== null);
+
+  if (champions.length === 0) {
+    return (
+      <div className="card muted hof-empty">
+        No champions yet -- the first season&apos;s winners will be enshrined here the moment it ends. Check back!
+      </div>
+    );
+  }
+
+  return (
+    <div className="hof-champ-grid">
+      {champions.map(({ season, champ }, i) => (
+        <HallOfFameChampionCard key={champ.playerId + season.seasonId} season={season} champion={champ} index={i} />
+      ))}
+    </div>
+  );
+}
+
+function HallOfFameChampionCard({
+  season,
+  champion: champ,
+  index,
+}: {
+  season: HofSeason;
+  champion: HofDivisionChampion;
+  index: number;
+}) {
+  // Always data-rarity=0 (Legendary) -- every card in this grid is that
+  // season's top-division champion -- which reuses .hof-card's gold border
+  // and glow from app/v2/hall-of-fame.css. Animation delay is set inline
+  // (capped the same way as the nth-child stagger below .hof-shelf-row)
+  // since these cards sit directly in .hof-champ-grid, not .hof-shelf-row.
+  return (
+    <Link
+      href={`/profile/${champ.playerId}`}
+      prefetch={false}
+      className="hof-card hof-champ-card"
+      data-rarity={0}
+      style={{ animationDelay: `${Math.min(index, 11) * 25}ms` }}
+    >
+      <HofTrophyIcon />
+      {champ.titleCount >= 2 && <span className="hof-card-sticker">x{champ.titleCount}</span>}
+      <div className="pixel hof-card-division" data-rarity={0}>
+        {season.seasonLabel}
+      </div>
+      <CardAvatar displayName={champ.playerName} avatarUrl={champ.avatarUrl} />
+      <div className="hof-card-name">{champ.playerName}</div>
+    </Link>
   );
 }
 

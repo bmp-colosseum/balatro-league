@@ -176,6 +176,35 @@ html[data-ui="v2"] .hof-card-name {
   margin-top: 4px;
 }
 
+/* Legendary-only "one shelf" view: every season's champion in one flat
+   panel, instead of one shelf per season. Reuses .hof-card in full (sizing,
+   rarity border/glow, hover, deal-in animation) -- this block only adds the
+   grid wrapper and the avatar/centered layout the All-divisions cards don't
+   need. */
+html[data-ui="v2"] .hof-champ-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  background: var(--panel);
+  border: 2px solid var(--panel-edge);
+  border-radius: var(--radius);
+  padding: 18px 16px;
+}
+html[data-ui="v2"] .hof-champ-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+html[data-ui="v2"] .hof-champ-card .player-card-avatar {
+  width: 44px;
+  height: 44px;
+}
+html[data-ui="v2"] .hof-champ-card .player-card-avatar-initials {
+  font-size: 14px;
+}
+
 /* Deal-in: cards settle from 8px down to their resting position, ending
    fully visible. */
 @keyframes hofDealIn {
