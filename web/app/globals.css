@@ -578,6 +578,13 @@ html[data-ui="v2"] header h1 a::before {
   border-radius: 3px;
   box-shadow: 2px 2px 0 var(--panel-edge);
 }
+/* Nav links are body face: the pixel face at 13px is hard to read. */
+html[data-ui="v2"] header nav.pixel,
+html[data-ui="v2"] header nav a {
+  font-family: var(--font-body-v2), "Segoe UI", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0;
+}
 html[data-ui="v2"] header nav a {
   border-radius: 999px;
 }
@@ -604,10 +611,15 @@ html[data-ui="v2"] .pill[data-rarity="2"] { background: var(--uncommon) !importa
 html[data-ui="v2"] .pill[data-rarity="3"] { background: var(--common) !important; }
 
 /* Standings table (DivisionStandingsTable). */
+/* Points stay in the body face: pixel digits at table size read as blocks
+   (checked on the live preview), and a league is all numbers. */
 html[data-ui="v2"] td.pts-cell,
 html[data-ui="v2"] strong.pts-cell {
-  font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
-  font-size: 20px;
+  font-family: var(--font-body-v2), "Segoe UI", sans-serif;
+  font-weight: 800;
+  font-size: 19px;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
 }
 html[data-ui="v2"] .record-cells,
 html[data-ui="v2"] .record-cells * {

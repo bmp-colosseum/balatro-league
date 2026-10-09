@@ -43,7 +43,9 @@ uncommon, `--info` = common, `--admin` keeps its orange. Tailwind/shadcn
 ## Type
 
 - Display: **Pixelify Sans** 700 (Google Fonts) for h1/h2, division names,
-  tier chips, points cells, the "you" badge. Never for body copy.
+  tier chips, buttons, the "you" badge. Never for body copy, nav links or
+  numbers in tables (pixel digits read as blocks at table sizes; points use
+  the body face at 800 weight).
 - Body: **Nunito Sans** 400/600/700 for everything else. 15px base, line-height 1.5.
 - Numbers in columns: `font-variant-numeric: tabular-nums`.
 - Uppercase labels (table headers, eyebrows): 11px, letter-spacing .8px, paper-faint.
@@ -60,7 +62,7 @@ uncommon, `--info` = common, `--admin` keeps its orange. Tailwind/shadcn
 - **Tier chip**: rarity colour bg, #0b1b1a text, display face 12px uppercase,
   letter-spacing .6px, 5px radius.
 - **Standings table**: rank (faint), player (bold, optional italic tiebreak
-  note under the name at 11.5px faint), Pts in display face 20px, W-D-L
+  note under the name at 11.5px faint), Pts in body face 800 at 19px, W-D-L
   (dim, nowrap), Pl, Lives (coloured by sign). Promotion rows get a 4px gold
   inset stripe on the first cell; relegation rows a 4px rare stripe; the last
   row above each line gets a 2px dashed border in that colour. A zone key
