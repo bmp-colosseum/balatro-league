@@ -84,6 +84,7 @@ export function initialsFor(displayName: string): string {
 export interface SeasonForMatchHands<M> {
   seasonName: string;
   divisionName: string;
+  tierPosition: number;
   isActive: boolean;
   matches: readonly M[];
 }
@@ -91,6 +92,7 @@ export interface SeasonForMatchHands<M> {
 export interface MatchHandContext {
   seasonName: string;
   divisionName: string;
+  tierPosition: number;
   isActiveSeason: boolean;
 }
 
@@ -111,7 +113,7 @@ export function flattenMatchesNewestFirst<M extends { confirmedAt: Date | null }
     for (const match of s.matches) {
       all.push({
         match,
-        context: { seasonName: s.seasonName, divisionName: s.divisionName, isActiveSeason: s.isActive },
+        context: { seasonName: s.seasonName, divisionName: s.divisionName, tierPosition: s.tierPosition, isActiveSeason: s.isActive },
       });
     }
   }

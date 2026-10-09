@@ -38,6 +38,7 @@ export interface ShootoutCleanupDivision {
   id: string;
   name: string;
   tierName: string;
+  tierPosition: number;
   // Every admin-recorded shootout in this division, in the order the
   // matches were created -- both deletable and keep rows, so the page can
   // render one table with a verdict column per row.
@@ -84,6 +85,7 @@ export async function loadShootoutCleanup(seasonId: string): Promise<ShootoutCle
         orderBy: { position: "asc" },
         select: {
           name: true,
+          position: true,
           divisions: {
             orderBy: { groupNumber: "asc" },
             select: {
@@ -188,6 +190,7 @@ export async function loadShootoutCleanup(seasonId: string): Promise<ShootoutCle
         id: d.id,
         name: d.name,
         tierName: tier.name,
+        tierPosition: tier.position,
         entries,
         deletableCount: plan.deletable.length,
       });

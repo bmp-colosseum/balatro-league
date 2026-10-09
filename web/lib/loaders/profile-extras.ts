@@ -36,6 +36,7 @@ export interface ProfileBmpSnapshot {
 export interface AdminRecordContext {
   divisionId: string;
   divisionName: string;
+  tierPosition: number;
   // Active members of the player's division — for name resolution in the
   // consolidated MatchActionsPanel.
   members: Array<{ playerId: string; displayName: string }>;
@@ -52,6 +53,7 @@ export interface AdminRecordContext {
 export interface OwnActiveDivision {
   divisionId: string;
   divisionName: string;
+  tierPosition: number;
   seasonId: string;
   seasonName: string;
   reportableOpponents: Array<{ playerId: string; displayName: string }>;
@@ -203,6 +205,7 @@ async function loadOwnActiveDivision(playerId: string): Promise<OwnActiveDivisio
           id: true,
           name: true,
           seasonId: true,
+          tier: { select: { position: true } },
           season: { select: { number: true, subtitle: true, scheduleLocked: true } },
           members: {
             where: { status: "ACTIVE" },
@@ -231,6 +234,7 @@ async function loadOwnActiveDivision(playerId: string): Promise<OwnActiveDivisio
   return {
     divisionId: div.id,
     divisionName: div.name,
+    tierPosition: div.tier.position,
     seasonId: div.seasonId,
     seasonName: formatSeasonLabel(div.season),
     reportableOpponents,
@@ -248,6 +252,7 @@ async function loadAdminRecordContext(playerId: string): Promise<AdminRecordCont
     include: {
       division: {
         include: {
+          tier: true,
           season: { select: { scheduleLocked: true } },
           members: { where: { status: "ACTIVE" }, include: { player: true } },
           matches: {
@@ -280,5 +285,5 @@ async function loadAdminRecordContext(playerId: string): Promise<AdminRecordCont
     .filter((m) => m.playerId !== playerId && owesResultAgainst(sets, m.playerId, scheduleLocked))
     .map((m) => ({ p1Id: playerId, p2Id: m.playerId }));
   const members = div.members.map((m) => ({ playerId: m.playerId, displayName: m.player.displayName }));
-  return { divisionId: div.id, divisionName: div.name, members, unplayed, played };
+  return { divisionId: div.id, divisionName: div.name, tierPosition: div.tier.position, members, unplayed, played };
 }

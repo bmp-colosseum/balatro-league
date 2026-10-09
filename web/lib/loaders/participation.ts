@@ -17,6 +17,7 @@ export interface ParticipationMember {
   displayName: string;
   discordId: string;
   divisionName: string;
+  tierPosition: number;
   played: number;
   total: number;
   remaining: number;
@@ -45,6 +46,7 @@ export async function loadParticipation(): Promise<ParticipationData> {
           select: {
             id: true,
             name: true,
+            tier: { select: { position: true } },
             members: {
               where: { status: "ACTIVE" },
               select: {
@@ -103,6 +105,7 @@ export async function loadParticipation(): Promise<ParticipationData> {
         displayName: p.displayName,
         discordId: p.discordId,
         divisionName: d.name,
+        tierPosition: d.tier.position,
         played: pl,
         total,
         remaining,

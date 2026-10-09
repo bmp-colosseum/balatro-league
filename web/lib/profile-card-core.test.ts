@@ -148,7 +148,8 @@ const seasonForHands = (
   divisionName: string,
   isActive: boolean,
   matches: FakeMatch[],
-): SeasonForMatchHands<FakeMatch> => ({ seasonName, divisionName, isActive, matches });
+  tierPosition = 1,
+): SeasonForMatchHands<FakeMatch> => ({ seasonName, divisionName, tierPosition, isActive, matches });
 
 describe("flattenMatchesNewestFirst -- table-driven scenarios", () => {
   it("returns nothing for no seasons", () => {
@@ -164,7 +165,7 @@ describe("flattenMatchesNewestFirst -- table-driven scenarios", () => {
     ];
     const result = flattenMatchesNewestFirst(seasons);
     expect(result.map((h) => h.match.id)).toEqual(["m2", "m1"]);
-    expect(result[0]!.context).toEqual({ seasonName: "Season 1", divisionName: "Div A", isActiveSeason: false });
+    expect(result[0]!.context).toEqual({ seasonName: "Season 1", divisionName: "Div A", tierPosition: 1, isActiveSeason: false });
   });
 
   it("merges matches across seasons into one newest-first list", () => {

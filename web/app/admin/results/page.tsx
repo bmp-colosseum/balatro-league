@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormSelect } from "@/components/FormSelect";
 import { loadResultsPage, type ResultsMember } from "@/lib/loaders/admin-results";
+import { RarityText } from "@/components/RarityText";
 import { overrideResultAction, showdownAction, undoAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -79,13 +80,13 @@ export default async function ResultsPage({
 
         {data.resolvedFromPlayer && sel && (
           <p className="muted" style={{ fontSize: 12 }}>
-            Showing <strong>{sel.division.tierName} — {sel.division.name}</strong> (where {data.resolvedFromPlayer.displayName} plays).
+            Showing <strong><RarityText position={sel.division.tierPosition}>{sel.division.tierName} — {sel.division.name}</RarityText></strong> (where {data.resolvedFromPlayer.displayName} plays).
           </p>
         )}
 
         {sel && (
           <>
-            <h3 style={{ marginTop: 20 }}>{sel.division.tierName} — {sel.division.name}</h3>
+            <h3 style={{ marginTop: 20 }}><RarityText position={sel.division.tierPosition}>{sel.division.tierName} — {sel.division.name}</RarityText></h3>
 
             {/* ---- Match actions: record / DQ / void in one picker ---- */}
             {(() => {

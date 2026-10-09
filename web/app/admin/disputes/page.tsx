@@ -20,6 +20,7 @@ import { FlashToast } from "@/components/FlashToast";
 import { acceptDisputeProposal, rejectDispute, setDisputeResult } from "./actions";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { FormSelect } from "@/components/FormSelect";
+import { RarityText } from "@/components/RarityText";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +73,7 @@ export default async function AdminDisputesPage({
                     <DiscordId value={d.playerB.discordId} username={d.playerB.username} />
                   </strong>
                   <Link href={`/divisions/${d.divisionId}`} className="muted" style={{ fontSize: 12 }}>
-                    {d.divisionName} · {d.tierName}
+                    <RarityText position={d.tierPosition}>{d.divisionName} · {d.tierName}</RarityText>
                   </Link>
                   <span className="muted" style={{ marginLeft: "auto", fontSize: 11 }}>
                     Disputed{" "}

@@ -55,6 +55,7 @@ export interface MmrChangeRow {
   matchId: string;
   confirmedAt: Date | null;
   divisionName: string;
+  tierPosition: number;
   aName: string;
   bName: string;
   beforeA: number;
@@ -84,7 +85,7 @@ export async function loadMmrChanges(limit = 200): Promise<MmrChangeRow[]> {
       mmrAfterA: true,
       mmrBeforeB: true,
       mmrAfterB: true,
-      division: { select: { name: true } },
+      division: { select: { name: true, tier: { select: { position: true } } } },
       playerA: { select: { displayName: true } },
       playerB: { select: { displayName: true } },
     },
@@ -93,6 +94,7 @@ export async function loadMmrChanges(limit = 200): Promise<MmrChangeRow[]> {
     matchId: m.id,
     confirmedAt: m.confirmedAt,
     divisionName: m.division.name,
+    tierPosition: m.division.tier.position,
     aName: m.playerA.displayName,
     bName: m.playerB.displayName,
     beforeA: m.mmrBeforeA!,

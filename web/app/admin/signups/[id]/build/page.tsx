@@ -169,6 +169,7 @@ export default async function BuildSeasonPage({
                   ? {
                       divisionName: prior.divisionName,
                       tierName: prior.tierName,
+                      tierPosition: prior.tierPosition,
                       rank: prior.rank,
                       totalMembers: prior.totalMembers,
                       seasonName: prior.seasonName,

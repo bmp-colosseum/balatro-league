@@ -26,6 +26,8 @@ import {
 } from "@/lib/loaders/admin-resolve";
 import { planBulkAction, type BulkAction, type PlayerStanding, type RowStatus, type Suggestion, type SuggestedActionKind } from "@/lib/bulk-resolve-core";
 import { applyBulkResolveAction } from "./actions";
+import { RarityText } from "@/components/RarityText";
+import type { ReactNode } from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -348,7 +350,7 @@ function QueueRow({ row }: { row: BulkResolveQueueRow }) {
         <input type="checkbox" name="ids" value={row.matchId} />
       </td>
       <td style={{ fontSize: 12 }}>
-        {row.tierName} - {row.divisionName}
+        <RarityText position={row.tierPosition}>{row.tierName} - {row.divisionName}</RarityText>
       </td>
       <td>
         <StandingCell player={row.playerA} />
@@ -408,9 +410,14 @@ function ConfirmStep({ sp, data }: { sp: SP; data: BulkResolveData }) {
   const allowed = decisions.filter((d) => d.allowed);
   const refused = decisions.filter((d) => !d.allowed);
   const byId = new Map(data.rows.map((r) => [r.matchId, r]));
-  const label = (id: string) => {
+  const label = (id: string): ReactNode => {
     const row = byId.get(id);
-    return row ? `${row.tierName} - ${row.divisionName}: ${row.playerA.displayName} vs ${row.playerB.displayName}` : id;
+    if (!row) return id;
+    return (
+      <>
+        <RarityText position={row.tierPosition}>{row.tierName} - {row.divisionName}</RarityText>: {row.playerA.displayName} vs {row.playerB.displayName}
+      </>
+    );
   };
 
   return (

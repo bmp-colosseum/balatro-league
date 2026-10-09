@@ -14,6 +14,7 @@ import { DiscordId } from "@/components/DiscordId";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
 import { rarityIndex, tierColors } from "@/lib/tier-colors";
+import { RarityText } from "@/components/RarityText";
 import {
   loadSeasonWinners,
   winnerAwardStatus,
@@ -191,7 +192,7 @@ function DivisionRow({ division: d }: { division: SeasonWinnerDivision }) {
     <tr>
       <td>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-          <strong>{d.divisionName}</strong>
+          <strong><RarityText position={d.tierPosition}>{d.divisionName}</RarityText></strong>
           <RarityPill name={d.tierName} position={d.tierPosition} />
         </div>
         <div className="muted" style={{ fontSize: 11 }}>

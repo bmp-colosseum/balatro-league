@@ -41,6 +41,7 @@ export interface BulkResolveDivisionOption {
 export interface BulkResolveQueueRow extends UnresolvedRow {
   divisionName: string;
   tierName: string;
+  tierPosition: number;
 }
 
 export interface BulkResolveSeasonOption {
@@ -153,7 +154,7 @@ export async function loadBulkResolveQueue(filters: BulkResolveFilters): Promise
         members,
         now,
       );
-      return { ...row, divisionName: d.name, tierName: d.tier.name };
+      return { ...row, divisionName: d.name, tierName: d.tier.name, tierPosition: d.tier.position };
     });
   });
 

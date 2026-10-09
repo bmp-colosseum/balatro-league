@@ -9,6 +9,7 @@ import { getShowBmpMmr } from "@/lib/preferences";
 import { loadPlayerHistory, type GamePlayed, type MatchEntry } from "@/lib/profile";
 import { ProfileAnalyticsSection } from "@/components/ProfileAnalyticsSection";
 import { tierColors, rarityIndex } from "@/lib/tier-colors";
+import { RarityText } from "@/components/RarityText";
 import {
   titleStickers,
   netLivesForGames,
@@ -301,9 +302,9 @@ export async function ProfileView({
             <div style={{ marginTop: 4 }}>
               In{" "}
               <Link href={`/divisions/${activeSeason.divisionId}`} style={{ color: "var(--text)", fontWeight: 600 }}>
-                {activeSeason.divisionName}
+                <RarityText position={activeSeason.tierPosition}>{activeSeason.divisionName}</RarityText>
               </Link>{" "}
-              <span className="muted">({activeSeason.tierName})</span>
+              <span className="muted">(<RarityText position={activeSeason.tierPosition}>{activeSeason.tierName}</RarityText>)</span>
             </div>
             <div style={{ marginTop: 6, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "baseline" }}>
               <span>
@@ -343,7 +344,7 @@ export async function ProfileView({
                 {activeSeasonEntry.status === "ACTIVE" ? (
                   <>
                     <p className="muted" style={{ fontSize: 12, margin: "0 0 6px" }}>
-                      In {activeSeasonEntry.divisionName}. Drop if they&apos;ve left or gone inactive — unplayed matches are removed and opponents refilled.
+                      In <RarityText position={activeSeasonEntry.tierPosition}>{activeSeasonEntry.divisionName}</RarityText>. Drop if they&apos;ve left or gone inactive — unplayed matches are removed and opponents refilled.
                     </p>
                     <form action={dropPlayer}>
                       <input type="hidden" name="playerId" value={profile.player.id} />
@@ -353,7 +354,7 @@ export async function ProfileView({
                 ) : (
                   <>
                     <p className="muted" style={{ fontSize: 12, margin: "0 0 6px" }}>
-                      Dropped from {activeSeasonEntry.divisionName}. Reinstate to give them their schedule back.
+                      Dropped from <RarityText position={activeSeasonEntry.tierPosition}>{activeSeasonEntry.divisionName}</RarityText>. Reinstate to give them their schedule back.
                     </p>
                     <form action={reinstatePlayer}>
                       <input type="hidden" name="playerId" value={profile.player.id} />
@@ -457,7 +458,7 @@ export async function ProfileView({
             their profile while logging results. */}
         {isOwnProfile && ownActiveDivision && (
           <div className="card" style={{ marginTop: 16 }}>
-            <strong>Report a match — {ownActiveDivision.divisionName}</strong>
+            <strong>Report a match — <RarityText position={ownActiveDivision.tierPosition}>{ownActiveDivision.divisionName}</RarityText></strong>
             <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
               Season: {ownActiveDivision.seasonName}
             </div>
@@ -621,7 +622,7 @@ export async function ProfileView({
           <div style={{ marginTop: 16 }}>
             <p className="muted" style={{ fontSize: 12, margin: "0 0 6px" }}>
               <span style={{ color: "var(--accent)" }}>⚙ Admin</span> — {profile.player.displayName}&apos;s matches in{" "}
-              <strong>{adminCtx.divisionName}</strong>. Record, fix, void, or DQ any of them below.
+              <strong><RarityText position={adminCtx.tierPosition}>{adminCtx.divisionName}</RarityText></strong>. Record, fix, void, or DQ any of them below.
             </p>
             <MatchActionsPanel
               divisionId={adminCtx.divisionId}
@@ -930,7 +931,7 @@ export async function ProfileView({
                   style={isDisputed ? { opacity: 0.75 } : undefined}
                 >
                   <div className="muted" style={{ fontSize: 11 }}>
-                    {date} - {hand.context.seasonName} - {hand.context.divisionName}
+                    {date} - {hand.context.seasonName} - <RarityText position={hand.context.tierPosition}>{hand.context.divisionName}</RarityText>
                     {isShootout && <span style={{ marginLeft: 6 }}>(shootout)</span>}
                   </div>
                   <div className="profile-hand-players">

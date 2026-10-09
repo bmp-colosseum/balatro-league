@@ -8,7 +8,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { loadReportPageData } from "@/lib/loaders/report";
 import { CANONICAL_DECKS, CANONICAL_STAKES } from "@/lib/balatro-info";
-import { tierColors } from "@/lib/tier-colors";
+import { tierColors, rarityIndex } from "@/lib/tier-colors";
+import { RarityText } from "@/components/RarityText";
 import { SiteNav } from "@/components/SiteNav";
 import { Callout } from "@/components/Callout";
 import { DiscordId } from "@/components/DiscordId";
@@ -65,8 +66,8 @@ export default async function ReportPage({
           <div className="card">
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
               <span className="muted">Your division:</span>
-              <span className="pill" style={{ background: tc.bg, color: tc.fg }}>{division.tierName}</span>
-              <Link href={`/divisions/${division.divisionId}`} style={{ textDecoration: "none" }}>{division.divisionName}</Link>
+              <span className="pill" data-rarity={rarityIndex(division.tierPosition)} style={{ background: tc.bg, color: tc.fg }}>{division.tierName}</span>
+              <Link href={`/divisions/${division.divisionId}`} style={{ textDecoration: "none" }}><RarityText position={division.tierPosition}>{division.divisionName}</RarityText></Link>
               <span className="muted" style={{ marginLeft: "auto", fontSize: 12 }}>{division.seasonName}</span>
             </div>
 

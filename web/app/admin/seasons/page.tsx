@@ -32,6 +32,7 @@ import { SignupRoster } from "@/components/SignupRoster";
 import { listGuildTextChannels } from "@/lib/discord";
 import { formatSeasonLabel, nextSeasonNumber } from "@/lib/format-season";
 import { prisma } from "@/lib/prisma";
+import { RarityText } from "@/components/RarityText";
 
 export const dynamic = "force-dynamic";
 
@@ -235,9 +236,12 @@ export default async function AdminSeasonsPage({
           ) : seasons.map((s) => {
             const players = s.divisions.reduce((sum, d) => sum + d._count.members, 0);
             const sets = s.divisions.reduce((sum, d) => sum + d._count.matches, 0);
-            const tierLine = s.tiers
-              .map((t) => `${t.name}: ${t._count.divisions}`)
-              .join(" · ");
+            const tierLine = s.tiers.map((t, i) => (
+              <span key={t.id}>
+                {i > 0 && " · "}
+                <RarityText position={t.position}>{t.name}</RarityText>: {t._count.divisions}
+              </span>
+            ));
             return (
               <div key={s.id} className="card">
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -283,7 +287,7 @@ export default async function AdminSeasonsPage({
                             textDecoration: "none",
                           }}
                         >
-                          {d.name} <span className="muted">({d._count.members})</span>
+                          <RarityText position={d.tier.position}>{d.name}</RarityText> <span className="muted">({d._count.members})</span>
                         </Link>
                       ))}
                     </div>

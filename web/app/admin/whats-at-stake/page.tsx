@@ -4,6 +4,7 @@ import { AdminNav } from "@/components/AdminNav";
 import { Callout } from "@/components/Callout";
 import { loadWhatsAtStake } from "@/lib/loaders/whats-at-stake";
 import type { PPPlayerResult, PPMatchResult, MatchImportance } from "@/lib/playoff-picture";
+import { RarityText } from "@/components/RarityText";
 
 export const dynamic = "force-dynamic";
 
@@ -72,7 +73,7 @@ export default async function WhatsAtStakePage() {
             return (
               <div key={d.divisionId} className="card" style={{ marginTop: 12 }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
-                  <strong style={{ fontSize: 15 }}>{d.divisionName}</strong>
+                  <strong style={{ fontSize: 15 }}><RarityText position={d.tierPosition}>{d.divisionName}</RarityText></strong>
                   <span className="muted" style={{ fontSize: 12 }}>
                     ↑{pic.promote} promote · ↓{pic.relegate} relegate · {pic.matches.length} left
                     {d.locked ? " · locked schedule" : " · round-robin"}

@@ -16,6 +16,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
+import { RarityText } from "@/components/RarityText";
 
 export interface RatingRow {
   discordId: string;
@@ -26,6 +27,7 @@ export interface RatingRow {
   prior?: {
     divisionName: string;
     tierName: string;
+    tierPosition: number;
     rank: number;
     totalMembers: number;
     seasonName: string;
@@ -291,7 +293,7 @@ export function DraggableRatingTable({
                 <td style={{ fontSize: 12 }}>
                   {r.prior ? (
                     <span>
-                      <strong>{r.prior.divisionName}</strong>{" "}
+                      <strong><RarityText position={r.prior.tierPosition}>{r.prior.divisionName}</RarityText></strong>{" "}
                       <span className="muted">#{r.prior.rank}/{r.prior.totalMembers}</span>
                       {r.prior.finalGlobalRank != null && (
                         <span

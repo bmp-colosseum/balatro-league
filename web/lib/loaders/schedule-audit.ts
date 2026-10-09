@@ -15,6 +15,7 @@ import { formatSeasonLabel } from "@/lib/format-season";
 export interface OffScheduleMatch {
   sessionId: string;
   divisionName: string;
+  tierPosition: number;
   playerA: string;
   playerAId: string;
   playerB: string;
@@ -30,6 +31,7 @@ export interface OffScheduleMatch {
 export interface BrokenScoreMatch {
   matchId: string;
   divisionName: string;
+  tierPosition: number;
   playerA: string;
   playerB: string;
   gamesWonA: number;
@@ -41,6 +43,7 @@ export interface BrokenScoreMatch {
 export interface UnfinishedMatch {
   sessionId: string;
   divisionName: string;
+  tierPosition: number;
   playerA: string;
   playerB: string;
   state: string;
@@ -75,6 +78,7 @@ export async function loadScheduleAudit(): Promise<ScheduleAuditResult | "NO_SEA
         select: {
           id: true,
           name: true,
+          tier: { select: { position: true } },
           matches: {
             where: { format: "LEAGUE_BO2" },
             select: { id: true, playerAId: true, playerBId: true, gamesWonA: true, gamesWonB: true, status: true },
@@ -87,10 +91,11 @@ export async function loadScheduleAudit(): Promise<ScheduleAuditResult | "NO_SEA
 
   // Per division: display name, the set of assigned (pre-created) BO2 pairs, and
   // the pairs that already have a CONFIRMED result.
-  const divInfo = new Map<string, { name: string; assigned: Set<string>; confirmed: Set<string> }>();
+  const divInfo = new Map<string, { name: string; tierPosition: number; assigned: Set<string>; confirmed: Set<string> }>();
   for (const d of season.divisions) {
     divInfo.set(d.id, {
       name: d.name,
+      tierPosition: d.tier.position,
       assigned: new Set(d.matches.map((m) => pairKey(m.playerAId, m.playerBId))),
       confirmed: new Set(
         d.matches.filter((m) => m.status === "CONFIRMED").map((m) => pairKey(m.playerAId, m.playerBId)),
@@ -144,6 +149,7 @@ export async function loadScheduleAudit(): Promise<ScheduleAuditResult | "NO_SEA
     offSchedule.push({
       sessionId: s.id,
       divisionName: info.name,
+      tierPosition: info.tierPosition,
       playerA: nameOf.get(s.playerAId) ?? s.playerAId,
       playerAId: s.playerAId,
       playerB: nameOf.get(s.playerBId) ?? s.playerBId,
@@ -164,6 +170,7 @@ export async function loadScheduleAudit(): Promise<ScheduleAuditResult | "NO_SEA
       return {
         sessionId: s.id,
         divisionName: info?.name ?? s.divisionId!,
+        tierPosition: info?.tierPosition ?? 1,
         playerA: nameOf.get(s.playerAId) ?? s.playerAId,
         playerB: nameOf.get(s.playerBId) ?? s.playerBId,
         state: s.state,
@@ -177,6 +184,7 @@ export async function loadScheduleAudit(): Promise<ScheduleAuditResult | "NO_SEA
   const brokenScores: BrokenScoreMatch[] = brokenRaw.map((m) => ({
     matchId: m.matchId,
     divisionName: divInfo.get(m.divisionId)?.name ?? m.divisionId,
+    tierPosition: divInfo.get(m.divisionId)?.tierPosition ?? 1,
     playerA: nameOf.get(m.aId) ?? m.aId,
     playerB: nameOf.get(m.bId) ?? m.bId,
     gamesWonA: m.a,

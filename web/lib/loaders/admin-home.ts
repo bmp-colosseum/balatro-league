@@ -21,6 +21,7 @@ export interface AdminDisputeRow {
   divisionId: string;
   divisionName: string;
   tierName: string;
+  tierPosition: number;
   playerA: { id: string; displayName: string; discordId: string; username: string | null };
   playerB: { id: string; displayName: string; discordId: string; username: string | null };
   gamesWonA: number;
@@ -58,7 +59,7 @@ export async function loadAdminDisputes(): Promise<AdminDisputeRow[]> {
       division: {
         select: {
           name: true,
-          tier: { select: { name: true } },
+          tier: { select: { name: true, position: true } },
         },
       },
     },
@@ -69,6 +70,7 @@ export async function loadAdminDisputes(): Promise<AdminDisputeRow[]> {
     divisionId: r.divisionId,
     divisionName: r.division.name,
     tierName: r.division.tier.name,
+    tierPosition: r.division.tier.position,
     playerA: r.playerA,
     playerB: r.playerB,
     gamesWonA: r.gamesWonA,

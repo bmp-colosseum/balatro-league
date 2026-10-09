@@ -127,6 +127,7 @@ export interface StandingsPreviewDivision {
   id: string;
   name: string;
   tierName: string;
+  tierPosition: number;
   k: number;
   n: number;
   scheduled: number;
@@ -157,6 +158,7 @@ export interface StandingsPreviewCandidateDivision {
   id: string;
   name: string;
   tierName: string;
+  tierPosition: number;
   // Suggested candidates (per suggestDropCandidates), pre-tick material.
   candidates: DropCandidate[];
   // Every other ACTIVE member not already suggested, for the "add someone
@@ -196,6 +198,7 @@ export interface StandingsPreviewSelectedDrop {
   divisionId: string;
   divisionName: string;
   tierName: string;
+  tierPosition: number;
 }
 
 export interface LoadStandingsPreviewOptions {
@@ -480,14 +483,14 @@ export async function loadStandingsPreview(
   // the picker panel needs every division's roster.
   const allDropCandidateMembers: DropCandidateMemberInput[] = [];
   const allDropCandidateMatches: DropCandidateMatchInput[] = [];
-  const divisionMetaOrder: { id: string; name: string; tierName: string }[] = [];
+  const divisionMetaOrder: { id: string; name: string; tierName: string; tierPosition: number }[] = [];
   let totalDivisions = 0;
   const now = new Date();
 
   for (const tier of season.tiers) {
     for (const d of tier.divisions) {
       totalDivisions++;
-      divisionMetaOrder.push({ id: d.id, name: d.name, tierName: tier.name });
+      divisionMetaOrder.push({ id: d.id, name: d.name, tierName: tier.name, tierPosition: tier.position });
 
       const leagueMatches = d.matches.filter((m) => m.format === "LEAGUE_BO2");
       const confirmedPairings: BestNPairing[] = leagueMatches
@@ -601,13 +604,14 @@ export async function loadStandingsPreview(
         .filter((m) => hypotheticalIdsInDivision.has(m.playerId))
         .map((m) => ({ playerId: m.playerId, displayName: m.player.displayName }));
       for (const hd of hypotheticalDrops) {
-        selectedDrops.push({ playerId: hd.playerId, displayName: hd.displayName, divisionId: d.id, divisionName: d.name, tierName: tier.name });
+        selectedDrops.push({ playerId: hd.playerId, displayName: hd.displayName, divisionId: d.id, divisionName: d.name, tierName: tier.name, tierPosition: tier.position });
       }
 
       divisions.push({
         id: d.id,
         name: d.name,
         tierName: tier.name,
+        tierPosition: tier.position,
         k: bestNCount.division.k,
         n: bestNCount.division.n,
         scheduled: bestNCount.division.scheduled,
@@ -640,7 +644,7 @@ export async function loadStandingsPreview(
     const otherActiveMembers = allDropCandidateMembers
       .filter((m) => m.divisionId === meta.id && m.status === "ACTIVE" && !candidateIds.has(m.playerId))
       .map((m) => ({ playerId: m.playerId, displayName: m.displayName }));
-    return { id: meta.id, name: meta.name, tierName: meta.tierName, candidates, otherActiveMembers };
+    return { id: meta.id, name: meta.name, tierName: meta.tierName, tierPosition: meta.tierPosition, candidates, otherActiveMembers };
   });
 
   const summary = {

@@ -80,16 +80,16 @@ export async function loadContinuityPlacement(roundId: string): Promise<Continui
   // the tier's last slot (e.g. an old Rare 6 → Owen Rare 5). This consolidates a
   // mismatched current structure into the clean ladder.
   const ladder = owenLadder(round.signups.length);
-  const owenDivs: { tierName: string; name: string }[] = [];
+  const owenDivs: { tierName: string; tierPosition: number; name: string }[] = [];
   const owenIndexByTierPos = new Map<string, number>();
   const owenTierCount = new Map<string, number>();
-  for (const t of ladder) {
+  ladder.forEach((t, tierIndex) => {
     owenTierCount.set(t.name, t.divisionCount);
     for (let g = 1; g <= t.divisionCount; g++) {
       owenIndexByTierPos.set(`${t.name}:${g}`, owenDivs.length);
-      owenDivs.push({ tierName: t.name, name: formatDivisionName(t.name, g, t.divisionCount) });
+      owenDivs.push({ tierName: t.name, tierPosition: tierIndex + 1, name: formatDivisionName(t.name, g, t.divisionCount) });
     }
-  }
+  });
   const owenIndexForActive = activeSeason.divisions.map((d) => {
     const cnt = owenTierCount.get(d.tier.name);
     if (cnt == null) return owenDivs.length - 1; // tier not on the ladder → bottom

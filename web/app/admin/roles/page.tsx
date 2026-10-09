@@ -7,6 +7,8 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { loadRoleAuditData, type SeasonRecordRow } from "@/lib/loaders/role-audit";
 import type { RoleAuditEntry, RoleExpectationKind, UnmappedRole } from "@/lib/role-audit-core";
 import { fixRole } from "./actions";
+import { RarityText } from "@/components/RarityText";
+import type { ReactNode } from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +65,7 @@ export default async function RoleAuditPage() {
                 <ul>
                   {data.unmatchedChampions.map((c, i) => (
                     <li key={i}>
-                      {c.seasonLabel} {c.divisionName}: <strong>{c.championName}</strong>
+                      {c.seasonLabel} <RarityText position={c.tierPosition}>{c.divisionName}</RarityText>: <strong>{c.championName}</strong>
                     </li>
                   ))}
                 </ul>
@@ -213,11 +215,16 @@ function EntryRow({
   );
 }
 
-function compactSeasons(row: SeasonRecordRow): string {
+function compactSeasons(row: SeasonRecordRow): ReactNode {
   if (row.memberships.length === 0) return "-";
-  return row.memberships
-    .map((m) => `S${m.seasonNumber} ${m.divisionName}${m.finish ? ` #${m.finish}` : ""}${m.champion ? " *" : ""}`)
-    .join(", ");
+  return row.memberships.map((m, i) => (
+    <span key={`${m.seasonNumber}-${m.divisionName}`}>
+      {i > 0 && ", "}
+      S{m.seasonNumber} <RarityText position={m.tierPosition}>{m.divisionName}</RarityText>
+      {m.finish ? ` #${m.finish}` : ""}
+      {m.champion ? " *" : ""}
+    </span>
+  ));
 }
 
 function titlesByTierText(titlesByTier: Record<string, number>): string {

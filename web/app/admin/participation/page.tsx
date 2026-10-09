@@ -6,6 +6,7 @@ import { Callout } from "@/components/Callout";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Button } from "@/components/ui/button";
 import { loadParticipation, type MemberStatus } from "@/lib/loaders/participation";
+import { RarityText } from "@/components/RarityText";
 import { banPlayerAction, addStrikeAction } from "@/app/admin/bans/actions";
 
 export const dynamic = "force-dynamic";
@@ -82,7 +83,7 @@ export default async function ParticipationPage({
                             </span>
                           )}
                         </td>
-                        <td className="muted" style={{ fontSize: 13 }}>{m.divisionName}</td>
+                        <td className="muted" style={{ fontSize: 13 }}><RarityText position={m.tierPosition}>{m.divisionName}</RarityText></td>
                         <td style={{ textAlign: "center", fontVariantNumeric: "tabular-nums" }}>
                           {m.played}/{m.total}
                         </td>

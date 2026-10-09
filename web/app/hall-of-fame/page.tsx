@@ -4,6 +4,7 @@ import Link from "next/link";
 import { SiteNav } from "@/components/SiteNav";
 import { loadHallOfFame, type HofMatch, type HofSeason, type HofDivisionChampion } from "@/lib/loaders/hall-of-fame";
 import { rarityIndex } from "@/lib/tier-colors";
+import { RarityText } from "@/components/RarityText";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,7 @@ export default async function HallOfFamePage() {
                           </Link>
                         </div>
                         <div className="muted" style={{ fontSize: 13 }}>
-                          Champion · {champ.divisionName} · <strong>{champ.record}</strong> (W-L-D) · {champ.points} pts
+                          Champion · <RarityText position={champ.tierPosition}>{champ.divisionName}</RarityText> · <strong>{champ.record}</strong> (W-L-D) · {champ.points} pts
                         </div>
                       </div>
                     </div>

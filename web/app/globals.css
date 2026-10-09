@@ -4,6 +4,7 @@
 @import "./v2/hall-of-fame.css";
 @import "./v2/profile.css";
 @import "./v2/division.css";
+@import "./v2/rarity-text.css";
 
 :root {
   --bg: #0f1115;

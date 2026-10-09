@@ -1,0 +1,14 @@
+/* v2 "Card Table" rarity-colored text -- wraps any plain-text tier/division
+   name (RarityText component) so it reads in its tier's rarity color
+   everywhere on the site, matching the existing data-rarity convention on
+   .pill, .division-name, and .tier-heading in globals.css. design-system/
+   MASTER.md is the spec. Under v1 (no html[data-ui="v2"]) this span has no
+   rule at all, so v1 renders exactly as it did before. */
+html[data-ui="v2"] .rarity-text {
+  font-weight: 700;
+}
+
+html[data-ui="v2"] .rarity-text[data-rarity="0"] { color: var(--legendary); }
+html[data-ui="v2"] .rarity-text[data-rarity="1"] { color: var(--rare); }
+html[data-ui="v2"] .rarity-text[data-rarity="2"] { color: var(--uncommon); }
+html[data-ui="v2"] .rarity-text[data-rarity="3"] { color: var(--common); }

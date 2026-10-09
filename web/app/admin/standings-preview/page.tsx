@@ -27,6 +27,7 @@ import {
 import type { SeasonScoringMode, SeasonTiebreak } from "@/lib/standings-mode";
 import { loadShootoutCleanup, type ShootoutCleanupData } from "@/lib/loaders/shootout-cleanup";
 import type { ShootoutCleanupVerdict } from "@/lib/shootout-cleanup-core";
+import { RarityText } from "@/components/RarityText";
 
 const TIEBREAK_LABEL: Record<Tiebreak, string> = { chain: "Today's tiebreaks", lives: "Add net lives" };
 const SEASON_TIEBREAK_LABEL: Record<SeasonTiebreak, string> = { chain: "Today's tiebreaks", lives: "Break ties by net lives" };
@@ -297,7 +298,7 @@ function DivisionCard({
   return (
     <div className="card" style={{ marginTop: 12 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-        <strong style={{ fontSize: 15 }}>{d.tierName} - {d.name}</strong>
+        <strong style={{ fontSize: 15 }}><RarityText position={d.tierPosition}>{d.tierName} - {d.name}</RarityText></strong>
         <span className="pill" style={{ fontSize: 11 }}>
           counts best {d.n} of {d.scheduled} matches
         </span>
@@ -408,7 +409,7 @@ function DropPickerPanel({
             if (cd.candidates.length === 0 && cd.otherActiveMembers.length === 0) return null;
             return (
               <div key={cd.id} style={{ borderTop: "1px solid var(--border, rgba(255,255,255,0.08))", paddingTop: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 600 }}>{cd.tierName} - {cd.name}</div>
+                <div style={{ fontSize: 12, fontWeight: 600 }}><RarityText position={cd.tierPosition}>{cd.tierName} - {cd.name}</RarityText></div>
                 {cd.candidates.length === 0 ? (
                   <div className="muted" style={{ fontSize: 11 }}>No low-activity candidates.</div>
                 ) : (
@@ -471,7 +472,7 @@ function ApplyDropsForm({
   selectedDrops,
 }: {
   selectedSeasonId: string;
-  selectedDrops: { playerId: string; displayName: string; divisionId: string; divisionName: string; tierName: string }[];
+  selectedDrops: { playerId: string; displayName: string; divisionId: string; divisionName: string; tierName: string; tierPosition: number }[];
 }) {
   if (selectedDrops.length === 0) return null;
   const n = selectedDrops.length;
@@ -490,7 +491,7 @@ function ApplyDropsForm({
         <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12 }}>
           {selectedDrops.map((d) => (
             <li key={d.playerId}>
-              {d.displayName} -- {d.tierName} / {d.divisionName}
+              {d.displayName} -- <RarityText position={d.tierPosition}>{d.tierName} / {d.divisionName}</RarityText>
             </li>
           ))}
         </ul>
@@ -608,7 +609,7 @@ function ShootoutCleanupSection({
       {data.divisions.map((d) => (
         <div key={d.id}>
           <div style={{ fontSize: 12, fontWeight: 600, marginTop: 8 }}>
-            {d.tierName} - {d.name}
+            <RarityText position={d.tierPosition}>{d.tierName} - {d.name}</RarityText>
           </div>
           <div className="table-scroll">
             <table className="table-dense" style={{ margin: 0 }}>

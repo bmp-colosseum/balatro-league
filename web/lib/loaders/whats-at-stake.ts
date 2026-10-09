@@ -16,6 +16,7 @@ export interface DivisionStake {
   divisionId: string;
   divisionName: string;
   tierName: string;
+  tierPosition: number;
   locked: boolean;
   picture: PlayoffPicture;
 }
@@ -95,7 +96,7 @@ export async function loadWhatsAtStake(): Promise<WhatsAtStakeResult | "NO_SEASO
       promote: mv.promote,
       relegate: mv.relegate,
     });
-    return { divisionId: d.id, divisionName: d.name, tierName: d.tier.name, locked, picture };
+    return { divisionId: d.id, divisionName: d.name, tierName: d.tier.name, tierPosition: d.tier.position, locked, picture };
   });
 
   return { seasonLabel: formatSeasonLabel(season), divisions };

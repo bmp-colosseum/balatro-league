@@ -8,6 +8,7 @@ import { AdminNav } from "@/components/AdminNav";
 import { endSeason } from "../../actions";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Callout } from "@/components/Callout";
+import { RarityText } from "@/components/RarityText";
 
 export const dynamic = "force-dynamic";
 
@@ -57,8 +58,8 @@ export default async function EndSeasonPreviewPage({
         {divisions.map((d) => (
           <div key={d.divisionId} className="card">
             <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-              <strong>{d.divisionName}</strong>
-              <span className="muted" style={{ fontSize: 12 }}>(tier {d.tierPosition} — {d.tierName})</span>
+              <strong><RarityText position={d.tierPosition}>{d.divisionName}</RarityText></strong>
+              <span className="muted" style={{ fontSize: 12 }}>(tier {d.tierPosition} — <RarityText position={d.tierPosition}>{d.tierName}</RarityText>)</span>
             </div>
             <table style={{ marginTop: 8 }}>
               <thead>

@@ -17,6 +17,7 @@ import { DatePickerField } from "@/components/DatePickerField";
 import { SeasonWindow } from "@/components/SeasonWindow";
 import { SeasonDeckPresetPicker } from "@/components/SeasonDeckPresetPicker";
 import { tierColors } from "@/lib/tier-colors";
+import { RarityText } from "@/components/RarityText";
 import { DivisionStandingsTable, type StandingsRowExtras } from "@/components/DivisionStandingsTable";
 import { loadMmrForPlayerIds } from "@/lib/loaders/standings";
 import { getShowBmpMmr } from "@/lib/preferences";
@@ -185,7 +186,7 @@ async function PublicSummary({
       {season.tiers.filter((t) => t.divisions.length > 0).map((tier) => (
         <section key={tier.id} style={{ marginTop: 24 }}>
           <h3 style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <span>{tier.name}</span>
+            <RarityText position={tier.position}>{tier.name}</RarityText>
             {isAdmin && (
               <Link href="/admin/divisions" className="muted" style={{ fontSize: 11, fontWeight: 400 }}>
                 ↑↓ Set promote/relegate per division →
@@ -201,7 +202,7 @@ async function PublicSummary({
               return (
                 <div key={div.id} className="card">
                   <strong className="pixel" style={{ fontSize: 18 }}>
-                    <Link href={`/divisions/${div.id}`} style={{ textDecoration: "none" }}>{div.name}</Link>
+                    <Link href={`/divisions/${div.id}`} style={{ textDecoration: "none" }}><RarityText position={tier.position}>{div.name}</RarityText></Link>
                   </strong>
                   <DivisionStandingsTable
                     rows={div.rows}

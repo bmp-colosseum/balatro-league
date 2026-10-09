@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/admin";
 import { loadAdminDivisionsIndex } from "@/lib/loaders/admin";
-import { tierColors } from "@/lib/tier-colors";
+import { tierColors, rarityIndex } from "@/lib/tier-colors";
+import { RarityText } from "@/components/RarityText";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
@@ -99,7 +100,7 @@ export default async function AdminDivisionsPage({
                 return (
                   <section key={tier.id} style={{ marginTop: 24 }}>
                     <h3>
-                      <span className="pill" style={{ background: color.bg, color: color.fg, marginRight: 8 }}>
+                      <span className="pill" data-rarity={rarityIndex(tier.position)} style={{ background: color.bg, color: color.fg, marginRight: 8 }}>
                         {tier.name}
                       </span>
                       <span className="muted" style={{ fontSize: 14, fontWeight: "normal" }}>
@@ -125,7 +126,7 @@ export default async function AdminDivisionsPage({
                                 textDecoration: "none",
                               }}
                             >
-                              <strong>{d.name}</strong>
+                              <strong><RarityText position={tier.position}>{d.name}</RarityText></strong>
                               <div className="muted" style={{ marginTop: 8 }}>
                                 {d.memberCount} player{d.memberCount === 1 ? "" : "s"} · {d.confirmedPairingCount}/{d.expectedPairingCount} matches
                               </div>

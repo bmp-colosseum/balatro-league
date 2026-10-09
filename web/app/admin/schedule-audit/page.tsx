@@ -4,6 +4,7 @@ import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { Callout } from "@/components/Callout";
 import { loadScheduleAudit } from "@/lib/loaders/schedule-audit";
+import { RarityText } from "@/components/RarityText";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ export default async function ScheduleAuditPage() {
                     {audit.unfinished.map((m) => (
                       <tr key={m.sessionId}>
                         <td className="muted" style={{ whiteSpace: "nowrap", fontSize: 12 }}>{m.updatedAt.toISOString().slice(0, 10)}</td>
-                        <td>{m.divisionName}</td>
+                        <td><RarityText position={m.tierPosition}>{m.divisionName}</RarityText></td>
                         <td>
                           {m.playerA} <span className="muted">vs</span> {m.playerB}
                           {m.resultRecorded && (
@@ -102,7 +103,7 @@ export default async function ScheduleAuditPage() {
                   <tbody>
                     {audit.brokenScores.map((m) => (
                       <tr key={m.matchId}>
-                        <td>{m.divisionName}</td>
+                        <td><RarityText position={m.tierPosition}>{m.divisionName}</RarityText></td>
                         <td>
                           {m.playerA} <span className="muted">vs</span> {m.playerB}
                         </td>
@@ -163,7 +164,7 @@ export default async function ScheduleAuditPage() {
                       <td className="muted" style={{ whiteSpace: "nowrap", fontSize: 12 }}>
                         {m.createdAt.toISOString().slice(0, 10)}
                       </td>
-                      <td>{m.divisionName}</td>
+                      <td><RarityText position={m.tierPosition}>{m.divisionName}</RarityText></td>
                       <td>
                         <Link href={`/profile/${m.playerAId}`} style={{ color: "var(--text)" }}>{m.playerA}</Link>
                         <span className="muted"> vs </span>

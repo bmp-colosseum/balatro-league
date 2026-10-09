@@ -7,6 +7,7 @@ import { loadLiveMmrEnabled, loadMmrSeasons, loadMmrStatus, loadMmrChanges } fro
 import { previewSeasonMmr, type MmrSeedSource } from "@/lib/mmr-recompute";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { MmrLadder, type MmrLadderRow } from "@/components/MmrLadder";
+import { RarityText } from "@/components/RarityText";
 import { applyMmrLadder, applySeasonMmrApply, fillMissingMmr, markMatchesSettled, setLiveMmr, saveMmrs, unsettleSeasonGames } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -285,7 +286,7 @@ export default async function MmrAdminPage({
                     return (
                       <tr key={c.matchId}>
                         <td className="muted" style={{ whiteSpace: "nowrap" }}>{c.confirmedAt ? c.confirmedAt.toISOString().slice(0, 10) : "—"}</td>
-                        <td className="muted">{c.divisionName}</td>
+                        <td className="muted"><RarityText position={c.tierPosition}>{c.divisionName}</RarityText></td>
                         <td style={{ fontSize: 13 }}>
                           {cell(c.aName, c.beforeA, c.afterA, dA)}
                           <span className="muted"> · </span>

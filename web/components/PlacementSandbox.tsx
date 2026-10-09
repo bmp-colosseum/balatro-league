@@ -10,6 +10,7 @@
 import { useMemo, useState } from "react";
 import { planByRating, type TierConfig } from "@/lib/season-plan";
 import { generateSchedule, summariseSchedule } from "@/lib/schedule";
+import { RarityText } from "@/components/RarityText";
 
 export interface SandboxPlayer {
   discordId: string;
@@ -173,7 +174,7 @@ export function PlacementSandbox({
       {projection.tiersOut.map((tier) => (
         <div key={tier.position}>
           <h3 style={{ margin: "4px 0 8px", display: "flex", alignItems: "baseline", gap: 10 }}>
-            {tier.name}
+            <RarityText position={tier.position}>{tier.name}</RarityText>
             <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>
               {tier.size} player{tier.size === 1 ? "" : "s"} · {tier.divisions.length} division{tier.divisions.length === 1 ? "" : "s"}
             </span>
@@ -182,7 +183,7 @@ export function PlacementSandbox({
             {tier.divisions.map((div) => (
               <div key={div.name} className="card" style={{ margin: 0 }}>
                 <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>
-                  {div.name}{" "}
+                  <RarityText position={tier.position}>{div.name}</RarityText>{" "}
                   <span className="muted" style={{ fontWeight: 400 }}>
                     — {div.size} players · {Math.max(0, Math.min(4, div.size - 1))} games each
                   </span>

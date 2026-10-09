@@ -29,6 +29,7 @@ import {
 export interface UnmatchedChampion {
   seasonLabel: string;
   divisionName: string;
+  tierPosition: number;
   championName: string;
 }
 
@@ -186,7 +187,7 @@ export async function loadRoleAuditData(): Promise<RoleAuditPageData> {
 
       const role = matchChampionRole(discordRoles, s.number, seasonLabel, d.name);
       if (!role) {
-        unmatchedChampions.push({ seasonLabel, divisionName: d.name, championName: champ.displayName });
+        unmatchedChampions.push({ seasonLabel, divisionName: d.name, tierPosition: d.tier.position, championName: champ.displayName });
         continue;
       }
       expectations.push({

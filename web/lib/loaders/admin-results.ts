@@ -8,6 +8,7 @@ export interface ResultsDivisionOption {
   id: string;
   name: string;
   tierName: string;
+  tierPosition: number;
 }
 export interface ResultsMember {
   playerId: string;
@@ -60,7 +61,7 @@ export async function loadResultsPage(opts: { divisionId?: string; playerId?: st
     select: { id: true, name: true, tier: { select: { name: true, position: true } } },
     orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
   });
-  const divisions: ResultsDivisionOption[] = divisionsRaw.map((d) => ({ id: d.id, name: d.name, tierName: d.tier.name }));
+  const divisions: ResultsDivisionOption[] = divisionsRaw.map((d) => ({ id: d.id, name: d.name, tierName: d.tier.name, tierPosition: d.tier.position }));
 
   // Resolve a searched player to their active-season division.
   let divisionId = opts.divisionId;

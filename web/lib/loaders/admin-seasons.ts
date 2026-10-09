@@ -183,6 +183,7 @@ export interface BuildSeasonPriorInfo {
   totalMembers: number;
   divisionName: string;
   tierName: string;
+  tierPosition: number;
   seasonName: string;
   seasonStartedAt: Date;
   // Snapshot of Player.rating at the moment that prior season ended.
@@ -369,6 +370,7 @@ export async function loadBuildSeasonPage(roundId: string): Promise<BuildSeasonR
       totalMembers: div.members.length,
       divisionName: div.name,
       tierName: div.tier.name,
+      tierPosition: div.tier.position,
       seasonName: formatSeasonLabel(div.season),
       seasonStartedAt: div.season.startedAt,
       finalGlobalRank: m.finalGlobalRank,

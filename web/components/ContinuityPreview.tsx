@@ -16,6 +16,7 @@ import { generateSchedule, scheduleDegree, summariseSchedule } from "@/lib/sched
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { CopyId } from "@/components/CopyId";
 import type { ContinuityDivision } from "@/lib/loaders/continuity";
+import { RarityText } from "@/components/RarityText";
 
 export function ContinuityPreview({
   divisions,
@@ -62,7 +63,7 @@ export function ContinuityPreview({
         schedule = { opponents: r.opponents, sos: r.sos, summary: summariseSchedule(r, sp, degree) };
       }
       const nameOf = new Map(members.map((m) => [m.discordId, m.displayName]));
-      return { name: d.name, divIdx, members, backCount, newCount, avgMmr, isRoundRobin, schedule, nameOf };
+      return { name: d.name, tierPosition: d.tierPosition, divIdx, members, backCount, newCount, avgMmr, isRoundRobin, schedule, nameOf };
     });
   }, [divisions, showSchedules, defaultOpponentsPerPlayer]);
 
@@ -99,7 +100,7 @@ export function ContinuityPreview({
       {view.map((d) => (
         <div key={d.name} className="card" style={{ margin: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>
-            {d.name}{" "}
+            <RarityText position={d.tierPosition}>{d.name}</RarityText>{" "}
             <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>
               — {d.members.length} players ({d.backCount} back · {d.newCount} new) · avg MMR {d.avgMmr}
               {d.isRoundRobin ? " · round-robin" : ""}

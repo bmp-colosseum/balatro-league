@@ -32,6 +32,7 @@ export interface PlacementMember {
 }
 export interface PlacementDivision {
   tierName: string;
+  tierPosition: number;
   name: string;
   members: PlacementMember[];
 }
@@ -135,7 +136,7 @@ export function divisionMovement(
 }
 
 export function buildOwenPlacement(
-  divisions: { tierName: string; name: string }[],
+  divisions: { tierName: string; tierPosition: number; name: string }[],
   returners: ReturnerInput[],
   rookies: RookieInput[],
   targetSize: number,
@@ -143,7 +144,7 @@ export function buildOwenPlacement(
 ): PlacementDivision[] {
   const { topTarget, tightenTopTiers = true, swapThreshold = 8, baseSwap = 1, bigSwap = 2 } = opts;
   const n = divisions.length;
-  const divs: PlacementDivision[] = divisions.map((d) => ({ tierName: d.tierName, name: d.name, members: [] }));
+  const divs: PlacementDivision[] = divisions.map((d) => ({ tierName: d.tierName, tierPosition: d.tierPosition, name: d.name, members: [] }));
 
   // 1. Returners start in their finish division, then promotion/relegation keyed
   //    to ACTUAL finish position (Owen's rule):

@@ -4,13 +4,13 @@ import { buildOwenPlacement, divisionMovement, type ReturnerInput, type RookieIn
 // Deep ladder so we can exercise the top (custom) boundaries AND the count-based
 // ones below Rare 3.
 const DIVS = [
-  { tierName: "Legendary", name: "Legendary" }, // 0
-  { tierName: "Rare", name: "Rare 1" }, // 1
-  { tierName: "Rare", name: "Rare 2" }, // 2
-  { tierName: "Rare", name: "Rare 3" }, // 3
-  { tierName: "Rare", name: "Rare 4" }, // 4
-  { tierName: "Uncommon", name: "Uncommon 1" }, // 5
-  { tierName: "Uncommon", name: "Uncommon 2" }, // 6
+  { tierName: "Legendary", tierPosition: 1, name: "Legendary" }, // 0
+  { tierName: "Rare", tierPosition: 2, name: "Rare 1" }, // 1
+  { tierName: "Rare", tierPosition: 2, name: "Rare 2" }, // 2
+  { tierName: "Rare", tierPosition: 2, name: "Rare 3" }, // 3
+  { tierName: "Rare", tierPosition: 2, name: "Rare 4" }, // 4
+  { tierName: "Uncommon", tierPosition: 3, name: "Uncommon 1" }, // 5
+  { tierName: "Uncommon", tierPosition: 3, name: "Uncommon 2" }, // 6
 ];
 
 // divSize = the size of the player's REAL division last season. Movement is keyed

@@ -27,6 +27,8 @@ import { PlayerSearch, type PlayerOption } from "@/components/PlayerSearch";
 import { addDivisionToTier } from "@/app/admin/seasons/actions";
 import { Button } from "@/components/ui/button";
 import { CopyId } from "@/components/CopyId";
+import { rarityIndex } from "@/lib/tier-colors";
+import { RarityText } from "@/components/RarityText";
 
 export interface EditorMember {
   id: string;
@@ -421,7 +423,7 @@ export function DraggableDivisionsEditor({
         return (
           <div key={tier.id} style={{ marginTop: 12 }}>
             <h4 style={{ margin: "8px 0 4px", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span className="pill" style={{ background: tier.color.bg, color: tier.color.fg }}>{tier.name}</span>
+              <span className="pill" data-rarity={rarityIndex(tier.position)} style={{ background: tier.color.bg, color: tier.color.fg }}>{tier.name}</span>
               <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>
                 {tierMemberCount} player{tierMemberCount === 1 ? "" : "s"} across {tierDivs.length} division{tierDivs.length === 1 ? "" : "s"}
                 {tierDivs.length > 0 && ` · ~${avgPerDiv.toFixed(1)}/div (target 5–6, capacity ${target})`}
@@ -465,7 +467,7 @@ export function DraggableDivisionsEditor({
                   >
                     <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                       <strong>
-                        <Link href={`/divisions/${d.id}`} style={{ textDecoration: "none" }}>{d.name}</Link>
+                        <Link href={`/divisions/${d.id}`} style={{ textDecoration: "none" }}><RarityText position={tier.position}>{d.name}</RarityText></Link>
                       </strong>
                       <span className="muted" style={{ fontSize: 11, marginLeft: "auto" }}>
                         {divMembers.length} member{divMembers.length === 1 ? "" : "s"}
