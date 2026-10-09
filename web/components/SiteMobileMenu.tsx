@@ -94,7 +94,7 @@ export function SiteMobileMenu({
           <input type="hidden" name="returnTo" value={activePath || "/"} />
           <MenuItem className={rowClass} nativeButton render={<button type="submit" />}>
             <span className="text-sm">{showingBmpMmr ? "[x]" : "[ ]"}</span>
-            <span>Show BMP MMR</span>
+            <span>Show balatromp.com rating</span>
           </MenuItem>
         </form>
         {inGuild && (

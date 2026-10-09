@@ -11,13 +11,19 @@ export interface NavLink {
 
 // Public primary nav — shown to everyone. (Join / My profile / Admin are
 // appended conditionally by SiteNav; they aren't part of the always-on set.)
+// "Players" is a sign-in wall for a logged-out visitor (the page itself
+// redirects to /auth/signin), so SiteNav drops it from the rendered nav for
+// that audience -- it stays in this shared list since the command palette
+// still offers it to everyone (clicking it bounces the same way the page
+// always has). "Traits" isn't here at all: it's a cosmetic-badges page, not
+// a primary-nav destination -- it's linked from the profile's Traits card
+// instead (see ProfileView.tsx).
 export const PRIMARY_LINKS: NavLink[] = [
   { href: "/standings", label: "Standings" },
   { href: "/players", label: "Players" },
   { href: "/stats", label: "Stats" },
   { href: "/hall-of-fame", label: "Hall of Fame" },
   { href: "/seasons", label: "Seasons" },
-  { href: "/traits", label: "Traits" },
 ];
 
 export interface AdminNavLink extends NavLink {

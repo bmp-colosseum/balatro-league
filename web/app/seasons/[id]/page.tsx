@@ -573,7 +573,7 @@ async function AdminSeasonPanel({
           <Button type="submit" variant="secondary" size="sm">Save</Button>
           <Link href="/admin/settings" className="muted" style={{ fontSize: 11 }}>Manage templates →</Link>
         </form>
-        <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <div id="end-date" style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <span className="muted" style={{ fontSize: 12 }}>Planned end date</span>
           <form action={setSeasonScheduledEnd} style={{ display: "flex", gap: 6, alignItems: "center" }}>
             <input type="hidden" name="id" value={season.id} />

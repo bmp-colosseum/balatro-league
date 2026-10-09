@@ -35,10 +35,18 @@ export async function SiteNav({ activePath }: { activePath: string }) {
   // @username display is members-only — only offer the toggle to verified members.
   const inGuild = (session?.user as { inGuild?: boolean } | undefined)?.inGuild === true;
 
-  // Only surface "Join" when there's actually an open signup round.
   const signupsOpen = !!(await loadOpenSignupRoundId());
-  const primary: { href: string; label: string }[] = [...PRIMARY_LINKS];
-  if (signupsOpen) primary.push({ href: "/join", label: "Join" });
+  // "Players" requires login (the page itself redirects to sign-in) -- a
+  // logged-out visitor tapping it would only hit that wall, so drop it from
+  // their nav entirely.
+  const primary: { href: string; label: string }[] = isLoggedIn
+    ? [...PRIMARY_LINKS]
+    : PRIMARY_LINKS.filter((link) => link.href !== "/players");
+  // A logged-out visitor always gets a route to Join -- between seasons it's
+  // exactly the page that offers "notify me when next season opens". A
+  // logged-in visitor already has "My profile", so Join only earns a slot
+  // for them while a round is actually open.
+  if (!isLoggedIn || signupsOpen) primary.push({ href: "/join", label: "Join" });
   if (isLoggedIn) primary.push({ href: "/me", label: "My profile" });
   if (isAdmin) primary.push({ href: "/admin", label: "Admin" });
 
@@ -122,7 +130,7 @@ export async function SiteNav({ activePath }: { activePath: string }) {
                 className="w-full justify-start gap-2 px-1 text-[13px] text-foreground"
               >
                 <span className="text-sm">{showingBmpMmr ? "☑" : "☐"}</span>
-                <span>Show BMP MMR</span>
+                <span>Show balatromp.com rating</span>
               </Button>
             </form>
             {inGuild && (

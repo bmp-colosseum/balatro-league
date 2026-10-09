@@ -416,7 +416,10 @@ export async function ProfileView({
         {/* Fun traits derived from ban/pick behaviour — flavour only. */}
         {traits.length > 0 && (
           <div className="card" style={{ marginTop: 12 }}>
-            <strong style={{ fontSize: 13 }}>🎭 Traits</strong>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+              <strong style={{ fontSize: 13 }}>🎭 Traits</strong>
+              <Link href="/traits" className="muted" style={{ fontSize: 12 }}>All traits</Link>
+            </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
               {traits.map((tr) => (
                 <span

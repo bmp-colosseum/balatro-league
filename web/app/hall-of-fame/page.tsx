@@ -56,7 +56,7 @@ export default async function HallOfFamePage() {
                       <span style={{ fontSize: 32 }}>🏆</span>
                       <div>
                         <div style={{ fontSize: 20, fontWeight: 700 }}>
-                          <Link href={`/profile/${champ.playerId}`} style={{ color: "var(--accent)", textDecoration: "none" }}>
+                          <Link href={`/profile/${champ.playerId}`} prefetch={false} style={{ color: "var(--accent)", textDecoration: "none" }}>
                             {champ.playerName}
                           </Link>
                         </div>
@@ -80,7 +80,7 @@ export default async function HallOfFamePage() {
                                 <span style={{ width: 18, fontWeight: 700, color: o.color }}>{o.tag}</span>
                                 <span style={{ width: 56, fontVariantNumeric: "tabular-nums" }}>{m.myGames}-{m.oppGames}</span>
                                 <span className="muted">vs</span>
-                                <Link href={`/profile/${m.opponentId}`} style={{ color: "var(--text)" }}>{m.opponentName}</Link>
+                                <Link href={`/profile/${m.opponentId}`} prefetch={false} style={{ color: "var(--text)" }}>{m.opponentName}</Link>
                               </div>
                             );
                           })}
@@ -166,7 +166,7 @@ function HallOfFameShelf({ season: s }: { season: HofSeason }) {
 function HallOfFameCard({ champion: champ }: { champion: HofDivisionChampion }) {
   const rarity = rarityIndex(champ.tierPosition);
   return (
-    <Link href={`/profile/${champ.playerId}`} className="hof-card" data-rarity={rarity}>
+    <Link href={`/profile/${champ.playerId}`} prefetch={false} className="hof-card" data-rarity={rarity}>
       <HofTrophyIcon />
       {champ.titleCount >= 2 && <span className="hof-card-sticker">x{champ.titleCount}</span>}
       <div className="pixel hof-card-division" data-rarity={rarity}>

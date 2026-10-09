@@ -30,6 +30,10 @@ interface Item {
 const PUBLIC_PAGES: Item[] = [
   ...PRIMARY_LINKS.map((l) => ({ label: l.label, href: l.href })),
   { label: "Join the league", href: "/join" },
+  // /how-to-play is still an admin-only WIP draft -- this points at the
+  // public "How it works" panel on /join instead so the entry resolves for
+  // everyone (see .claude/knowledge/ux-audit/01-findings.md, backlog #33).
+  { label: "How to play", href: "/join#how-it-works" },
 ];
 
 // Require a signed-in session (the pages themselves redirect otherwise).
@@ -39,11 +43,12 @@ const AUTHED_PAGES: Item[] = [
 ];
 
 // Mirror the admin nav (minus devOps-only links the palette can't gate without
-// extra context), plus the two WIP draft pages that live only here.
+// extra context), plus the one WIP draft page that lives only here ("How to
+// play" moved to PUBLIC_PAGES above, pointing at the public /join anchor
+// instead of this still-admin-only draft).
 const ADMIN_PAGES: Item[] = [
   ...ADMIN_LINKS.filter((l) => !l.devOpsOnly).map((l) => ({ label: l.label, href: l.href })),
   { label: "MP Changes (WIP)", href: "/changes" },
-  { label: "How to play (WIP)", href: "/how-to-play" },
 ];
 
 interface Ctx {

@@ -51,10 +51,10 @@ export default async function PublicDivisionPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ err?: string; ok?: string }>;
+  searchParams: Promise<{ err?: string; ok?: string; reportErr?: string; reportOk?: string }>;
 }) {
   const { id } = await params;
-  const { err, ok } = await searchParams;
+  const { err, ok, reportErr, reportOk } = await searchParams;
   // Friendly success message for the ?ok= redirect codes admin actions set.
   const okMessage = ((): string | null => {
     if (!ok) return null;
@@ -68,6 +68,18 @@ export default async function PublicDivisionPage({
       "tie-resolved": "Tie resolved.",
     };
     return known[ok] ?? "Done.";
+  })();
+  // Feedback for a PLAYER's own report (reportFromDivisionAction's ?reportOk=
+  // / ?reportErr= redirect codes) -- same Callout the admin actions above get,
+  // just keyed off separate query params so the two paths never collide.
+  // "not-logged-in" / "missing-fields" are the two synthetic codes the action
+  // sets itself; anything else is already a human-readable reason string from
+  // reportSetFromWeb (web/lib/report.ts), so it renders as-is.
+  const reportErrMessage = ((): string | null => {
+    if (!reportErr) return null;
+    if (reportErr === "not-logged-in") return "You need to be signed in to report a match.";
+    if (reportErr === "missing-fields") return "Pick an opponent and a result before submitting.";
+    return reportErr;
   })();
 
   const data = await loadDivisionPageData(id);
@@ -164,6 +176,16 @@ export default async function PublicDivisionPage({
         {isAdmin && okMessage && (
           <Callout type="success">
             {okMessage}
+          </Callout>
+        )}
+        {reportOk && (
+          <Callout type="success">
+            Recorded. Your opponent has been DMed to dispute if it&apos;s wrong.
+          </Callout>
+        )}
+        {reportErrMessage && (
+          <Callout type="danger">
+            {reportErrMessage}
           </Callout>
         )}
 

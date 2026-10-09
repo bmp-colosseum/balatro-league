@@ -195,7 +195,7 @@ export default async function JoinPage({
           </>
         )}
 
-        <div className="card muted" style={{ fontSize: 13 }}>
+        <div id="how-it-works" className="card muted" style={{ fontSize: 13 }}>
           <strong>How it works</strong>
           <ul style={{ marginTop: 6 }}>
             <li>Sign up and wait for the season to start.</li>

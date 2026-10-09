@@ -5,6 +5,8 @@
 import { requireOwnerOrDevops } from "@/lib/admin";
 import { DEFAULTS, parseFirstPickMode, type FirstPickMode } from "@/lib/league-settings";
 import { loadRulesTemplates } from "@/lib/loaders/admin-settings";
+import { getUiPreviewV2 } from "@/lib/preferences";
+import { enableUiPreviewAction, disableUiPreviewAction } from "@/app/admin/ui-preview-actions";
 import { AdminNav } from "@/components/AdminNav";
 import { Button } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -38,12 +40,31 @@ export default async function AdminSettingsPage({
   await requireOwnerOrDevops();
   const { ok, err } = await searchParams;
   const templates = await loadRulesTemplates();
+  const uiV2 = await getUiPreviewV2();
 
   return (
     <>
       <SiteNav activePath="" />
       <AdminNav activePath="/admin/settings" />
       <main>
+        {/* The "Card Table" look is the default for everyone. This toggle is a
+            per-browser opt-out so an admin can compare against the classic
+            look while any remaining pages are restyled (see
+            ../ui-preview-actions.ts). Moved here from the dashboard so it's
+            out of the weekly landing view (see .claude/knowledge/ux-audit/01-findings.md, backlog #35). */}
+        <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <strong style={{ marginRight: "auto" }}>Look: {uiV2 ? "new (default)" : "classic (this browser only)"}</strong>
+          {uiV2 ? (
+            <form action={disableUiPreviewAction}>
+              <button type="submit" className="secondary">Use classic look here</button>
+            </form>
+          ) : (
+            <form action={enableUiPreviewAction}>
+              <button type="submit">Back to new look</button>
+            </form>
+          )}
+        </div>
+
         <h2>Rules templates</h2>
         <p className="muted" style={{ fontSize: 12 }}>
           Each template holds the timeout values. The ★ default applies to any season that hasn't

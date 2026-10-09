@@ -66,7 +66,7 @@ export default async function TraitsGuidePage() {
                       {t.holders.map((h, i) => (
                         <span key={h.id}>
                           {i > 0 && ", "}
-                          <Link href={`/profile/${h.id}`}>{h.name}</Link>
+                          <Link href={`/profile/${h.id}`} prefetch={false}>{h.name}</Link>
                           <DiscordId value={h.discordId} username={h.username} />
                         </span>
                       ))}

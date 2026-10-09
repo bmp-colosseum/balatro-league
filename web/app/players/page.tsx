@@ -36,7 +36,7 @@ export default async function PlayersPage() {
                 players.map((p) => (
                   <tr key={p.id}>
                     <td className="card-header">
-                      <Link href={`/profile/${p.id}`} style={{ color: "var(--text)" }}>
+                      <Link href={`/profile/${p.id}`} prefetch={false} style={{ color: "var(--text)" }}>
                         {p.displayName}
                       </Link>
                       <DiscordId value={p.discordId} username={p.username} />
