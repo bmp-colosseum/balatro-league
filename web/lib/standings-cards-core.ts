@@ -102,8 +102,17 @@ export function groupTiebreakNotes(rows: readonly TiebreakNoteRow[]): TiebreakNo
     let j = i + 1;
     while (j < rows.length && rows[j]!.tiebreakNote && rows[j]!.points === rows[i]!.points) j++;
     const group = rows.slice(i, j);
-    const names = group.map((r) => r.player.displayName);
     const allHaveLives = group.every((r) => r.netLives !== undefined);
+    // Nothing to report when every tied player's net lives are 0 -- that's
+    // the all-zero signature of an early-season / no-matches-played group
+    // (see noMatchesYet in DivisionStandingsTable.tsx), where "tied on
+    // points -- total net lives decided it (0 / 0 / 0)" is just noise, not
+    // a real tiebreak. Skip the group entirely rather than emit it.
+    if (allHaveLives && group.every((r) => r.netLives === 0)) {
+      i = j;
+      continue;
+    }
+    const names = group.map((r) => r.player.displayName);
     const text = allHaveLives
       ? `${joinNames(names)} tied on points -- total net lives decided it (${group.map((r) => `${r.netLives}`).join(" / ")})`
       : `${joinNames(names)} tied on points`;

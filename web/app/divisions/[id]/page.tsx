@@ -226,6 +226,7 @@ export default async function PublicDivisionPage({
               showCountedBadge={!!scoringBadge}
               livesBreaksTies={livesBreaksTies}
               tierRarity={rarityIndex(division.tierPosition)}
+              noMatchesYet={division.confirmedPairingCount === 0}
             />
           </div>
         </div>
@@ -563,10 +564,15 @@ function VsBlock({ p, viewerPlayerId }: { p: Pairing; viewerPlayerId: string | n
         <Link href={`/profile/${p.a.id}`} className="vs-name">{p.a.displayName}</Link>
         <span className="vs-pixel pixel">vs</span>
         <Link href={`/profile/${p.b.id}`} className="vs-name">{p.b.displayName}</Link>
-        <div className="vs-status muted">
-          unplayed
-          {isYourMatch && <span className="vs-your-match-tag">your match</span>}
-        </div>
+        {/* "unplayed" told you nothing the "Still to play" section heading
+            didn't already say -- dropped. The gold tag is still worth
+            showing (it's the one thing this card can tell you that the
+            heading can't: that it's yours). */}
+        {isYourMatch && (
+          <div className="vs-status">
+            <span className="vs-your-match-tag">your match</span>
+          </div>
+        )}
       </div>
     );
   }

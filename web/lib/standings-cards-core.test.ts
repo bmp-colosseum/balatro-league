@@ -135,6 +135,42 @@ describe("groupTiebreakNotes", () => {
       { lastIndex: 2, text: "Ann and Lee tied on points" },
     ]);
   });
+
+  test("every tied player's net lives are 0 (nothing played yet) -> suppressed entirely", () => {
+    const rows = [
+      row("baconisbets", 0, "Tied on points with everyone; total net lives decided it (0 / 0 / 0 / 0 / 0)", 0),
+      row("ezhikgoobikov", 0, "Tied on points with everyone; total net lives decided it (0 / 0 / 0 / 0 / 0)", 0),
+      row("Jellyy", 0, "Tied on points with everyone; total net lives decided it (0 / 0 / 0 / 0 / 0)", 0),
+      row("Owen", 0, "Tied on points with everyone; total net lives decided it (0 / 0 / 0 / 0 / 0)", 0),
+      row("piton322", 0, "Tied on points with everyone; total net lives decided it (0 / 0 / 0 / 0 / 0)", 0),
+    ];
+    expect(groupTiebreakNotes(rows)).toEqual([]);
+  });
+
+  test("some net lives 0 but not all -> still reported (a real tie, not a no-matches artifact)", () => {
+    const rows = [
+      row("Ann", 6, "Tied on points with Lee; total net lives decided it (0 / -2)", 0),
+      row("Lee", 6, "Tied on points with Ann; total net lives decided it (0 / -2)", -2),
+    ];
+    expect(groupTiebreakNotes(rows)).toEqual([
+      { lastIndex: 1, text: "Ann and Lee tied on points -- total net lives decided it (0 / -2)" },
+    ]);
+  });
+
+  test("zero-lives group sitting between two normal groups -> only the zero one is dropped", () => {
+    const rows = [
+      row("Ann", 9, "Tied on points with Lee; total net lives decided it (3 / 1)", 3),
+      row("Lee", 9, "Tied on points with Ann; total net lives decided it (3 / 1)", 1),
+      row("Cara", 6, "Tied on points with Dev; total net lives decided it (0 / 0)", 0),
+      row("Dev", 6, "Tied on points with Cara; total net lives decided it (0 / 0)", 0),
+      row("Fin", 3, "Tied on points with Gus; total net lives decided it (-1 / -3)", -1),
+      row("Gus", 3, "Tied on points with Fin; total net lives decided it (-1 / -3)", -3),
+    ];
+    expect(groupTiebreakNotes(rows)).toEqual([
+      { lastIndex: 1, text: "Ann and Lee tied on points -- total net lives decided it (3 / 1)" },
+      { lastIndex: 5, text: "Fin and Gus tied on points -- total net lives decided it (-1 / -3)" },
+    ]);
+  });
 });
 
 describe("divisionSummaryLine", () => {

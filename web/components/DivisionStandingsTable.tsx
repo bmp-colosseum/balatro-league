@@ -515,10 +515,16 @@ export function DivisionStandingsTable({
                     {/* Rank badge -- the medal string is "N" normally or "#N"
                         for a tied row (rankLabel); the card shows the bare
                         number either way, so tied rows show the same number.
-                        Early season: a dot instead of a rank nobody's earned
-                        yet (see noMatchesYet above). */}
-                    <span className="player-card-rank" data-rarity={tierRarity}>
-                      {noMatchesYet ? "." : medal.replace(/^#/, "")}
+                        Early season: a faint dash instead of a rank nobody's
+                        earned yet (see noMatchesYet above) -- data-empty
+                        drops the rarity fill so it doesn't read as a real
+                        badge (see standings-cards.css). */}
+                    <span
+                      className="player-card-rank"
+                      data-rarity={noMatchesYet ? undefined : tierRarity}
+                      data-empty={noMatchesYet ? "1" : undefined}
+                    >
+                      {noMatchesYet ? "-" : medal.replace(/^#/, "")}
                     </span>
                     <CardAvatar displayName={r.player.displayName} avatarUrl={ex?.avatarUrl} />
                     <div className="player-card-name-block">
@@ -536,7 +542,11 @@ export function DivisionStandingsTable({
                       </div>
                     )}
                   </div>
-                  {footnote && <p className="tie-footnote-v2">{footnote}</p>}
+                  {/* Also gated on !noMatchesYet: a fallback "tied on
+                      points" footnote (no lives list to zero-check) can
+                      still fire with 0 matches played, which is just as
+                      meaningless this early. */}
+                  {!noMatchesYet && footnote && <p className="tie-footnote-v2">{footnote}</p>}
                 </Fragment>
               );
             })}

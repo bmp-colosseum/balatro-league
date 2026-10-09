@@ -90,6 +90,16 @@ html[data-ui="v2"] .player-card-rank[data-rarity="1"] { background: var(--rare);
 html[data-ui="v2"] .player-card-rank[data-rarity="2"] { background: var(--uncommon); color: #0b1b1a; }
 html[data-ui="v2"] .player-card-rank[data-rarity="3"] { background: var(--common); color: #0b1b1a; }
 
+/* Early season (0 matches played): a faint dash instead of a filled rarity
+   badge -- a rank nobody has earned yet shouldn't look like a real one
+   (see noMatchesYet in DivisionStandingsTable.tsx). */
+html[data-ui="v2"] .player-card-rank[data-empty="1"] {
+  background: transparent;
+  border: 2px solid var(--panel-edge);
+  color: var(--paper-faint);
+  font-weight: 400;
+}
+
 /* Avatar slot -- 40px circle, extras.avatarUrl image or the initials()
    fallback (CardAvatar never emits a broken <img>, so there's no onerror
    case to style here). */

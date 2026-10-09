@@ -209,7 +209,7 @@ export default async function StandingsPage() {
                   <strong>{totalPlayed}</strong> <span className="muted">/ {totalExpected}</span> matches played · <strong>{totalRemaining}</strong> remaining
                 </span>
                 <div style={{ flex: "1 1 120px", minWidth: 100, background: "var(--surface-2)", borderRadius: 99, height: 6, overflow: "hidden" }}>
-                  <div style={{ background: "var(--accent-2)", height: "100%", width: `${pctPlayed}%` }} />
+                  <div style={{ background: "var(--gold)", height: "100%", width: `${pctPlayed}%` }} />
                 </div>
                 <span className="muted" style={{ fontSize: 13, whiteSpace: "nowrap" }}>{pctPlayed}% complete</span>
               </div>
@@ -223,7 +223,7 @@ export default async function StandingsPage() {
                   <strong>{totalPlayed}</strong> of {totalExpected} played
                 </span>
                 <div style={{ flex: "1 1 120px", minWidth: 100, background: "var(--surface-2)", borderRadius: 99, height: 6, overflow: "hidden" }}>
-                  <div style={{ background: "var(--accent-2)", height: "100%", width: `${pctPlayed}%` }} />
+                  <div style={{ background: "var(--gold)", height: "100%", width: `${pctPlayed}%` }} />
                 </div>
               </div>
               <details style={{ marginTop: 8 }}>
