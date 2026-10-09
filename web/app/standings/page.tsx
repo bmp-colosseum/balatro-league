@@ -336,6 +336,7 @@ export default async function StandingsPage() {
                               <span>{activeCount} player{activeCount === 1 ? "" : "s"}</span>
                               {promoteN > 0 && <span>{promoteN} up</span>}
                               {relegateN > 0 && <span>{relegateN} down</span>}
+                              <span>{div.format === "round-robin" ? "round robin, play everyone" : "4 assigned opponents"}</span>
                             </div>
                           </div>
                           <DivisionStandingsTable

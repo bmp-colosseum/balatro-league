@@ -789,12 +789,14 @@ html[data-ui="v2"] .division-chip {
 html[data-ui="v2"] .pill.matches-chip {
   background: var(--panel-2) !important;
   color: var(--paper-faint) !important;
+  white-space: nowrap;
 }
 
 /* v1's meta line (player-count emoji, promote/relegate arrows, format text)
    swaps for the v2 wording ("N players" / "N up" / "N down") -- both always
    render, this just toggles which one shows, same pattern as the zone key. */
-html[data-ui="v2"] .meta-v1 { display: none; }
+/* !important: the v1 line carries an inline display:flex. */
+html[data-ui="v2"] .meta-v1 { display: none !important; }
 html[data-ui="v2"] .meta-v2 {
   display: flex;
   flex-wrap: wrap;
