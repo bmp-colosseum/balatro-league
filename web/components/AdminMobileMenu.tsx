@@ -49,7 +49,7 @@ function GroupRows({ group, unreadDms }: { group: AdminMobileNavGroup; unreadDms
             render={<Link href={link.href} />}
           >
             {link.label}
-            {link.href === "/admin/dms" && unreadDms > 0 && (
+            {link.href === "/admin/messages" && unreadDms > 0 && (
               <span
                 className="ml-1.5 inline-flex items-center justify-center rounded-full px-1.5 text-[10px] font-semibold leading-4 text-white"
                 style={{ background: "var(--danger)" }}

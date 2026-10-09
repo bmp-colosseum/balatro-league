@@ -139,7 +139,7 @@ export default async function SeasonToolsPage() {
           title="Resolve"
           guidance="Clear stuck pending and disputed matches as the season runs."
           chip={`unplayed: ${resolveQueue.totalUnfiltered}`}
-          links={[{ href: "/admin/resolve", label: "Resolve" }]}
+          links={[{ href: "/admin/matches?status=pending", label: "Matches" }]}
         />
         <Step
           n={6}

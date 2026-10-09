@@ -110,7 +110,7 @@ describe("checkOpenMatches", () => {
         divisionId: "div-1",
         divisionName: "Legendary",
         message: "Open match (PENDING) between Alice and Bob was never resolved",
-        href: "/admin/resolve",
+        href: "/admin/matches?status=pending",
       },
     ]);
   });

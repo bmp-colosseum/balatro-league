@@ -77,7 +77,7 @@ function GroupDropdown({
             }
           >
             {link.label}
-            {link.href === "/admin/dms" && <DmBadge count={unreadDms} />}
+            {link.href === "/admin/messages" && <DmBadge count={unreadDms} />}
           </Link>
         ))}
       </div>
@@ -127,7 +127,7 @@ export async function AdminNav({ activePath }: { activePath: string }) {
           ) : visible(link) ? (
             <Link key={link.href} href={link.href} className={linkClass(isActive(link))}>
               {link.label}
-              {link.href === "/admin/dms" && <DmBadge count={unreadDms} />}
+              {link.href === "/admin/messages" && <DmBadge count={unreadDms} />}
             </Link>
           ) : null,
         )}

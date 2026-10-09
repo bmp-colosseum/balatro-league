@@ -136,7 +136,7 @@ export function checkOpenMatches(division: SeasonAuditDivisionInput, ended: bool
       divisionId: division.divisionId,
       divisionName: division.name,
       message: `Open match (${m.status}) between ${displayNameOf(division, m.playerAId)} and ${displayNameOf(division, m.playerBId)} was never resolved`,
-      href: "/admin/resolve",
+      href: "/admin/matches?status=pending",
     });
   }
   return findings;
@@ -160,7 +160,7 @@ export function checkUnsettledCancels(division: SeasonAuditDivisionInput): Findi
       divisionId: division.divisionId,
       divisionName: division.name,
       message: `Cancelled match between ${displayNameOf(division, m.playerAId)} and ${displayNameOf(division, m.playerBId)} has no recorded admin reason`,
-      href: "/admin/resolve",
+      href: "/admin/matches?status=pending",
     });
   }
   return findings;

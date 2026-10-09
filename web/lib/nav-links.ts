@@ -52,26 +52,16 @@ export interface AdminNavLink extends NavLink {
 export const ADMIN_LINKS: AdminNavLink[] = [
   { href: "/admin", label: "Inbox", exact: true },
   {
-    href: "/admin/results",
+    href: "/admin/matches",
     label: "Matches",
     children: [
-      { href: "/admin/results", label: "Results" },
-      { href: "/admin/resolve", label: "Resolve" },
-      { href: "/admin/disputes", label: "Disputes" },
+      { href: "/admin/matches", label: "Matches" },
       { href: "/admin/schedule-audit", label: "Data Audit" },
       { href: "/admin/participation", label: "Participation" },
       { href: "/admin/whats-at-stake", label: "At Stake" },
     ],
   },
-  {
-    href: "/admin/dms",
-    label: "Messages",
-    children: [
-      { href: "/admin/dms", label: "DMs" },
-      { href: "/admin/message", label: "Message" },
-      { href: "/admin/transcripts", label: "Transcripts" },
-    ],
-  },
+  { href: "/admin/messages", label: "Messages" },
   { href: "/admin/season-tools", label: "Season tools" },
   {
     href: "/admin/settings",

@@ -33,14 +33,14 @@ export default async function AdminHome() {
               <div>
                 <strong>{stats.disputedPairings}</strong> disputed match{stats.disputedPairings === 1 ? "" : "es"}
                 {" -- "}
-                <a href="/admin/disputes">Review in Matches {"->"}</a>
+                <a href="/admin/matches?status=disputed">Review in Matches {"->"}</a>
               </div>
             )}
             {unreadDms > 0 && (
               <div>
                 <strong>{unreadDms}</strong> unread DM{unreadDms === 1 ? "" : "s"}
                 {" -- "}
-                <a href="/admin/dms">Open Messages {"->"}</a>
+                <a href="/admin/messages">Open Messages {"->"}</a>
               </div>
             )}
           </div>

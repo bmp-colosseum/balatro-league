@@ -27,7 +27,7 @@ test("public pages have no horizontal overflow at 375px", async ({ page }) => {
 
 test("admin pages have no horizontal overflow at 375px", async ({ page }) => {
   await page.request.post("/api/test-auth", { data: { discordId: "e2e-owner", name: "E2E Admin" } });
-  for (const p of ["/admin", "/admin/audit", "/admin/results", "/admin/seasons", "/admin/config"]) {
+  for (const p of ["/admin", "/admin/audit", "/admin/matches", "/admin/seasons", "/admin/config"]) {
     await expectNoHorizontalOverflow(page, p);
   }
 });
@@ -61,7 +61,7 @@ test("admin nav folds every link into one Admin menu trigger at 390px", async ({
   // and Ops are devOps-gated and not visible to a plain test-auth owner
   // without that binding.
   await expect(page.getByRole("menuitem", { name: "Inbox" })).toBeVisible();
-  await expect(page.getByRole("menuitem", { name: "Transcripts" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Messages" })).toBeVisible();
 });
 
 // Visible tap targets under the 44px floor (standings/players/stats tables,

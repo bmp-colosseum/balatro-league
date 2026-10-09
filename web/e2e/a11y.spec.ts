@@ -18,7 +18,7 @@ const PAGES = [
   "/", "/standings", "/players", "/stats", "/hall-of-fame", "/seasons",
   "/traits", "/join", "/how-to-play",
 ];
-const ADMIN_PAGES = ["/admin", "/admin/config", "/admin/results", "/admin/seasons"];
+const ADMIN_PAGES = ["/admin", "/admin/config", "/admin/matches", "/admin/seasons"];
 
 test("public pages have no color-contrast violations", async ({ page }) => {
   for (const path of PAGES) {
