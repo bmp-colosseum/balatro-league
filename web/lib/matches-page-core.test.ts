@@ -5,6 +5,8 @@ import {
   matchesStatusFilter,
   parseStatusFilter,
   parseOlderThanDays,
+  parsePlayerFilter,
+  matchesPlayerFilter,
   involvesDroppedPlayer,
   filterMatchRows,
   groupMatchRows,
@@ -12,6 +14,7 @@ import {
   type MatchPageRow,
   type MatchPageFilters,
   type MatchPageStatus,
+  type PlayerHandleInfo,
   type PlayerStanding,
   type Suggestion,
   type SeasonOption,
@@ -92,6 +95,53 @@ describe("parseStatusFilter / parseOlderThanDays", () => {
     { raw: "7.9", expected: 7 },
   ])("parseOlderThanDays($raw) -> $expected", ({ raw, expected }) => {
     expect(parseOlderThanDays(raw)).toBe(expected);
+  });
+});
+
+describe("parsePlayerFilter", () => {
+  it.each<{ raw: string | undefined; expected: string | undefined }>([
+    { raw: undefined, expected: undefined },
+    { raw: "", expected: undefined },
+    { raw: "   ", expected: undefined },
+    { raw: "Alice", expected: "Alice" },
+    { raw: "  Alice  ", expected: "Alice" },
+  ])("parsePlayerFilter($raw) -> $expected", ({ raw, expected }) => {
+    expect(parsePlayerFilter(raw)).toBe(expected);
+  });
+});
+
+describe("matchesPlayerFilter", () => {
+  const handles = new Map<string, PlayerHandleInfo>([
+    ["p1", { discordId: "111", username: "alice_handle" }],
+    ["p2", { discordId: "222", username: null }],
+  ]);
+  const testRow = row({
+    playerA: standing({ playerId: "p1", displayName: "Alice" }),
+    playerB: standing({ playerId: "p2", displayName: "Bob" }),
+  });
+
+  it.each<{ name: string; query: string | undefined; expected: boolean }>([
+    { name: "undefined query -- no filter, matches", query: undefined, expected: true },
+    { name: "empty query -- no filter, matches", query: "", expected: true },
+    { name: "matches player A's name", query: "ali", expected: true },
+    { name: "matches player A's name, case-insensitive", query: "ALICE", expected: true },
+    { name: "matches player B's name", query: "bob", expected: true },
+    { name: "matches player A's handle", query: "handle", expected: true },
+    { name: "matches player A's handle, case-insensitive", query: "ALICE_HANDLE", expected: true },
+    { name: "no match on name or handle", query: "charlie", expected: false },
+    { name: "player with no username -- name still matches", query: "bob", expected: true },
+  ])("$name", ({ query, expected }) => {
+    expect(matchesPlayerFilter(testRow, handles, query)).toBe(expected);
+  });
+
+  it("unknown playerId (no handle entry) still matches on name", () => {
+    const noHandles = new Map<string, PlayerHandleInfo>();
+    expect(matchesPlayerFilter(testRow, noHandles, "alice")).toBe(true);
+  });
+
+  it("unknown playerId with a non-matching query misses", () => {
+    const noHandles = new Map<string, PlayerHandleInfo>();
+    expect(matchesPlayerFilter(testRow, noHandles, "handle")).toBe(false);
   });
 });
 
@@ -191,6 +241,37 @@ describe("filterMatchRows -- table scenarios", () => {
         expect(ids(shuffled)).toEqual(ids(rows));
       }),
     );
+  });
+});
+
+describe("filterMatchRows -- player text filter", () => {
+  const handleRows = [
+    row({
+      matchId: "alice-vs-bob",
+      playerA: standing({ playerId: "p1", displayName: "Alice" }),
+      playerB: standing({ playerId: "p2", displayName: "Bob" }),
+    }),
+    row({
+      matchId: "charlie-vs-dana",
+      playerA: standing({ playerId: "p3", displayName: "Charlie" }),
+      playerB: standing({ playerId: "p4", displayName: "Dana" }),
+    }),
+  ];
+  const handles = new Map<string, PlayerHandleInfo>([
+    ["p1", { discordId: "111", username: "al_handle" }],
+    ["p4", { discordId: "444", username: null }],
+  ]);
+  const baseFilters: MatchPageFilters = { status: "all", droppedOnly: false };
+
+  it.each<{ name: string; player: string | undefined; expectedIds: string[] }>([
+    { name: "no player filter -- everything", player: undefined, expectedIds: ["alice-vs-bob", "charlie-vs-dana"] },
+    { name: "matches by name", player: "dana", expectedIds: ["charlie-vs-dana"] },
+    { name: "matches by handle", player: "al_handle", expectedIds: ["alice-vs-bob"] },
+    { name: "case-insensitive", player: "CHARLIE", expectedIds: ["charlie-vs-dana"] },
+    { name: "no match", player: "zzz", expectedIds: [] },
+  ])("$name", ({ player, expectedIds }) => {
+    const result = filterMatchRows(handleRows, { ...baseFilters, player }, handles).map((r) => r.matchId);
+    expect(result).toEqual(expectedIds);
   });
 });
 

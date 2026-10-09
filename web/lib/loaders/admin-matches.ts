@@ -29,6 +29,7 @@ import {
   toPageStatus,
   type MatchPageDispute,
   type MatchPageRow,
+  type PlayerHandleInfo,
 } from "@/lib/matches-page-core";
 
 export interface AdminMatchesDivisionOption {
@@ -62,6 +63,11 @@ export interface AdminMatchesPageData {
   // Every member, by division -- the single-match panel + shootout picker
   // need the roster for whichever division a row/action is scoped to.
   membersByDivision: Map<string, AdminMatchesMember[]>;
+  // Discord handle info (id + @username) by playerId, for every member of
+  // every division this season -- feeds both the name chips and the
+  // ?player= text search without widening PlayerStanding (shared with
+  // lib/bulk-resolve-core.ts).
+  handlesByPlayerId: Map<string, PlayerHandleInfo>;
   rows: MatchPageRow[];
 }
 
@@ -90,6 +96,7 @@ export async function loadAdminMatchesPage(requestedSeasonId: string | undefined
       seasons,
       divisions: [],
       membersByDivision: new Map(),
+      handlesByPlayerId: new Map(),
       rows: [],
     };
   }
@@ -149,6 +156,10 @@ export async function loadAdminMatchesPage(requestedSeasonId: string | undefined
   }));
 
   const membersByDivision = new Map<string, AdminMatchesMember[]>();
+  // Every member regardless of status (not just ACTIVE) -- a dropped player's
+  // handle still needs to show up on their past matches and still needs to
+  // be searchable.
+  const handlesByPlayerId = new Map<string, PlayerHandleInfo>();
   for (const d of divisionsRaw) {
     membersByDivision.set(
       d.id,
@@ -156,6 +167,9 @@ export async function loadAdminMatchesPage(requestedSeasonId: string | undefined
         .filter((m) => m.status === "ACTIVE")
         .map((m) => ({ playerId: m.playerId, displayName: m.player.displayName, discordId: m.player.discordId, username: m.player.username })),
     );
+    for (const m of d.members) {
+      handlesByPlayerId.set(m.playerId, { discordId: m.player.discordId, username: m.player.username });
+    }
   }
 
   const now = new Date();
@@ -232,6 +246,7 @@ export async function loadAdminMatchesPage(requestedSeasonId: string | undefined
     seasons,
     divisions,
     membersByDivision,
+    handlesByPlayerId,
     rows,
   };
 }

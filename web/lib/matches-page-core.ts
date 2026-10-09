@@ -134,20 +134,66 @@ export interface MatchPageFilters {
   status: StatusFilter;
   olderThanDays?: number;
   droppedOnly: boolean;
+  // Free-text search: matches a row when either player's name or Discord
+  // handle contains this text (case-insensitive). Undefined = no filter.
+  player?: string;
 }
 
 export function involvesDroppedPlayer(row: Pick<MatchPageRow, "playerA" | "playerB">): boolean {
   return row.playerA.memberStatus === "DROPPED" || row.playerB.memberStatus === "DROPPED";
 }
 
+// Discord handle info for one player -- a small lookup the loader builds
+// from the same player rows it already reads, kept OUT of PlayerStanding
+// (shared with lib/bulk-resolve-core.ts) so this page's chip/search needs
+// never widen that shared type. Plain data, passed into this core by value.
+export interface PlayerHandleInfo {
+  discordId: string;
+  username: string | null;
+}
+
+// Free-text ?player= query -> trimmed text, or undefined for "no filter".
+// Matches the other parse* helpers on this page: unset/blank is "no filter",
+// never a thrown error.
+export function parsePlayerFilter(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function textMatchesPlayerQuery(displayName: string, handle: PlayerHandleInfo | undefined, query: string): boolean {
+  if (displayName.toLowerCase().includes(query)) return true;
+  return !!handle?.username && handle.username.toLowerCase().includes(query);
+}
+
+// True when EITHER player's name or Discord handle contains the (already
+// lower-cased) query text. `handlesByPlayerId` is plain data the loader
+// builds once per page load -- this stays a pure function of its inputs.
+export function matchesPlayerFilter(
+  row: Pick<MatchPageRow, "playerA" | "playerB">,
+  handlesByPlayerId: ReadonlyMap<string, PlayerHandleInfo>,
+  query: string | undefined,
+): boolean {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  return (
+    textMatchesPlayerQuery(row.playerA.displayName, handlesByPlayerId.get(row.playerA.playerId), q) ||
+    textMatchesPlayerQuery(row.playerB.displayName, handlesByPlayerId.get(row.playerB.playerId), q)
+  );
+}
+
 // Deterministic, order-independent: depends only on each row's own fields and
 // the filter values -- never on another row's state or position in the array.
-export function filterMatchRows(rows: readonly MatchPageRow[], filters: MatchPageFilters): MatchPageRow[] {
+export function filterMatchRows(
+  rows: readonly MatchPageRow[],
+  filters: MatchPageFilters,
+  handlesByPlayerId: ReadonlyMap<string, PlayerHandleInfo> = new Map(),
+): MatchPageRow[] {
   return rows.filter((row) => {
     if (filters.divisionId && row.divisionId !== filters.divisionId) return false;
     if (!matchesStatusFilter(row.pageStatus, filters.status)) return false;
     if (filters.olderThanDays != null && row.daysSinceTouch < filters.olderThanDays) return false;
     if (filters.droppedOnly && !involvesDroppedPlayer(row)) return false;
+    if (!matchesPlayerFilter(row, handlesByPlayerId, filters.player)) return false;
     return true;
   });
 }
