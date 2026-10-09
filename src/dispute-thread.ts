@@ -15,13 +15,14 @@
 
 import {
   ChannelType,
+  MessageFlags,
   ThreadAutoArchiveDuration,
   type TextChannel,
 } from "discord.js";
 import { prisma } from "./db.js";
 import { tryGetDiscordClient } from "./discord.js";
 import { getConfig, LeagueConfigKey } from "./league-config.js";
-import { buildReportEmbed } from "./report-flow.js";
+import { buildReportContainer } from "./report-flow.js";
 import { disputeThreadButtons } from "./commands/dispute-buttons.js";
 import { webUrl } from "./web-url.js";
 import { postModerationNotice } from "./mod-log.js";
@@ -69,7 +70,7 @@ export async function spawnDisputeThread(
           const message = await threadParent.messages.fetch(pairing.reportMessageId);
           startMessageId = message.id;
           if (!opts.skipEmbedEdit) {
-            const embed = buildReportEmbed({
+            const container = buildReportContainer({
               status: "DISPUTED",
               reporter,
               opponent,
@@ -78,7 +79,7 @@ export async function spawnDisputeThread(
               reporterIsA,
               pairingId: pairing.id,
             });
-            await message.edit({ content: "", embeds: [embed], components: [] });
+            await message.edit({ flags: MessageFlags.IsComponentsV2, components: [container] });
           }
         } catch (err) {
           // Message gone but channel exists — spawn an unanchored thread

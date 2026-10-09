@@ -15,7 +15,10 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
-  EmbedBuilder,
+  ContainerBuilder,
+  MessageFlags,
+  SeparatorBuilder,
+  TextDisplayBuilder,
   type TextChannel,
 } from "discord.js";
 import { prisma } from "./db.js";
@@ -23,6 +26,7 @@ import { tryGetDiscordClient } from "./discord.js";
 import { env } from "./env.js";
 import { resolveBotCommandsChannelId } from "./bot-commands-channel.js";
 import { getConfig, LeagueConfigKey } from "./league-config.js";
+import { buildReportMessageBlocks, type ReportStatus } from "./result-message-core.js";
 import { sanitizeName } from "./sanitize.js";
 import { mentionWithHandle, type MentionSubject } from "./mention.js";
 
@@ -47,72 +51,54 @@ async function resolveReportChannelId(seasonId: string | null): Promise<string |
   return resolveBotCommandsChannelId();
 }
 
-// Build the report embed in its current state (PENDING / CONFIRMED /
-// AUTO_CONFIRMED / DISPUTED). Used by both initial post + every edit.
-export function buildReportEmbed(args: {
-  status: "PENDING" | "CONFIRMED" | "AUTO_CONFIRMED" | "DISPUTED";
+// Accent color per status -- same palette the original embed's setColor used.
+const STATUS_ACCENT_COLOR: Record<ReportStatus, number> = {
+  PENDING: 0xf1c40f,
+  CONFIRMED: 0x2ecc71,
+  AUTO_CONFIRMED: 0x2ecc71,
+  DISPUTED: 0xe74c3c,
+};
+
+// Build the report container in its current state (PENDING / CONFIRMED /
+// AUTO_CONFIRMED / DISPUTED). Used by both initial post + every edit -- a
+// Components V2 message can't carry embeds, so this returns a ContainerBuilder
+// (a top-level component) instead of an EmbedBuilder.
+export function buildReportContainer(args: {
+  status: ReportStatus;
   reporter: { displayName: string } & MentionSubject;
   opponent: { displayName: string } & MentionSubject;
   divisionName: string;
   result: { gamesWonA: number; gamesWonB: number };
   reporterIsA: boolean;
   pairingId: string;
-  // Optional combo captured on the report — shown as a field when present.
+  // Optional combo captured on the report — shown as its own line when present.
   combo?: { deck?: string | null; stake?: string | null };
-}): EmbedBuilder {
+}): ContainerBuilder {
   const { status, reporter, opponent, divisionName, result, reporterIsA, pairingId, combo } = args;
-  const repGames = reporterIsA ? result.gamesWonA : result.gamesWonB;
-  const oppGames = reporterIsA ? result.gamesWonB : result.gamesWonA;
-  const scoreline = `${sanitizeName(reporter.displayName)} **${repGames}-${oppGames}** ${sanitizeName(opponent.displayName)}`;
-  const verdict =
-    repGames === 2 && oppGames === 0 ? `🏆 ${sanitizeName(reporter.displayName)} swept`
-    : repGames === 0 && oppGames === 2 ? `🏆 ${sanitizeName(opponent.displayName)} swept`
-    : `🤝 ${sanitizeName(reporter.displayName)} and ${sanitizeName(opponent.displayName)} drew 1-1`;
-  let title: string;
-  let color: number;
-  let description: string;
-  switch (status) {
-    case "PENDING":
-      title = "📝 Match reported — awaiting opponent";
-      color = 0xf1c40f;
-      description =
-        `${scoreline}\n_in **${divisionName}**_\n\n` +
-        `${mentionWithHandle(opponent)}, please **Confirm** or **Dispute** within 2 minutes.\n` +
-        `_If no action, the result auto-confirms._`;
-      break;
-    case "CONFIRMED":
-      title = "✅ Match confirmed";
-      color = 0x2ecc71;
-      description = `${verdict}\n${scoreline}\n_in **${divisionName}**_`;
-      break;
-    case "AUTO_CONFIRMED":
-      title = "✅ Match confirmed (auto)";
-      color = 0x2ecc71;
-      description =
-        `${verdict}\n${scoreline}\n_in **${divisionName}**_\n\n` +
-        `_Auto-confirmed after 2 minutes — opponent didn't respond._`;
-      break;
-    case "DISPUTED":
-      title = "⚠ Match disputed";
-      color = 0xe74c3c;
-      description =
-        `${scoreline}\n_in **${divisionName}**_\n\n` +
-        `${mentionWithHandle(opponent)} disputed the result. A helper has been pinged in the thread below.`;
-      break;
+  const blocks = buildReportMessageBlocks({
+    status,
+    divisionName,
+    reporterName: sanitizeName(reporter.displayName),
+    opponentName: sanitizeName(opponent.displayName),
+    opponentMention: mentionWithHandle(opponent),
+    reporterIsA,
+    gamesWonA: result.gamesWonA,
+    gamesWonB: result.gamesWonB,
+    combo,
+  });
+
+  const container = new ContainerBuilder().setAccentColor(STATUS_ACCENT_COLOR[status]);
+  container.addTextDisplayComponents(new TextDisplayBuilder().setContent(blocks.metaLine));
+  container.addTextDisplayComponents(new TextDisplayBuilder().setContent(blocks.headerLine));
+  if (blocks.bodyLine) {
+    container.addSeparatorComponents(new SeparatorBuilder());
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(blocks.bodyLine));
   }
-  const embed = new EmbedBuilder()
-    .setTitle(title)
-    .setDescription(description)
-    .setColor(color)
-    .setFooter({ text: `Match ${pairingId}` });
-  if (combo && (combo.deck || combo.stake)) {
-    embed.addFields({
-      name: "🎴 Played",
-      value: [combo.deck, combo.stake].filter(Boolean).join(" / "),
-      inline: false,
-    });
+  if (blocks.comboLine) {
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(blocks.comboLine));
   }
-  return embed;
+  container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`-# Match ${pairingId}`));
+  return container;
 }
 
 function pendingButtons(pairingId: string): ActionRowBuilder<ButtonBuilder> {
@@ -160,7 +146,7 @@ export async function postPendingReport(pairingId: string): Promise<void> {
     const reporterIsA = pairing.reporterId === pairing.playerAId;
     const reporter = reporterIsA ? pairing.playerA : pairing.playerB;
     const opponent = reporterIsA ? pairing.playerB : pairing.playerA;
-    const embed = buildReportEmbed({
+    const container = buildReportContainer({
       status: "PENDING",
       reporter,
       opponent,
@@ -170,10 +156,13 @@ export async function postPendingReport(pairingId: string): Promise<void> {
       pairingId: pairing.id,
       combo: { deck: pairing.reportedDeck, stake: pairing.reportedStake },
     });
+    // The opponent-ping lives in the container body now (a Components V2
+    // message can't carry `content`) -- allowedMentions is scoped to just
+    // their id so nothing else in the container can ping by accident.
     const message = await (channel as TextChannel).send({
-      content: `${mentionWithHandle(opponent)} match reported against you`,
-      embeds: [embed],
-      components: [pendingButtons(pairingId)],
+      flags: MessageFlags.IsComponentsV2,
+      components: [container, pendingButtons(pairingId)],
+      allowedMentions: { users: [opponent.discordId] },
     });
     await prisma.match.update({
       where: { id: pairingId },

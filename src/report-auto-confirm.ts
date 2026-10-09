@@ -3,11 +3,11 @@
 // already left PENDING — admin overrode it, opponent confirmed, opponent
 // disputed, etc. Idempotent so retries are safe.
 
-import { ChannelType, type TextChannel } from "discord.js";
+import { ChannelType, MessageFlags, type TextChannel } from "discord.js";
 import { prisma } from "./db.js";
 import { tryGetDiscordClient } from "./discord.js";
 import { enqueueAnnounceResult, maybeEnqueueShootoutCheck } from "./queue.js";
-import { buildReportEmbed } from "./report-flow.js";
+import { buildReportContainer } from "./report-flow.js";
 import { recomputeDivisionStandings } from "./standings-cache.js";
 
 export async function autoConfirmReport(pairingId: string): Promise<void> {
@@ -49,7 +49,7 @@ export async function autoConfirmReport(pairingId: string): Promise<void> {
       const reporterIsA = pairing.reporterId === pairing.playerAId;
       const reporter = reporterIsA ? pairing.playerA : pairing.playerB;
       const opponent = reporterIsA ? pairing.playerB : pairing.playerA;
-      const embed = buildReportEmbed({
+      const container = buildReportContainer({
         status: "AUTO_CONFIRMED",
         reporter,
         opponent,
@@ -58,7 +58,7 @@ export async function autoConfirmReport(pairingId: string): Promise<void> {
         reporterIsA,
         pairingId: pairing.id,
       });
-      await message.edit({ content: "", embeds: [embed], components: [] });
+      await message.edit({ flags: MessageFlags.IsComponentsV2, components: [container] });
     } catch (err) {
       console.warn(`[report.auto-confirm] couldn't edit embed for ${pairingId}:`, err);
     }
