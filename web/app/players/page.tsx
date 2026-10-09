@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { loadPlayersList } from "@/lib/loaders/players";
-import { tierColors } from "@/lib/tier-colors";
+import { rarityIndex, tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { DiscordId } from "@/components/DiscordId";
 
@@ -70,5 +70,12 @@ export default async function PlayersPage() {
 
 function TierPill({ name, position }: { name: string; position: number }) {
   const c = tierColors(position);
-  return <span className="pill" style={{ background: c.bg, color: c.fg }}>{name}</span>;
+  // data-rarity is a plain hook for the v2 stylesheet (gives this pill one
+  // of the four Balatro rarity colors instead of the v1 gold/purple/blue/
+  // grey cycle -- see globals.css); v1 ignores it and keeps the inline style.
+  return (
+    <span className="pill" data-rarity={rarityIndex(position)} style={{ background: c.bg, color: c.fg }}>
+      {name}
+    </span>
+  );
 }

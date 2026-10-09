@@ -352,3 +352,328 @@ form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
   margin-left: 6px;
   user-select: all;
 }
+
+/* The v2 "Card Table" standings zone key (see DivisionStandingsTable) is a
+   brand-new block with no v1 equivalent -- hidden by default so it has zero
+   effect without the preview cookie, shown only under html[data-ui="v2"]
+   below. Not itself scoped under that selector because it has to be OFF by
+   default, not re-pointed from something that already existed. */
+.zone-key-v2 { display: none; }
+
+/* ========================================================================
+   v2 "Card Table" design system -- design-system/MASTER.md is the spec.
+   Every rule below is scoped under html[data-ui="v2"] (set by layout.tsx
+   from the admin-only preview cookie; see lib/preferences.ts) so the
+   current look is completely unaffected without it.
+   ======================================================================== */
+
+html[data-ui="v2"] {
+  /* Tokens, straight out of MASTER.md. */
+  --felt: #1b443f;
+  --felt-deep: #12302d;
+  --felt-line: rgba(255, 255, 255, 0.07);
+  --panel: #26383a;
+  --panel-2: #2f4447;
+  --panel-edge: #0d1a1a;
+  --paper: #f3eee2;
+  --paper-dim: #b8c2bf;
+  --paper-faint: #7f8f8c;
+  --gold: #f1b53a;
+  --gold-ink: #2a1d05;
+  --common: #1e9bff;
+  --uncommon: #3cc78f;
+  --rare: #ff6259;
+  --legendary: #bb73d6;
+  --shadow: 0 6px 0 var(--panel-edge), 0 14px 28px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
+
+  /* Semantic aliases re-pointed onto the tokens above. */
+  --bg: var(--felt);
+  --surface: var(--panel);
+  --surface-2: var(--panel-2);
+  --border: var(--panel-edge);
+  --text: var(--paper);
+  --muted: var(--paper-dim);
+  --accent: var(--gold);
+  --danger: var(--rare);
+  --success: var(--uncommon);
+  --info: var(--common);
+  --radius: 10px;
+  /* --admin keeps its orange per MASTER.md. */
+
+  /* shadcn --color-* variables onto the same tokens, so every shadcn
+     component (Button, Input, Dialog, Command, Select, Menu) re-themes for
+     free -- same pattern the base @theme inline block already uses for v1. */
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--gold);
+  --color-primary-foreground: var(--gold-ink);
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--surface-2);
+  --color-muted-foreground: var(--muted);
+  --color-accent: var(--surface-2);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--danger);
+  --color-border: var(--border);
+  --color-input: var(--surface-2);
+  --color-ring: var(--accent);
+}
+
+/* Felt ground with a subtle diagonal weave, body type, base numeric style. */
+html[data-ui="v2"] body {
+  background-color: var(--felt);
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--felt-line) 0,
+    var(--felt-line) 1px,
+    transparent 1px,
+    transparent 12px
+  );
+  font-family: var(--font-body-v2), "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text);
+}
+html[data-ui="v2"] td,
+html[data-ui="v2"] th {
+  font-variant-numeric: tabular-nums;
+}
+html[data-ui="v2"] th {
+  font-size: 11px;
+  letter-spacing: 0.8px;
+  color: var(--paper-faint);
+}
+
+/* Display face: Pixelify Sans for h1/h2 and anything tagged .pixel, large
+   sizes only -- never body copy, never small numbers (the Pts cell below is
+   the one deliberate exception MASTER.md calls out). */
+html[data-ui="v2"] h1,
+html[data-ui="v2"] h2,
+html[data-ui="v2"] .pixel {
+  font-family: var(--font-display-v2), var(--font-pixel), "Segoe UI", sans-serif;
+  letter-spacing: 0.5px;
+  text-wrap: balance;
+}
+html[data-ui="v2"] h1 { font-size: clamp(28px, 5vw, 40px); }
+html[data-ui="v2"] h2 { font-size: 22px; }
+html[data-ui="v2"] h3 { font-size: 17px; }
+
+/* Panel. */
+html[data-ui="v2"] .card {
+  background: var(--panel);
+  border: 2px solid var(--panel-edge);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+html[data-ui="v2"] .card-header {
+  background: var(--panel-2);
+  border-bottom: 2px solid var(--panel-edge);
+  margin: -16px -16px 12px;
+  padding: 10px 16px;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+/* Buttons -- plain <button> (the @layer base fallback above) and the
+   shadcn Button (data-slot="button"). Both are unlayered rules here, which
+   beat ANY layered Tailwind/base rule regardless of specificity -- same
+   cascade-layers behavior the file's own comments describe above. Only the
+   three "filled" looks MASTER.md defines (primary/secondary/destructive)
+   get the chunky shadow + press; outline/ghost/link stay as Tailwind themed
+   them via the --color-* repoint above. */
+html[data-ui="v2"] button:not([data-slot="button"]) {
+  font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
+  font-size: 15px;
+  border-radius: 8px;
+  background: var(--gold);
+  color: var(--gold-ink);
+  border: none;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.45);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+html[data-ui="v2"] button.secondary:not([data-slot="button"]) {
+  background: var(--panel-2);
+  color: var(--text);
+}
+html[data-ui="v2"] button.danger:not([data-slot="button"]) {
+  background: var(--rare);
+  color: #0b1b1a;
+}
+html[data-ui="v2"] button:not([data-slot="button"]):active {
+  transform: translateY(3px);
+  box-shadow: none;
+}
+html[data-ui="v2"] [data-slot="button"][class*="bg-primary"],
+html[data-ui="v2"] [data-slot="button"][class*="bg-secondary"],
+html[data-ui="v2"] [data-slot="button"][class*="destructive"] {
+  font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
+  border-radius: 8px;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.45);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+html[data-ui="v2"] [data-slot="button"][class*="destructive"] {
+  background: var(--rare);
+  color: #0b1b1a;
+}
+html[data-ui="v2"] [data-slot="button"][class*="bg-primary"]:active,
+html[data-ui="v2"] [data-slot="button"][class*="bg-secondary"]:active,
+html[data-ui="v2"] [data-slot="button"][class*="destructive"]:active {
+  transform: translateY(3px);
+  box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui="v2"] button,
+  html[data-ui="v2"] [data-slot="button"] {
+    transition: none;
+  }
+}
+
+/* Form controls. */
+html[data-ui="v2"] input[type="text"],
+html[data-ui="v2"] input[type="number"],
+html[data-ui="v2"] input[type="datetime-local"],
+html[data-ui="v2"] input[type="email"],
+html[data-ui="v2"] input[type="password"],
+html[data-ui="v2"] input[type="search"],
+html[data-ui="v2"] select,
+html[data-ui="v2"] textarea {
+  background: var(--panel);
+  border: 2px solid var(--panel-edge);
+  border-radius: 8px;
+  box-shadow: 0 4px 0 var(--panel-edge);
+  color: var(--text);
+  transition: box-shadow 150ms ease, border-color 150ms ease;
+}
+html[data-ui="v2"] input:focus,
+html[data-ui="v2"] select:focus,
+html[data-ui="v2"] textarea:focus {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+  border-color: var(--gold);
+}
+
+/* Sticky top bar (SiteNav). The app renders exactly one <header>. */
+html[data-ui="v2"] header {
+  background: var(--felt-deep);
+  border-bottom: 3px solid var(--panel-edge);
+}
+html[data-ui="v2"] header h1 a {
+  font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
+  gap: 8px;
+}
+/* Paper card chip drawn in CSS -- a little rounded rectangle with a hard
+   offset shadow, standing in for a playing card next to the brand. */
+html[data-ui="v2"] header h1 a::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 18px;
+  flex-shrink: 0;
+  background: var(--paper);
+  border: 1px solid var(--panel-edge);
+  border-radius: 3px;
+  box-shadow: 2px 2px 0 var(--panel-edge);
+}
+html[data-ui="v2"] header nav a {
+  border-radius: 999px;
+}
+html[data-ui="v2"] header nav a[class*="bg-secondary"] {
+  box-shadow: 0 3px 0 var(--panel-edge);
+}
+
+/* Tier chips -- rarity-colored per MASTER.md, keyed off data-rarity (see
+   lib/tier-colors.ts' rarityIndex + the two pill components that set it).
+   !important is deliberate and scoped tight to this one attribute selector:
+   the v1 pill sets its color via an inline style, which otherwise always
+   wins over a stylesheet rule. */
+html[data-ui="v2"] .pill[data-rarity] {
+  font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  border-radius: 5px;
+  color: #0b1b1a !important;
+}
+html[data-ui="v2"] .pill[data-rarity="0"] { background: var(--legendary) !important; }
+html[data-ui="v2"] .pill[data-rarity="1"] { background: var(--rare) !important; }
+html[data-ui="v2"] .pill[data-rarity="2"] { background: var(--uncommon) !important; }
+html[data-ui="v2"] .pill[data-rarity="3"] { background: var(--common) !important; }
+
+/* Standings table (DivisionStandingsTable). */
+html[data-ui="v2"] td.pts-cell,
+html[data-ui="v2"] strong.pts-cell {
+  font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
+  font-size: 20px;
+}
+html[data-ui="v2"] .record-cells,
+html[data-ui="v2"] .record-cells * {
+  color: var(--paper-dim);
+}
+html[data-ui="v2"] .lives-cell[data-sign="pos"] { color: var(--uncommon); }
+html[data-ui="v2"] .lives-cell[data-sign="neg"] { color: var(--rare); }
+html[data-ui="v2"] .lives-cell[data-sign="zero"] { color: var(--paper-faint); }
+html[data-ui="v2"] .tiebreak-note {
+  font-size: 11.5px;
+  font-style: italic;
+  color: var(--paper-faint);
+}
+/* Zone stripe on the first cell + the old v1 background wash turned off --
+   v2 reads the zone from the 4px inset stripe + the key below instead. The
+   !important cancels rowTint()'s inline background (see the component). */
+html[data-ui="v2"] .standings-table-wrap tr[data-zone] {
+  background: transparent !important;
+}
+html[data-ui="v2"] .standings-table-wrap tr[data-zone="promote"] > td:first-child {
+  box-shadow: inset 4px 0 0 var(--gold);
+}
+html[data-ui="v2"] .standings-table-wrap tr[data-zone="relegate"] > td:first-child {
+  box-shadow: inset 4px 0 0 var(--rare);
+}
+html[data-ui="v2"] .standings-table-wrap tr[data-boundary="promote"] > td {
+  border-bottom: 2px dashed var(--gold);
+}
+html[data-ui="v2"] .standings-table-wrap tr[data-boundary="relegate"] > td {
+  border-bottom: 2px dashed var(--rare);
+}
+html[data-ui="v2"] .standings-card[data-zone] {
+  background: transparent !important;
+}
+html[data-ui="v2"] .standings-card[data-zone="promote"] {
+  border-left: 4px solid var(--gold);
+}
+html[data-ui="v2"] .standings-card[data-zone="relegate"] {
+  border-left: 4px solid var(--rare);
+}
+html[data-ui="v2"] .zone-key-v1 { display: none; }
+html[data-ui="v2"] .zone-key-v2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--paper-faint);
+}
+html[data-ui="v2"] .zone-key-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+html[data-ui="v2"] .zone-key-swatch-promote { background: var(--gold); }
+html[data-ui="v2"] .zone-key-swatch-relegate { background: var(--rare); }
+
+/* Phone: the standings cards (not the desktop table -- that's already
+   hidden below 640px) drop W-D-L and the played count under 480px. */
+@media (max-width: 480px) {
+  html[data-ui="v2"] .standings-card .card-wdl,
+  html[data-ui="v2"] .standings-card .card-pl {
+    display: none;
+  }
+}

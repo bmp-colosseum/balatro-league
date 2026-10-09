@@ -13,7 +13,7 @@ import { Callout } from "@/components/Callout";
 import { DiscordId } from "@/components/DiscordId";
 import { ActionFlashForm } from "@/components/ActionFlashForm";
 import { SubmitButton } from "@/components/SubmitButton";
-import { tierColors } from "@/lib/tier-colors";
+import { rarityIndex, tierColors } from "@/lib/tier-colors";
 import {
   loadSeasonWinners,
   winnerAwardStatus,
@@ -108,9 +108,11 @@ function RarityPill({
   title?: string;
 }) {
   const c = tierColors(position);
+  // data-rarity: see the matching comment on TierPill in app/players/page.tsx.
   return (
     <span
       className="pill"
+      data-rarity={rarityIndex(position)}
       title={title}
       style={{ background: c.bg, color: c.fg, fontSize: size, whiteSpace: "nowrap" }}
     >
