@@ -397,10 +397,6 @@ function DropPickerPanel({
           </label>
           <Button type="submit" variant="secondary" size="sm">Recalculate</Button>
         </div>
-        <p className="muted" style={{ fontSize: 11, margin: 0 }}>
-          Tick who to treat as dropped, then Recalculate to update the three tables below. Nothing is applied until
-          you use &ldquo;Apply these drops&rdquo;.
-        </p>
 
         {nothingToShow ? (
           <div className="muted" style={{ fontSize: 12 }}>No active players this season.</div>
@@ -754,11 +750,23 @@ export default async function StandingsPreviewPage({
       <AdminNav activePath="/admin/standings-preview" />
       <main>
         <h2>Best-N standings preview</h2>
-        <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>
-          Preview of the proposed &ldquo;best N&rdquo; dropout-adjusted scoring rule, side by side with the{" "}
-          <strong>current</strong> standings. Just viewing this page applies nothing -- the Apply/Use buttons below
-          are the only things that write anything, and each says exactly what it will do before you confirm.
-        </p>
+        <details style={{ marginTop: 4 }}>
+          <summary className="muted" style={{ cursor: "pointer", fontSize: 13 }}>
+            How this page works
+          </summary>
+          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+            <p className="muted" style={{ fontSize: 13, margin: 0 }}>
+              Preview of the proposed &ldquo;best N&rdquo; dropout-adjusted scoring rule, side by side with the{" "}
+              <strong>current</strong> standings. Just viewing this page applies nothing -- the Apply/Use buttons
+              below are the only things that write anything, and each says exactly what it will do before you
+              confirm.
+            </p>
+            <p className="muted" style={{ fontSize: 11, margin: 0 }}>
+              Tick who to treat as dropped, then Recalculate to update the three tables below. Nothing is applied
+              until you use &ldquo;Apply these drops&rdquo;.
+            </p>
+          </div>
+        </details>
 
         <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 8 }}>
           <span className="muted" style={{ fontSize: 12 }}>3+-way tie breaking:</span>

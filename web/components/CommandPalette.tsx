@@ -39,9 +39,19 @@ const AUTHED_PAGES: Item[] = [
 ];
 
 // Mirror the admin nav (minus devOps-only links the palette can't gate without
-// extra context), plus the two WIP draft pages that live only here.
+// extra context), plus the two WIP draft pages that live only here. Nav
+// entries can be a group (Matches, Messages, Settings, System -- a dropdown
+// with `children`, not itself a destination) or a plain link (Inbox, Season
+// tools); flatten groups to their children so every individual admin page
+// stays searchable here, same as before the nav regroup.
 const ADMIN_PAGES: Item[] = [
-  ...ADMIN_LINKS.filter((l) => !l.devOpsOnly).map((l) => ({ label: l.label, href: l.href })),
+  ...ADMIN_LINKS.flatMap((l) =>
+    l.children && l.children.length > 0
+      ? l.children.filter((c) => !c.devOpsOnly).map((c) => ({ label: c.label, href: c.href }))
+      : l.devOpsOnly
+        ? []
+        : [{ label: l.label, href: l.href }],
+  ),
   { label: "MP Changes (WIP)", href: "/changes" },
   { label: "How to play (WIP)", href: "/how-to-play" },
 ];
