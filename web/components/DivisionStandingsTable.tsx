@@ -260,7 +260,8 @@ function CardHand({ r }: { r: StandingsTableRow }) {
 // plus the signed number, coloured by sign exactly like LivesCell above.
 // Renders nothing when this row has no lives data.
 function CardLives({ r }: { r: StandingsTableRow }) {
-  if (r.netLives === undefined) return null;
+  // No games yet means no lives to speak of -- an empty heart is noise.
+  if (r.netLives === undefined || r.played === 0) return null;
   const sign = r.netLives > 0 ? "+" : "";
   const dataSign = r.netLives > 0 ? "pos" : r.netLives < 0 ? "neg" : "zero";
   return (
