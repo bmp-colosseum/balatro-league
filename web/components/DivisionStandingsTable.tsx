@@ -491,7 +491,7 @@ export function DivisionStandingsTable({
                 {/* Rank badge -- the medal string is "N" normally or "#N"
                     for a tied row (rankLabel); the card shows the bare
                     number either way, so tied rows show the same number. */}
-                <span className="player-card-rank pixel" data-rarity={tierRarity}>
+                <span className="player-card-rank" data-rarity={tierRarity}>
                   {medal.replace(/^#/, "")}
                 </span>
                 <CardAvatar displayName={r.player.displayName} avatarUrl={ex?.avatarUrl} />
