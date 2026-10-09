@@ -9,11 +9,17 @@ import { hasTier } from "@/lib/admin";
 import { DivisionStandingsTable, type StandingsRowExtras } from "@/components/DivisionStandingsTable";
 import { loadMmrForPlayerIds } from "@/lib/loaders/standings";
 import { getShowBmpMmr } from "@/lib/preferences";
-import { loadDivisionPageData, type DivisionRecentPairing, type DivisionUnplayed } from "@/lib/loaders/division";
+import {
+  loadDivisionPageData,
+  type DivisionRecentPairing,
+  type DivisionUnplayed,
+  type DivisionStandingRow,
+} from "@/lib/loaders/division";
 import { loadTieHelper, type TieGroup } from "@/lib/loaders/tie-helper";
 import { loadAdminDivisionDetail } from "@/lib/loaders/admin";
 import { loadPlayerIdByDiscordId } from "@/lib/loaders/players";
-import { tierColors } from "@/lib/tier-colors";
+import { tierColors, rarityIndex } from "@/lib/tier-colors";
+import { groupPairings, type Pairing } from "@/lib/division-page-core";
 import { SiteNav } from "@/components/SiteNav";
 import { Callout } from "@/components/Callout";
 import { DiscordId } from "@/components/DiscordId";
@@ -101,7 +107,44 @@ export default async function PublicDivisionPage({
     <>
       <SiteNav activePath="/standings" />
       <main>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+        {/* v2 "Card Table" hero: division identity in the pixel face
+            (rarity-colored), rarity chip, season link, "N players / N up /
+            N down / schedule" meta, and the roster as chips -- brand new,
+            hidden by default (see app/v2/division.css), shown only under
+            html[data-ui="v2"]. The v1 block right below stays untouched and
+            is hidden the same way v1/v2 swaps happen elsewhere on the site
+            (see globals.css' .meta-v1/.meta-v2 pattern). */}
+        <div className="card division-hero-v2">
+          <div className="card-header">
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+              <strong className="pixel division-name" data-rarity={rarityIndex(division.tierPosition)}>
+                {division.name}
+              </strong>
+              <span
+                className="pill division-chip"
+                data-rarity={rarityIndex(division.tierPosition)}
+                style={{ background: tc.bg, color: tc.fg }}
+              >
+                {division.tierName}
+              </span>
+              <Link href={`/seasons/${division.seasonId}`} className="muted">
+                {division.seasonName}
+              </Link>
+              <Link href="/standings" className="muted" style={{ marginLeft: "auto" }}>
+                all standings
+              </Link>
+            </div>
+            <div className="muted meta-v2">
+              <span>{division.activeCount} player{division.activeCount === 1 ? "" : "s"}</span>
+              {division.promote > 0 && <span>{division.promote} up</span>}
+              {division.relegate > 0 && <span>{division.relegate} down</span>}
+              <span>{division.scheduleFormat === "round-robin" ? "round robin, play everyone" : division.scheduleFormat}</span>
+            </div>
+          </div>
+          <RosterV2 rows={standings} viewerPlayerId={viewerPlayerId} />
+        </div>
+
+        <div className="division-top-v1" style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           <h2 style={{ margin: 0 }}>{division.name}</h2>
           <span className="pill" style={{ background: tc.bg, color: tc.fg }}>{division.tierName}</span>
           <Link href={`/seasons/${division.seasonId}`} className="muted">
@@ -109,7 +152,7 @@ export default async function PublicDivisionPage({
           </Link>
           <Link href="/standings" style={{ marginLeft: "auto" }}>← all standings</Link>
         </div>
-        <div className="muted" style={{ marginTop: 4 }}>
+        <div className="muted division-top-v1" style={{ marginTop: 4 }}>
           {division.activeCount} active {division.activeCount === 1 ? "player" : "players"} · {division.confirmedPairingCount} {division.confirmedPairingCount === 1 ? "match" : "matches"} played · {unplayed.length} remaining
         </div>
 
@@ -125,7 +168,22 @@ export default async function PublicDivisionPage({
         )}
 
         <div className="card">
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+          {/* v2 header strip -- same reusable look as the hero above, titled
+              "Standings" instead of repeating the division identity (that's
+              already shown in the hero card right above this one). Hidden
+              by default; the v1 inline header right below is hidden in turn
+              under html[data-ui="v2"] (see app/v2/division.css). */}
+          <div className="card-header standings-head-v2">
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+              <strong className="pixel">Standings</strong>
+              {scoringBadge && (
+                <span className="pill" style={{ fontSize: 11 }}>
+                  counts best {scoringBadge.n} of {scoringBadge.scheduled} matches
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="standings-head-v1" style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
             <strong>Standings</strong>
             {scoringBadge && (
               <span
@@ -205,6 +263,49 @@ export default async function PublicDivisionPage({
   );
 }
 
+// v2 "Card Table" roster strip -- every division member (including dropped
+// ones) as a chip: avatar circle when the row carries one, else initials.
+// avatarUrl isn't on DivisionStandingRow as of this writing (another leaf
+// is adding it to the loader rows) -- read defensively via an intersection
+// type rather than assuming the field exists, so this renders the initials
+// fallback for everyone until it lands. The viewer's own chip gets a gold
+// edge (.roster-chip-you); dropped members render dimmed with a strike
+// through their name, same convention as the standings table. Brand new --
+// hidden by default, shown only under html[data-ui="v2"] (see
+// app/v2/division.css).
+function RosterV2({
+  rows,
+  viewerPlayerId,
+}: {
+  rows: DivisionStandingRow[];
+  viewerPlayerId: string | null;
+}) {
+  return (
+    <div className="roster-v2">
+      {rows.map((r) => {
+        const avatarUrl = (r.player as { avatarUrl?: string | null }).avatarUrl ?? null;
+        const initials = r.player.displayName.trim().slice(0, 2).toUpperCase() || "?";
+        const isViewer = viewerPlayerId !== null && r.player.id === viewerPlayerId;
+        return (
+          <Link
+            key={r.player.id}
+            href={`/profile/${r.player.id}`}
+            className={`roster-chip${isViewer ? " roster-chip-you" : ""}${r.dropped ? " roster-chip-dropped" : ""}`}
+          >
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={avatarUrl} alt="" className="roster-chip-avatar" />
+            ) : (
+              <span className="roster-chip-avatar roster-chip-initials">{initials}</span>
+            )}
+            <span className="roster-chip-name">{r.dropped ? <s>{r.player.displayName}</s> : r.player.displayName}</span>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
 // Split the Remaining + Played lists into "Your matches" (top, visible,
 // actionable) vs "Division matches" (collapsed, everyone else). When the
 // viewer isn't a member of this division we fall back to a single visible
@@ -240,11 +341,41 @@ function MatchesSections({
     return { playerId: opp.id, displayName: opp.displayName, alreadyPending: false };
   });
 
+  // v2 "Card Table" matchup grouping -- unify both loader lists into the
+  // plain Pairing shape groupPairings (web/lib/division-page-core.ts)
+  // understands, then group into "Your matches" / "Still to play" /
+  // "Played". Computed unconditionally (both branches below feed it) so
+  // the non-member path renders the same vs-blocks it always did, just
+  // with no "yours" group (viewerPlayerId is null there too).
+  const allPairings: Pairing[] = [
+    ...unplayed.map(
+      (m): Pairing => ({
+        played: false,
+        a: { id: m.a.id, displayName: m.a.displayName },
+        b: { id: m.b.id, displayName: m.b.displayName },
+      }),
+    ),
+    ...recentPairings.map(
+      (p): Pairing => ({
+        played: true,
+        id: p.id,
+        date: p.date,
+        a: { id: p.playerA.id, displayName: p.playerA.displayName },
+        b: { id: p.playerB.id, displayName: p.playerB.displayName },
+        scoreA: p.gamesWonA,
+        scoreB: p.gamesWonB,
+        forfeit: p.forfeit,
+      }),
+    ),
+  ];
+  const grouped = groupPairings(allPairings, viewerPlayerId);
+  const matchesV2 = <MatchesV2 grouped={grouped} viewerPlayerId={viewerPlayerId} />;
+
   if (!viewerIsMember) {
     return (
       <>
         {unplayed.length > 0 && (
-          <div className="card">
+          <div className="card matches-list-v1">
             <strong>Remaining ({unplayed.length})</strong>
             <p className="muted" style={{ fontSize: 11, marginTop: 4, marginBottom: 8 }}>
               {viewerPlayerId
@@ -254,19 +385,20 @@ function MatchesSections({
             <UnplayedList rows={unplayed} />
           </div>
         )}
-        <details className="card">
+        <details className="card matches-list-v1">
           <summary style={{ cursor: "pointer" }}>
             <strong>Recent matches ({confirmedPairingCount})</strong>
           </summary>
           <PlayedTable rows={recentPairings} uncounted={uncounted} />
         </details>
+        {matchesV2}
       </>
     );
   }
 
   return (
     <>
-      <h3 style={{ marginTop: 16, marginBottom: 8 }}>🎯 Your matches</h3>
+      <h3 className="matches-list-v1" style={{ marginTop: 16, marginBottom: 8 }}>🎯 Your matches</h3>
 
       <div className="card">
         <strong>Report a match</strong>
@@ -302,16 +434,16 @@ function MatchesSections({
       </div>
 
       {myPlayed.length > 0 && (
-        <div className="card">
+        <div className="card matches-list-v1">
           <strong>Your played ({myPlayed.length})</strong>
           <YourPlayedTable rows={myPlayed} viewerPlayerId={viewerPlayerId!} uncounted={uncounted} />
         </div>
       )}
 
-      <h3 style={{ marginTop: 24, marginBottom: 8 }}>Division matches</h3>
+      <h3 className="matches-list-v1" style={{ marginTop: 24, marginBottom: 8 }}>Division matches</h3>
 
       {otherUnplayed.length > 0 && (
-        <details className="card">
+        <details className="card matches-list-v1">
           <summary style={{ cursor: "pointer" }}>
             <strong>Remaining ({otherUnplayed.length})</strong>
             <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
@@ -322,7 +454,7 @@ function MatchesSections({
         </details>
       )}
 
-      <details className="card">
+      <details className="card matches-list-v1">
         <summary style={{ cursor: "pointer" }}>
           <strong>Played ({otherPlayed.length})</strong>
           <span className="muted" style={{ marginLeft: 8, fontSize: 12 }}>
@@ -331,7 +463,103 @@ function MatchesSections({
         </summary>
         <PlayedTable rows={otherPlayed} uncounted={uncounted} />
       </details>
+      {matchesV2}
     </>
+  );
+}
+
+// v2 "Card Table" matchup overview -- every pairing (played + unplayed) as a
+// small "vs" panel, grouped by groupPairings (web/lib/division-page-core.ts)
+// into "Your matches" (when signed in) / "Still to play" / "Played". Purely
+// presentational: the real report/record controls stay where they already
+// are above (the "Report a match" card) and in the admin Match actions
+// panel below -- this is a readable overview of the same data, not a
+// replacement form surface. Brand new -- hidden by default, shown only
+// under html[data-ui="v2"] (see app/v2/division.css).
+function MatchesV2({
+  grouped,
+  viewerPlayerId,
+}: {
+  grouped: ReturnType<typeof groupPairings>;
+  viewerPlayerId: string | null;
+}) {
+  if (grouped.yours.length === 0 && grouped.toPlay.length === 0 && grouped.played.length === 0) {
+    return null;
+  }
+  return (
+    <div className="matches-v2">
+      {grouped.yours.length > 0 && (
+        <section className="vs-group">
+          <h3 className="pixel">Your matches</h3>
+          <div className="vs-grid">
+            {grouped.yours.map((p) => (
+              <VsBlock key={pairingKey(p)} p={p} viewerPlayerId={viewerPlayerId} />
+            ))}
+          </div>
+        </section>
+      )}
+      {grouped.toPlay.length > 0 && (
+        <section className="vs-group">
+          <h3 className="pixel">Still to play</h3>
+          <div className="vs-grid">
+            {grouped.toPlay.map((p) => (
+              <VsBlock key={pairingKey(p)} p={p} viewerPlayerId={viewerPlayerId} />
+            ))}
+          </div>
+        </section>
+      )}
+      {grouped.played.length > 0 && (
+        <section className="vs-group">
+          <h3 className="pixel">Played</h3>
+          <div className="vs-grid">
+            {grouped.played.map((p) => (
+              <VsBlock key={pairingKey(p)} p={p} viewerPlayerId={viewerPlayerId} />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function pairingKey(p: Pairing): string {
+  return p.played ? p.id : `${p.a.id}-${p.b.id}`;
+}
+
+// One pairing's "vs" panel: left name / pixel "vs" / right name, then either
+// the score (winner tinted uncommon-green, loser rare-red, a draw paper-faint
+// on both sides) or "unplayed" -- with a gold "your match" tag when the
+// signed-in viewer is one of the two and the match hasn't been played yet
+// (once it's played, the pairing already sits under the "Your matches"
+// heading, so the tag would be redundant there).
+function VsBlock({ p, viewerPlayerId }: { p: Pairing; viewerPlayerId: string | null }) {
+  const isYourMatch = viewerPlayerId !== null && (p.a.id === viewerPlayerId || p.b.id === viewerPlayerId);
+  if (!p.played) {
+    return (
+      <div className="vs-block">
+        <Link href={`/profile/${p.a.id}`} className="vs-name">{p.a.displayName}</Link>
+        <span className="vs-pixel pixel">vs</span>
+        <Link href={`/profile/${p.b.id}`} className="vs-name">{p.b.displayName}</Link>
+        <div className="vs-status muted">
+          unplayed
+          {isYourMatch && <span className="vs-your-match-tag">your match</span>}
+        </div>
+      </div>
+    );
+  }
+  const draw = p.scoreA === p.scoreB;
+  const aWins = p.scoreA > p.scoreB;
+  const sideClass = (isA: boolean) => (draw ? "vs-draw" : (isA ? aWins : !aWins) ? "vs-winner" : "vs-loser");
+  return (
+    <div className="vs-block">
+      <Link href={`/profile/${p.a.id}`} className={`vs-name ${sideClass(true)}`}>{p.a.displayName}</Link>
+      <span className="vs-pixel pixel">vs</span>
+      <Link href={`/profile/${p.b.id}`} className={`vs-name ${sideClass(false)}`}>{p.b.displayName}</Link>
+      <div className="vs-status">
+        <strong className="vs-score">{p.scoreA}-{p.scoreB}</strong>
+        {p.forfeit && <span className="muted"> by DQ</span>}
+      </div>
+    </div>
   );
 }
 
@@ -505,7 +733,16 @@ function AdminSection({
 }) {
   const { division, members, pairings, shootouts, unplayed, playerById, lifeDiffByPlayer } = adminData;
   return (
-    <>
+    // v2 "Card Table" wraps every admin card below inside one panel headed
+    // "Admin" (same header-strip look as the hero/Standings panels above) --
+    // internals untouched. admin-panel-v2 carries no v1 styling of its own
+    // (see app/v2/division.css), so it's a no-op wrapper <div> under v1 --
+    // each child keeps rendering as its own separate .card exactly as
+    // before. admin-panel-header-v2 is brand new, hidden by default.
+    <div className="admin-panel-v2">
+      <div className="card-header admin-panel-header-v2">
+        <strong className="pixel">Admin</strong>
+      </div>
       <div className="card card-accent">
         <strong style={{ color: "var(--accent)" }}>🔧 Admin tools</strong>
         <p className="muted" style={{ fontSize: 12, margin: "4px 0 0" }}>
@@ -805,7 +1042,7 @@ function AdminSection({
         )}
       </div>
 
-    </>
+    </div>
   );
 }
 

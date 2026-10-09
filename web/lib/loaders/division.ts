@@ -14,6 +14,8 @@ import { formatSeasonLabel } from "@/lib/format-season";
 import { computeUnplayedPairs, pairKey } from "@/lib/unplayed-pairs";
 import { normalizeTiebreak, type ScoringBadge } from "@/lib/standings-mode";
 import type { UncountedEntry } from "@/lib/uncounted-core";
+import { getPlacementRules } from "@/lib/placement-rules";
+import { scheduleDegree } from "@/lib/schedule";
 
 export interface DivisionStandingRow {
   player: { id: string; displayName: string; discordId: string; username: string | null };
@@ -77,6 +79,15 @@ export interface DivisionPageData {
     tierPosition: number;
     activeCount: number;
     confirmedPairingCount: number;
+    // Ladder-wide promote/relegate counts + schedule format, for the v2
+    // "Card Table" header strip's "N up / N down / schedule" meta line --
+    // same arithmetic as loadStandingsPageData (lib/loaders/standings.ts),
+    // computed locally below since this single-division page doesn't load
+    // the whole season's standings. 0 at the very top/bottom of the ladder.
+    promote: number;
+    relegate: number;
+    // "round-robin" or "<N> opponents" -- see lib/schedule.ts' scheduleDegree.
+    scheduleFormat: string;
   };
   standings: DivisionStandingRow[];
   // Set only when this season's scoringMode is a best-n mode AND this
@@ -126,6 +137,44 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
     division.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId),
   );
   const activeMembers = division.members.filter((m) => m.status === "ACTIVE");
+
+  // Ladder-wide promote/relegate counts + schedule format (tier position,
+  // then group number -- same ordering as loadStandingsPageData). The top
+  // division overall never promotes; the bottom never relegates.
+  const rules = await getPlacementRules();
+  const ladderSeason = await prisma.season.findUnique({
+    where: { id: division.seasonId },
+    select: {
+      divisions: {
+        orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
+        select: {
+          id: true,
+          opponentsPerPlayer: true,
+          promoteCount: true,
+          relegateCount: true,
+          members: { where: { status: "ACTIVE" }, select: { id: true } },
+        },
+      },
+    },
+  });
+  const ladder = ladderSeason?.divisions ?? [];
+  const ladderIndex = ladder.findIndex((d) => d.id === division.id);
+  const thisLadderDiv = ladderIndex >= 0 ? ladder[ladderIndex]! : null;
+  const ladderActiveSize = thisLadderDiv?.members.length ?? activeMembers.length;
+  const promote =
+    thisLadderDiv && ladderIndex > 0
+      ? Math.min(Math.max(0, thisLadderDiv.promoteCount), ladderActiveSize)
+      : 0;
+  const relegate =
+    thisLadderDiv && ladderIndex < ladder.length - 1
+      ? Math.min(Math.max(0, thisLadderDiv.relegateCount), ladderActiveSize)
+      : 0;
+  const scheduleDeg = scheduleDegree(
+    thisLadderDiv?.opponentsPerPlayer,
+    rules.defaultOpponentsPerPlayer,
+    ladderActiveSize,
+  );
+  const scheduleFormat = scheduleDeg >= ladderActiveSize - 1 ? "round-robin" : `${scheduleDeg} opponents`;
 
   // Cached standings — same source as /standings, no recompute. Read the
   // badge AFTER (not before) loadDivisionStandings, which warms the cache
@@ -249,6 +298,9 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
       tierPosition: division.tier.position,
       activeCount: activeMembers.length,
       confirmedPairingCount: pairings.length,
+      promote,
+      relegate,
+      scheduleFormat,
     },
     standings,
     scoringBadge,
