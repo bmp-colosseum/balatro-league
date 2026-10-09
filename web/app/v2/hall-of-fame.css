@@ -185,15 +185,17 @@ html[data-ui="v2"] .hof-champ-grid {
   /* Fill the row: two cards per row on a phone, as many as fit on desktop,
      instead of a single 170px column with the panel's right half empty. */
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
   gap: 14px;
   background: var(--panel);
   border: 2px solid var(--panel-edge);
   border-radius: var(--radius);
   padding: 18px 16px;
 }
+/* Beats the fixed 150/170px widths the shelf cards carry (the rarity rule
+   above has higher specificity than a plain .hof-champ-card selector). */
+html[data-ui="v2"] .hof-champ-grid .hof-card[data-rarity] { width: auto; }
 html[data-ui="v2"] .hof-champ-card {
-  width: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
