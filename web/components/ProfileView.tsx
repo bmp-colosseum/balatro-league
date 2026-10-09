@@ -922,7 +922,9 @@ export async function ProfileView({
               const isVoid = m.myGames === 0 && m.opponentGames === 0;
               const badge = outcomeBadge(m, isDisputed, isVoid);
               const date = m.confirmedAt ? m.confirmedAt.toISOString().slice(0, 10) : "-";
-              const repGame = m.games.find((g) => g.deck && g.stake);
+              // One chip row per game: a match is two games with different
+              // deck/stake combos, and players want to see both.
+              const comboGames = m.games.filter((g) => g.deck && g.stake);
               return (
                 <div
                   key={m.pairingId}
@@ -950,18 +952,28 @@ export async function ProfileView({
                   <div className="profile-hand-score" style={{ textAlign: "center" }}>
                     {m.myGames}-{m.opponentGames}
                   </div>
-                  {repGame && repGame.deck && repGame.stake && (
+                  {comboGames.length > 0 && (
                     <div className="profile-hand-chips">
-                      <span className="profile-hand-chip">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={deckImage(repGame.deck)} alt="" width={14} height={14} style={{ borderRadius: 2 }} />
-                        {repGame.deck}
-                      </span>
-                      <span className="profile-hand-chip">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={stakeImage(repGame.stake)} alt="" width={14} height={14} style={{ borderRadius: 2 }} />
-                        {repGame.stake}
-                      </span>
+                      {comboGames.map((g) => (
+                        <span
+                          key={g.num}
+                          className="profile-hand-combo"
+                          data-result={g.iWon === null ? "none" : g.iWon ? "won" : "lost"}
+                          title={`Game ${g.num}: ${g.deck} / ${g.stake}${g.iWon === null ? "" : g.iWon ? " (won)" : " (lost)"}`}
+                        >
+                          <span className="profile-hand-combo-num">G{g.num}</span>
+                          <span className="profile-hand-chip">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={deckImage(g.deck!)} alt="" width={14} height={14} style={{ borderRadius: 2 }} />
+                            {g.deck}
+                          </span>
+                          <span className="profile-hand-chip">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={stakeImage(g.stake!)} alt="" width={14} height={14} style={{ borderRadius: 2 }} />
+                            {g.stake}
+                          </span>
+                        </span>
+                      ))}
                     </div>
                   )}
                   <div className="profile-hand-meta">

@@ -220,6 +220,23 @@ html[data-ui="v2"] .profile-hand-chip {
   font-size: 10px;
   color: var(--paper-faint);
 }
+/* One combo group per game: "G1  deck  stake", edged by that game's result. */
+html[data-ui="v2"] .profile-hand-combo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-edge);
+  background: var(--panel);
+}
+html[data-ui="v2"] .profile-hand-combo[data-result="won"] { border-color: var(--uncommon); }
+html[data-ui="v2"] .profile-hand-combo[data-result="lost"] { border-color: var(--rare); }
+html[data-ui="v2"] .profile-hand-combo-num {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--paper-dim);
+}
 html[data-ui="v2"] .profile-hand-meta {
   margin-top: 8px;
   padding-top: 8px;
