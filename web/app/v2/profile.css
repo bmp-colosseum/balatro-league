@@ -64,10 +64,12 @@ html[data-ui="v2"] .profile-hero-avatar-fallback {
   background: var(--panel-edge);
   color: var(--paper);
   font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
+  font-weight: 400; /* Jersey 10 ships one weight; faux bold blurs pixel fonts */
   font-size: 22px;
 }
 html[data-ui="v2"] .profile-hero-name {
   font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
+  font-weight: 400; /* Jersey 10 ships one weight; faux bold blurs pixel fonts */
   font-size: 26px;
   line-height: 1.2;
   color: var(--paper);
@@ -194,6 +196,7 @@ html[data-ui="v2"] .profile-hand-score {
 html[data-ui="v2"] .profile-hand-vs {
   align-self: center;
   font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
+  font-weight: 400; /* Jersey 10 ships one weight; faux bold blurs pixel fonts */
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Silkscreen, Pixelify_Sans, Nunito_Sans } from "next/font/google";
+import { Silkscreen, Jersey_10, Nunito_Sans } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -20,9 +20,9 @@ const pixel = Silkscreen({
 // (see globals.css); loaded unconditionally here since next/font needs a
 // module-scope call, but an unused @font-face costs nothing until something
 // references its CSS variable.
-const displayV2 = Pixelify_Sans({
+const displayV2 = Jersey_10({
   subsets: ["latin"],
-  weight: ["500", "700"],
+  weight: ["400"],
   variable: "--font-display-v2",
   display: "swap",
 });
