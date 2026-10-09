@@ -25,6 +25,22 @@ html[data-ui="v2"] .hof-count {
   margin: 0;
   font-size: 13px;
 }
+/* Legendary-only / all-divisions switch: two tier-tab pills, the inactive
+   one dimmed. Plain links, so it works without JS and is bookmarkable. */
+.hof-toggle { display: none; }
+html[data-ui="v2"] .hof-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+html[data-ui="v2"] .hof-toggle .tier-tab[data-active="false"] {
+  opacity: 0.55;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+}
+html[data-ui="v2"] .hof-toggle-all {
+  background: var(--paper-faint);
+}
 
 html[data-ui="v2"] .hof-shelves {
   display: flex;

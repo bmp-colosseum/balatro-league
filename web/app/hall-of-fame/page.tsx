@@ -19,8 +19,14 @@ const OUTCOME: Record<HofMatch["outcome"], { tag: string; color: string }> = {
   void: { tag: "–", color: "var(--muted)" },
 };
 
-export default async function HallOfFamePage() {
-  const seasons = await loadHallOfFame();
+export default async function HallOfFamePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ all?: string }>;
+}) {
+  const [seasons, sp] = await Promise.all([loadHallOfFame(), searchParams]);
+  // Legendary champions only by default; ?all=1 shows every division's winner.
+  const showAll = sp.all === "1";
   const withChampions = seasons.filter((s) => s.champion);
 
   return (
@@ -98,7 +104,7 @@ export default async function HallOfFamePage() {
             season. Same data as the v1 block above, just always rendered and
             toggled by CSS (app/v2/hall-of-fame.css) so v1 never sees it. */}
         <div className="hof-v2">
-          <HallOfFameTrophyShelf seasons={withChampions} />
+          <HallOfFameTrophyShelf seasons={withChampions} showAll={showAll} />
         </div>
       </main>
     </>
@@ -107,7 +113,12 @@ export default async function HallOfFamePage() {
 
 // Trophy shelf: one felt-deep band per season carrying its label/dates, with
 // that season's champion(s) as cards standing on the shelf line beneath it.
-function HallOfFameTrophyShelf({ seasons }: { seasons: HofSeason[] }) {
+function HallOfFameTrophyShelf({ seasons: allSeasons, showAll }: { seasons: HofSeason[]; showAll: boolean }) {
+  // Default view: the Legendary (top-tier) champion per season only. Every
+  // division's winner is a lot of cards; "All divisions" opts into them.
+  const seasons = showAll
+    ? allSeasons
+    : allSeasons.map((s) => ({ ...s, divisionChampions: s.divisionChampions.filter((c) => c.tierPosition === 0) }));
   if (seasons.length === 0) {
     return (
       <div className="card muted hof-empty">
@@ -125,9 +136,17 @@ function HallOfFameTrophyShelf({ seasons }: { seasons: HofSeason[] }) {
       <div className="hof-header">
         <h2 className="pixel hof-title">Hall of Fame</h2>
         <p className="muted hof-count">
-          {seasons.length} season{seasons.length === 1 ? "" : "s"}, {titleCount} division title{titleCount === 1 ? "" : "s"},{" "}
-          {distinctChampions} champion{distinctChampions === 1 ? "" : "s"}
+          {seasons.length} season{seasons.length === 1 ? "" : "s"}, {titleCount} {showAll ? "division" : "Legendary"} title
+          {titleCount === 1 ? "" : "s"}, {distinctChampions} champion{distinctChampions === 1 ? "" : "s"}
         </p>
+        <nav className="hof-toggle" aria-label="Which champions to show">
+          <Link href="/hall-of-fame" className="tier-tab" data-rarity={0} data-active={!showAll} aria-current={!showAll ? "page" : undefined}>
+            Legendary champions
+          </Link>
+          <Link href="/hall-of-fame?all=1" className="tier-tab hof-toggle-all" data-active={showAll} aria-current={showAll ? "page" : undefined}>
+            All divisions
+          </Link>
+        </nav>
       </div>
 
       <div className="hof-shelves">
