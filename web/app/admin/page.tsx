@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/admin";
 import { loadAdminHomeStats } from "@/lib/loaders/admin";
+import { unreadDmCount } from "@/lib/loaders/dms";
 import { seasonCountdown } from "@/lib/season-countdown-core";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminHome() {
   await requireAdmin();
-  const stats = await loadAdminHomeStats();
+  const [stats, unreadDms] = await Promise.all([loadAdminHomeStats(), unreadDmCount()]);
   const countdown = stats.activeSeason
     ? seasonCountdown({
         startMs: stats.activeSeason.startedAt.getTime(),
@@ -23,7 +24,27 @@ export default async function AdminHome() {
       <SiteNav activePath="/admin" />
       <AdminNav activePath="/admin" />
       <main>
-        <h2>Admin dashboard</h2>
+        <h2>Inbox</h2>
+
+        {(stats.disputedPairings > 0 || unreadDms > 0) && (
+          <div className="card" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <strong>Needs attention</strong>
+            {stats.disputedPairings > 0 && (
+              <div>
+                <strong>{stats.disputedPairings}</strong> disputed match{stats.disputedPairings === 1 ? "" : "es"}
+                {" -- "}
+                <a href="/admin/disputes">Review in Matches {"->"}</a>
+              </div>
+            )}
+            {unreadDms > 0 && (
+              <div>
+                <strong>{unreadDms}</strong> unread DM{unreadDms === 1 ? "" : "s"}
+                {" -- "}
+                <a href="/admin/dms">Open Messages {"->"}</a>
+              </div>
+            )}
+          </div>
+        )}
 
         {stats.activeSeason ? (
           <>

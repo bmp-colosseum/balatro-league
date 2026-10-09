@@ -125,6 +125,15 @@ export default async function EndSeasonPreviewPage({
             This updates {totalDeltas} player rating{totalDeltas === 1 ? "" : "s"} and marks the season inactive.
             Next season's setup uses these ratings to seed everyone.
           </p>
+          <p className="muted">This will also:</p>
+          <ul className="muted" style={{ marginTop: 0 }}>
+            <li>Write final placements and ratings.</li>
+            <li>Delete the season&apos;s Discord division channels and roles (champion roles stay).</li>
+            <li>DM every promoted and relegated player.</li>
+          </ul>
+          <p className="muted">
+            <strong>Cannot be undone.</strong>
+          </p>
           <form action={endSeason} style={{ display: "flex", gap: 8 }}>
             <input type="hidden" name="id" value={season.id} />
             <ConfirmButton message="End this season and apply new ratings to every player? This rewrites all ratings and can't be cleanly undone.">End season + apply ratings</ConfirmButton>
