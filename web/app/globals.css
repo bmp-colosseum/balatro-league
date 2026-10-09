@@ -376,6 +376,21 @@ form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
    line (see app/standings/page.tsx) -- v1 keeps its own .meta-v1 line,
    always rendered, never hidden outside html[data-ui="v2"] below. */
 .meta-v2 { display: none; }
+/* v2-only "12 of 174 played" progress line (drops the "remaining"/"%
+   complete" repeats v1's .progress-v1 keeps, unchanged, below). */
+.progress-v2 { display: none; }
+/* Phone-collapsed one-line division summary (see app/standings/page.tsx) --
+   off by default; shown only at v2 phone widths while collapsed (further
+   down, alongside the other details/summary rules). */
+.division-summary-v2 { display: none; }
+/* Every division's standings card now wraps its body in <details><summary>
+   so phone+v2 can natively collapse it (no JS needed) -- but a <details>
+   without an `open` attribute hides its body via the UA stylesheet
+   regardless of data-ui, which would also collapse it for v1 and for v2 on
+   desktop. This UNCONDITIONAL override (not scoped under html[data-ui="v2"])
+   beats that UA rule and keeps the body always visible by default; the v2
+   phone-only rule further down re-collapses it when appropriate. */
+.division-details-v2:not([open]) > .division-body-v2 { display: block; }
 /* .division-name used to carry its font-size as an inline style (18px);
    moved to a plain class so the v2 override below (22px) doesn't need
    !important to beat it. Same computed value, so v1 is unaffected. */
@@ -792,6 +807,13 @@ html[data-ui="v2"] .division-name[data-rarity="3"] { color: var(--common); }
 html[data-ui="v2"] .division-name {
   font-size: 22px;
 }
+/* A tier with just one division said its name three times: the h3, the
+   card title, and this chip. data-multi (set only for 2+ divisions, see
+   app/standings/page.tsx) drops the h3 and chip for a single-division tier
+   under v2, keeping just the coloured card title; v1 always shows both. */
+html[data-ui="v2"] .tier-heading:not([data-multi="1"]) {
+  display: none;
+}
 
 /* Division panel header strip -- .card-header already gives the panel-2
    full-bleed strip (see the Panel rules above); this chip is the one piece
@@ -799,6 +821,9 @@ html[data-ui="v2"] .division-name {
    picked up by the existing `.pill[data-rarity]` rule for its fill/ink/face. */
 html[data-ui="v2"] .division-chip {
   display: inline-block;
+}
+html[data-ui="v2"] .division-chip:not([data-multi="1"]) {
+  display: none;
 }
 /* The "N/M matches" counter reads as a quiet chip under v2 instead of the
    v1 green/grey completion color -- !important needed, same reasoning as
@@ -821,6 +846,56 @@ html[data-ui="v2"] .meta-v2 {
   font-size: 11px;
   margin-top: 2px;
   margin-bottom: 8px;
+}
+
+/* "12 of 174 played" plus the bar only -- drops v1's "remaining"/"%
+   complete" repeats of the same number (see .progress-v1/.progress-v2 in
+   app/standings/page.tsx, both always rendered, this just toggles which
+   one shows). */
+html[data-ui="v2"] .progress-v1 { display: none; }
+html[data-ui="v2"] .progress-v2 {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 15px;
+}
+
+/* Phone collapse (<=640px): every division other than the viewer's own
+   starts collapsed to the one-line .division-summary-v2 (see
+   app/standings/page.tsx); tapping it expands via the native <details>
+   toggle, no JS needed. Desktop (and v1, everywhere -- see the unconditional
+   override near the top of this file) always shows the full body. */
+@media (max-width: 640px) {
+  html[data-ui="v2"] .division-details-v2:not([open]) > .division-body-v2 {
+    display: none;
+  }
+  html[data-ui="v2"] .division-details-v2:not([open]) > .division-summary-v2 {
+    display: block;
+    cursor: pointer;
+    padding: 10px 14px;
+  }
+}
+/* Expanded (phone, viewer's own division or an opened one) or desktop at
+   any width: the one-line summary would just repeat the full header right
+   below it, so it's hidden rather than shown twice. */
+html[data-ui="v2"] .division-details-v2[open] > .division-summary-v2 {
+  display: none;
+}
+@media (min-width: 641px) {
+  html[data-ui="v2"] .division-details-v2 > .division-summary-v2 {
+    display: none;
+  }
+}
+
+/* Desktop (>=1100px): cap the tier-section grid at exactly 2 columns with a
+   max-width per card, instead of letting auto-fit stretch to very wide
+   single cards -- narrower, denser columns mean 3-4 divisions' worth of
+   rows fit in a screen instead of one. */
+@media (min-width: 1100px) {
+  html[data-ui="v2"] .tier-section .grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 560px));
+  }
 }
 
 /* "You" badge on the viewer's own standings row. */

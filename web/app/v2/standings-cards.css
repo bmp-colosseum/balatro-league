@@ -173,6 +173,12 @@ html[data-ui="v2"] .player-card-lives[data-sign="pos"] { color: var(--uncommon);
 html[data-ui="v2"] .player-card-lives[data-sign="neg"] { color: var(--rare); }
 html[data-ui="v2"] .player-card-lives[data-sign="zero"] { color: var(--paper-faint); }
 
+/* "lives" spelled out after the number on desktop; dropped to icon+number
+   only on phone (see the phone media block below) where there's no room. */
+html[data-ui="v2"] .player-card-lives-label {
+  color: var(--paper-faint);
+}
+
 /* Points tile -- 56px wide, body face 800 at 22px (never pixel face --
    MASTER.md flags pixel digits as unreadable at this size). */
 html[data-ui="v2"] .player-card-points {
@@ -200,15 +206,34 @@ html[data-ui="v2"] .player-card-points-label {
   color: var(--paper-faint);
 }
 
-/* Phone: the hand wraps onto its own row under the name, spanning the
-   name/hand/lives columns -- rank and avatar stay put by repeating their
-   area names across both grid rows. */
-@media (max-width: 480px) {
+/* Phone (<=640px): a dense 52px-ish row -- 36px rank, 28px avatar, a name
+   that wraps to at most 2 lines instead of truncating, and the hand/lives
+   sharing a second compact line under the name. Desktop keeps the full-size
+   card above untouched (see the tier-section grid rule further down for the
+   desktop two-column layout that's the other half of "more divisions per
+   screen"). */
+@media (max-width: 640px) {
   html[data-ui="v2"] .player-card {
-    grid-template-columns: 44px 40px 1fr auto;
+    grid-template-columns: 36px 28px 1fr auto;
     grid-template-areas:
       "rank avatar name points"
       "rank avatar hand lives";
+    padding: 6px 10px;
+    row-gap: 2px;
+    column-gap: 8px;
+  }
+  html[data-ui="v2"] .player-card-rank {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+    border-radius: 6px;
+  }
+  html[data-ui="v2"] .player-card-avatar {
+    width: 28px;
+    height: 28px;
+  }
+  html[data-ui="v2"] .player-card-avatar-initials {
+    font-size: 11px;
   }
   /* Give the name the whole middle column and let it wrap to two lines
      instead of truncating ("JayS..."). */
@@ -218,9 +243,26 @@ html[data-ui="v2"] .player-card-points-label {
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     line-height: 1.2;
+    font-size: 13px;
+  }
+  html[data-ui="v2"] .player-card-points {
+    width: 44px;
+    padding: 2px 0;
+  }
+  html[data-ui="v2"] .player-card-points-value {
+    font-size: 16px;
+  }
+  html[data-ui="v2"] .player-card-points-label {
+    font-size: 9px;
   }
   html[data-ui="v2"] .player-card-lives {
     justify-self: end;
+    font-size: 12px;
+  }
+  /* Icon + number only on phone -- "lives" spelled out is a desktop-only
+     label (see the base rule above). */
+  html[data-ui="v2"] .player-card-lives-label {
+    display: none;
   }
 }
 
@@ -236,18 +278,23 @@ html[data-ui="v2"] .player-card-points-label {
 html[data-ui="v2"] .player-card {
   animation: player-card-deal-in 220ms ease-out backwards;
 }
-html[data-ui="v2"] .player-card:nth-child(1) { animation-delay: 0ms; }
-html[data-ui="v2"] .player-card:nth-child(2) { animation-delay: 30ms; }
-html[data-ui="v2"] .player-card:nth-child(3) { animation-delay: 60ms; }
-html[data-ui="v2"] .player-card:nth-child(4) { animation-delay: 90ms; }
-html[data-ui="v2"] .player-card:nth-child(5) { animation-delay: 120ms; }
-html[data-ui="v2"] .player-card:nth-child(6) { animation-delay: 150ms; }
-html[data-ui="v2"] .player-card:nth-child(7) { animation-delay: 180ms; }
-html[data-ui="v2"] .player-card:nth-child(8) { animation-delay: 210ms; }
-html[data-ui="v2"] .player-card:nth-child(9) { animation-delay: 240ms; }
-html[data-ui="v2"] .player-card:nth-child(10) { animation-delay: 270ms; }
-html[data-ui="v2"] .player-card:nth-child(11) { animation-delay: 300ms; }
-html[data-ui="v2"] .player-card:nth-child(n+12) { animation-delay: 330ms; }
+/* nth-of-type (not nth-child): the tie-footnote / no-matches-yet lines
+   below are <p> siblings interleaved between .player-card <div>s, and
+   nth-of-type counts only same-tag siblings, so the stagger still lines up
+   with each card's OWN position regardless of how many footnote lines sit
+   between them. */
+html[data-ui="v2"] .player-card:nth-of-type(1) { animation-delay: 0ms; }
+html[data-ui="v2"] .player-card:nth-of-type(2) { animation-delay: 30ms; }
+html[data-ui="v2"] .player-card:nth-of-type(3) { animation-delay: 60ms; }
+html[data-ui="v2"] .player-card:nth-of-type(4) { animation-delay: 90ms; }
+html[data-ui="v2"] .player-card:nth-of-type(5) { animation-delay: 120ms; }
+html[data-ui="v2"] .player-card:nth-of-type(6) { animation-delay: 150ms; }
+html[data-ui="v2"] .player-card:nth-of-type(7) { animation-delay: 180ms; }
+html[data-ui="v2"] .player-card:nth-of-type(8) { animation-delay: 210ms; }
+html[data-ui="v2"] .player-card:nth-of-type(9) { animation-delay: 240ms; }
+html[data-ui="v2"] .player-card:nth-of-type(10) { animation-delay: 270ms; }
+html[data-ui="v2"] .player-card:nth-of-type(11) { animation-delay: 300ms; }
+html[data-ui="v2"] .player-card:nth-of-type(n+12) { animation-delay: 330ms; }
 
 @media (prefers-reduced-motion: reduce) {
   html[data-ui="v2"] .player-card {
@@ -257,4 +304,103 @@ html[data-ui="v2"] .player-card:nth-child(n+12) { animation-delay: 330ms; }
   html[data-ui="v2"] .player-card:hover {
     transform: none;
   }
+}
+
+/* One merged tie footnote under a tie group (groupTiebreakNotes in
+   lib/standings-cards-core.ts) instead of a note repeated on every tied
+   row. Sits as its own line between player-cards, so it needs its own
+   small indent/margin rather than living inside a card. */
+html[data-ui="v2"] .tie-footnote-v2 {
+  margin: -4px 0 8px 48px;
+  font-size: 11px;
+  color: var(--paper-faint);
+  font-style: italic;
+}
+@media (max-width: 640px) {
+  html[data-ui="v2"] .tie-footnote-v2 {
+    margin-left: 40px;
+  }
+}
+
+/* Early season (0 played): one line for the whole division instead of
+   every row's "1" rank + "0 PTS" tile (both dropped per-row, see
+   DivisionStandingsTable's noMatchesYet handling). */
+html[data-ui="v2"] .no-matches-yet-v2 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--paper-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+/* "Your division" card -- /standings' pinned summary for a signed-in
+   player (see app/standings/page.tsx's YourDivisionCard). Off by default
+   like every other v2-only block (no v1 equivalent at all), shown only
+   under html[data-ui="v2"]. */
+.your-division-v2 { display: none; }
+html[data-ui="v2"] .your-division-v2 {
+  display: block;
+  margin-bottom: 16px;
+  border: 2px solid var(--gold);
+  box-shadow: 0 0 0 3px rgba(241, 181, 58, 0.14);
+}
+html[data-ui="v2"] .your-division-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+html[data-ui="v2"] .your-division-name-block {
+  flex: 1;
+  min-width: 0;
+}
+html[data-ui="v2"] .your-division-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--gold);
+}
+html[data-ui="v2"] .your-division-rank {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-body-v2), "Segoe UI", sans-serif;
+  font-weight: 800;
+  font-size: 16px;
+  border-radius: 8px;
+  background: var(--panel-edge);
+  color: var(--paper);
+}
+html[data-ui="v2"] .your-division-rank[data-rarity="0"] { background: var(--legendary); color: #0b1b1a; }
+html[data-ui="v2"] .your-division-rank[data-rarity="1"] { background: var(--rare); color: #0b1b1a; }
+html[data-ui="v2"] .your-division-rank[data-rarity="2"] { background: var(--uncommon); color: #0b1b1a; }
+html[data-ui="v2"] .your-division-rank[data-rarity="3"] { background: var(--common); color: #0b1b1a; }
+html[data-ui="v2"] .your-division-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 14px;
+}
+html[data-ui="v2"] .your-division-points {
+  font-weight: 800;
+  font-size: 18px;
+}
+html[data-ui="v2"] .your-division-hand {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+html[data-ui="v2"] .your-division-left {
+  margin-top: 8px;
+  font-size: 13px;
+}
+html[data-ui="v2"] .your-division-report {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gold);
 }

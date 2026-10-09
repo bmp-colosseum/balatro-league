@@ -28,6 +28,14 @@ export interface DivisionStandingRow {
   gamesLost: number;
   played: number;
   tiedWithPrev?: boolean;
+  // Standard competition ranking (shared rank for genuine ties) -- see
+  // StandingRow.rank in @/lib/standings. Previously dropped on the floor
+  // here, which made rankLabel/the v2 rank badge fall back to the row's
+  // POSITIONAL index (1,2,3,4,5) instead of the cache's shared-rank number
+  // (1,2,2,2,5) -- the same tied players showed different ranks on this
+  // page than on /standings, which reads loadDivisionStandings' rows
+  // directly and so always had `rank` intact.
+  rank?: number;
   dropped: boolean;
   // Set only under a best-N scoring mode -- see StandingRow.counted/of.
   counted?: number;
@@ -209,6 +217,7 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
     gamesLost: r.gamesLost,
     played: r.played,
     tiedWithPrev: r.tiedWithPrev,
+    rank: r.rank,
     dropped: droppedIds.has(r.player.id),
     counted: r.counted,
     of: r.of,
