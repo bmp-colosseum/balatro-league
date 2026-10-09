@@ -17,7 +17,7 @@ import { prisma } from "../db.js";
 import { spawnDisputeThread } from "../dispute-thread.js";
 import { getOrCreatePlayer, guildDisplayName } from "../players.js";
 import { enqueueReportAutoConfirm } from "../queue.js";
-import { buildReportEmbed, postPendingReport } from "../report-flow.js";
+import { buildReportContainer, postPendingReport } from "../report-flow.js";
 import { confirmSet, disputeSet, reportSet } from "../reporting.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
 import type { ButtonHandler, ModalHandler, SelectMenuHandler, SlashCommand } from "./types.js";
@@ -187,7 +187,7 @@ export const reportButtons: ButtonHandler = {
     // align. Edit the embed to drop the buttons and show outcome.
     enqueueAnnounceResult(pairingId).catch(() => {});
     recomputeDivisionStandings(pairing.divisionId).catch(() => {});
-    const embed = buildReportEmbed({
+    const container = buildReportContainer({
       status: "CONFIRMED",
       reporter,
       opponent,
@@ -196,7 +196,7 @@ export const reportButtons: ButtonHandler = {
       reporterIsA,
       pairingId: pairing.id,
     });
-    await interaction.update({ content: "", embeds: [embed], components: [] });
+    await interaction.update({ flags: MessageFlags.IsComponentsV2, components: [container] });
   },
 };
 
@@ -307,9 +307,9 @@ export const disputeModal: ModalHandler = {
     const reporterIsA = pairing.reporterId === pairing.playerAId;
     const reporter = reporterIsA ? pairing.playerA : pairing.playerB;
     const opponent = reporterIsA ? pairing.playerB : pairing.playerA;
-    // Build embed for logging/thread purposes only — we don't have a
-    // handle on the original announce embed to update from here.
-    const _embed = buildReportEmbed({
+    // Build the container for logging/thread purposes only — we don't have a
+    // handle on the original announce message to update from here.
+    const _container = buildReportContainer({
       status: "DISPUTED",
       reporter,
       opponent,
@@ -318,9 +318,9 @@ export const disputeModal: ModalHandler = {
       reporterIsA,
       pairingId: pairing.id,
     });
-    // (update already happened above; just mark _embed as
+    // (update already happened above; just mark _container as
     // intentionally unused so the lint+tsc don't complain.)
-    void _embed;
+    void _container;
     spawnDisputeThread(pairing.id, { skipEmbedEdit: true }).catch((err) =>
       console.warn(`[dispute-modal] thread spawn for ${pairingId}:`, err),
     );

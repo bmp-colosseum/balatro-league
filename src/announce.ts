@@ -19,13 +19,26 @@
 //   channel: season.resultsChannelId  → LeagueConfig.ResultsChannelId → env.RESULTS_CHANNEL_ID
 
 import { REST } from "@discordjs/rest";
-import { Routes, type RESTPostAPIChannelMessageJSONBody } from "discord-api-types/v10";
-import { EmbedBuilder } from "discord.js";
+import { MessageFlags, Routes, type RESTPostAPIChannelMessageJSONBody } from "discord-api-types/v10";
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ContainerBuilder,
+  EmbedBuilder,
+  SeparatorBuilder,
+  TextDisplayBuilder,
+} from "discord.js";
+import { deckEmoji, stakeEmoji } from "./balatro-emojis.js";
 import { prisma } from "./db.js";
 import { env } from "./env.js";
+import { formatSeasonLabel } from "./format-season.js";
 import { getConfig, LeagueConfigKey } from "./league-config.js";
 import { attachRestTiming } from "./rate-limit-logger.js";
+import { buildConfirmedResultBlocks, type GameLineInput } from "./result-message-core.js";
 import { sanitizeName } from "./sanitize.js";
+import { tierAccentColor } from "./tier-colors.js";
+import { webUrl } from "./web-url.js";
 
 let cachedRest: REST | null = null;
 function rest(): REST {
@@ -44,7 +57,7 @@ export async function announceResult(pairingId: string): Promise<void> {
     include: {
       playerA: true,
       playerB: true,
-      division: { include: { season: true } },
+      division: { include: { season: true, tier: true } },
       // Per-game deck/stake lives on Game rows (the guided /start-match flow
       // writes them via writeMatchGames). The legacy Match.reportedDeck/
       // reportedStake columns are only populated by the old /report path and
@@ -66,77 +79,65 @@ export async function announceResult(pairingId: string): Promise<void> {
     env.RESULTS_CHANNEL_ID;
   if (!webhookUrl && !channelId) return;
 
-  // Forfeit/DQ wins are flagged publicly ("by DQ") but the reason stays
-  // admin-only — never surface pairing.forfeitReason here.
-  const dqSuffix = pairing.forfeit ? " — by DQ" : "";
-  let title: string;
-  let color: number;
-  if (pairing.gamesWonA === 2 && pairing.gamesWonB === 0) {
-    title = `🏆 ${sanitizeName(pairing.playerA.displayName)} beats ${sanitizeName(pairing.playerB.displayName)}${dqSuffix}`;
-    color = 0x2ecc71;
-  } else if (pairing.gamesWonB === 2 && pairing.gamesWonA === 0) {
-    title = `🏆 ${sanitizeName(pairing.playerB.displayName)} beats ${sanitizeName(pairing.playerA.displayName)}${dqSuffix}`;
-    color = 0x2ecc71;
-  } else {
-    title = `🤝 ${sanitizeName(pairing.playerA.displayName)} draws ${sanitizeName(pairing.playerB.displayName)}`;
-    color = 0xf1c40f;
-  }
-
-  const embed = new EmbedBuilder()
-    .setTitle(title)
-    .setDescription(
-      `${sanitizeName(pairing.playerA.displayName)} **${pairing.gamesWonA}–${pairing.gamesWonB}** ${sanitizeName(pairing.playerB.displayName)}\n` +
-        `Division: **${pairing.division.name}**` +
-        (pairing.forfeit ? `\n_Win by forfeit / DQ._` : ""),
-    )
-    .setColor(color)
-    .setFooter({ text: `Match ${pairing.id}` })
-    .setTimestamp(new Date());
   // Per-game breakdown: what was played and who took it. Prefer the real Game
   // rows; fall back to the legacy reported* columns for matches recorded through
   // the old /report path or admin manual entry (which have no Game deck/stake).
-  const gameLines = pairing.games
-    .map((g) => {
-      const combo = [g.deck, g.stake].filter(Boolean).join(" / ");
-      if (!combo && !g.winnerId) return null;
-      const winner =
-        g.winnerId === pairing.playerAId
-          ? pairing.playerA.displayName
-          : g.winnerId === pairing.playerBId
-            ? pairing.playerB.displayName
-            : null;
-      const who = winner ? ` — **${sanitizeName(winner)}**` : "";
-      return `Game ${g.num}: ${combo || "_combo not recorded_"}${who}`;
-    })
-    .filter((l): l is string => l !== null);
+  const games: GameLineInput[] = pairing.games.map((g) => ({
+    num: g.num,
+    deck: g.deck,
+    stake: g.stake,
+    deckEmoji: g.deck ? deckEmoji(g.deck) : null,
+    stakeEmoji: g.stake ? stakeEmoji(g.stake) : null,
+    winnerName:
+      g.winnerId === pairing.playerAId
+        ? sanitizeName(pairing.playerA.displayName)
+        : g.winnerId === pairing.playerBId
+          ? sanitizeName(pairing.playerB.displayName)
+          : null,
+    winnerLives: g.winnerLives,
+  }));
+  const fallbackCombo =
+    pairing.games.length === 0 && (pairing.reportedDeck || pairing.reportedStake)
+      ? [pairing.reportedDeck, pairing.reportedStake].filter(Boolean).join(" / ")
+      : null;
 
-  if (gameLines.length > 0) {
-    embed.addFields({ name: "🎴 Games", value: gameLines.join("\n"), inline: false });
-  } else if (pairing.reportedDeck || pairing.reportedStake) {
-    embed.addFields({
-      name: "🎴 Played",
-      value: [pairing.reportedDeck, pairing.reportedStake].filter(Boolean).join(" / "),
-      inline: false,
-    });
+  // Forfeit/DQ wins are flagged publicly (the "_Win by forfeit / DQ._" line)
+  // but the reason stays admin-only — never surface pairing.forfeitReason here.
+  const blocks = buildConfirmedResultBlocks({
+    seasonLabel: formatSeasonLabel(season),
+    divisionName: pairing.division.name,
+    divisionUrl: webUrl(`divisions/${pairing.division.id}`),
+    playerAName: sanitizeName(pairing.playerA.displayName),
+    playerBName: sanitizeName(pairing.playerB.displayName),
+    gamesWonA: pairing.gamesWonA,
+    gamesWonB: pairing.gamesWonB,
+    forfeit: pairing.forfeit,
+    matchId: pairing.id,
+    games,
+    fallbackCombo,
+  });
+
+  // Accent color = the division's tier rarity color, falling back to gold
+  // for an unexpected/missing tier position.
+  const container = new ContainerBuilder().setAccentColor(tierAccentColor(pairing.division.tier.position));
+  container.addTextDisplayComponents(new TextDisplayBuilder().setContent(blocks.metaLine));
+  container.addTextDisplayComponents(new TextDisplayBuilder().setContent(blocks.headerLine));
+  if (blocks.gamesLine) {
+    container.addSeparatorComponents(new SeparatorBuilder());
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(blocks.gamesLine));
   }
+  container.addTextDisplayComponents(new TextDisplayBuilder().setContent(blocks.footerLine));
 
   // Dispute button — visible inline so a player who sees their result
   // and disagrees can flag it without leaving the channel. Routes to
   // the existing report:dispute handler in src/commands/report.ts which
   // already accepts CONFIRMED pairings (kicks off the dispute flow).
-  const components = [
-    {
-      type: 1, // ACTION_ROW
-      components: [
-        {
-          type: 2, // BUTTON
-          style: 4, // DANGER (red)
-          label: "Dispute this result",
-          custom_id: `report:dispute:${pairing.id}`,
-        },
-      ],
-    },
-  ];
+  const disputeRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`report:dispute:${pairing.id}`)
+      .setLabel("Dispute this result")
+      .setStyle(ButtonStyle.Danger),
+  );
 
   // Bot REST is the preferred path because it can attach interactive
   // components (the Dispute button). User-created webhook URLs CAN'T
@@ -144,7 +145,11 @@ export async function announceResult(pairingId: string): Promise<void> {
   // more setup than just using the bot identity directly.
   if (channelId) {
     try {
-      const body: RESTPostAPIChannelMessageJSONBody = { embeds: [embed.toJSON()], components };
+      const body: RESTPostAPIChannelMessageJSONBody = {
+        flags: MessageFlags.IsComponentsV2,
+        components: [container.toJSON(), disputeRow.toJSON()],
+        allowed_mentions: { parse: [] },
+      };
       await rest().post(Routes.channelMessages(channelId), { body });
       return;
     } catch (err) {
@@ -154,7 +159,7 @@ export async function announceResult(pairingId: string): Promise<void> {
     }
   }
 
-  // Webhook fallback — posts the embed without the dispute button
+  // Webhook fallback — posts the container without the dispute button
   // (webhooks don't carry interactive components reliably). Useful
   // when no channel id is configured at all.
   if (webhookUrl) {
@@ -162,7 +167,11 @@ export async function announceResult(pairingId: string): Promise<void> {
       const res = await fetch(webhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ embeds: [embed.toJSON()] }),
+        body: JSON.stringify({
+          flags: MessageFlags.IsComponentsV2,
+          components: [container.toJSON()],
+          allowed_mentions: { parse: [] },
+        }),
       });
       if (!res.ok) {
         console.warn(`[announceResult] webhook failed: ${res.status} ${await res.text()}`);
