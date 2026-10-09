@@ -42,11 +42,12 @@ uncommon, `--info` = common, `--admin` keeps its orange. Tailwind/shadcn
 
 ## Type
 
-- Display: **Pixelify Sans** 700 (Google Fonts) for h1/h2, division names,
-  tier chips, buttons, the "you" badge. Never for body copy, nav links or
-  numbers in tables (pixel digits read as blocks at table sizes; points use
-  the body face at 800 weight).
-- Body: **Nunito Sans** 400/600/700 for everything else. 15px base, line-height 1.5.
+- Display: **Pixelify Sans** 700 (self-hosted from `web/app/fonts/`, see
+  `web/app/layout.tsx`) for h1/h2, division names, tier chips, buttons, the
+  "you" badge. Never for body copy, nav links or numbers in tables (pixel
+  digits read as blocks at table sizes; points use the body face at 800 weight).
+- Body: **Nunito Sans** 400/600/700 (self-hosted from `web/app/fonts/`) for
+  everything else. 15px base, line-height 1.5.
 - Numbers in columns: `font-variant-numeric: tabular-nums`.
 - Uppercase labels (table headers, eyebrows): 11px, letter-spacing .8px, paper-faint.
 - Headings: `text-wrap: balance`. Scale: h1 clamp(28px, 5vw, 40px); h2 22px; h3 17px.

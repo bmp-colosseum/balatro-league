@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Silkscreen, Jersey_10, Nunito_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -9,9 +9,15 @@ import { getUiPreviewV2 } from "@/lib/preferences";
 // without hurting readability of the dense tables (body text stays system).
 // Silkscreen has sharper, blockier glyphs than Pixelify (whose rounded digits
 // read poorly). Kept as-is for the current (v1) look.
-const pixel = Silkscreen({
-  subsets: ["latin"],
-  weight: ["400", "700"],
+//
+// Self-hosted (latin subset woff2 files in ./fonts) instead of next/font/google
+// so production builds don't need to reach fonts.googleapis.com at build time.
+// See ./fonts/LICENSE-*.txt for the OFL license text of each family.
+const pixel = localFont({
+  src: [
+    { path: "./fonts/silkscreen-400.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/silkscreen-700.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-pixel",
   display: "swap",
 });
@@ -20,16 +26,17 @@ const pixel = Silkscreen({
 // (see globals.css); loaded unconditionally here since next/font needs a
 // module-scope call, but an unused @font-face costs nothing until something
 // references its CSS variable.
-const displayV2 = Jersey_10({
-  subsets: ["latin"],
-  weight: ["400"],
+const displayV2 = localFont({
+  src: [{ path: "./fonts/jersey-10-400.woff2", weight: "400", style: "normal" }],
   variable: "--font-display-v2",
   display: "swap",
 });
 
-const bodyV2 = Nunito_Sans({
-  subsets: ["latin"],
-  weight: ["400", "600", "700"],
+// Nunito Sans ships from Google as a single variable woff2 (wght 200..1000,
+// sliced into weight-specific @font-face blocks that all point at the same
+// file) -- so we keep the one file and declare the full variable range.
+const bodyV2 = localFont({
+  src: [{ path: "./fonts/nunito-sans-variable.woff2", weight: "200 1000", style: "normal" }],
   variable: "--font-body-v2",
   display: "swap",
 });
