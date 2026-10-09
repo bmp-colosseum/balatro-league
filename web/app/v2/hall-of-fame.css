@@ -53,8 +53,26 @@ html[data-ui="v2"] .hof-shelf-dates {
   color: var(--paper-dim);
 }
 
+/* --hof-row-h approximates one card's rendered height (trophy row + division
+   label + player name + vertical padding) plus the row gap below it. Cards
+   wrap via plain flexbox, which exposes no per-row selector to hang a real
+   "shelf plank" element off of -- so the deck's background instead repeats a
+   thin line every --hof-row-h down the whole stack, landing right under each
+   wrapped row's bottom edge. If the card's padding/font-sizes change (hof-card
+   rules below), retune this to match. */
 html[data-ui="v2"] .hof-shelf-deck {
-  background: var(--panel);
+  --hof-row-h: 96px;
+  background-color: var(--panel);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(var(--hof-row-h) - 3px),
+    var(--panel-edge) calc(var(--hof-row-h) - 3px),
+    var(--panel-edge) var(--hof-row-h)
+  );
+  /* Shifts the repeating pattern down by the deck's own top padding, so the
+     first line falls just below row 1 instead of partway through it. */
+  background-position: 0 18px;
   border: 2px solid var(--panel-edge);
   border-top: none;
   border-radius: 0 0 var(--radius) var(--radius);
@@ -63,17 +81,11 @@ html[data-ui="v2"] .hof-shelf-deck {
 html[data-ui="v2"] .hof-shelf-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  align-content: flex-start;
+  row-gap: 12px;
+  column-gap: 12px;
   position: relative;
   z-index: 2;
-  /* Pulls the row's bottom 6px over the shelf line below it, so the cards
-     read as standing ON the shelf instead of floating above it. */
-  margin-bottom: -6px;
-}
-html[data-ui="v2"] .hof-shelf-line {
-  height: 3px;
-  border-radius: 2px;
-  background: var(--panel-edge);
 }
 
 /* Card: 150px wide (two fit per row on a phone-width shelf with room to
@@ -115,16 +127,19 @@ html[data-ui="v2"] .hof-card-trophy {
   right: 8px;
 }
 
-/* Gold "xN" sticker for a champion with more than one title overall
-   (titleCount from lib/hall-of-fame-core.ts via the loader). */
+/* Gold "xN" sticker for a champion with more than one division title overall
+   (titleCount from lib/hall-of-fame-core.ts via the loader). Body face at 800,
+   not the pixel display face -- pixel digits this small read as blocks (same
+   rule as td.pts-cell in globals.css). */
 html[data-ui="v2"] .hof-card-sticker {
   position: absolute;
   top: 8px;
   left: 8px;
   background: var(--gold);
   color: var(--gold-ink);
-  font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
-  font-size: 10px;
+  font-family: var(--font-body-v2), "Segoe UI", sans-serif;
+  font-weight: 800;
+  font-size: 11px;
   line-height: 1;
   padding: 2px 5px;
   border-radius: 4px;

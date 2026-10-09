@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { SiteNav } from "@/components/SiteNav";
-import { loadHallOfFame, type HofMatch, type HofSeason } from "@/lib/loaders/hall-of-fame";
+import { loadHallOfFame, type HofMatch, type HofSeason, type HofDivisionChampion } from "@/lib/loaders/hall-of-fame";
 import { rarityIndex } from "@/lib/tier-colors";
 
 export const dynamic = "force-dynamic";
@@ -115,14 +115,17 @@ function HallOfFameTrophyShelf({ seasons }: { seasons: HofSeason[] }) {
     );
   }
 
-  const distinctChampions = new Set(seasons.map((s) => s.champion!.playerId)).size;
+  const allDivisionChampions = seasons.flatMap((s) => s.divisionChampions);
+  const titleCount = allDivisionChampions.length;
+  const distinctChampions = new Set(allDivisionChampions.map((c) => c.playerId)).size;
 
   return (
     <>
       <div className="hof-header">
         <h2 className="pixel hof-title">Hall of Fame</h2>
         <p className="muted hof-count">
-          {seasons.length} season{seasons.length === 1 ? "" : "s"}, {distinctChampions} champion{distinctChampions === 1 ? "" : "s"}
+          {seasons.length} season{seasons.length === 1 ? "" : "s"}, {titleCount} division title{titleCount === 1 ? "" : "s"},{" "}
+          {distinctChampions} champion{distinctChampions === 1 ? "" : "s"}
         </p>
       </div>
 
@@ -136,9 +139,6 @@ function HallOfFameTrophyShelf({ seasons }: { seasons: HofSeason[] }) {
 }
 
 function HallOfFameShelf({ season: s }: { season: HofSeason }) {
-  const champ = s.champion!;
-  const rarity = rarityIndex(champ.tierPosition);
-
   return (
     <section className="hof-shelf">
       <div className="hof-shelf-band">
@@ -146,26 +146,28 @@ function HallOfFameShelf({ season: s }: { season: HofSeason }) {
         <span className="hof-shelf-dates">Ended {endedLabel(s.endedAt)}</span>
       </div>
       <div className="hof-shelf-deck">
+        {/* One card per division champion, ladder order (tierPosition asc,
+            then group number asc, from the loader) -- the Legendary/top-tier
+            champion lands first and renders larger via data-rarity="0" (see
+            app/v2/hall-of-fame.css). Wraps onto multiple shelf rows as needed;
+            the deck's repeating background keeps a shelf line under every
+            wrapped row, not just the last one. */}
         <div className="hof-shelf-row">
-          <HallOfFameCard champion={champ} rarity={rarity} />
+          {s.divisionChampions.map((champ) => (
+            <HallOfFameCard key={champ.playerId + champ.divisionName} champion={champ} />
+          ))}
         </div>
-        <div className="hof-shelf-line" />
       </div>
     </section>
   );
 }
 
-function HallOfFameCard({
-  champion: champ,
-  rarity,
-}: {
-  champion: NonNullable<HofSeason["champion"]>;
-  rarity: number;
-}) {
+function HallOfFameCard({ champion: champ }: { champion: HofDivisionChampion }) {
+  const rarity = rarityIndex(champ.tierPosition);
   return (
     <Link href={`/profile/${champ.playerId}`} className="hof-card" data-rarity={rarity}>
       <HofTrophyIcon />
-      {champ.titleCount > 1 && <span className="hof-card-sticker">x{champ.titleCount}</span>}
+      {champ.titleCount >= 2 && <span className="hof-card-sticker">x{champ.titleCount}</span>}
       <div className="pixel hof-card-division" data-rarity={rarity}>
         {champ.divisionName}
       </div>
