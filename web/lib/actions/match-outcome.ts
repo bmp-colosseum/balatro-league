@@ -79,5 +79,6 @@ export async function setMatchOutcome(formData: FormData) {
   if (r && !r.ok) fail(r.reason);
   revalidatePath(`/divisions/${divisionId}`);
   revalidatePath("/admin/results");
+  revalidatePath("/admin/matches");
   redirect(`${returnTo}?ok=match-updated`);
 }
