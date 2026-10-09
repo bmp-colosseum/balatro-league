@@ -219,6 +219,7 @@ function sortStandings(
       rows,
       (xId, yId) => shootoutBetween(xId, yId, shootouts),
       (xId, yId) => headToHeadLivesDiff(xId, yId, pairings),
+      (xId, yId) => headToHead(xId, yId, pairings),
     );
     return assignRanks(ordered);
   }
@@ -372,6 +373,9 @@ export function orderLivesPointsGroup<T extends StandingRow>(
   group: T[],
   shootoutBetween: (xId: string, yId: string) => number,
   h2hLivesDiff: (xId: string, yId: string) => number | null,
+  // Negative when x beat y 2-0 head-to-head, positive when y beat x, 0 when
+  // they drew, never met, or (best-N) the result is not counted by both.
+  h2hResult: (xId: string, yId: string) => number = () => 0,
 ): T[] {
   if (group.length <= 1) return group.slice();
 
@@ -388,9 +392,22 @@ export function orderLivesPointsGroup<T extends StandingRow>(
     if (diff !== null) {
       a.h2hLives = diff;
       b.h2hLives = diff === 0 ? 0 : -diff; // avoid -0 when the match netted exactly even
+    }
+
+    // A 2-0 head-to-head win settles a two-way tie outright, with or without
+    // lives recorded for that match.
+    const h2h = h2hResult(a.player.id, b.player.id);
+    if (h2h !== 0) {
+      const [winner, loser] = h2h < 0 ? [a, b] : [b, a];
+      winner.tiebreakNote = `Tied on points with ${loser.player.displayName}; beat them head-to-head`;
+      loser.tiebreakNote = `Tied on points with ${winner.player.displayName}; lost to them head-to-head`;
+      return [winner, loser];
+    }
+
+    if (diff !== null) {
       if (diff !== 0) {
-        a.tiebreakNote = `Tied on points with ${b.player.displayName}; head-to-head lives ${formatSignedLives(a.h2hLives)} vs ${formatSignedLives(b.h2hLives)} decided it`;
-        b.tiebreakNote = `Tied on points with ${a.player.displayName}; head-to-head lives ${formatSignedLives(b.h2hLives)} vs ${formatSignedLives(a.h2hLives)} decided it`;
+        a.tiebreakNote = `Tied on points with ${b.player.displayName}; head-to-head lives ${formatSignedLives(diff)} vs ${formatSignedLives(-diff)} decided it`;
+        b.tiebreakNote = `Tied on points with ${a.player.displayName}; head-to-head lives ${formatSignedLives(-diff)} vs ${formatSignedLives(diff)} decided it`;
         return diff > 0 ? [a, b] : [b, a];
       }
     }
@@ -466,6 +483,7 @@ export function sortStandingsLives<T extends StandingRow>(
   rows: T[],
   shootoutBetween: (xId: string, yId: string) => number,
   h2hLivesDiff: (xId: string, yId: string) => number | null,
+  h2hResult: (xId: string, yId: string) => number = () => 0,
 ): T[] {
   const byPoints = rows.slice().sort((x, y) => y.points - x.points);
   const result: T[] = [];
@@ -473,7 +491,7 @@ export function sortStandingsLives<T extends StandingRow>(
   while (i < byPoints.length) {
     let j = i + 1;
     while (j < byPoints.length && byPoints[j]!.points === byPoints[i]!.points) j++;
-    result.push(...orderLivesPointsGroup(byPoints.slice(i, j), shootoutBetween, h2hLivesDiff));
+    result.push(...orderLivesPointsGroup(byPoints.slice(i, j), shootoutBetween, h2hLivesDiff, h2hResult));
     i = j;
   }
   return result;

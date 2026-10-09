@@ -344,19 +344,19 @@ describe("computeStandings -- tiebreak: lives -- tiebreakNote audit", () => {
     expect(alice.tiebreakNote).toBe("Tied on points with Bob; shootout decided it");
   });
 
-  it("head-to-head lives decided a 2-way tie after a 2-0 -- signed numbers, own value first", () => {
+  it("head-to-head lives decided a 2-way tie after a 1-1 -- signed numbers, own value first", () => {
     const players = [P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"), P("eve", "Eve"), P("dave", "Dave")];
     const pairings = [
-      ML("alice", "bob", 2, 0, [G("alice", 4), G("alice", 1)]), // h2h diff = +5 for alice
-      ML("alice", "carol", 0, 2), // alice's compensating loss
+      ML("alice", "bob", 1, 1, [G("alice", 4), G("bob", 1)]), // h2h diff = +3 for alice (1-1, so no outright win)
+      ML("alice", "carol", 2, 0), // alice to 4 points
       ML("carol", "eve", 1, 1), // keeps carol out of alice/bob's points group
-      ML("bob", "dave", 2, 0), // bob's compensating win
+      ML("bob", "dave", 2, 0), // bob to 4 points
     ];
     const lives = computeStandings(players, pairings, [], undefined, "lives");
     const alice = lives.find((r) => r.player.id === "alice")!;
     const bob = lives.find((r) => r.player.id === "bob")!;
-    expect(alice.tiebreakNote).toBe("Tied on points with Bob; head-to-head lives +5 vs -5 decided it");
-    expect(bob.tiebreakNote).toBe("Tied on points with Alice; head-to-head lives -5 vs +5 decided it");
+    expect(alice.tiebreakNote).toBe("Tied on points with Bob; head-to-head lives +3 vs -3 decided it");
+    expect(bob.tiebreakNote).toBe("Tied on points with Alice; head-to-head lives -3 vs +3 decided it");
   });
 
   it("total net lives decided a 2-way tie after the within-match differential was exactly zero", () => {
@@ -477,5 +477,35 @@ describe("computeStandings -- tiebreak: lives -- tiebreakNote audit", () => {
     ];
     const chain = computeStandings(players, pairings);
     expect(chain.every((r) => r.tiebreakNote === undefined)).toBe(true);
+  });
+});
+
+describe("lives tiebreak: a 2-0 head-to-head win settles a two-way tie outright", () => {
+  it("wins even when no lives were recorded for that match", () => {
+    // Alice beat Bob 2-0 with no lives data; both otherwise level on 3 points.
+    const players = [P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"), P("eve", "Eve"), P("dave", "Dave")];
+    const pairings = [
+      ML("alice", "bob", 2, 0), // no games -> no h2h lives, but a clear 2-0
+      ML("alice", "carol", 0, 2),
+      ML("carol", "eve", 1, 1),
+      ML("bob", "dave", 2, 0),
+    ];
+    const lives = computeStandings(players, pairings, [], undefined, "lives");
+    const alice = lives.find((r) => r.player.id === "alice")!;
+    const bob = lives.find((r) => r.player.id === "bob")!;
+    expect(alice.points).toBe(3);
+    expect(bob.points).toBe(3);
+    expect(lives.indexOf(alice)).toBeLessThan(lives.indexOf(bob));
+    expect(bob.tiedWithPrev).toBeFalsy();
+    expect(alice.tiebreakNote).toBe("Tied on points with Bob; beat them head-to-head");
+    expect(bob.tiebreakNote).toBe("Tied on points with Alice; lost to them head-to-head");
+  });
+
+  it("a 1-1 head-to-head does not count as a win; lives inside the match decide instead", () => {
+    const players = [P("alice", "Alice"), P("bob", "Bob")];
+    const pairings = [ML("alice", "bob", 1, 1, [G("alice", 2), G("bob", 4)])]; // bob +2 inside the match
+    const lives = computeStandings(players, pairings, [], undefined, "lives");
+    expect(ids(lives)).toEqual(["bob", "alice"]);
+    expect(lives[0]!.tiebreakNote).toContain("head-to-head lives");
   });
 });

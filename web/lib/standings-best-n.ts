@@ -318,6 +318,7 @@ export function computeBestNStandings(
       rows,
       (xId, yId) => shootoutBetween(xId, yId, effectiveShootouts),
       (xId, yId) => (bothCounted(xId, yId) ? headToHeadLivesDiff(xId, yId, effectivePairings) : null),
+      (xId, yId) => (bothCounted(xId, yId) ? headToHead(xId, yId, effectivePairings) : 0),
     );
   } else {
     sorted = rows.slice().sort((x, y) => {
