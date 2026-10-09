@@ -210,6 +210,11 @@ export async function ProfileView({
     (m) => m.games,
   );
   const heroNetLives = netLivesForGames(heroGames);
+  // Rank -- the one hero-card fact the old "This season" block carried that
+  // the stat strip didn't already show. Folded in here instead of keeping a
+  // separate block; falls back to the player's best-ever season rank the
+  // same way the other hero stats fall back to career totals.
+  const heroRank = activeSeason ? activeSeason.rank : (t.bestRank ?? 0);
 
   // The league-wide active season's window/countdown, for the quick-actions
   // strip on your OWN profile (/me) -- independent of activeSeason above,
@@ -233,6 +238,101 @@ export async function ProfileView({
   // raw id never lands in this page's source). Best-effort: null (no link) if the Tour is
   // unconfigured/unreachable or this person isn't in the Tour.
   const tourPath = await tourProfilePath(profile.player.discordId);
+
+  // v2 match history defaults to the current season; everything else sits
+  // behind a "Show all seasons" disclosure (see .profile-match-hands-v2
+  // below). isActiveSeason comes from flattenMatchesNewestFirst, which tags
+  // each hand with the season it came from.
+  const currentSeasonHands = matchHands.filter((hand) => hand.context.isActiveSeason);
+  const pastSeasonHands = matchHands.filter((hand) => !hand.context.isActiveSeason);
+
+  // Narrowed alias -- `profile` is non-null past the notFound() check above,
+  // but TS control-flow narrowing doesn't carry into a function declaration
+  // hoisted below it, so renderMatchHand closes over this instead.
+  const viewedPlayer = profile.player;
+
+  // One "hand" card -- shared by both the current-season list and the
+  // "Show all seasons" disclosure below so the two never drift.
+  function renderMatchHand(hand: (typeof matchHands)[number]) {
+    const m = hand.match;
+    const isDisputed = m.status === "DISPUTED";
+    const isShootout = m.isShootout === true;
+    const isVoid = m.myGames === 0 && m.opponentGames === 0;
+    const badge = outcomeBadge(m, isDisputed, isVoid);
+    const date = m.confirmedAt ? m.confirmedAt.toISOString().slice(0, 10) : "-";
+    // One chip row per game: a match is two games with different
+    // deck/stake combos, and players want to see both.
+    const comboGames = m.games.filter((g) => g.deck && g.stake);
+    return (
+      <div
+        key={m.pairingId}
+        className="card profile-hand-v2"
+        data-outcome={m.outcome.toLowerCase()}
+        style={isDisputed ? { opacity: 0.75 } : undefined}
+      >
+        <div className="muted" style={{ fontSize: 11 }}>
+          {date} - {hand.context.seasonName} - <RarityText position={hand.context.tierPosition}>{hand.context.divisionName}</RarityText>
+          {isShootout && <span style={{ marginLeft: 6 }}>(shootout)</span>}
+        </div>
+        <div className="profile-hand-players">
+          <div className="profile-hand-mini-card">
+            <div className="profile-hand-mini-name">{viewedPlayer.displayName}</div>
+          </div>
+          <div className="profile-hand-vs">vs</div>
+          <div className="profile-hand-mini-card">
+            <div className="profile-hand-mini-name">
+              <Link href={`/profile/${m.opponentPlayerId}`} style={{ color: "inherit" }}>
+                {m.opponentDisplayName}
+              </Link>
+            </div>
+          </div>
+        </div>
+        <div className="profile-hand-score" style={{ textAlign: "center" }}>
+          {m.myGames}-{m.opponentGames}
+        </div>
+        {comboGames.length > 0 && (
+          <div className="profile-hand-chips">
+            {comboGames.map((g) => (
+              <span
+                key={g.num}
+                className="profile-hand-combo"
+                data-result={g.iWon === null ? "none" : g.iWon ? "won" : "lost"}
+                title={`Game ${g.num}: ${g.deck} / ${g.stake}${g.iWon === null ? "" : g.iWon ? " (won)" : " (lost)"}`}
+              >
+                <span className="profile-hand-combo-num">G{g.num}</span>
+                <span className="profile-hand-chip">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={deckImage(g.deck!)} alt="" width={14} height={14} style={{ borderRadius: 2 }} />
+                  {g.deck}
+                </span>
+                <span className="profile-hand-chip">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={stakeImage(g.stake!)} alt="" width={14} height={14} style={{ borderRadius: 2 }} />
+                  {g.stake}
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="profile-hand-meta">
+          <span className="pill" style={{ background: badge.bg, color: badge.fg, fontSize: isDisputed ? 10 : undefined }}>
+            {badge.label}
+          </span>
+          {m.uncounted && <span title={m.uncounted.title}>{m.uncounted.label}</span>}
+          {picksBansDetails(m.games, m.opponentDisplayName)}
+          {isOwnProfile && hand.context.isActiveSeason && !isShootout && (
+            <DisputeForm
+              action={submitProfileDispute}
+              pairingId={m.pairingId}
+              opponentName={m.opponentDisplayName}
+              isDisputed={isDisputed}
+              hiddenFields={{ profileId: viewedPlayer.id }}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -280,15 +380,24 @@ export async function ProfileView({
               </span>
             )}
             <div className="profile-hero-stats">
+              <div className="profile-hero-stat"><div className="label">Rank</div><div className="value">{heroRank > 0 ? `#${heroRank}` : "-"}</div></div>
               <div className="profile-hero-stat"><div className="label">Points</div><div className="value">{heroPoints}</div></div>
               <div className="profile-hero-stat"><div className="label">Record</div><div className="value">{heroRecord.wins}-{heroRecord.draws}-{heroRecord.losses}</div></div>
               <div className="profile-hero-stat"><div className="label">Net lives</div><div className="value">{heroNetLives > 0 ? `+${heroNetLives}` : heroNetLives}</div></div>
+            </div>
+            {/* Collapsed career-totals line -- replaces the separate 5-tile
+                "Career totals" grid + stray game-win-rate line below (kept,
+                v1-only, for the classic look; see .profile-stats-grid-v1 /
+                .profile-stats-gamewinrate-v1 in app/v2/profile.css). */}
+            <div className="profile-hero-summary">
+              {t.seasons} {t.seasons === 1 ? "season" : "seasons"} - {t.points} pts - {t.wins}W {t.draws}D {t.losses}L
+              {t.totalGames > 0 && <> - {t.gameWinRatePct}% game win rate</>}
             </div>
             {titleStickerList.length > 0 && (
               <div className="profile-hero-stickers">
                 {titleStickerList.map((s) => (
                   <span key={s.tierName} className="pill profile-sticker" data-rarity={s.rarity}>
-                    {s.tierName} x{s.count}
+                    {s.tierName} x<span className="profile-sticker-count">{s.count}</span>
                   </span>
                 ))}
               </div>
@@ -296,8 +405,12 @@ export async function ProfileView({
           </div>
         </div>
 
+        {/* v1 only -- v2 folds division/rank/points/record into the hero
+            card's stat strip (see profile-hero-stats above) and replaces the
+            "left to play" link with the chip-based "Still to play" card
+            below (see .profile-season-info-v1 in app/v2/profile.css). */}
         {activeSeason && (
-          <div className="card card-info" style={{ marginTop: 12 }}>
+          <div className="card card-info profile-season-info-v1" style={{ marginTop: 12 }}>
             <strong style={{ color: "var(--info)" }}>This season</strong>
             <div style={{ marginTop: 4 }}>
               In{" "}
@@ -326,6 +439,47 @@ export async function ProfileView({
                 <Link href={`/divisions/${activeSeason.divisionId}`} style={{ color: "var(--info)" }}>see your matchups →</Link>
               </div>
             )}
+          </div>
+        )}
+
+        {/* v2 "Still to play" -- the chip list the audit flagged as missing
+            (the bot's private DM panel shows "N left to play: names", the web
+            profile didn't). Own profile only -- reportableOpponents is only
+            computed for the viewer-is-owner case (loadProfileExtras). Each
+            chip and the "Report a result" link both point at the existing
+            report UI (the division page's ReportForm, and the "Report a
+            match" card further down this same page). */}
+        {isOwnProfile && ownActiveDivision && ownActiveDivision.reportableOpponents.length > 0 && (
+          <div className="card profile-still-to-play-v2" style={{ marginTop: 12 }}>
+            <strong>
+              Still to play --{" "}
+              <RarityText position={ownActiveDivision.tierPosition}>{ownActiveDivision.divisionName}</RarityText>
+            </strong>
+            <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {ownActiveDivision.reportableOpponents.map((o) => (
+                <Link
+                  key={o.playerId}
+                  href={`/divisions/${ownActiveDivision.divisionId}`}
+                  style={{
+                    display: "inline-flex",
+                    padding: "4px 10px",
+                    borderRadius: 999,
+                    background: "var(--surface-2)",
+                    border: "1px solid var(--border)",
+                    color: "var(--text)",
+                    fontSize: 13,
+                    textDecoration: "none",
+                  }}
+                >
+                  {o.displayName}
+                </Link>
+              ))}
+            </div>
+            <p style={{ marginTop: 8, marginBottom: 0, fontSize: 13 }}>
+              <a href="#report-a-match" className="link-action" style={{ color: "var(--accent-2-text)" }}>
+                Report a result -{">"}
+              </a>
+            </p>
           </div>
         )}
 
@@ -390,8 +544,11 @@ export async function ProfileView({
         )}
 
         {/* Career totals — one strip so the headline numbers (seasons, points,
-            W/D/L) aren't scattered down the page. */}
-        <div className="grid grid-3" style={{ marginTop: 12 }}>
+            W/D/L) aren't scattered down the page. v1 only -- v2 collapses
+            this into one line inside the hero card instead (see
+            .profile-hero-summary above and .profile-stats-grid-v1 /
+            .profile-stats-gamewinrate-v1 in app/v2/profile.css). */}
+        <div className="grid grid-3 profile-stats-grid-v1" style={{ marginTop: 12 }}>
           <div className="stat"><div className="label">Seasons</div><div className="value">{t.seasons}</div></div>
           <div className="stat"><div className="label">Total points</div><div className="value">{t.points}</div></div>
           <div className="stat" title={t.totalMatches > 0 ? `${t.wins}/${t.totalMatches} matches won 2-0` : undefined}>
@@ -408,7 +565,7 @@ export async function ProfileView({
           </div>
         </div>
         {t.totalGames > 0 && (
-          <div className="muted" style={{ marginTop: 6, fontSize: 12 }} title="Game-level win rate.">
+          <div className="muted profile-stats-gamewinrate-v1" style={{ marginTop: 6, fontSize: 12 }} title="Game-level win rate.">
             Game win rate: <strong>{t.gameWinRatePct}%</strong> (across {t.totalGames} games)
           </div>
         )}
@@ -457,7 +614,7 @@ export async function ProfileView({
             Same UX as /me, just lives here so the player can stay on
             their profile while logging results. */}
         {isOwnProfile && ownActiveDivision && (
-          <div className="card" style={{ marginTop: 16 }}>
+          <div id="report-a-match" className="card" style={{ marginTop: 16, scrollMarginTop: 72 }}>
             <strong>Report a match — <RarityText position={ownActiveDivision.tierPosition}>{ownActiveDivision.divisionName}</RarityText></strong>
             <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
               Season: {ownActiveDivision.seasonName}
@@ -909,92 +1066,32 @@ export async function ProfileView({
             newest first, as a "hand": two mini cards (this player vs the
             opponent) with the score between them. Keeps every v1 action/
             data point (dispute form, uncounted tag, pick/ban details,
-            shootout marker, disputed/void styling) alongside the new look. */}
+            shootout marker, disputed/void styling) alongside the new look.
+            Defaults to the CURRENT season; older seasons sit behind a "Show
+            all seasons" disclosure so a multi-season career doesn't bury
+            this season's matches. */}
         <div className="profile-match-hands-v2">
           <h3>Match history</h3>
           {matchHands.length === 0 ? (
             <div className="card muted">No matches played yet.</div>
           ) : (
-            matchHands.map((hand) => {
-              const m = hand.match;
-              const isDisputed = m.status === "DISPUTED";
-              const isShootout = m.isShootout === true;
-              const isVoid = m.myGames === 0 && m.opponentGames === 0;
-              const badge = outcomeBadge(m, isDisputed, isVoid);
-              const date = m.confirmedAt ? m.confirmedAt.toISOString().slice(0, 10) : "-";
-              // One chip row per game: a match is two games with different
-              // deck/stake combos, and players want to see both.
-              const comboGames = m.games.filter((g) => g.deck && g.stake);
-              return (
-                <div
-                  key={m.pairingId}
-                  className="card profile-hand-v2"
-                  data-outcome={m.outcome.toLowerCase()}
-                  style={isDisputed ? { opacity: 0.75 } : undefined}
-                >
-                  <div className="muted" style={{ fontSize: 11 }}>
-                    {date} - {hand.context.seasonName} - <RarityText position={hand.context.tierPosition}>{hand.context.divisionName}</RarityText>
-                    {isShootout && <span style={{ marginLeft: 6 }}>(shootout)</span>}
+            <>
+              {currentSeasonHands.length > 0 ? (
+                currentSeasonHands.map(renderMatchHand)
+              ) : (
+                <div className="card muted">No matches yet this season.</div>
+              )}
+              {pastSeasonHands.length > 0 && (
+                <details className="profile-match-hands-disclosure">
+                  <summary>
+                    Show all seasons ({pastSeasonHands.length} more {pastSeasonHands.length === 1 ? "match" : "matches"})
+                  </summary>
+                  <div className="profile-match-hands-past">
+                    {pastSeasonHands.map(renderMatchHand)}
                   </div>
-                  <div className="profile-hand-players">
-                    <div className="profile-hand-mini-card">
-                      <div className="profile-hand-mini-name">{profile.player.displayName}</div>
-                    </div>
-                    <div className="profile-hand-vs">vs</div>
-                    <div className="profile-hand-mini-card">
-                      <div className="profile-hand-mini-name">
-                        <Link href={`/profile/${m.opponentPlayerId}`} style={{ color: "inherit" }}>
-                          {m.opponentDisplayName}
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="profile-hand-score" style={{ textAlign: "center" }}>
-                    {m.myGames}-{m.opponentGames}
-                  </div>
-                  {comboGames.length > 0 && (
-                    <div className="profile-hand-chips">
-                      {comboGames.map((g) => (
-                        <span
-                          key={g.num}
-                          className="profile-hand-combo"
-                          data-result={g.iWon === null ? "none" : g.iWon ? "won" : "lost"}
-                          title={`Game ${g.num}: ${g.deck} / ${g.stake}${g.iWon === null ? "" : g.iWon ? " (won)" : " (lost)"}`}
-                        >
-                          <span className="profile-hand-combo-num">G{g.num}</span>
-                          <span className="profile-hand-chip">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={deckImage(g.deck!)} alt="" width={14} height={14} style={{ borderRadius: 2 }} />
-                            {g.deck}
-                          </span>
-                          <span className="profile-hand-chip">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={stakeImage(g.stake!)} alt="" width={14} height={14} style={{ borderRadius: 2 }} />
-                            {g.stake}
-                          </span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  <div className="profile-hand-meta">
-                    <span className="pill" style={{ background: badge.bg, color: badge.fg, fontSize: isDisputed ? 10 : undefined }}>
-                      {badge.label}
-                    </span>
-                    {m.uncounted && <span title={m.uncounted.title}>{m.uncounted.label}</span>}
-                    {picksBansDetails(m.games, m.opponentDisplayName)}
-                    {isOwnProfile && hand.context.isActiveSeason && !isShootout && (
-                      <DisputeForm
-                        action={submitProfileDispute}
-                        pairingId={m.pairingId}
-                        opponentName={m.opponentDisplayName}
-                        isDisputed={isDisputed}
-                        hiddenFields={{ profileId: profile.player.id }}
-                      />
-                    )}
-                  </div>
-                </div>
-              );
-            })
+                </details>
+              )}
+            </>
           )}
         </div>
       </main>

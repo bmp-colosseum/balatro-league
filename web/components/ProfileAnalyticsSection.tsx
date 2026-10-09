@@ -1,6 +1,6 @@
 "use client";
 
-// Collapsed "Your deck & stake stats" section on /profile/[id] and /me.
+// Collapsed "Deck and stake stats" section on /profile/[id] and /me.
 // deckPerformance/stakePerformance/favorites are already computed for free as
 // a byproduct of the match-history query the page always runs (see
 // lib/profile.ts's loadPlayerHistory) — passed in as plain props, no extra
@@ -123,7 +123,7 @@ export function ProfileAnalyticsSection({
   return (
     <details className="card" style={{ marginTop: 16 }} onToggle={handleToggle}>
       <summary style={{ cursor: "pointer" }}>
-        <strong>Your deck &amp; stake stats</strong>
+        <strong>Deck and stake stats</strong>
       </summary>
 
       {qualifyingDecks.length > 0 && (

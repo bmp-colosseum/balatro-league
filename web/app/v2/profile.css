@@ -10,6 +10,19 @@
 .profile-history-v1 { display: block; }
 html[data-ui="v2"] .profile-history-v1 { display: none; }
 
+/* The v1 "This season" card and the 5-tile career-totals grid + stray
+   game-win-rate line -- v2 folds all of this into the hero card (the stat
+   strip + the collapsed .profile-hero-summary line below it). */
+html[data-ui="v2"] .profile-season-info-v1,
+html[data-ui="v2"] .profile-stats-grid-v1,
+html[data-ui="v2"] .profile-stats-gamewinrate-v1 {
+  display: none;
+}
+
+/* "Still to play" chip card -- v2 only (own profile; see ProfileView.tsx). */
+.profile-still-to-play-v2 { display: none; }
+html[data-ui="v2"] .profile-still-to-play-v2 { display: block; }
+
 /* ---- hero card ------------------------------------------------------ */
 .profile-hero-v2 { display: none; }
 html[data-ui="v2"] .profile-hero-v2 {
@@ -115,6 +128,17 @@ html[data-ui="v2"] .profile-hero-stat .value {
   margin-top: 2px;
 }
 
+/* Collapsed career-totals line ("8 seasons - 26 pts - 4W 14D 5L - 48% game
+   win rate") -- replaces the v1 5-tile grid + separate game-win-rate line,
+   folded inside the hero card itself. Body face: this is prose, not a
+   display-face label. */
+html[data-ui="v2"] .profile-hero-summary {
+  margin-top: 10px;
+  font-family: var(--font-body-v2), "Segoe UI", sans-serif;
+  font-size: 12.5px;
+  color: var(--paper-dim);
+}
+
 html[data-ui="v2"] .profile-hero-stickers {
   display: flex;
   flex-wrap: wrap;
@@ -124,6 +148,20 @@ html[data-ui="v2"] .profile-hero-stickers {
 }
 html[data-ui="v2"] .profile-sticker {
   font-size: 10px;
+}
+/* Sentence case ("Legendary x3"), not the uppercase display-face treatment
+   the rest of .pill[data-rarity] uses for tier chips -- a repeated title
+   count reads better as prose than as a shouted chip. The count itself
+   still gets the body face + tabular numerals used for every other number
+   on the card (see .profile-sticker-count). */
+html[data-ui="v2"] .pill[data-rarity].profile-sticker {
+  text-transform: none;
+  letter-spacing: 0;
+}
+html[data-ui="v2"] .profile-sticker-count {
+  font-family: var(--font-body-v2), "Segoe UI", sans-serif;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 html[data-ui="v2"] .profile-sticker:nth-child(odd) { transform: rotate(-3deg); }
 html[data-ui="v2"] .profile-sticker:nth-child(even) { transform: rotate(2deg); }
@@ -247,6 +285,21 @@ html[data-ui="v2"] .profile-hand-meta {
   gap: 8px;
   flex-wrap: wrap;
   align-items: center;
+}
+
+/* "Show all seasons" disclosure -- match history defaults to the current
+   season; everything older sits collapsed here. */
+html[data-ui="v2"] .profile-match-hands-disclosure summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--paper-dim);
+  padding: 6px 2px;
+}
+html[data-ui="v2"] .profile-match-hands-past {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 /* The v1 name heading above the card duplicates the card itself under v2. */
