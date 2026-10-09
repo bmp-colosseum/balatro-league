@@ -134,7 +134,7 @@ tr:hover { background: var(--surface-2); }
 /* Horizontal scroll wrapper for wide tables. Wrap a <table> in
    <div class="table-scroll">…</div> and it'll scroll horizontally
    if it would otherwise overflow its container. */
-.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table-scroll { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; } /* sideways only; a few px of phantom overflow was showing a vertical bar on phones */
 
 
 .pill {
