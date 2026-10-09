@@ -24,7 +24,7 @@ import { getLeagueSettingsForSeason } from "./league-settings.js";
 import { assignRanks, computeStandings, type StandingRow, type ShootoutInput } from "./standings.js";
 import { computeBestNStandings, buildBestNMembers, type BestNPairing } from "./standings-best-n.js";
 import { normalizeScoringMode, selectStandingsEngine, buildScoringBadge, normalizeTiebreak, type ScoringBadge } from "./standings-mode.js";
-import { attachLivesToTiedRows } from "./standings-lives.js";
+import { attachNetLives } from "./standings-lives.js";
 import { buildUncounted, type UncountedEntry } from "./uncounted-core.js";
 
 interface CachedRow {
@@ -42,7 +42,7 @@ interface CachedRow {
   counted?: number;
   of?: number;
   // Set under season.tiebreak "lives" (every row), or under the default
-  // "chain" for a row that's part of a tie group (attachLivesToTiedRows,
+  // "chain" for a row that's part of a tie group (attachNetLives,
   // informational only -- see standings-lives.ts). Absent for every other
   // chain-mode row, so a division with no ties stays byte-for-byte
   // identical to before this field existed. See StandingRow.netLives/
@@ -182,12 +182,12 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
 
   // Chain mode never reorders by lives, but a TIED player's net life
   // differential is still shown as informational context -- see
-  // attachLivesToTiedRows's header. Under "lives", every row already carries
+  // attachNetLives's header. Under "lives", every row already carries
   // netLives from the engine itself, so this is a no-op there (every row
   // either already has it set, or isn't in a tie group and this would just
   // recompute the same thing -- skip entirely to avoid the redundant work).
   if (tiebreak === "chain") {
-    attachLivesToTiedRows(rows, pairings);
+    attachNetLives(rows, pairings);
   }
 
   const payload: CachedPayload = {

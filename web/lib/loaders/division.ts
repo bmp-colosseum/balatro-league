@@ -42,7 +42,7 @@ export interface DivisionStandingRow {
   of?: number;
   // Set when this row carries a net-lives value -- either because the
   // season's tiebreak is "lives" (every row), or it's "chain" and this row
-  // is part of a tie group (see attachLivesToTiedRows). See
+  // is part of a tie group (see attachNetLives). See
   // StandingRow.netLives/livesGamesMissing.
   netLives?: number;
   livesGamesMissing?: number;
@@ -117,7 +117,7 @@ export interface DivisionPageData {
   unplayed: DivisionUnplayed[];
   // True when this season's tiebreak is "lives" (ties ARE broken by net
   // lives) vs the default "chain" (net lives shown for tied players only as
-  // informational context -- see attachLivesToTiedRows). Drives the Lives
+  // informational context -- see attachNetLives). Drives the Lives
   // column's footnote wording on DivisionStandingsTable.
   livesBreaksTies: boolean;
 }
