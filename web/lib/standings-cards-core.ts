@@ -129,5 +129,6 @@ export function divisionSummaryLine(input: {
   if (input.playedMatches === 0 || !input.leaderName) {
     return `${input.divisionName} - no matches yet`;
   }
-  return `${input.divisionName} - leader ${input.leaderName} ${input.leaderPoints ?? 0} pts - ${input.playedMatches}/${input.expectedMatches} played`;
+  const pts = input.leaderPoints ?? 0;
+  return `${input.divisionName} - leader ${input.leaderName} ${pts} ${pts === 1 ? "pt" : "pts"} - ${input.playedMatches}/${input.expectedMatches} played`;
 }

@@ -204,7 +204,7 @@ export default async function StandingsPage() {
             </nav>
             <SeasonWindow start={data.season.startedAt} end={data.season.scheduledEndAt} className="mb-2" />
             <div className="card" style={{ marginBottom: 16 }}>
-              <div className="progress-v1" style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+              <div className="progress-v1">
                 <span style={{ fontSize: 15, whiteSpace: "nowrap" }}>
                   <strong>{totalPlayed}</strong> <span className="muted">/ {totalExpected}</span> matches played · <strong>{totalRemaining}</strong> remaining
                 </span>

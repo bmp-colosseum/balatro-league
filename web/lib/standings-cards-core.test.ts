@@ -172,4 +172,16 @@ describe("divisionSummaryLine", () => {
       }),
     ).toBe("Common 1 - leader Zed 0 pts - 1/6 played");
   });
+
+  test("a single point reads pt, not pts", () => {
+    expect(
+      divisionSummaryLine({
+        divisionName: "Uncommon 4",
+        leaderName: "andrejweb3",
+        leaderPoints: 1,
+        playedMatches: 1,
+        expectedMatches: 14,
+      }),
+    ).toBe("Uncommon 4 - leader andrejweb3 1 pt - 1/14 played");
+  });
 });

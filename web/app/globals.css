@@ -379,6 +379,9 @@ form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 /* v2-only "12 of 174 played" progress line (drops the "remaining"/"%
    complete" repeats v1's .progress-v1 keeps, unchanged, below). */
 .progress-v2 { display: none; }
+/* progress-v1 used to carry display:flex inline, which beat the v2 hide rule
+   further down (inline styles outrank class selectors). */
+.progress-v1 { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
 /* Phone-collapsed one-line division summary (see app/standings/page.tsx) --
    off by default; shown only at v2 phone widths while collapsed (further
    down, alongside the other details/summary rules). */
