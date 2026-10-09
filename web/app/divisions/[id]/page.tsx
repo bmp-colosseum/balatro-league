@@ -100,7 +100,7 @@ export default async function PublicDivisionPage({
     showBmpMmr,
   );
   const standingsExtras = new Map<string, StandingsRowExtras>(
-    standings.map((r) => [r.player.id, { mmr: mmrByPlayerId.get(r.player.id) }]),
+    standings.map((r) => [r.player.id, { mmr: mmrByPlayerId.get(r.player.id), avatarUrl: r.avatarUrl ?? null }]),
   );
 
   return (
@@ -203,6 +203,7 @@ export default async function PublicDivisionPage({
               bmpCurrentSeason={bmpCurrentSeason}
               showCountedBadge={!!scoringBadge}
               livesBreaksTies={livesBreaksTies}
+              tierRarity={rarityIndex(division.tierPosition)}
             />
           </div>
         </div>

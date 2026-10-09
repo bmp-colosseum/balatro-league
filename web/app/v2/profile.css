@@ -35,7 +35,7 @@ html[data-ui="v2"] .profile-hero-card {
   animation: profileHeroDealIn 220ms ease-out;
 }
 @media (min-width: 641px) {
-  html[data-ui="v2"] .profile-hero-card { aspect-ratio: 5 / 7; justify-content: center; }
+  html[data-ui="v2"] .profile-hero-card { min-height: 420px; justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) {
   html[data-ui="v2"] .profile-hero-card { animation: none; }
@@ -225,3 +225,6 @@ html[data-ui="v2"] .profile-hand-meta {
   flex-wrap: wrap;
   align-items: center;
 }
+
+/* The v1 name heading above the card duplicates the card itself under v2. */
+html[data-ui="v2"] .profile-header-v1 { display: none !important; }
