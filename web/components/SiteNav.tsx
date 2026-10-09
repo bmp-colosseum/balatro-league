@@ -13,7 +13,7 @@ import { auth } from "@/auth";
 import { isAdminUser } from "@/lib/admin";
 import { getShowBmpMmr, getShowUsernames, getShowDiscordIds, getUiPreviewV2 } from "@/lib/preferences";
 import { toggleShowBmpMmr, toggleShowUsernames, toggleShowDiscordIds } from "@/app/preferences/actions";
-import { disableUiPreviewAction } from "@/app/admin/ui-preview-actions";
+import { enableUiPreviewAction } from "@/app/admin/ui-preview-actions";
 import { loadOpenSignupRoundId } from "@/lib/loaders/join";
 import { CommandButton } from "@/components/CommandButton";
 import { Button } from "@/components/ui/button";
@@ -28,10 +28,10 @@ export async function SiteNav({ activePath }: { activePath: string }) {
   const showingBmpMmr = await getShowBmpMmr();
   const showingUsernames = await getShowUsernames();
   const showingDiscordIds = isAdmin ? await getShowDiscordIds() : false;
-  // Persistent "turn off" pill for the v2 preview -- admins only, and only
-  // while the cookie is actually set (see app/admin/ui-preview-actions.ts).
-  // A non-admin never sees this even if they somehow carry the cookie.
-  const previewingUiV2 = isAdmin ? await getUiPreviewV2() : false;
+  // The new look is the default; an admin who switched this browser to the
+  // classic look gets a persistent pill to come back (see
+  // app/admin/ui-preview-actions.ts). Non-admins never see it.
+  const classicLookOn = isAdmin ? !(await getUiPreviewV2()) : false;
   // @username display is members-only — only offer the toggle to verified members.
   const inGuild = (session?.user as { inGuild?: boolean } | undefined)?.inGuild === true;
 
@@ -75,15 +75,15 @@ export async function SiteNav({ activePath }: { activePath: string }) {
       </nav>
 
       <span className="ml-auto flex flex-nowrap items-center gap-3">
-        {previewingUiV2 && (
-          <form action={disableUiPreviewAction}>
+        {classicLookOn && (
+          <form action={enableUiPreviewAction}>
             <button
               type="submit"
               className="pill"
               style={{ background: "var(--admin)", color: "#fff", border: "none", cursor: "pointer" }}
-              title="You're previewing the v2 redesign. Click to go back to the current look."
+              title="This browser is on the classic look. Click to go back to the new look."
             >
-              Previewing new look -- turn off
+              Classic look on -- back to new look
             </button>
           </form>
         )}

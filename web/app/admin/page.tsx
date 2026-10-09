@@ -28,18 +28,18 @@ export default async function AdminHome() {
       <main>
         <h2>Admin dashboard</h2>
 
-        {/* v2 "Card Table" redesign preview -- admin-only, cookie-gated.
-            Lets a TO judge the new look on the live site with real data
-            before anyone else sees it (see ui-preview-actions.ts). */}
+        {/* The "Card Table" look is the default for everyone. This toggle is a
+            per-browser opt-out so an admin can compare against the classic
+            look while the remaining pages are restyled (see ui-preview-actions.ts). */}
         <div className="card" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <strong style={{ marginRight: "auto" }}>New look: {uiV2 ? "previewing" : "off"}</strong>
+          <strong style={{ marginRight: "auto" }}>Look: {uiV2 ? "new (default)" : "classic (this browser only)"}</strong>
           {uiV2 ? (
             <form action={disableUiPreviewAction}>
-              <button type="submit" className="secondary">Back to current</button>
+              <button type="submit" className="secondary">Use classic look here</button>
             </form>
           ) : (
             <form action={enableUiPreviewAction}>
-              <button type="submit">Preview</button>
+              <button type="submit">Back to new look</button>
             </form>
           )}
         </div>
