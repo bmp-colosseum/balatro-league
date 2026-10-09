@@ -5,6 +5,7 @@
 @import "./v2/profile.css";
 @import "./v2/division.css";
 @import "./v2/rarity-text.css";
+@import "./v2/stats.css";
 
 :root {
   --bg: #0f1115;
@@ -81,6 +82,15 @@ body {
 @layer base {
   a { color: var(--accent-2-text); text-decoration: none; }
   a:hover { text-decoration: underline; }
+  /* v2 "Card Table" link colour -- kills the leftover v1 blurple (#747ff4)
+     on plain links that carry no other colour class ("all standings",
+     "<- Standings", "All traits", "Open Discord invite" text, etc).
+     Scoped and layered the same as the rule above, so it only raises
+     specificity within @layer base -- a Tailwind utility class on a link
+     (nav pills, menu rows) still wins, same reasoning as the comment
+     above this block. */
+  html[data-ui="v2"] a { color: var(--paper); }
+  html[data-ui="v2"] a:hover { color: var(--gold); text-decoration-color: var(--gold); }
 }
 h1, h2, h3 { margin: 0 0 8px 0; }
 h2 { font-size: 24px; }
@@ -136,6 +146,13 @@ tr:hover { background: var(--surface-2); }
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+/* Season status pills (/seasons) -- token colours via the existing semantic
+   variables instead of inline rgba. --success/--surface-2/--muted are
+   already re-pointed to --uncommon/--panel-2/--paper-dim under v2 (see the
+   html[data-ui="v2"] block below), so this one rule gives the right look
+   in both looks with no v2-specific override needed. */
+.pill[data-status="active"] { background: var(--success); color: #06261a; }
+.pill[data-status="finished"] { background: var(--surface-2); color: var(--muted); }
 
 /* Jump-nav links on the /changes page — read as tappable chips, not bare text. */
 .jump-link {
@@ -552,7 +569,7 @@ html[data-ui="v2"] button:not([data-slot="button"]):active {
 }
 html[data-ui="v2"] [data-slot="button"][class*="bg-primary"],
 html[data-ui="v2"] [data-slot="button"][class*="bg-secondary"],
-html[data-ui="v2"] [data-slot="button"][class*="destructive"] {
+html[data-ui="v2"] [data-slot="button"][class*="text-destructive"] {
   font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
   font-weight: 400; /* Jersey 10 ships one weight; faux bold blurs pixel fonts */
   font-size-adjust: 0.58; /* Jersey 10 is condensed: normalise its x-height so set sizes read as intended */
@@ -560,13 +577,23 @@ html[data-ui="v2"] [data-slot="button"][class*="destructive"] {
   box-shadow: 0 4px 0 rgba(0, 0, 0, 0.45);
   transition: transform 150ms ease, box-shadow 150ms ease;
 }
-html[data-ui="v2"] [data-slot="button"][class*="destructive"] {
+/* [class*="destructive"] used to match here, but every button variant's
+   base class list already carries "aria-invalid:border-destructive" /
+   "ring-destructive/20" (see buttonVariants' shared prefix in
+   components/ui/button.tsx), and [class*=...] matches that substring
+   ANYWHERE in the class attribute -- so every secondary/ghost/outline
+   button, not just variant="destructive", was being forced solid Rare red
+   here. "text-destructive" is a token that only the destructive variant's
+   own class string contains, so this now targets the right buttons only
+   (e.g. the header Search button, which is variant="secondary" and was
+   rendering Rare red instead of panel-2). */
+html[data-ui="v2"] [data-slot="button"][class*="text-destructive"] {
   background: var(--rare);
   color: #0b1b1a;
 }
 html[data-ui="v2"] [data-slot="button"][class*="bg-primary"]:active,
 html[data-ui="v2"] [data-slot="button"][class*="bg-secondary"]:active,
-html[data-ui="v2"] [data-slot="button"][class*="destructive"]:active {
+html[data-ui="v2"] [data-slot="button"][class*="text-destructive"]:active {
   transform: translateY(3px);
   box-shadow: none;
 }
