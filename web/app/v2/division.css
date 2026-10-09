@@ -1,0 +1,195 @@
+/* v2 "Card Table" styling for the single-division page
+   (app/divisions/[id]/page.tsx + lib/loaders/division.ts). design-system/
+   MASTER.md is the spec. Every brand-new element below gets an unscoped
+   "off by default" rule (so it has zero effect without the admin preview
+   cookie) followed by the real look re-enabled under html[data-ui="v2"] --
+   same convention as the rest of the v2 stylesheet (globals.css). Elements
+   that are existing v1 markup merely TAGGED with a new class (to be hidden
+   under v2) get no unscoped rule at all -- v1 must stay byte-for-byte
+   unchanged, so only the html[data-ui="v2"] side of those exists.
+
+   Reused without any new CSS here: .card, .card-header, .pixel,
+   .division-name[data-rarity], .pill[data-rarity] (chip fill/ink/face),
+   .meta-v2 (the "N players / N up / N down / schedule" line) -- all
+   already defined in app/globals.css and generic enough for this page to
+   reuse directly. */
+
+/* ------------------------------------------------------------------------
+   Brand-new containers -- off by default.
+   ------------------------------------------------------------------------ */
+.division-hero-v2 { display: none; }
+.roster-v2 { display: none; }
+.standings-head-v2 { display: none; }
+.admin-panel-header-v2 { display: none; }
+.matches-v2 { display: none; }
+
+/* v1 markup tagged for hiding under v2 only -- no unscoped rule (v1 must
+   stay exactly as it renders today without the cookie). */
+html[data-ui="v2"] .division-top-v1 { display: none !important; }
+html[data-ui="v2"] .standings-head-v1 { display: none !important; }
+html[data-ui="v2"] .matches-list-v1 { display: none; }
+
+/* ------------------------------------------------------------------------
+   Hero + Standings/Admin panel headers.
+   ------------------------------------------------------------------------ */
+html[data-ui="v2"] .division-hero-v2 {
+  display: block;
+  margin-bottom: 16px;
+}
+html[data-ui="v2"] .standings-head-v2 {
+  display: block;
+}
+html[data-ui="v2"] .admin-panel-header-v2 {
+  display: block;
+}
+
+/* Admin wrapper -- a plain <div> under v1 (no rule there), a panel under
+   v2 so every admin .card inside reads as one "Admin" room instead of a
+   loose pile of cards. Children keep their own .card look untouched. */
+html[data-ui="v2"] .admin-panel-v2 {
+  background: var(--panel);
+  border: 2px solid var(--panel-edge);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+html[data-ui="v2"] .admin-panel-v2 .card {
+  margin-top: 12px;
+}
+html[data-ui="v2"] .admin-panel-v2 .card:first-of-type {
+  margin-top: 0;
+}
+
+/* ------------------------------------------------------------------------
+   Roster chips.
+   ------------------------------------------------------------------------ */
+html[data-ui="v2"] .roster-v2 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+html[data-ui="v2"] .roster-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 2px solid var(--panel-edge);
+  color: var(--paper);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  transition: transform 150ms ease, border-color 150ms ease;
+}
+html[data-ui="v2"] .roster-chip:hover {
+  text-decoration: none;
+  border-color: var(--gold);
+}
+html[data-ui="v2"] .roster-chip-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+html[data-ui="v2"] .roster-chip-initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel-edge);
+  color: var(--paper-faint);
+  font-size: 10px;
+  letter-spacing: 0.3px;
+}
+/* The signed-in viewer's own chip -- gold edge, same signal as the
+   standings table's "you" badge. */
+html[data-ui="v2"] .roster-chip-you {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold);
+}
+/* Dropped members -- dimmed; the name itself carries the strikethrough
+   (rendered as <s> in the chip, same as the standings table). */
+html[data-ui="v2"] .roster-chip-dropped {
+  opacity: 0.55;
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui="v2"] .roster-chip { transition: none; }
+}
+
+/* ------------------------------------------------------------------------
+   Matchups -- "vs" blocks.
+   ------------------------------------------------------------------------ */
+html[data-ui="v2"] .matches-v2 {
+  display: block;
+  margin-top: 16px;
+}
+html[data-ui="v2"] .vs-group {
+  margin-top: 16px;
+}
+html[data-ui="v2"] .vs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+html[data-ui="v2"] .vs-block {
+  position: relative;
+  background: var(--panel);
+  border: 2px solid var(--panel-edge);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+html[data-ui="v2"] .vs-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--paper);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+html[data-ui="v2"] .vs-name:hover {
+  text-decoration: underline;
+}
+html[data-ui="v2"] .vs-pixel {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--paper-faint);
+  text-transform: uppercase;
+}
+html[data-ui="v2"] .vs-status {
+  flex: 1 1 100%;
+  font-size: 11px;
+  color: var(--paper-faint);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+html[data-ui="v2"] .vs-score {
+  font-family: var(--font-body-v2), "Segoe UI", sans-serif;
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--paper);
+  font-variant-numeric: tabular-nums;
+}
+html[data-ui="v2"] .vs-winner { color: var(--uncommon); }
+html[data-ui="v2"] .vs-loser { color: var(--rare); }
+html[data-ui="v2"] .vs-draw { color: var(--paper-faint); }
+html[data-ui="v2"] .vs-your-match-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--gold);
+  color: var(--gold-ink);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
