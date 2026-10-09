@@ -1,5 +1,12 @@
 "use server";
 
+// Server actions for the merged /admin/messages page. Moved here (behaviour
+// unchanged) from web/app/admin/dms/actions.ts and web/app/admin/message/actions.ts,
+// which are deleted now that the DMs/Message pages are thin redirects into this
+// page -- see web/app/admin/dms/page.tsx and web/app/admin/message/page.tsx.
+// Every redirect below now targets /admin/messages?tab=inbox (the only tab any
+// of these actions act on) instead of the old /admin/dms or /admin/message paths.
+
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
@@ -9,19 +16,20 @@ import { enqueueDm } from "@/lib/queue";
 import { formatStaffReply, pickStaffDisplayName } from "@/lib/dm-format-core";
 import { selectUnansweredMessageIds } from "@/lib/dm-inbox-core";
 
-const PAGE = "/admin/dms";
+const PAGE = "/admin/messages";
+const INBOX_TAB = "tab=inbox";
 
 // Bulk/per-card actions redirect back to the same tab + search query the
 // staff member was looking at, instead of always bouncing to the default
 // view -- so archiving a page of results doesn't lose their place.
 function backToPage(view: string, q: string, params: { ok?: string; err?: string }): string {
   const search = new URLSearchParams();
+  search.set("tab", "inbox");
   if (view) search.set("view", view);
   if (q) search.set("q", q);
   if (params.ok) search.set("ok", params.ok);
   if (params.err) search.set("err", params.err);
-  const qs = search.toString();
-  return qs ? `${PAGE}?${qs}` : PAGE;
+  return `${PAGE}?${search.toString()}`;
 }
 
 // Resolve how the player will see the replying staff member: the daily-synced
@@ -38,7 +46,7 @@ async function resolveStaffName(discordId: string, fallbackName: string | null |
 
 // Reply to a player's thread: quotes the latest message of theirs that hasn't
 // been answered yet, sends ONE DM (named + quoted via formatStaffReply), and
-// marks every one of their unread/read inbound messages as replied — a single
+// marks every one of their unread/read inbound messages as replied - a single
 // reply answers the whole backlog, not just one row. The bot sends the content
 // unchanged (enqueueDm/notify.dm records the DmDelivery row with kind
 // "staff-reply" so the thread view can show who sent it and what it said).
@@ -46,8 +54,8 @@ export async function replyToDm(formData: FormData) {
   const { user } = await requireAdmin();
   const discordId = String(formData.get("discordId") ?? "").trim();
   const replyText = String(formData.get("reply") ?? "").trim();
-  if (!discordId) redirect(`${PAGE}?err=${encodeURIComponent("Missing recipient.")}`);
-  if (!replyText) redirect(`${PAGE}?err=${encodeURIComponent("Write a reply before sending.")}`);
+  if (!discordId) redirect(`${PAGE}?${INBOX_TAB}&err=${encodeURIComponent("Missing recipient.")}`);
+  if (!replyText) redirect(`${PAGE}?${INBOX_TAB}&err=${encodeURIComponent("Write a reply before sending.")}`);
 
   const pending = await prisma.inboundDm.findMany({
     where: { authorDiscordId: discordId, status: { in: ["unread", "read"] } },
@@ -106,7 +114,7 @@ export async function replyToDm(formData: FormData) {
   });
 
   revalidatePath(PAGE);
-  redirect(`${PAGE}?ok=${encodeURIComponent("Sent.")}`);
+  redirect(`${PAGE}?${INBOX_TAB}&ok=${encodeURIComponent("Sent.")}`);
 }
 
 // Mark an unread DM as read. updateMany with a status guard so we only ever
@@ -114,7 +122,7 @@ export async function replyToDm(formData: FormData) {
 export async function markDmRead(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id") ?? "").trim();
-  if (!id) redirect(`${PAGE}?err=${encodeURIComponent("Missing message id.")}`);
+  if (!id) redirect(`${PAGE}?${INBOX_TAB}&err=${encodeURIComponent("Missing message id.")}`);
 
   await prisma.inboundDm.updateMany({
     where: { id, status: "unread" },
@@ -122,7 +130,7 @@ export async function markDmRead(formData: FormData) {
   });
 
   revalidatePath(PAGE);
-  redirect(`${PAGE}?ok=${encodeURIComponent("Marked read.")}`);
+  redirect(`${PAGE}?${INBOX_TAB}&ok=${encodeURIComponent("Marked read.")}`);
 }
 
 // Shared formData reader for the bulk/per-card actions below: the selected
@@ -234,4 +242,42 @@ export async function unarchiveConversations(formData: FormData) {
 
   revalidatePath(PAGE);
   redirect(backToPage(view, q, { ok: `Unarchived ${ids.length} conversation(s).` }));
+}
+
+// Send a one-off DM to a single player via the bot (the "New DM" disclosure).
+// The web enqueues a notify.dm job (the bot owns the actual send + throttling);
+// audited with the sending admin. On any validation failure, redirects back
+// with newdm=1 so the page reopens the New DM disclosure instead of silently
+// collapsing it with the error banner shown above a closed form.
+export async function sendBotDm(formData: FormData) {
+  const { user } = await requireAdmin();
+  const playerId = String(formData.get("playerId") ?? "").trim();
+  const message = String(formData.get("message") ?? "").trim();
+
+  const failWith = (err: string) =>
+    redirect(`${PAGE}?${INBOX_TAB}&newdm=1&err=${encodeURIComponent(err)}`);
+
+  if (!playerId) failWith("Pick a player.");
+  if (!message) failWith("Write a message before sending.");
+  if (message.length > 1900) failWith("Message is too long (max 1900 characters).");
+
+  const player = await prisma.player.findUnique({
+    where: { id: playerId },
+    select: { discordId: true, displayName: true },
+  });
+  if (!player) failWith("Player not found.");
+
+  await enqueueDm({ discordId: player!.discordId, content: message });
+
+  await recordAudit({
+    actor: actorFromAdminUser(user),
+    action: "bot.dm",
+    targetType: "Player",
+    targetId: playerId,
+    summary: `DM'd ${player!.displayName} via the bot`,
+    metadata: { playerId, length: message.length },
+  });
+
+  revalidatePath(PAGE);
+  redirect(`${PAGE}?${INBOX_TAB}&ok=${encodeURIComponent(`DM queued to ${player!.displayName}.`)}`);
 }
