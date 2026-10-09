@@ -64,6 +64,8 @@ export interface StandingsRowExtras {
   // True for the signed-in viewer's own row -- see the v2 "you" badge below.
   // false/absent under v1 too, but v1 never reads it.
   isViewer?: boolean;
+  // Discord avatar URL (web/lib/avatar.ts), filled by the standings page; undefined when unknown.
+  avatarUrl?: string | null;
 }
 
 function formatBmpSeason(tag: string | null): string {

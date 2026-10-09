@@ -277,6 +277,7 @@ export default async function StandingsPage() {
                           showdown: complete && (promoTieRowSet.has(i) || relegationTieRowSet.has(i)),
                           mmr: data.mmrByPlayerId.get(r.player.id),
                           isViewer: data.viewerPlayerId !== null && r.player.id === data.viewerPlayerId,
+                          avatarUrl: data.avatarUrlByPlayerId.get(r.player.id),
                         }]),
                       );
                       const neighbors = neighborNamesByDivisionId.get(div.id);

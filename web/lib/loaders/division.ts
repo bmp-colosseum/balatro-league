@@ -10,6 +10,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { loadDivisionStandings, loadDivisionScoringBadge, loadDivisionUncounted } from "@/lib/standings-cache";
+import { discordAvatarUrl } from "@/lib/avatar";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { computeUnplayedPairs, pairKey } from "@/lib/unplayed-pairs";
 import { normalizeTiebreak, type ScoringBadge } from "@/lib/standings-mode";
@@ -38,6 +39,9 @@ export interface DivisionStandingRow {
   // See StandingRow.tiebreakNote -- plain-English audit of which step
   // decided this row's tie, present under the same conditions as netLives.
   tiebreakNote?: string;
+  // Discord avatar URL (web/lib/avatar.ts) for this row's player. null = no
+  // custom avatar (caller falls back to initials/a placeholder).
+  avatarUrl: string | null;
 }
 
 export interface DivisionRecentPairing {
@@ -133,6 +137,19 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
   const standingsRows = await loadDivisionStandings(divisionId);
   const scoringBadge = await loadDivisionScoringBadge(divisionId);
   const uncounted = await loadDivisionUncounted(divisionId);
+
+  // Discord avatars for this division's standings rows -- ONE query by
+  // discordId (standingsRows already carry the full Player, including
+  // discordId, via loadDivisionStandings).
+  const avatarDiscordIds = standingsRows.map((r) => r.player.discordId);
+  const avatarGuildMembers = avatarDiscordIds.length === 0
+    ? []
+    : await prisma.guildMember.findMany({
+        where: { discordId: { in: avatarDiscordIds } },
+        select: { discordId: true, avatar: true },
+      });
+  const avatarHashByDiscordId = new Map(avatarGuildMembers.map((g) => [g.discordId, g.avatar]));
+
   const standings: DivisionStandingRow[] = standingsRows.map((r) => ({
     player: { id: r.player.id, displayName: r.player.displayName, discordId: r.player.discordId, username: r.player.username },
     points: r.points,
@@ -149,6 +166,7 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
     netLives: r.netLives,
     livesGamesMissing: r.livesGamesMissing,
     tiebreakNote: r.tiebreakNote,
+    avatarUrl: discordAvatarUrl(r.player.discordId, avatarHashByDiscordId.get(r.player.discordId)),
   }));
 
   const pairings = await prisma.match.findMany({

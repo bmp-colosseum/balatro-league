@@ -58,6 +58,7 @@ export async function runGuildMemberSync(): Promise<{ synced: number; removed: n
         username: m.user.username ?? null,
         globalName: m.user.globalName ?? null,
         nickname: m.nickname ?? null,
+        avatar: m.user.avatar ?? null,
       };
       await prisma.guildMember.upsert({
         where: { discordId: m.id },

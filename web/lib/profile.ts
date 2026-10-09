@@ -24,6 +24,7 @@
 import { prisma } from "./prisma";
 import { parseStandingsRows, parseStandingsUncounted } from "@/lib/standings-cache";
 import { uncountedTag, type UncountedTag } from "@/lib/uncounted-core";
+import { discordAvatarUrl } from "@/lib/avatar";
 import { formatSeasonLabel } from "./format-season";
 
 // One combo in a game's pick/ban pool, in pool order. `picked` = the combo the
@@ -147,7 +148,16 @@ export interface HeadToHead {
 }
 
 export interface PlayerHistory {
-  player: { id: string; discordId: string; displayName: string; username: string | null; rating: number | null };
+  player: {
+    id: string;
+    discordId: string;
+    displayName: string;
+    username: string | null;
+    rating: number | null;
+    // Discord avatar URL (web/lib/avatar.ts). null = no custom avatar
+    // (caller falls back to initials/a placeholder).
+    avatarUrl: string | null;
+  };
   history: SeasonHistoryEntry[];
   totals: {
     seasons: number;
@@ -204,6 +214,16 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
   });
   if (!player) return null;
 
+  // Discord avatar -- one indexed lookup by discordId.
+  const avatarGuildMember = await prisma.guildMember.findUnique({
+    where: { discordId: player.discordId },
+    select: { avatar: true },
+  });
+  const playerWithAvatar = {
+    ...player,
+    avatarUrl: discordAvatarUrl(player.discordId, avatarGuildMember?.avatar),
+  };
+
   // 1) Lightweight memberships — no deep includes.
   // Hide DRAFT seasons (never activated AND not yet ended) from the
   // career timeline; active and ended seasons both show.
@@ -231,7 +251,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
   });
   if (memberships.length === 0) {
     return {
-      player,
+      player: playerWithAvatar,
       history: [],
       totals: emptyTotals(),
       deckPerformance: [],
@@ -553,7 +573,7 @@ export async function loadPlayerHistory(playerId: string): Promise<PlayerHistory
     }))
     .sort((a, b) => b.totalMatches - a.totalMatches);
 
-  return { player, history, totals, deckPerformance, stakePerformance, favorites, headToHeads };
+  return { player: playerWithAvatar, history, totals, deckPerformance, stakePerformance, favorites, headToHeads };
 }
 
 // One deck/stake this player has banned, with how often they banned it vs.

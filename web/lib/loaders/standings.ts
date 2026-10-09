@@ -15,6 +15,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { isScheduleLocked } from "@/lib/schedule-locked";
+import { discordAvatarUrl } from "@/lib/avatar";
 import { loadBestBmpSnapshotsForPlayerIds } from "@/lib/bmp-snapshots";
 import { loadDivisionStandings, loadManyDivisionStandings, loadManyDivisionScoringBadges } from "@/lib/standings-cache";
 import { normalizeTiebreak, type ScoringBadge, type SeasonTiebreak } from "@/lib/standings-mode";
@@ -99,6 +100,11 @@ export interface StandingsPageData {
   // The signed-in viewer's own Player id, for the v2 "you" badge. Null when
   // signed out, or signed in but not yet linked to a Player row.
   viewerPlayerId: string | null;
+  // Map of playerId -> Discord avatar URL (web/lib/avatar.ts), for every
+  // player visible on this page. null = no custom avatar (caller falls
+  // back to initials/a placeholder); a playerId absent from the map was
+  // never looked up.
+  avatarUrlByPlayerId: Map<string, string | null>;
 }
 
 export async function loadStandingsPageData(opts: {
@@ -161,6 +167,7 @@ export async function loadStandingsPageData(opts: {
       mmrByPlayerId: new Map(),
       bmpCurrentSeason: null,
       viewerPlayerId: null,
+      avatarUrlByPlayerId: new Map(),
     };
   }
 
@@ -176,6 +183,26 @@ export async function loadStandingsPageData(opts: {
   // Badges read AFTER the rows above, which warm any cold cache -- this
   // never computes on its own.
   const scoringBadgeByDivisionId = await loadManyDivisionScoringBadges(allDivIds);
+
+  // Discord avatars for every player visible on this page -- ONE query by
+  // discordId (the standings rows already carry the full Player, including
+  // discordId, via loadManyDivisionStandings), mapped back to playerId since
+  // that's the key every other per-player map on this page uses.
+  const allStandingsRows = [...standingsByDivisionId.values()].flat();
+  const discordIdByPlayerId = new Map(allStandingsRows.map((r) => [r.player.id, r.player.discordId]));
+  const avatarGuildMembers = discordIdByPlayerId.size === 0
+    ? []
+    : await prisma.guildMember.findMany({
+        where: { discordId: { in: [...discordIdByPlayerId.values()] } },
+        select: { discordId: true, avatar: true },
+      });
+  const avatarHashByDiscordId = new Map(avatarGuildMembers.map((g) => [g.discordId, g.avatar]));
+  const avatarUrlByPlayerId = new Map<string, string | null>(
+    [...discordIdByPlayerId.entries()].map(([playerId, discordId]) => [
+      playerId,
+      discordAvatarUrl(discordId, avatarHashByDiscordId.get(discordId)),
+    ]),
+  );
 
   // All shootouts across this season's divisions in one round-trip.
   // Shootout has no Player relation in the schema, so we batch the
@@ -339,6 +366,7 @@ export async function loadStandingsPageData(opts: {
     mmrByPlayerId,
     bmpCurrentSeason,
     viewerPlayerId,
+    avatarUrlByPlayerId,
   };
 }
 

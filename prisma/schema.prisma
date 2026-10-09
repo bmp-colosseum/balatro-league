@@ -113,6 +113,7 @@ model GuildMember {
   username   String? // Discord @handle, e.g. "coolguy"
   globalName String? // global display name
   nickname   String? // per-guild nickname
+  avatar     String? // Discord avatar hash (User.avatar) -- null when the member has no custom avatar
   updatedAt  DateTime @updatedAt
 
   @@index([username])
