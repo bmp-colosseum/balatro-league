@@ -171,6 +171,10 @@ export async function dropPlayer(formData: FormData) {
   const playerId = String(formData.get("playerId") ?? "");
   const season = await prisma.season.findFirst({ where: { isActive: true } });
   if (!season || !playerId) return;
+  // "yes" / "no" from the profile buttons; absent means the season's default:
+  // refill when every match counts, leave the slate alone under best-N.
+  const refillParam = String(formData.get("refill") ?? "");
+  const refill = refillParam ? refillParam === "yes" : (season.scoringMode ?? "all") === "all";
 
   const membership = await prisma.divisionMember.findFirst({
     where: { playerId, division: { seasonId: season.id }, status: "ACTIVE" },
@@ -196,7 +200,10 @@ export async function dropPlayer(formData: FormData) {
   });
   // Refill the dropped player's ex-opponents back toward their target slate
   // (never past it) and DM everyone whose matchups changed.
-  await resyncSeasonSchedules(season.id, { beforeByDivision: new Map([[membership.divisionId, pairingsBefore]]) });
+  await resyncSeasonSchedules(season.id, {
+    beforeByDivision: new Map([[membership.divisionId, pairingsBefore]]),
+    fill: refill,
+  });
   await recomputeDivisionStandings(membership.divisionId).catch(() => {});
   await enqueueStandingsRefresh().catch(() => {});
   revalidatePath("/admin/players");

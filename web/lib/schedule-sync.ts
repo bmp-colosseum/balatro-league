@@ -21,8 +21,13 @@ import type { Pairing } from "@/lib/schedule-diff-core";
 // captured beforehand, so the change DMs compare against the real "before".
 export async function resyncSeasonSchedules(
   seasonId: string,
-  opts: { beforeByDivision?: Map<string, Pairing[]> } = {},
+  opts: { beforeByDivision?: Map<string, Pairing[]>; fill?: boolean } = {},
 ): Promise<{ pruned: number; created: number }> {
+  // fill=false: prune orphaned matchups and tell the affected players, but
+  // create nothing new. The TO's choice when a season scores best-N: a
+  // leaver's opponents simply play one match fewer and everyone counts their
+  // best N-1, instead of drawing replacement matchups out of nowhere.
+  const fill = opts.fill ?? true;
   // A season has a locked schedule iff the flag is set OR — the ground truth — a
   // pre-created (0-0 PENDING) match exists. We honour either, so a flag that's
   // wrongly false (e.g. a season activated before the flag existed) still gets
@@ -86,7 +91,7 @@ export async function resyncSeasonSchedules(
     // "before" snapshot the change DMs diff against (unless the caller already
     // deleted rows and handed us an earlier one).
     const pairingsBefore = opts.beforeByDivision?.get(d.id) ?? matches;
-    if (needsCleanRegenerate(memberIds, matches, target)) {
+    if (fill && needsCleanRegenerate(memberIds, matches, target)) {
       const wiped = await prisma.match.deleteMany({ where: { divisionId: d.id, format: "LEAGUE_BO2" } });
       pruned += wiped.count;
       created += await lockOneDivision(d.id);
@@ -99,7 +104,7 @@ export async function resyncSeasonSchedules(
       await prisma.match.deleteMany({ where: { id: { in: plan.pruneIds } } });
       pruned += plan.pruneIds.length;
     }
-    if (plan.createPairs.length) {
+    if (fill && plan.createPairs.length) {
       await prisma.match.createMany({
         data: plan.createPairs.map(([a, b]) => ({
           divisionId: d.id,
@@ -114,7 +119,7 @@ export async function resyncSeasonSchedules(
       });
       created += plan.createPairs.length;
     }
-    if (plan.pruneIds.length || plan.createPairs.length) {
+    if (plan.pruneIds.length || (fill && plan.createPairs.length)) {
       await notifyScheduleRegenerated(d.id, d.name, pairingsBefore, "changed");
     }
   }

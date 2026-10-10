@@ -498,11 +498,14 @@ export async function ProfileView({
                 {activeSeasonEntry.status === "ACTIVE" ? (
                   <>
                     <p className="muted" style={{ fontSize: 12, margin: "0 0 6px" }}>
-                      In <RarityText position={activeSeasonEntry.tierPosition}>{activeSeasonEntry.divisionName}</RarityText>. Drop if they&apos;ve left or gone inactive — unplayed matches are removed and opponents refilled.
+                      In <RarityText position={activeSeasonEntry.tierPosition}>{activeSeasonEntry.divisionName}</RarityText>. Drop if they&apos;ve left or gone inactive. Their unplayed matches are removed either way.
+                      &quot;No new matches&quot; leaves their opponents one match short (fine when the season counts best N-1).
+                      &quot;Refill&quot; draws replacement matchups for those opponents, never more than their usual slate.
                     </p>
-                    <form action={dropPlayer}>
+                    <form action={dropPlayer} style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                       <input type="hidden" name="playerId" value={profile.player.id} />
-                      <ConfirmButton message={`Drop ${profile.player.displayName} from ${activeSeasonEntry.divisionName}? Their unplayed matches are removed. You can reinstate them after.`} variant="secondary" style={{ fontSize: 12 }}>Drop from division</ConfirmButton>
+                      <ConfirmButton name="refill" value="no" message={`Drop ${profile.player.displayName} from ${activeSeasonEntry.divisionName} without new matches? Their unplayed matches are removed and their opponents are told. You can reinstate them after.`} variant="secondary" style={{ fontSize: 12 }}>Drop, no new matches</ConfirmButton>
+                      <ConfirmButton name="refill" value="yes" message={`Drop ${profile.player.displayName} from ${activeSeasonEntry.divisionName} and refill their opponents? Their unplayed matches are removed, replacements are drawn where possible, and everyone affected is told.`} variant="secondary" style={{ fontSize: 12 }}>Drop and refill opponents</ConfirmButton>
                     </form>
                   </>
                 ) : (
