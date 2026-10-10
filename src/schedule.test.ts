@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import fc from "fast-check";
 import { generateSchedule, summariseSchedule, planDivisionResync, needsCleanRegenerate, type SchedulePlayer, type ExistingMatch } from "./schedule.js";
 
 // A realistic-ish division: 16 players banded on Owen's 2200 scale, spaced ~15.
@@ -298,6 +299,67 @@ describe("planDivisionResync", () => {
     // Remaining 5 are now a complete graph among themselves (degree 4) → nothing to add.
     const deg = degrees(remaining, plan.createPairs, existing, plan.pruneIds);
     for (const id of remaining) expect(deg.get(id)).toBe(4);
+  });
+});
+
+describe("planDivisionResync after a drop with results on the board", () => {
+  it("does not refill an opponent who already played the dropped player (that result stands)", () => {
+    // p1..p5 complete; p1 already beat p5, the rest of p5's games are unplayed.
+    const ids = ["p1", "p2", "p3", "p4", "p5"];
+    const existing = roundRobin(ids).map((m) =>
+      m.playerAId === "p1" && m.playerBId === "p5" ? { ...m, status: "CONFIRMED", gamesWonA: 2 } : m,
+    );
+    const remaining = ["p1", "p2", "p3", "p4"]; // p5 dropped
+    const plan = planDivisionResync(remaining, existing, 4);
+    // p5's three unplayed rows go; the played p1-p5 row stays.
+    expect(plan.pruneIds.length).toBe(3);
+    expect(plan.pruneIds).not.toContain(existing.find((m) => m.status === "CONFIRMED")!.id);
+    // Four players can only have 3 opponents each; p1 keeps its p5 result as a
+    // 4th match and gets nothing new, nobody else can be added either.
+    expect(plan.createPairs).toEqual([]);
+  });
+
+  it("never refills a member whose kept matches (including played ones against the leaver) already reach the cap", () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 3, max: 9 }),
+        fc.array(fc.tuple(fc.nat({ max: 8 }), fc.nat({ max: 8 }), fc.boolean()), { maxLength: 30 }),
+        fc.integer({ min: 2, max: 6 }),
+        (n, raw, target) => {
+          const ids = Array.from({ length: n }, (_, i) => `p${i}`);
+          const seen = new Set<string>();
+          const existing: ExistingMatch[] = [];
+          for (const [x, y, played] of raw) {
+            const a = ids[x % n]!, b = ids[y % n]!;
+            if (a === b) continue;
+            const k = a < b ? `${a}|${b}` : `${b}|${a}`;
+            if (seen.has(k)) continue;
+            seen.add(k);
+            existing.push(mk(a, b, played ? { status: "CONFIRMED", gamesWonA: 2 } : {}));
+          }
+          const remaining = ids.slice(0, -1); // the last member dropped
+          const plan = planDivisionResync(remaining, existing, target);
+          const cap = Math.min(target, remaining.length - 1);
+          const pruned = new Set(plan.pruneIds);
+          const kept = new Map(remaining.map((id) => [id, 0]));
+          for (const m of existing) {
+            if (pruned.has(m.id)) continue;
+            if (kept.has(m.playerAId)) kept.set(m.playerAId, kept.get(m.playerAId)! + 1);
+            if (kept.has(m.playerBId)) kept.set(m.playerBId, kept.get(m.playerBId)! + 1);
+          }
+          // Only unplayed rows against the leaver are pruned; played ones stay.
+          for (const id of plan.pruneIds) {
+            const m = existing.find((x) => x.id === id)!;
+            expect(m.status).toBe("PENDING");
+          }
+          // A member already at or above the cap (counting the kept result
+          // against the leaver) is never handed another matchup as the needy side.
+          const needyIds = new Set(remaining.filter((id) => kept.get(id)! < cap));
+          for (const [a, b] of plan.createPairs) expect(needyIds.has(a) || needyIds.has(b)).toBe(true);
+        },
+      ),
+      { numRuns: 300 },
+    );
   });
 });
 

@@ -378,17 +378,20 @@ export function planDivisionResync(
   }
 
   // 2. Remaining valid matchups between two active members → current degree.
+  // Degree = every match a member keeps, including a PLAYED one against someone
+  // who has since left: that result stands in the standings, so it fills one of
+  // the member's slots and must not be replaced (otherwise the ex-opponent ends
+  // up with target+1 counted matches). Only the pruned unplayed rows free a slot.
   const pairSet = new Set<string>();
   const deg = new Map<string, number>();
   for (const id of activeMemberIds) deg.set(id, 0);
   for (const m of matches) {
     if (pruned.has(m.id)) continue;
-    if (!active.has(m.playerAId) || !active.has(m.playerBId)) continue;
     const k = key(m.playerAId, m.playerBId);
     if (pairSet.has(k)) continue;
     pairSet.add(k);
-    deg.set(m.playerAId, deg.get(m.playerAId)! + 1);
-    deg.set(m.playerBId, deg.get(m.playerBId)! + 1);
+    if (active.has(m.playerAId)) deg.set(m.playerAId, deg.get(m.playerAId)! + 1);
+    if (active.has(m.playerBId)) deg.set(m.playerBId, deg.get(m.playerBId)! + 1);
   }
 
   // 3. Greedily connect deficient members up to `target` (capped at the complete
