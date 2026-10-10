@@ -62,7 +62,7 @@ describe("buildOnboardingGuideMessages", () => {
 
   it("omits the support-channel mention when supportChannelUrl is null", () => {
     const [, , msg3] = buildOnboardingGuideMessages(input({ supportChannelUrl: null }));
-    expect(msg3).toContain("Click **Help** at the bottom of your division channel. Good luck out there!");
+    expect(msg3).toContain("Click **Help** at the bottom of your division channel, or DM **Chrono**, who runs the league. Good luck out there!");
     expect(msg3).not.toContain("league-support");
   });
 

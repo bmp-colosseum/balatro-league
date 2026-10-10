@@ -42,7 +42,7 @@ function message1(input: OnboardingGuideInput): string {
     `# \u{1F0CF} Welcome to the Balatro League!`,
     `You're new this season, so here's how it all works, start to finish.`,
     ``,
-    `**The league runs in seasons.** You're playing in **${input.seasonLabel}** right now. ${windowLine} When a season ends, the next one's signups open soon after.`,
+    `**The league runs in seasons.** You're playing in **${input.seasonLabel}** right now. ${windowLine} Signups for the next season usually open about a week into the current one and stay open for around two weeks, so keep an eye on #league-info.`,
     ``,
     `**Tiers and divisions.** Each season is split into tiers by skill, highest to lowest: **Legendary**, **Rare**, **Uncommon**, **Common**. Each tier is split into divisions (small groups) so you're playing people around your level. Your division channel's name tells you which one you're in.`,
     ``,
@@ -62,8 +62,8 @@ function message2(input: OnboardingGuideInput): string {
 
 function message3(input: OnboardingGuideInput): string {
   const helpLine = input.supportChannelUrl
-    ? `**Need help?** Click **Help** at the bottom of your division channel, or ask in #league-support (<${input.supportChannelUrl}>). Good luck out there!`
-    : `**Need help?** Click **Help** at the bottom of your division channel. Good luck out there!`;
+    ? `**Need help?** Click **Help** at the bottom of your division channel, ask in #league-support (<${input.supportChannelUrl}>), or DM **Chrono**, who runs the league. Good luck out there!`
+    : `**Need help?** Click **Help** at the bottom of your division channel, or DM **Chrono**, who runs the league. Good luck out there!`;
   return [
     `**How the season ends.** Divisions under 8 players: ${up(1)} a division and ${down(1)}. Divisions of 8 or more: ${up(2)} and ${down(2)}.`,
     ``,
