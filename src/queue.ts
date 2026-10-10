@@ -87,7 +87,7 @@ import { backfillDmAttachments } from "./dm-attachment-backfill.js";
 // newName don't apply to that role.
 interface ScheduleChangeJob {
   playerId: string;
-  role: "new" | "opponent" | "regenerated";
+  role: "new" | "opponent" | "regenerated" | "changed";
   divisionName: string;
   departedName?: string;
   newName?: string;
@@ -367,6 +367,8 @@ export async function initQueue(): Promise<void> {
         const content =
           role === "new"
             ? `👋 You've been added to **${divisionName}**, taking **${sanitizeName(departedName ?? "")}**'s spot. Here's your schedule — reach out to your opponents to set up games:`
+            : role === "changed"
+              ? `\u{1F504} **Schedule update -- ${divisionName}.** A player left your division, so one of your matchups was removed or replaced. Here is your current schedule -- if you had already arranged the removed match, it no longer counts; set up any new one with your opponent.`
             : role === "opponent"
               ? `🔄 **Schedule update — ${divisionName}.** **${sanitizeName(departedName ?? "")}** was dropped and replaced by **${sanitizeName(newName ?? "")}**, so one of your matchups is now against ${sanitizeName(newName ?? "")}. Your current schedule:`
               : `\u{1F504} **Schedule update -- ${divisionName}.** The division's schedule was rebuilt, so your opponents changed. Here is your current schedule -- reach out to your new opponents to set up your matches.`;

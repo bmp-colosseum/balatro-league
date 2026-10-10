@@ -346,7 +346,10 @@ export interface ResyncPlan {
 // which new matchups to create so every active member is connected to `target`
 // opponents. Existing valid matches (played OR still-valid pre-created) are
 // preserved — we only ADD edges to fill deficits, so nobody's existing schedule
-// is disturbed. Deterministic: connects the most-deficient member to the most-
+// is disturbed.
+// A new edge is only ever drawn between two members who BOTH still need a
+// game: the league rule is that nobody plays an extra match, so an odd number
+// of deficits leaves one member short rather than giving someone a 5th. Deterministic: connects the most-deficient member to the most-
 // deficient available partner, ties broken by id, so a re-run is idempotent.
 // An optional `forbidden` list of unordered id pairs is never proposed as a
 // createPairs entry; if a member's deficit can only be filled by a forbidden
@@ -406,14 +409,13 @@ export function planDivisionResync(
     if (needy.length === 0) break;
     let progressed = false;
     for (const a of needy) {
+      // League rule: nobody ever plays an extra game. Only partners who still
+      // need one are eligible, so a member can end up short (visible on the
+      // schedule audit, and best-N scoring copes with it) but never over.
       const partners = members
-        .filter((b) => b !== a && !pairSet.has(key(a, b)) && !forbiddenSet.has(key(a, b)))
-        .sort((b1, b2) => {
-          const n1 = (deg.get(b1)! < cap ? 0 : 1) - (deg.get(b2)! < cap ? 0 : 1);
-          if (n1 !== 0) return n1; // prefer partners who also still need games
-          return deg.get(b1)! - deg.get(b2)! || (b1 < b2 ? -1 : 1);
-        });
-      if (partners.length === 0) continue; // already paired with everyone
+        .filter((b) => b !== a && deg.get(b)! < cap && !pairSet.has(key(a, b)) && !forbiddenSet.has(key(a, b)))
+        .sort((b1, b2) => deg.get(b1)! - deg.get(b2)! || (b1 < b2 ? -1 : 1));
+      if (partners.length === 0) continue; // nobody left who needs a game
       const b = partners[0]!;
       pairSet.add(key(a, b));
       deg.set(a, deg.get(a)! + 1);

@@ -28,10 +28,15 @@ export async function captureDivisionPairings(divisionId: string): Promise<Pairi
 // number of recipients enqueued, for the caller's audit metadata. An enqueue
 // failure is caught + logged, not thrown -- a DM outage must never fail the
 // regenerate itself.
+// `role` picks the DM wording: "regenerated" when the whole slate was redrawn,
+// "changed" when a roster change only removed/added a few matchups (the
+// patch path in schedule-sync.ts). Either way only players whose opponents
+// actually differ are told.
 export async function notifyScheduleRegenerated(
   divisionId: string,
   divisionName: string,
   before: Pairing[],
+  role: "regenerated" | "changed" = "regenerated",
 ): Promise<number> {
   const after = await captureDivisionPairings(divisionId);
   const changed = diffOpponents(before, after);
@@ -44,7 +49,7 @@ export async function notifyScheduleRegenerated(
   const activeIds = new Set(activeMembers.map((m) => m.playerId));
   const recipients = changed
     .filter((c) => activeIds.has(c.playerId))
-    .map((c) => ({ playerId: c.playerId, role: "regenerated" as const }));
+    .map((c) => ({ playerId: c.playerId, role }));
   if (recipients.length === 0) return 0;
 
   await enqueueScheduleChange({ recipients, divisionName }).catch((err) =>

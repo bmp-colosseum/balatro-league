@@ -205,7 +205,7 @@ export async function enqueueStripDivisionRole(job: {
 // "regenerated" — the division's schedule was rebuilt and this player's
 // opponents changed; departedName/newName aren't applicable.
 export async function enqueueScheduleChange(job: {
-  recipients: Array<{ playerId: string; role: "new" | "opponent" | "regenerated" }>;
+  recipients: Array<{ playerId: string; role: "new" | "opponent" | "regenerated" | "changed" }>;
   divisionName: string;
   departedName?: string;
   newName?: string;

@@ -217,27 +217,26 @@ describe("generateSchedule — forbidden pairs", () => {
 
 describe("planDivisionResync — forbidden pairs", () => {
   it("never emits a forbidden pair in createPairs", () => {
-    const existing = roundRobin(["p1", "p2", "p3", "p4", "p5"]); // all at degree 4
-    const members = ["p1", "p2", "p3", "p4", "p5", "p6"]; // p6 just joined, needs 4
+    // p6 replaces a leaver whose four unplayed matches were pruned, so p2..p5
+    // each need one game; p6 may not play p2.
+    const existing = [mk("p1", "p2"), mk("p1", "p3"), mk("p1", "p4"), mk("p1", "p5")];
+    const members = ["p1", "p2", "p3", "p4", "p5", "p6"];
     const forbidden: [string, string][] = [["p6", "p2"]];
     const plan = planDivisionResync(members, existing, 4, forbidden);
     expect(hasPair(plan.createPairs, "p6", "p2")).toBe(false);
-    expect(plan.createPairs.length).toBe(4); // exactly enough non-forbidden partners left
     const deg = degrees(members, plan.createPairs, existing, plan.pruneIds);
-    expect(deg.get("p6")).toBe(4);
+    for (const id of members) expect(deg.get(id)!).toBeLessThanOrEqual(4);
   });
 
   it("leaves the deficit rather than honoring a forbidden pairing when partners run out", () => {
-    const existing = roundRobin(["p1", "p2", "p3", "p4", "p5"]); // all at degree 4
+    // Only p2 still needs a game, and p6 may not play p2: p6 stays short.
+    const existing = [mk("p1", "p3"), mk("p1", "p4"), mk("p1", "p5"), mk("p3", "p4"), mk("p3", "p5"), mk("p4", "p5")];
     const members = ["p1", "p2", "p3", "p4", "p5", "p6"];
-    // Only p1, p4, p5 remain eligible for p6 -> deficit of 1 against target 4.
-    const forbidden: [string, string][] = [["p6", "p2"], ["p6", "p3"]];
+    const forbidden: [string, string][] = [["p6", "p2"]];
     const plan = planDivisionResync(members, existing, 4, forbidden);
     expect(hasPair(plan.createPairs, "p6", "p2")).toBe(false);
-    expect(hasPair(plan.createPairs, "p6", "p3")).toBe(false);
-    expect(plan.createPairs.length).toBe(3);
     const deg = degrees(members, plan.createPairs, existing, plan.pruneIds);
-    expect(deg.get("p6")).toBe(3); // deficit left, not filled by a forbidden partner
+    for (const id of members) expect(deg.get(id)!).toBeLessThanOrEqual(4);
   });
 
   it("is unaffected by a forbidden pair referencing a non-member", () => {
@@ -249,15 +248,29 @@ describe("planDivisionResync — forbidden pairs", () => {
 });
 
 describe("planDivisionResync", () => {
-  it("gives a newcomer exactly `target` opponents and disturbs nobody else", () => {
-    const existing = roundRobin(["p1", "p2", "p3", "p4", "p5"]); // all at degree 4
+  it("a newcomer only gets games against members who still need one; nobody is pushed to 5", () => {
+    // Everyone already has their 4: the newcomer gets nothing rather than
+    // handing four players a 5th match (an untouched division takes the clean
+    // regenerate path instead, see needsCleanRegenerate).
+    const existing = roundRobin(["p1", "p2", "p3", "p4", "p5"]).map((m, i) =>
+      i === 0 ? { ...m, status: "CONFIRMED", gamesWonA: 2 } : m,
+    );
     const members = ["p1", "p2", "p3", "p4", "p5", "p6"]; // p6 just joined
     const plan = planDivisionResync(members, existing, 4);
     expect(plan.pruneIds).toEqual([]);
-    expect(plan.createPairs.length).toBe(4); // p6 needs 4 opponents
-    for (const [a, b] of plan.createPairs) expect(a === "p6" || b === "p6").toBe(true); // every new edge touches p6
+    expect(plan.createPairs).toEqual([]);
+  });
+
+  it("a replacement for a leaver inherits the leaver's open slots", () => {
+    // p5 left; its four unplayed matches are orphaned, p1..p4 each need one.
+    const existing = roundRobin(["p1", "p2", "p3", "p4", "p5"]);
+    const members = ["p1", "p2", "p3", "p4", "p6"]; // p6 replaces p5
+    const plan = planDivisionResync(members, existing, 4);
+    expect(plan.pruneIds.length).toBe(4);
+    expect(plan.createPairs.length).toBe(4);
+    for (const [a, b] of plan.createPairs) expect(a === "p6" || b === "p6").toBe(true);
     const deg = degrees(members, plan.createPairs, existing, plan.pruneIds);
-    expect(deg.get("p6")).toBe(4);
+    for (const id of members) expect(deg.get(id)).toBe(4);
   });
 
   it("prunes unplayed rows that involve a non-member, keeps played history", () => {
@@ -352,10 +365,13 @@ describe("planDivisionResync after a drop with results on the board", () => {
             const m = existing.find((x) => x.id === id)!;
             expect(m.status).toBe("PENDING");
           }
-          // A member already at or above the cap (counting the kept result
-          // against the leaver) is never handed another matchup as the needy side.
-          const needyIds = new Set(remaining.filter((id) => kept.get(id)! < cap));
-          for (const [a, b] of plan.createPairs) expect(needyIds.has(a) || needyIds.has(b)).toBe(true);
+          // Nobody ever ends above the cap, counting kept results against the leaver.
+          const total = new Map(kept);
+          for (const [a, b] of plan.createPairs) {
+            total.set(a, total.get(a)! + 1);
+            total.set(b, total.get(b)! + 1);
+          }
+          for (const id of remaining) expect(total.get(id)!).toBeLessThanOrEqual(Math.max(cap, kept.get(id)!));
         },
       ),
       { numRuns: 300 },

@@ -14,8 +14,15 @@ import { lockOneDivision } from "@/lib/lock-schedule";
 import { notifyScheduleRegenerated } from "@/lib/schedule-regenerate";
 import { getPlacementRules } from "@/lib/placement-rules";
 import { loadAvoidedPairIdPairs } from "@/lib/loaders/avoided-pairs";
+import type { Pairing } from "@/lib/schedule-diff-core";
 
-export async function resyncSeasonSchedules(seasonId: string): Promise<{ pruned: number; created: number }> {
+// `beforeByDivision`: a caller that deletes rows itself before resyncing (the
+// drop action voids the leaver's pending matches first) passes the pairings it
+// captured beforehand, so the change DMs compare against the real "before".
+export async function resyncSeasonSchedules(
+  seasonId: string,
+  opts: { beforeByDivision?: Map<string, Pairing[]> } = {},
+): Promise<{ pruned: number; created: number }> {
   // A season has a locked schedule iff the flag is set OR — the ground truth — a
   // pre-created (0-0 PENDING) match exists. We honour either, so a flag that's
   // wrongly false (e.g. a season activated before the flag existed) still gets
@@ -75,10 +82,11 @@ export async function resyncSeasonSchedules(seasonId: string): Promise<{ pruned:
     // uneven (someone would end up with a 5th match, or short): wipe and rebuild
     // the SoS-balanced graph instead of patching -- the same thing the
     // "Regenerate schedule" button does, applied automatically while it is safe.
+    // `matches` is this division's pre-change LEAGUE_BO2 pairings -- the
+    // "before" snapshot the change DMs diff against (unless the caller already
+    // deleted rows and handed us an earlier one).
+    const pairingsBefore = opts.beforeByDivision?.get(d.id) ?? matches;
     if (needsCleanRegenerate(memberIds, matches, target)) {
-      // `matches` is this division's pre-wipe LEAGUE_BO2 pairings -- exactly
-      // what notifyScheduleRegenerated needs as the "before" snapshot.
-      const pairingsBefore = matches;
       const wiped = await prisma.match.deleteMany({ where: { divisionId: d.id, format: "LEAGUE_BO2" } });
       pruned += wiped.count;
       created += await lockOneDivision(d.id);
@@ -105,6 +113,9 @@ export async function resyncSeasonSchedules(seasonId: string): Promise<{ pruned:
         skipDuplicates: true,
       });
       created += plan.createPairs.length;
+    }
+    if (plan.pruneIds.length || plan.createPairs.length) {
+      await notifyScheduleRegenerated(d.id, d.name, pairingsBefore, "changed");
     }
   }
   return { pruned, created };

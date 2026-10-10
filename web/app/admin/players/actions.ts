@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
+import { captureDivisionPairings } from "@/lib/schedule-regenerate";
 import { isPlayerIdBanned } from "@/lib/bans";
 import { enqueueMmrSnapshot, enqueueWelcomeRefresh, enqueueStandingsRefresh } from "@/lib/queue";
 import { placePlayerInDivision } from "@/lib/division-membership";
@@ -176,6 +177,10 @@ export async function dropPlayer(formData: FormData) {
   });
   if (!membership) return;
 
+  // Snapshot the slate before anything is deleted so the change DMs can say
+  // exactly whose matchups were removed or replaced.
+  const pairingsBefore = await captureDivisionPairings(membership.divisionId);
+
   await prisma.divisionMember.update({
     where: { id: membership.id },
     data: { status: "DROPPED", droppedAt: new Date() },
@@ -189,8 +194,9 @@ export async function dropPlayer(formData: FormData) {
       OR: [{ playerAId: playerId }, { playerBId: playerId }],
     },
   });
-  // Refill the dropped player's ex-opponents back toward their target slate.
-  await resyncSeasonSchedules(season.id);
+  // Refill the dropped player's ex-opponents back toward their target slate
+  // (never past it) and DM everyone whose matchups changed.
+  await resyncSeasonSchedules(season.id, { beforeByDivision: new Map([[membership.divisionId, pairingsBefore]]) });
   await recomputeDivisionStandings(membership.divisionId).catch(() => {});
   await enqueueStandingsRefresh().catch(() => {});
   revalidatePath("/admin/players");
