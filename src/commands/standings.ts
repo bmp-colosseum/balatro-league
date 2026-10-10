@@ -70,7 +70,7 @@ export const standings: SlashCommand = {
     } catch (err) {
       console.error("[/standings] failed:", err);
       await interaction
-        .editReply("⚠️ Couldn't load standings right now. It's been logged — try again shortly, or run `/schedule` to see your matchups.")
+        .editReply("⚠️ Couldn't load standings right now. It's been logged — try again shortly, or tap the Who do I play? button in your division channel to see your matchups.")
         .catch(() => {});
     }
   },

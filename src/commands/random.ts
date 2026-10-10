@@ -91,7 +91,7 @@ export async function rollBans(): Promise<EmbedBuilder> {
     .setTitle(`🎲 Random ban pool — ${combos.length} combos`)
     .setColor(0x9b59b6)
     .setDescription(lines.join("\n"))
-    .setFooter({ text: "Playing a league match? Use /start-match for the guided ban/pick + auto-record." });
+    .setFooter({ text: "Playing a league match? Hit Start a match in #league-matches for the guided ban/pick + auto-record." });
 }
 
 // One /random command with subcommands instead of /random-deck etc. — no dashes
