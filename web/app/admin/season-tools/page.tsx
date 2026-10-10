@@ -4,9 +4,15 @@ import { loadAdminHomeStats } from "@/lib/loaders/admin";
 import { loadSignupRoundsIndex } from "@/lib/loaders/admin-signups";
 import { loadBulkResolveQueue } from "@/lib/loaders/admin-resolve";
 import { loadSeasonAuditOverview } from "@/lib/loaders/season-audit";
+import { loadNewcomers } from "@/lib/loaders/newcomers";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
+import { DiscordId } from "@/components/DiscordId";
+import { ActionFlashForm } from "@/components/ActionFlashForm";
+import { SubmitButton } from "@/components/SubmitButton";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { pickCurrentSignupRound, seasonToolsSeasonId } from "@/lib/season-tools-core";
+import { previewOnboardingGuide, sendOnboardingGuideToAll } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -74,11 +80,12 @@ function SectionLabel({ children }: { children: string }) {
 export default async function SeasonToolsPage() {
   await requireAdmin();
 
-  const [stats, signupRounds, resolveQueue, auditOverview] = await Promise.all([
+  const [stats, signupRounds, resolveQueue, auditOverview, newcomersData] = await Promise.all([
     loadAdminHomeStats(),
     loadSignupRoundsIndex(),
     loadBulkResolveQueue({}),
     loadSeasonAuditOverview(),
+    loadNewcomers(),
   ]);
 
   const currentRound = pickCurrentSignupRound(signupRounds);
@@ -132,6 +139,53 @@ export default async function SeasonToolsPage() {
           chip={stats.activeSeason ? `season active: ${stats.activeSeason.name}` : "no active season"}
           links={[{ href: "/admin/seasons", label: "Seasons" }]}
         />
+
+        <SectionLabel>New players</SectionLabel>
+        <div className="card">
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <strong>First-timers this season</strong>
+            <span className="pill" style={{ fontSize: 11 }}>
+              {newcomersData.seasonNumber == null
+                ? "no active season"
+                : `${newcomersData.newcomers.length} new player${newcomersData.newcomers.length === 1 ? "" : "s"}`}
+            </span>
+          </div>
+          <p className="muted" style={{ fontSize: 12, margin: "2px 0 8px" }}>
+            Players whose first-ever season is this one. The guide explains how the league works,
+            start to finish -- preview it yourself before sending it out.
+          </p>
+          {newcomersData.newcomers.length > 0 && (
+            <ul style={{ margin: "0 0 10px", paddingLeft: 18, fontSize: 13 }}>
+              {newcomersData.newcomers.map((n) => (
+                <li key={n.playerId}>
+                  {n.displayName} <DiscordId value={n.discordId} username={n.username} />
+                  {n.alreadySentGuide && (
+                    <span className="pill" style={{ fontSize: 10, marginLeft: 6, background: "rgba(46,204,113,0.18)", color: "var(--success)" }}>
+                      guide sent
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <ActionFlashForm action={previewOnboardingGuide}>
+              <SubmitButton variant="secondary" pendingText="Sending...">
+                Preview: DM the guide to me
+              </SubmitButton>
+            </ActionFlashForm>
+            {newcomersData.newcomers.length > 0 && (
+              <ActionFlashForm action={sendOnboardingGuideToAll}>
+                <ConfirmButton
+                  message={`Send the onboarding guide to all ${newcomersData.newcomers.length} new player(s)? Anyone already sent it is skipped.`}
+                  variant="default"
+                >
+                  Send to all {newcomersData.newcomers.length} new player{newcomersData.newcomers.length === 1 ? "" : "s"}
+                </ConfirmButton>
+              </ActionFlashForm>
+            )}
+          </div>
+        </div>
 
         <SectionLabel>During the season</SectionLabel>
         <Step

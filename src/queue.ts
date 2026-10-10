@@ -80,6 +80,7 @@ import { runShootoutCheck, isDivisionComplete } from "./shootout.js";
 import { seasonTimelineLines, parseBufferDays } from "./season-timing.js";
 import { refreshAllDmPanels } from "./dm-panel.js";
 import { backfillDmAttachments } from "./dm-attachment-backfill.js";
+import { sendOnboardingGuideDm } from "./onboarding-dm.js";
 
 // One recipient of a roster-change schedule DM. "new" = the player just added;
 // "opponent" = someone whose matchup now points at the replacement.
@@ -180,6 +181,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("queue.notify-opponents");
   await boss.createQueue("dm-panel.blast");
   await boss.createQueue("dm-attachments.backfill");
+  await boss.createQueue("notify.onboarding-guide");
 
   // One-shot cleanup for retired queues. Their cron schedule rows +
   // accumulated jobs (no worker listens anymore) stay in pg-boss forever
@@ -743,6 +745,21 @@ export async function initQueue(): Promise<void> {
         console.log(
           `[dm-attachments.backfill] scanned ${r.scanned}, recovered ${r.recovered}, unavailable ${r.unavailable}, failed ${r.failed}`,
         );
+      }
+    },
+  );
+
+  // Worker: DM the first-timer onboarding guide to one player (see
+  // src/onboarding-dm.ts). Idempotent per Discord user via DmDelivery (kind
+  // "onboarding-guide") -- skips if already sent. batchSize 1 so one bad send
+  // doesn't block/re-trigger the rest of a "send to all new players" fan-out.
+  await boss.work<{ playerId: string }>(
+    "notify.onboarding-guide",
+    { batchSize: 1, pollingIntervalSeconds: 5 },
+    async (jobs: Job<{ playerId: string }>[]) => {
+      for (const job of jobs) {
+        const outcome = await sendOnboardingGuideDm(job.data.playerId);
+        console.log(`[notify.onboarding-guide] ${job.data.playerId} -> ${outcome}`);
       }
     },
   );

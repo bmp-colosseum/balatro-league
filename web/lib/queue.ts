@@ -231,6 +231,20 @@ export async function enqueueAwardChampionRole(job: {
   await getBoss().send("award.champion-role", job, { retryLimit: 2, retryBackoff: true });
 }
 
+// Fan out the first-timer onboarding guide DM -- one job per playerId. Same
+// idempotent skip-if-already-sent behavior as every other DM worker (see
+// src/onboarding-dm.ts), so this is safe to call again for anyone who already
+// got it. Used by both the "Preview: DM the guide to me" button (one
+// playerId, the signed-in admin's own) and "Send to all N new players"
+// (every newcomer's playerId) on /admin/season-tools.
+export async function enqueueOnboardingGuide(job: { playerIds: string[] }): Promise<void> {
+  await ensureStarted();
+  const boss = getBoss();
+  for (const playerId of job.playerIds) {
+    await boss.send("notify.onboarding-guide", { playerId }, { retryLimit: 3, retryBackoff: true });
+  }
+}
+
 // Manual DM-attachment recovery: the bot's dm-attachments.backfill worker
 // re-fetches older InboundDm messages from Discord to re-download expired
 // attachment urls. Triggered by the /admin/ops "Recover DM attachments"

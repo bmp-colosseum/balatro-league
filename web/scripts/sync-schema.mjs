@@ -51,6 +51,11 @@ const SYNC = [
   // web's live standings path (web/lib/standings-cache.ts) + the
   // /admin/standings-preview "apply this rule" writer.
   { from: ["src", "standings-mode.ts"], to: ["lib", "standings-mode.ts"] },
+  // Pure first-timer onboarding-guide content builder -- shared by the bot's
+  // notify.onboarding-guide DM worker and the web's /admin/season-tools
+  // "Preview: DM the guide to me" button, so the preview always matches what
+  // actually gets sent.
+  { from: ["src", "onboarding-guide.ts"], to: ["lib", "onboarding-guide.ts"] },
 ];
 
 for (const { from, to } of SYNC) {
