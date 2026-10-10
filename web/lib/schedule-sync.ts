@@ -21,7 +21,7 @@ import type { Pairing } from "@/lib/schedule-diff-core";
 // captured beforehand, so the change DMs compare against the real "before".
 export async function resyncSeasonSchedules(
   seasonId: string,
-  opts: { beforeByDivision?: Map<string, Pairing[]>; fill?: boolean } = {},
+  opts: { beforeByDivision?: Map<string, Pairing[]>; fill?: boolean; notice?: { departedName?: string; countBest?: number } } = {},
 ): Promise<{ pruned: number; created: number }> {
   // fill=false: prune orphaned matchups and tell the affected players, but
   // create nothing new. The TO's choice when a season scores best-N: a
@@ -95,7 +95,7 @@ export async function resyncSeasonSchedules(
       const wiped = await prisma.match.deleteMany({ where: { divisionId: d.id, format: "LEAGUE_BO2" } });
       pruned += wiped.count;
       created += await lockOneDivision(d.id);
-      await notifyScheduleRegenerated(d.id, d.name, pairingsBefore);
+      await notifyScheduleRegenerated(d.id, d.name, pairingsBefore, "regenerated", opts.notice ?? {});
       continue;
     }
     const plan = planDivisionResync(memberIds, matches, target, forbidden);
@@ -120,7 +120,7 @@ export async function resyncSeasonSchedules(
       created += plan.createPairs.length;
     }
     if (plan.pruneIds.length || (fill && plan.createPairs.length)) {
-      await notifyScheduleRegenerated(d.id, d.name, pairingsBefore, "changed");
+      await notifyScheduleRegenerated(d.id, d.name, pairingsBefore, "changed", opts.notice ?? {});
     }
   }
   return { pruned, created };

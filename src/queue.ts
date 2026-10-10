@@ -74,7 +74,7 @@ import { runRosterCheckin } from "./roster-checkin.js";
 import { MODLOG_RETENTION_DAYS } from "./mod-log.js";
 import { buildScheduleEmbed } from "./schedule-embed.js";
 import { sanitizeName } from "./sanitize.js";
-import { changedScheduleText } from "./schedule-change-text.js";
+import { changedScheduleText, divisionNoticeText } from "./schedule-change-text.js";
 import { mentionWithHandle, handleOf, type MentionSubject } from "./mention.js";
 import { runShootoutCheck, isDivisionComplete } from "./shootout.js";
 import { seasonTimelineLines, parseBufferDays } from "./season-timing.js";
@@ -89,10 +89,12 @@ import { sendOnboardingGuideDm } from "./onboarding-dm.js";
 // newName don't apply to that role.
 interface ScheduleChangeJob {
   playerId: string;
-  role: "new" | "opponent" | "regenerated" | "changed";
+  role: "new" | "opponent" | "regenerated" | "changed" | "notice";
   // Display names of the opponents this player lost / gained (role "changed").
   removed?: string[];
   added?: string[];
+  // Best-N seasons: how many results count for everyone after a dropout.
+  countBest?: number;
   divisionName: string;
   departedName?: string;
   newName?: string;
@@ -366,7 +368,7 @@ export async function initQueue(): Promise<void> {
       for (const job of jobs) {
         const client = tryGetDiscordClient();
         if (!client) throw new Error("Discord client not ready — will retry");
-        const { playerId, role, divisionName, departedName, newName, removed = [], added = [] } = job.data;
+        const { playerId, role, divisionName, departedName, newName, removed = [], added = [], countBest } = job.data;
         const player = await prisma.player.findUnique({ where: { id: playerId }, select: { discordId: true } });
         if (!player) return;
         const embed = await buildScheduleEmbed(playerId);
@@ -374,7 +376,9 @@ export async function initQueue(): Promise<void> {
           role === "new"
             ? `👋 You've been added to **${divisionName}**, taking **${sanitizeName(departedName ?? "")}**'s spot. Here's your schedule — reach out to your opponents to set up games:`
             : role === "changed"
-              ? changedScheduleText(divisionName, removed, added)
+              ? changedScheduleText(divisionName, removed, added, { departedName, countBest })
+            : role === "notice"
+              ? divisionNoticeText(divisionName, departedName ?? "A player", countBest)
             : role === "opponent"
               ? `🔄 **Schedule update — ${divisionName}.** **${sanitizeName(departedName ?? "")}** was dropped and replaced by **${sanitizeName(newName ?? "")}**, so one of your matchups is now against ${sanitizeName(newName ?? "")}. Your current schedule:`
               : `\u{1F504} **Schedule update -- ${divisionName}.** The division's schedule was rebuilt, so your opponents changed. Here is your current schedule -- reach out to your new opponents to set up your matches.`;

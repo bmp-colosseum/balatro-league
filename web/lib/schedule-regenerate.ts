@@ -37,6 +37,7 @@ export async function notifyScheduleRegenerated(
   divisionName: string,
   before: Pairing[],
   role: "regenerated" | "changed" = "regenerated",
+  extra: { departedName?: string; countBest?: number } = {},
 ): Promise<number> {
   const after = await captureDivisionPairings(divisionId);
   const changed = diffOpponents(before, after);
@@ -63,7 +64,7 @@ export async function notifyScheduleRegenerated(
     }));
   if (recipients.length === 0) return 0;
 
-  await enqueueScheduleChange({ recipients, divisionName }).catch((err) =>
+  await enqueueScheduleChange({ recipients, divisionName, departedName: extra.departedName, countBest: extra.countBest }).catch((err) =>
     console.warn(`[schedule-regenerate] enqueue failed for division ${divisionId}:`, err),
   );
   return recipients.length;

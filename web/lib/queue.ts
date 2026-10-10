@@ -205,17 +205,18 @@ export async function enqueueStripDivisionRole(job: {
 // "regenerated" — the division's schedule was rebuilt and this player's
 // opponents changed; departedName/newName aren't applicable.
 export async function enqueueScheduleChange(job: {
-  recipients: Array<{ playerId: string; role: "new" | "opponent" | "regenerated" | "changed"; removed?: string[]; added?: string[] }>;
+  recipients: Array<{ playerId: string; role: "new" | "opponent" | "regenerated" | "changed" | "notice"; removed?: string[]; added?: string[] }>;
   divisionName: string;
   departedName?: string;
   newName?: string;
+  countBest?: number;
 }): Promise<void> {
   await ensureStarted();
   const boss = getBoss();
   for (const r of job.recipients) {
     await boss.send(
       "notify.schedule-change",
-      { playerId: r.playerId, role: r.role, divisionName: job.divisionName, departedName: job.departedName, newName: job.newName, removed: r.removed, added: r.added },
+      { playerId: r.playerId, role: r.role, divisionName: job.divisionName, departedName: job.departedName, newName: job.newName, removed: r.removed, added: r.added, countBest: job.countBest },
       { retryLimit: 3, retryBackoff: true },
     );
   }

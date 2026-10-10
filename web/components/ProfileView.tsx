@@ -499,8 +499,8 @@ export async function ProfileView({
                   <>
                     <p className="muted" style={{ fontSize: 12, margin: "0 0 6px" }}>
                       In <RarityText position={activeSeasonEntry.tierPosition}>{activeSeasonEntry.divisionName}</RarityText>. Drop if they&apos;ve left or gone inactive. Their unplayed matches are removed either way.
-                      &quot;No new matches&quot; leaves their opponents one match short (fine when the season counts best N-1).
-                      &quot;Refill&quot; draws replacement matchups for those opponents, never more than their usual slate.
+                      &quot;Refill&quot; draws replacement matchups for their opponents where possible, never more than the usual slate; under best-N scoring the whole division is told only their best N-1 results count now.
+                      &quot;No new matches&quot; leaves those opponents one match short instead.
                     </p>
                     <form action={dropPlayer} style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                       <input type="hidden" name="playerId" value={profile.player.id} />

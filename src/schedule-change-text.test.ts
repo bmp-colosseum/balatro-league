@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { changedScheduleText } from "./schedule-change-text.js";
+import { changedScheduleText, divisionNoticeText } from "./schedule-change-text.js";
 
 describe("changedScheduleText", () => {
   it("names the removed opponent and the replacement", () => {
@@ -24,5 +24,24 @@ describe("changedScheduleText", () => {
 
   it("falls back to a generic line when the diff is empty", () => {
     expect(changedScheduleText("Rare 1", [], [])).toContain("One of your matchups changed.");
+  });
+
+  it("adds the best-N line when the season counts best results", () => {
+    const text = changedScheduleText("Rare 3", ["Lan"], [], { countBest: 3 });
+    expect(text).toContain("Everything else on your schedule stays as it was. From now on only your best 3 results count toward the standings");
+    expect(text.endsWith("Here is your current schedule:")).toBe(true);
+  });
+});
+
+describe("divisionNoticeText", () => {
+  it("tells unaffected members who left and that only their best N count now", () => {
+    expect(divisionNoticeText("Rare 3", "Lan", 3)).toBe(
+      "\u{1F504} **Schedule update -- Rare 3.** **Lan** has left the division. Your own matchups have not changed -- keep playing them as planned. From now on only your best 3 results count toward the standings, so nobody is worse off for having one match fewer. Here is your current schedule:",
+    );
+  });
+
+  it("leaves out the best-N line when every match still counts", () => {
+    const text = divisionNoticeText("Rare 3", "Lan", undefined);
+    expect(text).not.toContain("best");
   });
 });

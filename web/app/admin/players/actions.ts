@@ -7,6 +7,10 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { captureDivisionPairings } from "@/lib/schedule-regenerate";
+import { diffOpponents } from "@/lib/schedule-diff-core";
+import { enqueueScheduleChange } from "@/lib/queue";
+import { getPlacementRules } from "@/lib/placement-rules";
+import { scheduleDegree } from "@/lib/schedule";
 import { isPlayerIdBanned } from "@/lib/bans";
 import { enqueueMmrSnapshot, enqueueWelcomeRefresh, enqueueStandingsRefresh } from "@/lib/queue";
 import { placePlayerInDivision } from "@/lib/division-membership";
@@ -171,10 +175,8 @@ export async function dropPlayer(formData: FormData) {
   const playerId = String(formData.get("playerId") ?? "");
   const season = await prisma.season.findFirst({ where: { isActive: true } });
   if (!season || !playerId) return;
-  // "yes" / "no" from the profile buttons; absent means the season's default:
-  // refill when every match counts, leave the slate alone under best-N.
-  const refillParam = String(formData.get("refill") ?? "");
-  const refill = refillParam ? refillParam === "yes" : (season.scoringMode ?? "all") === "all";
+  // "yes" / "no" from the profile buttons; absent means refill.
+  const refill = String(formData.get("refill") ?? "yes") !== "no";
 
   const membership = await prisma.divisionMember.findFirst({
     where: { playerId, division: { seasonId: season.id }, status: "ACTIVE" },
@@ -198,12 +200,52 @@ export async function dropPlayer(formData: FormData) {
       OR: [{ playerAId: playerId }, { playerBId: playerId }],
     },
   });
+  // Under best-N scoring everyone in the division now counts their best
+  // N-1 results; work out N-1 so the DMs can say so.
+  const scoring = season.scoringMode ?? "all";
+  let countBest: number | undefined;
+  if (scoring.startsWith("best-n")) {
+    const [division, rules] = await Promise.all([
+      prisma.division.findUnique({
+        where: { id: membership.divisionId },
+        select: { opponentsPerPlayer: true, members: { select: { status: true } } },
+      }),
+      getPlacementRules(),
+    ]);
+    if (division) {
+      const active = division.members.filter((m) => m.status === "ACTIVE").length;
+      const dropped = division.members.filter((m) => m.status === "DROPPED").length;
+      const scheduled = scheduleDegree(division.opponentsPerPlayer, rules.defaultOpponentsPerPlayer, active + dropped);
+      countBest = Math.max(0, scheduled - dropped);
+    }
+  }
+  const departed = await prisma.player.findUnique({ where: { id: playerId }, select: { displayName: true } });
+  const notice = { departedName: departed?.displayName, countBest };
+
   // Refill the dropped player's ex-opponents back toward their target slate
   // (never past it) and DM everyone whose matchups changed.
   await resyncSeasonSchedules(season.id, {
     beforeByDivision: new Map([[membership.divisionId, pairingsBefore]]),
     fill: refill,
+    notice,
   });
+
+  // Everyone else in the division gets the same news once: who left, that
+  // their own matchups stand, and (best-N) how many results count now.
+  const after = await captureDivisionPairings(membership.divisionId);
+  const changedIds = new Set(diffOpponents(pairingsBefore, after).map((c) => c.playerId));
+  const others = await prisma.divisionMember.findMany({
+    where: { divisionId: membership.divisionId, status: "ACTIVE", playerId: { notIn: [...changedIds] } },
+    select: { playerId: true, division: { select: { name: true } } },
+  });
+  if (others.length > 0) {
+    await enqueueScheduleChange({
+      recipients: others.map((m) => ({ playerId: m.playerId, role: "notice" as const })),
+      divisionName: others[0]!.division.name,
+      departedName: notice.departedName,
+      countBest,
+    }).catch((err) => console.warn("[drop] division notice enqueue failed:", err));
+  }
   await recomputeDivisionStandings(membership.divisionId).catch(() => {});
   await enqueueStandingsRefresh().catch(() => {});
   revalidatePath("/admin/players");
