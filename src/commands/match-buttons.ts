@@ -1577,7 +1577,7 @@ async function handleDc(interaction: ButtonInteraction, session: MatchSession) {
   if (gameNum === 0) {
     return reply(
       interaction,
-      "You can only report a DC once a game is being played. If your opponent went quiet during bans/picks, use `/helper` instead.",
+      "You can only report a DC once a game is being played. If your opponent went quiet during bans/picks, click the Call helper button below instead.",
     );
   }
   const { playerA, playerB } = await loadPlayers(session);
@@ -1587,7 +1587,7 @@ async function handleDc(interaction: ButtonInteraction, session: MatchSession) {
   if (session.isShootout) {
     return reply(
       interaction,
-      "Shootout DCs need admin review — use `/helper` so a moderator can decide the outcome. Shootouts don't auto-forfeit.",
+      "Shootout DCs need admin review — click the Call helper button below so a moderator can decide the outcome. Shootouts don't auto-forfeit.",
     );
   }
 

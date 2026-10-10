@@ -24,7 +24,7 @@ export function buildCheckinMessage(o: CheckinMessageOpts): string {
   const lines = [
     `Hey ${o.name}, quick check-in. You're in ${o.divisionName} but we haven't seen you play or post this season. Still up for it?`,
     ``,
-    `If you are: head to ${divCh}, run \`/schedule\` to see who you play, and message them to set up games.`,
+    `If you are: head to ${divCh}, tap the Who do I play? button to see who you play, and message them to set up games.`,
   ];
   if (o.seasonEndsAt) {
     const unix = Math.floor(o.seasonEndsAt.getTime() / 1000);
