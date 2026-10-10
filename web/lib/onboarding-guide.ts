@@ -42,7 +42,7 @@ function message1(input: OnboardingGuideInput): string {
     `# \u{1F0CF} Welcome to the Balatro League!`,
     `You're new this season, so here's how it all works, start to finish.`,
     ``,
-    `**The league runs in seasons.** You're playing in **${input.seasonLabel}** right now. ${windowLine} Signups for the next season usually open about a week into the current one and stay open for around two weeks, so keep an eye on #league-info.`,
+    `**The league runs in seasons.** You're playing in **${input.seasonLabel}** right now. ${windowLine} A season usually runs about two weeks. Signups for the next one open about a week in and stay open for a week, so keep an eye on #league-info.`,
     ``,
     `**Tiers and divisions.** Each season is split into tiers by skill, highest to lowest: **Legendary**, **Rare**, **Uncommon**, **Common**. Each tier is split into divisions (small groups) so you're playing people around your level. Your division channel's name tells you which one you're in.`,
     ``,
