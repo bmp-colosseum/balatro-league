@@ -4,6 +4,7 @@ import { loadStandingsPageData, type ViewerDivisionSummary } from "@/lib/loaders
 import { loadOpenSignupRoundId } from "@/lib/loaders/join";
 import { getShowBmpMmr } from "@/lib/preferences";
 import { SiteNav } from "@/components/SiteNav";
+import { CollapsibleDivision } from "@/components/CollapsibleDivision";
 import {
   CardAvatar,
   DivisionStandingsTable,
@@ -370,9 +371,8 @@ export default async function StandingsPage() {
                       // v2 phone collapse: the viewer's own division, and
                       // (signed out) the first division of each tier, start
                       // expanded; every other division starts collapsed to
-                      // the one-line summary below. Desktop and v1 force
-                      // everything open regardless of this attribute (see
-                      // globals.css) -- it only matters at v2 phone widths.
+                      // the one-line summary. Desktop and v1 always show
+                      // everything (components/CollapsibleDivision.tsx).
                       const isViewerDivision =
                         data.viewerPlayerId !== null && div.activeMemberIds.includes(data.viewerPlayerId);
                       const isOpenByDefault =
@@ -387,17 +387,7 @@ export default async function StandingsPage() {
                       });
                       return (
                         <div key={div.id} className="card">
-                        <details className="division-details-v2" open={isOpenByDefault}>
-                          {/* Phone-collapsed one-line summary -- hidden
-                              entirely under v1 and under v2 desktop, and
-                              hidden under v2 phone too once expanded (see
-                              globals.css) so it never duplicates the full
-                              header below. */}
-                          <summary className="division-summary-v2">
-                            <span className="division-summary-text">{summaryText}</span>
-                            <span className="division-summary-hide">Hide</span>
-                          </summary>
-                          <div className="division-body-v2">
+                        <CollapsibleDivision defaultOpenOnPhone={isOpenByDefault} summary={summaryText}>
                           {/* `card-header` is a no-op under v1 (no bare
                               `.card-header` rule outside a responsive-table
                               cell -- see globals.css); under v2 it becomes
@@ -482,8 +472,7 @@ export default async function StandingsPage() {
                               ))}
                             </div>
                           )}
-                          </div>
-                        </details>
+                        </CollapsibleDivision>
                         </div>
                       );
                     })}

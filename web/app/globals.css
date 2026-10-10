@@ -406,14 +406,20 @@ form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
    off by default; shown only at v2 phone widths while collapsed (further
    down, alongside the other details/summary rules). */
 .division-summary-v2 { display: none; }
-/* Every division's standings card now wraps its body in <details><summary>
-   so phone+v2 can natively collapse it (no JS needed) -- but a <details>
-   without an `open` attribute hides its body via the UA stylesheet
-   regardless of data-ui, which would also collapse it for v1 and for v2 on
-   desktop. This UNCONDITIONAL override (not scoped under html[data-ui="v2"])
-   beats that UA rule and keeps the body always visible by default; the v2
-   phone-only rule further down re-collapses it when appropriate. */
-.division-details-v2:not([open]) > .division-body-v2 { display: block; }
+/* Division cards collapse to a one-line summary on v2 phones only (see
+   components/CollapsibleDivision.tsx). The summary is a <button>; it is off
+   everywhere by default and only the v2 phone rules further down show it. */
+.division-summary-v2 {
+  display: none;
+  appearance: none;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  width: 100%;
+  text-align: left;
+}
+.division-summary-hide { display: none; }
 /* .division-name used to carry its font-size as an inline style (18px);
    moved to a plain class so the v2 override below (22px) doesn't need
    !important to beat it. Same computed value, so v1 is unaffected. */
@@ -897,28 +903,24 @@ html[data-ui="v2"] .progress-v2 {
 }
 
 /* Phone collapse (<=640px): every division other than the viewer's own
-   starts collapsed to the one-line .division-summary-v2 (see
-   app/standings/page.tsx); tapping it expands via the native <details>
-   toggle, no JS needed. Desktop (and v1, everywhere -- see the unconditional
-   override near the top of this file) always shows the full body. */
+   starts collapsed to the one-line summary button (components/
+   CollapsibleDivision.tsx owns the open state; data-ready="0" is the
+   server-rendered moment before it mounts). Desktop and v1 always show the
+   full body: no rule below applies there. */
 @media (max-width: 640px) {
-  html[data-ui="v2"] .division-details-v2:not([open]) > .division-body-v2 {
+  html[data-ui="v2"] .division-details-v2[data-open="0"] > .division-body-v2,
+  html[data-ui="v2"] .division-details-v2[data-ready="0"][data-phone-default="closed"] > .division-body-v2 {
     display: none;
   }
-  html[data-ui="v2"] .division-details-v2:not([open]) > .division-summary-v2 {
+  html[data-ui="v2"] .division-details-v2 > .division-summary-v2 {
     display: block;
     cursor: pointer;
+    min-height: 44px;
     padding: 10px 14px;
   }
-}
-/* Expanded on a phone: the summary stays as the tap target (otherwise there
-   is no way to collapse the card again) but shows a small "Hide" row instead
-   of repeating the header right below it. Desktop never shows it. */
-.division-summary-hide { display: none; }
-@media (max-width: 640px) {
-  html[data-ui="v2"] .division-details-v2[open] > .division-summary-v2 {
-    display: block;
-    cursor: pointer;
+  /* Expanded: the button stays as the tap target to collapse again, shown
+     as a small "Hide" row instead of repeating the header below it. */
+  html[data-ui="v2"] .division-details-v2[data-open="1"] > .division-summary-v2 {
     padding: 8px 14px;
     text-align: right;
     font-size: 11px;
@@ -926,13 +928,8 @@ html[data-ui="v2"] .progress-v2 {
     letter-spacing: 0.5px;
     color: var(--paper-faint);
   }
-  html[data-ui="v2"] .division-details-v2[open] > .division-summary-v2 > .division-summary-text { display: none; }
-  html[data-ui="v2"] .division-details-v2[open] > .division-summary-v2 > .division-summary-hide { display: inline; }
-}
-@media (min-width: 641px) {
-  html[data-ui="v2"] .division-details-v2 > .division-summary-v2 {
-    display: none;
-  }
+  html[data-ui="v2"] .division-details-v2[data-open="1"] > .division-summary-v2 > .division-summary-text { display: none; }
+  html[data-ui="v2"] .division-details-v2[data-open="1"] > .division-summary-v2 > .division-summary-hide { display: inline; }
 }
 
 /* Desktop (>=1100px): cap the tier-section grid at exactly 2 columns with a
