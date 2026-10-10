@@ -74,6 +74,7 @@ import { runRosterCheckin } from "./roster-checkin.js";
 import { MODLOG_RETENTION_DAYS } from "./mod-log.js";
 import { buildScheduleEmbed } from "./schedule-embed.js";
 import { sanitizeName } from "./sanitize.js";
+import { changedScheduleText } from "./schedule-change-text.js";
 import { mentionWithHandle, handleOf, type MentionSubject } from "./mention.js";
 import { runShootoutCheck, isDivisionComplete } from "./shootout.js";
 import { seasonTimelineLines, parseBufferDays } from "./season-timing.js";
@@ -88,6 +89,9 @@ import { backfillDmAttachments } from "./dm-attachment-backfill.js";
 interface ScheduleChangeJob {
   playerId: string;
   role: "new" | "opponent" | "regenerated" | "changed";
+  // Display names of the opponents this player lost / gained (role "changed").
+  removed?: string[];
+  added?: string[];
   divisionName: string;
   departedName?: string;
   newName?: string;
@@ -360,7 +364,7 @@ export async function initQueue(): Promise<void> {
       for (const job of jobs) {
         const client = tryGetDiscordClient();
         if (!client) throw new Error("Discord client not ready — will retry");
-        const { playerId, role, divisionName, departedName, newName } = job.data;
+        const { playerId, role, divisionName, departedName, newName, removed = [], added = [] } = job.data;
         const player = await prisma.player.findUnique({ where: { id: playerId }, select: { discordId: true } });
         if (!player) return;
         const embed = await buildScheduleEmbed(playerId);
@@ -368,7 +372,7 @@ export async function initQueue(): Promise<void> {
           role === "new"
             ? `👋 You've been added to **${divisionName}**, taking **${sanitizeName(departedName ?? "")}**'s spot. Here's your schedule — reach out to your opponents to set up games:`
             : role === "changed"
-              ? `\u{1F504} **Schedule update -- ${divisionName}.** A player left your division, so one of your matchups was removed or replaced. Here is your current schedule -- if you had already arranged the removed match, it no longer counts; set up any new one with your opponent.`
+              ? changedScheduleText(divisionName, removed, added)
             : role === "opponent"
               ? `🔄 **Schedule update — ${divisionName}.** **${sanitizeName(departedName ?? "")}** was dropped and replaced by **${sanitizeName(newName ?? "")}**, so one of your matchups is now against ${sanitizeName(newName ?? "")}. Your current schedule:`
               : `\u{1F504} **Schedule update -- ${divisionName}.** The division's schedule was rebuilt, so your opponents changed. Here is your current schedule -- reach out to your new opponents to set up your matches.`;

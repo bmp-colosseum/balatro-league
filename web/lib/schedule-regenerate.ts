@@ -47,9 +47,20 @@ export async function notifyScheduleRegenerated(
     select: { playerId: true },
   });
   const activeIds = new Set(activeMembers.map((m) => m.playerId));
+  // Names for the "changed" wording: who each player lost and gained.
+  const opponentIds = [...new Set(changed.flatMap((c) => [...c.removed, ...c.added]))];
+  const opponents = opponentIds.length
+    ? await prisma.player.findMany({ where: { id: { in: opponentIds } }, select: { id: true, displayName: true } })
+    : [];
+  const nameOf = new Map(opponents.map((p) => [p.id, p.displayName]));
   const recipients = changed
     .filter((c) => activeIds.has(c.playerId))
-    .map((c) => ({ playerId: c.playerId, role }));
+    .map((c) => ({
+      playerId: c.playerId,
+      role,
+      removed: c.removed.map((id) => nameOf.get(id) ?? "a player"),
+      added: c.added.map((id) => nameOf.get(id) ?? "a player"),
+    }));
   if (recipients.length === 0) return 0;
 
   await enqueueScheduleChange({ recipients, divisionName }).catch((err) =>
