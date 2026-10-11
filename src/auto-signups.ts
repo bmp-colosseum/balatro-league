@@ -27,7 +27,8 @@ import { formatSeasonLabel } from "./format-season.js";
 import { signupEmbed, signupButtons, DEFAULT_SEASON_LENGTH_DAYS } from "./signup/signup.js";
 import { enqueueSignupAskKickoff, enqueueLeagueInfoRefresh } from "./queue.js";
 import { env } from "./env.js";
-import { decideAutoSignups } from "./auto-signups-core.js";
+import { decideAutoSignups, weekLeftReminderDue } from "./auto-signups-core.js";
+import { resolveAnnouncementsChannelId } from "./announcements-channel.js";
 
 const DEFAULT_AUTO_OPEN_DAYS = 7;
 
@@ -157,6 +158,61 @@ async function createNextSeasonFrom(active: { number: number; targetGroupSize: n
 // The hourly tick body (signup.auto-open-tick in src/queue.ts). Idempotent:
 // re-running it when nothing is due, or when signups are already open,
 // is always a no-op -- decideAutoSignups guarantees that, not this function.
+const WEEK_LEFT_KEY = "week_left_reminder_season";
+
+async function postWeekLeftReminder(
+  active: { id: string; number: number; subtitle: string | null; startedAt: Date; scheduledEndAt: Date | null; leaguePlayerRoleId: string | null },
+  autoOpenDays: number,
+): Promise<void> {
+  const row = await prisma.leagueConfig.findUnique({ where: { key: WEEK_LEFT_KEY } });
+  const last = row ? Number(row.value) : NaN;
+  const due = weekLeftReminderDue({
+    now: new Date(),
+    autoOpenDays,
+    activeSeasonNumber: active.number,
+    activeSeasonStartedAt: active.startedAt,
+    activeSeasonScheduledEndAt: active.scheduledEndAt,
+    lastReminderSeasonNumber: Number.isFinite(last) ? last : null,
+  });
+  if (!due || !active.scheduledEndAt) return;
+
+  const channelId = await resolveAnnouncementsChannelId();
+  if (!channelId) {
+    console.warn("[signup.auto-open-tick] no announcements channel configured -- skipping week-left reminder");
+    return;
+  }
+  // Claim the season first so a crash after posting can never post twice.
+  await prisma.leagueConfig.upsert({
+    where: { key: WEEK_LEFT_KEY },
+    create: { key: WEEK_LEFT_KEY, value: String(active.number), updatedBy: "system/auto-signups" },
+    update: { value: String(active.number), updatedBy: "system/auto-signups" },
+  });
+
+  const end = Math.floor(active.scheduledEndAt.getTime() / 1000);
+  const label = formatSeasonLabel(active);
+  const role = active.leaguePlayerRoleId ? `<@&${active.leaguePlayerRoleId}> ` : "";
+  const content =
+    `${role}**One week left in ${label}!** The season ends <t:${end}:F> (<t:${end}:R>). ` +
+    `Get your remaining matches played before then -- press **Who do I play?** in your division channel to see who is left.`;
+  const channel = await getDiscordClient().channels.fetch(channelId);
+  if (!channel || !channel.isSendable()) {
+    console.warn(`[signup.auto-open-tick] announcements channel ${channelId} is not sendable`);
+    return;
+  }
+  await channel.send({
+    content,
+    allowedMentions: { roles: active.leaguePlayerRoleId ? [active.leaguePlayerRoleId] : [] },
+  });
+  await recordAudit({
+    actor: { discordId: "system", displayName: "system/auto-signups" },
+    action: "season.week-left-reminder",
+    targetType: "Season",
+    targetId: active.id,
+    summary: `Posted the one-week-left reminder for ${label}`,
+    metadata: { channelId },
+  });
+}
+
 export async function runAutoOpenSignupsTick(): Promise<void> {
   const autoOpenDays = await getSignupsAutoOpenDays();
   if (autoOpenDays <= 0) return; // off -- skip the DB reads below entirely
@@ -176,10 +232,18 @@ export async function runAutoOpenSignupsTick(): Promise<void> {
     ? (await prisma.signupRound.count({ where: { resultingSeasonId: nextSeason.id } })) > 0
     : false;
 
+  // "One week left" reminder in announcements, tagging the season's player
+  // role. Independent of the signup state: it posts once per season even if
+  // the organiser already opened signups by hand.
+  await postWeekLeftReminder(active, autoOpenDays).catch((err) =>
+    console.warn("[signup.auto-open-tick] week-left reminder failed:", err),
+  );
+
   const decision = decideAutoSignups({
     now: new Date(),
     autoOpenDays,
     activeSeasonStartedAt: active.startedAt,
+    activeSeasonScheduledEndAt: active.scheduledEndAt,
     nextSeasonExists: Boolean(nextSeason),
     nextSeasonHadRound,
     anyOpenRoundExists: Boolean(anyOpenRound),

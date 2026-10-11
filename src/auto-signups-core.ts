@@ -32,6 +32,35 @@ export interface AutoSignupInput {
   // round may be OPEN system-wide (see openSignupsForSeason's stale-round
   // comment), so this alone is enough to know "signups are already open".
   anyOpenRoundExists: boolean;
+  // The active season's planned end. When set, the setting means "this many
+  // days BEFORE the season ends" (the TO's rhythm: signups open and the
+  // one-week-left reminder goes out a week before the end). When unset the
+  // due date falls back to startedAt + autoOpenDays.
+  activeSeasonScheduledEndAt?: Date | null;
+}
+
+// The moment signups open and the "one week left" reminder posts.
+export function autoSignupsDueAt(input: Pick<AutoSignupInput, "autoOpenDays" | "activeSeasonStartedAt" | "activeSeasonScheduledEndAt">): Date {
+  return input.activeSeasonScheduledEndAt
+    ? addDays(input.activeSeasonScheduledEndAt, -input.autoOpenDays)
+    : addDays(input.activeSeasonStartedAt, input.autoOpenDays);
+}
+
+// Is the "one week left" announcement due for this season? Pure; the shell
+// passes the season number the reminder was last posted for.
+export function weekLeftReminderDue(input: {
+  now: Date;
+  autoOpenDays: number;
+  activeSeasonNumber: number;
+  activeSeasonStartedAt: Date;
+  activeSeasonScheduledEndAt: Date | null;
+  lastReminderSeasonNumber: number | null;
+}): boolean {
+  if (!Number.isFinite(input.autoOpenDays) || input.autoOpenDays <= 0) return false;
+  if (!input.activeSeasonScheduledEndAt) return false; // no end date, nothing to count down to
+  if (input.lastReminderSeasonNumber === input.activeSeasonNumber) return false;
+  if (input.now.getTime() >= input.activeSeasonScheduledEndAt.getTime()) return false; // season already over
+  return input.now.getTime() >= autoSignupsDueAt(input).getTime();
 }
 
 export type AutoSignupDecision =
@@ -63,7 +92,7 @@ export function decideAutoSignups(input: AutoSignupInput): AutoSignupDecision {
   if (input.nextSeasonExists && input.nextSeasonHadRound) {
     return { action: "already-open" };
   }
-  const dueAt = addDays(input.activeSeasonStartedAt, input.autoOpenDays);
+  const dueAt = autoSignupsDueAt(input);
   if (input.now.getTime() < dueAt.getTime()) {
     return { action: "wait", dueAt };
   }

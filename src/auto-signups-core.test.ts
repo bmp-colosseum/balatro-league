@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { addDays, decideAutoSignups, MS_PER_DAY, type AutoSignupInput } from "./auto-signups-core.js";
+import { addDays, decideAutoSignups, MS_PER_DAY, type AutoSignupInput, autoSignupsDueAt, weekLeftReminderDue } from "./auto-signups-core.js";
 
 const SEASON_START = new Date("2026-10-01T00:00:00.000Z");
 
@@ -94,3 +94,51 @@ describe("decideAutoSignups", () => {
     );
   });
 });
+
+describe("one week before the end", () => {
+  const start = new Date("2026-09-30T20:00:00Z");
+  const end = new Date("2026-10-21T20:00:00Z");
+  const base = {
+    autoOpenDays: 7,
+    activeSeasonStartedAt: start,
+    nextSeasonExists: false,
+    nextSeasonHadRound: false,
+    anyOpenRoundExists: false,
+    activeSeasonScheduledEndAt: end,
+  };
+
+  it("counts back from the scheduled end when there is one", () => {
+    expect(autoSignupsDueAt(base)).toEqual(new Date("2026-10-14T20:00:00Z"));
+    expect(decideAutoSignups({ ...base, now: new Date("2026-10-11T12:00:00Z") })).toEqual({
+      action: "wait",
+      dueAt: new Date("2026-10-14T20:00:00Z"),
+    });
+    expect(decideAutoSignups({ ...base, now: new Date("2026-10-14T21:00:00Z") })).toEqual({ action: "needs-next-season" });
+  });
+
+  it.each([
+    ["before the due date", "2026-10-13T00:00:00Z", null, false],
+    ["at the due date", "2026-10-14T20:00:00Z", null, true],
+    ["already posted this season", "2026-10-15T00:00:00Z", 9, false],
+    ["posted last season only", "2026-10-15T00:00:00Z", 8, true],
+    ["after the season ended", "2026-10-22T00:00:00Z", null, false],
+  ])("week-left reminder %s", (_name, now, last, expected) => {
+    expect(
+      weekLeftReminderDue({
+        now: new Date(now),
+        autoOpenDays: 7,
+        activeSeasonNumber: 9,
+        activeSeasonStartedAt: start,
+        activeSeasonScheduledEndAt: end,
+        lastReminderSeasonNumber: last,
+      }),
+    ).toBe(expected);
+  });
+
+  it("never posts the reminder when the feature is off or there is no end date", () => {
+    const at = { now: new Date("2026-10-15T00:00:00Z"), activeSeasonNumber: 9, activeSeasonStartedAt: start, lastReminderSeasonNumber: null };
+    expect(weekLeftReminderDue({ ...at, autoOpenDays: 0, activeSeasonScheduledEndAt: end })).toBe(false);
+    expect(weekLeftReminderDue({ ...at, autoOpenDays: 7, activeSeasonScheduledEndAt: null })).toBe(false);
+  });
+});
+

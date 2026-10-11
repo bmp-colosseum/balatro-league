@@ -60,6 +60,7 @@ export async function loadAutoSignupsStatus(): Promise<AutoSignupsStatus> {
     now: new Date(),
     autoOpenDays,
     activeSeasonStartedAt: activeSeason.startedAt,
+    activeSeasonScheduledEndAt: activeSeason.scheduledEndAt,
     nextSeasonExists: Boolean(nextSeason),
     nextSeasonHadRound,
     anyOpenRoundExists: Boolean(anyOpenRound),

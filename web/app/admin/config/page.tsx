@@ -62,7 +62,7 @@ const COMMUNITY_KEYS = [
 
 const SEASON_KEYS = [
   { key: "season_length_days", label: "Season length (days)", help: "How long players get to play once the season starts. Sets the 'play your games' window shown in the signup post (sign-ups close → +N days), unless you set explicit season start/end dates on the season. Default 14 (two weeks)." },
-  { key: "signups_auto_open_days", label: "Auto-open signups after (days)", help: "How many days into the current season to automatically open signups for the next one (creating that season first if it doesn't exist yet). Checked hourly. Set to 0 to turn this off and keep opening signups by hand on Seasons / Season tools. Default 7 (one week). Posts to the Signups channel ID set above." },
+  { key: "signups_auto_open_days", label: "Open signups this many days before the season ends", help: "Checked hourly. At this point the bot opens signups for the next season (creating it first if it doesn't exist yet) in the Signups channel set above, and posts a 'one week left to finish your games' reminder in the announcements channel tagging the season's player role. Counts back from the season's planned end date; with no end date it counts forward from the start. You still close signups by hand. Set to 0 to turn both off. Default 7." },
 ];
 
 const BMP_KEYS = [
