@@ -14,20 +14,19 @@ import { SiteNav } from "@/components/SiteNav";
 import { Callout } from "@/components/Callout";
 import { DiscordId } from "@/components/DiscordId";
 import { ReportForm } from "@/components/ReportForm";
-import { DisputeForm } from "@/components/DisputeForm";
-import { submitReportFromReportPage, submitReportPageDispute } from "./actions";
+import { submitReportFromReportPage } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; err?: string; disputeOk?: string; disputeErr?: string }>;
+  searchParams: Promise<{ ok?: string; err?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/auth/signin?from=/report");
 
-  const { ok, err, disputeOk, disputeErr } = await searchParams;
+  const { ok, err } = await searchParams;
   const user = session.user as { discordId: string };
 
   const { player, division, recentMatches } = await loadReportPageData(user.discordId);
@@ -41,7 +40,7 @@ export default async function ReportPage({
 
         {ok && (
           <Callout type="success">
-            ✓ Reported. Your opponent got a DM with a dispute link.
+            ✓ Reported. It's already recorded in standings — your opponent got a DM.
           </Callout>
         )}
         {err && (
@@ -83,20 +82,10 @@ export default async function ReportPage({
             )}
 
             <p className="muted" style={{ fontSize: 11, marginTop: 12 }}>
-              Recorded right away and posted to <strong>#results</strong>. Your opponent gets a DM to dispute if the score is wrong.
+              Recorded right away and posted to <strong>#results</strong>. Something wrong with a
+              result? Press <strong>Report a problem</strong> on the result post (or open a ticket).
             </p>
           </div>
-        )}
-
-        {disputeOk && (
-          <Callout type="success">
-            ✓ Dispute filed. A helper has been pinged in #results.
-          </Callout>
-        )}
-        {disputeErr && (
-          <Callout type="danger">
-            {disputeErr}
-          </Callout>
         )}
 
         {player && division && recentMatches.length > 0 && (
@@ -105,7 +94,7 @@ export default async function ReportPage({
               <strong>Your recent matches ({recentMatches.length})</strong>
             </summary>
             <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>
-              Wrong score? Click Dispute to flag it for a helper.
+              Wrong score? Press Report a problem on the result post in #results (or open a ticket).
             </p>
             <table style={{ marginTop: 8 }}>
               <thead>
@@ -114,7 +103,6 @@ export default async function ReportPage({
                   <th>Opponent</th>
                   <th>Score</th>
                   <th>Result</th>
-                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -138,14 +126,6 @@ export default async function ReportPage({
                       </td>
                       <td><strong>{m.myGames}-{m.opponentGames}</strong></td>
                       <td><span className="pill" style={{ background: outcome.bg, color: outcome.fg, fontSize: isDisputed ? 10 : undefined }}>{outcome.label}</span></td>
-                      <td>
-                        <DisputeForm
-                          action={submitReportPageDispute}
-                          pairingId={m.pairingId}
-                          opponentName={m.opponentDisplayName}
-                          isDisputed={isDisputed}
-                        />
-                      </td>
                     </tr>
                   );
                 })}

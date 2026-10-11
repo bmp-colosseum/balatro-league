@@ -4,18 +4,16 @@
 // where the report comes from.
 
 import { prisma } from "@/lib/prisma";
-import {
-  enqueueAnnounceResult,
-  enqueueDisputeSpawnThread,
-  enqueueDm,
-} from "@/lib/queue";
+import { enqueueAnnounceResult, enqueueDm } from "@/lib/queue";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
 import { recordAudit } from "@/lib/audit";
 
 // Compose the DM body sent to the opponent when a web-side report
 // confirms a match. Phrased from the opponent's POV so they don't have
-// to flip the score in their head — and includes a direct path to the
-// inline dispute UI on /report if the result is wrong.
+// to flip the score in their head. The match also posts to #results with
+// a "Report a problem" button, so that's the pointer given here rather
+// than a web dispute flow (there isn't one — a wrong result goes through
+// that button or a support ticket, and staff fix it on the admin side).
 function buildOpponentReportDm(args: {
   reporterDisplayName: string;
   reporterGames: number;
@@ -23,7 +21,7 @@ function buildOpponentReportDm(args: {
   divisionName: string;
   siteUrl: string;
 }): string {
-  const { reporterDisplayName, reporterGames, opponentGames, divisionName, siteUrl } = args;
+  const { reporterDisplayName, reporterGames, opponentGames, divisionName } = args;
   const verdict =
     reporterGames > opponentGames
       ? `**${reporterDisplayName}** reported a **${reporterGames}-${opponentGames}** win over you in ${divisionName}.`
@@ -32,7 +30,7 @@ function buildOpponentReportDm(args: {
         : `**${reporterDisplayName}** reported a **1-1 draw** against you in ${divisionName}.`;
   return (
     `📝 ${verdict}\n\n` +
-    `It's already recorded in standings. **If that's wrong**, open ${siteUrl}/report, find this match in "Your recent matches", and click **Dispute** — a League Helper will sort it out.`
+    `It's already recorded in standings. **Something wrong?** Press **Report a problem** on the result post in #results (or open a ticket with /support).`
   );
 }
 
@@ -270,95 +268,8 @@ export async function reportSetFromWeb(
   return { ok: true, pairingId: pairing.id, created: !existing };
 }
 
-export type DisputeResultStr = "2-0" | "1-1" | "0-2" | "unsure";
-
-export type DisputeOutcome =
-  | { ok: true; pairingId: string }
-  | { ok: false; reason: string };
-
-// Web-side dispute action. Either player in the match can call. Allows
-// PENDING or CONFIRMED to flip to DISPUTED with a proposed correction
-// (or "unsure" for "let the helper figure it out"). Recomputes standings
-// inline (cheap, single division) and enqueues the Discord thread spawn
-// to the bot so the helper gets a ping.
-export async function disputeMatchFromWeb(
-  disputerDiscordId: string,
-  pairingId: string,
-  proposed: DisputeResultStr,
-  reason: string | null,
-  // Optional per-game winner's lives — same detail a report carries. Per GAME
-  // (game order is POV-independent), so stored as-is; attributed to each game's
-  // winner only if/when a helper accepts the proposal.
-  lives?: { game1?: number | null; game2?: number | null },
-): Promise<DisputeOutcome> {
-  const player = await prisma.player.findUnique({ where: { discordId: disputerDiscordId } });
-  if (!player) return { ok: false, reason: "You don't have a Player record." };
-
-  const pairing = await prisma.match.findUnique({
-    where: { id: pairingId },
-    include: { division: { include: { season: true } } },
-  });
-  if (!pairing) return { ok: false, reason: "Match not found." };
-  if (pairing.playerAId !== player.id && pairing.playerBId !== player.id) {
-    return { ok: false, reason: "You're not part of this match." };
-  }
-  // Active season only — past seasons stay frozen.
-  if (!pairing.division.season.isActive) {
-    return {
-      ok: false,
-      reason: "Past seasons can't be disputed. Ask a League Helper if it's truly wrong.",
-    };
-  }
-  if (pairing.status === "CANCELLED") {
-    return { ok: false, reason: "This match was cancelled — nothing to dispute." };
-  }
-
-  let proposedGamesWonA: number | null = null;
-  let proposedGamesWonB: number | null = null;
-  if (proposed !== "unsure") {
-    // Proposal is in disputer's POV. Translate to A/B coords.
-    const disputerIsA = player.id === pairing.playerAId;
-    const [self, opp] =
-      proposed === "2-0" ? [2, 0] : proposed === "0-2" ? [0, 2] : [1, 1];
-    proposedGamesWonA = disputerIsA ? self : opp;
-    proposedGamesWonB = disputerIsA ? opp : self;
-  }
-  const cleanReason = reason?.trim().slice(0, 500) || null;
-  // Lives only make sense alongside a concrete proposed result — drop them for
-  // an "unsure" dispute (no winners to attribute them to).
-  const cleanLives = (v: number | null | undefined): number | null =>
-    v != null && Number.isInteger(v) && v >= 0 && v <= 999 ? v : null;
-  const livesG1 = proposed === "unsure" ? null : cleanLives(lives?.game1);
-  const livesG2 = proposed === "unsure" ? null : cleanLives(lives?.game2);
-
-  await prisma.match.update({
-    where: { id: pairingId },
-    data: {
-      status: "DISPUTED",
-      disputedById: player.id,
-      disputedAt: new Date(),
-      disputeProposedGamesWonA: proposedGamesWonA,
-      disputeProposedGamesWonB: proposedGamesWonB,
-      disputeProposedLivesG1: livesG1,
-      disputeProposedLivesG2: livesG2,
-      disputeReason: cleanReason,
-      // Clear so spawnDisputeThread acts even if a prior thread existed.
-      disputeThreadId: null,
-    },
-  });
-  await recomputeDivisionStandings(pairing.divisionId);
-  enqueueDisputeSpawnThread(pairingId).catch((err) =>
-    console.warn("[web dispute] thread spawn enqueue failed:", err),
-  );
-
-  await recordAudit({
-    actor: { discordId: player.discordId, displayName: player.displayName },
-    action: "match.dispute.web",
-    targetType: "Match",
-    targetId: pairingId,
-    summary: `${player.displayName} disputed a match (proposed ${proposed})${cleanReason ? ` — ${cleanReason}` : ""}`,
-    metadata: { proposed, reason: cleanReason, divisionId: pairing.divisionId },
-  }).catch(() => { /* audit must never block a dispute */ });
-
-  return { ok: true, pairingId };
-}
+// There's no web-side dispute action anymore — a wrong result goes through
+// the "Report a problem" button on the #results post (src/announce.ts),
+// or a /support ticket. Staff fix it on /admin/matches. The admin
+// accept/reject tooling for matches that are ALREADY DISPUTED (legacy rows)
+// still lives in web/lib/bulk-resolve.ts and web/app/admin/matches.

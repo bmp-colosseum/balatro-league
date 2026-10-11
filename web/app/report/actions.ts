@@ -3,12 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import {
-  disputeMatchFromWeb,
-  reportSetFromWeb,
-  type DisputeResultStr,
-} from "@/lib/report";
-import { parseReportForm, parseDisputeLives } from "@/lib/report-form";
+import { reportSetFromWeb } from "@/lib/report";
+import { parseReportForm } from "@/lib/report-form";
 
 async function currentDiscordId(): Promise<string | null> {
   const session = await auth();
@@ -29,34 +25,4 @@ export async function submitReportFromReportPage(formData: FormData) {
   revalidatePath("/me");
   revalidatePath("/standings");
   redirect("/report?ok=1");
-}
-
-// Server action backing the per-match Dispute button on /report's
-// "Your recent matches" table. Mirrors submitProfileDispute but
-// redirects back to /report instead of the profile.
-export async function submitReportPageDispute(formData: FormData) {
-  const disputerDiscordId = await currentDiscordId();
-  if (!disputerDiscordId) redirect("/auth/signin?from=/report");
-
-  const pairingId = String(formData.get("pairingId") ?? "").trim();
-  const proposedRaw = String(formData.get("proposed") ?? "").trim();
-  const reason = String(formData.get("reason") ?? "").trim() || null;
-  const lives = parseDisputeLives(formData);
-
-  if (!pairingId) {
-    redirect(`/report?disputeErr=${encodeURIComponent("Missing match id")}`);
-  }
-  const proposed: DisputeResultStr =
-    proposedRaw === "2-0" || proposedRaw === "1-1" || proposedRaw === "0-2"
-      ? proposedRaw
-      : "unsure";
-
-  const r = await disputeMatchFromWeb(disputerDiscordId!, pairingId, proposed, reason, lives);
-  if (!r.ok) {
-    redirect(`/report?disputeErr=${encodeURIComponent(r.reason)}`);
-  }
-  revalidatePath("/report");
-  revalidatePath("/standings");
-  revalidatePath("/me");
-  redirect("/report?disputeOk=1");
 }

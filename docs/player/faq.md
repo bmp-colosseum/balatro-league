@@ -40,7 +40,8 @@ beating you). An admin applies it.
 
 ### How do I play a match?
 `/start-match @opponent` for the guided ban/pick flow (recommended), or play in BMP
-and `/report @opponent result:2-0`. Your opponent confirms manual reports.
+and `/report @opponent result:2-0`. Manual reports count right away, no confirmation
+needed.
 
 ### How does the deck ban/pick work?
 From a pool of 9: first player bans 1, second bans 3, first bans 3 more, then the
@@ -52,9 +53,9 @@ Games are played with 4 lives. The winner of each game records how many they had
 left — it's used as a **tiebreaker reference** for close ties.
 
 ### My opponent disconnected / the score is wrong / they won't schedule — what do I do?
-Use the **DC** button mid-game, **Dispute** a wrong score, and message a **helper**
-(`/helper`) for scheduling problems — ideally before the deadline. See
-[reporting.md](reporting.md).
+Use the **DC** button mid-game, press **Report a problem** on the result post if a
+score is wrong (or open a ticket), and message a **helper** (`/helper`) for
+scheduling problems — ideally before the deadline. See [reporting.md](reporting.md).
 
 ### How do promotions work?
 At season end, the top finishers in each division move **up** a tier and the bottom

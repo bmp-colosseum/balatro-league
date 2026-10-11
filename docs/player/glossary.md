@@ -19,7 +19,7 @@ One-liners for every term you'll see around the league.
 - **MMR** — your Balatro Multiplayer ranked rating. One of the references admins use when placing you — a helper, not the decider.
 - **Promotion / relegation** — moving up (promotion) or down (relegation) a tier between seasons based on where you finished.
 - **DQ / forfeit** — a result (usually 2-0) awarded by an admin without playing it out — no-show, drop-out, or rule break. Shows as "W by DQ".
-- **Dispute** — flagging a reported score as wrong so a helper/admin reviews it.
+- **Report a problem** — the button on a result post (or a `/support` ticket) that flags a result as wrong so a helper/admin reviews it and fixes the record.
 - **Helper** — staff who mediate matches and record verbally-agreed results (`/helper` to summon).
 - **Trait** — a cosmetic badge earned automatically from how you play. See `/traits`.
 - **Showdowns box** — the **⚔** panel on a division page listing the tiebreaker games played there.

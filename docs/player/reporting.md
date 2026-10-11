@@ -1,4 +1,4 @@
-# Reporting, Confirming & Disputes
+# Reporting & Results
 
 How a result becomes official, and what to do when something goes wrong.
 
@@ -13,25 +13,16 @@ Two paths, same outcome:
 - **Manual (`/report @opponent result:2-0`)** — if you played in BMP without the
   bot, the **winner (or either player) reports the score**: `2-0`, `1-1`, or `0-2`.
 
-Results post to the league's results channel, and to `/standings` on the site.
+Either way it **counts right away** — no confirmation step. Results post to the
+league's results channel, and to `/standings` on the site.
 
-## Confirming
+> Tip: always glance at the score posted for your match and make sure it's right.
 
-When a result is reported manually, your **opponent gets a confirm/dispute prompt**.
+## Something wrong with a result?
 
-- They **confirm** → it's official and counts in the standings.
-- If they do nothing, it **auto-confirms** after a set window (so a result can't be
-  held hostage by someone ignoring it).
-- They **dispute** → see below.
-
-> Tip: always glance at the score posted for your match and make sure it's right —
-> confirming is how the league knows it's correct.
-
-## Disputes
-
-If a reported score is wrong, hit **Dispute** (in Discord, or from your profile on
-the site) and say what it should be. A **helper/admin** is pinged to review and
-sets the correct result. Disputed matches show a badge until resolved.
+Press **Report a problem** on the result post in Discord (or open a ticket with
+`/support`) and say what's wrong. A **helper/admin** picks it up and fixes the
+record on the admin side.
 
 ---
 
