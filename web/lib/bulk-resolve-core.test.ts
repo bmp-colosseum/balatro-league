@@ -312,10 +312,34 @@ const pairWithMatchArb = fc.tuple(memberArb, memberArb).chain(([a, bRaw]) => {
   return fc.tuple(fc.constant(a), fc.constant(b), matchArbFor(a.playerId, b.playerId));
 });
 
+// A division has at most one member row per playerId (DB: DivisionMember
+// @@unique([seasonId, playerId])), so a real member list never has two
+// entries sharing a playerId. `standingFor` looks a player up with
+// `members.find(...)`, which legitimately resolves to "whichever duplicate
+// comes first in the array" when that invariant is violated -- that's a
+// property of `.find`, not an order-dependence bug in classifyUnresolved.
+// Narrow `extras` to playerIds distinct from `a`, `b`, and each other so the
+// property only asserts what should actually hold for real input shapes.
+function distinctExtrasArbFor(aId: string, bId: string): fc.Arbitrary<DivisionMemberInput[]> {
+  return fc.array(memberArb, { maxLength: 4 }).map((extras) => {
+    const used = new Set([aId, bId]);
+    return extras.map((m) => {
+      let id = m.playerId;
+      while (used.has(id)) id = `${id}x`;
+      used.add(id);
+      return id === m.playerId ? m : { ...m, playerId: id };
+    });
+  });
+}
+
+const classifyScenarioArb = pairWithMatchArb.chain(([a, b, m]) =>
+  distinctExtrasArbFor(a.playerId, b.playerId).map((extras) => ({ a, b, m, extras })),
+);
+
 describe("classifyUnresolved -- properties", () => {
   it("is order-independent in the members array", () => {
     fc.assert(
-      fc.property(pairWithMatchArb, fc.array(memberArb, { maxLength: 4 }), ([a, b, m], extras) => {
+      fc.property(classifyScenarioArb, ({ a, b, m, extras }) => {
         const members = [a, b, ...extras];
         const shuffled = [...extras, b, a];
         const r1 = classifyUnresolved(m, members, NOW);
@@ -323,6 +347,52 @@ describe("classifyUnresolved -- properties", () => {
         expect(r2.suggestion).toEqual(r1.suggestion);
         expect(r2.status).toBe(r1.status);
       }),
+      {
+        // Pinned regression: fast-check found this exact shape (two players
+        // both opted out of check-in, plus a third member) flaky before
+        // `distinctExtrasArbFor` existed, because the generated `extras`
+        // member collided with `b`'s playerId ("/") -- member order then
+        // changed which duplicate `.find` saw first and flipped the
+        // suggestion between "void" (both out) and "forfeit-a" (b's
+        // duplicate had no check-in issue). Kept here (ids deduped) so this
+        // scenario always runs, not just when the generator happens to hit it.
+        examples: [
+          [
+            {
+              a: {
+                playerId: "TR",
+                displayName: "gJd^P<F 4",
+                status: "ACTIVE",
+                droppedAt: null,
+                checkinStatus: "out",
+                checkinAt: new Date("2025-10-07T14:29:19.561Z"),
+              },
+              b: {
+                playerId: "/",
+                displayName: "M",
+                status: "ACTIVE",
+                droppedAt: new Date("2025-10-05T10:58:19.464Z"),
+                checkinStatus: "out",
+                checkinAt: new Date("2026-01-07T08:25:19.409Z"),
+              },
+              m: {
+                id: " ",
+                divisionId: "d1",
+                playerAId: "TR",
+                playerBId: "/",
+                status: "PENDING",
+                createdAt: new Date("2025-01-01T00:00:00.000Z"),
+                reportedAt: null,
+                confirmedAt: null,
+                disputedAt: null,
+              },
+              extras: [
+                { playerId: "/y", displayName: " ", status: "ACTIVE", droppedAt: null, checkinStatus: null, checkinAt: null },
+              ],
+            },
+          ],
+        ],
+      },
     );
   });
 
