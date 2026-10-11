@@ -14,9 +14,9 @@ test("admin-gated page redirects anonymous users to sign in", async ({ page }) =
   await expect(page).toHaveURL(/\/auth\/signin/);
 });
 
-test("WIP pages (/changes, /how-to-play) are admin-only (404 for anon)", async ({ page }) => {
+test("WIP pages (/changes) are admin-only (404 for anon)", async ({ page }) => {
   // Anonymous must not be able to reach them at all — not even by direct URL.
-  for (const path of ["/changes", "/how-to-play"]) {
+  for (const path of ["/changes"]) {
     const res = await page.goto(path);
     expect(res?.status(), `${path} should 404 for anon`).toBe(404);
   }
@@ -25,6 +25,12 @@ test("WIP pages (/changes, /how-to-play) are admin-only (404 for anon)", async (
   const res = await page.goto("/changes");
   expect(res?.status()).toBe(200);
   await expect(page.getByText(/WIP — admin-only preview/)).toBeVisible();
+});
+
+test("/how-to-play redirects anon straight to the public /how-it-works page", async ({ page }) => {
+  const res = await page.goto("/how-to-play");
+  expect(res?.status()).toBe(200);
+  await expect(page).toHaveURL(/\/how-it-works$/);
 });
 
 test("⌘K palette hides Admin from anon, shows it to admins", async ({ page }) => {

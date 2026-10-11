@@ -14,7 +14,7 @@ list. `docs/arch/channel-registry.md` is a proposal, not the live list.
 
 | Message | Where | When | Wording lives in |
 |---|---|---|---|
-| Welcome guide (3 DMs) | DM | first season for a player; Season tools "Preview" / "Send to all" | `buildOnboardingGuideMessages`, [src/onboarding-guide.ts](../../src/onboarding-guide.ts); sender `src/onboarding-dm.ts` |
+| Welcome guide (3 DMs) + public `/how-it-works` page | DM, web | first season for a player; Season tools "Preview" / "Send to all"; page is always public | `buildOnboardingGuideMessages` / `buildOnboardingGuideSections`, [src/onboarding-guide.ts](../../src/onboarding-guide.ts); sender `src/onboarding-dm.ts`; page `web/app/how-it-works/page.tsx` |
 | Season-start matchups DM | DM | once every division channel is bootstrapped | `queueSeasonOnboardingDms`, `src/queue.ts` |
 | Season-start post | `#league-announcements` | same moment | `announceSeasonStartIfComplete`, `src/queue.ts`; channels-disabled variant in `web/lib/season-activation.ts` |
 | Division welcome (pinned) | division channel | bootstrap, `/league refresh-welcome`, `/league re-ping`, after a schedule regenerate | `renderDivisionWelcome`, `src/queue.ts` |
@@ -75,9 +75,21 @@ refresh-welcome` (edit, or `ping:true` to repost; `dry-run` previews),
 
 Three DMs: the league, seasons, tiers and your schedule; playing a match,
 results and standings; promotion and relegation, ties, scheduling, where to
-get help. Text is pure in `src/onboarding-guide.ts`, copied to
-`web/lib/onboarding-guide.ts` by the sync script so the admin preview renders
-the same copy.
+get help. Content lives as 10 structured sections (`OnboardingGuideSection`
+-- a plain heading + a body that may carry a sliver of Discord markdown,
+`**bold**` / `<url>`) returned by `buildOnboardingGuideSections` in
+`src/onboarding-guide.ts`; `buildOnboardingGuideMessages` assembles those
+same sections into the three DMs. The file is copied to
+`web/lib/onboarding-guide.ts` by the sync script, so both the admin preview
+DM and the public `/how-it-works` page
+(`web/app/how-it-works/page.tsx`, loader `web/lib/loaders/how-it-works.ts`)
+render from the one source -- the page runs each section's body through
+`web/lib/discord-markdown.ts` (a tiny `**bold**`/`<url>` -> HTML converter)
+instead of re-typing the copy. Season label/dates come from the active
+season the same way the DM derives them; with no active season, the shared
+content falls back to its own evergreen wording (same fallback the DM uses
+when `seasonWindowLines` is empty) -- there's no separate "public" copy to
+keep in sync.
 
 Season tools, "New players" card:
 

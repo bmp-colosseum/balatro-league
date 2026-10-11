@@ -6,6 +6,7 @@
 @import "./v2/division.css";
 @import "./v2/rarity-text.css";
 @import "./v2/stats.css";
+@import "./v2/how-it-works.css";
 
 :root {
   --bg: #0f1115;

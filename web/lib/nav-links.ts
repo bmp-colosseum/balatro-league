@@ -24,6 +24,7 @@ export const PRIMARY_LINKS: NavLink[] = [
   { href: "/stats", label: "Stats" },
   { href: "/hall-of-fame", label: "Hall of Fame" },
   { href: "/seasons", label: "Seasons" },
+  { href: "/how-it-works", label: "How it works" },
 ];
 
 export interface AdminNavLink extends NavLink {

@@ -1,0 +1,40 @@
+/* /how-it-works -- v2 "Card Table" refinements. Brand-new page (no v1
+   markup to preserve), so app/how-it-works/page.tsx renders ONE markup that
+   already looks fine under the v1 base rules via the shared .card/h1/h2/.muted
+   classes in globals.css; this file only adds the v2-gated polish MASTER.md
+   calls for (the eyebrow label treatment, hero spacing, section rhythm).
+   Imported once from globals.css, after the existing @import lines. */
+
+html[data-ui="v2"] .howto-hero {
+  text-align: center;
+  padding: 24px 20px;
+}
+
+/* Uppercase eyebrow label per MASTER.md's "Uppercase labels (table headers,
+   eyebrows): 11px, letter-spacing .8px, paper-faint" -- kept out of the
+   .pixel/display-face treatment on purpose (Jersey 10 at small sizes reads
+   as blocks, same reasoning globals.css gives for h3/data). */
+html[data-ui="v2"] .howto-eyebrow {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--paper-faint);
+}
+
+html[data-ui="v2"] .howto-hero h1 {
+  margin-bottom: 8px;
+}
+
+html[data-ui="v2"] .howto-section h3 {
+  color: var(--gold);
+}
+
+html[data-ui="v2"] .howto-section p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+html[data-ui="v2"] .howto-section a {
+  color: var(--gold);
+}

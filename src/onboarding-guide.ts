@@ -1,13 +1,16 @@
-// Pure content builder for the first-timer "how it all works" DM (the
-// onboarding guide). Reuses the exact wording already used in
-// league-info-content.ts's STATIC_INTRO and queue.ts's renderDivisionWelcome
-// -- the up()/down() promote/relegate agreement helpers below mirror
-// renderDivisionWelcome's so the two surfaces never disagree on wording.
+// Pure content builder for the first-timer "how it all works" guide. Powers
+// TWO surfaces off the exact same structured sections:
+//   - the onboarding DM (buildOnboardingGuideMessages, 3 Discord messages)
+//   - the public /how-it-works page on the web (buildOnboardingGuideSections)
+// so the two never disagree on wording. Reuses the exact wording already
+// used in league-info-content.ts's STATIC_INTRO and queue.ts's
+// renderDivisionWelcome -- the up()/down() promote/relegate agreement
+// helpers below mirror renderDivisionWelcome's so all three surfaces agree.
 //
 // No imports -- kept trivially pure (like checkin-message.ts) so it's
 // unit-testable with plain data and can be mirrored into
 // web/lib/onboarding-guide.ts (by web/scripts/sync-schema.mjs) for the admin
-// preview to render identical copy.
+// preview and the public page to render identical copy.
 //
 // Discord's hard limit is 2000 chars per message; every returned message
 // stays well under that, so the caller can send them as-is, in order.
@@ -24,6 +27,25 @@ export interface OnboardingGuideInput {
   supportChannelUrl: string | null;
 }
 
+// One topic in the guide: a plain-text heading (no trailing punctuation --
+// `headingPunctuation` supplies it for the DM's bold lead-in) and a body that
+// may contain Discord markdown (**bold**, <url>). Stable `id`s so callers
+// (the web page's anchors, tests) can address a section without depending on
+// array order.
+export interface OnboardingGuideSection {
+  id: string;
+  heading: string;
+  // "." for a statement, "?" for a question. Defaults to "." when omitted.
+  headingPunctuation?: "." | "?";
+  body: string;
+}
+
+export interface OnboardingGuideContent {
+  title: string;
+  intro: string;
+  sections: OnboardingGuideSection[];
+}
+
 // Promotion/relegation singular-vs-plural agreement -- mirrors up()/down() in
 // src/queue.ts's renderDivisionWelcome so the wording never drifts apart.
 export function up(n: number): string {
@@ -33,52 +55,125 @@ export function down(n: number): string {
   return n === 1 ? "last place moves down" : `the bottom ${n} move down`;
 }
 
-function message1(input: OnboardingGuideInput): string {
+// Assembles the guide's content as structured sections -- the single source
+// both buildOnboardingGuideMessages (DM) and the web page build from.
+export function buildOnboardingGuideSections(input: OnboardingGuideInput): OnboardingGuideContent {
   const windowLine =
     input.seasonWindowLines.length > 0
       ? `${input.seasonWindowLines.join(". ")}.`
       : "Check the pinned message in #league-info for the exact dates.";
-  return [
-    `# \u{1F0CF} Welcome to the Balatro League!`,
-    `You're new this season, so here's how it all works, start to finish.`,
-    ``,
-    `**The league runs in seasons.** You're playing in **${input.seasonLabel}** right now. ${windowLine} A season usually runs about two weeks. Signups for the next one open about a week in and stay open until that next season starts, so keep an eye on #league-info.`,
-    ``,
-    `**Tiers and divisions.** Each season is split into tiers by skill, highest to lowest: **Legendary**, **Rare**, **Uncommon**, **Common**. Each tier is split into divisions (small groups) so you're playing people around your level. Your division channel's name tells you which one you're in.`,
-    ``,
-    `**Your schedule.** You're placed in one division with a set of assigned opponents -- not the whole server. The bot DMs you your matchups directly. If you lose track, click **Who do I play?** in your division channel any time; that's your reminder.`,
-  ].join("\n");
+  const helpBody = input.supportChannelUrl
+    ? `Click **Help** at the bottom of your division channel, ask in the support channel (<${input.supportChannelUrl}>), or DM **Chrono**, who runs the league. Good luck out there!`
+    : `Click **Help** at the bottom of your division channel, or DM **Chrono**, who runs the league. Good luck out there!`;
+
+  return {
+    title: "Welcome to the Balatro League!",
+    intro: "You're new this season, so here's how it all works, start to finish.",
+    sections: [
+      {
+        id: "seasons",
+        heading: "The league runs in seasons",
+        body: `You're playing in **${input.seasonLabel}** right now. ${windowLine} A season usually runs about two weeks. Signups for the next one open about a week in and stay open until that next season starts, so keep an eye on #league-info.`,
+      },
+      {
+        id: "tiers-and-divisions",
+        heading: "Tiers and divisions",
+        body: `Each season is split into tiers by skill, highest to lowest: **Legendary**, **Rare**, **Uncommon**, **Common**. Each tier is split into divisions (small groups) so you're playing people around your level. Your division channel's name tells you which one you're in.`,
+      },
+      {
+        id: "your-schedule",
+        heading: "Your schedule",
+        body: `You're placed in one division with a set of assigned opponents -- not the whole server. The bot DMs you your matchups directly. If you lose track, click **Who do I play?** in your division channel any time; that's your reminder.`,
+      },
+      {
+        id: "playing-a-match",
+        heading: "Playing a match",
+        body: `When you're ready to play someone, click **Start a match** at the bottom of your division channel and pick your opponent. The bot runs the pick/ban phase for you. A match is **two games**, and the deck/stake combo never repeats within a matchup. After each game, the **winner records how many lives they had left** -- that number matters later for tiebreaks.`,
+      },
+      {
+        id: "results",
+        heading: "Results",
+        body: `The bot records the result for you once the match is done -- nothing to report by hand.`,
+      },
+      {
+        id: "standings",
+        heading: "Standings",
+        body: `Full standings for every division: <${input.standingsUrl}>`,
+      },
+      {
+        id: "season-end",
+        heading: "How the season ends",
+        body: `Divisions under 8 players: ${up(1)} a division and ${down(1)}. Divisions of 8 or more: ${up(2)} and ${down(2)}.`,
+      },
+      {
+        id: "ties",
+        heading: "Ties",
+        body: `Two players tied: play one extra game (a shootout) if you can -- that decides it. If you can't, the player who won your match against each other 2-0 takes it; failing that, the lives from that match, then total net lives for the season. Three or more tied: total net lives decide. Net lives = the lives you had left in your wins, minus the lives your opponents had left when they beat you.`,
+      },
+      {
+        id: "scheduling",
+        heading: "Scheduling",
+        body: `It's on you to set up your matches. Message your opponent in your division channel or by DM and agree on a time. Use Hammertime (<https://hammertime.cyou>) to post a time that shows correctly for both of you, whatever time zone you're in -- there's a **Schedule with Hammertime** button in your division channel.`,
+      },
+      {
+        id: "need-help",
+        heading: "Need help",
+        headingPunctuation: "?",
+        body: helpBody,
+      },
+    ],
+  };
 }
 
-function message2(input: OnboardingGuideInput): string {
-  return [
-    `**Playing a match.** When you're ready to play someone, click **Start a match** at the bottom of your division channel and pick your opponent. The bot runs the pick/ban phase for you. A match is **two games**, and the deck/stake combo never repeats within a matchup. After each game, the **winner records how many lives they had left** -- that number matters later for tiebreaks.`,
-    ``,
-    `**Results.** The bot records the result for you once the match is done -- nothing to report by hand.`,
-    ``,
-    `**Standings.** Full standings for every division: <${input.standingsUrl}>`,
-  ].join("\n");
+// Renders one section as a Discord bold-lead-in line, e.g.
+// "**Tiers and divisions.** Each season is split into tiers...".
+function renderSectionLine(section: OnboardingGuideSection): string {
+  const punctuation = section.headingPunctuation ?? ".";
+  return `**${section.heading}${punctuation}** ${section.body}`;
 }
 
-function message3(input: OnboardingGuideInput): string {
-  const helpLine = input.supportChannelUrl
-    ? `**Need help?** Click **Help** at the bottom of your division channel, ask in the support channel (<${input.supportChannelUrl}>), or DM **Chrono**, who runs the league. Good luck out there!`
-    : `**Need help?** Click **Help** at the bottom of your division channel, or DM **Chrono**, who runs the league. Good luck out there!`;
-  return [
-    `**How the season ends.** Divisions under 8 players: ${up(1)} a division and ${down(1)}. Divisions of 8 or more: ${up(2)} and ${down(2)}.`,
-    ``,
-    `**Ties.** Two players tied: play one extra game (a shootout) if you can -- that decides it. If you can't, the player who won your match against each other 2-0 takes it; failing that, the lives from that match, then total net lives for the season. Three or more tied: total net lives decide. Net lives = the lives you had left in your wins, minus the lives your opponents had left when they beat you.`,
-    ``,
-    `**Scheduling.** It's on you to set up your matches. Message your opponent in your division channel or by DM and agree on a time. Use Hammertime (<https://hammertime.cyou>) to post a time that shows correctly for both of you, whatever time zone you're in -- there's a **Schedule with Hammertime** button in your division channel.`,
-    ``,
-    helpLine,
-  ].join("\n");
+function sectionById(sections: OnboardingGuideSection[], id: string): OnboardingGuideSection {
+  const found = sections.find((s) => s.id === id);
+  if (!found) throw new Error(`onboarding-guide: missing section "${id}"`);
+  return found;
 }
 
 // Assembles the full guide as an ordered list of Discord messages, each kept
 // under Discord's 2000-char limit. Send them in order, one after another.
 export function buildOnboardingGuideMessages(input: OnboardingGuideInput): string[] {
-  return [message1(input), message2(input), message3(input)];
+  const content = buildOnboardingGuideSections(input);
+  const byId = (id: string): OnboardingGuideSection => sectionById(content.sections, id);
+
+  const message1 = [
+    `# \u{1F0CF} ${content.title}`,
+    content.intro,
+    ``,
+    renderSectionLine(byId("seasons")),
+    ``,
+    renderSectionLine(byId("tiers-and-divisions")),
+    ``,
+    renderSectionLine(byId("your-schedule")),
+  ].join("\n");
+
+  const message2 = [
+    renderSectionLine(byId("playing-a-match")),
+    ``,
+    renderSectionLine(byId("results")),
+    ``,
+    renderSectionLine(byId("standings")),
+  ].join("\n");
+
+  const message3 = [
+    renderSectionLine(byId("season-end")),
+    ``,
+    renderSectionLine(byId("ties")),
+    ``,
+    renderSectionLine(byId("scheduling")),
+    ``,
+    renderSectionLine(byId("need-help")),
+  ].join("\n");
+
+  return [message1, message2, message3];
 }
 
 export const ONBOARDING_GUIDE_MAX_MESSAGE_LENGTH = 2000;
