@@ -69,7 +69,7 @@ function message3(input: OnboardingGuideInput): string {
     ``,
     `**Ties.** Two players tied: play one extra game (a shootout) if you can -- that decides it. If you can't, the player who won your match against each other 2-0 takes it; failing that, the lives from that match, then total net lives for the season. Three or more tied: total net lives decide. Net lives = the lives you had left in your wins, minus the lives your opponents had left when they beat you.`,
     ``,
-    `**Scheduling.** It's on you to set up your matches. Message your opponent in your division channel or by DM and agree on a time. Click **Schedule a time** (Hammertime) to post a time that shows correctly for both of you, whatever time zone you're in.`,
+    `**Scheduling.** It's on you to set up your matches. Message your opponent in your division channel or by DM and agree on a time. Use Hammertime (<https://hammertime.cyou>) to post a time that shows correctly for both of you, whatever time zone you're in -- there's a **Schedule with Hammertime** button in your division channel.`,
     ``,
     helpLine,
   ].join("\n");

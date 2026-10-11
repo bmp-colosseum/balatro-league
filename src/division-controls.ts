@@ -20,7 +20,7 @@ export function divisionControlsRow(): ActionRowBuilder<ButtonBuilder> {
 // across time zones. A Link button carries no customId (it's just a URL).
 function hammertimeRow(): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("Schedule a time").setURL("https://hammertime.cyou"),
+    new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel("Schedule with Hammertime").setURL("https://hammertime.cyou"),
   );
 }
 

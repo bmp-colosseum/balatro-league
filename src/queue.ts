@@ -1122,7 +1122,7 @@ export async function renderDivisionWelcome(
     `- Each matchup is **2 games**. The deck/stake combo does not repeat within a matchup. The **winner records how many lives they had left** after each game. Lives are used for tiebreaks at the end of the season.`,
     ...(moveBullet ? [moveBullet] : []),
     `- **Ties:** if two players are tied, we encourage them to play one extra game (a **shootout**) to decide it. If no shootout is played, or more than two players are tied, **net lives** decide who promotes or relegates. Net lives = the lives you had left in your wins, minus the lives your opponents had left in your losses.`,
-    `- **Scheduling is on you.** Message each opponent here or by DM and agree on a time. Use **Schedule a time** below (Hammertime) to post a time that shows correctly in everyone's time zone. Nobody will chase you down.`,
+    `- **Scheduling is on you.** Message each opponent here or by DM and agree on a time. Use **Schedule with Hammertime** below (<https://hammertime.cyou>) to post a time that shows correctly in everyone's time zone. Nobody will chase you down.`,
     ``,
     `**Standings + your schedule:** <${webUrl(`divisions/${div.id}`)}>`,
     ``,

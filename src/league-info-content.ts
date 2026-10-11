@@ -29,7 +29,7 @@ const STATIC_INTRO = [
   "",
   "**Ties:** if two players are tied, we encourage them to play one extra game (a **shootout**) to decide it. If no shootout is played, or more than two players are tied, **net lives** decide who promotes or relegates. Net lives = the lives you had left in your wins, minus the lives your opponents had left in your losses.",
   "",
-  "**Scheduling:** scheduling is on you. Message each opponent and agree on a time. Use **Schedule a time** (Hammertime) in your division channel to post a time that shows correctly in everyone's time zone.",
+  "**Scheduling:** scheduling is on you. Message each opponent and agree on a time. Use Hammertime (<https://hammertime.cyou>), or the **Schedule with Hammertime** button in your division channel, to post a time that shows correctly in everyone's time zone.",
   "",
   `**Website:** <${webUrl()}> — standings, profiles, sign up.`,
 ].join("\n");
