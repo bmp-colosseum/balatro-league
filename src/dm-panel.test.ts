@@ -2,9 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   buildDmPanel,
   buildDmPanelLines,
+  capPanelContent,
   classifyDmPanelEditError,
   decideDmPanelAction,
   parseDmPanelRecord,
+  shouldSendFallbackSeasonStartDm,
   type DmPanelRecord,
 } from "./dm-panel.js";
 import type { PlayerStatusSummary } from "./commands/status.js";
@@ -36,17 +38,24 @@ describe("buildDmPanelLines -- compact panel content", () => {
     expect(lines.some((l) => l.includes("division channel"))).toBe(false);
   });
 
-  it("leads with the timeline lines when present", () => {
+  it("leads with the season-start intro, then the timeline lines", () => {
     const lines = buildDmPanelLines(okSummary, ["Finish by X", "Buffer note"]);
     expect(lines[0]).toBe("**Your League Panel**");
-    expect(lines[1]).toBe("Finish by X");
-    expect(lines[2]).toBe("Buffer note");
+    expect(lines[1]).toBe("**Season 6** is live -- you're in **Rare 1**.");
+    expect(lines[2]).toBe("Finish by X");
+    expect(lines[3]).toBe("Buffer note");
   });
 
-  it("has no timeline lines when none are given", () => {
+  it("has no timeline lines when none are given, intro still present", () => {
     const lines = buildDmPanelLines(okSummary, []);
     expect(lines[0]).toBe("**Your League Panel**");
-    expect(lines[1]).toContain("Rare 1");
+    expect(lines[1]).toBe("**Season 6** is live -- you're in **Rare 1**.");
+    expect(lines[2]).toContain("Rare 1");
+  });
+
+  it("omits the season-start intro for a non-'ok' kind", () => {
+    const lines = buildDmPanelLines({ kind: "no-season", message: "No active season right now." }, []);
+    expect(lines.some((l) => l.includes("is live"))).toBe(false);
   });
 
   it("includes division, rank, record, and movement for an 'ok' summary", () => {
@@ -60,20 +69,44 @@ describe("buildDmPanelLines -- compact panel content", () => {
     expect(joined).toContain("Safe - holding your spot");
   });
 
-  it("lists remaining opponents with a count when matches are left", () => {
-    const lines = buildDmPanelLines(okSummary, []);
-    expect(lines[lines.length - 1]).toBe("2 left to play: Alice, Bob");
-  });
-
-  it("says all matches are done when nothing is left", () => {
-    const lines = buildDmPanelLines({ ...okSummary, remainingOpponents: [] }, []);
-    expect(lines[lines.length - 1]).toBe("All your matches are done!");
+  it.each([
+    ["4 matchups", ["Alice", "Bob", "Cara", "Dee"], "**Matchups still to play (4):**\n- Alice\n- Bob\n- Cara\n- Dee"],
+    ["2 matchups", ["Alice", "Bob"], "**Matchups still to play (2):**\n- Alice\n- Bob"],
+    ["0 matchups left", [], "All your matches are done!"],
+  ] as const)("matchups section -- %s", (_label, remainingOpponents, expected) => {
+    const lines = buildDmPanelLines({ ...okSummary, remainingOpponents: [...remainingOpponents] }, []);
+    expect(lines[lines.length - 1]).toBe(expected);
   });
 
   it("falls back to done when remainingOpponents is undefined", () => {
     const { remainingOpponents: _drop, ...rest } = okSummary;
     const lines = buildDmPanelLines(rest as PlayerStatusSummary, []);
     expect(lines[lines.length - 1]).toBe("All your matches are done!");
+  });
+
+  it("pairs each matchup with its @handle (parallel to remainingOpponents)", () => {
+    const lines = buildDmPanelLines(
+      {
+        ...okSummary,
+        remainingOpponents: ["Alice", "Bob", "Cara", "Dee"],
+        remainingOpponentHandles: ["@alice1", "@bobby", "", "@dee_d"],
+      },
+      [],
+    );
+    expect(lines[lines.length - 1]).toBe(
+      "**Matchups still to play (4):**\n- Alice (@alice1)\n- Bob (@bobby)\n- Cara\n- Dee (@dee_d)",
+    );
+  });
+
+  it("falls back to no-handle rendering when remainingOpponentHandles is missing or shorter", () => {
+    const noHandles = buildDmPanelLines({ ...okSummary, remainingOpponents: ["Alice", "Bob"] }, []);
+    expect(noHandles[noHandles.length - 1]).toBe("**Matchups still to play (2):**\n- Alice\n- Bob");
+
+    const shortHandles = buildDmPanelLines(
+      { ...okSummary, remainingOpponents: ["Alice", "Bob"], remainingOpponentHandles: ["@alice1"] },
+      [],
+    );
+    expect(shortHandles[shortHandles.length - 1]).toBe("**Matchups still to play (2):**\n- Alice (@alice1)\n- Bob");
   });
 
   it("shows just the explanation message for a non-'ok' kind (no-season)", () => {
@@ -153,5 +186,38 @@ describe("classifyDmPanelEditError -- what to do after a failed edit", () => {
     [undefined, "skip-transient"], // no code at all (network error, etc)
   ] as const)("code %s -> %s", (code, expected) => {
     expect(classifyDmPanelEditError(code === undefined ? null : { code })).toBe(expected);
+  });
+});
+
+describe("capPanelContent -- Discord content-length safety net", () => {
+  it("returns the content unchanged when under the limit", () => {
+    expect(capPanelContent("short content")).toBe("short content");
+  });
+
+  it("returns content exactly at the limit unchanged", () => {
+    const exact = "x".repeat(2000);
+    expect(capPanelContent(exact)).toBe(exact);
+  });
+
+  it("truncates with a trailing marker when over the limit", () => {
+    const long = "x".repeat(2100);
+    const result = capPanelContent(long);
+    expect(result.length).toBe(2000);
+    expect(result.endsWith("\n...(truncated)")).toBe(true);
+  });
+
+  it("honors a custom limit", () => {
+    const result = capPanelContent("x".repeat(100), 20);
+    expect(result.length).toBe(20);
+    expect(result.endsWith("\n...(truncated)")).toBe(true);
+  });
+});
+
+describe("shouldSendFallbackSeasonStartDm -- season-start double-DM guard", () => {
+  it.each([
+    ["panels disabled", false, true], // panel DM won't carry matchups -- fallback must fire
+    ["panels enabled", true, false], // panel DM already carries matchups -- no fallback
+  ] as const)("%s -> %s", (_label, panelsEnabled, expected) => {
+    expect(shouldSendFallbackSeasonStartDm(panelsEnabled)).toBe(expected);
   });
 });

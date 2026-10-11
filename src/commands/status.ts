@@ -11,6 +11,7 @@ import { getOrCreatePlayer, guildDisplayName } from "../players.js";
 import { formatSeasonLabel } from "../format-season.js";
 import { computeStandings } from "../standings.js";
 import { sanitizeName } from "../sanitize.js";
+import { handleOf } from "../mention.js";
 import type { SlashCommand } from "./types.js";
 
 // Plain-data snapshot of "where a player stands right now" — the shared core
@@ -38,6 +39,14 @@ export interface PlayerStatusSummary {
   // Pre-rendered promotion/relegation/safe line — see describeMovement.
   movement?: string;
   remainingOpponents?: string[];
+  // Parallel to remainingOpponents (same index = same opponent) -- each
+  // entry is "@handle" or "" when the opponent has no synced/shown
+  // username. Discord mentions often render as "unknown user" in a DM, so
+  // player-facing surfaces that list opponents by name (the DM panel) pair
+  // the name with a typed handle the way mentionWithHandle/handleOf do
+  // everywhere else. Optional + parallel (not a richer remainingOpponents
+  // entry) so existing consumers of the plain string[] are unaffected.
+  remainingOpponentHandles?: string[];
 }
 
 // Promotion/relegation position: the top `promote` finishers move up a
@@ -103,7 +112,10 @@ export async function computeStatusSummaryForPlayer(playerId: string): Promise<P
   // Opponents still to play = your pre-created matchups that haven't been played
   // yet (PENDING + 0-0). Mirrors /schedule's "still to play".
   const nameById = new Map(div.members.map((m) => [m.player.id, m.player.displayName]));
-  const remainingOpponents = div.matches
+  // Player rows are already joined (div.members include: { player: true }
+  // above) -- no extra query needed to pair each name with its handle.
+  const handleById = new Map(div.members.map((m) => [m.player.id, handleOf(m.player)]));
+  const remainingOpponentIds = div.matches
     .filter(
       (m) =>
         (m.playerAId === playerId || m.playerBId === playerId) &&
@@ -111,7 +123,9 @@ export async function computeStatusSummaryForPlayer(playerId: string): Promise<P
         m.gamesWonA === 0 &&
         m.gamesWonB === 0,
     )
-    .map((m) => sanitizeName(nameById.get(m.playerAId === playerId ? m.playerBId : m.playerAId) ?? "?"));
+    .map((m) => (m.playerAId === playerId ? m.playerBId : m.playerAId));
+  const remainingOpponents = remainingOpponentIds.map((id) => sanitizeName(nameById.get(id) ?? "?"));
+  const remainingOpponentHandles = remainingOpponentIds.map((id) => handleById.get(id) ?? "");
 
   return {
     kind: "ok",
@@ -128,6 +142,7 @@ export async function computeStatusSummaryForPlayer(playerId: string): Promise<P
     played: myRow.played,
     movement,
     remainingOpponents,
+    remainingOpponentHandles,
   };
 }
 

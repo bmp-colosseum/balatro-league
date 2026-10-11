@@ -79,7 +79,7 @@ import { changedScheduleText, divisionNoticeText } from "./schedule-change-text.
 import { mentionWithHandle, handleOf, type MentionSubject } from "./mention.js";
 import { runShootoutCheck, isDivisionComplete } from "./shootout.js";
 import { seasonTimelineLines, parseBufferDays } from "./season-timing.js";
-import { refreshAllDmPanels } from "./dm-panel.js";
+import { refreshAllDmPanels, dmPanelsEnabled, shouldSendFallbackSeasonStartDm } from "./dm-panel.js";
 import { backfillDmAttachments } from "./dm-attachment-backfill.js";
 import { sendOnboardingGuideDm } from "./onboarding-dm.js";
 
@@ -1360,12 +1360,18 @@ async function announceSeasonStartIfComplete(seasonId: string): Promise<void> {
   });
   if (claim.count === 0) return;
 
-  // Per-player onboarding DMs (welcome + their matchups) instead of pinging
-  // everyone to "go play". Each DM trickles out rate-limited; DMs-off players are
+  // The DM panel (below) is now the single season-start DM: its content leads
+  // with a season/division intro line and a matchups section (see
+  // buildDmPanelLines in dm-panel.ts) alongside the deadline, standing, and
+  // quick-action buttons it already carried. The separate onboarding DM only
+  // fires as a fallback when panels are OFF, so nobody is left with zero
+  // season-start DMs. Each DM trickles out rate-limited; DMs-off players are
   // skipped silently (they'll see it via /standings).
-  await queueSeasonOnboardingDms(seasonId).catch((err) =>
-    console.warn(`[season.announce] onboarding DMs failed for ${seasonId}:`, err),
-  );
+  if (shouldSendFallbackSeasonStartDm(await dmPanelsEnabled())) {
+    await queueSeasonOnboardingDms(seasonId).catch((err) =>
+      console.warn(`[season.announce] onboarding DMs failed for ${seasonId}:`, err),
+    );
+  }
   // Kick off the per-player DM panel (season deadline + personal standing,
   // refreshed by edit-in-place forever after) rather than waiting for the
   // next hourly tick to notice these new active members.
