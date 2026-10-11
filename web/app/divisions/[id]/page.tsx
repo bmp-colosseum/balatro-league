@@ -850,17 +850,27 @@ function AdminSection({
                         <Button type="submit" variant="secondary" size="sm">Reactivate</Button>
                       </form>
                     ) : (
-                      <form action={dropDivisionMember}>
+                      <form action={dropDivisionMember} style={{ display: "flex", gap: 4 }}>
                         <input type="hidden" name="divisionId" value={division.id} />
                         <input type="hidden" name="playerId" value={m.playerId} />
-                        <Button
-                          type="submit"
+                        <ConfirmButton
+                          name="refill"
+                          value="yes"
                           variant="secondary"
-                          size="sm"
-                          title="Mark dropped — keeps played pairings, voids unplayed"
+                          style={{ fontSize: 12 }}
+                          message={`Drop ${m.player.displayName} and refill their opponents? Their unplayed matches are removed, replacements are drawn where possible, and the whole division is told.`}
                         >
                           Drop
-                        </Button>
+                        </ConfirmButton>
+                        <ConfirmButton
+                          name="refill"
+                          value="no"
+                          variant="secondary"
+                          style={{ fontSize: 12 }}
+                          message={`Drop ${m.player.displayName} without new matches? Their unplayed matches are removed, their opponents play one fewer, and the whole division is told.`}
+                        >
+                          Drop, no new matches
+                        </ConfirmButton>
                       </form>
                     )}
                     <form action={removeDivisionMember}>

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { requireAdmin } from "@/lib/admin";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
+import { dropPlayerFromDivision } from "@/lib/drop-player";
 import { prisma } from "@/lib/prisma";
 import { reportSetFromWeb } from "@/lib/report";
 import { parseReportForm } from "@/lib/report-form";
@@ -100,35 +101,25 @@ export async function dropDivisionMember(formData: FormData) {
   const divisionId = String(formData.get("divisionId") ?? "");
   const playerId = String(formData.get("playerId") ?? "");
   const reason = String(formData.get("reason") ?? "").trim();
+  // "yes" / "no" from the two buttons; absent means refill.
+  const refill = String(formData.get("refill") ?? "yes") !== "no";
   if (!divisionId || !playerId) return;
 
-  const membership = await prisma.divisionMember.findUnique({
-    where: { divisionId_playerId: { divisionId, playerId } },
-  });
-  if (!membership) return;
+  const division = await prisma.division.findUnique({ where: { id: divisionId }, select: { seasonId: true } });
+  if (!division) return;
 
-  await prisma.divisionMember.update({
-    where: { id: membership.id },
-    data: { status: "DROPPED", droppedAt: new Date(), dropoutReason: reason || null },
-  });
-  // Void unplayed pairings only
-  await prisma.match.deleteMany({
-    where: {
-      divisionId,
-      status: "PENDING",
-      OR: [{ playerAId: playerId }, { playerBId: playerId }],
-    },
-  });
-  await recomputeDivisionStandings(divisionId).catch(() => {});
-  await recordAudit({
+  // Same path as the profile's drop buttons: voids unplayed matches, refills
+  // opponents when asked, and DMs the whole division about what changed.
+  await dropPlayerFromDivision({
+    playerId,
+    divisionId,
+    seasonId: division.seasonId,
+    refill,
+    reason: reason || null,
     actor: actorFromAdminUser(user),
-    action: "division.drop",
-    targetType: "DivisionMember",
-    targetId: membership.id,
-    summary: reason ? `Dropped (${reason})` : "Dropped",
-    metadata: { divisionId, playerId, reason: reason || null },
   });
   revalidatePath(`/divisions/${divisionId}`);
+  revalidatePath(`/profile/${playerId}`);
 }
 
 // Reverse of dropDivisionMember.
