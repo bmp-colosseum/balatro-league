@@ -35,6 +35,8 @@ html[data-ui="v2"] .howto-section p {
   line-height: 1.6;
 }
 
+html[data-ui="v2"] .howto-section p,
+html[data-ui="v2"] .howto-section a { overflow-wrap: anywhere; }
 html[data-ui="v2"] .howto-section a {
   color: var(--gold);
 }

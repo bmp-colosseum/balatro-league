@@ -103,7 +103,7 @@ export function buildOnboardingGuideSections(input: OnboardingGuideInput): Onboa
       {
         id: "season-end",
         heading: "How the season ends",
-        body: `Divisions under 8 players: ${up(1)} a division and ${down(1)}. Divisions of 8 or more: ${up(2)} and ${down(2)}.`,
+        body: `The top finishers in each division move up a division and the bottom finishers move down. How many depends on the division -- your division channel and the standings show the exact number for yours.`,
       },
       {
         id: "ties",

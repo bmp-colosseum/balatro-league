@@ -20,6 +20,19 @@ function escapeHtml(text: string): string {
 
 // Matches **bold** (no nested "*") or a Discord-style suppressed link
 // <https://...> / <http://...> (no whitespace or angle brackets inside).
+// Short, readable text for a link: raw Discord channel URLs and long paths
+// overflow a phone screen, so show what the link is rather than the URL.
+export function linkLabel(url: string): string {
+  try {
+    const u = new URL(url);
+    if (u.hostname === "discord.com" && u.pathname.startsWith("/channels/")) return "open in Discord";
+    const host = u.hostname.replace(/^www\./, "");
+    return u.pathname === "/" || u.pathname === "" ? host : host + u.pathname;
+  } catch {
+    return url;
+  }
+}
+
 const TOKEN_RE = /\*\*([^*]+)\*\*|<(https?:\/\/[^<>\s]+)>/g;
 
 export function discordMarkdownToHtml(text: string): string {
@@ -33,7 +46,7 @@ export function discordMarkdownToHtml(text: string): string {
       html += `<strong>${escapeHtml(bold)}</strong>`;
     } else if (url !== undefined) {
       const safeUrl = escapeHtml(url);
-      html += `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>`;
+      html += `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(linkLabel(url))}</a>`;
     }
     lastIndex = index + full.length;
   }

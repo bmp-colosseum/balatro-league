@@ -11,7 +11,7 @@ describe("discordMarkdownToHtml", () => {
 
   it("converts a suppressed Discord link <url> to an anchor", () => {
     expect(discordMarkdownToHtml("Full standings for every division: <https://balatroleague.com/standings>")).toBe(
-      'Full standings for every division: <a href="https://balatroleague.com/standings" target="_blank" rel="noopener noreferrer">https://balatroleague.com/standings</a>',
+      'Full standings for every division: <a href="https://balatroleague.com/standings" target="_blank" rel="noopener noreferrer">balatroleague.com/standings</a>',
     );
   });
 
@@ -19,7 +19,7 @@ describe("discordMarkdownToHtml", () => {
     const input =
       "Click **Help** at the bottom of your division channel, ask in the support channel (<https://discord.com/channels/1/2>), or DM **Chrono**, who runs the league. Good luck out there!";
     expect(discordMarkdownToHtml(input)).toBe(
-      'Click <strong>Help</strong> at the bottom of your division channel, ask in the support channel (<a href="https://discord.com/channels/1/2" target="_blank" rel="noopener noreferrer">https://discord.com/channels/1/2</a>), or DM <strong>Chrono</strong>, who runs the league. Good luck out there!',
+      'Click <strong>Help</strong> at the bottom of your division channel, ask in the support channel (<a href="https://discord.com/channels/1/2" target="_blank" rel="noopener noreferrer">open in Discord</a>), or DM <strong>Chrono</strong>, who runs the league. Good luck out there!',
     );
   });
 

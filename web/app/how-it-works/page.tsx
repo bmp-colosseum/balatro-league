@@ -26,7 +26,7 @@ export default async function HowItWorksPage() {
         <div className="card howto-hero">
           <p className="howto-eyebrow">{content.title}</p>
           <h1>How it works</h1>
-          <p className="muted">{content.intro}</p>
+          <p className="muted">Everything you need to know about how the league runs, start to finish.</p>
         </div>
 
         {content.sections.map((section) => (
