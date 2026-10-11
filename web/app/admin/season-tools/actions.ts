@@ -22,7 +22,7 @@ export async function previewOnboardingGuide(_prev: ActionResult, _formData: For
   if (!player) {
     return { ok: false, message: "No Player record for your Discord account -- can't preview." };
   }
-  await enqueueOnboardingGuide({ playerIds: [player.id] });
+  await enqueueOnboardingGuide({ playerIds: [player.id], force: true });
   await recordAudit({
     actor: actorFromAdminUser(user),
     action: "onboarding-guide.preview",

@@ -772,9 +772,9 @@ export async function initQueue(): Promise<void> {
   await boss.work<{ playerId: string }>(
     "notify.onboarding-guide",
     { batchSize: 1, pollingIntervalSeconds: 5 },
-    async (jobs: Job<{ playerId: string }>[]) => {
+    async (jobs: Job<{ playerId: string; force?: boolean }>[]) => {
       for (const job of jobs) {
-        const outcome = await sendOnboardingGuideDm(job.data.playerId);
+        const outcome = await sendOnboardingGuideDm(job.data.playerId, job.data.force === true);
         console.log(`[notify.onboarding-guide] ${job.data.playerId} -> ${outcome}`);
       }
     },

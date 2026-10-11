@@ -238,11 +238,11 @@ export async function enqueueAwardChampionRole(job: {
 // got it. Used by both the "Preview: DM the guide to me" button (one
 // playerId, the signed-in admin's own) and "Send to all N new players"
 // (every newcomer's playerId) on /admin/season-tools.
-export async function enqueueOnboardingGuide(job: { playerIds: string[] }): Promise<void> {
+export async function enqueueOnboardingGuide(job: { playerIds: string[]; force?: boolean }): Promise<void> {
   await ensureStarted();
   const boss = getBoss();
   for (const playerId of job.playerIds) {
-    await boss.send("notify.onboarding-guide", { playerId }, { retryLimit: 3, retryBackoff: true });
+    await boss.send("notify.onboarding-guide", { playerId, force: job.force === true }, { retryLimit: 3, retryBackoff: true });
   }
 }
 

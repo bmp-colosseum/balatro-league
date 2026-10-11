@@ -29,7 +29,8 @@ export type OnboardingGuideOutcome =
 // Throws on a transient failure (client not ready) so pg-boss retries;
 // permanently-undeliverable DMs (closed/blocked) are recorded as failed and
 // NOT retried, same convention as the other notify.* workers in queue.ts.
-export async function sendOnboardingGuideDm(playerId: string): Promise<OnboardingGuideOutcome> {
+// force: the admin preview button, which must send every time it is pressed.
+export async function sendOnboardingGuideDm(playerId: string, force = false): Promise<OnboardingGuideOutcome> {
   const player = await prisma.player.findUnique({
     where: { id: playerId },
     select: { discordId: true },
@@ -40,7 +41,7 @@ export async function sendOnboardingGuideDm(playerId: string): Promise<Onboardin
     where: { discordId: player.discordId, kind: ONBOARDING_GUIDE_KIND, status: "sent" },
     select: { id: true },
   });
-  if (already) return "skipped-already-sent";
+  if (already && !force) return "skipped-already-sent";
 
   const client = tryGetDiscordClient();
   if (!client) throw new Error("Discord client not ready -- will retry");
