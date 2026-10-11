@@ -202,8 +202,10 @@ function suggestFor(status: RowStatus, a: PlayerStanding, b: PlayerStanding): Su
 // The single entry point the loader calls per unresolved match. Deterministic
 // and order-independent: depends only on this match's own fields, this
 // division's member list (searched by id, so member array order never
-// matters), and the injected `now` -- never today's real clock, never any
-// other row's state.
+// matters -- relies on a division having at most one member row per
+// playerId, enforced at the DB layer by DivisionMember's
+// @@unique([seasonId, playerId])), and the injected `now` -- never today's
+// real clock, never any other row's state.
 export function classifyUnresolved(
   match: UnresolvedMatchInput,
   members: readonly DivisionMemberInput[],
