@@ -860,7 +860,7 @@ function AdminSection({
                           style={{ fontSize: 12 }}
                           message={`Drop ${m.player.displayName} and refill their opponents? Their unplayed matches are removed, replacements are drawn where possible, and the whole division is told.`}
                         >
-                          Drop
+                          Drop and refill
                         </ConfirmButton>
                         <ConfirmButton
                           name="refill"
