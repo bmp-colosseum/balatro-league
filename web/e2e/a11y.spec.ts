@@ -16,7 +16,7 @@ import { AxeBuilder } from "@axe-core/playwright";
 // part of this fix.
 const PAGES = [
   "/", "/standings", "/players", "/stats", "/hall-of-fame", "/seasons",
-  "/traits", "/join", "/how-to-play",
+  "/traits", "/join", "/how-it-works",
 ];
 const ADMIN_PAGES = ["/admin", "/admin/config", "/admin/matches", "/admin/seasons"];
 

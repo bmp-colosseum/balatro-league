@@ -529,7 +529,7 @@ export default async function ChangesPage() {
           {" "}Card art from <em>Balatro</em> (LocalThunk), extracted for the Antelytics viewer.
         </p>
         <p style={{ marginTop: 4, textAlign: "center" }}>
-          <Link href="/how-to-play">→ How the league works</Link>
+          <Link href="/how-it-works">→ How the league works</Link>
         </p>
       </main>
     </>

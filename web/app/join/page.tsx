@@ -203,6 +203,9 @@ export default async function JoinPage({
             <li>Play 2 games against each of your assigned opponents (top divisions play everyone; most play 4 others). You get about {playWindowLabel} to finish.</li>
             <li>Finish near the top to move up a division next season, near the bottom to move down.</li>
           </ul>
+          <p style={{ marginTop: 8 }}>
+            <Link href="/how-it-works">Read the full how-it-works page</Link> for the complete rundown.
+          </p>
         </div>
       </main>
     </>

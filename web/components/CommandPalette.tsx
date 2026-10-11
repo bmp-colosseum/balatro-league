@@ -30,10 +30,6 @@ interface Item {
 const PUBLIC_PAGES: Item[] = [
   ...PRIMARY_LINKS.map((l) => ({ label: l.label, href: l.href })),
   { label: "Join the league", href: "/join" },
-  // /how-to-play is still an admin-only WIP draft -- this points at the
-  // public "How it works" panel on /join instead so the entry resolves for
-  // everyone (see .claude/knowledge/ux-audit/01-findings.md, backlog #33).
-  { label: "How to play", href: "/join#how-it-works" },
 ];
 
 // Require a signed-in session (the pages themselves redirect otherwise).
