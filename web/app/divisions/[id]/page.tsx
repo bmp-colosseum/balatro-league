@@ -119,6 +119,17 @@ export default async function PublicDivisionPage({
     <>
       <SiteNav activePath="/standings" />
       <main>
+        {/* Admin shortcut bar: the per-division tools render at the very
+            bottom of a long page, so admins get a one-line jump to them and
+            to the two pages they usually need next. */}
+        {isAdmin && (
+          <div className="card admin-jump-v2" style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", fontSize: 13, padding: "8px 12px", marginBottom: 12 }}>
+            <strong>Admin</strong>
+            <a href="#admin-tools">Jump to division tools</a>
+            <Link href={`/admin/matches?division=${id}`}>Matches in this division</Link>
+            <Link href="/admin/season-tools">Season tools</Link>
+          </div>
+        )}
         {/* v2 "Card Table" hero: division identity in the pixel face
             (rarity-colored), rarity chip, season link, "N players / N up /
             N down / schedule" meta, and the roster as chips -- brand new,
@@ -768,7 +779,7 @@ function AdminSection({
     // (see app/v2/division.css), so it's a no-op wrapper <div> under v1 --
     // each child keeps rendering as its own separate .card exactly as
     // before. admin-panel-header-v2 is brand new, hidden by default.
-    <div className="admin-panel-v2">
+    <div className="admin-panel-v2" id="admin-tools">
       <div className="card-header admin-panel-header-v2">
         <strong className="pixel">Admin</strong>
       </div>

@@ -56,6 +56,7 @@ export const ADMIN_LINKS: AdminNavLink[] = [
     label: "Matches",
     children: [
       { href: "/admin/matches", label: "Matches" },
+      { href: "/admin/divisions", label: "Divisions" },
       { href: "/admin/schedule-audit", label: "Data Audit" },
       { href: "/admin/participation", label: "Participation" },
       { href: "/admin/whats-at-stake", label: "At Stake" },
