@@ -2,6 +2,8 @@
 
 Discord bot to run a Balatro league with division pyramid (Common → Legendary), round-robin best-of-2 sets, points-based standings, and opponent-confirmed match reporting.
 
+Operations handbook (how the league actually runs, from the code): [docs/handbook/README.md](docs/handbook/README.md).
+
 ## Status
 
 **Shipped so far** (Season 1 usable):
@@ -96,6 +98,8 @@ src/
 4. `npm run dev` to test it.
 
 ## Deploying
+
+> Superseded: the league deploys to the shared Colosseum box via the self-hosted runner, not Railway. See [docs/handbook/operations.md](docs/handbook/operations.md). The Railway notes below are kept for history only.
 
 Two services on Railway:
 - **Bot** (this repo root): Discord gateway connection. See [DEPLOY.md](./DEPLOY.md).
