@@ -101,6 +101,11 @@ then the button "Set up the season - place N players".
   currently 2, so division size does not change the count unless the config
   is edited. End-of-season uses these stored counts; it does not recompute
   them.
+- The organiser sets the final counts by hand per division after building
+  (for example 1 up / 1 down in a small division), and those manual values
+  are the source of truth. Each division's channel welcome and standings
+  show its own stored counts, so players always see the real number. Do not
+  "correct" stored counts to a size rule without asking the organiser.
 - Building creates nothing in Discord. Channels and roles appear at
   activation.
 
