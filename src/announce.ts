@@ -128,26 +128,28 @@ export async function announceResult(pairingId: string): Promise<void> {
   }
   container.addTextDisplayComponents(new TextDisplayBuilder().setContent(blocks.footerLine));
 
-  // Dispute button — visible inline so a player who sees their result
-  // and disagrees can flag it without leaving the channel. Routes to
-  // the existing report:dispute handler in src/commands/report.ts which
-  // already accepts CONFIRMED pairings (kicks off the dispute flow).
-  const disputeRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+  // Report a problem button — every result counts right away (no pending
+  // stage, no dispute vote). If something's wrong, a player presses this to
+  // open a one-field modal that files a support ticket (src/commands/report.ts
+  // reportButtons, action "problem") - staff fix it on the admin Matches page.
+  // customId stays prefixed "report:" so a stale "report:dispute:<id>" button
+  // on an already-posted message still opens the same modal (backward compat).
+  const reportProblemRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
-      .setCustomId(`report:dispute:${pairing.id}`)
-      .setLabel("Dispute this result")
-      .setStyle(ButtonStyle.Danger),
+      .setCustomId(`report:problem:${pairing.id}`)
+      .setLabel("Report a problem")
+      .setStyle(ButtonStyle.Secondary),
   );
 
   // Bot REST is the preferred path because it can attach interactive
-  // components (the Dispute button). User-created webhook URLs CAN'T
-  // — only application-owned webhooks support components, and that's
-  // more setup than just using the bot identity directly.
+  // components (the Report a problem button). User-created webhook URLs
+  // CAN'T — only application-owned webhooks support components, and
+  // that's more setup than just using the bot identity directly.
   if (channelId) {
     try {
       const body: RESTPostAPIChannelMessageJSONBody = {
         flags: MessageFlags.IsComponentsV2,
-        components: [container.toJSON(), disputeRow.toJSON()],
+        components: [container.toJSON(), reportProblemRow.toJSON()],
         allowed_mentions: { parse: [] },
       };
       await rest().post(Routes.channelMessages(channelId), { body });
@@ -159,8 +161,8 @@ export async function announceResult(pairingId: string): Promise<void> {
     }
   }
 
-  // Webhook fallback — posts the container without the dispute button
-  // (webhooks don't carry interactive components reliably). Useful
+  // Webhook fallback — posts the container without the Report a problem
+  // button (webhooks don't carry interactive components reliably). Useful
   // when no channel id is configured at all.
   if (webhookUrl) {
     try {

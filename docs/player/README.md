@@ -10,7 +10,7 @@ the current defaults).
 | **[about.md](about.md)** | What the league is, why it exists, and what it's trying to do — the purpose/vibe |
 | **[rules.md](rules.md)** | How the league works, end to end — seasons, tiers/divisions, format, scoring, ban/pick, lives, promotion/relegation |
 | **[standings.md](standings.md)** | How standings are sorted, **head-to-head**, **real ties**, and **showdowns** — exactly how rank is decided |
-| **[reporting.md](reporting.md)** | Playing a match, reporting + confirming results, disputes, disconnects, forfeits/DQ |
+| **[reporting.md](reporting.md)** | Playing a match, reporting results, reporting a problem, disconnects, forfeits/DQ |
 | **[faq.md](faq.md)** | Quick answers to the common questions |
 | **[glossary.md](glossary.md)** | One-line definitions of every term (tier, division, seed, MMR, showdown, h2h, …) |
 

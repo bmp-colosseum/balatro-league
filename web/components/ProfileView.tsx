@@ -25,9 +25,8 @@ import { FormSelect } from "@/components/FormSelect";
 import { ReportForm } from "@/components/ReportForm";
 import { MatchActionsPanel } from "@/components/MatchActionsPanel";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { DisputeForm } from "@/components/DisputeForm";
 import { CANONICAL_DECKS, CANONICAL_STAKES } from "@/lib/balatro-info";
-import { reportFromProfileAction, submitProfileDispute } from "@/app/profile/[id]/actions";
+import { reportFromProfileAction } from "@/app/profile/[id]/actions";
 import { resetToDiscordNameAction, setCustomNameAction, setShowUsernameAction } from "@/app/me/actions";
 import { dropPlayer, reinstatePlayer, movePlayer, setPlayerDiscordId } from "@/app/admin/players/actions";
 import { TimezoneSetting } from "@/components/TimezoneSetting";
@@ -320,15 +319,6 @@ export async function ProfileView({
           </span>
           {m.uncounted && <span title={m.uncounted.title}>{m.uncounted.label}</span>}
           {picksBansDetails(m.games, m.opponentDisplayName)}
-          {isOwnProfile && hand.context.isActiveSeason && !isShootout && (
-            <DisputeForm
-              action={submitProfileDispute}
-              pairingId={m.pairingId}
-              opponentName={m.opponentDisplayName}
-              isDisputed={isDisputed}
-              hiddenFields={{ profileId: viewedPlayer.id }}
-            />
-          )}
         </div>
       </div>
     );
@@ -927,12 +917,11 @@ export async function ProfileView({
                       <th>Opponent</th>
                       <th>Score</th>
                       <th>Result</th>
-                      {isOwnProfile && h.isActive && <th></th>}
                     </tr>
                   </thead>
                   <tbody>
                     {h.matches.length === 0 ? (
-                      <tr><td colSpan={isOwnProfile && h.isActive ? 5 : 4} className="muted">No matches played yet.</td></tr>
+                      <tr><td colSpan={4} className="muted">No matches played yet.</td></tr>
                     ) : (
                       h.matches.map((m, i) => {
                         const date = m.confirmedAt ? m.confirmedAt.toISOString().slice(0, 10) : "—";
@@ -1003,20 +992,6 @@ export async function ProfileView({
                                 </div>
                               )}
                             </td>
-                            {isOwnProfile && h.isActive && isShootout && (
-                              <td className="muted" style={{ fontSize: 11 }}>—</td>
-                            )}
-                            {isOwnProfile && h.isActive && !isShootout && (
-                              <td>
-                                <DisputeForm
-                                  action={submitProfileDispute}
-                                  pairingId={m.pairingId}
-                                  opponentName={m.opponentDisplayName}
-                                  isDisputed={isDisputed}
-                                  hiddenFields={{ profileId: profile.player.id }}
-                                />
-                              </td>
-                            )}
                           </tr>
                         );
                       })

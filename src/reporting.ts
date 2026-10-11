@@ -73,11 +73,14 @@ export async function reportSet(input: ReportInput): Promise<ReportResult> {
   }
   // A pre-created (locked-schedule) match is PENDING with no reporter yet — that's
   // an UNPLAYED assigned matchup, not a pending report, so let the report below
-  // fill it in. A PENDING row WITH a reporter is a real report awaiting confirm.
+  // fill it in. A PENDING row WITH a reporter is a leftover report from before
+  // reports confirmed instantly; it'll clear on its own once the already-queued
+  // auto-confirm job runs (see report-auto-confirm.ts); reject a new report in
+  // the meantime so it doesn't race that job.
   if (existing && existing.status === "PENDING" && existing.reporterId) {
     return {
       ok: false,
-      reason: "There's already a pending report for this match. The opponent needs to confirm or dispute it first.",
+      reason: "There's already a pending report for this match. It'll finalize shortly - try again in a minute.",
     };
   }
 
@@ -92,23 +95,28 @@ export async function reportSet(input: ReportInput): Promise<ReportResult> {
     };
   }
 
-  // PENDING by default — opponent confirms via the embed buttons in
-  // #results, OR the 2-minute auto-confirm pg-boss job fires and
-  // promotes it to CONFIRMED. No standings recompute or announce
-  // happens until status flips to CONFIRMED.
+  // Confirmed straight away — no pending stage, no opponent confirm/dispute
+  // window. If something's wrong, the opponent presses "Report a problem"
+  // on the result post (or opens a ticket) and staff fix it on the admin
+  // Matches page.
   const now = new Date();
   const reportedDeck = input.deck?.trim() || null;
   const reportedStake = input.stake?.trim() || null;
+  const winnerId =
+    gamesWonA > gamesWonB ? playerAId
+      : gamesWonB > gamesWonA ? playerBId
+      : null;
   const pairing = existing
     ? await prisma.match.update({
         where: { id: existing.id },
         data: {
           gamesWonA,
           gamesWonB,
-          status: "PENDING",
+          winnerId,
+          status: "CONFIRMED",
           reporterId: input.reporterPlayerId,
           reportedAt: now,
-          confirmedAt: null,
+          confirmedAt: now,
           reportedDeck,
           reportedStake,
         },
@@ -121,13 +129,20 @@ export async function reportSet(input: ReportInput): Promise<ReportResult> {
           format: "LEAGUE_BO2",
           gamesWonA,
           gamesWonB,
-          status: "PENDING",
+          winnerId,
+          status: "CONFIRMED",
           reporterId: input.reporterPlayerId,
           reportedAt: now,
+          confirmedAt: now,
           reportedDeck,
           reportedStake,
         },
       });
+
+  // Fire-and-forget: don't block the caller on Discord/standings work.
+  enqueueAnnounceResult(pairing.id).catch(() => {});
+  recomputeDivisionStandings(pairing.divisionId).catch(() => {});
+  maybeEnqueueShootoutCheck(pairing.divisionId).catch(() => {});
 
   return { ok: true, pairingId: pairing.id, status: existing ? "REREPORTED" : "CREATED" };
 }

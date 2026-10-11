@@ -66,7 +66,7 @@ Two ways to play a matchup:
   deck **ban/pick** for each game, records the winner, and logs everything
   automatically. This is the recommended way.
 - **Manual (`/report @opponent result:2-0`)** — if you played in BMP without the
-  bot, just report the score. Your opponent gets a confirm/dispute prompt.
+  bot, just report the score. It's recorded right away, no confirmation needed.
 
 ### Deck ban/pick (the guided flow)
 
@@ -94,10 +94,10 @@ preset). You'll see the allowed combos in the ban/pick flow.
 
 ---
 
-## Disconnects, disputes, forfeits
+## Disconnects, wrong results, forfeits
 
 Covered in **[reporting.md](reporting.md)** — including what happens if someone
-disconnects mid-game, how to dispute a wrong score, and DQ/forfeit results.
+disconnects mid-game, what to do about a wrong result, and DQ/forfeit results.
 
 ---
 
