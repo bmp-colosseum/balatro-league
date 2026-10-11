@@ -29,7 +29,7 @@ export const dynamic = "force-dynamic";
 const CHANNEL_KEYS = [
   { key: "announcements_channel_id", label: "Announcements channel ID", help: "Where the bot posts league-wide announcements (e.g. \"Season N is now live!\"). Right-click channel → Copy Channel ID. Auto-created as #league-announcements on bot startup if unset — set it here to redirect to a different channel. Falls back to env ANNOUNCEMENTS_CHANNEL_ID." },
   { key: "league_info_channel_id", label: "League-info channel ID", help: "The #league-info channel where the bot maintains the pinned 'how it works' + live-season message. Set this if you created the channel manually instead of running /league setup." },
-  { key: "signups_channel_id", label: "Signups channel ID", help: "Default channel the season signup embed posts to (e.g. #league-signups). The Open-signups form on the seasons page pre-selects this. /league setup adopts + renames a channel pinned here. Right-click channel → Copy Channel ID." },
+  { key: "signups_channel_id", label: "Signups channel ID", help: "Default channel the season signup embed posts to (e.g. #league-signups). The Open-signups form on the seasons page pre-selects this, and auto-open signups (below) posts here. /league setup adopts + renames a channel pinned here. If unset, auto-open falls back to whichever channel the most recent signup round used. Right-click channel → Copy Channel ID." },
   { key: "results_webhook_url", label: "Results webhook URL", help: "Posts match results here via webhook. First priority. Falls back to env RESULTS_WEBHOOK_URL." },
   { key: "results_channel_id", label: "Results channel — bot", help: "Where the BOT auto-posts match results (e.g. #league-results-bot). Used when no webhook is set. Right-click channel → Copy Channel ID. Falls back to env RESULTS_CHANNEL_ID." },
   { key: "results_human_channel_id", label: "Results channel — humans", help: "Human-facing results channel (e.g. #league-results) for people to post in manually if the bot's auto-post ever has an issue. The bot doesn't post here." },
@@ -62,6 +62,7 @@ const COMMUNITY_KEYS = [
 
 const SEASON_KEYS = [
   { key: "season_length_days", label: "Season length (days)", help: "How long players get to play once the season starts. Sets the 'play your games' window shown in the signup post (sign-ups close → +N days), unless you set explicit season start/end dates on the season. Default 14 (two weeks)." },
+  { key: "signups_auto_open_days", label: "Auto-open signups after (days)", help: "How many days into the current season to automatically open signups for the next one (creating that season first if it doesn't exist yet). Checked hourly. Set to 0 to turn this off and keep opening signups by hand on Seasons / Season tools. Default 7 (one week). Posts to the Signups channel ID set above." },
 ];
 
 const BMP_KEYS = [

@@ -16,10 +16,10 @@ import {
   editChannelMessage,
   fetchDiscordUser,
   fetchGuildMember,
-  postChannelMessage,
   sendDirectMessage,
 } from "@/lib/discord";
-import { enqueueLeagueInfoRefresh, enqueueMmrSnapshot, enqueueSignupAskKickoff, enqueueWelcomeRefresh } from "@/lib/queue";
+import { enqueueLeagueInfoRefresh, enqueueMmrSnapshot, enqueueWelcomeRefresh } from "@/lib/queue";
+import { openSignupsCore } from "@/lib/open-signups";
 import {
   buildSignupPayload,
   buildClosedSignupPayload,
@@ -756,12 +756,6 @@ export async function openSignupsForSeason(formData: FormData) {
   const channelId = String(formData.get("channelId") ?? "").trim();
   if (!seasonId || !channelId) redirect("/admin/seasons?err=missing-fields");
 
-  const guildId = process.env.DISCORD_GUILD_ID;
-  if (!guildId) redirect("/admin/seasons?err=no-guild-id");
-
-  const season = await prisma.season.findUnique({ where: { id: seasonId } });
-  if (!season) redirect("/admin/seasons?err=season-not-found");
-
   // Optional scheduled close time (datetime-local, interpreted as UTC on the
   // server). Stored + shown as a Discord timestamp; it's the withdraw deadline.
   const closesAtStr = String(formData.get("closesAt") ?? "").trim();
@@ -778,59 +772,16 @@ export async function openSignupsForSeason(formData: FormData) {
   const seasonStartsAt = parseDate("seasonStartsAt");
   const seasonEndsAt = parseDate("seasonEndsAt");
 
-  const seasonLabel = formatSeasonLabel(season!);
-  // Only ONE round may be OPEN: the join page, the bot's league-info post and
-  // every signup path pick "the open round", so a round that was built from but
-  // never closed (Season 5 sat OPEN until 2026-10-08) silently swallows later
-  // website signups and advertises the wrong season. Close any leftover first.
-  const stale = await prisma.signupRound.updateMany({
-    where: { status: "OPEN" },
-    data: { status: "CLOSED", closedAt: new Date() },
+  // All the actual effects (stale-round close, create, post, audit, enqueue)
+  // live in openSignupsCore so the auto-open tick's status line and this
+  // admin-triggered action can't drift apart. This action is just auth + form
+  // parsing + redirect/revalidate.
+  const result = await openSignupsCore(seasonId, channelId, actorFromAdminUser(user), {
+    closesAt,
+    seasonStartsAt,
+    seasonEndsAt,
   });
-  if (stale.count > 0) console.warn(`[signups.open] closed ${stale.count} stale OPEN round(s) before opening ${seasonLabel}`);
-  const round = await prisma.signupRound.create({
-    data: {
-      name: `${seasonLabel} Signups`,
-      guildId,
-      channelId,
-      messageId: "pending",
-      resultingSeasonId: season!.id,
-      status: "OPEN",
-      closesAt,
-      seasonStartsAt,
-      seasonEndsAt,
-    },
-  });
-
-  const messageId = await postChannelMessage(
-    channelId,
-    buildSignupPayload({ ...round, seasonScheduledStartAt: season!.scheduledStartAt }, 0, await getSeasonLengthDays()),
-  );
-  if (!messageId) {
-    await prisma.signupRound.delete({ where: { id: round.id } });
-    redirect("/admin/seasons?err=signup-post-failed");
-  }
-  await prisma.signupRound.update({ where: { id: round.id }, data: { messageId } });
-  recordAudit({
-    actor: actorFromAdminUser(user),
-    action: "signup-round.open",
-    targetType: "SignupRound",
-    targetId: round.id,
-    summary: `Opened signups for "${seasonLabel}"`,
-    metadata: { seasonId: season!.id, channelId },
-  });
-
-  // Kick off the interactive "are you in?" ask — DMs every past player (minus
-  // opt-outs) + the 🔔 opt-in list with in/out buttons, then auto-reminds the
-  // no-answers on a cadence until the round closes. The bot owns the fan-out.
-  await enqueueSignupAskKickoff(round.id).catch((err) =>
-    console.warn("[signups.open] ask-kickoff enqueue failed:", err),
-  );
-
-  // Refresh #league-info so the "Signups open" block appears.
-  await enqueueLeagueInfoRefresh().catch((err) =>
-    console.warn("[signups.open] league-info refresh enqueue failed:", err),
-  );
+  if (!result.ok) redirect(`/admin/seasons?err=${result.error}`);
 
   revalidatePath("/admin/seasons");
 }
