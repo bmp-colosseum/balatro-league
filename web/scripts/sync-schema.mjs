@@ -56,6 +56,11 @@ const SYNC = [
   // "Preview: DM the guide to me" button, so the preview always matches what
   // actually gets sent.
   { from: ["src", "onboarding-guide.ts"], to: ["lib", "onboarding-guide.ts"] },
+  // Pure "auto-open signups" decision core -- shared by the bot's hourly
+  // signup.auto-open-tick (src/auto-signups.ts) and the web's Season Tools
+  // status line (web/lib/auto-signups.ts), so both read the same inputs the
+  // same way.
+  { from: ["src", "auto-signups-core.ts"], to: ["lib", "auto-signups-core.ts"] },
 ];
 
 for (const { from, to } of SYNC) {

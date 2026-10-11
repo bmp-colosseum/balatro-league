@@ -5,6 +5,7 @@ import { loadSignupRoundsIndex } from "@/lib/loaders/admin-signups";
 import { loadBulkResolveQueue } from "@/lib/loaders/admin-resolve";
 import { loadSeasonAuditOverview } from "@/lib/loaders/season-audit";
 import { loadNewcomers } from "@/lib/loaders/newcomers";
+import { loadAutoSignupsStatus, formatAutoSignupsLine } from "@/lib/auto-signups";
 import { SiteNav } from "@/components/SiteNav";
 import { AdminNav } from "@/components/AdminNav";
 import { DiscordId } from "@/components/DiscordId";
@@ -80,12 +81,13 @@ function SectionLabel({ children }: { children: string }) {
 export default async function SeasonToolsPage() {
   await requireAdmin();
 
-  const [stats, signupRounds, resolveQueue, auditOverview, newcomersData] = await Promise.all([
+  const [stats, signupRounds, resolveQueue, auditOverview, newcomersData, autoSignups] = await Promise.all([
     loadAdminHomeStats(),
     loadSignupRoundsIndex(),
     loadBulkResolveQueue({}),
     loadSeasonAuditOverview(),
     loadNewcomers(),
+    loadAutoSignupsStatus(),
   ]);
 
   const currentRound = pickCurrentSignupRound(signupRounds);
@@ -112,6 +114,10 @@ export default async function SeasonToolsPage() {
           chip={currentRound ? `${currentRound.status === "OPEN" ? "open" : currentRound.status.toLowerCase()}: ${currentRound.signups.length} signed up` : "no round open"}
           links={[{ href: "/admin/signups", label: "Signups" }]}
         />
+        <p className="muted" style={{ fontSize: 12, margin: "-6px 0 12px 32px" }}>
+          Automatic signups: {formatAutoSignupsLine(autoSignups)}{" "}
+          <Link href="/admin/config">Settings {"->"}</Link>
+        </p>
         <Step
           n={2}
           title="Review signups"

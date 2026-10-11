@@ -31,6 +31,7 @@ import { checkQueueStalls } from "./devops-alarm.js";
 import { postDevopsAlert } from "./devops-alert.js";
 import { tryGetDiscordClient } from "./discord.js";
 import { planSignupAskKickoff, sendOrRefreshAsk, planReminderTick } from "./signup/signup-reminders.js";
+import { runAutoOpenSignupsTick } from "./auto-signups.js";
 import { recordDmDelivery } from "./dm-delivery.js";
 
 // Preflight for the announce worker: is a results destination configured at
@@ -174,6 +175,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("signup.ask-kickoff");
   await boss.createQueue("signup.ask");
   await boss.createQueue("signup.reminder-tick");
+  await boss.createQueue("signup.auto-open-tick");
   await boss.createQueue("activity.scan");
   await boss.createQueue("roster.checkin");
   await boss.createQueue("modlog.purge");
@@ -667,6 +669,16 @@ export async function initQueue(): Promise<void> {
   });
   await boss.schedule("signup.reminder-tick", "0 * * * *");
   console.log("[pg-boss] scheduled signup.reminder-tick hourly");
+
+  // Worker + schedule: hourly auto-open-signups tick. Decides (via
+  // decideAutoSignups in auto-signups-core.ts) whether it's time to open
+  // signups for the next season -- creating that season first if it doesn't
+  // exist -- and is a no-op otherwise. See src/auto-signups.ts for the body.
+  await boss.work("signup.auto-open-tick", { batchSize: 1, pollingIntervalSeconds: 60 }, async () => {
+    await runAutoOpenSignupsTick();
+  });
+  await boss.schedule("signup.auto-open-tick", "0 * * * *");
+  console.log("[pg-boss] scheduled signup.auto-open-tick hourly");
 
   // Worker: delete a completed match's thread after its close grace. Posted a
   // "closing in a minute" notice at completion; this fires ~60s later so players

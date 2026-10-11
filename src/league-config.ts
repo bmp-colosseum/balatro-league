@@ -167,6 +167,11 @@ export const LeagueConfigKey = {
   // pinned here. The actual posted channel is still stored per-round on
   // SignupRound.channelId — this is just the default + the adoption target.
   SignupsChannelId: "signups_channel_id",
+  // Days into the current season to automatically open signups for the next
+  // one (creating that season first if it doesn't exist yet). Checked by the
+  // hourly signup.auto-open-tick (src/auto-signups.ts). 0 or unset-as-0 turns
+  // it off; unset entirely defaults to 7. Editable on /admin/config.
+  SignupsAutoOpenDays: "signups_auto_open_days",
   // Message id of the self-updating league-info message. We edit THIS
   // message on every refresh (regardless of whether it's currently
   // pinned) so a lost/removed pin can't make the worker post duplicates.
