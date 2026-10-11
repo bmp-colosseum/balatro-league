@@ -54,7 +54,7 @@ function message2(input: OnboardingGuideInput): string {
   return [
     `**Playing a match.** When you're ready to play someone, click **Start a match** at the bottom of your division channel and pick your opponent. The bot runs the pick/ban phase for you. A match is **two games**, and the deck/stake combo never repeats within a matchup. After each game, the **winner records how many lives they had left** -- that number matters later for tiebreaks.`,
     ``,
-    `**Results.** The bot records the result once it's reported. Your opponent gets **confirm** or **dispute** buttons. A dispute goes to a staff thread to get sorted out; you don't need to do anything else.`,
+    `**Results.** The bot records the result for you once the match is done -- nothing to report by hand.`,
     ``,
     `**Standings.** Full standings for every division: <${input.standingsUrl}>`,
   ].join("\n");
@@ -62,7 +62,7 @@ function message2(input: OnboardingGuideInput): string {
 
 function message3(input: OnboardingGuideInput): string {
   const helpLine = input.supportChannelUrl
-    ? `**Need help?** Click **Help** at the bottom of your division channel, ask in #league-support (<${input.supportChannelUrl}>), or DM **Chrono**, who runs the league. Good luck out there!`
+    ? `**Need help?** Click **Help** at the bottom of your division channel, ask in the support channel (<${input.supportChannelUrl}>), or DM **Chrono**, who runs the league. Good luck out there!`
     : `**Need help?** Click **Help** at the bottom of your division channel, or DM **Chrono**, who runs the league. Good luck out there!`;
   return [
     `**How the season ends.** Divisions under 8 players: ${up(1)} a division and ${down(1)}. Divisions of 8 or more: ${up(2)} and ${down(2)}.`,

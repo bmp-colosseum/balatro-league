@@ -70,7 +70,7 @@ describe("buildOnboardingGuideMessages", () => {
     const [, , msg3] = buildOnboardingGuideMessages(
       input({ supportChannelUrl: "https://discord.com/channels/1/2" }),
     );
-    expect(msg3).toContain("#league-support (<https://discord.com/channels/1/2>)");
+    expect(msg3).toContain("ask in the support channel (<https://discord.com/channels/1/2>)");
   });
 
   it("states both promotion/relegation brackets using the up()/down() wording", () => {
