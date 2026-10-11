@@ -41,7 +41,11 @@ export function changedScheduleText(
     );
   }
   if (added.length > 0) {
-    parts.push(`You now play ${names(added)} instead -- reach out to set up a time.`);
+    parts.push(
+      extra.countBest
+        ? `You now play ${names(added)} instead. That match is optional: play it if you can find a time, and if you can't, nobody is marked down for it.`
+        : `You now play ${names(added)} instead -- reach out to set up a time.`,
+    );
   }
   if (parts.length === 0) parts.push("One of your matchups changed.");
   parts.push("Everything else on your schedule stays as it was.");

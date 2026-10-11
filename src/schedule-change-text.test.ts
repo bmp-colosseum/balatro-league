@@ -26,6 +26,12 @@ describe("changedScheduleText", () => {
     expect(changedScheduleText("Rare 1", [], [])).toContain("One of your matchups changed.");
   });
 
+  it("calls a replacement match optional under best-N", () => {
+    const text = changedScheduleText("Rare 3", ["Lan"], ["Torb22"], { countBest: 3 });
+    expect(text).toContain("You now play **Torb22** instead. That match is optional: play it if you can find a time, and if you can't, nobody is marked down for it.");
+    expect(text).not.toContain("reach out to set up a time");
+  });
+
   it("adds the best-N line when the season counts best results", () => {
     const text = changedScheduleText("Rare 3", ["Lan"], [], { countBest: 3 });
     expect(text).toContain("Everything else on your schedule stays as it was. From now on only your best 3 results count toward the standings");
