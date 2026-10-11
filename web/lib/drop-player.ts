@@ -29,7 +29,9 @@ export interface DropPlayerArgs {
   actor: AuditActor;
 }
 
-export type DropPlayerResult = "dropped" | "not-a-member";
+export type DropPlayerResult =
+  | { outcome: "not-a-member" }
+  | { outcome: "dropped"; name: string; voided: number; created: number; told: number; countBest: number | null };
 
 export async function dropPlayerFromDivision(args: DropPlayerArgs): Promise<DropPlayerResult> {
   const { playerId, divisionId, seasonId, refill, actor } = args;
@@ -38,7 +40,7 @@ export async function dropPlayerFromDivision(args: DropPlayerArgs): Promise<Drop
   const membership = await prisma.divisionMember.findUnique({
     where: { divisionId_playerId: { divisionId, playerId } },
   });
-  if (!membership || membership.status !== "ACTIVE") return "not-a-member";
+  if (!membership || membership.status !== "ACTIVE") return { outcome: "not-a-member" };
 
   // Snapshot the slate before anything is deleted so the change DMs can say
   // exactly whose matchups were removed or replaced.
@@ -50,7 +52,7 @@ export async function dropPlayerFromDivision(args: DropPlayerArgs): Promise<Drop
   });
 
   // Void unplayed pairings; played ones stand.
-  await prisma.match.deleteMany({
+  const voided = await prisma.match.deleteMany({
     where: { divisionId, status: "PENDING", OR: [{ playerAId: playerId }, { playerBId: playerId }] },
   });
 
@@ -79,7 +81,7 @@ export async function dropPlayerFromDivision(args: DropPlayerArgs): Promise<Drop
 
   // Refill the leaver's ex-opponents toward their slate (never past it) and
   // DM everyone whose matchups changed.
-  await resyncSeasonSchedules(seasonId, {
+  const resync = await resyncSeasonSchedules(seasonId, {
     beforeByDivision: new Map([[divisionId, pairingsBefore]]),
     fill: refill,
     notice,
@@ -88,6 +90,7 @@ export async function dropPlayerFromDivision(args: DropPlayerArgs): Promise<Drop
   // Everyone else in the division hears the same news once.
   const after = await captureDivisionPairings(divisionId);
   const changedIds = new Set(diffOpponents(pairingsBefore, after).map((c) => c.playerId));
+  changedIds.delete(playerId);
   const others = await prisma.divisionMember.findMany({
     where: { divisionId, status: "ACTIVE", playerId: { notIn: [...changedIds] } },
     select: { playerId: true, division: { select: { name: true } } },
@@ -111,5 +114,24 @@ export async function dropPlayerFromDivision(args: DropPlayerArgs): Promise<Drop
     summary: `${reason ? `Dropped (${reason})` : "Dropped"}${refill ? ", opponents refilled" : ", no new matches"}`,
     metadata: { divisionId, playerId, reason, refill, countBest: countBest ?? null },
   });
-  return "dropped";
+  return {
+    outcome: "dropped",
+    name: departed?.displayName ?? "Player",
+    voided: voided.count,
+    created: resync.created,
+    told: changedIds.size + others.length,
+    countBest: countBest ?? null,
+  };
+}
+
+// One-line summary for the ?ok= callout after a drop.
+export function describeDrop(r: Extract<DropPlayerResult, { outcome: "dropped" }>): string {
+  const parts = [
+    `${r.name} dropped`,
+    `${r.voided} unplayed match${r.voided === 1 ? "" : "es"} voided`,
+    r.created > 0 ? `${r.created} new matchup${r.created === 1 ? "" : "s"} drawn` : "no new matchups",
+    `${r.told} player${r.told === 1 ? "" : "s"} told by DM`,
+  ];
+  if (r.countBest) parts.push(`division now counts best ${r.countBest}`);
+  return parts.join(", ") + ".";
 }

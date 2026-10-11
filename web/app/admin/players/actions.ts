@@ -7,7 +7,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { actorFromAdminUser } from "@/lib/audit";
-import { dropPlayerFromDivision } from "@/lib/drop-player";
+import { dropPlayerFromDivision, describeDrop } from "@/lib/drop-player";
 import { isPlayerIdBanned } from "@/lib/bans";
 import { enqueueMmrSnapshot, enqueueWelcomeRefresh, enqueueStandingsRefresh } from "@/lib/queue";
 import { placePlayerInDivision } from "@/lib/division-membership";
@@ -180,7 +180,7 @@ export async function dropPlayer(formData: FormData) {
   });
   if (!membership) return;
 
-  await dropPlayerFromDivision({
+  const result = await dropPlayerFromDivision({
     playerId,
     divisionId: membership.divisionId,
     seasonId: season.id,
@@ -190,6 +190,9 @@ export async function dropPlayer(formData: FormData) {
   revalidatePath("/admin/players");
   revalidatePath(`/profile/${playerId}`);
   revalidatePath(`/divisions/${membership.divisionId}`);
+  if (result.outcome === "dropped") {
+    redirect(`/divisions/${membership.divisionId}?ok=${encodeURIComponent("dropped:" + describeDrop(result))}`);
+  }
 }
 
 export async function reinstatePlayer(formData: FormData) {

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { requireAdmin } from "@/lib/admin";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
-import { dropPlayerFromDivision } from "@/lib/drop-player";
+import { dropPlayerFromDivision, describeDrop } from "@/lib/drop-player";
 import { prisma } from "@/lib/prisma";
 import { reportSetFromWeb } from "@/lib/report";
 import { parseReportForm } from "@/lib/report-form";
@@ -110,7 +110,7 @@ export async function dropDivisionMember(formData: FormData) {
 
   // Same path as the profile's drop buttons: voids unplayed matches, refills
   // opponents when asked, and DMs the whole division about what changed.
-  await dropPlayerFromDivision({
+  const result = await dropPlayerFromDivision({
     playerId,
     divisionId,
     seasonId: division.seasonId,
@@ -120,6 +120,10 @@ export async function dropDivisionMember(formData: FormData) {
   });
   revalidatePath(`/divisions/${divisionId}`);
   revalidatePath(`/profile/${playerId}`);
+  if (result.outcome === "dropped") {
+    redirect(`/divisions/${divisionId}?ok=${encodeURIComponent("dropped:" + describeDrop(result))}`);
+  }
+  redirect(`/divisions/${divisionId}?err=${encodeURIComponent("That player is not an active member of this division.")}`);
 }
 
 // Reverse of dropDivisionMember.

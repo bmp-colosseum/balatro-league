@@ -58,6 +58,7 @@ export default async function PublicDivisionPage({
   // Friendly success message for the ?ok= redirect codes admin actions set.
   const okMessage = ((): string | null => {
     if (!ok) return null;
+    if (ok.startsWith("dropped:")) return ok.slice("dropped:".length);
     if (ok.startsWith("dq-forfeit:")) {
       const n = Number(ok.split(":")[1]) || 0;
       return `DQ recorded — awarded ${n} opponent${n === 1 ? "" : "s"} a 2-0 by forfeit. Player kept active (finishes last / relegates).`;
