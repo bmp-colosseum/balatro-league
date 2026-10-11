@@ -55,25 +55,27 @@ Sources: [src/commands/start-match.ts](../../src/commands/start-match.ts),
 
 ## Reporting without the flow
 
-- `/report @opponent result:2-0|1-1|0-2` creates a PENDING `Match` and posts
-  to the results channel with "Confirm" and "Dispute" buttons
-  (`src/report-flow.ts`). Only the two players may press them.
-- Auto-confirm after `reportAutoConfirmSeconds` (default 120) through the
-  `report.auto-confirm` job.
-- Dispute opens a thread named "Dispute - {reporter} vs {opponent} - {id}"
-  (`src/dispute-thread.ts`) with staff buttons "Close -- keep reported
-  result", "Apply proposed result (staff)", "Set other result (staff)".
+- `/report @opponent result:2-0|1-1|0-2` (`src/reporting.ts`) records the
+  `Match` CONFIRMED straight away and posts it to the results channel --
+  there is no pending stage and no Confirm/Dispute vote. The web report
+  form (`/report` or `/me`) goes through the same `reportSetFromWeb`
+  (`web/lib/report.ts`) and behaves identically.
+- Something wrong with a result: press "Report a problem" on the result
+  post (every result post has one, see below) or run `/support`. Either way
+  it opens a support ticket for staff -- it does not create a dispute or
+  change the recorded result by itself.
 - `/report-shootout` records a one-game tiebreaker the same way.
 
 ## Result posts
 
 - The confirmed-result announcement is the one Components V2 surface
   (`src/announce.ts`): a container with text blocks for the meta line, the
-  header, the games line and the footer, a separator, and a "Dispute this
-  result" button. Accent colour is the division's tier colour. Posted to the
-  results channel (season override, then `results_channel_id` or webhook,
-  then `RESULTS_CHANNEL_ID`). Always a new message; corrections post again,
-  nothing is edited.
+  header, the games line and the footer, a separator, and a "Report a
+  problem" button that opens a short modal and files a support ticket
+  (`src/report-problem-core.ts`) -- not a dispute. Accent colour is the
+  division's tier colour. Posted to the results channel (season override,
+  then `results_channel_id` or webhook, then `RESULTS_CHANNEL_ID`). Always a
+  new message; corrections post again, nothing is edited.
 - The text itself is built by pure functions in `src/result-message-core.ts`:
   `buildConfirmedResultBlocks` for the announcement and
   `buildReportMessageBlocks` for the pending report, which `report-flow.ts`
@@ -91,7 +93,7 @@ The Prisma model is `Match`; code and comments call a row a "pairing".
 | `status` (`PairingStatus`) | PENDING, CONFIRMED, DISPUTED, CANCELLED | PENDING 0-0 is an unplayed scheduled match |
 | `format` | LEAGUE_BO2, SHOOTOUT_BO1 | |
 | `forfeit` + `forfeitReason` | bool, text | a 2-0 awarded without play |
-| dispute fields | `disputedById`, proposed games and lives, reason, thread id | |
+| dispute fields | `disputedById`, proposed games and lives, reason, thread id | legacy only -- no live path creates a new DISPUTED row; a wrong result now goes through "Report a problem" / `/support` instead |
 
 Admin outcomes in `web/lib/match-admin.ts`:
 
@@ -159,4 +161,7 @@ for untracked match threads. It does not auto-pause or activate seasons.
 - Only the announcement is Components V2. The live thread is classic embeds.
 - The guided flow has no Confirm/Dispute buttons; agreement is the two
   "won" votes, and disagreement goes to an admin, not to a dispute thread.
+- `/report` and the web report form record CONFIRMED immediately too -- no
+  Confirm/Dispute buttons there either. "Report a problem" opens a support
+  ticket, not a dispute.
 - Undo has no precondition and leaves no row behind.

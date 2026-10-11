@@ -2,9 +2,13 @@ import "server-only";
 
 // Swap two players BETWEEN divisions, trading their schedules wholesale: each
 // player moves into the other's division and inherits the other's exact
-// matchups. Everyone else is untouched — their opponent "A" simply becomes "B"
-// and vice versa, so the SoS-balanced graph is preserved with no regenerate or
-// resync. This is the right tool for a like-for-like roster swap.
+// matchups. Everyone else keeps their own schedule slot, but whoever played
+// the departing side of it now faces the incoming player instead -- so the
+// SoS-balanced graph is preserved with no regenerate or resync, but opponent
+// identities do change for those players. Everyone affected (A, B, and every
+// player whose opponent "A" became "B" or vice versa) gets the same "your
+// opponents changed" DM a drop or regenerate sends. This is the right tool
+// for a like-for-like roster swap.
 //
 // Only valid BEFORE either player has results: repointing a played/reported
 // match would hand that result to the wrong player, so we refuse if either side
@@ -15,6 +19,7 @@ import { bannedPlayerIdSet } from "@/lib/bans";
 import { addGuildMemberRole, removeGuildMemberRole } from "@/lib/discord";
 import { refreshStandingsCacheIfWarm } from "@/lib/standings-cache";
 import { enqueueStandingsRefresh } from "@/lib/queue";
+import { captureDivisionPairings, notifyScheduleRegenerated } from "@/lib/schedule-regenerate";
 
 export class SwapError extends Error {}
 
@@ -91,6 +96,12 @@ export async function swapDivisionPlayers(playerAId: string, playerBId: string):
     return prisma.match.update({ where: { id: m.id }, data: { playerAId: a, playerBId: b } });
   };
 
+  // Snapshot both divisions' pairings before repointing so the "your
+  // opponents changed" DM can diff against it afterward -- every prior
+  // opponent of A (in division A) now faces B instead, and vice versa.
+  const pairingsBeforeA = await captureDivisionPairings(memA.divisionId);
+  const pairingsBeforeB = await captureDivisionPairings(memB.divisionId);
+
   await prisma.$transaction([
     ...aMatches.map((m) => repoint(m, playerAId, playerBId)),
     ...bMatches.map((m) => repoint(m, playerBId, playerAId)),
@@ -112,6 +123,16 @@ export async function swapDivisionPlayers(playerAId: string, playerBId: string):
     if (bRole) await addGuildMemberRole(guildId, aDc, bRole).catch(() => {});
     if (aRole) await addGuildMemberRole(guildId, bDc, aRole).catch(() => {});
   }
+
+  // Tell everyone whose matchups changed in either division -- A and B
+  // themselves (new division, new opponents) plus every player who kept
+  // their division but now faces the other swapped-in player instead.
+  await notifyScheduleRegenerated(memA.divisionId, memA.division.name, pairingsBeforeA, "changed").catch((err) =>
+    console.warn("[swap] schedule-change notify failed for division A:", err),
+  );
+  await notifyScheduleRegenerated(memB.divisionId, memB.division.name, pairingsBeforeB, "changed").catch((err) =>
+    console.warn("[swap] schedule-change notify failed for division B:", err),
+  );
 
   // Both divisions' rosters changed → refresh their standings caches so the
   // #league-standings post + web reflect the swap (warm-only; nudge the channel).

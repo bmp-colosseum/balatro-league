@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { requireAdmin } from "@/lib/admin";
 import { actorFromAdminUser, recordAudit } from "@/lib/audit";
 import { dropPlayerFromDivision, describeDrop } from "@/lib/drop-player";
+import { reinstateDroppedPlayer } from "@/lib/reinstate-player";
 import { prisma } from "@/lib/prisma";
 import { reportSetFromWeb } from "@/lib/report";
 import { parseReportForm } from "@/lib/report-form";
@@ -126,17 +127,24 @@ export async function dropDivisionMember(formData: FormData) {
   redirect(`/divisions/${divisionId}?err=${encodeURIComponent("That player is not an active member of this division.")}`);
 }
 
-// Reverse of dropDivisionMember.
+// Reverse of dropDivisionMember. Shares its resync/DM/role-restore logic
+// with the profile's "Reinstate" button via reinstateDroppedPlayer so the
+// two don't drift on what reinstating actually does.
 export async function reactivateDivisionMember(formData: FormData) {
   await requireAdmin();
   const divisionId = String(formData.get("divisionId") ?? "");
   const playerId = String(formData.get("playerId") ?? "");
   if (!divisionId || !playerId) return;
-  await prisma.divisionMember.update({
-    where: { divisionId_playerId: { divisionId, playerId } },
-    data: { status: "ACTIVE", droppedAt: null, dropoutReason: null },
-  });
+
+  const division = await prisma.division.findUnique({ where: { id: divisionId }, select: { seasonId: true } });
+  if (!division) return;
+
+  const result = await reinstateDroppedPlayer(playerId, division.seasonId);
   revalidatePath(`/divisions/${divisionId}`);
+  revalidatePath(`/profile/${playerId}`);
+  if (result.outcome === "banned") {
+    redirect(`/divisions/${divisionId}?err=${encodeURIComponent("That player is banned -- unban them at /admin/bans before reinstating.")}`);
+  }
 }
 
 // Hard remove: deletes the membership entirely + ALL pairings in this

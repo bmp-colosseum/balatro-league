@@ -877,15 +877,14 @@ function AdminSection({
                     <form action={removeDivisionMember}>
                       <input type="hidden" name="divisionId" value={division.id} />
                       <input type="hidden" name="playerId" value={m.playerId} />
-                      <Button
-                        type="submit"
+                      <ConfirmButton
                         variant="secondary"
                         size="sm"
                         className="text-[#e74c3c]"
-                        title="Hard remove: deletes membership + ALL their pairings in this division"
+                        message={`Remove ${m.player.displayName} completely? This deletes every match they played in this division, results included. Use Drop instead if they just left.`}
                       >
                         Remove
-                      </Button>
+                      </ConfirmButton>
                     </form>
                   </td>
                 </tr>

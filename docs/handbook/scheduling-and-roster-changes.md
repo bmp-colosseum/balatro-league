@@ -85,7 +85,8 @@ and "Drop, no new matches". `dropPlayerFromDivision` (`web/lib/drop-player.ts`):
    their slate. No new matches: ex-opponents end one match short.
 5. Standings are recomputed and the standings channel refresh is queued. An
    audit row `division.drop` records "opponents refilled" or "no new matches".
-6. Discord division role and channel access are NOT removed by a plain drop.
+6. The division's Discord role and channel access ARE removed. The season
+   League Player role is NOT -- the player still took part this season.
 
 ### The DMs (`src/schedule-change-text.ts`)
 
@@ -110,25 +111,25 @@ file `src/schedule-change-text.test.ts` pins the exact strings.
 
 ## Reinstating a dropped player
 
-Two buttons that do different things:
+Two buttons, same shared path (`reinstateDroppedPlayer` in
+`web/lib/reinstate-player.ts`): `/profile/{id}` "Reinstate"
+(`reinstatePlayer` in `web/app/admin/players/actions.ts`) and
+`/divisions/{id}` "Reactivate" (`reactivateDivisionMember`). Both: refuse
+banned players, set the membership ACTIVE, run the full resync so the player
+gets matches again, restore the division's Discord role (taken away on
+drop), and refresh standings.
 
-- `/profile/{id}`, "Reinstate" (`reinstatePlayer` in
-  `web/app/admin/players/actions.ts`): refuses banned players, sets the
-  membership ACTIVE, then runs the full resync so the player gets matches
-  again, then refreshes standings.
-- `/divisions/{id}`, "Reactivate" (`reactivateDivisionMember`): only sets
-  the membership ACTIVE. No resync, no standings refresh. The player can sit
-  ACTIVE with zero matches until something else triggers a resync.
-
-Use the profile page button. Neither path sends a DM by itself; the resync
-may send "changed" DMs.
+Neither path sends a DM by itself; the resync may send "changed" DMs.
 
 ## Swap and replace (pre-results only)
 
 - "Swap" (`/seasons/{id}`, Roster tools): trades two ACTIVE players between
   two divisions, each inheriting the other's pairings by repointing match
   rows. Refused if either has any non-0-0 match, is banned, or they share a
-  division. Division roles are swapped. Sends no DM at all.
+  division. Division roles are swapped. Both swapped players, and anyone else
+  in either division whose opponent changed as a result (their old opponent
+  is now the other swapped-in player), get the same "changed" schedule DM a
+  drop or regenerate sends.
 - "Replace" (`/divisions/{id}` or `/seasons/{id}`): substitutes a brand-new
   person for a departed active member, handing them the exact pairings.
   Refused if the departed player has a result, if the replacement is already
@@ -141,8 +142,9 @@ Once a result exists, both are blocked; drop and refill is the tool.
 ## Hard remove
 
 `/divisions/{id}`, "Remove" (red). Deletes the membership and all of the
-player's pairings in that division, with no confirm dialog. Use only to undo
-a mistaken add before anything was played.
+player's pairings in that division -- played results included -- behind a
+confirm dialog warning exactly that. Use only to undo a mistaken add before
+anything was played; use Drop for a normal mid-season departure.
 
 ## Regenerate buttons on /admin/divisions
 
@@ -153,8 +155,9 @@ any match in scope has a result.
 
 ## Things to know that are not obvious
 
-- A plain drop leaves the player's Discord role and channel access in place.
-- "Reactivate" on the division page does not give the player a schedule.
-- Swap is silent; every other roster change DMs the people affected.
+- A plain drop removes the player's division Discord role and channel
+  access; reinstating gives it back. The season League Player role is never
+  touched by either.
+- Every roster change now DMs the people affected, including Swap.
 - The draw is deterministic (seed 1). Two admins previewing the same roster
   see the same schedule.

@@ -17,6 +17,7 @@ import { scheduleDegree } from "@/lib/schedule";
 import { resyncSeasonSchedules } from "@/lib/schedule-sync";
 import { recomputeDivisionStandings } from "@/lib/standings-cache";
 import { recordAudit, type AuditActor } from "@/lib/audit";
+import { removeGuildMemberRole } from "@/lib/discord";
 
 export interface DropPlayerArgs {
   playerId: string;
@@ -76,8 +77,19 @@ export async function dropPlayerFromDivision(args: DropPlayerArgs): Promise<Drop
       countBest = Math.max(0, scheduled - dropped);
     }
   }
-  const departed = await prisma.player.findUnique({ where: { id: playerId }, select: { displayName: true } });
+  const departed = await prisma.player.findUnique({ where: { id: playerId }, select: { displayName: true, discordId: true } });
   const notice = { departedName: departed?.displayName, countBest };
+
+  // Take back the division's Discord role (channel access). The season
+  // League Player role stays -- they still took part this season. Reinstate
+  // (web/lib/reinstate-player.ts) gives the division role back.
+  const guildId = process.env.DISCORD_GUILD_ID;
+  if (guildId && departed) {
+    const div = await prisma.division.findUnique({ where: { id: divisionId }, select: { discordRoleId: true } });
+    if (div?.discordRoleId) {
+      await removeGuildMemberRole(guildId, departed.discordId, div.discordRoleId).catch(() => {});
+    }
+  }
 
   // Refill the leaver's ex-opponents toward their slate (never past it) and
   // DM everyone whose matchups changed.

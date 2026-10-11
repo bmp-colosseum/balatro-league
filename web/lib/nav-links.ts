@@ -74,7 +74,6 @@ export const ADMIN_LINKS: AdminNavLink[] = [
       { href: "/admin/deck-bans", label: "Deck Bans" },
       { href: "/admin/avoided-pairs", label: "Avoided Pairs" },
       { href: "/admin/bans", label: "Bans" },
-      { href: "/admin/players", label: "Players" },
       { href: "/admin/mmr", label: "MMR" },
     ],
   },

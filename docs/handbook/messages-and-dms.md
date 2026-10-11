@@ -25,9 +25,8 @@ list. `docs/arch/channel-registry.md` is a proposal, not the live list.
 | "Are you in?" ask, reminder, last call | DM | round opens; scheduled ticks | `askContent`, `src/signup/signup-reminders.ts` |
 | Roster check-in ("still playing?") | DM | admin enqueues `roster.checkin` | [src/checkin-message.ts](../../src/checkin-message.ts); sender `src/roster-checkin.ts` |
 | Match invite | private thread under `#league-matches` | Start a match | `renderMatch`, `src/match-render.ts`; posted by `src/league-match-invite.ts` |
-| Pending report + Confirm/Dispute | results channel | `/report` | `buildReportMessageBlocks`, [src/result-message-core.ts](../../src/result-message-core.ts); `src/report-flow.ts` |
-| Confirmed result | results channel or webhook | match CONFIRMED | `buildConfirmedResultBlocks`; posted by [src/announce.ts](../../src/announce.ts) |
-| Dispute thread | thread under results channel | Dispute pressed or web dispute | `spawnDisputeThread`, `src/dispute-thread.ts` |
+| Confirmed result + Report a problem | results channel or webhook | match CONFIRMED (`/report` and the web form record CONFIRMED immediately, no pending stage) | `buildConfirmedResultBlocks`; posted by [src/announce.ts](../../src/announce.ts); button wiring `src/report-problem-core.ts` |
+| Report-a-problem ticket | staff ticket (same as `/support`) | "Report a problem" pressed | `buildProblemTicketIssue`, [src/report-problem-core.ts](../../src/report-problem-core.ts); opened via `src/commands/support.ts` |
 | Shootout owed | DM + division channel | division completes with a 2-way tie on a line | `runShootoutCheck`, [src/shootout.ts](../../src/shootout.ts) |
 | Season-end movement DMs | DM | End season | `endSeasonCore`, [web/lib/end-season.ts](../../web/lib/end-season.ts) |
 | Casual challenge result | `#challenges` | `/challenge` series ends | `announceChallengeResult`, `src/announce.ts` |

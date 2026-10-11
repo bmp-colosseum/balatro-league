@@ -13,7 +13,7 @@ Navigation (`web/lib/nav-links.ts`):
   Sent, Failed, Transcripts.
 - "Season tools" = `/admin/season-tools`.
 - "Settings" dropdown: Settings (devops only), Config, Traits, Deck Bans,
-  Avoided Pairs, Bans, Players, MMR.
+  Avoided Pairs, Bans, MMR.
 - "System" dropdown: Activity, Play Times, Ops (devops only), Host, Role
   audit, Action log, Season Audit.
 
@@ -28,8 +28,9 @@ under "Roster tools". Neither is in the nav.
    matches) or "Drop, no new matches" (opponents end one match short).
 3. Confirm the dialog.
 4. Result: unplayed matches against them are removed, played ones stand,
-   affected players are DM'd, standings recompute. Their Discord role is not
-   removed; do that by hand in Discord if needed.
+   affected players are DM'd, standings recompute. Their division Discord
+   role (and channel access) is removed; the season League Player role stays
+   since they still took part this season.
 
 The same two buttons exist on `/profile/{id}`. Details in
 [scheduling-and-roster-changes.md](scheduling-and-roster-changes.md).
@@ -47,9 +48,11 @@ the newcomer inherits the schedule and is DM'd it.
 
 ## Reinstate a dropped player
 
-1. `/profile/{id}`, press "Reinstate".
-2. The player becomes ACTIVE and the schedule is re-synced so they get
-   matches. Avoid "Reactivate" on the division page; it skips the re-sync.
+1. `/profile/{id}`, press "Reinstate", or `/divisions/{id}`, "Admin tools",
+   press "Reactivate" -- both buttons now do the same thing.
+2. The player becomes ACTIVE, the schedule is re-synced so they get matches
+   again (DMs go out to anyone whose matchups change), and their division
+   Discord role is restored.
 
 ## Fix a result
 
@@ -57,8 +60,13 @@ the newcomer inherits the schedule and is DM'd it.
 2. On the match row pick the correct result in the dropdown and press "Set".
 3. To remove a result entirely press "Undo" and confirm ("Standings fall back
    to the next tiebreaker."). There is no undo of Undo.
-4. For a disputed match, read "Recorded" vs "Disputer says", then "Accept
-   proposed", "Keep original", or enter a result and "Apply".
+4. A reported result counts immediately now -- there's no Confirm/Dispute
+   step for a new report. A player who thinks a result is wrong presses
+   "Report a problem" on the result post (or runs `/support`), which opens a
+   support ticket for staff, not a dispute. The "Recorded" vs "Disputer
+   says" picker ("Accept proposed", "Keep original", or enter a result and
+   "Apply") still shows for matches disputed before this change and still
+   works the same way; nothing new can reach that state.
 
 A forfeit or void for one player: `/divisions/{id}`, "Admin tools", "DQ
 (forfeit)" gives their opponents 2-0 and keeps the player active; "Void
@@ -161,7 +169,6 @@ quick-roll bar, division welcomes). See [messages-and-dms.md](messages-and-dms.m
 
 - "Inbox" in the nav is the dashboard. Player DMs are the Inbox tab inside
   Messages.
-- The "Players" link under Settings points at `/admin/players`, which has no
-  page and returns 404. Roster tools are on `/seasons/{id}`.
+- Roster tools are on `/seasons/{id}`, not in the nav.
 - "Remove" on the division page hard-deletes a membership and all its
-  matches with no confirm dialog.
+  matches; it asks for confirmation first, same as Drop.

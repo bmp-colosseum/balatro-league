@@ -8,7 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
 import { actorFromAdminUser } from "@/lib/audit";
 import { dropPlayerFromDivision, describeDrop } from "@/lib/drop-player";
-import { isPlayerIdBanned } from "@/lib/bans";
+import { reinstateDroppedPlayer } from "@/lib/reinstate-player";
 import { enqueueMmrSnapshot, enqueueWelcomeRefresh, enqueueStandingsRefresh } from "@/lib/queue";
 import { placePlayerInDivision } from "@/lib/division-membership";
 import { resyncSeasonSchedules } from "@/lib/schedule-sync";
@@ -201,23 +201,10 @@ export async function reinstatePlayer(formData: FormData) {
   const season = await prisma.season.findFirst({ where: { isActive: true } });
   if (!season || !playerId) return;
 
+  const result = await reinstateDroppedPlayer(playerId, season.id);
   // A banned player can't be reinstated into a division — unban them first.
-  if (await isPlayerIdBanned(playerId)) {
+  if (result.outcome === "banned") {
     redirect(`/admin/players?err=${encodeURIComponent("That player is banned — unban them at /admin/bans before reinstating.")}`);
-  }
-  const membership = await prisma.divisionMember.findFirst({
-    where: { playerId, division: { seasonId: season.id }, status: "DROPPED" },
-  });
-  if (membership) {
-    await prisma.divisionMember.update({
-      where: { id: membership.id },
-      data: { status: "ACTIVE", droppedAt: null, dropoutReason: null },
-    });
-    // Their matches were deleted on drop — give them a schedule again.
-    await resyncSeasonSchedules(season.id);
-    if (await refreshStandingsCacheIfWarm(membership.divisionId).catch(() => false)) {
-      await enqueueStandingsRefresh().catch(() => {});
-    }
   }
   revalidatePath("/admin/players");
   revalidatePath(`/profile/${playerId}`);
