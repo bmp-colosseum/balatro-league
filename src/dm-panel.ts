@@ -4,6 +4,16 @@
 // the season deadline plus the player's own situation (division/rank/matches
 // left) and the same division-controls buttons used everywhere else.
 //
+// This is now also the SINGLE season-start DM: queue.ts's
+// announceSeasonStartIfComplete enqueues a dm-panel.blast at season kickoff
+// (same first-send-vs-edit machinery below), and buildDmPanelLines leads an
+// "ok" summary with a short season/division intro line plus a matchups
+// section -- the content the old separate queueSeasonOnboardingDms DM used to
+// carry. That separate DM now only fires as a fallback when DM panels are
+// OFF (dmPanelsEnabled() false) -- see shouldSendFallbackSeasonStartDm below
+// and its call site in queue.ts -- so a player is never left with zero
+// season-start DMs.
+//
 // This module NEVER touches inbound DMs (see inbound-dm.ts / captureInboundDm)
 // -- it only ever sends/edits messages it itself owns.
 //
@@ -121,8 +131,16 @@ export function classifyDmPanelEditError(err: DmPanelErrorLike | null | undefine
 // Compact panel content -- a few lines, never a giant embed. `summary` is the
 // shared personal-status snapshot from computeStatusSummaryForPlayer;
 // `timelineLines` is the season-deadline block, resolved once per cycle.
+// For an "ok" summary this doubles as the season-start DM content: a short
+// "season is live, you're in X" intro line leads, and the matchups section
+// at the end lists every remaining opponent on its own line (the same
+// information the old separate season-start DM carried).
 export function buildDmPanelLines(summary: PlayerStatusSummary, timelineLines: string[]): string[] {
-  const lines: string[] = ["**Your League Panel**", ...timelineLines];
+  const lines: string[] = ["**Your League Panel**"];
+  if (summary.kind === "ok") {
+    lines.push(`**${summary.seasonLabel}** is live -- you're in **${summary.divisionName}**.`);
+  }
+  lines.push(...timelineLines);
   if (summary.kind !== "ok") {
     lines.push(summary.message ?? "No status available right now.");
     return lines;
@@ -138,20 +156,53 @@ export function buildDmPanelLines(summary: PlayerStatusSummary, timelineLines: s
   // clickable channel link inside a DM too, so no full URL is needed.
   if (summary.divisionChannelId) lines.push(`Your division channel: <#${summary.divisionChannelId}>`);
   const remaining = summary.remainingOpponents ?? [];
+  // A <@id> mention often renders as "unknown user" in a DM (the client
+  // hasn't resolved that member) -- pair each name with its typed "@handle"
+  // (summary.remainingOpponentHandles, same index as remainingOpponents) so
+  // the player can always find who they're playing, same convention as
+  // every other player-facing mention site (src/mention.ts).
+  const handles = summary.remainingOpponentHandles ?? [];
   lines.push(
-    remaining.length ? `${remaining.length} left to play: ${remaining.join(", ")}` : "All your matches are done!",
+    remaining.length
+      ? `**Matchups still to play (${remaining.length}):**\n${remaining
+          .map((name, i) => (handles[i] ? `- ${name} (${handles[i]})` : `- ${name}`))
+          .join("\n")}`
+      : "All your matches are done!",
   );
   return lines;
+}
+
+// Discord's hard cap on a non-embed message's `content`. Defensive only --
+// a compact panel (a handful of status lines + a division-sized opponent
+// list) sits nowhere near this in practice, but capPanelContent makes sure a
+// future field added here fails safe (truncated with a note) instead of the
+// send erroring outright.
+export const DISCORD_CONTENT_LIMIT = 2000;
+
+export function capPanelContent(content: string, limit: number = DISCORD_CONTENT_LIMIT): string {
+  if (content.length <= limit) return content;
+  const marker = "\n...(truncated)";
+  return content.slice(0, Math.max(0, limit - marker.length)) + marker;
 }
 
 // Full send/edit payload: compact content + the standard division-controls
 // row, mentions cleared so a refresh (or the initial send) never pings.
 export function buildDmPanel(summary: PlayerStatusSummary, timelineLines: string[]): BaseMessageOptions {
   return {
-    content: buildDmPanelLines(summary, timelineLines).join("\n\n"),
+    content: capPanelContent(buildDmPanelLines(summary, timelineLines).join("\n\n")),
     components: playerActionRows(),
     allowedMentions: { parse: [] },
   };
+}
+
+// Gate for queue.ts's season-start fallback: the separate (pre-merge)
+// season-start matchups DM must still fire when DM panels are OFF, so a
+// player is never left with zero season-start DMs -- but when panels are ON
+// the panel DM itself now carries the intro + matchups, and sending both
+// would double-DM everyone. Pure so the branch is a one-line unit test, not
+// something you can only exercise through the live dmPanelsEnabled() DB read.
+export function shouldSendFallbackSeasonStartDm(dmPanelsEnabled: boolean): boolean {
+  return !dmPanelsEnabled;
 }
 
 // ---- Storage shell (LeagueConfig, no schema change) ------------------------
