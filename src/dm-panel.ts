@@ -138,7 +138,7 @@ export function classifyDmPanelEditError(err: DmPanelErrorLike | null | undefine
 export function buildDmPanelLines(summary: PlayerStatusSummary, timelineLines: string[]): string[] {
   const lines: string[] = ["**Your League Panel**"];
   if (summary.kind === "ok") {
-    lines.push(`**${summary.seasonLabel}** is live -- you're in **${summary.divisionName}**.`);
+    lines.push(`You're playing **${summary.seasonLabel}** in **${summary.divisionName}**.`);
   }
   lines.push(...timelineLines);
   if (summary.kind !== "ok") {

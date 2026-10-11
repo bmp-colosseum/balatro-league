@@ -41,7 +41,7 @@ describe("buildDmPanelLines -- compact panel content", () => {
   it("leads with the season-start intro, then the timeline lines", () => {
     const lines = buildDmPanelLines(okSummary, ["Finish by X", "Buffer note"]);
     expect(lines[0]).toBe("**Your League Panel**");
-    expect(lines[1]).toBe("**Season 6** is live -- you're in **Rare 1**.");
+    expect(lines[1]).toBe("You're playing **Season 6** in **Rare 1**.");
     expect(lines[2]).toBe("Finish by X");
     expect(lines[3]).toBe("Buffer note");
   });
@@ -49,7 +49,7 @@ describe("buildDmPanelLines -- compact panel content", () => {
   it("has no timeline lines when none are given, intro still present", () => {
     const lines = buildDmPanelLines(okSummary, []);
     expect(lines[0]).toBe("**Your League Panel**");
-    expect(lines[1]).toBe("**Season 6** is live -- you're in **Rare 1**.");
+    expect(lines[1]).toBe("You're playing **Season 6** in **Rare 1**.");
     expect(lines[2]).toContain("Rare 1");
   });
 

@@ -40,7 +40,7 @@ export async function performSeasonActivation(
   }
   await prisma.season.update({
     where: { id: seasonId },
-    data: { isActive: true, endedAt: null, scheduledStartAt: null },
+    data: { isActive: true, endedAt: null, scheduledStartAt: null, startedAt: new Date() }, // the real start: matchups are drawn now
   });
   recordAudit({
     actor,

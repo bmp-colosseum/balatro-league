@@ -397,7 +397,7 @@ export async function sweepScheduledStarts(): Promise<number> {
       }
       await prisma.season.update({
         where: { id: season.id },
-        data: { isActive: true, endedAt: null, scheduledStartAt: null },
+        data: { isActive: true, endedAt: null, scheduledStartAt: null, startedAt: new Date() }, // the real start: matchups are drawn now
       });
       recordAudit({
         actor: SYSTEM_ACTOR,
