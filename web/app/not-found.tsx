@@ -4,7 +4,7 @@
 // no way back in (see .claude/knowledge/ux-audit/01-findings.md, backlog #33).
 
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { SiteNav } from "@/components/SiteNav";
 import { TOUR_PUBLIC_URL } from "@/lib/tour-profile";
 
@@ -14,7 +14,7 @@ export default function NotFound() {
       <SiteNav activePath="" />
       <main>
         <div className="card" style={{ textAlign: "center", padding: "32px 16px" }}>
-          <h2 style={{ marginTop: 0 }}>That page does not exist</h2>
+          <h1 style={{ marginTop: 0 }}>That page does not exist</h1>
           <p className="muted">The link may be old, or the page may have moved.</p>
           <p style={{ marginTop: 16, display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
             <Link
@@ -33,10 +33,16 @@ export default function NotFound() {
             >
               <ArrowLeft size={16} /> Back to standings
             </Link>
-            <Link href="/join">Join the league -&gt;</Link>
+            {/* Lucide arrow icon, not a typed "->" beside a button that uses
+                a real arrow glyph (ux-round5 L43). */}
+            <Link href="/join" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              Join the league <ArrowRight size={14} aria-hidden="true" />
+            </Link>
             {/* The league's sibling site -- same URL the Tour's own product
                 switcher uses to link back (lib/tour-profile.ts). */}
-            <a href={TOUR_PUBLIC_URL}>Team Tour -&gt;</a>
+            <a href={TOUR_PUBLIC_URL} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              Team Tour <ArrowRight size={14} aria-hidden="true" />
+            </a>
           </p>
         </div>
       </main>

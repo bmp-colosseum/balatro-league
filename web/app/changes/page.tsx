@@ -18,12 +18,12 @@ import { WipBanner } from "@/components/WipBanner";
 // session — can't stay force-static. Also kept noindex pending SurCats' okay.
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Multiplayer changes — Balatro League",
-  description:
-    "How Balatro Multiplayer's ranked ruleset differs from vanilla Balatro: the shop queue, consumables, jokers, packs, and more.",
-  robots: { index: false, follow: false },
-};
+// No page-level metadata here on purpose: this route 404s for non-admins
+// (see hasTier check below), and until this leaf's own metadata export was
+// dropped, the hidden draft's own title ("Multiplayer changes - Balatro
+// League") leaked onto that 404 -- the one place a miss named the page it
+// was refusing to show (ux-round5 finding 1, L43). The root layout's
+// default "Balatro League" title now covers this 404 like every other one.
 
 const SECTIONS: { id: string; label: string }[] = [
   { id: "shop-queue", label: "Shop queue" },
@@ -44,7 +44,7 @@ export default async function ChangesPage() {
       <SiteNav activePath="/changes" />
       <main>
         <WipBanner note="Draft of the MP-changes reference — hidden until SurCats okays republishing the source doc." />
-        <h2>What&apos;s different in Balatro Multiplayer</h2>
+        <h1>What&apos;s different in Balatro Multiplayer</h1>
         <p className="muted">
           Multiplayer changes a lot of vanilla Balatro&apos;s mechanics and RNG. This page collects
           those changes for the <strong>ranked ruleset</strong> — what&apos;s exclusive to MP, what&apos;s
