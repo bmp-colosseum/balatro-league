@@ -8,6 +8,10 @@ import { DiscordId } from "@/components/DiscordId";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Players - Balatro League",
+};
+
 export default async function PlayersPage() {
   // Player roster is gated — must be logged in to see it. Standings + season
   // pages stay public.
@@ -20,7 +24,7 @@ export default async function PlayersPage() {
     <>
       <SiteNav activePath="/players" />
       <main>
-        <h2>Players ({players.length})</h2>
+        <h1>Players ({players.length})</h1>
         <div className="card">
           <table className="responsive-table">
             <thead>

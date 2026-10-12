@@ -18,6 +18,10 @@ import { submitReportFromReportPage } from "./actions";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Report a match - Balatro League",
+};
+
 export default async function ReportPage({
   searchParams,
 }: {
@@ -36,7 +40,7 @@ export default async function ReportPage({
     <>
       <SiteNav activePath="/report" />
       <main>
-        <h2>Report a match</h2>
+        <h1>Report a match</h1>
 
         {ok && (
           <Callout type="success">
