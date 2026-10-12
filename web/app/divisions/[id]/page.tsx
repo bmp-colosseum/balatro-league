@@ -112,8 +112,19 @@ export default async function PublicDivisionPage({
     standings.map((r) => r.player.id),
     showBmpMmr,
   );
+  // Current promotion / relegation spots, so the zone stripe shows here too
+  // (same rule as /standings: top `promote`, bottom `relegate`, capped so at
+  // least one row is neither).
+  const spotRoom = Math.max(0, standings.length - 1);
+  const promoteSpots = Math.min(Math.max(0, division.promote), spotRoom);
+  const relegateSpots = Math.min(Math.max(0, division.relegate), spotRoom - promoteSpots);
   const standingsExtras = new Map<string, StandingsRowExtras>(
-    standings.map((r) => [r.player.id, { mmr: mmrByPlayerId.get(r.player.id), avatarUrl: r.avatarUrl ?? null }]),
+    standings.map((r, i) => [r.player.id, {
+      mmr: mmrByPlayerId.get(r.player.id),
+      avatarUrl: r.avatarUrl ?? null,
+      inPromotionSpot: promoteSpots > 0 && i < promoteSpots,
+      inRelegationSpot: relegateSpots > 0 && i >= standings.length - relegateSpots,
+    }]),
   );
 
   return (

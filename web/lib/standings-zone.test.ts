@@ -24,6 +24,20 @@ describe("zoneOf", () => {
   });
 });
 
+describe("zoneOf mid-season spots", () => {
+  test("a row sitting in a promotion spot today is in the promote zone before anything is decided", () => {
+    expect(zoneOf({ inPromotionSpot: true })).toBe("promote");
+    expect(zoneOf({ inRelegationSpot: true })).toBe("relegate");
+  });
+  test("decided and clinched states still win over the current spot", () => {
+    expect(zoneOf({ inRelegationSpot: true, clinchStatus: "up" })).toBe("promote");
+    expect(zoneOf({ inPromotionSpot: true, relegating: true })).toBe("relegate");
+  });
+  test("a row in neither spot has no zone", () => {
+    expect(zoneOf({ inPromotionSpot: false, inRelegationSpot: false })).toBeUndefined();
+  });
+});
+
 describe("boundaryBelow", () => {
   test("empty table -> no boundary", () => {
     const zones: Zone[] = [];

@@ -60,6 +60,9 @@ export interface StandingsRowExtras {
   promoting?: boolean;
   relegating?: boolean;
   clinchStatus?: "up" | "down";
+  // Current promotion / relegation spot (see lib/standings-zone.ts ZoneExtras).
+  inPromotionSpot?: boolean;
+  inRelegationSpot?: boolean;
   showdown?: boolean;
   mmr?: StandingsMmrEntry;
   // True for the signed-in viewer's own row -- see the v2 "you" badge below.

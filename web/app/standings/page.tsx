@@ -421,6 +421,9 @@ export default async function StandingsPage() {
                         rows.map((r, i) => [r.player.id, {
                           promoting: complete && i < promoteEff && !promoTieRowSet.has(i),
                           relegating: complete && i >= rows.length - relegateEff && !relegationTieRowSet.has(i),
+                          // Where the row sits today: the zone stripe shows the line all season.
+                          inPromotionSpot: promoteEff > 0 && i < promoteEff,
+                          inRelegationSpot: relegateEff > 0 && i >= rows.length - relegateEff,
                           clinchStatus: complete ? undefined : clinch.get(r.player.id),
                           showdown: complete && (promoTieRowSet.has(i) || relegationTieRowSet.has(i)),
                           mmr: data.mmrByPlayerId.get(r.player.id),

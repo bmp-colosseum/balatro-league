@@ -4,9 +4,16 @@
 // (DivisionStandingsTable) calls these per row with plain data.
 
 export interface ZoneExtras {
+  // Decided at season end (every match played).
   promoting?: boolean;
   relegating?: boolean;
+  // Mid-season: mathematically certain.
   clinchStatus?: "up" | "down";
+  // Mid-season: where the row sits RIGHT NOW (top promoteCount / bottom
+  // relegateCount). Drawn as the zone stripe so players can see the line
+  // all season, like a playoff line; nothing is decided by it.
+  inPromotionSpot?: boolean;
+  inRelegationSpot?: boolean;
 }
 
 export type Zone = "promote" | "relegate" | undefined;
@@ -16,8 +23,12 @@ export type Zone = "promote" | "relegate" | undefined;
 // promoting is checked first, so a row that is somehow flagged both ways
 // (shouldn't happen upstream) reads as promoting.
 export function zoneOf(ex: ZoneExtras | undefined): Zone {
+  // Decided or clinched states win; the current spot only fills in while
+  // nothing is settled yet.
   if (ex?.promoting || ex?.clinchStatus === "up") return "promote";
   if (ex?.relegating || ex?.clinchStatus === "down") return "relegate";
+  if (ex?.inPromotionSpot) return "promote";
+  if (ex?.inRelegationSpot) return "relegate";
   return undefined;
 }
 
