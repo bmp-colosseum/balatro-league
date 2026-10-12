@@ -207,7 +207,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         } else if (interaction.isRepliable()) {
           await interaction.reply({
             content:
-              "🔒 The league bot is in **sign-ups-only mode** right now — only sign-ups are live. Full functionality opens when the season starts.",
+              "🔒 The league bot is in **signups-only mode** right now — only signups are live. Full functionality opens when the season starts.",
             flags: MessageFlags.Ephemeral,
           });
         }

@@ -5,7 +5,9 @@
 // strings they drop into TextDisplayBuilder content. Keeping this pure means
 // every branch (draw vs sweep, forfeit, missing emoji, missing lives, missing
 // Game rows) is a literal-in/literal-out unit test with no Discord client or
-// database involved.
+// database involved. (matchRef is itself zero-import/pure, so this stays true.)
+
+import { matchRef } from "./match-ref.js";
 
 // ---------------------------------------------------------------------------
 // Confirmed-result channel post (src/announce.ts's announceResult)
@@ -91,7 +93,10 @@ export function confirmedGameLine(game: GameLineInput): string | null {
   const icons = `${game.deckEmoji ?? ""}${game.stakeEmoji ?? ""}`;
   const prefix = icons ? `${icons} ` : "";
   const comboText = combo || "_combo not recorded_";
-  const livesSuffix = game.winnerName && game.winnerLives != null ? ` (${game.winnerLives} lives left)` : "";
+  const livesSuffix =
+    game.winnerName && game.winnerLives != null
+      ? ` (${game.winnerLives} ${game.winnerLives === 1 ? "life" : "lives"} left)`
+      : "";
   const who = game.winnerName ? ` - **${game.winnerName}**${livesSuffix}` : "";
   return `${prefix}${game.num}. ${comboText}${who}`;
 }
@@ -106,7 +111,7 @@ export function confirmedGamesLines(games: readonly GameLineInput[], fallbackCom
 }
 
 export function confirmedFooterLine(matchId: string): string {
-  return `-# Match ${matchId}`;
+  return `-# Match ref ${matchRef(matchId)}`;
 }
 
 export function buildConfirmedResultBlocks(input: ConfirmedResultInput): ConfirmedResultBlocks {

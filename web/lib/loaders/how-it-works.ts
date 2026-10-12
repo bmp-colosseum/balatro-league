@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { buildOnboardingGuideSections, type OnboardingGuideContent } from "@/lib/onboarding-guide";
 import { seasonWindowLinesPlain, seasonWindowDates, type SeasonWindowDate } from "@/lib/season-window-text";
+import { normalizeTiebreak } from "@/lib/standings-mode";
 
 // Same convention as web/lib/report.ts / signup-discord.ts for building an
 // absolute site URL from inside the web app itself.
@@ -40,7 +41,7 @@ export interface HowItWorksPageData {
 export async function loadHowItWorksPageData(): Promise<HowItWorksPageData> {
   const season = await prisma.season.findFirst({
     where: { isActive: true },
-    select: { number: true, subtitle: true, startedAt: true, scheduledStartAt: true, scheduledEndAt: true },
+    select: { number: true, subtitle: true, startedAt: true, scheduledStartAt: true, scheduledEndAt: true, tiebreak: true },
   });
 
   const seasonLabel = season ? formatSeasonLabel(season) : "the current season";
@@ -68,6 +69,7 @@ export async function loadHowItWorksPageData(): Promise<HowItWorksPageData> {
     seasonWindowLines,
     standingsUrl: siteUrl("/standings"),
     supportChannelUrl,
+    tiebreak: normalizeTiebreak(season?.tiebreak),
   });
 
   return { content, hasActiveSeason: !!season, supportChannelUrl, seasonWindowDates: seasonWindowDatesForSync };

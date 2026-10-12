@@ -149,9 +149,9 @@ export async function reportSetFromWeb(
   // Web reports finalize immediately — the reporter is signed in and
   // took a deliberate UI action, that's the commitment. Opponent gets
   // a DM with a dispute link if the result is wrong; the inline
-  // dispute UI on /report routes through the helper-review flow.
-  // The Discord /report slash command still uses the PENDING + 2-min
-  // confirm window since that's natural in a channel context.
+  // dispute UI on /report routes through the helper-review flow. Discord
+  // results (match threads, /report) also finalize immediately now; there is
+  // no PENDING confirm window anywhere results are created.
   const now = new Date();
   // Per-game combos (decks/stakes differ per game). The Match keeps a single
   // "headline" reportedDeck/Stake = game 1's, for list views that show one combo;

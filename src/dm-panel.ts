@@ -45,6 +45,7 @@
 
 import { type BaseMessageOptions, type Client } from "discord.js";
 import { activePublicSeason } from "./active-season.js";
+import { formatSeasonLabel } from "./format-season.js";
 import { prisma } from "./db.js";
 import { playerActionRows } from "./division-controls.js";
 import { getConfig, LeagueConfigKey } from "./league-config.js";
@@ -135,12 +136,21 @@ export function classifyDmPanelEditError(err: DmPanelErrorLike | null | undefine
 // "season is live, you're in X" intro line leads, and the matchups section
 // at the end lists every remaining opponent on its own line (the same
 // information the old separate season-start DM carried).
-export function buildDmPanelLines(summary: PlayerStatusSummary, timelineLines: string[]): string[] {
-  const lines: string[] = ["**Your League Panel**"];
+// Render a seasonTimelineLines() head line as one plain bold line instead of
+// an H2 -- an H2 ("## [flag] Finish all your games by...") renders as a giant
+// heading in a DM on mobile (finding 10 / B14 in
+// .claude/knowledge/bot-ux/01-findings.md). Only the head line carries the
+// "## " prefix; any buffer-explanation line underneath is already plain.
+function flattenTimelineHeading(line: string): string {
+  return line.startsWith("## ") ? `**${line.slice(3)}**` : line;
+}
+
+export function buildDmPanelLines(summary: PlayerStatusSummary, timelineLines: string[], seasonLabel: string): string[] {
+  const lines: string[] = [`**${seasonLabel}: your panel**`];
   if (summary.kind === "ok") {
     lines.push(`You're playing **${summary.seasonLabel}** in **${summary.divisionName}**.`);
   }
-  lines.push(...timelineLines);
+  lines.push(...timelineLines.map(flattenTimelineHeading));
   if (summary.kind !== "ok") {
     lines.push(summary.message ?? "No status available right now.");
     return lines;
@@ -187,10 +197,30 @@ export function capPanelContent(content: string, limit: number = DISCORD_CONTENT
 
 // Full send/edit payload: compact content + the standard division-controls
 // row, mentions cleared so a refresh (or the initial send) never pings.
-export function buildDmPanel(summary: PlayerStatusSummary, timelineLines: string[]): BaseMessageOptions {
+export function buildDmPanel(summary: PlayerStatusSummary, timelineLines: string[], seasonLabel: string): BaseMessageOptions {
   return {
-    content: capPanelContent(buildDmPanelLines(summary, timelineLines).join("\n\n")),
+    content: capPanelContent(buildDmPanelLines(summary, timelineLines, seasonLabel).join("\n\n")),
     components: playerActionRows(),
+    allowedMentions: { parse: [] },
+  };
+}
+
+// Final panel content once a player's season has ended -- replaces the
+// live progress lines (rank/points/matchups) with a one-line close so the
+// panel stops showing a deadline that's days in the past forever (see
+// finding 10, B13 in .claude/knowledge/bot-ux/01-findings.md: before this,
+// refreshAllDmPanels just bails out with no active season and the stale
+// panel is never touched again).
+export function buildDmPanelFinalLines(seasonLabel: string, divisionName: string, rank: number, totalInDivision: number): string[] {
+  return [`**${seasonLabel} is over.** You finished #${rank} of ${totalInDivision} in ${divisionName}.`];
+}
+
+// No buttons -- every quick action (Start a match, Who do I play?, ...) is
+// for an in-progress season, so none of them apply to a closed one.
+export function buildDmPanelFinal(seasonLabel: string, divisionName: string, rank: number, totalInDivision: number): BaseMessageOptions {
+  return {
+    content: capPanelContent(buildDmPanelFinalLines(seasonLabel, divisionName, rank, totalInDivision).join("\n\n")),
+    components: [],
     allowedMentions: { parse: [] },
   };
 }
@@ -269,10 +299,11 @@ export async function sendOrRefreshDmPanel(
   client: Client,
   player: { id: string; discordId: string },
   timelineLines: string[],
+  seasonLabel: string,
 ): Promise<void> {
   try {
     const summary = await computeStatusSummaryForPlayer(player.id);
-    const options = buildDmPanel(summary, timelineLines);
+    const options = buildDmPanel(summary, timelineLines, seasonLabel);
     const stored = await readDmPanelRecord(player.id);
     const action = decideDmPanelAction(stored);
 
@@ -293,6 +324,59 @@ export async function sendOrRefreshDmPanel(
   } catch (err) {
     console.warn(`[dm-panel] refresh failed for player ${player.id}:`, err);
   }
+}
+
+// One row of a finalized season's placement, pre-computed by the caller
+// (web/lib/end-season.ts already has the exact standings it used for the
+// rating math + the promoted/relegated DMs) -- this module just renders +
+// delivers it, same edit-or-send machinery as the live panel.
+export interface SeasonFinalStanding {
+  playerId: string;
+  discordId: string;
+  divisionName: string;
+  rank: number;
+  totalInDivision: number;
+}
+
+async function finalizeDmPanelForPlayer(
+  client: Client,
+  player: { id: string; discordId: string },
+  options: BaseMessageOptions,
+): Promise<void> {
+  const stored = await readDmPanelRecord(player.id);
+  if (stored) {
+    const outcome = await tryEditPanel(client, stored, options);
+    if (outcome === "ok") return;
+    await clearDmPanelRecord(player.id);
+    if (outcome === "skip-undeliverable") return;
+  }
+  await sendFreshPanel(client, player, options);
+}
+
+// Finalize every player's panel for a season that just ended -- edits the
+// stored panel message in place when one exists (silent, matching the
+// live-refresh convention), or sends a fresh final DM for a player who
+// never had one (DM panels turned on mid-season, etc). Never throws per
+// player, same convention as refreshAllDmPanels.
+export async function finalizeDmPanelsForSeason(
+  client: Client,
+  seasonLabel: string,
+  standings: SeasonFinalStanding[],
+): Promise<{ processed: number; failed: number }> {
+  let processed = 0;
+  let failed = 0;
+  for (const row of standings) {
+    try {
+      const options = buildDmPanelFinal(seasonLabel, row.divisionName, row.rank, row.totalInDivision);
+      await finalizeDmPanelForPlayer(client, { id: row.playerId, discordId: row.discordId }, options);
+      processed++;
+    } catch (err) {
+      failed++;
+      console.warn(`[dm-panel] finalize failed for player ${row.playerId}:`, err);
+    }
+  }
+  console.log(`[dm-panel] finalized ${processed} panel(s) for "${seasonLabel}", ${failed} failure(s)`);
+  return { processed, failed };
 }
 
 function delay(ms: number): Promise<void> {
@@ -320,6 +404,7 @@ export async function refreshAllDmPanels(client: Client): Promise<{ processed: n
   if (!(await dmPanelsEnabled())) return { processed: 0, failed: 0 };
   const season = await activePublicSeason();
   if (!season) return { processed: 0, failed: 0 };
+  const seasonLabel = formatSeasonLabel(season);
   const timelineLines = seasonTimelineLines(
     season.scheduledEndAt,
     parseBufferDays(await getConfig(LeagueConfigKey.TiebreakBufferDays)),
@@ -333,7 +418,7 @@ export async function refreshAllDmPanels(client: Client): Promise<{ processed: n
   let failed = 0;
   for (const m of members) {
     try {
-      await sendOrRefreshDmPanel(client, m.player, timelineLines);
+      await sendOrRefreshDmPanel(client, m.player, timelineLines, seasonLabel);
       processed++;
     } catch (err) {
       // sendOrRefreshDmPanel already catches internally -- this is a second

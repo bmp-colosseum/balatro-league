@@ -7,13 +7,16 @@
 // renderDivisionWelcome -- the up()/down() promote/relegate agreement
 // helpers below mirror renderDivisionWelcome's so all three surfaces agree.
 //
-// No imports -- kept trivially pure (like checkin-message.ts) so it's
-// unit-testable with plain data and can be mirrored into
-// web/lib/onboarding-guide.ts (by web/scripts/sync-schema.mjs) for the admin
-// preview and the public page to render identical copy.
+// Only local import is ties-text.ts (also zero-import/pure), so this stays
+// trivially unit-testable with plain data and can be mirrored into
+// web/lib/onboarding-guide.ts (by web/scripts/sync-schema.mjs, which syncs
+// ties-text.ts alongside it) for the admin preview and the public page to
+// render identical copy.
 //
 // Discord's hard limit is 2000 chars per message; every returned message
 // stays well under that, so the caller can send them as-is, in order.
+
+import { tiesText, type SeasonTiebreak } from "./ties-text";
 
 export interface OnboardingGuideInput {
   // e.g. "Season 7" or "Season 7 -- Launch" (formatSeasonLabel()).
@@ -25,6 +28,10 @@ export interface OnboardingGuideInput {
   standingsUrl: string;
   // Jump link to the support channel, or null to omit the direct mention.
   supportChannelUrl: string | null;
+  // The active season's tiebreak mode -- drives the "Ties" section's exact
+  // rule text via ties-text.ts. Pass normalizeTiebreak(season?.tiebreak)
+  // (its "chain" default when no active season).
+  tiebreak: SeasonTiebreak;
 }
 
 // One topic in the guide: a plain-text heading (no trailing punctuation --
@@ -88,7 +95,7 @@ export function buildOnboardingGuideSections(input: OnboardingGuideInput): Onboa
       {
         id: "playing-a-match",
         heading: "Playing a match",
-        body: `When you're ready to play someone, click **Start a match** at the bottom of your division channel and pick your opponent. The bot runs the pick/ban phase for you. A match is **two games**, and the deck/stake combo never repeats within a matchup. After each game, the **winner records how many lives they had left** -- that number matters later for tiebreaks.`,
+        body: `When you're ready to play someone, click **Start a match** at the bottom of your division channel and pick your opponent. The bot runs the bans and picks for you. A match is **two games**, and the deck/stake combo never repeats within a match. After each game, the **winner records how many lives they had left** -- that number matters later for tiebreaks.`,
       },
       {
         id: "results",
@@ -108,7 +115,7 @@ export function buildOnboardingGuideSections(input: OnboardingGuideInput): Onboa
       {
         id: "ties",
         heading: "Ties",
-        body: `Two players tied: play one extra game (a shootout) if you can -- that decides it. If you can't, the player who won your match against each other 2-0 takes it; failing that, the lives from that match, then total net lives for the season. Three or more tied: total net lives decide. Net lives = the lives you had left in your wins, minus the lives your opponents had left when they beat you.`,
+        body: tiesText(input.tiebreak).rule,
       },
       {
         id: "scheduling",

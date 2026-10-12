@@ -51,6 +51,11 @@ const SYNC = [
   // web's live standings path (web/lib/standings-cache.ts) + the
   // /admin/standings-preview "apply this rule" writer.
   { from: ["src", "standings-mode.ts"], to: ["lib", "standings-mode.ts"] },
+  // Pure ties/tiebreak copy (one wording per tiebreak mode) -- shared by the
+  // bot's division welcome / #league-info / onboarding guide / shootout
+  // notices and (via onboarding-guide.ts below) the web's /how-it-works page
+  // + admin preview, so the ties rule can't drift between surfaces.
+  { from: ["src", "ties-text.ts"], to: ["lib", "ties-text.ts"] },
   // Pure first-timer onboarding-guide content builder -- shared by the bot's
   // notify.onboarding-guide DM worker and the web's /admin/season-tools
   // "Preview: DM the guide to me" button, so the preview always matches what

@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   buildDmPanel,
+  buildDmPanelFinal,
+  buildDmPanelFinalLines,
   buildDmPanelLines,
   capPanelContent,
   classifyDmPanelEditError,
@@ -29,37 +31,49 @@ const okSummary: PlayerStatusSummary = {
 
 describe("buildDmPanelLines -- compact panel content", () => {
   it("links to the player's division channel when one is provisioned", () => {
-    const lines = buildDmPanelLines({ ...okSummary, divisionChannelId: "123456789" }, []);
+    const lines = buildDmPanelLines({ ...okSummary, divisionChannelId: "123456789" }, [], "Season 6");
     expect(lines.some((l) => l.includes("<#123456789>"))).toBe(true); // clickable channel mention, works in DMs
   });
 
   it("omits the channel line when the division has no channel yet", () => {
-    const lines = buildDmPanelLines({ ...okSummary, divisionChannelId: null }, []);
+    const lines = buildDmPanelLines({ ...okSummary, divisionChannelId: null }, [], "Season 6");
     expect(lines.some((l) => l.includes("division channel"))).toBe(false);
   });
 
-  it("leads with the season-start intro, then the timeline lines", () => {
-    const lines = buildDmPanelLines(okSummary, ["Finish by X", "Buffer note"]);
-    expect(lines[0]).toBe("**Your League Panel**");
+  it("titles itself 'Season N: your panel', not a generic 'Your League Panel' (B14)", () => {
+    const lines = buildDmPanelLines(okSummary, [], "Season 6");
+    expect(lines[0]).toBe("**Season 6: your panel**");
+  });
+
+  it("leads with the title, then the season-start intro, then the timeline lines", () => {
+    const lines = buildDmPanelLines(okSummary, ["Finish by X", "Buffer note"], "Season 6");
+    expect(lines[0]).toBe("**Season 6: your panel**");
     expect(lines[1]).toBe("You're playing **Season 6** in **Rare 1**.");
     expect(lines[2]).toBe("Finish by X");
     expect(lines[3]).toBe("Buffer note");
   });
 
+  it("flattens an H2 timeline head line to a plain bold line, not a heading (B14)", () => {
+    const flag = "\u{1F3C1}";
+    const lines = buildDmPanelLines(okSummary, [`## ${flag} Finish all your games by X (Y)`, "_Buffer note_"], "Season 6");
+    expect(lines).toContain(`**${flag} Finish all your games by X (Y)**`);
+    expect(lines.some((l) => l.startsWith("## "))).toBe(false);
+  });
+
   it("has no timeline lines when none are given, intro still present", () => {
-    const lines = buildDmPanelLines(okSummary, []);
-    expect(lines[0]).toBe("**Your League Panel**");
+    const lines = buildDmPanelLines(okSummary, [], "Season 6");
+    expect(lines[0]).toBe("**Season 6: your panel**");
     expect(lines[1]).toBe("You're playing **Season 6** in **Rare 1**.");
     expect(lines[2]).toContain("Rare 1");
   });
 
   it("omits the season-start intro for a non-'ok' kind", () => {
-    const lines = buildDmPanelLines({ kind: "no-season", message: "No active season right now." }, []);
+    const lines = buildDmPanelLines({ kind: "no-season", message: "No active season right now." }, [], "Season 6");
     expect(lines.some((l) => l.includes("is live"))).toBe(false);
   });
 
   it("includes division, rank, record, and movement for an 'ok' summary", () => {
-    const lines = buildDmPanelLines(okSummary, []);
+    const lines = buildDmPanelLines(okSummary, [], "Season 6");
     const joined = lines.join("\n");
     expect(joined).toContain("Rare 1");
     expect(joined).toContain("Rare tier");
@@ -74,13 +88,13 @@ describe("buildDmPanelLines -- compact panel content", () => {
     ["2 matchups", ["Alice", "Bob"], "**Matchups still to play (2):**\n- Alice\n- Bob"],
     ["0 matchups left", [], "All your matches are done!"],
   ] as const)("matchups section -- %s", (_label, remainingOpponents, expected) => {
-    const lines = buildDmPanelLines({ ...okSummary, remainingOpponents: [...remainingOpponents] }, []);
+    const lines = buildDmPanelLines({ ...okSummary, remainingOpponents: [...remainingOpponents] }, [], "Season 6");
     expect(lines[lines.length - 1]).toBe(expected);
   });
 
   it("falls back to done when remainingOpponents is undefined", () => {
     const { remainingOpponents: _drop, ...rest } = okSummary;
-    const lines = buildDmPanelLines(rest as PlayerStatusSummary, []);
+    const lines = buildDmPanelLines(rest as PlayerStatusSummary, [], "Season 6");
     expect(lines[lines.length - 1]).toBe("All your matches are done!");
   });
 
@@ -92,6 +106,7 @@ describe("buildDmPanelLines -- compact panel content", () => {
         remainingOpponentHandles: ["@alice1", "@bobby", "", "@dee_d"],
       },
       [],
+      "Season 6",
     );
     expect(lines[lines.length - 1]).toBe(
       "**Matchups still to play (4):**\n- Alice (@alice1)\n- Bob (@bobby)\n- Cara\n- Dee (@dee_d)",
@@ -99,39 +114,41 @@ describe("buildDmPanelLines -- compact panel content", () => {
   });
 
   it("falls back to no-handle rendering when remainingOpponentHandles is missing or shorter", () => {
-    const noHandles = buildDmPanelLines({ ...okSummary, remainingOpponents: ["Alice", "Bob"] }, []);
+    const noHandles = buildDmPanelLines({ ...okSummary, remainingOpponents: ["Alice", "Bob"] }, [], "Season 6");
     expect(noHandles[noHandles.length - 1]).toBe("**Matchups still to play (2):**\n- Alice\n- Bob");
 
     const shortHandles = buildDmPanelLines(
       { ...okSummary, remainingOpponents: ["Alice", "Bob"], remainingOpponentHandles: ["@alice1"] },
       [],
+      "Season 6",
     );
     expect(shortHandles[shortHandles.length - 1]).toBe("**Matchups still to play (2):**\n- Alice (@alice1)\n- Bob");
   });
 
   it("shows just the explanation message for a non-'ok' kind (no-season)", () => {
-    const lines = buildDmPanelLines({ kind: "no-season", message: "No active season right now." }, ["Timeline"]);
-    expect(lines).toEqual(["**Your League Panel**", "Timeline", "No active season right now."]);
+    const lines = buildDmPanelLines({ kind: "no-season", message: "No active season right now." }, ["Timeline"], "Season 6");
+    expect(lines).toEqual(["**Season 6: your panel**", "Timeline", "No active season right now."]);
   });
 
   it("shows just the explanation message for a non-'ok' kind (no-division)", () => {
     const lines = buildDmPanelLines(
       { kind: "no-division", message: "You're not in a division this season." },
       [],
+      "Season 6",
     );
-    expect(lines).toEqual(["**Your League Panel**", "You're not in a division this season."]);
+    expect(lines).toEqual(["**Season 6: your panel**", "You're not in a division this season."]);
   });
 
   it("falls back to a generic message when a non-'ok' kind is missing one", () => {
-    const lines = buildDmPanelLines({ kind: "no-standings-row" }, []);
+    const lines = buildDmPanelLines({ kind: "no-standings-row" }, [], "Season 6");
     expect(lines[lines.length - 1]).toBe("No status available right now.");
   });
 });
 
 describe("buildDmPanel -- full send/edit payload", () => {
   it("joins the lines into content, attaches the controls row, and clears mentions", () => {
-    const options = buildDmPanel(okSummary, ["Timeline line"]);
-    expect(options.content).toContain("**Your League Panel**");
+    const options = buildDmPanel(okSummary, ["Timeline line"], "Season 6");
+    expect(options.content).toContain("**Season 6: your panel**");
     expect(options.content).toContain("Timeline line");
     expect(options.content).toContain("Rare 1");
     expect(options.components).toHaveLength(2); // controls row + hammertime link row
@@ -210,6 +227,29 @@ describe("capPanelContent -- Discord content-length safety net", () => {
     const result = capPanelContent("x".repeat(100), 20);
     expect(result.length).toBe(20);
     expect(result.endsWith("\n...(truncated)")).toBe(true);
+  });
+});
+
+describe("buildDmPanelFinalLines / buildDmPanelFinal -- B13 season-end finalize", () => {
+  it("states the season is over and the final placement", () => {
+    expect(buildDmPanelFinalLines("Season 9", "Rare 3", 4, 8)).toEqual([
+      "**Season 9 is over.** You finished #4 of 8 in Rare 3.",
+    ]);
+  });
+
+  it("the full payload drops every button (no in-progress action applies to a closed season)", () => {
+    const options = buildDmPanelFinal("Season 9", "Rare 3", 4, 8);
+    expect(options.components).toEqual([]);
+  });
+
+  it("the full payload never pings (edit-in-place convention)", () => {
+    const options = buildDmPanelFinal("Season 9", "Rare 3", 1, 8);
+    expect(options.allowedMentions).toEqual({ parse: [] });
+  });
+
+  it("the full payload's content is the final line", () => {
+    const options = buildDmPanelFinal("Season 9", "Common 1", 8, 8);
+    expect(options.content).toBe("**Season 9 is over.** You finished #8 of 8 in Common 1.");
   });
 });
 

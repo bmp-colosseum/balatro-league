@@ -14,7 +14,6 @@ Sources: [src/commands/start-match.ts](../../src/commands/start-match.ts),
 [src/result-message-core.ts](../../src/result-message-core.ts),
 [src/commands/report.ts](../../src/commands/report.ts),
 [src/report-auto-confirm.ts](../../src/report-auto-confirm.ts),
-[src/dispute-thread.ts](../../src/dispute-thread.ts),
 [web/lib/match-admin.ts](../../web/lib/match-admin.ts),
 [web/app/admin/matches/page.tsx](../../web/app/admin/matches/page.tsx),
 [prisma/schema.prisma](../../prisma/schema.prisma).
@@ -27,14 +26,19 @@ Sources: [src/commands/start-match.ts](../../src/commands/start-match.ts),
   opponent)". Both players must be ACTIVE members of the same division in the
   active season.
 - The bot opens a private thread under `#league-matches` with an invite that
-  has "Accept" and "Decline". The invite expires after
-  `matchInviteExpiryMinutes` (default 5) and the sweep cancels it.
+  has "Accept" and "Decline" -- the embed shows the real
+  `matchInviteExpiryMinutes` (default 5), not a hardcoded "5 minutes". Past
+  that, the sweep cancels it and DMs the inviter (see "The sweep" below).
 - Pick/ban per game (`src/match-session.ts`): a pool of 9 deck-and-stake
   combos is drawn (`src/match-pool.ts`, BMP-style caps: at most 4 per stake,
   3 per deck, at least one White stake). First player bans 1, second bans 3,
-  first bans 3 more, second picks 1 of the remaining 2. The UI is a dropdown
-  plus random-ban and random-pick buttons, "Reroll pool" (both must agree)
-  and "Propose custom combo".
+  first bans 3 more, second picks 1 of the remaining 2 -- game 1's ban embed
+  carries one extra orientation sentence spelling this order out for a
+  newcomer, computed from the real policy/pool rather than hardcoded.
+  The UI is a dropdown plus a random-ban button; "Reroll options" (both
+  must agree) and "Propose custom combo" are shown for casual `/challenge`
+  matches only -- league matches hide both so a league pool is never
+  reroll-able or swappable for a custom combo.
 - Who bans first in game 2: the loser of game 1 presses "{name} bans first",
   unless the rules template sets `firstPickMode` to ALTERNATE, which skips the
   choice.
@@ -77,10 +81,13 @@ Sources: [src/commands/start-match.ts](../../src/commands/start-match.ts),
   then `results_channel_id` or webhook, then `RESULTS_CHANNEL_ID`). Always a
   new message; corrections post again, nothing is edited.
 - The text itself is built by pure functions in `src/result-message-core.ts`:
-  `buildConfirmedResultBlocks` for the announcement and
-  `buildReportMessageBlocks` for the pending report, which `report-flow.ts`
-  edits in place as the status moves PENDING, CONFIRMED, AUTO_CONFIRMED or
-  DISPUTED.
+  `buildConfirmedResultBlocks` for the announcement, and
+  `buildReportMessageBlocks` (consumed by `report-flow.ts`'s
+  `buildReportContainer`) for CONFIRMED / AUTO_CONFIRMED / DISPUTED renders.
+  The PENDING pending-report stage (`postPendingReport`, its Confirm/Dispute
+  buttons, the `report.post-pending` queue) was removed once results started
+  counting straight away -- there is no live path left that creates a fresh
+  PENDING report embed.
 - Site labels (`web/lib/result-labels.ts`): "{a} wins 2-0", "1-1 draw", "You
   beat {opponent} 2-0".
 
@@ -143,14 +150,19 @@ DQ and void-player live on the division page's Admin tools, not here (see
 
 `src/match-sweep.ts` runs at boot and every 60 seconds:
 
-1. Invites older than 5 minutes: cancel, delete thread.
+1. Invites past `matchInviteExpiryMinutes`: cancel, DM the inviter ("your
+   invite to X expired"; the invitee, who never accepted, is not pinged),
+   delete thread.
 2. In-progress matches idle 3 hours: auto-pause and post "this match was
    auto-paused ... hit Resume ... stay paused for up to 7 days."
-3. Any non-terminal session older than 24 hours: cancel.
-4. Paused more than 7 days: cancel.
+3. Any non-terminal session older than 24 hours: cancel, post in the thread
+   and DM both players ("cancelled after 24 hours with no activity").
+4. Paused more than 7 days: cancel, same thread-post + DM-both notice
+   ("cancelled after 7 days with no activity").
 5. Retry deleting leaked threads.
 6. Seasons past `scheduledStartAt`: activate and post the "is now live"
-   announcement.
+   announcement (`buildSeasonLiveAnnouncement` in `src/queue.ts`, shared with
+   the season-start-completion announcement so the two paths can't drift).
 
 `/admin/config` has "Run match-thread sweep now" (`web/lib/match-sweep.ts`),
 which does the expired, idle and leaked-thread checks plus an optional scan
@@ -165,3 +177,12 @@ for untracked match threads. It does not auto-pause or activate seasons.
   Confirm/Dispute buttons there either. "Report a problem" opens a support
   ticket, not a dispute.
 - Undo has no precondition and leaves no row behind.
+- A match id shown to a player is the short `matchRef(id)` ("Match ref
+  A1B2C3", last 6 characters of the cuid, uppercased --
+  [src/match-ref.ts](../../src/match-ref.ts)), never the full id. Admin
+  tooling still looks up the full id.
+- `src/commands/dispute-buttons.ts` and `src/dispute-thread.ts` were deleted:
+  the public-thread dispute-mediation flow had no live caller once results
+  started counting straight away. `reporting.ts`'s `disputeSet`/`confirmSet`
+  are now unreachable too (kept, not deleted, in case an admin-web resolution
+  path is wired up to them later).

@@ -53,16 +53,21 @@ export interface PlayerStatusSummary {
 // division next season, the bottom `relegate` move down (both 0 at the
 // top/bottom of the ladder). Pure — exported so it's unit-testable without
 // touching the DB.
+// Singular/plural agreement for the promote/relegate parenthetical -- "top 1
+// promote" read as a typo (see B06 in .claude/knowledge/bot-ux/01-findings.md).
+const promoteWord = (promote: number): string => (promote === 1 ? "the top finisher promotes" : `top ${promote} promote`);
+const relegateWord = (relegate: number): string => (relegate === 1 ? "last place relegates" : `bottom ${relegate} relegate`);
+
 export function describeMovement(rank: number, total: number, promote: number, relegate: number): string {
   if (promote > 0 && rank <= promote) {
-    return `🔼 **Promotion spot** - on track to move up next season (top ${promote} promote). Hold it!`;
+    return `🔼 **Promotion spot** - on track to move up next season (${promoteWord(promote)}). Hold it!`;
   }
   if (relegate > 0 && rank > total - relegate) {
-    return `🔽 **Relegation spot** - on track to drop next season (bottom ${relegate} relegate). Climb out!`;
+    return `🔽 **Relegation spot** - on track to drop next season (${relegateWord(relegate)}). Climb out!`;
   }
   const parts: string[] = [];
-  if (promote > 0) parts.push(`top ${promote} promote`);
-  if (relegate > 0) parts.push(`bottom ${relegate} relegate`);
+  if (promote > 0) parts.push(promoteWord(promote));
+  if (relegate > 0) parts.push(relegateWord(relegate));
   return `✅ **Safe** - holding your spot` + (parts.length ? ` (${parts.join(", ")})` : "");
 }
 
@@ -92,7 +97,7 @@ export async function computeStatusSummaryForPlayer(playerId: string): Promise<P
   if (!membership) {
     return {
       kind: "no-division",
-      message: "You're not in a division this season. Once you're placed, `/schedule` shows your matches.",
+      message: "You're not in a division this season. Once you're placed, click **Who do I play?** in your division channel to see your matches.",
     };
   }
 

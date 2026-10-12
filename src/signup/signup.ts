@@ -61,7 +61,7 @@ export function signupEmbed(
   const status = isOpen
     ? `**${active.length} signed up**`
     : round.status === "CLOSED"
-      ? `**${active.length} signed up — sign-ups closed**`
+      ? `**${active.length} signed up — signups closed**`
       : `**${active.length} signed up — season started**`;
 
   // Description tracks the round's lifecycle. While OPEN we show the close
@@ -71,7 +71,7 @@ export function signupEmbed(
   if (isOpen) {
     const closeLine = round.closesAt
       ? `Closes ${discordTs(round.closesAt, "F")} (${discordTs(round.closesAt, "R")}). Withdraw anytime before.`
-      : "Withdraw anytime before sign-ups close.";
+      : "Withdraw anytime before signups close.";
     description = `Hit **Sign Up** to join. ${closeLine}`;
   } else if (round.status === "CLOSED") {
     description = "Sign-ups are closed.";
@@ -87,8 +87,7 @@ export function signupEmbed(
     .setThumbnail(LOGO_URL)
     .setDescription(description)
     .addFields({ name: "Status", value: status, inline: false })
-    .setColor(isOpen ? 0x5865f2 : 0x99aab5)
-    .setFooter({ text: `Round ${round.id}` });
+    .setColor(isOpen ? 0x5865f2 : 0x99aab5);
   if (windowValue) embed.addFields({ name: "🎮 Play your games", value: windowValue, inline: false });
   return embed;
 }

@@ -32,4 +32,14 @@ describe("describeMovement -- promotion/relegation/safe line", () => {
   it("never flags relegation when relegateCount is 0, even at the bottom rank", () => {
     expect(describeMovement(8, 8, 2, 0)).toContain("Safe");
   });
+
+  it("singular agreement: 'the top finisher promotes' / 'last place relegates', not 'top 1 promote' (B06)", () => {
+    const safe = describeMovement(4, 8, 1, 1);
+    expect(safe).toContain("the top finisher promotes");
+    expect(safe).toContain("last place relegates");
+    expect(safe).not.toMatch(/top 1 promote|bottom 1 relegate/);
+
+    expect(describeMovement(1, 8, 1, 1)).toContain("the top finisher promotes");
+    expect(describeMovement(8, 8, 1, 1)).toContain("last place relegates");
+  });
 });

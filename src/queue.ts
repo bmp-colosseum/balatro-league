@@ -22,8 +22,9 @@ import { announceResult } from "./announce.js";
 import { snapshotPlayerMmr, ensureBmpCurrentSeasonDetected, type MmrSnapshotJob } from "./mmr-snapshots.js";
 import { runDisplayNameRefresh } from "./display-name-refresh.js";
 import { runGuildMemberSync } from "./guild-member-sync.js";
-import { spawnDisputeThread } from "./dispute-thread.js";
 import { webUrl } from "./web-url.js";
+import { normalizeTiebreak } from "./standings-mode.js";
+import { tiesText } from "./ties-text.js";
 import { prisma } from "./db.js";
 import { refreshLeagueInfoPinned, refreshStandingsMessages } from "./channel-refresh.js";
 import { env } from "./env.js";
@@ -67,7 +68,6 @@ import { playerActionRows } from "./division-controls.js";
 import { notifyOpponentsOfQueueJoin } from "./league-queue.js";
 import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
 import { formatSeasonLabel } from "./format-season.js";
-import { postPendingReport } from "./report-flow.js";
 import { autoConfirmReport } from "./report-auto-confirm.js";
 import { getLeagueSettings } from "./league-settings.js";
 import { runActivityScan } from "./activity-scan.js";
@@ -79,7 +79,13 @@ import { changedScheduleText, divisionNoticeText } from "./schedule-change-text.
 import { mentionWithHandle, handleOf, type MentionSubject } from "./mention.js";
 import { runShootoutCheck, isDivisionComplete } from "./shootout.js";
 import { seasonTimelineLines, parseBufferDays } from "./season-timing.js";
-import { refreshAllDmPanels, dmPanelsEnabled, shouldSendFallbackSeasonStartDm } from "./dm-panel.js";
+import {
+  refreshAllDmPanels,
+  dmPanelsEnabled,
+  shouldSendFallbackSeasonStartDm,
+  finalizeDmPanelsForSeason,
+  type SeasonFinalStanding,
+} from "./dm-panel.js";
 import { backfillDmAttachments } from "./dm-attachment-backfill.js";
 import { sendOnboardingGuideDm } from "./onboarding-dm.js";
 
@@ -160,12 +166,10 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("bootstrap.division");
   await boss.createQueue("snapshot.mmr");
   await boss.createQueue("refresh.active-mmrs");
-  await boss.createQueue("report.post-pending");
   await boss.createQueue("report.auto-confirm");
   await boss.createQueue("devops.queue-stall-check");
   await boss.createQueue("cleanup.strip-role");
   await boss.createQueue("award.champion-role");
-  await boss.createQueue("dispute.spawn-thread");
   await boss.createQueue("notify.announce-result");
   await boss.createQueue("league-info.refresh");
   await boss.createQueue("welcome.refresh");
@@ -184,6 +188,7 @@ export async function initQueue(): Promise<void> {
   await boss.createQueue("match.close-thread");
   await boss.createQueue("queue.notify-opponents");
   await boss.createQueue("dm-panel.blast");
+  await boss.createQueue("dm-panel.finalize");
   await boss.createQueue("dm-attachments.backfill");
   await boss.createQueue("notify.onboarding-guide");
 
@@ -383,7 +388,7 @@ export async function initQueue(): Promise<void> {
               ? divisionNoticeText(divisionName, departedName ?? "A player", countBest)
             : role === "opponent"
               ? `🔄 **Schedule update — ${divisionName}.** **${sanitizeName(departedName ?? "")}** was dropped and replaced by **${sanitizeName(newName ?? "")}**, so one of your matchups is now against ${sanitizeName(newName ?? "")}. Your current schedule:`
-              : `\u{1F504} **Schedule update -- ${divisionName}.** The division's schedule was rebuilt, so your opponents changed. Here is your current schedule -- reach out to your new opponents to set up your matches.`;
+              : `\u{1F504} **Schedule update -- ${divisionName}.** Your division's schedule was redrawn from scratch (nothing you did caused this), so your opponents changed. Here is your current schedule -- reach out to your new opponents to set up your matches.`;
         try {
           const user = await client.users.fetch(player.discordId);
           await user.send(embed ? { content, embeds: [embed] } : { content });
@@ -528,25 +533,11 @@ export async function initQueue(): Promise<void> {
   await boss.send("sync.guild-members", {}, { singletonKey: "sync.guild-members.boot" });
   console.log("[pg-boss] scheduled sync.guild-members @ 07:30 UTC daily (+ once on boot)");
 
-  // Worker: post the public PENDING report embed to #results. Used by
-  // the web-side /me report flow which can't post directly. Discord
-  // /report posts inline so it normally bypasses this queue.
-  await boss.work<{ pairingId: string }>(
-    "report.post-pending",
-    { batchSize: 5, pollingIntervalSeconds: 5 },
-    async (jobs) => {
-      for (const job of jobs) {
-        await postPendingReport(job.data.pairingId).catch((err) =>
-          console.warn(`[report.post-pending] ${job.data.pairingId} failed:`, err),
-        );
-      }
-    },
-  );
-
-  // Worker: 2-min auto-confirm. Both the inline /report path AND the
-  // web report path enqueue this with startAfter 120s. Handler is a
-  // no-op if the pairing already left PENDING (opponent confirmed,
-  // admin overrode, etc).
+  // Worker: 2-min auto-confirm. Orphaned since reports finalize CONFIRMED
+  // instantly (no pending stage) -- kept registered (zero live enqueues)
+  // since enqueueReportAutoConfirm / reportAutoConfirmSeconds are still
+  // wired into the admin settings UI; out of this leaf's named scope to
+  // remove (see B20 report).
   await boss.work<{ pairingId: string }>(
     "report.auto-confirm",
     { batchSize: 5, pollingIntervalSeconds: 60 },
@@ -608,22 +599,6 @@ export async function initQueue(): Promise<void> {
   // repeats per queue.
   await boss.schedule("devops.queue-stall-check", "*/5 * * * *");
   console.log("[pg-boss] scheduled devops.queue-stall-check every 5min");
-
-  // Worker: spawn a Discord helper-mediation thread for a disputed
-  // pairing. Used by the web dispute flow (Discord button-driven
-  // disputes call spawnDisputeThread inline). Idempotent on
-  // Pairing.disputeThreadId — re-runs no-op once a thread exists.
-  await boss.work<{ pairingId: string }>(
-    "dispute.spawn-thread",
-    { batchSize: 3, pollingIntervalSeconds: 5 },
-    async (jobs) => {
-      for (const job of jobs) {
-        await spawnDisputeThread(job.data.pairingId).catch((err) =>
-          console.warn(`[dispute.spawn-thread] ${job.data.pairingId}:`, err),
-        );
-      }
-    },
-  );
 
   // Worker: when signups open, fan out the interactive "are you in?" ask to
   // every past player (minus opt-outs) + the 🔔 opt-in list. Computes the
@@ -745,6 +720,23 @@ export async function initQueue(): Promise<void> {
     console.log(`[dm-panel.blast] processed ${processed}, failed ${failed}`);
   });
 
+  // Worker: finalize every panel for a season web/lib/end-season.ts just
+  // ended. The web side has no live Discord client, so it enqueues this with
+  // the exact standings it already computed for the rating math + the
+  // promoted/relegated DMs (see B13 in .claude/knowledge/bot-ux/01-findings.md).
+  await boss.work<{ seasonLabel: string; standings: SeasonFinalStanding[] }>(
+    "dm-panel.finalize",
+    { batchSize: 1, pollingIntervalSeconds: 15 },
+    async (jobs) => {
+      for (const job of jobs) {
+        const client = tryGetDiscordClient();
+        if (!client) throw new Error("Discord client not ready — will retry");
+        const { processed, failed } = await finalizeDmPanelsForSeason(client, job.data.seasonLabel, job.data.standings);
+        console.log(`[dm-panel.finalize] processed ${processed}, failed ${failed}`);
+      }
+    },
+  );
+
   // Worker: re-fetch + store attachment bytes for OLDER InboundDm rows whose
   // Discord CDN urls have (likely) expired, or where the live download at
   // capture time failed. Manual-only -- triggered by the /admin/ops
@@ -801,11 +793,6 @@ export async function enqueueSignupAskKickoff(roundId: string): Promise<void> {
 export async function enqueueSignupAsk(job: { roundId: string; discordId: string }): Promise<void> {
   if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
   await boss.send("signup.ask", job, { retryLimit: 3, retryBackoff: true });
-}
-
-export async function enqueueDisputeSpawnThread(pairingId: string): Promise<void> {
-  if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
-  await boss.send("dispute.spawn-thread", { pairingId }, { retryLimit: 2 });
 }
 
 // Mirror of web/lib/queue.ts's enqueueBootstrapDivision. The web admin
@@ -876,6 +863,14 @@ export async function enqueueDmPanelBlast(): Promise<void> {
   await boss.send("dm-panel.blast", {}, { retryLimit: 2 });
 }
 
+// Enqueued by web/lib/end-season.ts (its own mirror) right after a season
+// ends, so every player's DM panel gets a one-time final edit instead of
+// freezing on stale "Finish all your games by <date> (N days ago)" text.
+export async function enqueueDmPanelFinalize(job: { seasonLabel: string; standings: SeasonFinalStanding[] }): Promise<void> {
+  if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
+  await boss.send("dm-panel.finalize", job, { retryLimit: 3, retryBackoff: true });
+}
+
 // Division-complete → check for boundary ties owing a shootout. Cheap guard: only
 // enqueue once the division is actually done, so mid-season confirms don't spawn
 // work. Fire-and-forget from the confirm path; the worker re-checks + dedups.
@@ -893,11 +888,6 @@ export async function enqueueAnnounceResult(pairingId: string): Promise<void> {
   // drop). Exponential backoff means a long outage costs very few re-pulls,
   // not constant churn; devops gets pinged so it's fixed fast either way.
   await boss.send("notify.announce-result", { pairingId }, { retryLimit: 30, retryBackoff: true });
-}
-
-export async function enqueueReportPostPending(pairingId: string): Promise<void> {
-  if (!boss) throw new Error("Queue not initialized — initQueue() must run first");
-  await boss.send("report.post-pending", { pairingId }, { retryLimit: 2 });
 }
 
 export async function enqueueReportAutoConfirm(pairingId: string): Promise<void> {
@@ -1067,7 +1057,7 @@ export async function renderDivisionWelcome(
   const deg = lockedCount > 0 && N > 0 ? Math.round((2 * lockedCount) / N) : null;
   const assignedSubset = deg != null && deg < N - 1;
   const playBullet = assignedSubset
-    ? `- You play **${deg} other people** in this division, 2 games each. The bot DMs you your matchups. Need a reminder? Click **Who do I play?** at the bottom of this channel.`
+    ? `- You play **${deg} ${deg === 1 ? "other person" : "other people"}** in this division, 2 games each. The bot DMs you your matchups. Need a reminder? Click **Who do I play?** at the bottom of this channel.`
     : `- Play **every other person** in this list once - 2 games each (**${N - 1} matchups**, ${rrTotal} total in this division).`;
   // Promotion / relegation line for THIS division: its own counts, with the
   // ceiling (first division of the season) and floor (last) suppressed so the
@@ -1118,8 +1108,8 @@ export async function renderDivisionWelcome(
     ``,
     `**How it works**`,
     playBullet,
-    `- To play, click **Start a match** at the bottom of this channel and pick your opponent. The bot facilitates the pick/ban phase and records each game.`,
-    `- Each matchup is **2 games**. The deck/stake combo does not repeat within a matchup. The **winner records how many lives they had left** after each game. Lives are used for tiebreaks at the end of the season.`,
+    `- To play, click **Start a match** at the bottom of this channel and pick your opponent. The bot runs the bans and picks and records each game.`,
+    `- Each match is **2 games**. The deck/stake combo does not repeat within a match. The **winner records how many lives they had left** after each game. Lives are used for tiebreaks at the end of the season.`,
     ...(moveBullet ? [moveBullet] : []),
     `- **Ties:** if two players are tied, we encourage them to play one extra game (a **shootout**) to decide it. If no shootout is played, or more than two players are tied, **net lives** decide who promotes or relegates. Net lives = the lives you had left in your wins, minus the lives your opponents had left in your losses.`,
     `- **Scheduling is on you.** Message each opponent here or by DM and agree on a time. Use **Schedule with Hammertime** below (<https://hammertime.cyou>) to post a time that shows correctly in everyone's time zone. Nobody will chase you down.`,
@@ -1326,6 +1316,13 @@ async function bootstrapDivision({ divisionId, guildId }: BootstrapDivisionJob):
   );
 }
 
+// One wording for "a season just went live", shared by this season-start
+// announcement and match-sweep.ts's scheduled-start announcement (B19 --
+// those two paths used to each write their own, slightly different text).
+export function buildSeasonLiveAnnouncement(seasonLabel: string): string {
+  return `🃏 **${seasonLabel}** is live! Your matchups are in your **DMs**; if you need a reminder, click **Who do I play?** under the quick actions in your division channel. Good luck.`;
+}
+
 // Post the "Season N is live" announcement (pinging the League Player role) —
 // but only once every division with members has its channel + role, i.e. all
 // role assignments are done. Claimed atomically via Season.startAnnouncedAt so
@@ -1384,7 +1381,7 @@ async function announceSeasonStartIfComplete(seasonId: string): Promise<void> {
   const client = tryGetDiscordClient();
   if (!client) return;
   // Ping-free: no more @everyone-go-play. The matchups went out as DMs.
-  const content = `🃏 **${formatSeasonLabel(season)}** is live! Your matchups are in your **DMs**; if you need a reminder, click **Who do I play?** under the quick actions in your division channel. Good luck.`;
+  const content = buildSeasonLiveAnnouncement(formatSeasonLabel(season));
   try {
     const channel = await client.channels.fetch(channelId);
     if (channel && channel.isTextBased() && "send" in channel) {
@@ -1454,7 +1451,7 @@ async function queueSeasonOnboardingDms(seasonId: string): Promise<void> {
         `🎴 **Welcome to ${label}!**\n` +
         `You're in **${div.name}**.${div.discordChannelId ? ` Head to your division channel: <#${div.discordChannelId}>.` : ""}\n\n` +
         `**Your matchups this season:**\n${oppLine}\n\n` +
-        `Play each **2 games** — click **Start a match** under the quick actions at the bottom of your division channel and the bot facilitates the pick/ban and records each game. ` +
+        `Play each **2 games** — click **Start a match** under the quick actions at the bottom of your division channel and the bot runs the bans and picks and records each game. ` +
         `**My standings** and **Help** sit right next to it. Good luck!`;
       await enqueueDm({
         discordId: m.player.discordId,

@@ -224,7 +224,7 @@ export const challenge: SlashCommand = {
       data: { threadId },
     });
 
-    const { embeds, components } = renderMatch(updatedSession, me, opp);
+    const { embeds, components } = renderMatch(updatedSession, me, opp, { expiryMinutes: settings.matchInviteExpiryMinutes });
     try {
       const thread = await interaction.client.channels.fetch(threadId);
       if (thread && thread.type === ChannelType.PrivateThread) {

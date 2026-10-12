@@ -61,6 +61,12 @@ describe("confirmedGameLine", () => {
     ).toBe("<:deck_red:1><:stake_gold:2> 1. Red Deck / Gold - **Alice** (3 lives left)");
   });
 
+  it("singularises '1 life left', not '1 lives left' (B06)", () => {
+    expect(confirmedGameLine(game({ num: 1, winnerName: "Alice", winnerLives: 1 }))).toBe(
+      "1. Red Deck / Gold - **Alice** (1 life left)",
+    );
+  });
+
   it("omits the icon prefix when no emoji is uploaded", () => {
     expect(confirmedGameLine(game({ num: 2, winnerName: "Bob" }))).toBe("2. Red Deck / Gold - **Bob**");
   });
@@ -109,8 +115,12 @@ describe("confirmedGamesLines", () => {
 });
 
 describe("confirmedFooterLine", () => {
-  it("renders the match id as Discord small text", () => {
-    expect(confirmedFooterLine("abc123")).toBe("-# Match abc123");
+  it("renders a short uppercased match ref as Discord small text, not the full id (B09)", () => {
+    expect(confirmedFooterLine("abc123")).toBe("-# Match ref ABC123");
+  });
+
+  it("takes just the last 6 characters of a full-length cuid", () => {
+    expect(confirmedFooterLine("cmg3k7x2q000dp92q9rxg53qv")).toBe("-# Match ref XG53QV");
   });
 });
 
@@ -131,7 +141,7 @@ describe("buildConfirmedResultBlocks", () => {
     expect(blocks.metaLine).toBe("### Season 4 - Rare 2");
     expect(blocks.headerLine).toBe("## [**Alice beats Bob** 2-0](https://www.balatroleague.com/divisions/d1)");
     expect(blocks.gamesLine).toBeNull();
-    expect(blocks.footerLine).toBe("-# Match match1");
+    expect(blocks.footerLine).toBe("-# Match ref MATCH1");
   });
 
   it("appends the forfeit wording under the header on a DQ win", () => {

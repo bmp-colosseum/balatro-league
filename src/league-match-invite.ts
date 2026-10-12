@@ -99,7 +99,7 @@ export async function createLeagueMatchInvite(opts: {
         })) ?? { scheduleLocked: false };
         if (scheduleLocked) {
           return {
-            error: `${sanitizeName(opp.displayName)} isn't on your schedule this season — you only play your assigned matchups. If this should be a match, ask an admin.`,
+            error: `${sanitizeName(opp.displayName)} isn't on your schedule this season — you only play your assigned matchups. If this should be a match, ask a helper.`,
           };
         }
       }
@@ -135,7 +135,7 @@ export async function createLeagueMatchInvite(opts: {
       await bootstrapPresetsAndPointers();
       const preset = await presetForSeason(season.id);
       if (!preset || preset.decks.length === 0 || preset.stakes.length === 0) {
-        return { error: `This season's match config preset is empty — ask an admin to set one up.` };
+        return { error: `This season's match config preset is empty — ask a helper to set one up.` };
       }
 
       const settings = await getLeagueSettingsForSeason(season.id);
@@ -209,7 +209,7 @@ export async function createLeagueMatchInvite(opts: {
     data: { threadId },
   });
 
-  const { embeds, components, content } = renderMatch(updatedSession, me, opp);
+  const { embeds, components, content } = renderMatch(updatedSession, me, opp, { expiryMinutes });
   let inviteUrl: string | null = null;
   try {
     const thread = await client.channels.fetch(threadId);

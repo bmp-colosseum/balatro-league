@@ -244,8 +244,11 @@ export async function disputeSet(
       disputeProposedGamesWonA: opts.proposedGamesWonA ?? null,
       disputeProposedGamesWonB: opts.proposedGamesWonB ?? null,
       disputeReason: opts.reason ?? null,
-      // Re-disputing should re-spawn a thread (the previous one may be
-      // resolved/archived). Clear the id so spawnDisputeThread acts.
+      // Clear any previous dispute-thread id (the previous one may be
+      // resolved/archived) -- this function has no live caller since the
+      // Discord report Confirm/Dispute flow was removed (see B20 in
+      // .claude/knowledge/bot-ux/01-findings.md); kept only as a possible
+      // admin-web resolution path if one is wired up later.
       disputeThreadId: null,
     },
   });

@@ -9,14 +9,11 @@ import {
   type ChatInputCommandInteraction,
   type ModalSubmitInteraction,
 } from "discord.js";
-import { enqueueAnnounceResult } from "../queue.js";
 import { CANONICAL_DECKS, CANONICAL_STAKES } from "../balatro-info.js";
 import { prisma } from "../db.js";
 import { getOrCreatePlayer, guildDisplayName } from "../players.js";
-import { buildReportContainer } from "../report-flow.js";
 import { buildProblemTicketIssue, isReportProblemAction } from "../report-problem-core.js";
-import { confirmSet, reportSet } from "../reporting.js";
-import { recomputeDivisionStandings } from "../standings-cache.js";
+import { reportSet } from "../reporting.js";
 import { openSupportTicket } from "./support.js";
 import type { ButtonHandler, ModalHandler, SlashCommand } from "./types.js";
 
@@ -100,85 +97,50 @@ export const report: SlashCommand = {
     // window. The announce post itself carries the "Report a problem" button
     // if something's wrong.
     await interaction.editReply(
-      `✅ Recorded. It's posted in #results — if anything's wrong, press **Report a problem** on that post (or run /support).`,
+      `✅ Recorded. It's posted in #results — if anything's wrong, press **Report a problem** on that post.`,
     );
   },
 };
 
-// Button handler: customIds are "report:confirm:<pairingId>" (legacy —
-// backward compat for any already-posted pending-report embed) or
-// "report:problem:<pairingId>" / "report:dispute:<pairingId>" (the latter
-// is the pre-existing customId from already-posted result announcements;
-// both open the same "Report a problem" modal — there's no live path left
-// that creates a new dispute).
+// Button handler: customIds are "report:problem:<pairingId>" (current) or
+// "report:dispute:<pairingId>" (the pre-existing customId from
+// already-posted result announcements before the wording changed) — both
+// open the same "Report a problem" modal. There's no live path left that
+// creates a fresh Confirm/Dispute pending-report embed (see B20 in
+// .claude/knowledge/bot-ux/01-findings.md) — a "report:confirm:" press on
+// an old leftover message now just falls through to the broken-button reply.
 export const reportButtons: ButtonHandler = {
   prefix: "report:",
   async execute(interaction: ButtonInteraction) {
     const parts = interaction.customId.split(":");
     const action = parts[1];
     const pairingId = parts[2];
-    if (!pairingId || (action !== "confirm" && !isReportProblemAction(action ?? ""))) {
+    if (!pairingId || !isReportProblemAction(action ?? "")) {
       await interaction.reply({ content: "This button looks broken — refresh Discord and try again.", flags: MessageFlags.Ephemeral });
       return;
     }
 
-    if (isReportProblemAction(action!)) {
-      // Only the two players in this match can flag it — keeps the ticket
-      // queue relevant instead of randoms opening tickets about others' matches.
-      const subject = await prisma.match.findUnique({
-        where: { id: pairingId },
-        include: { playerA: { select: { discordId: true } }, playerB: { select: { discordId: true } } },
-      });
-      if (!subject) {
-        await interaction.reply({ content: "This match isn't on record anymore.", flags: MessageFlags.Ephemeral });
-        return;
-      }
-      if (
-        interaction.user.id !== subject.playerA.discordId &&
-        interaction.user.id !== subject.playerB.discordId
-      ) {
-        await interaction.reply({
-          content: "Only the two players in this match can report a problem with it.",
-          flags: MessageFlags.Ephemeral,
-        });
-        return;
-      }
-      await interaction.showModal(buildReportProblemModal(pairingId));
-      return;
-    }
-
-    const actor = await getOrCreatePlayer(interaction.user, guildDisplayName(interaction));
-    const r = await confirmSet(pairingId, actor.id);
-    if (!r.ok) {
-      await interaction.reply({ content: r.reason, flags: MessageFlags.Ephemeral });
-      return;
-    }
-
-    const pairing = await prisma.match.findUnique({
+    // Only the two players in this match can flag it — keeps the ticket
+    // queue relevant instead of randoms opening tickets about others' matches.
+    const subject = await prisma.match.findUnique({
       where: { id: pairingId },
-      include: { playerA: true, playerB: true, division: true },
+      include: { playerA: { select: { discordId: true } }, playerB: { select: { discordId: true } } },
     });
-    if (!pairing) return;
-
-    const reporterIsA = pairing.reporterId === pairing.playerAId;
-    const reporter = reporterIsA ? pairing.playerA : pairing.playerB;
-    const opponent = reporterIsA ? pairing.playerB : pairing.playerA;
-
-    // confirmSet already wrote status=CONFIRMED + recompute. Fire the
-    // announce here so the results-channel post + standings page
-    // align. Edit the embed to drop the buttons and show outcome.
-    enqueueAnnounceResult(pairingId).catch(() => {});
-    recomputeDivisionStandings(pairing.divisionId).catch(() => {});
-    const container = buildReportContainer({
-      status: "CONFIRMED",
-      reporter,
-      opponent,
-      divisionName: pairing.division.name,
-      result: { gamesWonA: pairing.gamesWonA, gamesWonB: pairing.gamesWonB },
-      reporterIsA,
-      pairingId: pairing.id,
-    });
-    await interaction.update({ flags: MessageFlags.IsComponentsV2, components: [container] });
+    if (!subject) {
+      await interaction.reply({ content: "This match isn't on record anymore.", flags: MessageFlags.Ephemeral });
+      return;
+    }
+    if (
+      interaction.user.id !== subject.playerA.discordId &&
+      interaction.user.id !== subject.playerB.discordId
+    ) {
+      await interaction.reply({
+        content: "Only the two players in this match can report a problem with it.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+    await interaction.showModal(buildReportProblemModal(pairingId));
   },
 };
 

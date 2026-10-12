@@ -8,6 +8,7 @@ import {
   ONBOARDING_GUIDE_MAX_MESSAGE_LENGTH,
   type OnboardingGuideInput,
 } from "./onboarding-guide.js";
+import { tiesText, type SeasonTiebreak } from "./ties-text.js";
 
 function input(overrides: Partial<OnboardingGuideInput> = {}): OnboardingGuideInput {
   return {
@@ -15,6 +16,7 @@ function input(overrides: Partial<OnboardingGuideInput> = {}): OnboardingGuideIn
     seasonWindowLines: [],
     standingsUrl: "https://balatroleague.com/standings",
     supportChannelUrl: null,
+    tiebreak: "lives",
     ...overrides,
   };
 }
@@ -96,8 +98,8 @@ describe("buildOnboardingGuideMessages", () => {
     );
     expect(messages).toEqual([
       "# \u{1F0CF} Welcome to the Balatro League!\nYou're new this season, so here's how it all works, start to finish.\n\n**The league runs in seasons.** You're playing in **Season 7 -- Launch** right now. Started <t:1700000000:F>. Ends <t:1710000000:F> (<t:1710000000:R>). A season usually runs about two weeks. Signups for the next one open about a week in and stay open until that next season starts, so keep an eye on #league-info.\n\n**Tiers and divisions.** Each season is split into tiers by skill, highest to lowest: **Legendary**, **Rare**, **Uncommon**, **Common**. Each tier is split into divisions (small groups) so you're playing people around your level. Your division channel's name tells you which one you're in.\n\n**Your schedule.** You're placed in one division with a set of assigned opponents -- not the whole server. The bot DMs you your matchups directly. If you lose track, click **Who do I play?** in your division channel any time; that's your reminder.",
-      "**Playing a match.** When you're ready to play someone, click **Start a match** at the bottom of your division channel and pick your opponent. The bot runs the pick/ban phase for you. A match is **two games**, and the deck/stake combo never repeats within a matchup. After each game, the **winner records how many lives they had left** -- that number matters later for tiebreaks.\n\n**Results.** The bot records the result for you once the match is done -- nothing to report by hand.\n\n**Standings.** Full standings for every division: <https://balatroleague.com/standings>",
-      "**How the season ends.** The top finishers in each division move up a division and the bottom finishers move down. How many depends on the division -- your division channel and the standings show the exact number for yours.\n\n**Ties.** Two players tied: play one extra game (a shootout) if you can -- that decides it. If you can't, the player who won your match against each other 2-0 takes it; failing that, the lives from that match, then total net lives for the season. Three or more tied: total net lives decide. Net lives = the lives you had left in your wins, minus the lives your opponents had left when they beat you.\n\n**Scheduling.** It's on you to set up your matches. Message your opponent in your division channel or by DM and agree on a time. Use Hammertime (<https://hammertime.cyou>) to post a time that shows correctly for both of you, whatever time zone you're in -- there's a **Schedule with Hammertime** button in your division channel.\n\n**Need help?** Click **Help** at the bottom of your division channel, ask in the support channel (<https://discord.com/channels/111/222>), or DM **Chrono**, who runs the league. Good luck out there!",
+      "**Playing a match.** When you're ready to play someone, click **Start a match** at the bottom of your division channel and pick your opponent. The bot runs the bans and picks for you. A match is **two games**, and the deck/stake combo never repeats within a match. After each game, the **winner records how many lives they had left** -- that number matters later for tiebreaks.\n\n**Results.** The bot records the result for you once the match is done -- nothing to report by hand.\n\n**Standings.** Full standings for every division: <https://balatroleague.com/standings>",
+      `**How the season ends.** The top finishers in each division move up a division and the bottom finishers move down. How many depends on the division -- your division channel and the standings show the exact number for yours.\n\n**Ties.** ${tiesText("lives").rule}\n\n**Scheduling.** It's on you to set up your matches. Message your opponent in your division channel or by DM and agree on a time. Use Hammertime (<https://hammertime.cyou>) to post a time that shows correctly for both of you, whatever time zone you're in -- there's a **Schedule with Hammertime** button in your division channel.\n\n**Need help?** Click **Help** at the bottom of your division channel, ask in the support channel (<https://discord.com/channels/111/222>), or DM **Chrono**, who runs the league. Good luck out there!`,
     ]);
   });
 
@@ -109,6 +111,7 @@ describe("buildOnboardingGuideMessages", () => {
           seasonWindowLines: fc.array(fc.string({ maxLength: 120 }), { maxLength: 3 }),
           standingsUrl: fc.webUrl(),
           supportChannelUrl: fc.option(fc.webUrl(), { nil: null }),
+          tiebreak: fc.constantFrom<SeasonTiebreak>("chain", "lives"),
         }),
         (i) => {
           const messages = buildOnboardingGuideMessages(i);
@@ -173,6 +176,7 @@ describe("buildOnboardingGuideSections", () => {
           seasonWindowLines: fc.array(fc.string({ maxLength: 120 }), { maxLength: 3 }),
           standingsUrl: fc.webUrl(),
           supportChannelUrl: fc.option(fc.webUrl(), { nil: null }),
+          tiebreak: fc.constantFrom<SeasonTiebreak>("chain", "lives"),
         }),
         (i) => {
           const content = buildOnboardingGuideSections(i);
