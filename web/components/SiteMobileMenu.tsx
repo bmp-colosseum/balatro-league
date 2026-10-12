@@ -17,11 +17,15 @@ import Link from "next/link";
 import { Menu as MenuIcon, LogIn, LogOut } from "lucide-react";
 import { Menu, MenuTrigger, MenuContent, MenuItem, MenuLinkItem, MenuSeparator } from "@/components/ui/menu";
 import type { NavLink } from "@/lib/nav-links";
-import { TOUR_PUBLIC_URL } from "@/lib/tour-profile";
+import { productSwitcherRows } from "@/lib/product-switcher-core";
 
 export interface SiteMobileMenuProps {
   links: NavLink[];
   activePath: string;
+  /** The League's own active season label (components/SiteNav.tsx's
+   *  loadActiveSeasonSummary()) -- feeds the League/Tour switcher rows at the
+   *  top of this menu, same data components/ProductSwitcher.tsx uses. */
+  activeSeasonName: string | null;
   showingBmpMmr: boolean;
   showingUsernames: boolean;
   showingDiscordIds: boolean;
@@ -51,6 +55,7 @@ const rowClass = "min-h-11";
 export function SiteMobileMenu({
   links,
   activePath,
+  activeSeasonName,
   showingBmpMmr,
   showingUsernames,
   showingDiscordIds,
@@ -62,6 +67,7 @@ export function SiteMobileMenu({
   toggleShowUsernames,
   toggleShowDiscordIds,
 }: SiteMobileMenuProps) {
+  const switcherRows = productSwitcherRows(activeSeasonName);
   return (
     <Menu>
       <MenuTrigger className={triggerClass}>
@@ -69,16 +75,21 @@ export function SiteMobileMenu({
         <span className="text-sm">Menu</span>
       </MenuTrigger>
       <MenuContent align="end">
-        {/* The league's sibling site -- same URL the Tour's own product
-            switcher uses to link back (lib/tour-profile.ts). A new tab since
-            it's a different site entirely, not a page within this one. */}
-        <MenuLinkItem
-          closeOnClick
-          className={rowClass}
-          render={<a href={TOUR_PUBLIC_URL} target="_blank" rel="noopener noreferrer" />}
-        >
-          Team Tour
-        </MenuLinkItem>
+        {/* League/Tour switcher -- "the first thing in Menu" per
+            .claude/knowledge/ux-cohesion/01-findings.md section b. A real
+            cross-site navigation (two separate Next.js apps on two
+            subdomains), so plain <a>s -- same rows components/ProductSwitcher.tsx
+            renders on desktop, from the same lib/product-switcher-core.ts data. */}
+        {switcherRows.map((row) => (
+          <MenuLinkItem key={row.key} className={rowClass} closeOnClick render={<a href={row.href} />}>
+            <span className="flex min-w-0 flex-col">
+              <span style={{ fontWeight: row.current ? 700 : 400 }}>{row.label}</span>
+              <span className="muted truncate" style={{ fontSize: 12 }}>
+                {row.sub}
+              </span>
+            </span>
+          </MenuLinkItem>
+        ))}
         <MenuSeparator />
         {links.map((link) => {
           const isActive = link.href === "/admin" ? activePath.startsWith("/admin") : link.href === activePath;

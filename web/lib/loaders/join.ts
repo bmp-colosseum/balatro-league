@@ -7,6 +7,7 @@
 import { auth } from "@/auth";
 import { isAdminUser } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
+import { loadDiscordInviteUrl } from "@/lib/loaders/discord-invite";
 
 export interface JoinPageData {
   discordInviteUrl: string | null;
@@ -30,11 +31,8 @@ export async function loadJoinPageData(): Promise<JoinPageData> {
   const viewerDiscordId =
     (session?.user as { discordId?: string } | undefined)?.discordId ?? null;
 
-  const [inviteRow, round, interest, mySignup] = await Promise.all([
-    prisma.leagueConfig.findUnique({
-      where: { key: "discord_server_invite_url" },
-      select: { value: true },
-    }),
+  const [discordInviteUrl, round, interest, mySignup] = await Promise.all([
+    loadDiscordInviteUrl(),
     prisma.signupRound.findFirst({
       where: { status: "OPEN" },
       orderBy: { openedAt: "desc" },
@@ -79,7 +77,7 @@ export async function loadJoinPageData(): Promise<JoinPageData> {
   const viewerIsAdmin = viewerDiscordId ? await isAdminUser() : false;
 
   return {
-    discordInviteUrl: inviteRow?.value ?? null,
+    discordInviteUrl,
     openRound: round
       ? { id: round.id, name: round.name, seasonLabel, signupCount: round.signups.length }
       : null,
