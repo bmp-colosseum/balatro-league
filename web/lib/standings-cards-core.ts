@@ -122,22 +122,21 @@ export function groupTiebreakNotes(rows: readonly TiebreakNoteRow[]): TiebreakNo
   return groups;
 }
 
-// "Rare 2 - leader Birb 9 pts - 4/10 played" (or "Rare 2 - none played"
-// before anything's been played) -- the phone-collapsed one-line summary for
-// a division that isn't the viewer's own (see app/standings/page.tsx). Pure
-// string composition from already-derived plain values; the caller decides
-// who the "leader" is (rows[0] after sorting/ranking) and passes its name +
-// points through.
+// "Birb leads . 2/10" (or "none played" before anything's been played) --
+// the faint meta line next to the phone-collapsed division summary's own
+// tier-coloured name (see components/CollapsibleDivision.tsx,
+// app/standings/page.tsx). The division name used to be baked into this
+// same string; it now renders as its own element so it can carry the tier
+// colour, so this only returns the leader/progress half. Pure string
+// composition from already-derived plain values; the caller decides who the
+// "leader" is (rows[0] after sorting/ranking) and passes its name through.
 export function divisionSummaryLine(input: {
-  divisionName: string;
   leaderName?: string;
-  leaderPoints?: number;
   playedMatches: number;
   expectedMatches: number;
 }): string {
   if (input.playedMatches === 0 || !input.leaderName) {
-    return `${input.divisionName} - none played`;
+    return "none played";
   }
-  const pts = input.leaderPoints ?? 0;
-  return `${input.divisionName} - leader ${input.leaderName} ${pts} ${pts === 1 ? "pt" : "pts"} - ${input.playedMatches}/${input.expectedMatches} played`;
+  return `${input.leaderName} leads . ${input.playedMatches}/${input.expectedMatches}`;
 }

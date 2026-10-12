@@ -85,6 +85,7 @@ export default async function JoinPage({
               className="primary-btn"
               style={{
                 display: "inline-block",
+                marginTop: 10,
                 background: "var(--accent-2)",
                 color: "white",
                 padding: "8px 16px",
@@ -195,16 +196,15 @@ export default async function JoinPage({
           </>
         )}
 
+        {/* Cut to one line + the link -- this used to repeat four facts the
+            how-it-works page already covers in its own sections (signup,
+            placement, matches, promotion/relegation), so a first-timer saw
+            the same copy twice within one click. */}
         <div id="how-it-works" className="card muted" style={{ fontSize: 13 }}>
-          <strong>How it works</strong>
-          <ul style={{ marginTop: 6 }}>
-            <li>Sign up and wait for the season to start.</li>
-            <li>You&apos;re placed in a division and get a Discord channel for it.</li>
-            <li>Play 2 games against each of your assigned opponents (top divisions play everyone; most play 4 others). You get about {playWindowLabel} to finish.</li>
-            <li>Finish near the top to move up a division next season, near the bottom to move down.</li>
-          </ul>
-          <p style={{ marginTop: 8 }}>
-            <Link href="/how-it-works">Read the full how-it-works page</Link> for the complete rundown.
+          <p style={{ margin: 0 }}>
+            Sign up, get placed in a division, and play your assigned opponents over about{" "}
+            {playWindowLabel}. <Link href="/how-it-works">Read the full how-it-works page</Link> for the complete
+            rundown.
           </p>
         </div>
       </main>

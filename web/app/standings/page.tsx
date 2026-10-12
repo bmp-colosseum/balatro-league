@@ -236,6 +236,18 @@ export default async function StandingsPage() {
                   <span><span style={{ color: "var(--admin)" }}>🔒↓</span> locked — guaranteed down</span>
                   <span><span style={{ color: "var(--accent)" }}>⚔</span> tied — needs a shootout (a 1-game tiebreaker)</span>
                   <span><s>name</s> dropped out</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                    <span style={{ display: "inline-block", width: 10, height: 14, borderRadius: 3, background: "var(--success)" }} />
+                    <span style={{ display: "inline-block", width: 10, height: 14, borderRadius: 3, background: "var(--muted)" }} />
+                    <span style={{ display: "inline-block", width: 10, height: 14, borderRadius: 3, background: "var(--danger)" }} />
+                    form (win / draw / loss)
+                  </span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: 12, height: 12, fill: "var(--success)" }}>
+                      <path d="M12 21s-6.7-4.35-9.33-8.36C.37 9.77 1.4 6 5 6c2.06 0 3.46 1.24 4.2 2.3C9.94 7.24 11.34 6 13.4 6c3.6 0 4.63 3.77 2.33 6.64C18.7 16.65 12 21 12 21z" />
+                    </svg>
+                    net lives (signed, +green/-red)
+                  </span>
                 </div>
               </details>
             </div>
@@ -379,15 +391,19 @@ export default async function StandingsPage() {
                         isViewerDivision || (data.viewerPlayerId === null && divIndex === 0);
                       const leader = rows[0];
                       const summaryText = divisionSummaryLine({
-                        divisionName: div.name,
                         leaderName: leader?.player.displayName,
-                        leaderPoints: leader?.points,
                         playedMatches,
                         expectedMatches,
                       });
                       return (
                         <div key={div.id} className="card">
-                        <CollapsibleDivision defaultOpenOnPhone={isOpenByDefault} summary={summaryText}>
+                        <CollapsibleDivision
+                          defaultOpenOnPhone={isOpenByDefault}
+                          divisionName={div.name}
+                          tierRarity={rarityIndex(tier.position)}
+                          isOwnDivision={isViewerDivision}
+                          summary={summaryText}
+                        >
                           {/* `card-header` is a no-op under v1 (no bare
                               `.card-header` rule outside a responsive-table
                               cell -- see globals.css); under v2 it becomes

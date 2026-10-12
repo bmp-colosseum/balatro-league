@@ -35,3 +35,33 @@ export function seasonWindowLinesPlain(opts: SeasonWindowInput): string[] {
   if (scheduledEndAt) lines.push(`Ends around ${formatDate(scheduledEndAt)}`);
   return lines;
 }
+
+// The ISO date(s) baked (as a UTC-formatted fallback) into seasonWindowLinesPlain's
+// output, in the SAME order the dates appear across those lines -- lets a client
+// component (SeasonDateSync) find-and-replace the fallback text for the viewer's
+// own timezone after hydration, same as /standings' SeasonWindow (LocalDateTime),
+// instead of leaving the guide pinned to a UTC date that can read a day off from
+// what /standings shows (see .claude/knowledge/ux-round3/01-findings.md finding 7).
+// Returns [] whenever seasonWindowLinesPlain would have embedded no date at all
+// (the "Started recently" fallback).
+export interface SeasonWindowDate {
+  iso: string;
+  // Exact substring formatDate() produced for this date -- what's actually
+  // sitting in the rendered guide body text today, so the client pass can
+  // find it verbatim.
+  fallback: string;
+}
+
+export function seasonWindowDates(opts: SeasonWindowInput): SeasonWindowDate[] {
+  const { scheduledStartAt, startedAt, scheduledEndAt, isActive } = opts;
+  const dates: SeasonWindowDate[] = [];
+
+  if (!isActive) {
+    if (scheduledStartAt) dates.push({ iso: scheduledStartAt.toISOString(), fallback: formatDate(scheduledStartAt) });
+    return dates;
+  }
+
+  if (startedAt) dates.push({ iso: startedAt.toISOString(), fallback: formatDate(startedAt) });
+  if (scheduledEndAt) dates.push({ iso: scheduledEndAt.toISOString(), fallback: formatDate(scheduledEndAt) });
+  return dates;
+}

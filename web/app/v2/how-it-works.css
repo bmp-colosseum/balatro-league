@@ -40,3 +40,21 @@ html[data-ui="v2"] .howto-section a { overflow-wrap: anywhere; }
 html[data-ui="v2"] .howto-section a {
   color: var(--gold);
 }
+
+/* Closing CTA button ("Ready?" section, app/how-it-works/page.tsx) -- the
+   v1 inline style gives a flat gold rectangle everywhere; under v2 it
+   becomes a real MASTER.md button (display face, hard shadow, press). */
+html[data-ui="v2"] .howto-cta {
+  background: var(--gold) !important;
+  color: var(--gold-ink) !important;
+  font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
+  font-weight: 400;
+  font-size: 15px;
+  border-radius: 8px;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.45);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+html[data-ui="v2"] .howto-cta:active {
+  transform: translateY(3px);
+  box-shadow: none;
+}

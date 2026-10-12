@@ -420,7 +420,6 @@ form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
   width: 100%;
   text-align: left;
 }
-.division-summary-hide { display: none; }
 /* .division-name used to carry its font-size as an inline style (18px);
    moved to a plain class so the v2 override below (22px) doesn't need
    !important to beat it. Same computed value, so v1 is unaffected. */
@@ -443,7 +442,14 @@ html[data-ui="v2"] {
   --panel-edge: #0d1a1a;
   --paper: #f3eee2;
   --paper-dim: #b8c2bf;
-  --paper-faint: #7f8f8c;
+  /* Lifted from #7f8f8c -- measured 3.63:1 on panel and 3.05:1 on panel-2,
+     both under MASTER.md's own 4.5:1 floor for every "None played",
+     subtitle, table header and tier-chip count that uses this pair (see
+     .claude/knowledge/ux-round3/01-findings.md finding 8). #93a3a0 clears
+     4.5:1 on panel (4.67:1 measured); panel-2 improves to 3.92:1 but still
+     doesn't clear 4.5 there -- flagging rather than inventing a second,
+     panel-2-specific token in the same pass. */
+  --paper-faint: #93a3a0;
   --gold: #f1b53a;
   --gold-ink: #2a1d05;
   --common: #1e9bff;
@@ -907,30 +913,95 @@ html[data-ui="v2"] .progress-v2 {
    starts collapsed to the one-line summary button (components/
    CollapsibleDivision.tsx owns the open state; data-ready="0" is the
    server-rendered moment before it mounts). Desktop and v1 always show the
-   full body: no rule below applies there. */
+   full body: no rule below applies there.
+   The one button plays two roles via data-open, so SSR/no-JS never sees a
+   layout shift (both inner spans always render):
+     closed -> a panel-2 row: tier-coloured division name, a faint
+               leader/progress line, a chevron -- NOT the bare default
+               <button> styling (gold fill, hard shadow, Jersey10), which is
+               what made every collapsed division read as a primary CTA.
+     open   -> a small "Hide" chip overlapping the card header's top-right
+               corner, instead of repeating a second full-width band. */
 @media (max-width: 640px) {
+  html[data-ui="v2"] .division-details-v2 {
+    position: relative;
+  }
   html[data-ui="v2"] .division-details-v2[data-open="0"] > .division-body-v2,
   html[data-ui="v2"] .division-details-v2[data-ready="0"][data-phone-default="closed"] > .division-body-v2 {
     display: none;
   }
+  /* Override the generic `button` rule's gold fill/shadow/display-font --
+     this is a panel-2 row or a quiet chip, not a primary action. */
   html[data-ui="v2"] .division-details-v2 > .division-summary-v2 {
     display: block;
     cursor: pointer;
+    background: var(--panel-2);
+    color: var(--text);
+    border: none;
+    box-shadow: none;
+    font-family: inherit;
+    font-weight: inherit;
+    border-radius: var(--radius);
+  }
+  html[data-ui="v2"] .division-details-v2[data-open="0"] > .division-summary-v2 {
     min-height: 44px;
     padding: 10px 14px;
   }
-  /* Expanded: the button stays as the tap target to collapse again, shown
-     as a small "Hide" row instead of repeating the header below it. */
+  html[data-ui="v2"] .division-details-v2[data-open="0"] > .division-summary-v2 > .division-summary-expanded {
+    display: none;
+  }
+  html[data-ui="v2"] .division-summary-collapsed {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  html[data-ui="v2"] .division-summary-name {
+    flex-shrink: 0;
+    font-size: 15px;
+    color: var(--paper);
+  }
+  html[data-ui="v2"] .division-summary-name[data-rarity="0"] { color: var(--legendary); }
+  html[data-ui="v2"] .division-summary-name[data-rarity="1"] { color: var(--rare); }
+  html[data-ui="v2"] .division-summary-name[data-rarity="2"] { color: var(--uncommon); }
+  html[data-ui="v2"] .division-summary-name[data-rarity="3"] { color: var(--common); }
+  /* The viewer's own division -- gold instead of its tier colour, same
+     "gold = you" convention as the rest of v2 (YourDivisionCard, you-badge). */
+  html[data-ui="v2"] .division-summary-name[data-own="1"] { color: var(--gold); }
+  html[data-ui="v2"] .division-summary-meta {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--paper-faint);
+  }
+  html[data-ui="v2"] .division-summary-chevron {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    color: var(--paper-faint);
+  }
+  /* Expanded: a small chip overlapping the card header's corner, taking the
+     place the full-width "HIDE" band used to own. */
   html[data-ui="v2"] .division-details-v2[data-open="1"] > .division-summary-v2 {
-    padding: 8px 14px;
-    text-align: right;
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    z-index: 1;
+    width: auto;
+    min-height: 0;
+    padding: 3px 10px;
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     color: var(--paper-faint);
+    background: var(--panel-edge);
+    border-radius: 999px;
   }
-  html[data-ui="v2"] .division-details-v2[data-open="1"] > .division-summary-v2 > .division-summary-text { display: none; }
-  html[data-ui="v2"] .division-details-v2[data-open="1"] > .division-summary-v2 > .division-summary-hide { display: inline; }
+  html[data-ui="v2"] .division-details-v2[data-open="1"] > .division-summary-v2 > .division-summary-collapsed {
+    display: none;
+  }
 }
 
 /* Desktop (>=1100px): cap the tier-section grid at exactly 2 columns with a

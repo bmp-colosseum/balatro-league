@@ -49,10 +49,17 @@ function CommandDialog({
 }) {
   return (
     <Dialog {...props}>
-      <DialogHeader className="sr-only">
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{description}</DialogDescription>
-      </DialogHeader>
+      {/* DialogHeader used to be a sibling of DialogContent here, i.e. a
+          direct child of the Dialog Root -- which only gates DialogContent's
+          own Portal on open state, not plain children. That left this
+          "sr-only" <h2> permanently in the DOM (CommandPalette mounts once
+          in the root layout and never unmounts), so every page's heading
+          outline carried a hidden "Jump to" heading even while the palette
+          was closed. Nesting it inside DialogContent ties its lifetime to
+          the dialog's open state like any other dialog content; render={<span
+          />} also drops the <h2> semantics entirely, since a floating
+          command palette doesn't need a heading level of its own -- just an
+          accessible name for the dialog. */}
       <DialogContent
         className={cn(
           "top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0",
@@ -60,6 +67,10 @@ function CommandDialog({
         )}
         showCloseButton={showCloseButton}
       >
+        <DialogHeader className="sr-only">
+          <DialogTitle render={<span />}>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
         {children}
       </DialogContent>
     </Dialog>

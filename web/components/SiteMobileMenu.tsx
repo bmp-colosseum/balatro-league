@@ -17,6 +17,7 @@ import Link from "next/link";
 import { Menu as MenuIcon, LogIn, LogOut } from "lucide-react";
 import { Menu, MenuTrigger, MenuContent, MenuItem, MenuLinkItem, MenuSeparator } from "@/components/ui/menu";
 import type { NavLink } from "@/lib/nav-links";
+import { TOUR_PUBLIC_URL } from "@/lib/tour-profile";
 
 export interface SiteMobileMenuProps {
   links: NavLink[];
@@ -68,6 +69,17 @@ export function SiteMobileMenu({
         <span className="text-sm">Menu</span>
       </MenuTrigger>
       <MenuContent align="end">
+        {/* The league's sibling site -- same URL the Tour's own product
+            switcher uses to link back (lib/tour-profile.ts). A new tab since
+            it's a different site entirely, not a page within this one. */}
+        <MenuLinkItem
+          closeOnClick
+          className={rowClass}
+          render={<a href={TOUR_PUBLIC_URL} target="_blank" rel="noopener noreferrer" />}
+        >
+          Team Tour
+        </MenuLinkItem>
+        <MenuSeparator />
         {links.map((link) => {
           const isActive = link.href === "/admin" ? activePath.startsWith("/admin") : link.href === activePath;
           return (

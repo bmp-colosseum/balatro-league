@@ -112,7 +112,7 @@ export function CommandPalette() {
   return (
     <CommandDialog open={open} onOpenChange={setOpen} title="Jump to" description="Search pages">
       <Command>
-        <CommandInput placeholder="Jump to a page…" />
+        <CommandInput placeholder="Jump to a player, division, or season..." />
         <CommandList>
           <CommandEmpty>No results.</CommandEmpty>
           <CommandGroup heading="Pages">

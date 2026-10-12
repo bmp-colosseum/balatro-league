@@ -19,6 +19,7 @@ import { CommandButton } from "@/components/CommandButton";
 import { Button } from "@/components/ui/button";
 import { SiteMobileMenu } from "@/components/SiteMobileMenu";
 import { PRIMARY_LINKS } from "@/lib/nav-links";
+import { TOUR_PUBLIC_URL } from "@/lib/tour-profile";
 
 export async function SiteNav({ activePath }: { activePath: string }) {
   const session = await auth();
@@ -121,6 +122,17 @@ export async function SiteNav({ activePath }: { activePath: string }) {
             ⚙️
           </summary>
           <div className="absolute right-0 top-[calc(100%+6px)] z-50 min-w-[220px] rounded-md border border-border bg-card p-2 shadow-lg">
+            {/* The league's sibling site -- same URL the Tour's own product
+                switcher uses to link back (lib/tour-profile.ts). New tab:
+                a different site, not a page within this one. */}
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-2 px-1 text-[13px] text-foreground"
+              render={<a href={TOUR_PUBLIC_URL} target="_blank" rel="noopener noreferrer" />}
+            >
+              Team Tour -&gt;
+            </Button>
+            <div className="my-1 border-t border-border" />
             <form action={toggleShowBmpMmr}>
               <input type="hidden" name="next" value={showingBmpMmr ? "0" : "1"} />
               <input type="hidden" name="returnTo" value={activePath || "/"} />

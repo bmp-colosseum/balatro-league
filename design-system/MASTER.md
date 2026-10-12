@@ -24,7 +24,7 @@ are the product.
 | --panel-edge | #0d1a1a | borders and the hard offset shadow |
 | --paper | #f3eee2 | primary text |
 | --paper-dim | #b8c2bf | secondary text |
-| --paper-faint | #7f8f8c | labels, notes, column headers |
+| --paper-faint | #93a3a0 | labels, notes, column headers |
 | --gold | #f1b53a | champion, promotion zone, focus ring, "you" badge |
 | --gold-ink | #2a1d05 | text on gold |
 | --common | #1e9bff | Common tier |
@@ -94,7 +94,7 @@ signature elements, so they read as rooms in one building:
 
 | | League | Team Tour |
 |---|---|---|
-| felt | green (#1b443f / #12302d) | burgundy (#4a1d24 / #2e1116) |
+| felt | green (#1b443f / #12302d) | navy (#1c2a4a / #111a30) |
 | semantic colour set | rarity colours for tiers (Common blue, Uncommon green, Rare red, Legendary purple) | team colours for teams; rarity colours only where a league rarity genuinely appears |
 | gold | champion, promotion, "you" | captain, pick'em leader, "your team" |
 | signature element | tier tabs, zone stripes, tiebreak notes | team cards with the team colour as the panel edge, matchup "vs" blocks, pick'em cards |

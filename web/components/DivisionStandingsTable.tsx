@@ -229,11 +229,18 @@ function TiebreakNoteLine({ r }: { r: StandingsTableRow }) {
 // Avatar slot: extras.avatarUrl when present (a later leaf fills it from
 // Discord), else the initials() fallback on a plain circle. Never renders a
 // broken <img> -- no avatarUrl at all means no <img> tag is emitted.
+//
+// loading="lazy" does double duty here: it defers rows below the fold (the
+// heaviest page on either site was 87 Discord avatars eagerly fetched at
+// once, see .claude/knowledge/ux-round3/01-findings.md), AND it skips
+// fetching entirely for a collapsed division's avatars -- a display:none
+// ancestor never has an intersecting layout box, so the browser's native
+// lazy-load never schedules the request at all until the division opens.
 export function CardAvatar({ displayName, avatarUrl }: { displayName: string; avatarUrl?: string | null }) {
   if (avatarUrl) {
     return (
       <span className="player-card-avatar">
-        <img src={avatarUrl} alt="" className="player-card-avatar-img" />
+        <img src={avatarUrl} alt="" loading="lazy" className="player-card-avatar-img" />
       </span>
     );
   }

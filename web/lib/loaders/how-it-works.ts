@@ -8,7 +8,7 @@
 import { prisma } from "@/lib/prisma";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { buildOnboardingGuideSections, type OnboardingGuideContent } from "@/lib/onboarding-guide";
-import { seasonWindowLinesPlain } from "@/lib/season-window-text";
+import { seasonWindowLinesPlain, seasonWindowDates, type SeasonWindowDate } from "@/lib/season-window-text";
 
 // Same convention as web/lib/report.ts / signup-discord.ts for building an
 // absolute site URL from inside the web app itself.
@@ -29,6 +29,12 @@ export interface HowItWorksPageData {
   // can link the support channel without parsing it back out of the guide's
   // rendered HTML.
   supportChannelUrl: string | null;
+  // The season start/end date(s) embedded (as UTC fallback text) in the
+  // "seasons" section's body -- fed to <SeasonDateSync> so the page can swap
+  // them for the viewer's local timezone after hydration, matching
+  // /standings. [] when the guide has no date to sync (no active season, or
+  // the "Started recently" no-date fallback).
+  seasonWindowDates: SeasonWindowDate[];
 }
 
 export async function loadHowItWorksPageData(): Promise<HowItWorksPageData> {
@@ -38,14 +44,16 @@ export async function loadHowItWorksPageData(): Promise<HowItWorksPageData> {
   });
 
   const seasonLabel = season ? formatSeasonLabel(season) : "the current season";
-  const seasonWindowLines = season
-    ? seasonWindowLinesPlain({
+  const seasonWindowInput = season
+    ? {
         scheduledStartAt: season.scheduledStartAt,
         startedAt: season.startedAt,
         scheduledEndAt: season.scheduledEndAt,
         isActive: true,
-      })
-    : [];
+      }
+    : null;
+  const seasonWindowLines = seasonWindowInput ? seasonWindowLinesPlain(seasonWindowInput) : [];
+  const seasonWindowDatesForSync = seasonWindowInput ? seasonWindowDates(seasonWindowInput) : [];
 
   const supportChannelRow = await prisma.leagueConfig.findUnique({
     where: { key: "support_channel_id" },
@@ -62,5 +70,5 @@ export async function loadHowItWorksPageData(): Promise<HowItWorksPageData> {
     supportChannelUrl,
   });
 
-  return { content, hasActiveSeason: !!season, supportChannelUrl };
+  return { content, hasActiveSeason: !!season, supportChannelUrl, seasonWindowDates: seasonWindowDatesForSync };
 }

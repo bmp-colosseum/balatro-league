@@ -175,49 +175,22 @@ describe("groupTiebreakNotes", () => {
 
 describe("divisionSummaryLine", () => {
   test("no matches played -> none played, regardless of leader", () => {
-    expect(
-      divisionSummaryLine({ divisionName: "Rare 2", playedMatches: 0, expectedMatches: 10 }),
-    ).toBe("Rare 2 - none played");
+    expect(divisionSummaryLine({ playedMatches: 0, expectedMatches: 10 })).toBe("none played");
   });
 
   test("no leader name available -> none played fallback", () => {
-    expect(
-      divisionSummaryLine({ divisionName: "Rare 2", playedMatches: 4, expectedMatches: 10 }),
-    ).toBe("Rare 2 - none played");
+    expect(divisionSummaryLine({ playedMatches: 4, expectedMatches: 10 })).toBe("none played");
   });
 
-  test("matches played with a leader -> full summary line", () => {
+  test("matches played with a leader -> leader + progress line", () => {
     expect(
-      divisionSummaryLine({
-        divisionName: "Rare 2",
-        leaderName: "Birb",
-        leaderPoints: 9,
-        playedMatches: 4,
-        expectedMatches: 10,
-      }),
-    ).toBe("Rare 2 - leader Birb 9 pts - 4/10 played");
+      divisionSummaryLine({ leaderName: "Birb", playedMatches: 4, expectedMatches: 10 }),
+    ).toBe("Birb leads . 4/10");
   });
 
-  test("leaderPoints missing defaults to 0", () => {
+  test("leader name with different progress counts", () => {
     expect(
-      divisionSummaryLine({
-        divisionName: "Common 1",
-        leaderName: "Zed",
-        playedMatches: 1,
-        expectedMatches: 6,
-      }),
-    ).toBe("Common 1 - leader Zed 0 pts - 1/6 played");
-  });
-
-  test("a single point reads pt, not pts", () => {
-    expect(
-      divisionSummaryLine({
-        divisionName: "Uncommon 4",
-        leaderName: "andrejweb3",
-        leaderPoints: 1,
-        playedMatches: 1,
-        expectedMatches: 14,
-      }),
-    ).toBe("Uncommon 4 - leader andrejweb3 1 pt - 1/14 played");
+      divisionSummaryLine({ leaderName: "Zed", playedMatches: 1, expectedMatches: 6 }),
+    ).toBe("Zed leads . 1/6");
   });
 });
