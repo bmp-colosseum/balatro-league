@@ -119,14 +119,6 @@ export async function enqueueMmrSnapshot(job: {
   });
 }
 
-// Web-side report just creates a PENDING Pairing; the bot owns the
-// public #results embed + the 2-min auto-confirm timer. These two
-// enqueues hand the rest of the flow off.
-export async function enqueueReportPostPending(pairingId: string): Promise<void> {
-  await ensureStarted();
-  await getBoss().send("report.post-pending", { pairingId }, { retryLimit: 2 });
-}
-
 // Trigger the bot to rebuild the pinned #league-info message. Mirror
 // of the bot-side enqueueLeagueInfoRefresh. Fire from any web action
 // that changes the "current state" reflected in the pinned content
@@ -173,13 +165,6 @@ export async function enqueueReportAutoConfirm(pairingId: string): Promise<void>
     { pairingId },
     { startAfter: settings.reportAutoConfirmSeconds, retryLimit: 2 },
   );
-}
-
-// Spawns the Discord helper-mediation thread for a freshly-disputed
-// match. Bot owns the worker (Discord client lives there); web enqueues.
-export async function enqueueDisputeSpawnThread(pairingId: string): Promise<void> {
-  await ensureStarted();
-  await getBoss().send("dispute.spawn-thread", { pairingId }, { retryLimit: 2 });
 }
 
 // End-of-season role cleanup — one job per (member, role) so a season
@@ -254,4 +239,25 @@ export async function enqueueOnboardingGuide(job: { playerIds: string[]; force?:
 export async function enqueueDmAttachmentBackfill(limit?: number): Promise<void> {
   await ensureStarted();
   await getBoss().send("dm-attachments.backfill", { limit }, { retryLimit: 1 });
+}
+
+// One row of a finalized season's placement -- mirrors
+// src/dm-panel.ts's SeasonFinalStanding shape (the job payload contract
+// between this enqueue and the bot's dm-panel.finalize worker).
+export interface SeasonFinalStanding {
+  playerId: string;
+  discordId: string;
+  divisionName: string;
+  rank: number;
+  totalInDivision: number;
+}
+
+// Finalize every player's DM panel for a season end-season.ts just ended --
+// the bot owns the live Discord edit (dm-panel.ts), this just hands off the
+// standings end-season.ts already computed for the rating math + the
+// promoted/relegated DMs, so the panel never just freezes on stale
+// "Finish all your games by <date> (N days ago)" text (B13).
+export async function enqueueDmPanelFinalize(job: { seasonLabel: string; standings: SeasonFinalStanding[] }): Promise<void> {
+  await ensureStarted();
+  await getBoss().send("dm-panel.finalize", job, { retryLimit: 3, retryBackoff: true });
 }

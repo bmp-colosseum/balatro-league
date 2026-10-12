@@ -37,7 +37,7 @@ export function changedScheduleText(
   const parts: string[] = [];
   if (removed.length > 0) {
     parts.push(
-      `Your match against ${names(removed)} is off -- ${removed.length === 1 ? "they left" : "they have left"} the division, so if you had a time arranged it no longer counts.`,
+      `Your match against ${names(removed)} is off -- ${removed.length === 1 ? "they left" : "they have left"} the division, so if you had a time arranged, you can drop that plan.`,
     );
   }
   if (added.length > 0) {

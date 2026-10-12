@@ -11,7 +11,7 @@ import {
   type ChatInputCommandInteraction,
 } from "discord.js";
 import type { SlashCommand } from "./types.js";
-import { WEB_HOST } from "../web-url.js";
+import { WEB_HOST, webUrl } from "../web-url.js";
 
 export const PLAYER_COMMANDS = [
   { cmd: "/standings", desc: "Current division standings" },
@@ -38,16 +38,31 @@ const ADMIN_COMMANDS = [
   { cmd: "/league unset-results-webhook", desc: "Stop using a webhook for results announces" },
 ];
 
-// The player command list embed — shared by /help and the division control-panel
-// "Help" button so both surfaces show the identical reference.
+// The player help embed — shared by /help and the division control-panel
+// "Help" button so both surfaces show the identical reference. Button-first:
+// every control it points at is one of the five buttons on the division
+// channel / DM panel, not a slash command a new player would have to learn
+// (the organiser's rule -- see B01 in .claude/knowledge/bot-ux/01-findings.md).
 export function buildPlayerHelpEmbed(): EmbedBuilder {
   return new EmbedBuilder()
-    .setTitle("🃏 League commands")
+    .setTitle("How to play")
     .setColor(0x5865f2)
     .setDescription(
-      PLAYER_COMMANDS.map((c) => `• \`${c.cmd}\` — ${c.desc}`).join("\n"),
-    )
-    .setFooter({ text: "League admins: run /admin-help for the admin/mod command list." });
+      [
+        "Everything you need is a button at the bottom of your division channel.",
+        "",
+        "**Who do I play?** shows your opponents and which matches are done.",
+        "**Start a match** picks an opponent and opens a private thread for the two of you. The bot runs the bans and picks and records the result.",
+        "**My standings** shows your rank, points and who is left to play.",
+        "**League standings** shows your whole division.",
+        "**Schedule with Hammertime** makes a time that shows correctly for everyone.",
+        "",
+        "Setting up a time is on you: message your opponent in your division channel or by DM.",
+        "Something wrong mid-match? Press **Call helper** in the match thread. Wrong result? Press **Report a problem** under the result post.",
+        "",
+        `Full rules: <${webUrl("how-it-works")}>`,
+      ].join("\n"),
+    );
 }
 
 export const help: SlashCommand = {

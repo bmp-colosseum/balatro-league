@@ -33,7 +33,7 @@ export async function ensureLeagueMatchesChannel(): Promise<string | null> {
   const category = await resolveConfiguredCategory(env.DISCORD_GUILD_ID, LeagueConfigKey.MatchesCategoryId, "🎴 Matches");
   const channel = await createGuildTextChannel(env.DISCORD_GUILD_ID, "league-matches", {
     parentId: category?.id,
-    topic: "League /start-match games spawn private threads here. Need a mod? Run /helper in your match.",
+    topic: "League /start-match games spawn private threads here. Need help mid-match? Run /helper (or press Call helper).",
   });
   if (!channel) {
     console.warn("[league-matches-channel] auto-create failed; match threads fall back to the current channel");

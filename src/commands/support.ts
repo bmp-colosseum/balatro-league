@@ -49,7 +49,7 @@ export async function openSupportTicket(
   const channel = await interaction.client.channels.fetch(supportChannelId).catch(() => null);
   if (!channel || channel.type !== ChannelType.GuildText) {
     await interaction.editReply(
-      "The configured support channel is missing or isn't a normal text channel — ask an admin to fix it on /admin/config.",
+      "The configured support channel is missing or isn't a normal text channel — ask a helper to fix it on /admin/config.",
     );
     return;
   }

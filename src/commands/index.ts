@@ -2,7 +2,6 @@
 import { admin } from "./admin.js";
 import { botStatus } from "./bot-status.js";
 import { challenge } from "./challenge.js";
-import { disputeResolveSelect, disputeThreadButtonHandler } from "./dispute-buttons.js";
 import { adminHelp, help } from "./help.js";
 import { helper } from "./helper.js";
 import { league } from "./league.js";
@@ -38,8 +37,8 @@ import type { ButtonHandler, ModalHandler, SelectMenuHandler, SlashCommand } fro
 // browser auto-detect) and shown to opponents in /schedule.
 export const slashCommands: SlashCommand[] = [help, adminHelp, helper, support, standings, schedule, status, profile, league, notify, startMatch, challenge, admin, random, pool, botStatus];
 
-export const buttonHandlers: ButtonHandler[] = [reportButtons, signupHandlers, signupAskButtonHandler, matchButtons, disputeThreadButtonHandler, supportButtons, queueButtons, leagueMatchesButtons, divisionControlsButtons, rosterButtons, randomButtons];
+export const buttonHandlers: ButtonHandler[] = [reportButtons, signupHandlers, signupAskButtonHandler, matchButtons, supportButtons, queueButtons, leagueMatchesButtons, divisionControlsButtons, rosterButtons, randomButtons];
 
-export const selectMenuHandlers: SelectMenuHandler[] = [matchSelectMenus, disputeResolveSelect, leagueMatchesPickSelect, leagueMatchesShootoutPickSelect];
+export const selectMenuHandlers: SelectMenuHandler[] = [matchSelectMenus, leagueMatchesPickSelect, leagueMatchesShootoutPickSelect];
 
 export const modalHandlers: ModalHandler[] = [reportProblemModal, callHelperModal];

@@ -11,7 +11,7 @@ import { prisma } from "./db.js";
 
 // The player-facing message shown when a banned player tries to sign up or play.
 export const BANNED_MESSAGE =
-  "You're banned from the league, so you can't sign up or play right now. If you think this is a mistake, reach out to a league moderator.";
+  "You're banned from the league, so you can't sign up or play right now. If you think this is a mistake, reach out to a helper.";
 
 interface BanFields {
   bannedAt: Date | null;

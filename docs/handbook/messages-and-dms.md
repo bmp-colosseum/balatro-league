@@ -25,6 +25,7 @@ list. `docs/arch/channel-registry.md` is a proposal, not the live list.
 | "Are you in?" ask, reminder, last call | DM | round opens; scheduled ticks | `askContent`, `src/signup/signup-reminders.ts` |
 | Roster check-in ("still playing?") | DM | admin enqueues `roster.checkin` | [src/checkin-message.ts](../../src/checkin-message.ts); sender `src/roster-checkin.ts` |
 | Match invite | private thread under `#league-matches` | Start a match | `renderMatch`, `src/match-render.ts`; posted by `src/league-match-invite.ts` |
+| Match invite expired (DM the inviter) / match cancelled (thread post + DM both players) | DM; thread | invite past `matchInviteExpiryMinutes`; idle 24h; paused 7d | `buildExpiredInviteDm` / `buildMatchCancelledNotice`, [src/match-sweep.ts](../../src/match-sweep.ts) |
 | Confirmed result + Report a problem | results channel or webhook | match CONFIRMED (`/report` and the web form record CONFIRMED immediately, no pending stage) | `buildConfirmedResultBlocks`; posted by [src/announce.ts](../../src/announce.ts); button wiring `src/report-problem-core.ts` |
 | Report-a-problem ticket | staff ticket (same as `/support`) | "Report a problem" pressed | `buildProblemTicketIssue`, [src/report-problem-core.ts](../../src/report-problem-core.ts); opened via `src/commands/support.ts` |
 | Shootout owed | DM + division channel | division completes with a 2-way tie on a line | `runShootoutCheck`, [src/shootout.ts](../../src/shootout.ts) |
@@ -39,6 +40,7 @@ list. `docs/arch/channel-registry.md` is a proposal, not the live list.
 | Degraded / recovered alerts | `#league-devops`, `#league-matches` banner, open match threads | health transitions | `src/health-broadcast.ts` |
 | Queue stall, missing config | `#league-devops` | detected | `postDevopsAlert`, `src/devops-alert.ts` |
 | Per-player DM panel | DM (edited in place) | season-start blast, hourly tick, if `dm_panels_enabled` | `buildDmPanel`, `src/dm-panel.ts` |
+| DM panel finalize ("Season N is over. You finished #R of T in Division.") | DM (edits the stored panel, or sends fresh) | season end, every active (non-dropped) member | `buildDmPanelFinal` / `finalizeDmPanelsForSeason`, `src/dm-panel.ts`; enqueued by `endSeasonCore`, `web/lib/end-season.ts` via the `dm-panel.finalize` job |
 | Staff reply to a player | DM | Messages page, Inbox tab | `formatStaffReply`, [web/lib/dm-format-core.ts](../../web/lib/dm-format-core.ts); enqueued by `web/app/admin/messages/actions.ts` |
 | Ad-hoc staff DM | DM | Messages page, "New DM" | `sendBotDm`, `web/app/admin/messages/actions.ts` |
 | Quick-roll bar | `#bot-commands` | tick or refresh | `buildBotCommandsStickyMessage`, `src/sticky-actions.ts` |
@@ -115,6 +117,16 @@ anywhere else yet; this section is the source.
 - Promotion and relegation wording comes from the shared `up()` / `down()`
   helpers duplicated in `src/onboarding-guide.ts` and `src/queue.ts` so the
   guide and the welcome never drift.
+- The ties/tiebreak rule comes from the single `tiesText(tiebreak)` helper in
+  [src/ties-text.ts](../../src/ties-text.ts) (mirrored to
+  `web/lib/ties-text.ts` by the sync script) -- used by the division welcome,
+  `#league-info`, the welcome guide, and the shootout-owed notices, so the
+  four surfaces can't describe a different tiebreak order from each other or
+  from `docs/handbook/standings-and-tiebreaks.md`.
+- A match/pairing id shown to a player is the short `matchRef(id)` (last 6
+  characters, uppercased -- [src/match-ref.ts](../../src/match-ref.ts)), e.g.
+  "Match ref A1B2C3", never the full cuid. Staff still look up the full id in
+  the admin web / `/admin` tooling.
 - Names go through `sanitizeName` before being bolded in a DM.
 - Discord messages may use emoji; the website may not use emoji as icons
   (`design-system/MASTER.md`).

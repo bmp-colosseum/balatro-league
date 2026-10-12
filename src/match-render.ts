@@ -21,6 +21,7 @@ import { parseGame, parseProposal, parsePolicy, phaseFor, remainingCombos, MAX_G
 import type { DeckEntry } from "./match-config.js";
 import { sanitizeName } from "./sanitize.js";
 import { mentionWithHandle } from "./mention.js";
+import { matchRef } from "./match-ref.js";
 
 // Components row can hold buttons OR a string-select menu — ban phase
 // renders both (a select menu row + a confirm button row), other phases
@@ -32,6 +33,10 @@ export interface RenderOptions {
   // Only consulted in GAME_1_BAN when a proposal is being built; ignored
   // otherwise. Defaults to empty (no proposal UI possible without it).
   allowedStakes?: string[];
+  // The real matchInviteExpiryMinutes setting, only consulted in
+  // WAITING_ACCEPT. Defaults to 5 (the old hardcoded value) when the caller
+  // doesn't have it handy, so every render path stays total.
+  expiryMinutes?: number;
 }
 
 // Every game slot, in order. Games 4/5 only exist for a BO5.
@@ -56,7 +61,7 @@ export function renderMatch(
 
   const bare = (() => {
     if (session.state === "WAITING_ACCEPT") {
-      return withHelperRow(session, renderWaitingAccept(session, playerA, playerB));
+      return withHelperRow(session, renderWaitingAccept(session, playerA, playerB, opts.expiryMinutes ?? 5));
     }
     if (session.state === "COMPLETE") {
       return renderComplete(session, playerA, playerB, games);
@@ -172,7 +177,7 @@ function computeActiveContent(
       const phase = phaseFor(game, a.id, b.id, parsePolicy(s.policy), !s.isCasual);
       if (phase.kind !== "BAN") return { content: "", turnKey: "" };
       const banner = phase.whoseBanId === a.id ? a : b;
-      return { content: `${mentionWithHandle(banner)} 🎯 your turn — ban ${phase.remainingForThem} combo(s).`, turnKey: banner.discordId };
+      return { content: `${mentionWithHandle(banner)} 🎯 your turn: ban ${phase.remainingForThem}.`, turnKey: banner.discordId };
     }
 
     if (s.state.endsWith("_PICK")) {
@@ -210,7 +215,7 @@ function computeActiveContent(
       }
       // No votes yet → both players go play the run, then vote a winner. A
       // single "BOTH" key pings them both once on entry, then stays quiet.
-      return { content: `${mentionWithHandle(a)} ${mentionWithHandle(b)} 🃏 play the match, then vote for the winner.`, turnKey: "BOTH" };
+      return { content: `${mentionWithHandle(a)} ${mentionWithHandle(b)} 🃏 play game ${gameNum}, then vote for the winner.`, turnKey: "BOTH" };
     }
 
     // Any other GAME_<n>_* phase we don't have a specific ping for.
@@ -285,25 +290,20 @@ function mention(player: Player): string {
   return mentionWithHandle(player);
 }
 
-function renderWaitingAccept(s: MatchSession, a: Player, b: Player) {
+function renderWaitingAccept(s: MatchSession, a: Player, b: Player, expiryMinutes: number) {
   const modeLine = s.isCasual
     ? `Casual challenge · **Best of ${s.bestOf}** · not recorded to the league.`
-    : `League match (2 games) · counts toward standings.`;
-  const guideLine = s.isCasual
-    ? ""
-    : `\n\n📋 You'll be walked through **2 games**:\n` +
-      `• Each game draws a **fresh pool** — the combos from game 1 won't come back in game 2.\n` +
-      `• The **winner records their leftover lives** after each game (it can matter for tiebreakers later).`;
+    : `League match, 2 games, counts toward standings.`;
+  const minuteWord = expiryMinutes === 1 ? "minute" : "minutes";
   const embed = new EmbedBuilder()
     .setTitle(s.isCasual ? "🎴 Challenge" : "🎴 Match invite")
     .setDescription(
       `${mention(a)} wants to play ${mention(b)}.\n` +
-        `${modeLine}` +
-        guideLine +
-        `\n\n${mention(b)}, accept within 5 minutes to start.`,
+        `${modeLine}\n\n` +
+        `${mention(b)}, press **Accept** within ${expiryMinutes} ${minuteWord} to start. (Both of you should be ready to play now.)`,
     )
     .setColor(s.isCasual ? 0x95a5a6 : 0x5865f2)
-    .setFooter({ text: `Match ${s.id}` });
+    .setFooter({ text: `Match ref ${matchRef(s.id)}` });
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId(`match:accept:${s.id}`).setLabel("Accept").setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`match:decline:${s.id}`).setLabel("Decline").setStyle(ButtonStyle.Secondary),
@@ -375,7 +375,7 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
   const embed = new EmbedBuilder()
     .setTitle(`🎴 Game ${gameNumber} — ${modeLabel}`)
     .setColor(GAME_COLORS[gameNumber] ?? DEFAULT_GAME_COLOR)
-    .setFooter({ text: `Match ${s.id}` });
+    .setFooter({ text: `Match ref ${matchRef(s.id)}` });
 
   // Game-1 ban phase: if a custom-combo proposal is in flight, replace
   // the ban dropdown UI with the proposal UI. Either player can also
@@ -412,21 +412,35 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
       const icons = [di, si].filter(Boolean).join(" ");
       return `${i + 1}. ${icons ? `${icons} ` : ""}${combo.deck} / ${combo.stake}`;
     });
+    // Game 1 only: a newcomer has no other screen that explains the ban
+    // order before this one, so it gets one orientation sentence up front
+    // (computed from the real policy/pool, not a hardcoded "1-3-3 of 8").
+    // Games 2+ already saw this on their own choose-first screen, so they
+    // keep the short form (see B04 in .claude/knowledge/bot-ux/01-findings.md).
+    const orientationLine =
+      gameNumber === 1
+        ? `**How this works:** each game starts with ${pool.length} deck and stake options. ` +
+          `${sanitizeName(first.displayName)} bans 1, ${sanitizeName(otherPlayer.displayName)} bans ${policy.secondPlayerBans}, ` +
+          `${sanitizeName(first.displayName)} bans ${policy.firstPlayerBans - 1}, then **${sanitizeName(otherPlayer.displayName)} picks** ` +
+          `from the last ${Math.max(pool.length - policy.firstPlayerBans - policy.secondPlayerBans, 0)}. ` +
+          `The winner of each game records their lives left.\n\n`
+        : "";
     embed.setDescription(
-      `🎯 **${sanitizeName(whose.displayName)}** is banning — pick **${expected}**.\n\n` +
-        `**Pool (${sortedRemaining.length} left):**\n` +
+      orientationLine +
+        `🎯 **${sanitizeName(whose.displayName)}** is banning: choose **${expected}** from the menu below.\n\n` +
+        `**Options (${sortedRemaining.length} left):**\n` +
         poolLines.join("\n"),
     );
     const rerollLabel =
       game.rerollVoteByA || game.rerollVoteByB
         ? "Confirm reroll"
-        : "Reroll pool";
+        : "Reroll options";
     // Public select menu (min=max=expected). The actor guard lives in
     // the handler; non-actors who touch it get an ephemeral "not your
     // turn" and the public message is left untouched.
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId(`match:banselect:${s.id}`)
-      .setPlaceholder(`${whose.displayName}: pick ${expected} to ban`)
+      .setPlaceholder(`${whose.displayName}: choose ${expected} to ban`)
       .setMinValues(expected)
       .setMaxValues(expected)
       .addOptions(
@@ -449,21 +463,30 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
     // Random ban auto-rolls the active banner's picks into the same
     // confirm prompt (still a deliberate confirm, just no manual
     // choosing). Reroll + Propose are shared-action buttons either
-    // player can click. Cancel/pause/helper live on the helper row.
-    const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    // player can click -- but only for CASUAL challenges. League matches
+    // hide both: the organiser wants a league match's pool fixed to what
+    // the season's preset drew, not reroll-able or swappable for a custom
+    // combo (see B16 in .claude/knowledge/bot-ux/01-findings.md).
+    // Cancel/pause/helper live on the helper row.
+    const banActionButtons = [
       new ButtonBuilder()
         .setCustomId(`match:banrandom:${s.id}`)
         .setLabel(`🎲 Random ban${expected > 1 ? "s" : ""}`)
         .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`match:reroll:${s.id}`)
-        .setLabel(rerollLabel)
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(`match:proposestart:${s.id}`)
-        .setLabel("Propose custom combo")
-        .setStyle(ButtonStyle.Secondary),
-    );
+    ];
+    if (s.isCasual) {
+      banActionButtons.push(
+        new ButtonBuilder()
+          .setCustomId(`match:reroll:${s.id}`)
+          .setLabel(rerollLabel)
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(`match:proposestart:${s.id}`)
+          .setLabel("Propose custom combo")
+          .setStyle(ButtonStyle.Secondary),
+      );
+    }
+    const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(...banActionButtons);
     return {
       embeds: [embed],
       components: [selectRow, actionRow],
@@ -573,8 +596,8 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
       embed.setDescription(
         `${playingLine(picked)}\n\n` +
           `🔌 **${sanitizeName(claimant.displayName)}** reports that **${sanitizeName(dcer.displayName)}** disconnected.\n\n` +
-          `**${sanitizeName(dcer.displayName)}** — **Confirm** to give ${sanitizeName(claimant.displayName)} this game, or **Keep playing** if you're still here.\n` +
-          `_If ${sanitizeName(dcer.displayName)} is gone for good, use \`/helper\` to get a mod._`,
+          `**${sanitizeName(dcer.displayName)}** — **Confirm DC** to give ${sanitizeName(claimant.displayName)} this game, or **Keep playing** if you're still here.\n` +
+          `_If ${sanitizeName(dcer.displayName)} is gone for good, press **Call helper** below._`,
       );
       // Two options only: the reported player confirms (forfeits), or
       // either player clicks Keep playing to clear the report and resume.
@@ -604,14 +627,14 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
         `⚠️ **Disputed** — players voted for different winners.\n` +
         `${voteLine(game.voteByA, a)}\n` +
         `${voteLine(game.voteByB, b)}\n\n` +
-        `Talk it out and click again, OR ask an admin to step in and fix the result.`;
+        `Talk it out and re-vote, or use 🆘 **Call helper**.`;
     } else if (game.voteByA || game.voteByB) {
       description +=
-        `Vote for the winner. Match advances when both agree.\n` +
+        `Vote for the winner. Game ${gameNumber} locks in when both agree.\n` +
         `${voteLine(game.voteByA, a)}\n` +
         `${voteLine(game.voteByB, b)}`;
     } else {
-      description += `Both players vote: click who won. Match advances when you agree.`;
+      description += `Both players vote: click who won. Game ${gameNumber} locks in when you agree.`;
     }
     embed.setDescription(description);
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -655,12 +678,12 @@ function renderComplete(s: MatchSession, a: Player, b: Player, games: Array<Game
     `🤝 ${sanitizeName(a.displayName)} ${aWins}-${bWins} ${sanitizeName(b.displayName)}`;
   const tail = s.isCasual
     ? "Casual match — not recorded to the league."
-    : "Result recorded. If something looks wrong, ask an admin to override.";
+    : "Result recorded. It counts straight away and is posted in the results channel. Wrong result? Press **Report a problem** under that post.";
   const embed = new EmbedBuilder()
     .setTitle("✅ Match complete")
     .setDescription(`${verdict}\n${tail}`)
     .setColor(0x2ecc71)
-    .setFooter({ text: `Match ${s.id}` });
+    .setFooter({ text: `Match ref ${matchRef(s.id)}` });
 
   const lines = played
     .map((g, i) => {
@@ -684,7 +707,7 @@ function renderCancelled(s: MatchSession, a: Player, b: Player) {
     .setTitle("❌ Match cancelled")
     .setDescription(`${mention(a)} vs ${mention(b)} — match was cancelled or timed out.`)
     .setColor(0xe74c3c)
-    .setFooter({ text: `Match ${s.id}` });
+    .setFooter({ text: `Match ref ${matchRef(s.id)}` });
   return { embeds: [embed], components: [] };
 }
 
@@ -704,7 +727,7 @@ function renderPaused(s: MatchSession, a: Player, b: Player) {
         `_Auto-cancels in 7 days if nobody resumes._`,
     )
     .setColor(0x95a5a6)
-    .setFooter({ text: `Match ${s.id}` });
+    .setFooter({ text: `Match ref ${matchRef(s.id)}` });
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`match:resume:${s.id}`)
@@ -717,7 +740,7 @@ function renderPaused(s: MatchSession, a: Player, b: Player) {
 function renderError(s: MatchSession, a: Player, b: Player, msg: string) {
   const embed = new EmbedBuilder()
     .setTitle("⚠️ Match error")
-    .setDescription(`${msg}. Ask an admin to look at match ${s.id}.`)
+    .setDescription(`${msg}. Ask a helper to look at match ref ${matchRef(s.id)}.`)
     .setColor(0xe74c3c);
   void a; void b;
   return { embeds: [embed], components: [] };
@@ -751,7 +774,7 @@ export function renderComboBuilder(args: {
         `Stake: ${stake ? `${stakeIcon} **${stake}**` : "_not picked_"}\n\n` +
         `Once you submit, **${sanitizeName(responder.displayName)}** can Accept, Counter, or Cancel.`,
     )
-    .setFooter({ text: `Match ${sessionId}` });
+    .setFooter({ text: `Match ref ${matchRef(sessionId)}` });
 
   // Deck select — full canonical deck library, sorted A-Z.
   const sortedDecks = [...CANONICAL_DECKS].sort((x, y) => x.name.localeCompare(y.name));
@@ -824,7 +847,7 @@ function renderProposal(
   const embed = new EmbedBuilder()
     .setTitle("🎯 Custom combo proposal")
     .setColor(0xf1c40f)
-    .setFooter({ text: `Match ${s.id}` })
+    .setFooter({ text: `Match ref ${matchRef(s.id)}` })
     .setDescription(
       `**${sanitizeName(proposer.displayName)}** proposes:\n\n` +
         `${icons ? `${icons}  ` : ""}**${proposal.deck} / ${proposal.stake}**\n\n` +

@@ -16,6 +16,7 @@ import { seasonWindowLines } from "./season-timing.js";
 import { getConfig, LeagueConfigKey } from "./league-config.js";
 import { env } from "./env.js";
 import { buildOnboardingGuideMessages } from "./onboarding-guide.js";
+import { normalizeTiebreak } from "./standings-mode.js";
 
 export const ONBOARDING_GUIDE_KIND = "onboarding-guide";
 
@@ -48,7 +49,7 @@ export async function sendOnboardingGuideDm(playerId: string, force = false): Pr
 
   const season = await prisma.season.findFirst({
     where: { isActive: true },
-    select: { number: true, subtitle: true, startedAt: true, scheduledStartAt: true, scheduledEndAt: true },
+    select: { number: true, subtitle: true, startedAt: true, scheduledStartAt: true, scheduledEndAt: true, tiebreak: true },
   });
   const seasonLabel = season ? formatSeasonLabel(season) : "the current season";
   const windowLines = season
@@ -69,6 +70,7 @@ export async function sendOnboardingGuideDm(playerId: string, force = false): Pr
     seasonWindowLines: windowLines,
     standingsUrl: webUrl("standings"),
     supportChannelUrl,
+    tiebreak: normalizeTiebreak(season?.tiebreak),
   });
 
   try {

@@ -182,7 +182,7 @@ async function buildGameStateFor(
     : await presetForCasualMatch();
   const poolSource = resolvePoolSource(session, preset);
   if (!poolSource) {
-    return { ok: false, error: "The deck pool isn't set up for this match — ask an admin to configure decks/stakes." };
+    return { ok: false, error: "The deck pool isn't set up for this match — ask a helper to configure decks/stakes." };
   }
   // Collect every deck NAME that appeared in any prior game's pool so the
   // new pool can avoid them (variety across games), and — when the Bo5
@@ -364,7 +364,7 @@ export const matchButtons: ButtonHandler = {
     const action = parts[1];
     const sessionId = parts[2];
     if (!sessionId) {
-      await reply(interaction, "This button looks broken — refresh Discord, or ask an admin if it keeps happening.");
+      await reply(interaction, "This button looks broken — refresh Discord, or ask a helper if it keeps happening.");
       return;
     }
 
@@ -418,7 +418,7 @@ export const matchSelectMenus: SelectMenuHandler = {
     const action = parts[1];
     const sessionId = parts[2];
     if (!sessionId) {
-      await reply(interaction, "Something went wrong with that pick — try again, or ask an admin.");
+      await reply(interaction, "Something went wrong with that pick — try again, or ask a helper.");
       return;
     }
     const session = await loadSession(sessionId);
@@ -719,7 +719,7 @@ async function handleReroll(interaction: ButtonInteraction, session: MatchSessio
     : await presetForCasualMatch();
   const poolSource = resolvePoolSource(session, preset);
   if (!poolSource) {
-    return reply(interaction, "The deck pool isn't set up for this match — ask an admin to configure decks/stakes.");
+    return reply(interaction, "The deck pool isn't set up for this match — ask a helper to configure decks/stakes.");
   }
   // Collect every deck NAME from prior games (variety) and, when the Bo5
   // "no repeats" rule is on, every EXACT combo actually played (hard-drop —
@@ -836,7 +836,7 @@ async function closeMatchChannel(
       // job is somehow lost. The final result is already rendered above, so the
       // thread is read-only-interesting for that last minute.
       await thread
-        .send("**Match complete!** This thread will close in about a minute.")
+        .send("**Match complete.** The result is in the results channel. This thread closes in a minute.")
         .catch((err: unknown) => logDiscordError("closeMatchChannel.closingNotice", err, { threadId: channelId, sessionId }));
       enqueueMatchThreadClose({ sessionId, threadId: channelId }).catch((err) =>
         logDiscordError("closeMatchChannel.enqueue", err, { threadId: channelId, sessionId }),
@@ -934,7 +934,7 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
   const poolSource = resolvePoolSource(session, preset);
   if (!poolSource) {
     const which = session.divisionId ? "this season's preset" : "the casual-match preset";
-    return reply(interaction, `The deck pool isn't set up — ask an admin to configure decks/stakes for ${which} on \`/admin/deck-bans\` before accepting.`);
+    return reply(interaction, `The deck pool isn't set up — ask a helper to configure decks/stakes for ${which} before accepting.`);
   }
   // Read the current league settings once and stamp the resulting
   // policy onto the session — that snapshot stays valid for this
@@ -1587,7 +1587,7 @@ async function handleDc(interaction: ButtonInteraction, session: MatchSession) {
   if (session.isShootout) {
     return reply(
       interaction,
-      "Shootout DCs need admin review — click the Call helper button below so a moderator can decide the outcome. Shootouts don't auto-forfeit.",
+      "Shootout DCs need a helper to review — click the Call helper button below so they can decide the outcome. Shootouts don't auto-forfeit.",
     );
   }
 
@@ -1609,17 +1609,17 @@ async function handleDc(interaction: ButtonInteraction, session: MatchSession) {
     }
     // The OTHER player already claimed (they say YOU disconnected). Treat
     // this click as a competing claim — clearer to just point them at the
-    // Confirm/Dispute buttons that are already showing.
-    return reply(interaction, "Your opponent already reported a DC. Use Confirm or Dispute on the match.");
+    // Confirm DC / Keep playing buttons that are already showing.
+    return reply(interaction, "Your opponent already reported a DC. Use Confirm DC or Keep playing on the match.");
   }
 
-  // First claim: record it and ping the opponent to confirm or dispute.
+  // First claim: record it and ping the opponent to confirm or keep playing.
   const updated = await updateSession(session, { dcInitiatorPlayerId: reporterId });
   if (!updated) return raceLost(interaction);
   await refreshMessage(interaction, updated);
   return reply(
     interaction,
-    "Reported that your opponent disconnected. They need to **Confirm** (you take this game) or **Dispute** it. If they're gone for good, use `/helper`.",
+    "Reported that your opponent disconnected. They need to press **Confirm DC** (you take this game) or **Keep playing** if they're still here. If they're gone for good, press **Call helper**.",
   );
 }
 
@@ -1652,7 +1652,7 @@ async function handleDcDispute(interaction: ButtonInteraction, session: MatchSes
   const updated = await updateSession(session, { dcInitiatorPlayerId: null });
   if (!updated) return raceLost(interaction);
   await refreshMessage(interaction, updated);
-  return reply(interaction, "Cleared the DC report — keep playing. If you can't agree, use `/helper`.");
+  return reply(interaction, "Cleared the DC report — keep playing. If you can't agree, press **Call helper**.");
 }
 
 // Shared forfeit application: claimant wins the current game, dcer is

@@ -62,7 +62,7 @@ function askContent(round: SignupRound, lengthDays: number, variant: AskVariant)
   } else if (variant === "reminder") {
     lines.push(`⏰ **Quick reminder** — still need your answer on **${round.name}**.`, "");
   } else {
-    lines.push(`🃏 **${round.name}** — sign-ups are open!`, "");
+    lines.push(`🃏 **${round.name}** — signups are open!`, "");
     lines.push("A new season is starting and I want to know if you're in.", "");
   }
   if (windowValue) lines.push(`**Play window:** ${windowValue}`, "");

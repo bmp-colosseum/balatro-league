@@ -126,7 +126,7 @@ async function buildMyScheduleEmbed(seasonId: string, discordId: string): Promis
     .setColor(0x5865f2)
     .setTitle(`🗓️ Your schedule — ${membership.division.name}`)
     .setDescription(lines.join("\n"))
-    .setFooter({ text: `${played}/${matches.length} played · use /start-match @opponent to play` });
+    .setFooter({ text: `${played}/${matches.length} played · press Start a match in your division channel to play` });
 }
 
 async function renderSingleDivision(

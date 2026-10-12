@@ -17,6 +17,7 @@ import { normalizeTiebreak, type SeasonTiebreak } from "./standings-mode.js";
 import { enqueueDm } from "./queue.js";
 import { sanitizeName } from "./sanitize.js";
 import { mentionWithHandle, type MentionSubject } from "./mention.js";
+import { tiesText } from "./ties-text.js";
 
 // A stable id for a player pair, order-independent, so (a,b) and (b,a) collide.
 export function pairKey(aId: string, bId: string): string {
@@ -115,20 +116,15 @@ export async function runShootoutCheck(divisionId: string): Promise<number> {
     const where = boundaryPhrase(need.boundary);
     // Under "lives" this pair already made it through net lives without
     // separating -- a shootout is a voluntary way to settle it, not owed.
-    // Under "chain" (default) it's the only thing left that can.
-    const unresolvedReason =
-      tiebreak === "lives"
-        ? "and net lives didn't settle it either"
-        : "and your head-to-head didn't settle it";
-    const callToAction =
-      tiebreak === "lives"
-        ? "A shootout is **optional** -- play **one game** if you'd rather not share the rank: open"
-        : "Play **one game** to decide it: open";
+    // Under "chain" (default) it's the only thing left that can. Both
+    // fragments come from the single ties-text source (see B02) so this
+    // notice can't drift from the welcome/#league-info/guide's rule text.
+    const { shootoutUnresolvedReason: unresolvedReason, shootoutCallToAction: callToAction } = tiesText(tiebreak);
     // DM each player (framed from their side).
     const dm = (me: typeof need.a, opp: typeof need.b) =>
       `🎯 **Shootout needed** — you and **${sanitizeName(opp.displayName)}** are tied for ${where} in ` +
       `**${division.name}**, ${unresolvedReason}. ${callToAction} ` +
-      `**#league-matches** and hit **Start shootout**, or run \`/start-match mode:shootout\`.`;
+      `**#league-matches** and hit **Start shootout**.`;
     if (isRealDiscordId(need.a.discordId))
       await enqueueDm({ discordId: need.a.discordId, content: dm(need.a, need.b), kind: "shootout" });
     if (isRealDiscordId(need.b.discordId))
@@ -147,7 +143,7 @@ export async function runShootoutCheck(divisionId: string): Promise<number> {
       const content =
         `🎯 ${mentions.length ? mentions.join(" ") + " — " : ""}${mentions.length ? "you're" : names + " are"} ` +
         `tied for ${where} in **${division.name}** ${splitPhrase}. ${decidesPhrase} ` +
-        `hit **Start shootout** in #league-matches (or \`/start-match mode:shootout\`).`;
+        `hit **Start shootout** in #league-matches.`;
       try {
         const ch = await client.channels.fetch(division.discordChannelId);
         if (ch && ch.type === ChannelType.GuildText) {

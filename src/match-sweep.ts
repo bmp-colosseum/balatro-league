@@ -35,13 +35,14 @@ import { ensureGuildCategory } from "./discord-helpers.js";
 import { env } from "./env.js";
 import { formatSeasonLabel } from "./format-season.js";
 import { logDiscordError } from "./log-discord-error.js";
-import { enqueueBootstrapDivision, enqueueLeagueInfoRefresh } from "./queue.js";
+import { enqueueBootstrapDivision, enqueueLeagueInfoRefresh, enqueueDm, buildSeasonLiveAnnouncement } from "./queue.js";
 import { recordAudit, SYSTEM_ACTOR } from "./audit.js";
 import { applyPendingMatchMmr } from "./mmr-live.js";
 import { sweepQueueMatches } from "./league-queue.js";
 import { tryGetDiscordClient } from "./discord.js";
 import { renderMatch } from "./match-render.js";
 import { mentionWithHandle } from "./mention.js";
+import { sanitizeName } from "./sanitize.js";
 import type { MatchSession } from "@prisma/client";
 
 const SWEEP_INTERVAL_MS = 60 * 1000;
@@ -81,7 +82,7 @@ export async function sweepExpiredInvites(): Promise<number> {
       state: "WAITING_ACCEPT",
       expiresAt: { lt: new Date() },
     },
-    select: { id: true, threadId: true, version: true },
+    select: { id: true, threadId: true, version: true, playerAId: true, playerBId: true },
   });
   if (expired.length === 0) return 0;
 
@@ -95,6 +96,7 @@ export async function sweepExpiredInvites(): Promise<number> {
     }).catch((err) => {
       console.warn(`[match-sweep] cancel ${session.id} failed:`, err);
     });
+    await notifyExpiredInvite(session);
 
     // Delete the abandoned thread immediately — no point keeping an
     // expired-invite shell around. REST works even without a live
@@ -152,6 +154,74 @@ async function notifyAutoPaused(session: MatchSession): Promise<void> {
         `to ${PAUSED_CANCEL_DAYS} days.`,
     })
     .catch((err) => logDiscordError("match-sweep.auto-pause.notify", err, { sessionId: session.id, threadId: channelId }));
+}
+
+// Pure message builders (see match-sweep.test.ts) -- the only branching in
+// these two notices is string formatting, so it's split out from the I/O
+// (DB player lookups, Discord DM/thread-post) around it.
+export function buildExpiredInviteDm(inviteeDisplayName: string): string {
+  return (
+    `Your match invite to **${sanitizeName(inviteeDisplayName)}** expired -- they didn't accept in time. ` +
+    `Nothing is recorded. Agree a time with them first, then press **Start a match** again.`
+  );
+}
+
+export function buildMatchCancelledNotice(playerADisplayName: string, playerBDisplayName: string, durationLabel: string): string {
+  return (
+    `Your match **${sanitizeName(playerADisplayName)} vs ${sanitizeName(playerBDisplayName)}** was cancelled ` +
+    `after ${durationLabel} with no activity. Nothing is recorded. If you still want to play it, press ` +
+    `**Start a match** and pick each other again.`
+  );
+}
+
+// A silently-deleted thread leaves no trace for the inviter (the invite's
+// only record was an ephemeral reply that's long gone by the time it
+// expires) -- DM them before the thread is deleted. The invitee is NOT
+// pinged: they never accepted, so there's nothing for them to act on.
+// Best-effort: a DM failure (invitee/inviter blocked the bot, closed DMs)
+// never blocks the cancel/delete itself.
+async function notifyExpiredInvite(session: Pick<MatchSession, "playerAId" | "playerBId">): Promise<void> {
+  const [inviter, invitee] = await Promise.all([
+    prisma.player.findUnique({ where: { id: session.playerAId } }),
+    prisma.player.findUnique({ where: { id: session.playerBId } }),
+  ]);
+  if (!inviter || !invitee) return;
+  await enqueueDm({
+    discordId: inviter.discordId,
+    content: buildExpiredInviteDm(invitee.displayName),
+    kind: "match-invite-expired",
+  }).catch((err) => console.warn(`[match-sweep] notifyExpiredInvite DM failed for ${inviter.discordId}:`, err));
+}
+
+// An idle (24h) or paused-too-long (7d) match is cancelled with no trace
+// either -- post in the thread (visible for the few seconds before it's
+// deleted) and DM both players, so neither has to wonder where their match
+// went. Best-effort throughout; a notify failure never blocks the cancel.
+async function notifyMatchCancelled(
+  session: Pick<MatchSession, "id" | "threadId" | "playerAId" | "playerBId">,
+  durationLabel: string,
+): Promise<void> {
+  const [playerA, playerB] = await Promise.all([
+    prisma.player.findUnique({ where: { id: session.playerAId } }),
+    prisma.player.findUnique({ where: { id: session.playerBId } }),
+  ]);
+  if (!playerA || !playerB) return;
+  const content = buildMatchCancelledNotice(playerA.displayName, playerB.displayName, durationLabel);
+
+  const threadId = session.threadId;
+  if (threadId) {
+    const client = tryGetDiscordClient();
+    const channel = client ? await client.channels.fetch(threadId).catch(() => null) : null;
+    if (channel && "send" in channel) {
+      await channel.send({ content }).catch((err) =>
+        logDiscordError("match-sweep.cancelled.threadNotice", err, { threadId, sessionId: session.id }),
+      );
+    }
+  }
+  await Promise.all([
+    enqueueDm({ discordId: playerA.discordId, content, kind: "match-cancelled" }),
+    enqueueDm({ discordId: playerB.discordId, content, kind: "match-cancelled" }),
+  ]).catch((err) => console.warn(`[match-sweep] notifyMatchCancelled DM failed for session ${session.id}:`, err));
 }
 
 // Auto-pause matches that are actually underway (a game has started) but idle for
@@ -216,7 +286,7 @@ export async function sweepIdleSessions(): Promise<number> {
       state: { notIn: ["COMPLETE", "CANCELLED", "PAUSED"] },
       updatedAt: { lt: cutoff },
     },
-    select: { id: true, threadId: true, state: true, updatedAt: true },
+    select: { id: true, threadId: true, state: true, updatedAt: true, playerAId: true, playerBId: true },
     take: 50,
   });
   if (stale.length === 0) return 0;
@@ -241,6 +311,7 @@ export async function sweepIdleSessions(): Promise<number> {
       });
     if (res.count === 0) continue;
     cancelled++;
+    await notifyMatchCancelled(session, `${IDLE_CANCEL_HOURS} hours`);
     if (session.threadId) {
       try {
         await rest().delete(Routes.channel(session.threadId));
@@ -325,7 +396,7 @@ export async function sweepPausedSessions(): Promise<number> {
       state: "PAUSED",
       pausedAt: { lt: cutoff },
     },
-    select: { id: true, threadId: true, pausedAt: true },
+    select: { id: true, threadId: true, pausedAt: true, playerAId: true, playerBId: true },
     take: 50,
   });
   if (stale.length === 0) return 0;
@@ -346,6 +417,7 @@ export async function sweepPausedSessions(): Promise<number> {
       });
     if (res.count === 0) continue;
     cancelled++;
+    await notifyMatchCancelled(session, `${PAUSED_CANCEL_DAYS} days`);
     if (session.threadId) {
       try {
         await rest().delete(Routes.channel(session.threadId));
@@ -460,7 +532,7 @@ export async function sweepScheduledStarts(): Promise<number> {
       // Best-effort announcement post.
       const channelId = await resolveAnnouncementsChannelId().catch(() => null);
       if (channelId) {
-        const content = `🃏 **${label}** is now live! Your matchups are in your DMs; in your division channel, click **Who do I play?** for a reminder and **Start a match** to play. Good luck.`;
+        const content = buildSeasonLiveAnnouncement(label);
         try {
           await rest().post(Routes.channelMessages(channelId), { body: { content } });
         } catch (err) {

@@ -15,28 +15,39 @@ import { prisma } from "./db.js";
 import { formatSeasonLabel } from "./format-season.js";
 import { webUrl } from "./web-url.js";
 import { seasonEndsHammer, seasonStartsHammer } from "./season-timing.js";
+import { normalizeTiebreak, type SeasonTiebreak } from "./standings-mode.js";
+import { tiesText } from "./ties-text.js";
 
-const STATIC_INTRO = [
-  "# 🃏 Balatro League",
-  "",
-  "Each season you're placed in a division by skill and play a set of **assigned opponents**, **2 games each**. The bot DMs you your matchups. Need a reminder? Click **Who do I play?** in your division channel.",
-  "",
-  "**Playing a match:** click **Start a match** at the bottom of your division channel and pick your opponent. The bot facilitates the **pick/ban** phase and records each game. The deck/stake combo does not repeat within a matchup. The **winner records how many lives they had left** after each game.",
-  "",
-  "**Scoring:** `2-0` = 3 pts · `1-1` = 1 pt each · `0-2` = 0.",
-  "",
-  "**Promotion & relegation:** in divisions of 8 or more players, the **top 2** move up a division and the **bottom 2** move down. In smaller divisions it is **1** each way. Your division's welcome message has the exact numbers, and `/standings` shows who is in a promotion or relegation spot right now.",
-  "",
-  "**Ties:** if two players are tied, we encourage them to play one extra game (a **shootout**) to decide it. If no shootout is played, or more than two players are tied, **net lives** decide who promotes or relegates. Net lives = the lives you had left in your wins, minus the lives your opponents had left in your losses.",
-  "",
-  "**Scheduling:** scheduling is on you. Message each opponent and agree on a time. Use Hammertime (<https://hammertime.cyou>), or the **Schedule with Hammertime** button in your division channel, to post a time that shows correctly in everyone's time zone.",
-  "",
-  `**Website:** <${webUrl()}> — standings, profiles, sign up.`,
-].join("\n");
+// Exported for a plain-data unit test -- composeLeagueInfoContent itself is
+// an impure shell (Prisma read) that this pure builder feeds into.
+export function buildStaticIntro(tiebreak: SeasonTiebreak): string {
+  return [
+    "# 🃏 Balatro League",
+    "",
+    "Each season you're placed in a division by skill and play a set of **assigned opponents**, **2 games each**. The bot DMs you your matchups. Need a reminder? Click **Who do I play?** in your division channel.",
+    "",
+    "**Playing a match:** click **Start a match** at the bottom of your division channel and pick your opponent. The bot runs the bans and picks and records each game. The deck/stake combo does not repeat within a matchup. The **winner records how many lives they had left** after each game.",
+    "",
+    "**Scoring:** `2-0` = 3 pts · `1-1` = 1 pt each · `0-2` = 0.",
+    "",
+    "**Promotion & relegation:** in divisions of 8 or more players, the **top 2** move up a division and the **bottom 2** move down. In smaller divisions it is **1** each way. Your division's welcome message has the exact numbers, and **My standings** shows who is in a promotion or relegation spot right now.",
+    "",
+    `**Ties:** ${tiesText(tiebreak).rule}`,
+    "",
+    "**Scheduling:** scheduling is on you. Message each opponent and agree on a time. Use Hammertime (<https://hammertime.cyou>), or the **Schedule with Hammertime** button in your division channel, to post a time that shows correctly in everyone's time zone.",
+    "",
+    `**Website:** <${webUrl()}> — standings, profiles, sign up.`,
+  ].join("\n");
+}
 
 export async function composeLeagueInfoContent(): Promise<string> {
+  // The ties rule shown here must match whichever tiebreak mode the active
+  // season actually runs -- no active season (evergreen case) falls back to
+  // the same "chain" default normalizeTiebreak uses everywhere else.
+  const activeSeason = await prisma.season.findFirst({ where: { isActive: true }, select: { tiebreak: true } });
+  const tiebreak = normalizeTiebreak(activeSeason?.tiebreak);
   const dynamic = await composeDynamicBlock();
-  return `${STATIC_INTRO}\n\n${dynamic}`;
+  return `${buildStaticIntro(tiebreak)}\n\n${dynamic}`;
 }
 
 async function composeDynamicBlock(): Promise<string> {

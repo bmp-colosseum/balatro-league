@@ -15,7 +15,7 @@ import type { StandingRow } from "./standings";
 import { prisma } from "./prisma";
 import { loadDivisionStandingsFresh } from "./standings-cache";
 import { recordAudit, type AuditActor } from "./audit";
-import { enqueueLeagueInfoRefresh, enqueueDm } from "./queue";
+import { enqueueLeagueInfoRefresh, enqueueDm, enqueueDmPanelFinalize, type SeasonFinalStanding } from "./queue";
 import { formatSeasonLabel } from "./format-season";
 import { deleteChannel, deleteGuildRole, removeGuildMemberRole } from "./discord";
 
@@ -435,6 +435,32 @@ export async function endSeasonCore(seasonId: string, actor: AuditActor): Promis
           layoutCaveat,
       );
     }
+  }
+
+  // Finalize every (non-dropped) player's DM panel with their placement --
+  // ALL divisions, not just the ones with promotion/relegation movement
+  // above, so a mid-table player gets "Season N is over. You finished #4 of
+  // 8 in Rare 3." instead of the panel freezing on a stale deadline forever
+  // (finding 10 / B13 in .claude/knowledge/bot-ux/01-findings.md). Reuses
+  // the exact standings computed above for the rating math.
+  const finalStandings: SeasonFinalStanding[] = [];
+  for (const [divIdx, d] of season.divisions.entries()) {
+    const droppedSet = new Set(d.members.filter((m) => m.status === "DROPPED").map((m) => m.playerId));
+    const active = divisionsForRating[divIdx]!.standings.filter((row) => !droppedSet.has(row.player.id));
+    active.forEach((row, i) => {
+      finalStandings.push({
+        playerId: row.player.id,
+        discordId: row.player.discordId,
+        divisionName: d.name,
+        rank: i + 1,
+        totalInDivision: active.length,
+      });
+    });
+  }
+  if (finalStandings.length > 0) {
+    await enqueueDmPanelFinalize({ seasonLabel, standings: finalStandings }).catch((err) =>
+      console.warn(`[season.end] dm-panel finalize enqueue failed for ${season.id}:`, err),
+    );
   }
 
   return {

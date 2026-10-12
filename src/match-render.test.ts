@@ -87,7 +87,7 @@ describe("renderMatch — BO5 games 4 and 5 render as themselves, not game 3", (
     const game4: GameState = { ...emptyGameState(A.id, pool()), pickedDeckIdx: 0 };
     const session = makeSession({ state: "GAME_4_PLAYING", bestOf: 5 }, { game4 });
     const { content, turnKey } = renderMatch(session, A, B);
-    expect(content).toBe(`<@${A.discordId}> <@${B.discordId}> 🃏 play the match, then vote for the winner.`);
+    expect(content).toBe(`<@${A.discordId}> <@${B.discordId}> 🃏 play game 4, then vote for the winner.`);
     expect(turnKey).toBe("BOTH");
   });
 
@@ -174,5 +174,117 @@ describe("renderMatch — WAITING_ACCEPT still pings the invitee", () => {
     const { content, turnKey } = renderMatch(session, A, B);
     expect(content).toBe(`<@${B.discordId}> 🎴 match invite from <@${A.discordId}> — accept or decline.`);
     expect(turnKey).toBe(B.discordId);
+  });
+
+  it("uses the real expiry minutes instead of a hardcoded 5, with plural agreement", () => {
+    const session = makeSession({ state: "WAITING_ACCEPT" });
+    const tenMin = firstEmbed(renderMatch(session, A, B, { expiryMinutes: 10 }).embeds);
+    expect(tenMin.data.description).toContain("within 10 minutes");
+    const oneMin = firstEmbed(renderMatch(session, A, B, { expiryMinutes: 1 }).embeds);
+    expect(oneMin.data.description).toContain("within 1 minute");
+    expect(oneMin.data.description).not.toContain("1 minutes");
+  });
+
+  it("falls back to 5 minutes when no expiryMinutes is supplied", () => {
+    const session = makeSession({ state: "WAITING_ACCEPT" });
+    const embed = firstEmbed(renderMatch(session, A, B).embeds);
+    expect(embed.data.description).toContain("within 5 minutes");
+  });
+
+  it("footer shows a short match ref, not the full cuid", () => {
+    const session = makeSession({ id: "cmg3k7x2q000dp92q9rxg53qv", state: "WAITING_ACCEPT" });
+    const embed = firstEmbed(renderMatch(session, A, B).embeds);
+    expect(embed.data.footer?.text).toBe("Match ref XG53QV");
+  });
+});
+
+describe("renderMatch -- GAME_1_BAN orientation + wording (B04)", () => {
+  it("game 1's ban turn ping never says combo(s)", () => {
+    const session = makeSession({ state: "GAME_1_BAN" }, { game1: emptyGameState(A.id, pool()) });
+    const { content } = renderMatch(session, A, B);
+    expect(content).toBe(`<@${A.discordId}> \u{1F3AF} your turn: ban 1.`);
+  });
+
+  it("game 1's embed explains the ban order and uses Options/choose, not Pool/pick", () => {
+    const session = makeSession({ state: "GAME_1_BAN" }, { game1: emptyGameState(A.id, pool()) });
+    const embed = firstEmbed(renderMatch(session, A, B).embeds);
+    const text = embed.data.description ?? "";
+    expect(text).toContain("How this works");
+    expect(text).toMatch(/Alice bans 1, Bob bans \d+, Alice bans \d+, then \*\*Bob picks\*\*/);
+    expect(text).toContain("Options (");
+    expect(text).not.toContain("Pool (");
+    expect(text).toContain("is banning: choose **1**");
+  });
+
+  it("game 2+ does not repeat the orientation sentence", () => {
+    const session = makeSession(
+      { state: "GAME_2_BAN" },
+      { game1: { ...emptyGameState(A.id, pool()), pickedDeckIdx: 0, winnerId: A.id }, game2: emptyGameState(B.id, pool()) },
+    );
+    const embed = firstEmbed(renderMatch(session, A, B).embeds);
+    expect(embed.data.description).not.toContain("How this works");
+  });
+});
+
+describe("renderMatch -- reroll/propose are casual-only (B16)", () => {
+  function buttonLabels(components: ReturnType<typeof renderMatch>["components"]): string[] {
+    return components.flatMap((row) =>
+      row.components
+        .map((c) => ("label" in c.data ? c.data.label : undefined))
+        .filter((l): l is string => Boolean(l)),
+    );
+  }
+
+  it("league (non-casual) GAME_1_BAN hides Reroll and Propose custom combo", () => {
+    const session = makeSession({ state: "GAME_1_BAN", isCasual: false }, { game1: emptyGameState(A.id, pool()) });
+    const labels = buttonLabels(renderMatch(session, A, B).components);
+    expect(labels.some((l) => l.includes("Random ban"))).toBe(true);
+    expect(labels.some((l) => l.includes("Reroll"))).toBe(false);
+    expect(labels.some((l) => l.includes("Propose custom combo"))).toBe(false);
+  });
+
+  it("casual GAME_1_BAN still shows Reroll and Propose custom combo", () => {
+    const session = makeSession({ state: "GAME_1_BAN", isCasual: true }, { game1: emptyGameState(A.id, pool()) });
+    const labels = buttonLabels(renderMatch(session, A, B).components);
+    expect(labels.some((l) => l.includes("Reroll"))).toBe(true);
+    expect(labels.some((l) => l.includes("Propose custom combo"))).toBe(true);
+  });
+});
+
+describe("renderMatch -- PLAYING wording says 'game N' not 'the match' (B08)", () => {
+  it("go-play ping names the game number", () => {
+    const session = makeSession({ state: "GAME_1_PLAYING" }, { game1: { ...emptyGameState(A.id, pool()), pickedDeckIdx: 0 } });
+    const { content } = renderMatch(session, A, B);
+    expect(content).toBe(`<@${A.discordId}> <@${B.discordId}> \u{1F0CF} play game 1, then vote for the winner.`);
+  });
+
+  it("vote-pending description says 'Game N locks in', not 'Match advances'", () => {
+    const session = makeSession(
+      { state: "GAME_1_PLAYING" },
+      { game1: { ...emptyGameState(A.id, pool()), pickedDeckIdx: 0, voteByA: A.id } },
+    );
+    const embed = firstEmbed(renderMatch(session, A, B).embeds);
+    expect(embed.data.description).toContain("Game 1 locks in when both agree");
+    expect(embed.data.description).not.toContain("Match advances");
+  });
+});
+
+describe("renderMatch -- result pointers say Report a problem / Call helper, not admin override (B05)", () => {
+  it("COMPLETE (league) points at the results channel + Report a problem", () => {
+    const win = (winnerId: string): GameState => ({ ...emptyGameState(winnerId, pool()), pickedDeckIdx: 0, winnerId });
+    const session = makeSession({ state: "COMPLETE" }, { game1: win(A.id), game2: win(A.id) });
+    const embed = firstEmbed(renderMatch(session, A, B).embeds);
+    expect(embed.data.description).toContain("Report a problem");
+    expect(embed.data.description).not.toContain("ask an admin");
+  });
+
+  it("a disputed vote points at Call helper, not an admin", () => {
+    const session = makeSession(
+      { state: "GAME_1_PLAYING" },
+      { game1: { ...emptyGameState(A.id, pool()), pickedDeckIdx: 0, voteByA: A.id, voteByB: B.id, disputed: true } },
+    );
+    const embed = firstEmbed(renderMatch(session, A, B).embeds);
+    expect(embed.data.description).toContain("Call helper");
+    expect(embed.data.description).not.toContain("ask an admin");
   });
 });
