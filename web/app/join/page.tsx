@@ -86,8 +86,8 @@ export default async function JoinPage({
               style={{
                 display: "inline-block",
                 marginTop: 10,
-                background: "var(--accent-2)",
-                color: "white",
+                background: "var(--gold)",
+                color: "var(--gold-ink)",
                 padding: "8px 16px",
                 borderRadius: 4,
                 textDecoration: "none",
@@ -121,8 +121,9 @@ export default async function JoinPage({
               href="/auth/signin?callbackUrl=%2Fjoin"
               style={{
                 display: "inline-block",
-                background: "var(--accent-2)",
-                color: "white",
+                marginTop: 10,
+                background: "var(--gold)",
+                color: "var(--gold-ink)",
                 padding: "8px 16px",
                 borderRadius: 4,
                 textDecoration: "none",

@@ -227,8 +227,8 @@ export default async function StandingsPage() {
                   <div style={{ background: "var(--gold)", height: "100%", width: `${pctPlayed}%` }} />
                 </div>
               </div>
-              <details style={{ marginTop: 8 }}>
-                <summary className="muted" style={{ cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5, fontSize: 11 }}>Key</summary>
+              <details style={{ marginTop: 2 }}>
+                <summary className="muted" style={{ cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5, fontSize: 11, display: "flex", alignItems: "center", minHeight: 32 }}>Key</summary>
                 <div style={{ marginTop: 8, fontSize: 12, display: "flex", flexWrap: "wrap", gap: "4px 16px", alignItems: "center" }}>
                   <span><span style={{ color: "var(--info)" }}>↑</span> promotion spot</span>
                   <span><span style={{ color: "var(--admin)" }}>↓</span> relegation spot</span>

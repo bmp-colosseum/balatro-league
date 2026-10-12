@@ -985,9 +985,11 @@ html[data-ui="v2"] .progress-v2 {
   /* Expanded: a small chip overlapping the card header's corner, taking the
      place the full-width "HIDE" band used to own. */
   html[data-ui="v2"] .division-details-v2[data-open="1"] > .division-summary-v2 {
+    /* Sits on the card's top edge, clear of the header text (the match count
+       lives at the header's top-right, where the chip used to land). */
     position: absolute;
-    top: 10px;
-    right: 14px;
+    top: -11px;
+    right: 12px;
     z-index: 1;
     width: auto;
     min-height: 0;
