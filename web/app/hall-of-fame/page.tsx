@@ -9,6 +9,10 @@ import { CardAvatar } from "@/components/DivisionStandingsTable";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Hall of Fame - Balatro League",
+};
+
 function endedLabel(d: Date): string {
   return d.toLocaleDateString("en-US", { year: "numeric", month: "long", timeZone: "UTC" });
 }
@@ -38,7 +42,7 @@ export default async function HallOfFamePage({
             html[data-ui="v2"] (app/globals.css). See the v2 trophy shelf
             below for the "Card Table" redesign of this same data. */}
         <div className="hof-v1">
-          <h2>🏆 Hall of Fame</h2>
+          <h1>🏆 Hall of Fame</h1>
           <p className="muted" style={{ marginTop: -4, marginBottom: 16 }}>
             The top division&apos;s winner is the league champion.
           </p>
@@ -135,7 +139,7 @@ function HallOfFameTrophyShelf({ seasons: allSeasons, showAll }: { seasons: HofS
   return (
     <>
       <div className="hof-header">
-        <h2 className="pixel hof-title">Hall of Fame</h2>
+        <h1 className="pixel hof-title">Hall of Fame</h1>
         <p className="muted hof-count">
           {seasons.length} season{seasons.length === 1 ? "" : "s"}, {titleCount} {showAll ? "division" : "Legendary"} title
           {titleCount === 1 ? "" : "s"}, {distinctChampions} champion{distinctChampions === 1 ? "" : "s"}

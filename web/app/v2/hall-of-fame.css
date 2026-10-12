@@ -95,14 +95,19 @@ html[data-ui="v2"] .hof-shelf-deck {
   padding: 18px 16px 16px;
 }
 html[data-ui="v2"] .hof-shelf-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
+  /* Grid, not flex-wrap -- same fix as .hof-champ-grid above (two per row
+     on a phone instead of one column with the panel's right half empty,
+     ux-round5 finding 2, L37). */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
   row-gap: 12px;
   column-gap: 12px;
   position: relative;
   z-index: 2;
 }
+/* Beats the fixed 150/170px widths .hof-card carries on its own (the same
+   override .hof-champ-grid needs -- see above). */
+html[data-ui="v2"] .hof-shelf-row .hof-card[data-rarity] { width: auto; }
 
 /* Card: 150px wide (two fit per row on a phone-width shelf with room to
    spare), panel-2 face, rarity-coloured 3px border -- same four Balatro
