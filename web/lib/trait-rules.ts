@@ -36,6 +36,20 @@ function bump(c: Counts, k: string): void {
   c[k] = (c[k] ?? 0) + 1;
 }
 
+// The public /traits guide says the 10-game floor once in its intro, not on
+// every card -- each registry criteria string starts "After 10+ games, ..."
+// so the admin editor (which has no shared intro line) still reads clearly
+// on its own; this strips that lead-in and capitalizes what's left, for the
+// guide page only (ux-round5 finding 4, L41). Leaves criteria text that
+// doesn't start with the prefix untouched.
+const GAMES_FLOOR_PREFIX = /^After 10\+ games,\s*/;
+
+export function criteriaForGuide(criteria: string): string {
+  const stripped = criteria.replace(GAMES_FLOOR_PREFIX, "");
+  if (stripped === criteria || stripped.length === 0) return criteria;
+  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
+}
+
 // Deterministic "top stake": highest `metric` count, ties broken by the
 // `tiebreak` count, then by stake name (alphabetical). Shared by the profile
 // and the /admin/traits "who has what" view so a player's traits are

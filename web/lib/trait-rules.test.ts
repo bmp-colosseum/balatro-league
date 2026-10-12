@@ -1,6 +1,45 @@
 import { describe, it, expect } from "vitest";
 import fc from "fast-check";
-import { computeEarnedTraits, topStakeDeterministic, TRAIT_GAMES_FLOOR, type TraitGameRow } from "./trait-rules.js";
+import {
+  computeEarnedTraits,
+  criteriaForGuide,
+  topStakeDeterministic,
+  TRAIT_GAMES_FLOOR,
+  type TraitGameRow,
+} from "./trait-rules.js";
+
+describe("criteriaForGuide", () => {
+  it("strips the shared 10-game lead-in and capitalizes what's left", () => {
+    expect(criteriaForGuide("After 10+ games, White is both your most-played and most-won stake."))
+      .toBe("White is both your most-played and most-won stake.");
+    expect(criteriaForGuide("After 10+ games, you've banned the Ghost deck in most games it appeared."))
+      .toBe("You've banned the Ghost deck in most games it appeared.");
+  });
+
+  it("leaves criteria without the prefix unchanged", () => {
+    expect(criteriaForGuide("Some other rule entirely.")).toBe("Some other rule entirely.");
+    expect(criteriaForGuide("")).toBe("");
+  });
+
+  it("never drops text -- same length minus the stripped prefix, unless that would leave nothing", () => {
+    fc.assert(
+      fc.property(
+        fc.string().map((s) => s.replace(/^\s+/, "")),
+        (rest) => {
+          const withPrefix = `After 10+ games, ${rest}`;
+          const result = criteriaForGuide(withPrefix);
+          if (rest.length === 0) {
+            // Stripping down to an empty "How to earn:" line would be worse
+            // than the unstripped sentence -- falls back to the original.
+            expect(result).toBe(withPrefix);
+          } else {
+            expect(result.length).toBe(rest.length);
+          }
+        },
+      ),
+    );
+  });
+});
 
 describe("topStakeDeterministic", () => {
   it("picks the highest metric count, alphabetical name as the final tiebreak", () => {
