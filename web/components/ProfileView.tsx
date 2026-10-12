@@ -19,6 +19,7 @@ import {
 import { SiteNav } from "@/components/SiteNav";
 import { Callout } from "@/components/Callout";
 import { DiscordId } from "@/components/DiscordId";
+import { LocalDateTime } from "@/components/LocalDateTime";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FormSelect } from "@/components/FormSelect";
@@ -258,7 +259,9 @@ export async function ProfileView({
     const isShootout = m.isShootout === true;
     const isVoid = m.myGames === 0 && m.opponentGames === 0;
     const badge = outcomeBadge(m, isDisputed, isVoid);
-    const date = m.confirmedAt ? m.confirmedAt.toISOString().slice(0, 10) : "-";
+    // Same shared date helper every other page uses ("Oct 12, 2026") instead
+    // of a raw ISO date (ux-round5 finding 7, L36).
+    const date = m.confirmedAt ? <LocalDateTime iso={m.confirmedAt.toISOString()} style="date" /> : "-";
     // One chip row per game: a match is two games with different
     // deck/stake combos, and players want to see both.
     const comboGames = m.games.filter((g) => g.deck && g.stake);
@@ -270,7 +273,7 @@ export async function ProfileView({
         style={isDisputed ? { opacity: 0.75 } : undefined}
       >
         <div className="muted" style={{ fontSize: 11 }}>
-          {date} - {hand.context.seasonName} - <RarityText position={hand.context.tierPosition}>{hand.context.divisionName}</RarityText>
+          {date} · {hand.context.seasonName} · <RarityText position={hand.context.tierPosition}>{hand.context.divisionName}</RarityText>
           {isShootout && <span style={{ marginLeft: 6 }}>(shootout)</span>}
         </div>
         <div className="profile-hand-players">
@@ -331,7 +334,7 @@ export async function ProfileView({
         <p style={{ marginBottom: 4 }}>
           <Link href="/standings" className="muted" style={{ fontSize: 13 }}>← Standings</Link>
         </p>
-        <h2 className="profile-header-v1">{profile.player.displayName}<DiscordId value={profile.player.discordId} username={profile.player.username} /></h2>
+        <h1 className="profile-header-v1">{profile.player.displayName}<DiscordId value={profile.player.discordId} username={profile.player.username} /></h1>
         {shownTimezone && (
           <p className="muted" style={{ fontSize: 13, marginTop: -4 }}>🕐 {shownTimezone}</p>
         )}
@@ -380,8 +383,8 @@ export async function ProfileView({
                 v1-only, for the classic look; see .profile-stats-grid-v1 /
                 .profile-stats-gamewinrate-v1 in app/v2/profile.css). */}
             <div className="profile-hero-summary">
-              {t.seasons} {t.seasons === 1 ? "season" : "seasons"} - {t.points} pts - {t.wins}W {t.draws}D {t.losses}L
-              {t.totalGames > 0 && <> - {t.gameWinRatePct}% game win rate</>}
+              {t.seasons} {t.seasons === 1 ? "season" : "seasons"} · {t.points} pts · {t.wins}W {t.draws}D {t.losses}L
+              {t.totalGames > 0 && <> · {t.gameWinRatePct}% game win rate</>}
             </div>
             {titleStickerList.length > 0 && (
               <div className="profile-hero-stickers">
@@ -924,7 +927,7 @@ export async function ProfileView({
                       <tr><td colSpan={4} className="muted">No matches played yet.</td></tr>
                     ) : (
                       h.matches.map((m, i) => {
-                        const date = m.confirmedAt ? m.confirmedAt.toISOString().slice(0, 10) : "—";
+                        const date = m.confirmedAt ? <LocalDateTime iso={m.confirmedAt.toISOString()} style="date" /> : "-";
                         const isDisputed = m.status === "DISPUTED";
                         const isShootout = m.isShootout === true;
                         // A 0-0 is a void (finished, no points) — distinct from a 1-1 draw.
@@ -1016,27 +1019,30 @@ export async function ProfileView({
               const won = h.rank === 1 && h.totalMembers > 0;
               const color = tierColors(h.tierPosition);
               return (
+                // One flat flex row -- season, tier chip, place and points
+                // all on one line (season-card-v2's CSS stacks this as a
+                // compact row on phone, 4-up on desktop), instead of a
+                // 128px-tall card per season on phone and an uneven 5-up
+                // grid (two orphans) on desktop (ux-round5 finding 7, L47).
                 <div
                   key={h.seasonId}
                   className="card profile-season-card-v2"
                   data-won={won ? "true" : undefined}
                 >
-                  <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                    <Link href={`/seasons/${h.seasonId}`} style={{ color: "var(--text)", fontWeight: 600, fontSize: 14 }}>
-                      {h.seasonName}
-                    </Link>
-                    <span
-                      className="pill"
-                      data-rarity={rarityIndex(h.tierPosition)}
-                      style={{ background: color.bg, color: color.fg }}
-                    >
-                      {h.divisionName}
-                    </span>
-                  </div>
-                  <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+                  <Link href={`/seasons/${h.seasonId}`} className="profile-season-name">
+                    {h.seasonName}
+                  </Link>
+                  <span
+                    className="pill"
+                    data-rarity={rarityIndex(h.tierPosition)}
+                    style={{ background: color.bg, color: color.fg }}
+                  >
+                    {h.divisionName}
+                  </span>
+                  <span className="muted profile-season-rank">
                     {h.rank > 0 ? `#${h.rank} of ${h.totalMembers}` : "unranked"}
-                  </div>
-                  <div className="profile-season-points" style={{ marginTop: 4 }}>{h.points} pts</div>
+                  </span>
+                  <span className="profile-season-points">{h.points} pts</span>
                 </div>
               );
             })}

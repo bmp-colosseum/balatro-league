@@ -170,23 +170,56 @@ html[data-ui="v2"] .profile-sticker:nth-child(even) { transform: rotate(2deg); }
 .profile-season-empty-v2 { display: none; }
 html[data-ui="v2"] .profile-season-empty-v2 { display: block; }
 .profile-season-grid-v2 { display: none; }
+/* Phone: one compact row per season (name, tier chip, place, pts all on one
+   line) instead of a 128px-tall card -- ux-round5 finding 7, L47. */
 html[data-ui="v2"] .profile-season-grid-v2 {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   margin-top: 12px;
 }
+/* Desktop: a real 4-up grid, so 7 seasons fill exactly two rows instead of
+   an auto-fit column count that left two orphans on their own row. */
+@media (min-width: 640px) {
+  html[data-ui="v2"] .profile-season-grid-v2 {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+}
 html[data-ui="v2"] .profile-season-card-v2 {
-  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  overflow: hidden;
 }
 html[data-ui="v2"] .profile-season-card-v2[data-won="true"] {
   border-color: var(--gold);
   box-shadow: inset 4px 0 0 var(--gold), var(--shadow);
 }
+html[data-ui="v2"] .profile-season-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--paper);
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+}
+html[data-ui="v2"] .profile-season-rank {
+  flex-shrink: 0;
+  font-size: 12px;
+  white-space: nowrap;
+}
 html[data-ui="v2"] .profile-season-card-v2 .profile-season-points {
+  flex-shrink: 0;
   font-family: var(--font-body-v2), "Segoe UI", sans-serif;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* ---- match history "hands" -------------------------------------------- */

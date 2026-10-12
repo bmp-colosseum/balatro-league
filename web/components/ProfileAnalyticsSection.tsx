@@ -99,6 +99,13 @@ export function ProfileAnalyticsSection({
 }) {
   const [banStats, setBanStats] = useState<PlayerBanStats | null>(null);
   const [isPending, startTransition] = useTransition();
+  // Starts closed, so the initial render (and SSR HTML) never pays for the
+  // sprite grids below -- this section alone was 239-264 deck/stake sprite
+  // <img>s and ~6,294 sub-12px text nodes on a typical profile, all inside a
+  // closed, merely CSS-hidden <details> (ux-round5 finding 10, L51). Once
+  // opened it stays mounted for the rest of the view (no point re-collapsing
+  // the DOM on a second click).
+  const [opened, setOpened] = useState(false);
 
   const qualifyingDecks = deckPerformance.filter((d) => d.gamesTotal >= 5);
   const qualifyingStakes = stakePerformance.filter((s) => s.gamesTotal >= 5);
@@ -113,7 +120,9 @@ export function ProfileAnalyticsSection({
   if (!hasAnythingToShow) return null;
 
   const handleToggle = (e: React.SyntheticEvent<HTMLDetailsElement>) => {
-    if (!e.currentTarget.open || banStats !== null || isPending) return;
+    if (!e.currentTarget.open) return;
+    setOpened(true);
+    if (banStats !== null || isPending) return;
     startTransition(async () => {
       const result = await loadDeckStakeAnalyticsAction(playerId);
       setBanStats(result);
@@ -126,7 +135,7 @@ export function ProfileAnalyticsSection({
         <strong>Deck and stake stats</strong>
       </summary>
 
-      {qualifyingDecks.length > 0 && (
+      {opened && qualifyingDecks.length > 0 && (
         <div className="grid grid-2" style={{ marginTop: 16 }}>
           <div className="card">
             <strong>Deck performance</strong>
@@ -187,7 +196,7 @@ export function ProfileAnalyticsSection({
         </div>
       )}
 
-      {favorites.mostPlayed.decks.length > 0 && (
+      {opened && favorites.mostPlayed.decks.length > 0 && (
         <div className="grid grid-2" style={{ marginTop: 16 }}>
           <div className="card">
             <strong>⭐ Most played</strong>
