@@ -3,7 +3,9 @@
 // override, bulk import, etc.) gated by `isAdmin`.
 
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { hasTier } from "@/lib/admin";
 import { DivisionStandingsTable, type StandingsRowExtras } from "@/components/DivisionStandingsTable";
@@ -19,6 +21,7 @@ import { loadTieHelper, type TieGroup } from "@/lib/loaders/tie-helper";
 import { loadAdminDivisionDetail } from "@/lib/loaders/admin";
 import { loadPlayerIdByDiscordId } from "@/lib/loaders/players";
 import { tierColors, rarityIndex } from "@/lib/tier-colors";
+import { formatSeasonLabel } from "@/lib/format-season";
 import { groupPairings, type Pairing } from "@/lib/division-page-core";
 import { SiteNav } from "@/components/SiteNav";
 import { Callout } from "@/components/Callout";
@@ -45,6 +48,20 @@ import {
 } from "./actions";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const division = await prisma.division.findUnique({
+    where: { id },
+    select: { name: true, season: { select: { number: true, subtitle: true } } },
+  });
+  if (!division) return { title: "Balatro League" };
+  return { title: `${division.name} - ${formatSeasonLabel(division.season)} - Balatro League` };
+}
 
 export default async function PublicDivisionPage({
   params,
@@ -153,8 +170,10 @@ export default async function PublicDivisionPage({
           <div className="card-header">
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
               {/* The page's only visible heading (ux-round4 finding 10, L8) --
-                  the hidden v1 block below has its own <h2>, but v2 (what
-                  everyone actually sees) had no heading element at all. */}
+                  the hidden v1 block below has its own h1 too (promoted from
+                  h2 in ux-round5 L45), but the two are mutually exclusive via
+                  the v1/v2 display:none toggle, so exactly one is ever in the
+                  accessible outline. */}
               <h1 className="pixel division-name" style={{ margin: 0 }} data-rarity={rarityIndex(division.tierPosition)}>
                 {division.name}
               </h1>
@@ -183,7 +202,7 @@ export default async function PublicDivisionPage({
         </div>
 
         <div className="division-top-v1" style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-          <h2 style={{ margin: 0 }}>{division.name}</h2>
+          <h1 style={{ margin: 0 }}>{division.name}</h1>
           <span className="pill" style={{ background: tc.bg, color: tc.fg }}>{division.tierName}</span>
           <Link href={`/seasons/${division.seasonId}`} className="muted">
             {division.seasonName}
