@@ -24,7 +24,10 @@ export interface OnboardingGuideInput {
   // Pre-rendered season start/end line(s) (e.g. from seasonWindowLines()).
   // [] falls back to a generic "check the pinned info" line.
   seasonWindowLines: string[];
-  // Full URL to the standings page, e.g. "https://balatroleague.com/standings".
+  // Link to the standings page -- the bot's DM needs the full URL Discord
+  // requires (e.g. "https://balatroleague.com/standings"); the web page's
+  // own loader passes a relative "/standings" instead (ux-round4 L10), since
+  // discordMarkdownToHtml renders a bare "/path" as a same-tab link.
   standingsUrl: string;
   // Jump link to the support channel, or null to omit the direct mention.
   supportChannelUrl: string | null;

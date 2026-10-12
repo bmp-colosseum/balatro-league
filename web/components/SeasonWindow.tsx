@@ -40,23 +40,28 @@ export function SeasonWindow({ start, end, className }: SeasonWindowProps) {
   const startIso = toIso(start);
   const endIso = toIso(end);
 
+  // Season boundaries are a date-only concept (ux-round4 finding 8, L4):
+  // pin to UTC like lib/season-window-text.ts's formatDate rather than the
+  // viewer's local timezone, so a slow load never shows the raw ISO
+  // fallback and then flips to a different calendar day once hydrated.
   let content: ReactNode;
   if (startIso && endIso) {
     content = (
       <>
-        Runs <LocalDateTime iso={startIso} style="date" /> to <LocalDateTime iso={endIso} style="date" />
+        Runs <LocalDateTime iso={startIso} style="date" timeZone="UTC" /> to{" "}
+        <LocalDateTime iso={endIso} style="date" timeZone="UTC" />
       </>
     );
   } else if (startIso) {
     content = (
       <>
-        {isPast(startIso) ? "Started" : "Starts"} <LocalDateTime iso={startIso} style="date" />
+        {isPast(startIso) ? "Started" : "Starts"} <LocalDateTime iso={startIso} style="date" timeZone="UTC" />
       </>
     );
   } else if (endIso) {
     content = (
       <>
-        {isPast(endIso) ? "Ended" : "Ends"} <LocalDateTime iso={endIso} style="date" />
+        {isPast(endIso) ? "Ended" : "Ends"} <LocalDateTime iso={endIso} style="date" timeZone="UTC" />
       </>
     );
   } else {

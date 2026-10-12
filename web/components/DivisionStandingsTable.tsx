@@ -256,8 +256,12 @@ export function CardAvatar({ displayName, avatarUrl }: { displayName: string; av
 // still spelled out in the tooltip for anyone who needs the exact numbers.
 export function CardHand({ r }: { r: StandingsTableRow }) {
   const pips = recordPips(r.wins, r.draws, r.losses);
+  // A title attribute is mouse-hover only -- touch never shows it (ux-round4
+  // finding 3 under "League standings", L14), so the same text goes on
+  // aria-label too, which VoiceOver/TalkBack read regardless of input.
+  const label = `Form: ${r.wins}W ${r.draws}D ${r.losses}L`;
   return (
-    <span className="player-card-hand" title={`Form: ${r.wins}W ${r.draws}D ${r.losses}L`}>
+    <span className="player-card-hand" role="img" aria-label={label} title={label}>
       {pips.map((kind, i) => (
         <span key={i} className="player-card-pip" data-kind={kind} />
       ))}
@@ -596,7 +600,14 @@ export function DivisionStandingsTable({
                       points" footnote (no lives list to zero-check) can
                       still fire with 0 matches played, which is just as
                       meaningless this early. */}
-                  {!noMatchesYet && footnote && <p className="tie-footnote-v2">{footnote}</p>}
+                  {!noMatchesYet && footnote && (
+                    <p
+                      className="tie-footnote-v2"
+                      title="Net lives = the lives you had left in your wins, minus the lives your opponents had left when they beat you."
+                    >
+                      {footnote}
+                    </p>
+                  )}
                 </Fragment>
               );
             })}

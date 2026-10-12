@@ -152,9 +152,12 @@ export default async function PublicDivisionPage({
         <div className="card division-hero-v2">
           <div className="card-header">
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-              <strong className="pixel division-name" data-rarity={rarityIndex(division.tierPosition)}>
+              {/* The page's only visible heading (ux-round4 finding 10, L8) --
+                  the hidden v1 block below has its own <h2>, but v2 (what
+                  everyone actually sees) had no heading element at all. */}
+              <h1 className="pixel division-name" style={{ margin: 0 }} data-rarity={rarityIndex(division.tierPosition)}>
                 {division.name}
-              </strong>
+              </h1>
               <span
                 className="pill division-chip"
                 data-rarity={rarityIndex(division.tierPosition)}
@@ -558,6 +561,14 @@ function MatchesV2({
       {grouped.played.length > 0 && (
         <section className="vs-group">
           <h3 className="pixel">Played</h3>
+          {/* The only "Report a problem" copy on the site used to live on
+              How it works' closing card, with no pointer to it from here --
+              so a player who spots a wrong score on their own division page
+              had nowhere to go (ux-round4 finding 10, L9). Same wording as
+              the report page's own recent-matches note (app/report/page.tsx). */}
+          <p className="muted" style={{ fontSize: 11, margin: "0 0 8px" }}>
+            Wrong score? Press Report a problem on the result post in Discord.
+          </p>
           <div className="vs-grid">
             {grouped.played.map((p) => (
               <VsBlock key={pairingKey(p)} p={p} viewerPlayerId={viewerPlayerId} />

@@ -758,6 +758,57 @@ html[data-ui="v2"] textarea:focus {
   border-color: var(--gold);
 }
 
+/* One global focus-visible ring, matching the inputs above, for every plain
+   link/button/disclosure (ux-round4 L6) -- the browser's default double
+   ring is the only visible feedback otherwise. */
+html[data-ui="v2"] a:focus-visible,
+html[data-ui="v2"] button:focus-visible,
+html[data-ui="v2"] summary:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* Menu rows (components/ui/menu.tsx) -- keyboard Tab/Enter/ArrowDown moves
+   real DOM focus onto each [role=menuitem], but Base UI's data-highlighted
+   state (the switcher and the Tour's season menu both use it, via
+   data-highlighted:bg-accent) doesn't reliably track that keyboard focus,
+   so arrowing through a menu showed no visible change at all (ux-round4
+   finding 2). :focus-visible always tracks real keyboard focus regardless
+   of data-highlighted, so it's the one guaranteed-correct hook here. The
+   popup clips with overflow-hidden (components/ui/menu.tsx's MenuContent),
+   so the ring sits inset (negative offset) instead of outside the row like
+   the global rule above, and the panel-2 fill reinforces it for high
+   -contrast mode where outlines can be hard to spot. */
+html[data-ui="v2"] [role="menuitem"]:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: -3px;
+  background: var(--panel-2);
+}
+
+/* Skip link (app/layout.tsx): the first focusable element on every page, so
+   a keyboard/screen-reader user can jump past the header without tabbing
+   through it (ux-round4 L7; ported from the Tour site's own .skip-link).
+   Off-screen until it actually has focus -- visibility: hidden or display:
+   none would remove it from the tab order entirely, which is the one thing
+   a skip link cannot do. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 1000;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  background: var(--accent);
+  color: #000;
+  font-weight: 600;
+  border-radius: 0 0 6px 0;
+}
+.skip-link:focus {
+  left: 0;
+}
+
 /* Sticky top bar (SiteNav). The app renders exactly one <header>. */
 html[data-ui="v2"] header {
   background: var(--felt-deep);
@@ -1097,17 +1148,24 @@ html[data-ui="v2"] .progress-v2 {
     height: 16px;
     color: var(--paper-faint);
   }
-  /* Expanded: a small chip overlapping the card header's corner, taking the
-     place the full-width "HIDE" band used to own. */
+  /* Expanded: the same 44px-tall panel-2 strip the collapsed row used, with
+     a small "Hide" chip right-aligned inside it instead of repeating a
+     full-width "HIDE" band. Used to go position:absolute and drop out of
+     flow here, which took its 44px with it -- the card-header strip right
+     below jumped up by that much the instant you expanded a division
+     (ux-round4 finding 11 (round 3's), L12). Keeping the same min-height in
+     both states means the strip never moves, just what's inside it does. */
   html[data-ui="v2"] .division-details-v2[data-open="1"] > .division-summary-v2 {
-    /* Sits on the card's top edge, clear of the header text (the match count
-       lives at the header's top-right, where the chip used to land). */
-    position: absolute;
-    top: -11px;
-    right: 12px;
-    z-index: 1;
-    width: auto;
-    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+  html[data-ui="v2"] .division-details-v2[data-open="1"] > .division-summary-v2 > .division-summary-collapsed {
+    display: none;
+  }
+  html[data-ui="v2"] .division-details-v2[data-open="1"] > .division-summary-v2 > .division-summary-expanded {
     padding: 3px 10px;
     font-size: 11px;
     text-transform: uppercase;
@@ -1115,9 +1173,6 @@ html[data-ui="v2"] .progress-v2 {
     color: var(--paper-faint);
     background: var(--panel-edge);
     border-radius: 999px;
-  }
-  html[data-ui="v2"] .division-details-v2[data-open="1"] > .division-summary-v2 > .division-summary-collapsed {
-    display: none;
   }
 }
 

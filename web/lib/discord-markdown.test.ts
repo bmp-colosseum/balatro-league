@@ -15,6 +15,12 @@ describe("discordMarkdownToHtml", () => {
     );
   });
 
+  it("converts a suppressed relative-path link to a same-tab anchor (ux-round4 L10)", () => {
+    expect(discordMarkdownToHtml("Full standings for every division: </standings>")).toBe(
+      'Full standings for every division: <a href="/standings">/standings</a>',
+    );
+  });
+
   it("handles multiple bold spans and a link in one string, matching a real onboarding-guide section", () => {
     const input =
       "Click **Help** at the bottom of your division channel, ask in the support channel (<https://discord.com/channels/1/2>), or DM **Chrono**, who runs the league. Good luck out there!";
@@ -50,17 +56,22 @@ describe("discordMarkdownToHtml", () => {
     // not just hand-picked examples -- a dynamic import keeps this test
     // from depending on web/lib's build order relative to the bot sync.
     return import("./onboarding-guide.js").then(({ buildOnboardingGuideSections }) => {
-      for (const supportChannelUrl of [null, "https://discord.com/channels/1/2"]) {
-        const content = buildOnboardingGuideSections({
-          seasonLabel: "Season 7",
-          seasonWindowLines: [],
-          standingsUrl: "https://balatroleague.com/standings",
-          supportChannelUrl,
-        });
-        for (const section of content.sections) {
-          const html = discordMarkdownToHtml(section.body);
-          expect(html).not.toContain("**");
-          expect(typeof html).toBe("string");
+      // Both shapes the real callers use: the bot's DM needs the absolute
+      // URL, the web /how-it-works loader passes a relative "/standings"
+      // (ux-round4 L10) -- lib/loaders/how-it-works.ts.
+      for (const standingsUrl of ["https://balatroleague.com/standings", "/standings"]) {
+        for (const supportChannelUrl of [null, "https://discord.com/channels/1/2"]) {
+          const content = buildOnboardingGuideSections({
+            seasonLabel: "Season 7",
+            seasonWindowLines: [],
+            standingsUrl,
+            supportChannelUrl,
+          });
+          for (const section of content.sections) {
+            const html = discordMarkdownToHtml(section.body);
+            expect(html).not.toContain("**");
+            expect(typeof html).toBe("string");
+          }
         }
       }
     });
@@ -68,12 +79,16 @@ describe("discordMarkdownToHtml", () => {
 
   it("property: never contains a literal '**' or a bare '<url>' token after conversion", () => {
     fc.assert(
-      fc.property(fc.array(fc.constantFrom("plain ", "**bold** ", "<https://example.test/x> ")), (parts) => {
-        const input = parts.join("");
-        const html = discordMarkdownToHtml(input);
-        expect(html).not.toContain("**");
-        expect(html).not.toMatch(/<https?:\/\//);
-      }),
+      fc.property(
+        fc.array(fc.constantFrom("plain ", "**bold** ", "<https://example.test/x> ", "</standings> ")),
+        (parts) => {
+          const input = parts.join("");
+          const html = discordMarkdownToHtml(input);
+          expect(html).not.toContain("**");
+          expect(html).not.toMatch(/<https?:\/\//);
+          expect(html).not.toContain("</standings>"); // the raw relative token never survives either
+        },
+      ),
     );
   });
 });

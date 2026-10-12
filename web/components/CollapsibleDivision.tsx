@@ -1,8 +1,30 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { divisionOpenStorageKey, formatStoredOpen, parseStoredOpen } from "@/lib/division-open-storage";
 
 const PHONE_QUERY = "(max-width: 640px)";
+
+// Reads a division's remembered open state from sessionStorage. Returns
+// null when nothing is stored yet (first visit this tab), so the caller
+// falls back to its own default.
+function readStoredOpen(divisionId: string): boolean | null {
+  try {
+    return parseStoredOpen(window.sessionStorage.getItem(divisionOpenStorageKey(divisionId)));
+  } catch {
+    // Private-mode / storage-disabled browsers: behave as if nothing is stored.
+    return null;
+  }
+}
+
+function writeStoredOpen(divisionId: string, open: boolean): void {
+  try {
+    window.sessionStorage.setItem(divisionOpenStorageKey(divisionId), formatStoredOpen(open));
+  } catch {
+    // Ignore write failures (quota, private mode); the toggle still works
+    // for this page view, it just won't be remembered.
+  }
+}
 
 // A division card body that collapses to a one-line summary on phones only.
 // It used to be a native <details>, but Chrome hides a closed details'
@@ -19,6 +41,7 @@ const PHONE_QUERY = "(max-width: 640px)";
 //   open   -> a small "Hide" chip that overlaps the card header strip
 //             instead of a second full-width band repeating the header
 export function CollapsibleDivision({
+  divisionId,
   defaultOpenOnPhone,
   divisionName,
   tierRarity,
@@ -26,6 +49,9 @@ export function CollapsibleDivision({
   summary,
   children,
 }: {
+  // Stable id used as the sessionStorage key so back/reload restores what
+  // the player expanded instead of always falling back to the default.
+  divisionId: string;
   defaultOpenOnPhone: boolean;
   divisionName: string;
   // 0-3, see lib/tier-colors.ts' rarityIndex -- colours the collapsed name.
@@ -43,9 +69,20 @@ export function CollapsibleDivision({
 
   useEffect(() => {
     const phone = window.matchMedia(PHONE_QUERY).matches;
-    setOpen(phone ? defaultOpenOnPhone : true);
+    const stored = phone ? readStoredOpen(divisionId) : null;
+    setOpen(phone ? stored ?? defaultOpenOnPhone : true);
     setReady(true);
-  }, [defaultOpenOnPhone]);
+  }, [defaultOpenOnPhone, divisionId]);
+
+  function toggle(): void {
+    setOpen((o) => {
+      const next = !o;
+      if (window.matchMedia(PHONE_QUERY).matches) {
+        writeStoredOpen(divisionId, next);
+      }
+      return next;
+    });
+  }
 
   return (
     <div
@@ -58,7 +95,7 @@ export function CollapsibleDivision({
         type="button"
         className="division-summary-v2"
         aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggle}
       >
         <span className="division-summary-collapsed">
           <span

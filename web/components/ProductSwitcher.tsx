@@ -43,7 +43,11 @@ export function ProductSwitcher({ activeSeasonName }: { activeSeasonName: string
           // A real cross-site navigation (two separate Next.js apps on two
           // subdomains) -- a plain <a>, not next/link's <Link>, which can't route
           // there client-side anyway.
-          <MenuLinkItem key={row.key} closeOnClick render={<a href={row.href} />}>
+          <MenuLinkItem
+            key={row.key}
+            closeOnClick
+            render={<a href={row.href} aria-current={row.current ? "true" : undefined} />}
+          >
             <span className="flex min-w-0 flex-col">
               <span style={{ fontWeight: row.current ? 700 : 400 }}>{row.label}</span>
               <span className="muted truncate" style={{ fontSize: 12 }}>

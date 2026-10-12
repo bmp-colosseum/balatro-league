@@ -53,6 +53,29 @@ export default async function HowItWorksPage() {
           </section>
         ))}
 
+        {/* Escalation path comes before the closing CTA (ux-round4 finding
+            10, L11) -- a new player reading top to bottom used to hit
+            "Something wrong with a result?" last, so the guide ended on a
+            problem instead of the call to action below. */}
+        <section className="card howto-section" id="report-a-problem">
+          <h3>Something wrong with a result?</h3>
+          <p>
+            Press <strong>Report a problem</strong> on the result post in Discord,{" "}
+            {supportChannelUrl ? (
+              <>
+                open a ticket in the{" "}
+                <a href={supportChannelUrl} target="_blank" rel="noopener noreferrer">
+                  support channel
+                </a>
+                ,
+              </>
+            ) : (
+              "open a ticket in the support channel,"
+            )}{" "}
+            or DM <strong>Chrono</strong>.
+          </p>
+        </section>
+
         {/* Closing CTA -- the guide used to explain everything and stop at
             "Good luck out there!" with no button (the join page is the one
             with buttons). Points a first-timer at /join, and a returning
@@ -75,25 +98,6 @@ export default async function HowItWorksPage() {
             >
               {isLoggedIn ? "Your division" : "Join the league"}
             </Link>
-          </p>
-        </section>
-
-        <section className="card howto-section" id="report-a-problem">
-          <h3>Something wrong with a result?</h3>
-          <p>
-            Press <strong>Report a problem</strong> on the result post in Discord,{" "}
-            {supportChannelUrl ? (
-              <>
-                open a ticket in the{" "}
-                <a href={supportChannelUrl} target="_blank" rel="noopener noreferrer">
-                  support channel
-                </a>
-                ,
-              </>
-            ) : (
-              "open a ticket in the support channel,"
-            )}{" "}
-            or DM <strong>Chrono</strong>.
           </p>
         </section>
       </main>

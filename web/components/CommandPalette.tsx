@@ -112,7 +112,13 @@ export function CommandPalette() {
   return (
     <CommandDialog open={open} onOpenChange={setOpen} title="Jump to" description="Search pages">
       <Command>
-        <CommandInput placeholder="Jump to a player, division, or season..." />
+        {/* Logged out, the palette can only ever return Pages and Divisions
+            (see app/api/command-context/route.ts: players are gated on a
+            session) -- a placeholder promising players/seasons there is a
+            dead end (ux-round4 finding 3, L3). */}
+        <CommandInput
+          placeholder={ctx.loggedIn ? "Jump to a player, division, or season..." : "Jump to a page or division"}
+        />
         <CommandList>
           <CommandEmpty>No results.</CommandEmpty>
           <CommandGroup heading="Pages">
@@ -148,6 +154,13 @@ export function CommandPalette() {
                   {p.username && <span className="discord-username">(@{p.username})</span>}
                 </CommandItem>
               ))}
+            </CommandGroup>
+          )}
+          {!ctx.loggedIn && (
+            <CommandGroup heading="Players">
+              <CommandItem value="sign in to search players" disabled className="muted">
+                Sign in to search players
+              </CommandItem>
             </CommandGroup>
           )}
         </CommandList>
