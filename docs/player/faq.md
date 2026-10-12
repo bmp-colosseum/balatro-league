@@ -8,6 +8,11 @@ When a season's signups are open, click **Sign Up** in `#league-signups`, or go 
 `/join` on the site. Between seasons, open your profile and turn on **🔔 Notify**
 (get a DM when signups open) or **🔁 Auto-sign-up** (get entered automatically).
 
+### What happens when I sign in on the site?
+Clicking a gated link while logged out (Report a match, Players) sends you to Discord
+login, then brings you back to that exact page afterward. Landing on `/auth/signin`
+directly (not via a gated link) takes you to your profile instead.
+
 ### How am I placed into a division?
 The admins seed you, weighing — **in order** — your **previous-season finish** (if
 any), your **Balatro ranked MMR**, and their **judgment**. So returning players are

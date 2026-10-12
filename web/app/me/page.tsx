@@ -12,13 +12,17 @@ import { Callout } from "@/components/Callout";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "My profile - Balatro League",
+};
+
 export default async function MePage({
   searchParams,
 }: {
   searchParams: Promise<{ ok?: string; err?: string }>;
 }) {
   const session = await auth();
-  if (!session?.user) redirect("/auth/signin");
+  if (!session?.user) redirect("/auth/signin?from=/me");
 
   const { ok, err } = await searchParams;
   const user = session.user as {
@@ -50,7 +54,7 @@ export default async function MePage({
     <>
       <SiteNav activePath="" />
       <main>
-        <h2>Your profile</h2>
+        <h1>Your profile</h1>
 
         <div className="card" style={{ display: "flex", gap: 16, alignItems: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
