@@ -211,6 +211,15 @@ html[data-ui="v2"] .player-card-name {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Stretches the name link to cover the whole card (ux-round5 finding 9,
+   L46) so the tap target is the 60px+ row, not just the ~15px-tall text --
+   a pseudo-element overlay, so the visible link stays exactly as wide as
+   the name. .player-card above already carries position: relative. */
+html[data-ui="v2"] .player-card-name::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
 
 /* Record "hand" -- one pip per match result, 10x14px, 3px radius/gap. */
 html[data-ui="v2"] .player-card-hand {

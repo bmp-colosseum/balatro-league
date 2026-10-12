@@ -115,6 +115,10 @@ function YourDivisionCard({
 
 export const dynamic = "force-dynamic"; // Always fresh — DB writes happen out-of-band via the bot
 
+export const metadata = {
+  title: "Standings - Balatro League",
+};
+
 export default async function StandingsPage() {
   const showBmpMmr = await getShowBmpMmr();
   // Viewer's Discord id (for the v2 "you" badge) -- undefined when signed
@@ -179,12 +183,12 @@ export default async function StandingsPage() {
         )}
         {!data.season ? (
           <>
-            <h2>Standings</h2>
+            <h1>Standings</h1>
             <div className="card muted">No active season right now.</div>
           </>
         ) : (
           <>
-            <h2>{data.season.name} — Standings</h2>
+            <h1>{data.season.name} — Standings</h1>
             {/* v2 "Card Table" tier tabs -- jump links to each tier's
                 section below, chunky and rarity-colored per MASTER.md. Brand
                 new element, hidden under v1 by a base `.tier-tabs { display:
@@ -227,8 +231,17 @@ export default async function StandingsPage() {
                   <div style={{ background: "var(--gold)", height: "100%", width: `${pctPlayed}%` }} />
                 </div>
               </div>
-              <details style={{ marginTop: 2 }}>
-                <summary className="muted" style={{ cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5, fontSize: 11, display: "flex", alignItems: "center", minHeight: 32 }}>Key</summary>
+              <details style={{ marginTop: 2 }} className="key-disclosure">
+                {/* Plain body-size text + a chevron instead of a bare 11px
+                    uppercase word with no affordance (ux-round5 L40) -- same
+                    "this opens" signal the Hide chip gives the collapsed
+                    divisions below (CollapsibleDivision.tsx). */}
+                <summary className="muted" style={{ cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", gap: 4, minHeight: 32 }}>
+                  Key
+                  <svg className="key-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true" width={14} height={14}>
+                    <path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </summary>
                 <div className="key-legend-v1" style={{ marginTop: 8, fontSize: 12, display: "flex", flexWrap: "wrap", gap: "4px 16px", alignItems: "center" }}>
                   <span><span style={{ color: "var(--info)" }}>↑</span> promotion spot</span>
                   <span><span style={{ color: "var(--admin)" }}>↓</span> relegation spot</span>

@@ -142,6 +142,25 @@ h1, h2 {
 .card-admin  { border-color: var(--admin); }
 .card-success { border-color: var(--success); }
 .card-danger  { border-color: var(--danger); }
+
+/* /seasons card links -- a whole-card <a> with no hover change or chevron
+   read as a static panel, not a destination (ux-round5 finding 11, L44).
+   Transition + chevron give it the same "this goes somewhere" signal the
+   collapsed division rows give elsewhere on the site. */
+.season-card-link { transition: background-color 120ms ease; }
+.season-card-link:hover { background: var(--surface-2); }
+.season-card-chevron {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  color: var(--muted);
+}
+
+/* /standings' "Key" disclosure chevron -- flips to point up once open, same
+   as CollapsibleDivision's own chevron (ux-round5 L40). */
+.key-disclosure-chevron { transition: transform 120ms ease; }
+.key-disclosure[open] > summary .key-disclosure-chevron { transform: rotate(180deg); }
+
 .muted { color: var(--muted); }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
@@ -536,8 +555,13 @@ form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 }
 /* .division-name used to carry its font-size as an inline style (18px);
    moved to a plain class so the v2 override below (22px) doesn't need
-   !important to beat it. Same computed value, so v1 is unaffected. */
-.division-name { font-size: 18px; }
+   !important to beat it. Same computed value, so v1 is unaffected.
+   white-space: nowrap keeps "Uncommon 1" on one line -- the flex row around
+   it already wraps its CHILDREN (the name, then the tier chip) onto a
+   second line when space is tight, so without this the name's own trailing
+   number broke onto its own line under the chip instead (ux-round5 finding
+   8, L38). */
+.division-name { font-size: 18px; white-space: nowrap; }
 
 /* ========================================================================
    v2 "Card Table" design system -- design-system/MASTER.md is the spec.

@@ -1,10 +1,15 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { loadSeasonsIndex } from "@/lib/loaders/seasons";
 import { loadHallOfFame } from "@/lib/loaders/hall-of-fame";
 import { SiteNav } from "@/components/SiteNav";
 import { SeasonWindow } from "@/components/SeasonWindow";
 
 export const dynamic = "force-dynamic";
+
+export const metadata = {
+  title: "Seasons - Balatro League",
+};
 
 export default async function SeasonsPage() {
   // Champion name per ended season, off the same Hall of Fame data the
@@ -17,7 +22,7 @@ export default async function SeasonsPage() {
     <>
       <SiteNav activePath="/seasons" />
       <main>
-        <h2>Seasons</h2>
+        <h1>Seasons</h1>
         {seasons.length === 0 ? (
           <div className="card muted">No seasons yet.</div>
         ) : (
@@ -28,9 +33,19 @@ export default async function SeasonsPage() {
                 <Link
                   key={s.id}
                   href={`/seasons/${s.id}`}
-                  className="card"
-                  style={{ display: "block", color: "var(--text)", textDecoration: "none", marginBottom: 0 }}
+                  className="card season-card-link"
+                  style={{ display: "block", position: "relative", color: "var(--text)", textDecoration: "none", marginBottom: 0, paddingRight: 36 }}
                 >
+                  {/* A whole-card link with no affordance read as a static
+                      panel, not something to click (ux-round5 L44) -- a
+                      trailing chevron plus a hover tint say "this goes
+                      somewhere", same signal the collapsed division rows
+                      give (components/CollapsibleDivision.tsx's chevron). */}
+                  <ChevronRight
+                    aria-hidden="true"
+                    size={18}
+                    className="season-card-chevron"
+                  />
                   <strong style={{ fontSize: 16 }}>{s.name}</strong>{" "}
                   {s.isActive ? (
                     <span className="pill" data-status="active">ACTIVE</span>

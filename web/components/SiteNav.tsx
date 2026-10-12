@@ -57,9 +57,15 @@ export async function SiteNav({ activePath }: { activePath: string }) {
   return (
     <>
     <header className="flex flex-nowrap items-center gap-3 border-b border-border bg-card px-4 py-2.5 md:gap-6 md:px-6 md:py-3">
-      <h1 className="m-0 text-base">
+      {/* Not a heading -- it's a brand/product switcher, not this page's
+          title. It used to render as the page's h1 on every route, so every
+          page's own heading was demoted to h2 (and the handful of pages with
+          their own h1 carried two) -- ux-round5 finding 5, L45. Each page's
+          real heading is promoted to h1 instead (see that page's own
+          top-of-main element). */}
+      <span className="m-0 text-base">
         <ProductSwitcher activeSeasonName={activeSeason?.name ?? null} />
-      </h1>
+      </span>
       <SeasonPill seasonId={activeSeason?.id ?? null} seasonName={activeSeason?.name ?? null} />
       <nav className="pixel hidden flex-wrap items-center gap-1 text-[13px] sm:flex md:gap-2">
         {primary.map((link) => {
