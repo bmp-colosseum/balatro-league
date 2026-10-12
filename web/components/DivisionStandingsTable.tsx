@@ -14,7 +14,7 @@ import { Fragment, type ReactNode, type CSSProperties } from "react";
 import { rankLabel } from "@/lib/standings";
 import { DiscordId } from "@/components/DiscordId";
 import type { StandingsMmrEntry } from "@/lib/loaders/standings";
-import { boundaryBelow, zoneKeyLines, zoneOf, type Zone } from "@/lib/standings-zone";
+import { boundaryBelow, clinchTitle, zoneKeyLines, zoneOf, type Zone } from "@/lib/standings-zone";
 import { groupTiebreakNotes, initials, recordPips } from "@/lib/standings-cards-core";
 
 // Minimal row shape the table needs. Every standings source — the /standings
@@ -284,6 +284,42 @@ export function CardLives({ r }: { r: StandingsTableRow }) {
   );
 }
 
+// v2 "Card Table" rank-tile clinch glyph -- a tiny inline SVG lock (no
+// emoji, per design-system/MASTER.md) instead of the table's lock-up/lock-down emoji.
+// Promote/relegate zones themselves are conveyed by the card's stripe +
+// dashed divider (app/v2/standings-cards.css), not by this glyph or an
+// arrow -- this only ever fires for the mid-season CLINCH state (ex is
+// undefined once the division is complete, see rowTint's comment above and
+// the page's `complete ?` gate), so it never collides with the showdown
+// glyph below (that one only fires once complete).
+export function ClinchGlyph({ status }: { status?: "up" | "down" }) {
+  if (!status) return null;
+  return (
+    <span className="player-card-clinch" data-status={status} title={clinchTitle(status)}>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M7 10V8a5 5 0 0 1 10 0v2h.5A1.5 1.5 0 0 1 19 11.5v8A1.5 1.5 0 0 1 17.5 21h-11A1.5 1.5 0 0 1 5 19.5v-8A1.5 1.5 0 0 1 6.5 10H7zm2 0h6V8a3 3 0 0 0-6 0v2z" />
+      </svg>
+    </span>
+  );
+}
+
+// v2 "Card Table" tied-needs-a-shootout glyph -- the table's crossed-swords
+// marker, reimplemented as an empty span whose glyph comes entirely from CSS
+// (`content: "\2694"`, see standings-cards.css) so this file stays ASCII.
+// Rendered only in chain-tiebreak seasons (the caller passes `show` as
+// `ex?.showdown && !livesBreaksTies`) -- under the "lives" tiebreak the tie
+// footnote under the row already explains the break, so repeating the
+// marker here would be redundant noise.
+export function ShowdownGlyph({ show }: { show?: boolean }) {
+  if (!show) return null;
+  return (
+    <span
+      className="player-card-showdown"
+      title="Tied -- play a shootout (a 1-game tiebreaker)"
+    />
+  );
+}
+
 // Faint background band marking the promotion (blue) / relegation (amber) zone so
 // the stakes read at a glance — kept DISTINCT from the green-win / red-loss record
 // colours. Covers the decided state (promoting/relegating) and the mid-season clinch.
@@ -526,12 +562,16 @@ export function DivisionStandingsTable({
                         earned yet (see noMatchesYet above) -- data-empty
                         drops the rarity fill so it doesn't read as a real
                         badge (see standings-cards.css). */}
-                    <span
-                      className="player-card-rank"
-                      data-rarity={noMatchesYet ? undefined : tierRarity}
-                      data-empty={noMatchesYet ? "1" : undefined}
-                    >
-                      {noMatchesYet ? "-" : medal.replace(/^#/, "")}
+                    <span className="player-card-rank-wrap">
+                      <span
+                        className="player-card-rank"
+                        data-rarity={noMatchesYet ? undefined : tierRarity}
+                        data-empty={noMatchesYet ? "1" : undefined}
+                      >
+                        {noMatchesYet ? "-" : medal.replace(/^#/, "")}
+                      </span>
+                      <ClinchGlyph status={ex?.clinchStatus} />
+                      <ShowdownGlyph show={ex?.showdown && !livesBreaksTies} />
                     </span>
                     <CardAvatar displayName={r.player.displayName} avatarUrl={ex?.avatarUrl} />
                     <div className="player-card-name-block">

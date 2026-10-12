@@ -21,6 +21,7 @@ html[data-ui="v2"] .standings-cards {
 }
 
 html[data-ui="v2"] .player-card {
+  position: relative;
   display: grid;
   grid-template-columns: 44px 40px 1fr auto auto auto;
   grid-template-areas: "rank avatar name hand lives points";
@@ -39,30 +40,94 @@ html[data-ui="v2"] .player-card:hover {
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
 }
 
-/* Promotion / relegation zone border + soft outer glow -- the card
-   equivalent of the table's inset stripe, see design-system/MASTER.md. */
-html[data-ui="v2"] .player-card[data-zone="promote"] {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 3px rgba(241, 181, 58, 0.18);
+/* Promotion / relegation zone -- a thin left stripe (subtle, not a full
+   border halo) in the SAME tokens the v1 table's up/down arrows use
+   (--info resolves to Common-blue, --admin stays amber under v2 -- see
+   app/globals.css' token block), so the card and the table agree on what
+   "promoting" looks like. Zone/clinch state is per lib/standings-zone.ts'
+   zoneOf; see DivisionStandingsTable.tsx. */
+html[data-ui="v2"] .player-card[data-zone="promote"]::before,
+html[data-ui="v2"] .player-card[data-zone="relegate"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 3px;
+  bottom: 3px;
+  width: 4px;
+  border-radius: 3px 0 0 3px;
 }
-html[data-ui="v2"] .player-card[data-zone="relegate"] {
-  border-color: var(--rare);
-  box-shadow: 0 0 0 3px rgba(255, 98, 89, 0.18);
-}
-html[data-ui="v2"] .player-card[data-zone="promote"]:hover {
-  box-shadow: 0 0 0 3px rgba(241, 181, 58, 0.18), 0 4px 10px rgba(0, 0, 0, 0.35);
-}
-html[data-ui="v2"] .player-card[data-zone="relegate"]:hover {
-  box-shadow: 0 0 0 3px rgba(255, 98, 89, 0.18), 0 4px 10px rgba(0, 0, 0, 0.35);
-}
+html[data-ui="v2"] .player-card[data-zone="promote"]::before { background: var(--info); }
+html[data-ui="v2"] .player-card[data-zone="relegate"]::before { background: var(--admin); }
 
 /* Dashed divider between the zone and the rest of the stack -- same
-   boundary hook (lib/standings-zone.ts) as the table's dashed row border. */
+   boundary hook (lib/standings-zone.ts) as the table's dashed row border,
+   same tokens as the stripe above. A small uppercase label "punches
+   through" the dashed line at desktop (like the Tour's "Playoff line");
+   phone swaps it for a bare chevron, see the phone media block below. */
 html[data-ui="v2"] .player-card[data-boundary="promote"] {
-  border-bottom: 2px dashed var(--gold);
+  border-bottom: 2px dashed var(--info);
 }
 html[data-ui="v2"] .player-card[data-boundary="relegate"] {
-  border-bottom: 2px dashed var(--rare);
+  border-bottom: 2px dashed var(--admin);
+}
+html[data-ui="v2"] .player-card[data-boundary]::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  transform: translateX(-50%);
+  padding: 0 8px;
+  background: var(--panel);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  z-index: 1;
+}
+html[data-ui="v2"] .player-card[data-boundary="promote"]::after { content: "Promotion"; color: var(--info); }
+html[data-ui="v2"] .player-card[data-boundary="relegate"]::after { content: "Relegation"; color: var(--admin); }
+
+/* Rank-tile corner badge -- clinch lock (ClinchGlyph, inline SVG) or the
+   tied-needs-a-shootout glyph (ShowdownGlyph, CSS-only content below).
+   Mutually exclusive per row: clinchStatus only ever fires pre-completion,
+   showdown only once the division is complete (see app/standings/page.tsx),
+   so the two badges never share a row. */
+html[data-ui="v2"] .player-card-rank-wrap {
+  grid-area: rank;
+  position: relative;
+  display: inline-flex;
+}
+html[data-ui="v2"] .player-card-clinch,
+html[data-ui="v2"] .player-card-showdown {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--panel-2);
+  border: 2px solid var(--panel-edge);
+  font-size: 10px;
+  line-height: 1;
+}
+html[data-ui="v2"] .player-card-clinch svg {
+  width: 10px;
+  height: 10px;
+  fill: currentColor;
+}
+html[data-ui="v2"] .player-card-clinch[data-status="up"] { color: var(--info); }
+html[data-ui="v2"] .player-card-clinch[data-status="down"] { color: var(--admin); }
+/* Crossed-swords glyph via a CSS escape (ASCII in source, renders the
+   actual character) instead of an emoji/unicode literal in the component. */
+html[data-ui="v2"] .player-card-showdown {
+  color: var(--accent);
+}
+html[data-ui="v2"] .player-card-showdown::after {
+  content: "\2694";
 }
 
 /* Rank badge -- pixel face, the bare number, 44px square. Falls back to a
@@ -70,7 +135,6 @@ html[data-ui="v2"] .player-card[data-boundary="relegate"] {
    the same 0-3 convention as lib/tier-colors.ts' rarityIndex (0 legendary,
    1 rare, 2 uncommon, 3 common) and the existing .pill[data-rarity] rule. */
 html[data-ui="v2"] .player-card-rank {
-  grid-area: rank;
   width: 44px;
   height: 44px;
   display: flex;
@@ -231,6 +295,25 @@ html[data-ui="v2"] .player-card-points-label {
     padding: 6px 10px;
     row-gap: 2px;
     column-gap: 8px;
+  }
+  /* Boundary label has no room for the word at this width -- swap it for a
+     small CSS-drawn downward chevron (a border triangle, no glyph/escape
+     needed) instead of truncating "Promotion"/"Relegation". */
+  html[data-ui="v2"] .player-card[data-boundary]::after {
+    content: "";
+    width: 0;
+    height: 0;
+    padding: 0;
+    background: none;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    bottom: -6px;
+  }
+  html[data-ui="v2"] .player-card[data-boundary="promote"]::after {
+    border-top: 5px solid var(--info);
+  }
+  html[data-ui="v2"] .player-card[data-boundary="relegate"]::after {
+    border-top: 5px solid var(--admin);
   }
   html[data-ui="v2"] .player-card-rank {
     width: 36px;

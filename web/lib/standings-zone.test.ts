@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { boundaryBelow, zoneKeyLines, zoneOf, type Zone, type ZoneExtras, type ZoneKeyLinesInput } from "./standings-zone";
+import { boundaryBelow, clinchTitle, zoneKeyLines, zoneOf, type Zone, type ZoneExtras, type ZoneKeyLinesInput } from "./standings-zone";
 
 describe("zoneOf", () => {
   test.each<[string, ZoneExtras | undefined, Zone]>([
@@ -114,5 +114,15 @@ describe("zoneKeyLines", () => {
     // once a division isn't first-overall, but the helper stays safe either way.
     const input: ZoneKeyLinesInput = { promote: true, relegate: false, above: undefined };
     expect(zoneKeyLines(input)[0]!.text).toBe("Promotes");
+  });
+});
+
+describe("clinchTitle", () => {
+  test("up -> clinched wording", () => {
+    expect(clinchTitle("up")).toBe("Clinched: guaranteed up");
+  });
+
+  test("down -> locked wording", () => {
+    expect(clinchTitle("down")).toBe("Locked: guaranteed down");
   });
 });
