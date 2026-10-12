@@ -73,7 +73,7 @@ export function buildOnboardingGuideSections(input: OnboardingGuideInput): Onboa
       ? `${input.seasonWindowLines.join(". ")}.`
       : "Check the pinned message in #league-info for the exact dates.";
   const helpBody = input.supportChannelUrl
-    ? `Click **Help** at the bottom of your division channel, ask in the support channel (<${input.supportChannelUrl}>), or DM **Chrono**, who runs the league. Good luck out there!`
+    ? `Click **Help** at the bottom of your division channel, ask in the support channel: <${input.supportChannelUrl}>, or DM **Chrono**, who runs the league. Good luck out there!`
     : `Click **Help** at the bottom of your division channel, or DM **Chrono**, who runs the league. Good luck out there!`;
 
   return {
@@ -93,17 +93,17 @@ export function buildOnboardingGuideSections(input: OnboardingGuideInput): Onboa
       {
         id: "your-schedule",
         heading: "Your schedule",
-        body: `You're placed in one division with a set of assigned opponents -- not the whole server. The bot DMs you your matchups directly. If you lose track, click **Who do I play?** in your division channel any time; that's your reminder.`,
+        body: `You're placed in one division with a set of assigned opponents, not the whole server. The bot DMs you your matchups directly. If you lose track, click **Who do I play?** in your division channel any time; that's your reminder.`,
       },
       {
         id: "playing-a-match",
         heading: "Playing a match",
-        body: `When you're ready to play someone, click **Start a match** at the bottom of your division channel and pick your opponent. The bot runs the bans and picks for you. A match is **two games**, and the deck/stake combo never repeats within a match. After each game, the **winner records how many lives they had left** -- that number matters later for tiebreaks.`,
+        body: `When you're ready to play someone, click **Start a match** at the bottom of your division channel and pick your opponent. The bot runs the bans and picks for you. A match is **two games**, and the deck/stake combo never repeats within a match. After each game, the **winner records how many lives they had left**. That number matters later for tiebreaks.`,
       },
       {
         id: "results",
         heading: "Results",
-        body: `The bot records the result for you once the match is done -- nothing to report by hand.`,
+        body: `The bot records the result for you once the match is done. Nothing to report by hand.`,
       },
       {
         id: "standings",
@@ -113,7 +113,7 @@ export function buildOnboardingGuideSections(input: OnboardingGuideInput): Onboa
       {
         id: "season-end",
         heading: "How the season ends",
-        body: `The top finishers in each division move up a division and the bottom finishers move down. How many depends on the division -- your division channel and the standings show the exact number for yours.`,
+        body: `The top finishers in each division move up a division and the bottom finishers move down. How many depends on the division. Your division channel and the standings show the exact number for yours.`,
       },
       {
         id: "ties",
@@ -123,7 +123,7 @@ export function buildOnboardingGuideSections(input: OnboardingGuideInput): Onboa
       {
         id: "scheduling",
         heading: "Scheduling",
-        body: `It's on you to set up your matches. Message your opponent in your division channel or by DM and agree on a time. Use Hammertime (<https://hammertime.cyou>) to post a time that shows correctly for both of you, whatever time zone you're in -- there's a **Schedule with Hammertime** button in your division channel.`,
+        body: `It's on you to set up your matches. Message your opponent in your division channel or by DM and agree on a time. Use Hammertime: <https://hammertime.cyou> to post a time that shows correctly for both of you, whatever time zone you're in. There's a **Schedule with Hammertime** button in your division channel.`,
       },
       {
         id: "need-help",

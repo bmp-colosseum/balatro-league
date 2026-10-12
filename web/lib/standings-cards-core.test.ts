@@ -86,7 +86,7 @@ describe("groupTiebreakNotes", () => {
     expect(groupTiebreakNotes(rows)).toEqual([
       {
         lastIndex: 2,
-        text: "Birb, Frankdeslimste and Mangoman007 tied on points -- total net lives decided it (-4 / -5 / -7)",
+        text: "Birb, Frankdeslimste and Mangoman007 tied on points: total net lives decided it (-4 / -5 / -7)",
       },
     ]);
   });
@@ -109,8 +109,8 @@ describe("groupTiebreakNotes", () => {
       row("Dev", 6, "Tied on points with Cara; total net lives decided it (2 / 0)", 0),
     ];
     expect(groupTiebreakNotes(rows)).toEqual([
-      { lastIndex: 1, text: "Ann and Lee tied on points -- total net lives decided it (3 / 1)" },
-      { lastIndex: 3, text: "Cara and Dev tied on points -- total net lives decided it (2 / 0)" },
+      { lastIndex: 1, text: "Ann and Lee tied on points: total net lives decided it (3 / 1)" },
+      { lastIndex: 3, text: "Cara and Dev tied on points: total net lives decided it (2 / 0)" },
     ]);
   });
 
@@ -153,7 +153,7 @@ describe("groupTiebreakNotes", () => {
       row("Lee", 6, "Tied on points with Ann; total net lives decided it (0 / -2)", -2),
     ];
     expect(groupTiebreakNotes(rows)).toEqual([
-      { lastIndex: 1, text: "Ann and Lee tied on points -- total net lives decided it (0 / -2)" },
+      { lastIndex: 1, text: "Ann and Lee tied on points: total net lives decided it (0 / -2)" },
     ]);
   });
 
@@ -167,8 +167,8 @@ describe("groupTiebreakNotes", () => {
       row("Gus", 3, "Tied on points with Fin; total net lives decided it (-1 / -3)", -3),
     ];
     expect(groupTiebreakNotes(rows)).toEqual([
-      { lastIndex: 1, text: "Ann and Lee tied on points -- total net lives decided it (3 / 1)" },
-      { lastIndex: 5, text: "Fin and Gus tied on points -- total net lives decided it (-1 / -3)" },
+      { lastIndex: 1, text: "Ann and Lee tied on points: total net lives decided it (3 / 1)" },
+      { lastIndex: 5, text: "Fin and Gus tied on points: total net lives decided it (-1 / -3)" },
     ]);
   });
 });

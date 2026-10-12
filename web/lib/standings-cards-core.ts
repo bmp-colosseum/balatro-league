@@ -114,7 +114,7 @@ export function groupTiebreakNotes(rows: readonly TiebreakNoteRow[]): TiebreakNo
     }
     const names = group.map((r) => r.player.displayName);
     const text = allHaveLives
-      ? `${joinNames(names)} tied on points -- total net lives decided it (${group.map((r) => `${r.netLives}`).join(" / ")})`
+      ? `${joinNames(names)} tied on points: total net lives decided it (${group.map((r) => `${r.netLives}`).join(" / ")})`
       : `${joinNames(names)} tied on points`;
     groups.push({ lastIndex: j - 1, text });
     i = j;

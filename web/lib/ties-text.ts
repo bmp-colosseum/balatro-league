@@ -36,7 +36,7 @@ const LIVES_RULE =
 
 const CHAIN_RULE =
   "Two or more players tied on points: whoever won your head-to-head 2-0 is ahead. " +
-  "Still tied? A confirmed shootout (one extra game) decides it -- play it, because " +
+  "Still tied? A confirmed shootout (one extra game) decides it. Play it, because " +
   "without one the tie falls back to total wins, which may not go your way.";
 
 export function tiesText(tiebreak: SeasonTiebreak): TiesText {
@@ -45,7 +45,7 @@ export function tiesText(tiebreak: SeasonTiebreak): TiesText {
       rule: LIVES_RULE,
       shootoutUnresolvedReason: "and net lives didn't settle it either",
       shootoutCallToAction:
-        "A shootout is **optional** -- play **one game** if you'd rather not share the rank: open",
+        "A shootout is **optional**. Play **one game** if you'd rather not share the rank: open",
     };
   }
   return {
