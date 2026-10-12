@@ -450,6 +450,7 @@ export default async function StandingsPage() {
                       return (
                         <div key={div.id} className="card">
                         <CollapsibleDivision
+                          divisionId={div.id}
                           defaultOpenOnPhone={isOpenByDefault}
                           divisionName={div.name}
                           tierRarity={rarityIndex(tier.position)}

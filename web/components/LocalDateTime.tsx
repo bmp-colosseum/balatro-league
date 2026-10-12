@@ -25,11 +25,20 @@ export interface LocalDateTimeProps {
   // to the ISO truncated to the date — readable enough for the first
   // paint without giving away that we're swapping.
   fallback?: string;
+  // When set, formats in this fixed timezone instead of the viewer's local
+  // one -- for date-only concepts (a season's start/end day) where
+  // converting to the viewer's local timezone can flip the displayed
+  // calendar day depending on where they are (ux-round4 finding 8, L4).
+  // Server and client compute the exact same string for a fixed timezone,
+  // so this path renders correctly on first paint and never swaps -- no
+  // raw-ISO flash, and no day that changes once hydration catches up.
+  timeZone?: "UTC";
 }
 
-export function LocalDateTime({ iso, style = "datetime", fallback }: LocalDateTimeProps) {
+export function LocalDateTime({ iso, style = "datetime", fallback, timeZone }: LocalDateTimeProps) {
   const [local, setLocal] = useState<string | null>(null);
   useEffect(() => {
+    if (timeZone) return; // deterministic -- computed directly below instead
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) {
       setLocal(iso);
@@ -40,6 +49,19 @@ export function LocalDateTime({ iso, style = "datetime", fallback }: LocalDateTi
       ...(style === "datetime" ? { timeStyle: "short" } : {}),
     });
     setLocal(fmt.format(d));
-  }, [iso, style]);
+  }, [iso, style, timeZone]);
+
+  if (timeZone) {
+    const d = new Date(iso);
+    const text = Number.isNaN(d.getTime())
+      ? iso
+      : new Intl.DateTimeFormat("en-US", {
+          dateStyle: "medium",
+          ...(style === "datetime" ? { timeStyle: "short" } : {}),
+          timeZone,
+        }).format(d);
+    return <time dateTime={iso}>{text}</time>;
+  }
+
   return <time dateTime={iso}>{local ?? fallback ?? iso.slice(0, 10)}</time>;
 }

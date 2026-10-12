@@ -166,7 +166,10 @@ html[data-ui="v2"] .player-card-rank[data-empty="1"] {
 
 /* Avatar slot -- 40px circle, extras.avatarUrl image or the initials()
    fallback (CardAvatar never emits a broken <img>, so there's no onerror
-   case to style here). */
+   case to style here). panel-2 (not panel-edge, which reads as near-black
+   against the felt-deep header) shows a visible tile while a slow-loading
+   image is still in flight instead of a black disc (ux-round4 finding 8,
+   L13). */
 html[data-ui="v2"] .player-card-avatar {
   grid-area: avatar;
   width: 40px;
@@ -177,7 +180,7 @@ html[data-ui="v2"] .player-card-avatar {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: var(--panel-edge);
+  background: var(--panel-2);
 }
 html[data-ui="v2"] .player-card-avatar-initials {
   color: var(--paper);

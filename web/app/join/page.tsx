@@ -40,7 +40,9 @@ export default async function JoinPage({
     <>
       <SiteNav activePath="/join" />
       <main>
-        <h2>Join the league</h2>
+        {/* The page's only heading -- used to be an h2 with no h1 above it
+            (ux-round4 finding 5 under "How it works and Join", L16). */}
+        <h1>Join the league</h1>
         <p className="muted">
           A Balatro multiplayer league on Discord. Sign up, get put in a division, and play
           your assigned opponents — 2 games each. Climb the divisions season to season.

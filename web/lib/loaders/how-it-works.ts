@@ -10,13 +10,6 @@ import { formatSeasonLabel } from "@/lib/format-season";
 import { buildOnboardingGuideSections, type OnboardingGuideContent } from "@/lib/onboarding-guide";
 import { seasonWindowLinesPlain, seasonWindowDates, type SeasonWindowDate } from "@/lib/season-window-text";
 
-// Same convention as web/lib/report.ts / signup-discord.ts for building an
-// absolute site URL from inside the web app itself.
-function siteUrl(path: string): string {
-  const base = (process.env.NEXTAUTH_URL ?? "").replace(/\/+$/, "") || "https://www.balatroleague.com";
-  return `${base}${path}`;
-}
-
 export interface HowItWorksPageData {
   content: OnboardingGuideContent;
   // Whether there's a currently-active season -- purely informational for
@@ -66,7 +59,10 @@ export async function loadHowItWorksPageData(): Promise<HowItWorksPageData> {
   const content = buildOnboardingGuideSections({
     seasonLabel,
     seasonWindowLines,
-    standingsUrl: siteUrl("/standings"),
+    // Relative, not an absolute www-prefixed URL (ux-round4 L10) -- the web
+    // page can link its own /standings directly; only the bot's onboarding
+    // DM (src/onboarding-dm.ts) needs the full https URL Discord requires.
+    standingsUrl: "/standings",
     supportChannelUrl,
   });
 

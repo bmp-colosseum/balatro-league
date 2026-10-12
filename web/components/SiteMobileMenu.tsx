@@ -81,7 +81,12 @@ export function SiteMobileMenu({
             subdomains), so plain <a>s -- same rows components/ProductSwitcher.tsx
             renders on desktop, from the same lib/product-switcher-core.ts data. */}
         {switcherRows.map((row) => (
-          <MenuLinkItem key={row.key} className={rowClass} closeOnClick render={<a href={row.href} />}>
+          <MenuLinkItem
+            key={row.key}
+            className={rowClass}
+            closeOnClick
+            render={<a href={row.href} aria-current={row.current ? "true" : undefined} />}
+          >
             <span className="flex min-w-0 flex-col">
               <span style={{ fontWeight: row.current ? 700 : 400 }}>{row.label}</span>
               <span className="muted truncate" style={{ fontSize: 12 }}>

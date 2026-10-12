@@ -4,7 +4,12 @@
 // sends without printing literal "**" or "<...>" characters. Deliberately
 // narrow -- only what the guide's copy uses:
 //   **bold**        -> <strong>bold</strong>
-//   <https://url>   -> <a href="https://url">https://url</a>
+//   <https://url>   -> <a href="https://url" target="_blank" ...>https://url</a>
+//   </relative/path> -> <a href="/relative/path">/relative/path</a> (same tab;
+//     lets the web-only loader (lib/loaders/how-it-works.ts) point the
+//     standings link at "/standings" instead of a second, www-prefixed host
+//     -- ux-round4 L10 -- while the bot's onboarding DM still needs the
+//     absolute https URL Discord requires)
 // Everything else is treated as plain text and HTML-escaped, so this is safe
 // to feed into dangerouslySetInnerHTML even though the source strings are
 // all author-controlled (never user input).
@@ -23,6 +28,9 @@ function escapeHtml(text: string): string {
 // Short, readable text for a link: raw Discord channel URLs and long paths
 // overflow a phone screen, so show what the link is rather than the URL.
 export function linkLabel(url: string): string {
+  // A same-origin relative path (see TOKEN_RE below) has no host to parse --
+  // show it as given.
+  if (url.startsWith("/")) return url;
   try {
     const u = new URL(url);
     if (u.hostname === "discord.com" && u.pathname.startsWith("/channels/")) return "open in Discord";
@@ -33,7 +41,7 @@ export function linkLabel(url: string): string {
   }
 }
 
-const TOKEN_RE = /\*\*([^*]+)\*\*|<(https?:\/\/[^<>\s]+)>/g;
+const TOKEN_RE = /\*\*([^*]+)\*\*|<(https?:\/\/[^<>\s]+|\/[^<>\s]+)>/g;
 
 export function discordMarkdownToHtml(text: string): string {
   let html = "";
@@ -46,7 +54,12 @@ export function discordMarkdownToHtml(text: string): string {
       html += `<strong>${escapeHtml(bold)}</strong>`;
     } else if (url !== undefined) {
       const safeUrl = escapeHtml(url);
-      html += `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(linkLabel(url))}</a>`;
+      // Relative (same-origin) links stay in the same tab -- only an
+      // absolute URL (a real jump off the site, e.g. into Discord) opens a
+      // new one.
+      const isAbsolute = /^https?:\/\//.test(url);
+      const attrs = isAbsolute ? ' target="_blank" rel="noopener noreferrer"' : "";
+      html += `<a href="${safeUrl}"${attrs}>${escapeHtml(linkLabel(url))}</a>`;
     }
     lastIndex = index + full.length;
   }

@@ -8,6 +8,7 @@
 // shape as the Tour site's MoreMenu split.
 
 import Link from "next/link";
+import { LogIn } from "lucide-react";
 import { auth } from "@/auth";
 import { isAdminUser } from "@/lib/admin";
 import { getShowBmpMmr, getShowUsernames, getShowDiscordIds, getUiPreviewV2 } from "@/lib/preferences";
@@ -54,6 +55,7 @@ export async function SiteNav({ activePath }: { activePath: string }) {
   if (isAdmin) primary.push({ href: "/admin", label: "Admin" });
 
   return (
+    <>
     <header className="flex flex-nowrap items-center gap-3 border-b border-border bg-card px-4 py-2.5 md:gap-6 md:px-6 md:py-3">
       <h1 className="m-0 text-base">
         <ProductSwitcher activeSeasonName={activeSeason?.name ?? null} />
@@ -179,11 +181,29 @@ export async function SiteNav({ activePath }: { activePath: string }) {
             </Link>
           </>
         ) : (
-          <Link href="/auth/signin" className="muted flex min-h-11 items-center text-xs sm:min-h-0">
-            Login with Discord
+          // Below sm, the text wrapped to two lines beside the icon-only brand
+          // chip and the clipped season pill (ux-round4 finding 9, topbar).
+          // The phone Menu already has this exact "Login with Discord" row,
+          // so the bar itself only needs the glyph down there -- same shape
+          // as the Tour's phone header. Text comes back at sm and up.
+          <Link
+            href="/auth/signin"
+            className="muted flex min-h-11 items-center text-xs sm:min-h-0"
+            aria-label="Login with Discord"
+          >
+            <LogIn className="size-4 sm:hidden" aria-hidden="true" />
+            <span className="hidden sm:inline">Login with Discord</span>
           </Link>
         )}
       </span>
     </header>
+    {/* Skip-link target (app/layout.tsx's "Skip to content" <a>, same class
+        as the Tour's -- ux-round4 L7). SiteNav renders the one <header> on
+        every page right before its own <main>, so landing the jump here
+        (rather than touching every page's own <main>) always clears the
+        header -- tabIndex={-1} lets the browser actually move keyboard
+        focus to it on activation, not just scroll. */}
+    <span id="main-content" tabIndex={-1} className="sr-only" />
+    </>
   );
 }

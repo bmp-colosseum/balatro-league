@@ -73,6 +73,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           each page.tsx renders its own <SiteNav>+<main> fragment rather than
           a single shared one this layout could wrap directly. */}
       <body>
+        {/* First focusable element on every page -- invisible until it has
+            keyboard focus (see .skip-link in globals.css), so a keyboard/
+            screen-reader user never has to tab through the brand switcher,
+            season pill, nav links, search and account control just to reach
+            the page itself (ux-round4 finding 1/L7; same pattern as the
+            Tour site's app/layout.tsx). Lands on the #main-content marker
+            SiteNav renders right after its own <header>. */}
+        <a href="#main-content" className="skip-link">Skip to content</a>
         <div className="site-body-main">{children}</div>
         <SiteFooter discordInviteUrl={discordInviteUrl} />
         <CommandPalette />
