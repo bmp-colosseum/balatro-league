@@ -770,8 +770,19 @@ html[data-ui="v2"] .zone-key-swatch {
   margin-right: 4px;
   vertical-align: middle;
 }
-html[data-ui="v2"] .zone-key-swatch-promote { background: var(--gold); }
-html[data-ui="v2"] .zone-key-swatch-relegate { background: var(--rare); }
+/* Common-blue / amber -- the SAME tokens the v2 player-card's zone stripe
+   and the v1 table's up/down arrows use (--info/--admin, see
+   app/v2/standings-cards.css), so every zone indicator on the site agrees. */
+html[data-ui="v2"] .zone-key-swatch-promote { background: var(--info); }
+html[data-ui="v2"] .zone-key-swatch-relegate { background: var(--admin); }
+
+/* Page-level KEY legend -- v1's arrows/emoji vs v2's stripe/SVG-lock/plain-X
+   wording (see app/standings/page.tsx), same always-in-the-DOM toggle
+   pattern as .meta-v1/.meta-v2 above. !important: both carry an inline
+   display:flex. */
+.key-legend-v2 { display: none !important; }
+html[data-ui="v2"] .key-legend-v1 { display: none !important; }
+html[data-ui="v2"] .key-legend-v2 { display: flex !important; }
 
 /* Phone: the standings cards (not the desktop table -- that's already
    hidden below 640px) drop W-D-L and the played count under 480px. */

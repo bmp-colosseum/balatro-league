@@ -74,3 +74,12 @@ export function zoneKeyLines(input: ZoneKeyLinesInput): ZoneKeyLine[] {
   }
   return lines;
 }
+
+// Title text for the v2 player card's rank-tile clinch glyph (an inline SVG
+// lock, see DivisionStandingsTable's ClinchGlyph) -- kept as a pure lookup
+// here so the wording is covered by a plain unit test, same as the rest of
+// this module. The v1 table's own RowBadges title strings are unrelated and
+// unchanged -- this is v2-only wording.
+export function clinchTitle(status: "up" | "down"): string {
+  return status === "up" ? "Clinched: guaranteed up" : "Locked: guaranteed down";
+}

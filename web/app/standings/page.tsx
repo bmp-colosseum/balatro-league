@@ -229,12 +229,61 @@ export default async function StandingsPage() {
               </div>
               <details style={{ marginTop: 2 }}>
                 <summary className="muted" style={{ cursor: "pointer", textTransform: "uppercase", letterSpacing: 0.5, fontSize: 11, display: "flex", alignItems: "center", minHeight: 32 }}>Key</summary>
-                <div style={{ marginTop: 8, fontSize: 12, display: "flex", flexWrap: "wrap", gap: "4px 16px", alignItems: "center" }}>
+                <div className="key-legend-v1" style={{ marginTop: 8, fontSize: 12, display: "flex", flexWrap: "wrap", gap: "4px 16px", alignItems: "center" }}>
                   <span><span style={{ color: "var(--info)" }}>↑</span> promotion spot</span>
                   <span><span style={{ color: "var(--admin)" }}>↓</span> relegation spot</span>
                   <span><span style={{ color: "var(--info)" }}>🔒↑</span> clinched — guaranteed up</span>
                   <span><span style={{ color: "var(--admin)" }}>🔒↓</span> locked — guaranteed down</span>
                   <span><span style={{ color: "var(--accent)" }}>⚔</span> tied — needs a shootout (a 1-game tiebreaker)</span>
+                  <span><s>name</s> dropped out</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                    <span style={{ display: "inline-block", width: 10, height: 14, borderRadius: 3, background: "var(--success)" }} />
+                    <span style={{ display: "inline-block", width: 10, height: 14, borderRadius: 3, background: "var(--muted)" }} />
+                    <span style={{ display: "inline-block", width: 10, height: 14, borderRadius: 3, background: "var(--danger)" }} />
+                    form (win / draw / loss)
+                  </span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: 12, height: 12, fill: "var(--success)" }}>
+                      <path d="M12 21s-6.7-4.35-9.33-8.36C.37 9.77 1.4 6 5 6c2.06 0 3.46 1.24 4.2 2.3C9.94 7.24 11.34 6 13.4 6c3.6 0 4.63 3.77 2.33 6.64C18.7 16.65 12 21 12 21z" />
+                    </svg>
+                    net lives (signed, +green/-red)
+                  </span>
+                </div>
+                {/* v2 "Card Table" KEY -- describes exactly what the player
+                    cards draw: a stripe (not an arrow) for the zone, an
+                    inline SVG lock (not the emoji) for clinch, a plain X
+                    glyph for the shootout marker (hidden when this season's
+                    tiebreak is "lives" -- the per-row tie footnote already
+                    explains the break there, see DivisionStandingsTable's
+                    ShowdownGlyph). Same v1/v2 toggle pattern as the rest of
+                    this page (see app/globals.css). */}
+                <div className="key-legend-v2" style={{ marginTop: 8, fontSize: 12, display: "flex", flexWrap: "wrap", gap: "4px 16px", alignItems: "center" }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <span className="zone-key-swatch zone-key-swatch-promote" /> promotion zone
+                  </span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <span className="zone-key-swatch zone-key-swatch-relegate" /> relegation zone
+                  </span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: 12, height: 12, fill: "var(--info)" }}>
+                      <path d="M7 10V8a5 5 0 0 1 10 0v2h.5A1.5 1.5 0 0 1 19 11.5v8A1.5 1.5 0 0 1 17.5 21h-11A1.5 1.5 0 0 1 5 19.5v-8A1.5 1.5 0 0 1 6.5 10H7zm2 0h6V8a3 3 0 0 0-6 0v2z" />
+                    </svg>
+                    clinched -- guaranteed up
+                  </span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: 12, height: 12, fill: "var(--admin)" }}>
+                      <path d="M7 10V8a5 5 0 0 1 10 0v2h.5A1.5 1.5 0 0 1 19 11.5v8A1.5 1.5 0 0 1 17.5 21h-11A1.5 1.5 0 0 1 5 19.5v-8A1.5 1.5 0 0 1 6.5 10H7zm2 0h6V8a3 3 0 0 0-6 0v2z" />
+                    </svg>
+                    locked -- guaranteed down
+                  </span>
+                  {data.season.tiebreak !== "lives" && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: 12, height: 12 }}>
+                        <path d="M4 4l16 16M20 4L4 20" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                      </svg>
+                      tied -- needs a shootout (a 1-game tiebreaker)
+                    </span>
+                  )}
                   <span><s>name</s> dropped out</span>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
                     <span style={{ display: "inline-block", width: 10, height: 14, borderRadius: 3, background: "var(--success)" }} />

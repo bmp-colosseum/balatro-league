@@ -151,9 +151,16 @@ it; that is stale, both caches wire it in via `selectStandingsEngine`.
 ## Zones on the standings table
 
 `web/lib/standings-zone.ts`: a row is in the promote zone if it is promoting
-or has clinched up, relegate if relegating or clinched down. A gold line sits
-below the last promoting row and a red line above the first relegating row;
-the key under the table reads "Promotes to X" / "Drops to Y".
+or has clinched up, relegate if relegating or clinched down. On the v2 player
+cards this draws as a thin blue (promote) or amber (relegate) left stripe --
+same `--info`/`--admin` tokens the v1 table's up/down arrows use -- plus a
+dashed divider labelled "Promotion"/"Relegation" (a bare chevron on phones)
+below the last promoting row and above the first relegating row. The
+per-division key under the table reads "Promotes to X" / "Drops to Y". The
+card's rank tile also shows a small lock glyph when a row is mid-season
+clinched (not yet decided), and a plain crossed-lines glyph on a tied row
+that still needs a shootout -- the latter is suppressed under the "lives"
+tiebreak, since the per-row tie footnote already explains the break there.
 
 ## Things to know that are not obvious
 
