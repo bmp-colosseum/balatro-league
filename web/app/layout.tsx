@@ -3,7 +3,9 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { CommandPalette } from "@/components/CommandPalette";
+import { SiteFooter } from "@/components/SiteFooter";
 import { getUiPreviewV2 } from "@/lib/preferences";
+import { loadDiscordInviteUrl } from "@/lib/loaders/discord-invite";
 
 // Crisp pixel font for headings + accents — a nod to Balatro's pixel look,
 // without hurting readability of the dense tables (body text stays system).
@@ -56,14 +58,23 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // html[data-ui="v2"] selectors in globals.css, with zero effect on anyone
   // without the cookie.
   const uiV2 = await getUiPreviewV2();
+  // Read once here (root layout, shared by every page) instead of each page
+  // running its own copy -- see lib/loaders/discord-invite.ts.
+  const discordInviteUrl = await loadDiscordInviteUrl();
   return (
     <html
       lang="en"
       className={`${pixel.variable} ${displayV2.variable} ${bodyV2.variable}`}
       data-ui={uiV2 ? "v2" : undefined}
     >
+      {/* body is a flex column (see globals.css) so the footer sticks to the
+          bottom of the viewport on short pages instead of ending on bare felt
+          -- .site-body-main (flex:1) is this app's "main flex:1" slot, since
+          each page.tsx renders its own <SiteNav>+<main> fragment rather than
+          a single shared one this layout could wrap directly. */}
       <body>
-        {children}
+        <div className="site-body-main">{children}</div>
+        <SiteFooter discordInviteUrl={discordInviteUrl} />
         <CommandPalette />
         <Toaster richColors position="top-center" />
       </body>

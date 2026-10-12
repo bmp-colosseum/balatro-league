@@ -25,6 +25,25 @@ export interface SeasonIndexEntry {
   pairingCount: number;
 }
 
+export interface ActiveSeasonSummary {
+  id: string;
+  name: string;
+}
+
+// Cheap lookup for the header's product switcher + season pill
+// (components/SiteNav.tsx, run on every page) -- just the id/name of
+// whichever season is currently marked active, or null between seasons.
+// Deliberately separate from loadSeasonsIndex() below: that one pulls full
+// per-season counts for the /seasons list, which SiteNav has no use for.
+export async function loadActiveSeasonSummary(): Promise<ActiveSeasonSummary | null> {
+  const season = await prisma.season.findFirst({
+    where: { isActive: true },
+    select: { id: true, number: true, subtitle: true },
+  });
+  if (!season) return null;
+  return { id: season.id, name: formatSeasonLabel(season) };
+}
+
 export async function loadSeasonsIndex(): Promise<SeasonIndexEntry[]> {
   // Every real (non-archived) season players can browse: the ACTIVE one plus all
   // ENDED ones. Pre-start drafts (neither active nor ended) stay hidden because

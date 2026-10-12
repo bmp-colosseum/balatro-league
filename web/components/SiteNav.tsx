@@ -8,18 +8,19 @@
 // shape as the Tour site's MoreMenu split.
 
 import Link from "next/link";
-import Image from "next/image";
 import { auth } from "@/auth";
 import { isAdminUser } from "@/lib/admin";
 import { getShowBmpMmr, getShowUsernames, getShowDiscordIds, getUiPreviewV2 } from "@/lib/preferences";
 import { toggleShowBmpMmr, toggleShowUsernames, toggleShowDiscordIds } from "@/app/preferences/actions";
 import { enableUiPreviewAction } from "@/app/admin/ui-preview-actions";
 import { loadOpenSignupRoundId } from "@/lib/loaders/join";
+import { loadActiveSeasonSummary } from "@/lib/loaders/seasons";
 import { CommandButton } from "@/components/CommandButton";
 import { Button } from "@/components/ui/button";
 import { SiteMobileMenu } from "@/components/SiteMobileMenu";
+import { ProductSwitcher } from "@/components/ProductSwitcher";
+import { SeasonPill } from "@/components/SeasonPill";
 import { PRIMARY_LINKS } from "@/lib/nav-links";
-import { TOUR_PUBLIC_URL } from "@/lib/tour-profile";
 
 export async function SiteNav({ activePath }: { activePath: string }) {
   const session = await auth();
@@ -37,6 +38,7 @@ export async function SiteNav({ activePath }: { activePath: string }) {
   const inGuild = (session?.user as { inGuild?: boolean } | undefined)?.inGuild === true;
 
   const signupsOpen = !!(await loadOpenSignupRoundId());
+  const activeSeason = await loadActiveSeasonSummary();
   // "Players" requires login (the page itself redirects to sign-in) -- a
   // logged-out visitor tapping it would only hit that wall, so drop it from
   // their nav entirely.
@@ -54,14 +56,9 @@ export async function SiteNav({ activePath }: { activePath: string }) {
   return (
     <header className="flex flex-nowrap items-center gap-3 border-b border-border bg-card px-4 py-2.5 md:gap-6 md:px-6 md:py-3">
       <h1 className="m-0 text-base">
-        <Link href="/" className="flex min-h-11 items-center gap-2 text-foreground no-underline hover:opacity-80 sm:min-h-0">
-          <Image src="/Balatro_League.png" alt="" width={24} height={24} className="rounded-sm" priority />
-          {/* Hides below sm -- the icon alone keeps the brand link recognizable
-              and tappable while leaving room for the Menu trigger, search, and
-              account control to fit on one row at 390px. */}
-          <span className="hidden sm:inline">Balatro League</span>
-        </Link>
+        <ProductSwitcher activeSeasonName={activeSeason?.name ?? null} />
       </h1>
+      <SeasonPill seasonId={activeSeason?.id ?? null} seasonName={activeSeason?.name ?? null} />
       <nav className="pixel hidden flex-wrap items-center gap-1 text-[13px] sm:flex md:gap-2">
         {primary.map((link) => {
           const isActive =
@@ -101,6 +98,7 @@ export async function SiteNav({ activePath }: { activePath: string }) {
         <SiteMobileMenu
           links={primary}
           activePath={activePath}
+          activeSeasonName={activeSeason?.name ?? null}
           showingBmpMmr={showingBmpMmr}
           showingUsernames={showingUsernames}
           showingDiscordIds={showingDiscordIds}
@@ -122,17 +120,9 @@ export async function SiteNav({ activePath }: { activePath: string }) {
             ⚙️
           </summary>
           <div className="absolute right-0 top-[calc(100%+6px)] z-50 min-w-[220px] rounded-md border border-border bg-card p-2 shadow-lg">
-            {/* The league's sibling site -- same URL the Tour's own product
-                switcher uses to link back (lib/tour-profile.ts). New tab:
-                a different site, not a page within this one. */}
-            <Button
-              variant="ghost"
-              className="w-full justify-start gap-2 px-1 text-[13px] text-foreground"
-              render={<a href={TOUR_PUBLIC_URL} target="_blank" rel="noopener noreferrer" />}
-            >
-              Team Tour -&gt;
-            </Button>
-            <div className="my-1 border-t border-border" />
+            {/* The Team Tour link now lives in the product switcher mark
+                (components/ProductSwitcher.tsx) -- keeping it here too would
+                be a duplicate affordance for the same destination. */}
             <form action={toggleShowBmpMmr}>
               <input type="hidden" name="next" value={showingBmpMmr ? "0" : "1"} />
               <input type="hidden" name="returnTo" value={activePath || "/"} />

@@ -170,6 +170,11 @@ run. Update this paragraph when those branches merge.
 The league workflow has no `preview` input; its dev lane is the best-effort
 `league-web-dev` roll in step 4.
 
+The two sites share one design system and header/footer shell (product
+switcher, season pill, felt-deep footer) ported between `web/` and the Tour's
+`apps/tour/`; see `web/lib/product-switcher-core.ts` and
+`web/components/SiteFooter.tsx` for the League side.
+
 ## Stale documents to be aware of
 
 - `README.md` "Deploying", `DEPLOY.md`, `DEPLOY-WEB.md`: Railway. Superseded.
