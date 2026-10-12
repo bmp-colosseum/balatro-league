@@ -13,6 +13,10 @@ import {
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Stats - Balatro League",
+};
+
 // Below this many pool appearances a ban rate isn't meaningful — show "—".
 const MIN_BAN_APPEARANCES = 5;
 
@@ -22,7 +26,7 @@ export default async function StatsPage() {
     <>
       <SiteNav activePath="/stats" />
       <main>
-        <h2>League stats</h2>
+        <h1>League stats</h1>
         <p className="muted">Career numbers, all seasons.</p>
 
         <div className="grid grid-2" style={{ marginTop: 16 }}>
@@ -40,34 +44,38 @@ export default async function StatsPage() {
             <p className="muted" style={{ fontSize: 11, marginTop: 0 }}>
               Match wins in a row. ● = still live.
             </p>
-            <table className="table-dense" style={{ width: "100%" }}>
-              <thead>
-                <tr>
-                  <th></th>
-                  <th>Player</th>
-                  <th style={{ textAlign: "right" }}>Streak</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.longestActiveStreaks.map((r, i) => (
-                  <tr key={r.playerId}>
-                    <td>{i + 1}.</td>
-                    <td>
-                      <Link href={`/profile/${r.playerId}`} style={{ color: "var(--text)" }}>{r.displayName}</Link>
-                      <DiscordId value={r.discordId} username={r.username} />
-                      {r.isActive && <span style={{ marginLeft: 6, color: "var(--success)", fontSize: 11 }}>● active</span>}
-                    </td>
-                    <td style={{ textAlign: "right" }}>
-                      <strong>{r.streak}</strong>
-                    </td>
+            <div className="table-scroll">
+              <table className="table-dense" style={{ width: "100%" }}>
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Player</th>
+                    <th style={{ textAlign: "right" }}>Streak</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {data.longestActiveStreaks.map((r, i) => (
+                    <tr key={r.playerId}>
+                      <td style={{ width: 28 }}>
+                        <RankMarker rank={i + 1} />
+                      </td>
+                      <td>
+                        <Link href={`/profile/${r.playerId}`} style={{ color: "var(--text)" }}>{r.displayName}</Link>
+                        <DiscordId value={r.discordId} username={r.username} />
+                        {r.isActive && <span style={{ marginLeft: 6, color: "var(--success)", fontSize: 11 }}>● active</span>}
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        <strong>{r.streak}</strong>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
-        <h3 style={{ marginTop: 24 }}>Decks &amp; stakes</h3>
+        <h3 style={{ marginTop: 24 }}>Decks and stakes</h3>
         <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>
           The standard pool, by games played. <strong>Ban rate</strong> = how often it gets banned when it shows up. Per-player rates on each <Link href="/players">profile</Link>.
         </p>
@@ -76,7 +84,7 @@ export default async function StatsPage() {
           <ItemTable title="Stakes" rows={data.stakes} imageFor={stakeImage} />
         </div>
 
-        <h3 style={{ marginTop: 24 }}>Deck + stake combos</h3>
+        <h3 style={{ marginTop: 24 }}>Deck and stake combos</h3>
         <div className="grid grid-2">
           <ComboCard
             title="Most-played combos"
@@ -92,6 +100,21 @@ export default async function StatsPage() {
           />
         </div>
       </main>
+    </>
+  );
+}
+
+// One rank marker, shared by every ranked list on this page (leaders AND
+// streaks) so a reader doesn't have to learn two different conventions --
+// gold tile for 1st, the same plain tile for every other rank, instead of a
+// gold tile / unstyled bold number / fading "4." "5." text three-way split
+// (ux-round5 finding 6, L35).
+function RankMarker({ rank }: { rank: number }) {
+  const medal = rank <= 3 ? ["\u{1F947}", "\u{1F948}", "\u{1F949}"][rank - 1] : `${rank}.`;
+  return (
+    <>
+      <span className="stats-rank-v1">{medal}</span>
+      <span className="stats-rank-tile" data-rank={rank}>{rank}</span>
     </>
   );
 }
@@ -123,16 +146,10 @@ function LeaderCard({
           <tbody>
             {rows.map((r, i) => {
               const rank = i + 1;
-              const medal = i < 3 ? ["\u{1F947}", "\u{1F948}", "\u{1F949}"][i] : `${rank}.`;
               return (
                 <tr key={r.playerId}>
                   <td style={{ width: 28 }}>
-                    <span className="stats-rank-v1">{medal}</span>
-                    {rank <= 3 ? (
-                      <span className="stats-rank-tile" data-rank={rank}>{rank}</span>
-                    ) : (
-                      <span className="stats-rank-tile stats-rank-tile-plain">{rank}.</span>
-                    )}
+                    <RankMarker rank={rank} />
                   </td>
                   <td>
                     <Link href={`/profile/${r.playerId}`} style={{ color: "var(--text)" }}>{r.displayName}</Link>

@@ -18,25 +18,17 @@ html[data-ui="v2"] .stats-rank-tile {
   height: 22px;
   padding: 0 2px;
   border-radius: 5px;
+  background: var(--surface-2);
   font-family: var(--font-body-v2), "Segoe UI", sans-serif;
-  font-weight: 800;
+  font-weight: 700;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: var(--paper);
+  color: var(--paper-dim);
 }
-/* Gold for 1st, paper-dim for 2nd/3rd (no fill), plain number after that --
-   see .stats-rank-tile-plain below. */
+/* Gold fill for 1st only -- every other rank (2nd on, and every row of the
+   Streaks list) shares this one plain tile instead of a gold / unstyled-bold
+   / fading-text three-way split (ux-round5 finding 6, L35). */
 html[data-ui="v2"] .stats-rank-tile[data-rank="1"] {
   background: var(--gold);
   color: var(--gold-ink);
-}
-html[data-ui="v2"] .stats-rank-tile[data-rank="2"],
-html[data-ui="v2"] .stats-rank-tile[data-rank="3"] {
-  background: transparent;
-  color: var(--paper-dim);
-}
-html[data-ui="v2"] .stats-rank-tile-plain {
-  background: transparent;
-  font-weight: 400;
-  color: var(--paper-faint);
 }
