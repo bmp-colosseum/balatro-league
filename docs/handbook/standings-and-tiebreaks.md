@@ -164,6 +164,14 @@ tiebreak, since the per-row tie footnote already explains the break there.
 
 ## Things to know that are not obvious
 
+- The season archive (`/seasons/[id]`) draws the same shared
+  `DivisionStandingsTable` rows as `/standings` and `/divisions/[id]` --
+  avatars, tier-coloured rank tiles, and the dashes/"None played" zero-state
+  for a division with zero confirmed matches, derived from `every row's
+  played === 0` rather than a separate confirmed-pairing count (see
+  `app/seasons/[id]/page.tsx`'s `PublicSummary`). Before this it drew plain
+  initials, black rank tiles, and a misleading rank-1/0-PTS row for every
+  player in an unplayed active-season division.
 - Scoring points look configurable in the rules template but are not.
 - Under lives, the head-to-head lives check happens between the 2-0
   head-to-head check and total net lives, exactly as listed above.

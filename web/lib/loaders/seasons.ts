@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { loadManyDivisionStandings } from "@/lib/standings-cache";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { normalizeTiebreak } from "@/lib/standings-mode";
+import { discordAvatarUrl } from "@/lib/avatar";
 
 export interface SeasonIndexEntry {
   id: string;
@@ -100,6 +101,12 @@ export interface SeasonDetailStandingRow {
   // See StandingRow.tiebreakNote -- plain-English audit of which step
   // decided this row's tie, present under the same conditions as netLives.
   tiebreakNote?: string;
+  // Discord avatar URL, same source + shape as the division page's rows
+  // (lib/loaders/division.ts) -- so the archive draws the same avatar
+  // circles /standings and /divisions/[id] do instead of two-letter
+  // initials (ux-round5 finding 2, L34). Null when the player has no
+  // custom avatar (initials fallback) or isn't a known guild member.
+  avatarUrl: string | null;
 }
 
 export interface SeasonDetailDivision {
@@ -171,6 +178,18 @@ export async function loadSeasonDetail(seasonId: string): Promise<SeasonDetailDa
   const allDivIds = season.tiers.flatMap((t) => t.divisions.map((d) => d.id));
   const byDiv = await loadManyDivisionStandings(allDivIds);
 
+  // Discord avatars for every row across every division -- same batched
+  // by-discordId lookup the division page uses (lib/loaders/division.ts),
+  // just run once for the whole season instead of once per division.
+  const allDiscordIds = [...byDiv.values()].flatMap((rows) => rows.map((r) => r.player.discordId));
+  const avatarGuildMembers = allDiscordIds.length === 0
+    ? []
+    : await prisma.guildMember.findMany({
+        where: { discordId: { in: allDiscordIds } },
+        select: { discordId: true, avatar: true },
+      });
+  const avatarHashByDiscordId = new Map(avatarGuildMembers.map((g) => [g.discordId, g.avatar]));
+
   const tiers: SeasonDetailTier[] = season.tiers.map((t) => ({
     id: t.id,
     name: t.name,
@@ -200,6 +219,7 @@ export async function loadSeasonDetail(seasonId: string): Promise<SeasonDetailDa
         netLives: r.netLives,
         livesGamesMissing: r.livesGamesMissing,
         tiebreakNote: r.tiebreakNote,
+        avatarUrl: discordAvatarUrl(r.player.discordId, avatarHashByDiscordId.get(r.player.discordId)),
       }));
       return { id: d.id, name: d.name, groupNumber: d.groupNumber, rows };
     }),

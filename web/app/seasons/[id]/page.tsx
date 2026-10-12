@@ -1,5 +1,7 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 import { hasTier } from "@/lib/admin";
 import { loadSeasonDetail } from "@/lib/loaders/seasons";
 import { loadAdminSeasonDetail, loadRulesTemplatePickerOptions } from "@/lib/loaders/admin";
@@ -16,7 +18,7 @@ import { LocalDateTime } from "@/components/LocalDateTime";
 import { DatePickerField } from "@/components/DatePickerField";
 import { SeasonWindow } from "@/components/SeasonWindow";
 import { SeasonDeckPresetPicker } from "@/components/SeasonDeckPresetPicker";
-import { tierColors } from "@/lib/tier-colors";
+import { tierColors, rarityIndex } from "@/lib/tier-colors";
 import { RarityText } from "@/components/RarityText";
 import { DivisionStandingsTable, type StandingsRowExtras } from "@/components/DivisionStandingsTable";
 import { loadMmrForPlayerIds } from "@/lib/loaders/standings";
@@ -56,6 +58,20 @@ import { loadServerLeavers, type ServerLeaver } from "@/lib/loaders/server-leave
 import { addFakePlayer, refreshActiveSeasonMmrs, replacePlayer, swapPlayers } from "@/app/admin/players/actions";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const season = await prisma.season.findUnique({
+    where: { id },
+    select: { number: true, subtitle: true },
+  });
+  if (!season) return { title: "Balatro League" };
+  return { title: `${formatSeasonLabel(season)} - Balatro League` };
+}
 
 export default async function SeasonDetailPage({
   params,
@@ -154,14 +170,22 @@ async function PublicSummary({
   );
   return (
     <>
+      {/* Own row, above the title -- stacked beside a long season name it
+          wrapped onto a second line on phone (ux-round5 finding 8, L39).
+          Same slot/shape as the profile page's own back-to-standings link,
+          with a real 44px tap target instead of a 23px line of text. */}
+      <p style={{ marginBottom: 4 }}>
+        <Link href="/seasons" className="muted" style={{ display: "inline-flex", alignItems: "center", minHeight: 44, fontSize: 13 }}>
+          ← all seasons
+        </Link>
+      </p>
       <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 4 }}>
-        <h2 style={{ margin: 0 }}>{season.name}</h2>
+        <h1 style={{ margin: 0 }}>{season.name}</h1>
         {season.isActive ? (
           <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--success)" }}>ACTIVE</span>
         ) : (
           <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "var(--muted)" }}>FINISHED</span>
         )}
-        <Link href="/seasons" style={{ marginLeft: "auto" }}>← all seasons</Link>
       </div>
       <SeasonWindow
         start={season.startedAt}
@@ -184,7 +208,12 @@ async function PublicSummary({
       )}
 
       {season.tiers.filter((t) => t.divisions.length > 0).map((tier) => (
-        <section key={tier.id} style={{ marginTop: 24 }}>
+        // "tier-section" matches /standings' tier wrapper -- the v2 stylesheet
+        // caps a .tier-section .grid-2 at exactly 2 columns on desktop
+        // (app/globals.css); without the class this grid fell back to
+        // auto-fit, which stretched each wide player-card stack to one full
+        // column instead of two (ux-round5 finding 2, L48).
+        <section key={tier.id} className="tier-section" style={{ marginTop: 24 }}>
           <h3 style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <RarityText position={tier.position}>{tier.name}</RarityText>
             {isAdmin && (
@@ -196,9 +225,16 @@ async function PublicSummary({
           <div className="grid grid-2">
             {tier.divisions.map((div) => {
               const extras = new Map<string, StandingsRowExtras>(
-                div.rows.map((r) => [r.player.id, { mmr: mmrByPlayerId.get(r.player.id) }]),
+                div.rows.map((r) => [r.player.id, { mmr: mmrByPlayerId.get(r.player.id), avatarUrl: r.avatarUrl }]),
               );
               const finalRanks = new Map(div.rows.map((r) => [r.player.id, r.finalGlobalRank]));
+              // No confirmed matches yet -- same flag the division page
+              // derives from confirmedPairingCount === 0 (division.ts); here
+              // every row's own `played` count stands in for that (a
+              // confirmed pairing always bumps both sides' played), so the
+              // v2 cards show dashes/"None played" instead of a misleading
+              // rank-1, 0-PTS row for every member (ux-round5 finding 2, L33).
+              const noMatchesYet = div.rows.every((r) => r.played === 0);
               return (
                 <div key={div.id} className="card">
                   <strong className="pixel" style={{ fontSize: 18 }}>
@@ -210,6 +246,8 @@ async function PublicSummary({
                     showBmpMmr={showBmpMmr}
                     bmpCurrentSeason={bmpCurrentSeason}
                     livesBreaksTies={season.livesBreaksTies}
+                    tierRarity={rarityIndex(tier.position)}
+                    noMatchesYet={noMatchesYet}
                     finalRankHeader={isEnded ? "Final rank" : undefined}
                     finalRankCell={
                       isEnded
