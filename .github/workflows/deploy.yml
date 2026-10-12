@@ -118,6 +118,7 @@ jobs:
         run: echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
 
       - name: Build + push changed images
+        timeout-minutes: 20
         env:
           OWNER: ${{ steps.v.outputs.owner }}
           TAG: ${{ steps.v.outputs.tag }}
