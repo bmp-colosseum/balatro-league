@@ -14,7 +14,17 @@ import { Fragment, type ReactNode, type CSSProperties } from "react";
 import { rankLabel } from "@/lib/standings";
 import { DiscordId } from "@/components/DiscordId";
 import type { StandingsMmrEntry } from "@/lib/loaders/standings";
-import { boundaryBelow, boundaryLabel, clinchTitle, zoneKeyLines, zoneOf, type Zone } from "@/lib/standings-zone";
+import {
+  boundaryArrowDirection,
+  boundaryBelow,
+  boundaryLabel,
+  zoneCertainty,
+  zoneGlyphTitle,
+  zoneKeyLines,
+  zoneOf,
+  type Zone,
+  type ZoneCertainty,
+} from "@/lib/standings-zone";
 import { groupTiebreakNotes, initials, recordPips } from "@/lib/standings-cards-core";
 
 // Minimal row shape the table needs. Every standings source — the /standings
@@ -291,21 +301,81 @@ export function CardLives({ r }: { r: StandingsTableRow }) {
   );
 }
 
-// v2 "Card Table" rank-tile clinch glyph -- a tiny inline SVG lock (no
-// emoji, per design-system/MASTER.md) instead of the table's lock-up/lock-down emoji.
-// Promote/relegate zones themselves are conveyed by the card's stripe +
-// dashed divider (app/v2/standings-cards.css), not by this glyph or an
-// arrow -- this only ever fires for the mid-season CLINCH state (ex is
-// undefined once the division is complete, see rowTint's comment above and
-// the page's `complete ?` gate), so it never collides with the showdown
-// glyph below (that one only fires once complete).
-export function ClinchGlyph({ status }: { status?: "up" | "down" }) {
-  if (!status) return null;
+// v2 "Card Table" rank-tile zone glyph -- a tiny inline SVG lock (no emoji,
+// per design-system/MASTER.md) instead of the table's lock-up/lock-down
+// emoji. Colored by ZONE (gold promote / grey relegate -- the same two hues
+// as the stripe and divider, never a tier color), and drawn SOLID+filled
+// when the row is decided/clinched vs OUTLINED+dashed-ring when it merely
+// sits in the spot today with nothing guaranteed yet (zoneCertainty) -- see
+// app/v2/standings-cards.css' [data-certainty] rules for the fill/stroke
+// swap. Renders nothing without a zone+certainty, so it never collides with
+// the showdown glyph below (certainty only fires pre-completion for "spot",
+// same window as the old clinch-only state; "decided" at season end never
+// coincides with a tied/showdown row -- ties are excluded from
+// promoting/relegating upstream, see app/standings/page.tsx).
+export function ClinchGlyph({ zone, certainty }: { zone: Zone; certainty?: ZoneCertainty }) {
+  if (!zone || !certainty) return null;
   return (
-    <span className="player-card-clinch" data-status={status} title={clinchTitle(status)}>
+    <span
+      className="player-card-clinch"
+      data-zone={zone}
+      data-certainty={certainty}
+      title={zoneGlyphTitle(zone, certainty)}
+    >
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M7 10V8a5 5 0 0 1 10 0v2h.5A1.5 1.5 0 0 1 19 11.5v8A1.5 1.5 0 0 1 17.5 21h-11A1.5 1.5 0 0 1 5 19.5v-8A1.5 1.5 0 0 1 6.5 10H7zm2 0h6V8a3 3 0 0 0-6 0v2z" />
       </svg>
+    </span>
+  );
+}
+
+// The dashed divider's "punches through" label -- a real rendered chevron +
+// text (not CSS `content: attr(...)`, which can't embed an SVG) so the
+// divider itself says what it is instead of relying on color alone (ux
+// feedback: the cut-off color wasn't obviously what the Key legend referred
+// to). Up-chevron for promotion, down-chevron for relegation
+// (boundaryArrowDirection); renders nothing without a boundary/label.
+export function BoundaryLabel({ boundary, text }: { boundary: Zone; text?: string }) {
+  if (!boundary || !text) return null;
+  const direction = boundaryArrowDirection(boundary);
+  return (
+    <span className="player-card-boundary-label" data-boundary={boundary}>
+      <svg className="player-card-boundary-arrow" viewBox="0 0 24 24" aria-hidden="true">
+        {direction === "up" ? (
+          <path d="M12 5l7 8h-4.5v6h-5v-6H5z" />
+        ) : (
+          <path d="M12 19l-7-8h4.5V5h5v6H19z" />
+        )}
+      </svg>
+      <span className="player-card-boundary-text">{text}</span>
+    </span>
+  );
+}
+
+// v2 "Card Table" KEY sample -- two tiny REAL player-card fragments (the
+// exact same classes/markup the live table renders, not a lookalike), so
+// the Key shows literally what the zone stripe + dashed divider + chevron
+// look like instead of an abstract color chip the reader has to map back to
+// the real thing. Static illustrative wording via boundaryLabel's own
+// bare-verb fallback -- this legend isn't tied to any one division, so it
+// never fabricates a division name that doesn't exist.
+export function ZoneKeySample() {
+  return (
+    <span className="key-legend-sample-group">
+      <span className="key-legend-sample" aria-hidden="true">
+        <span className="player-card key-legend-sample-card" data-zone="promote" data-boundary="promote">
+          <BoundaryLabel boundary="promote" text={boundaryLabel("promote")} />
+        </span>
+        <span className="player-card key-legend-sample-card" />
+      </span>
+      promotion zone
+      <span className="key-legend-sample" aria-hidden="true">
+        <span className="player-card key-legend-sample-card" data-boundary="relegate">
+          <BoundaryLabel boundary="relegate" text={boundaryLabel("relegate")} />
+        </span>
+        <span className="player-card key-legend-sample-card" data-zone="relegate" />
+      </span>
+      relegation zone
     </span>
   );
 }
@@ -411,6 +481,10 @@ export function DivisionStandingsTable({
   // stripe + dashed-divider hooks below (see lib/standings-zone.ts). Zero
   // effect under v1: these become data attributes the v1 CSS never selects.
   const zones: Zone[] = rows.map((r) => zoneOf(extras?.get(r.player.id)));
+  // Per-row certainty (decided/clinched vs merely "in the spot" today) for
+  // the v2 rank-tile glyph -- solid fill vs outlined/dashed ring, same hue
+  // either way (see lib/standings-zone.ts' zoneCertainty + ClinchGlyph).
+  const certainties = rows.map((r, i) => zoneCertainty(extras?.get(r.player.id), zones[i]));
   const anyPromoteZone = zones.includes("promote");
   const anyRelegateZone = zones.includes("relegate");
   const keyLines = zoneKeyLines({
@@ -420,10 +494,11 @@ export function DivisionStandingsTable({
     below: belowDivisionName,
     isTopOfLadder,
   });
-  // Per-row dashed-divider label text (the v2 card's data-boundary ::after
-  // content -- see app/v2/standings-cards.css), same "to <neighbor>" wording
-  // as the key lines. Computed once per zone kind since every row sharing a
-  // boundary kind in this division gets the same neighbor name.
+  // Per-row dashed-divider label text (rendered by BoundaryLabel as a real
+  // chevron + text node, not CSS `content: attr(...)` -- see
+  // app/v2/standings-cards.css), same "to <neighbor>" wording as the key
+  // lines. Computed once per zone kind since every row sharing a boundary
+  // kind in this division gets the same neighbor name.
   const promoteBoundaryLabel = boundaryLabel("promote", aboveDivisionName, belowDivisionName);
   const relegateBoundaryLabel = boundaryLabel("relegate", aboveDivisionName, belowDivisionName);
 
@@ -564,11 +639,12 @@ export function DivisionStandingsTable({
               // Same zone/boundary hooks as the desktop table row above --
               // see lib/standings-zone.ts.
               const zone = zones[i];
+              const certainty = certainties[i];
               const boundary = boundaryBelow(zones, i);
               // "Promotion to <above>" / "Relegation to <below>" (or the
               // bare word, or nothing at the true top/bottom of the ladder)
-              // -- see lib/standings-zone.ts' boundaryLabel. Read via CSS
-              // content: attr(data-boundary-label) (app/v2/standings-cards.css).
+              // -- see lib/standings-zone.ts' boundaryLabel. Rendered by
+              // BoundaryLabel as a real chevron + text node below.
               const boundaryLabelText =
                 boundary === "promote" ? promoteBoundaryLabel : boundary === "relegate" ? relegateBoundaryLabel : undefined;
               // One merged tie footnote under the LAST row of its group
@@ -580,7 +656,6 @@ export function DivisionStandingsTable({
                     className="player-card"
                     data-zone={zone}
                     data-boundary={boundary}
-                    data-boundary-label={boundaryLabelText}
                     data-you={ex?.isViewer ? "1" : undefined}
                   >
                     {/* Rank badge -- the medal string is "N" normally or "#N"
@@ -598,7 +673,7 @@ export function DivisionStandingsTable({
                       >
                         {noMatchesYet ? "-" : medal.replace(/^#/, "")}
                       </span>
-                      <ClinchGlyph status={ex?.clinchStatus} />
+                      <ClinchGlyph zone={zone} certainty={certainty} />
                       <ShowdownGlyph show={ex?.showdown && !livesBreaksTies} />
                     </span>
                     <CardAvatar displayName={r.player.displayName} avatarUrl={ex?.avatarUrl} />
@@ -616,6 +691,7 @@ export function DivisionStandingsTable({
                         <div className="player-card-points-label">pts</div>
                       </div>
                     )}
+                    <BoundaryLabel boundary={boundary} text={boundaryLabelText} />
                   </div>
                   {/* Also gated on !noMatchesYet: a fallback "tied on
                       points" footnote (no lives list to zero-check) can

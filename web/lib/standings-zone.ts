@@ -115,3 +115,50 @@ export function boundaryLabel(boundary: Zone, above?: string, below?: string): s
 export function clinchTitle(status: "up" | "down"): string {
   return status === "up" ? "Clinched: guaranteed up" : "Locked: guaranteed down";
 }
+
+// How certain a row's zone is -- "decided" covers both the season-end
+// promoting/relegating flags AND a mid-season clinch (both are guaranteed,
+// nothing can still change it), "spot" covers a row that merely SITS in the
+// promotion/relegation spot today with nothing decided or clinched yet (see
+// ZoneExtras' own comments). Branches mirror zoneOf's own precedence
+// (decided/clinched beats the current spot) so a row's certainty always
+// agrees with its zone. Lets the v2 player card draw the SAME zone color
+// solid when it's decided/clinched and outlined/dashed when it's only the
+// current spot, instead of a third color for the in-between state.
+export type ZoneCertainty = "decided" | "spot";
+
+export function zoneCertainty(ex: ZoneExtras | undefined, zone: Zone): ZoneCertainty | undefined {
+  if (zone === "promote") {
+    if (ex?.promoting || ex?.clinchStatus === "up") return "decided";
+    if (ex?.inPromotionSpot) return "spot";
+  }
+  if (zone === "relegate") {
+    if (ex?.relegating || ex?.clinchStatus === "down") return "decided";
+    if (ex?.inRelegationSpot) return "spot";
+  }
+  return undefined;
+}
+
+// Title text for the rank-tile zone glyph, covering both certainty levels --
+// "decided" reuses clinchTitle's existing wording (the glyph looks solid
+// either way, whether it's a mid-season clinch or the season is already
+// over), "spot" gets its own "not yet guaranteed" wording for the
+// outlined/dashed glyph. Returns undefined when there's no zone/certainty to
+// explain (nothing renders then -- see ZoneGlyph).
+export function zoneGlyphTitle(zone: Zone, certainty: ZoneCertainty | undefined): string | undefined {
+  if (!zone || !certainty) return undefined;
+  if (certainty === "decided") return clinchTitle(zone === "promote" ? "up" : "down");
+  return zone === "promote"
+    ? "In the promotion spot -- not yet guaranteed"
+    : "In the relegation spot -- not yet guaranteed";
+}
+
+// Which way the dashed boundary divider's arrow glyph points -- up for
+// promotion (climbing the ladder), down for relegation. Pure lookup so the
+// component can pick an SVG path without embedding the promote/relegate
+// mapping inline.
+export function boundaryArrowDirection(boundary: Zone): "up" | "down" | undefined {
+  if (boundary === "promote") return "up";
+  if (boundary === "relegate") return "down";
+  return undefined;
+}

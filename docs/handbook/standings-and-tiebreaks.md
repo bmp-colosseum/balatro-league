@@ -173,18 +173,37 @@ mirrored to `web/lib/onboarding-guide.ts`).
 
 `web/lib/standings-zone.ts`: a row is in the promote zone if it is promoting
 or has clinched up, relegate if relegating or clinched down. On the v2 player
-cards this draws as a thin blue (promote) or amber (relegate) left stripe --
-same `--info`/`--admin` tokens the v1 table's up/down arrows use -- plus a
-dashed divider labelled "Promotion to X" / "Relegation to Y" (the bare word
-when no neighbor name is known, "Top of the ladder" for the single division
-at the very top of the whole ladder, nothing when relegate is 0; a bare
-chevron on phones) below the last promoting row and above the first
-relegating row. The per-division key under the table reads the same
-"Promotion to X" / "Relegation to Y" wording. The card's rank tile also
-shows a small lock glyph when a row is mid-season clinched (not yet
-decided), and a plain crossed-lines glyph on a tied row that still needs a
-shootout -- the latter is suppressed under the "lives" tiebreak, since the
-per-row tie footnote already explains the break there.
+cards this draws as a thin gold (promote) or neutral grey-hatched (relegate)
+left stripe -- the `--zone-promote`/`--zone-relegate` tokens (gold accent /
+`--paper-faint` hatch, see `app/globals.css`), deliberately NEITHER a tier
+color (`--common`/`--uncommon`/`--rare`/`--legendary`) nor the old
+`--info`/`--admin` pairing, which clashed with the Common tier's own blue --
+plus a dashed divider in the same two colors, with a real up-chevron
+(promote) or down-chevron (relegate) SVG punched through it right before the
+label (`DivisionStandingsTable`'s `BoundaryLabel`, not CSS `content:
+attr(...)`, so the divider itself says what it is instead of relying on
+color alone). The label reads "Promotion to X" / "Relegation to Y" (the bare
+word when no neighbor name is known, "Top of the ladder" for the single
+division at the very top of the whole ladder, nothing when relegate is 0;
+phones drop the word and keep just the chevron). The per-division key under
+the table reads the same "Promotion to X" / "Relegation to Y" wording with a
+matching gold/grey swatch. The card's rank tile also shows a small lock
+glyph in the same gold/grey hue -- SOLID (filled lock, solid ring) once a
+row is decided or mid-season clinched, OUTLINED/DASHED (open lock, dashed
+ring) while a row merely sits in the promotion/relegation spot today with
+nothing guaranteed yet (`lib/standings-zone.ts`' `zoneCertainty`) -- and a
+plain crossed-lines glyph on a tied row that still needs a shootout -- the
+latter is suppressed under the "lives" tiebreak, since the per-row tie
+footnote already explains the break there.
+
+The page-level "Key" disclosure (`/standings`) shows two miniature REAL
+player-card fragments (`DivisionStandingsTable`'s `ZoneKeySample`, not a bare
+color swatch) demonstrating the stripe + dashed divider + chevron for
+promotion and relegation, plus the line "The dashed line is the cut-off.
+Players above a promotion line go up to the named division; below a
+relegation line go down." -- added 2026-10 after feedback that a bare color
+swatch didn't make it obvious the cut-off color was what the legend was
+pointing at.
 
 ## Things to know that are not obvious
 

@@ -8,6 +8,7 @@ import { CollapsibleDivision } from "@/components/CollapsibleDivision";
 import {
   CardAvatar,
   DivisionStandingsTable,
+  ZoneKeySample,
   type StandingsRowExtras,
 } from "@/components/DivisionStandingsTable";
 import { SeasonWindow } from "@/components/SeasonWindow";
@@ -276,28 +277,33 @@ export default async function StandingsPage() {
                   </span>
                 </div>
                 {/* v2 "Card Table" KEY -- describes exactly what the player
-                    cards draw: a stripe (not an arrow) for the zone, an
-                    inline SVG lock (not the emoji) for clinch, a plain X
+                    cards draw: real mini card fragments (not a bare color
+                    swatch) for the zone stripe + dashed divider + chevron,
+                    an inline SVG lock (not the emoji) for clinch, a plain X
                     glyph for the shootout marker (hidden when this season's
                     tiebreak is "lives" -- the per-row tie footnote already
                     explains the break there, see DivisionStandingsTable's
                     ShowdownGlyph). Same v1/v2 toggle pattern as the rest of
-                    this page (see app/globals.css). */}
+                    this page (see app/globals.css). The samples/wording
+                    below were reworked 2026-10 -- the old blue/amber swatch
+                    pair clashed with the tier colors (division names/rank
+                    badges use the same blue for the Common tier) and gave no
+                    visual hint that the cut-off COLOR was what the legend
+                    was pointing at; see docs/handbook/standings-and-tiebreaks.md's
+                    "Zones" section. */}
                 <div className="key-legend-v2" style={{ marginTop: 8, fontSize: 12, display: "flex", flexWrap: "wrap", gap: "4px 16px", alignItems: "center" }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                    <span className="zone-key-swatch zone-key-swatch-promote" /> promotion zone
+                  <span style={{ width: "100%", fontSize: 11.5 }}>
+                    The dashed line is the cut-off. Players above a promotion line go up to the named division; below a relegation line go down.
                   </span>
+                  <ZoneKeySample />
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                    <span className="zone-key-swatch zone-key-swatch-relegate" /> relegation zone
-                  </span>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: 12, height: 12, fill: "var(--info)" }}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: 12, height: 12, fill: "var(--zone-promote)" }}>
                       <path d="M7 10V8a5 5 0 0 1 10 0v2h.5A1.5 1.5 0 0 1 19 11.5v8A1.5 1.5 0 0 1 17.5 21h-11A1.5 1.5 0 0 1 5 19.5v-8A1.5 1.5 0 0 1 6.5 10H7zm2 0h6V8a3 3 0 0 0-6 0v2z" />
                     </svg>
                     clinched -- guaranteed up
                   </span>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-                    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: 12, height: 12, fill: "var(--admin)" }}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: 12, height: 12, fill: "var(--zone-relegate)" }}>
                       <path d="M7 10V8a5 5 0 0 1 10 0v2h.5A1.5 1.5 0 0 1 19 11.5v8A1.5 1.5 0 0 1 17.5 21h-11A1.5 1.5 0 0 1 5 19.5v-8A1.5 1.5 0 0 1 6.5 10H7zm2 0h6V8a3 3 0 0 0-6 0v2z" />
                     </svg>
                     locked -- guaranteed down
