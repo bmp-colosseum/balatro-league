@@ -48,6 +48,14 @@ interface CachedRow {
   // netLives is -- same presence rule, same byte-identical-chain-payload
   // guarantee.
   tiebreakNote?: string;
+  // See StandingRow.tiebreakKind/tiebreakValues in standings.ts -- the
+  // tiebreakNote's mechanism as structured data, for the v2 "Card Table"
+  // merged tie footnote's isFinal-aware wording (lib/standings-cards-core.ts).
+  // Same presence rule as tiebreakNote. Absent on a payload written before
+  // this field existed; readers fall back to kind-blind wording in that case
+  // (see groupTiebreakNotes).
+  tiebreakKind?: StandingRow["tiebreakKind"];
+  tiebreakValues?: StandingRow["tiebreakValues"];
 }
 
 // On-disk shape of DivisionStandings.rowsJson. Legacy rows written before
@@ -211,6 +219,8 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
       netLives: r.netLives,
       livesGamesMissing: r.livesGamesMissing,
       tiebreakNote: r.tiebreakNote,
+      tiebreakKind: r.tiebreakKind,
+      tiebreakValues: r.tiebreakValues,
     })),
   };
   if (badge) payload.badge = badge;
@@ -349,6 +359,8 @@ function hydrateRows(payload: CachedRow[], playerById: Map<string, Player>): Sta
       if (r.netLives !== undefined) row.netLives = r.netLives;
       if (r.livesGamesMissing !== undefined) row.livesGamesMissing = r.livesGamesMissing;
       if (r.tiebreakNote !== undefined) row.tiebreakNote = r.tiebreakNote;
+      if (r.tiebreakKind !== undefined) row.tiebreakKind = r.tiebreakKind;
+      if (r.tiebreakValues !== undefined) row.tiebreakValues = r.tiebreakValues;
       return row;
     })
     .filter((r): r is StandingRow => r !== null);

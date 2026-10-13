@@ -52,6 +52,86 @@ function joinNames(names: readonly string[]): string {
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
+// "+N"/"-N" for a signed lives number -- a negative value already carries
+// its own "-", a non-negative one needs "+" added. Small local copy of
+// lib/standings.ts's identical private helper -- this file stays zero-import
+// (see the file header).
+function formatSignedLives(n: number): string {
+  return n > 0 ? `+${n}` : `${n}`;
+}
+
+// Which mechanism decided (or failed to decide) a group of rows originally
+// tied on points -- set by orderLivesPointsGroup (lib/standings.ts) onto
+// StandingRow.tiebreakKind, alongside the existing free-text tiebreakNote.
+// Lets the wording below pick the right phrase instead of inferring it from
+// which stats happen to be present (netLives is set on EVERY row under the
+// "lives" tiebreak regardless of what actually separated a given pair, so
+// presence alone can't tell shootout/head-to-head apart from net lives --
+// see groupTiebreakNotes' history). "realTie" means nothing was decided (an
+// unbreakable tie sharing a rank) -- it never takes "decided it" wording,
+// in either state.
+export type TiebreakDecisionKind =
+  | "shootout"
+  | "headToHeadResult"
+  | "headToHeadLives"
+  | "netLives"
+  | "realTie";
+
+// The subset of TiebreakDecisionKind that DOES have a "decided it" /
+// "currently separate them" clause (see tiebreakDecidedPhrase) --
+// "realTie" is handled separately by its own fixed sentence.
+export type TiebreakDecidedKind = Exclude<TiebreakDecisionKind, "realTie">;
+
+// Raw inputs for tiebreakDecidedPhrase below -- plain values only; all
+// formatting (sign, parenthesized list) happens inside that function so
+// there is exactly one place that owns the punctuation. Which fields are
+// read depends on kind: "headToHeadResult" reads `won`; "headToHeadLives"
+// reads `diff` (this row's own signed differential from the one match);
+// "netLives" reads `livesList` (every tied row's net lives, in display
+// order -- the same list for every row in the group); "shootout" reads
+// nothing.
+export interface TiebreakWordingValues {
+  won?: boolean;
+  diff?: number;
+  livesList?: number[];
+}
+
+// The "decided it" (isFinal) / "currently separate them" (not yet final)
+// half of a tiebreak sentence, e.g. "total net lives decided it (3 / -3)"
+// vs "net lives currently separate them (+3 / -3)". isFinal is true once
+// the division is complete (every match played) or this specific tie is
+// already clinched/decided per the caller's own promote/relegate/clinch
+// logic -- until then more matches could still shift the numbers (net
+// lives is a season-long running total) or the tie group's membership
+// itself (a third player could still join or leave it), so the wording
+// stays present-tense and provisional rather than claiming a final
+// verdict already happened. Pure: a plain (kind, values, isFinal) ->
+// string mapping, no row/group shape involved -- callers (the per-row
+// tiebreakNote in lib/standings.ts, and groupTiebreakNotes below) build
+// their own surrounding sentence around this clause.
+export function tiebreakDecidedPhrase(
+  kind: TiebreakDecidedKind,
+  values: TiebreakWordingValues,
+  isFinal: boolean,
+): string {
+  switch (kind) {
+    case "shootout":
+      return isFinal ? "shootout decided it" : "a shootout currently separates them";
+    case "headToHeadResult":
+      if (isFinal) return values.won ? "beat them head-to-head" : "lost to them head-to-head";
+      return values.won ? "is currently ahead of them head-to-head" : "is currently behind them head-to-head";
+    case "headToHeadLives": {
+      const diff = values.diff ?? 0;
+      const pair = `${formatSignedLives(diff)} vs ${formatSignedLives(-diff)}`;
+      return isFinal ? `head-to-head lives ${pair} decided it` : `head-to-head lives ${pair} currently separate them`;
+    }
+    case "netLives": {
+      const list = (values.livesList ?? []).join(" / ");
+      return isFinal ? `total net lives decided it (${list})` : `net lives currently separate them (${list})`;
+    }
+  }
+}
+
 // Minimal row shape groupTiebreakNotes needs -- structurally compatible with
 // StandingsTableRow (components/DivisionStandingsTable.tsx) without
 // importing it (keeps this file at zero imports).
@@ -60,6 +140,42 @@ export interface TiebreakNoteRow {
   tiebreakNote?: string;
   netLives?: number;
   player: { displayName: string };
+  // See StandingRow.tiebreakKind/tiebreakValues in lib/standings.ts. Absent
+  // on a row built before these fields existed (e.g. a cache payload
+  // written by an older deploy, or a hand-built test row) -- groupKind below
+  // then falls back to the original netLives-presence-only inference so
+  // those callers keep their exact previous (final-only) wording.
+  tiebreakKind?: TiebreakDecisionKind;
+  tiebreakValues?: TiebreakWordingValues;
+  // True when THIS row's promotion/relegation fate is already clinched --
+  // StandingsRowExtras.clinchStatus is set (components/DivisionStandingsTable.tsx).
+  // A group is treated as final (see groupTiebreakNotes' divisionComplete
+  // param) once every one of its members is clinched, even mid-season.
+  clinched?: boolean;
+}
+
+// A group's tiebreakKind when every member agrees on the same one --
+// undefined when any row lacks it, or members disagree (can only happen if
+// a caller hand-builds inconsistent rows; every real pipeline sets the same
+// kind on every member of a group, see orderLivesPointsGroup). undefined
+// signals groupTiebreakNotes to use its legacy, kind-blind fallback wording
+// instead of guessing.
+function groupKind(group: readonly TiebreakNoteRow[]): TiebreakDecisionKind | undefined {
+  const first = group[0]?.tiebreakKind;
+  if (first === undefined) return undefined;
+  return group.every((r) => r.tiebreakKind === first) ? first : undefined;
+}
+
+// The values tiebreakDecidedPhrase needs for a GROUP's merged sentence (as
+// opposed to one row's own perspective). "netLives" shares one list across
+// every member (read straight off each row's netLives, same as before this
+// field existed); the two head-to-head kinds and shootout are only ever
+// exactly-2-row groups (a 3+-way tie is always net-lives-only -- see
+// orderLivesPointsGroup), so the first row's own tiebreakValues already has
+// everything tiebreakDecidedPhrase needs.
+function groupValues(kind: TiebreakDecidedKind, group: readonly TiebreakNoteRow[]): TiebreakWordingValues {
+  if (kind === "netLives") return { livesList: group.map((r) => r.netLives ?? 0) };
+  return group[0]?.tiebreakValues ?? {};
 }
 
 export interface TiebreakNoteGroup {
@@ -82,16 +198,31 @@ export interface TiebreakNoteGroup {
 // group -- grouping on that pair of conditions recovers the group boundaries
 // without needing a separate group id on each row.
 //
-// When every row in the group carries netLives (the common "total net lives
-// decided it" case -- see orderLivesPointsGroup, which gives every member of
-// such a group the SAME final-order lives list), the footnote names every
-// participant plus that shared list, e.g. "Birb, Frankdeslimste and
-// Mangoman007 tied on points -- total net lives decided it (-4 / -5 / -7)".
-// Otherwise (shootout / head-to-head / an unresolved real tie -- cases whose
-// per-row wording differs by the row's own perspective, so there is no single
-// shared number list to quote) it falls back to a plain "tied on points" line
-// naming every participant.
-export function groupTiebreakNotes(rows: readonly TiebreakNoteRow[]): TiebreakNoteGroup[] {
+// When every row in the group agrees on a tiebreakKind (the normal case --
+// see orderLivesPointsGroup, which sets the same kind on every member of a
+// group), the footnote names every participant plus the kind-appropriate
+// clause from tiebreakDecidedPhrase, e.g. "Birb, Frankdeslimste and
+// Mangoman007 tied on points: total net lives decided it (-4 / -5 / -7)"
+// once isFinal, or "...tied on points; net lives currently separate them
+// (-4 / -5 / -7)" while the division is still being played. "realTie" never
+// takes a "decided it" clause in either state -- nothing was decided, it's
+// an unbreakable tie sharing a rank.
+//
+// Falls back to the original, kind-blind wording (always the "final"
+// phrasing) when any row lacks tiebreakKind -- a hand-built test row, or a
+// cache payload written before this field existed: every row carries
+// netLives -> the old "total net lives decided it" line; otherwise (no
+// shared number list to quote) a plain "tied on points" line naming every
+// participant.
+//
+// divisionComplete is the one caller-known fact that always makes a group
+// final (every match in the division has been played). A group can ALSO be
+// final before that: once every one of its members is individually
+// clinched (StandingsRowExtras.clinchStatus, surfaced per row as
+// `clinched` -- see TiebreakNoteRow), that group's relative order can no
+// longer change regardless of what's left to play, so "decided it" is
+// already accurate.
+export function groupTiebreakNotes(rows: readonly TiebreakNoteRow[], divisionComplete: boolean): TiebreakNoteGroup[] {
   const groups: TiebreakNoteGroup[] = [];
   let i = 0;
   while (i < rows.length) {
@@ -102,6 +233,7 @@ export function groupTiebreakNotes(rows: readonly TiebreakNoteRow[]): TiebreakNo
     let j = i + 1;
     while (j < rows.length && rows[j]!.tiebreakNote && rows[j]!.points === rows[i]!.points) j++;
     const group = rows.slice(i, j);
+    const isFinal = divisionComplete || group.every((r) => r.clinched === true);
     const allHaveLives = group.every((r) => r.netLives !== undefined);
     // Nothing to report when every tied player's net lives are 0 -- that's
     // the all-zero signature of an early-season / no-matches-played group
@@ -113,9 +245,19 @@ export function groupTiebreakNotes(rows: readonly TiebreakNoteRow[]): TiebreakNo
       continue;
     }
     const names = group.map((r) => r.player.displayName);
-    const text = allHaveLives
-      ? `${joinNames(names)} tied on points: total net lives decided it (${group.map((r) => `${r.netLives}`).join(" / ")})`
-      : `${joinNames(names)} tied on points`;
+    const kind = groupKind(group);
+    let text: string;
+    if (kind === undefined) {
+      text = allHaveLives
+        ? `${joinNames(names)} tied on points: total net lives decided it (${group.map((r) => `${r.netLives}`).join(" / ")})`
+        : `${joinNames(names)} tied on points`;
+    } else if (kind === "realTie") {
+      text = `${joinNames(names)} tied on points and net lives -- shares the place`;
+    } else {
+      const connector = isFinal ? ":" : ";";
+      const phrase = tiebreakDecidedPhrase(kind, groupValues(kind, group), isFinal);
+      text = `${joinNames(names)} tied on points${connector} ${phrase}`;
+    }
     groups.push({ lastIndex: j - 1, text });
     i = j;
   }
