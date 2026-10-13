@@ -15,6 +15,9 @@ export const dynamic = "force-dynamic";
 // point crawlers at a 307 with nothing to index. /changes 404s for non-admins, same
 // reasoning. See docs/handbook/seo.md.
 const STATIC_PATHS: SitemapEntryInput[] = [
+  // "/" used to be a bare redirect to /standings (not worth a sitemap entry
+  // of its own); it's a real landing page now -- see app/page.tsx.
+  { path: "/" },
   { path: "/standings" },
   { path: "/seasons" },
   { path: "/hall-of-fame" },
@@ -22,6 +25,7 @@ const STATIC_PATHS: SitemapEntryInput[] = [
   { path: "/join" },
   { path: "/stats" },
   { path: "/traits" },
+  { path: "/guides/balatro-multiplayer-with-friends" },
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

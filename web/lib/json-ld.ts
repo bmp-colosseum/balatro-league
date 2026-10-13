@@ -7,9 +7,13 @@
 // Scope, per the SEO audit (.claude/knowledge/seo/01-audit-and-plan.md section 5):
 // WebSite + Organization (cheap, drives the Google-results "site name") and
 // BreadcrumbList (desktop rich result on profile/division/season pages). Event/
-// SportsEvent and FAQPage markup are deliberately NOT built here -- Google doesn't
-// show rich results for either on a site like this (virtual-only events; FAQ rich
-// results are government/health-only since 2023).
+// SportsEvent markup is deliberately NOT built here -- Google doesn't show rich
+// results for virtual-only online events. faqJsonLd below IS built (the "play with
+// friends" guide, app/guides/balatro-multiplayer-with-friends/page.tsx) even though
+// the same audit section notes Google retired FAQ rich results for ordinary sites in
+// 2023 (government/health-only now) -- the markup still describes the page's real,
+// visible Q&A honestly (schema.org doesn't require a rich-result payoff to be valid),
+// costs nothing, and is cheap insurance if that policy ever loosens again.
 
 export interface WebsiteJsonLdInput {
   name: string;
@@ -64,6 +68,30 @@ export function breadcrumbJsonLd(items: BreadcrumbItem[]): JsonLdObject {
       position: i + 1,
       name: item.name,
       item: item.url,
+    })),
+  };
+}
+
+export interface FaqItem {
+  question: string;
+  /** Plain text (or simple HTML -- schema.org's acceptedAnswer.text allows a
+   *  small set of formatting tags) matching exactly what the page's visible
+   *  FAQ section renders, so the markup never claims an answer the reader
+   *  can't also see on the page. */
+  answer: string;
+}
+
+export function faqJsonLd(items: FaqItem[]): JsonLdObject {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: items.map((item) => ({
+      "@type": "Question",
+      name: item.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: item.answer,
+      },
     })),
   };
 }

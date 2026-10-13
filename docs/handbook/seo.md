@@ -12,11 +12,17 @@ Sources: [web/lib/seo.ts](../../web/lib/seo.ts),
 
 ## Indexable (public, in the sitemap)
 
+`/` (the home landing page, replacing the old bare redirect to `/standings`),
 `/standings`, `/seasons`, every `/seasons/[id]`, every `/divisions/[id]`,
-`/hall-of-fame`, `/how-it-works`, `/join`, `/stats`, `/traits`. Each gets a real
-title, description, canonical link, and Open Graph/Twitter card through the shared
-`pageMetadata()` helper in `web/lib/seo.ts`, so a link pasted into Discord unfurls
-properly instead of showing the generic site title.
+`/hall-of-fame`, `/how-it-works`, `/join`, `/stats`, `/traits`, and
+`/guides/balatro-multiplayer-with-friends` (the "play with friends" how-to guide,
+linked from `/how-it-works` and the footer). Each gets a real title, description,
+canonical link, and Open Graph/Twitter card through the shared `pageMetadata()`
+helper in `web/lib/seo.ts`, so a link pasted into Discord unfurls properly instead
+of showing the generic site title. The home page is the one exception to the title
+template: it sets `title: { absolute: ... }` so the brand name leads the `<title>`
+("Balatro League | ...") instead of trailing it. The guide page also carries
+BreadcrumbList and FAQPage JSON-LD (see the JSON-LD section below).
 
 **Player profiles (`/profile/[id]`) are indexed as of 2026-10-13**, decided by the
 TO -- exposing Discord display names and avatars to search was an open question in
@@ -68,16 +74,21 @@ their own `robots` field.
 
 ## JSON-LD
 
-`web/lib/json-ld.ts` is a pure builder module (no React/Next/Prisma) with three
+`web/lib/json-ld.ts` is a pure builder module (no React/Next/Prisma) with four
 shapes: `websiteJsonLd` + `organizationJsonLd` (both rendered once, in
-`app/layout.tsx`, via `<JsonLd>` from `web/components/JsonLd.tsx`), and
-`breadcrumbJsonLd` (rendered per-page on `/profile/[id]`, `/divisions/[id]`, and
-`/seasons/[id]`). The Organization's `logo` is the shared OG card
-(`public/og-image.png`); its `sameAs` is the admin-configured Discord invite URL
-(`LeagueConfig` key `discord_server_invite_url`) when one is set, omitted
-otherwise. `Event`/`SportsEvent` and `FAQPage` markup are deliberately not built --
-Google doesn't show rich results for either here (virtual-only events; FAQ rich
-results have been government/health-only since 2023).
+`app/layout.tsx`, via `<JsonLd>` from `web/components/JsonLd.tsx`),
+`breadcrumbJsonLd` (rendered per-page on `/profile/[id]`, `/divisions/[id]`,
+`/seasons/[id]`, and the `/guides/balatro-multiplayer-with-friends` guide), and
+`faqJsonLd` (rendered only on that guide page, built from the exact same
+question/answer array its visible FAQ section renders). The Organization's `logo`
+is the shared OG card (`public/og-image.png`); its `sameAs` is the admin-configured
+Discord invite URL (`LeagueConfig` key `discord_server_invite_url`) when one is
+set, omitted otherwise. `Event`/`SportsEvent` markup is deliberately not built --
+Google doesn't show rich results for virtual-only online events. `FAQPage` markup
+IS built (unlike the SEO audit's original "skip it" recommendation) at this
+project's direction -- Google has shown no FAQPage rich result for an ordinary site
+since 2023 (government/health-only), so it's cheap insurance rather than an
+expected ranking gain.
 
 ## The default OG image
 

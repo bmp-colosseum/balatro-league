@@ -22,6 +22,7 @@ export function SiteFooter({ discordInviteUrl }: { discordInviteUrl: string | nu
             </a>
           )}
           <Link href="/how-it-works">How it works</Link>
+          <Link href="/guides/balatro-multiplayer-with-friends">Play with friends</Link>
           {/* The league's sibling site -- a real cross-site navigation (two
               separate Next.js apps on two subdomains), so a plain <a>. Full
               name, not just "Team Tour", so the anchor text itself tells a

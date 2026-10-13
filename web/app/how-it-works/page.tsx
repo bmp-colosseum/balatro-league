@@ -56,6 +56,19 @@ export default async function HowItWorksPage() {
           </section>
         ))}
 
+        {/* New-to-the-mod path -- someone landing here already knows what
+            the league is but may never have run Balatro Multiplayer itself.
+            Points at the install/lobby guide instead of assuming they
+            already have a friend to play against. */}
+        <section className="card howto-section" id="new-to-multiplayer">
+          <h3>New to Balatro Multiplayer?</h3>
+          <p>
+            If you haven&apos;t installed the mod or played a match with a friend yet, start with{" "}
+            <Link href="/guides/balatro-multiplayer-with-friends">how to play Balatro multiplayer with friends</Link>
+            {" "}-- it covers installing the mod, setting up a lobby, and inviting someone to play.
+          </p>
+        </section>
+
         {/* Escalation path comes before the closing CTA (ux-round4 finding
             10, L11) -- a new player reading top to bottom used to hit
             "Something wrong with a result?" last, so the guide ended on a

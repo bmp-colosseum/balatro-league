@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { breadcrumbJsonLd, organizationJsonLd, websiteJsonLd } from "./json-ld";
+import { breadcrumbJsonLd, faqJsonLd, organizationJsonLd, websiteJsonLd } from "./json-ld";
 
 // "Valid JSON" here means: every value survives a JSON.stringify/JSON.parse round
 // trip unchanged (no undefined, no function, no circular ref) -- the actual escaping
@@ -76,6 +76,38 @@ describe("breadcrumbJsonLd", () => {
   it("handles an empty list without throwing", () => {
     const ld = breadcrumbJsonLd([]);
     expect(ld.itemListElement).toEqual([]);
+    expect(roundTrips(ld)).toBe(true);
+  });
+});
+
+describe("faqJsonLd", () => {
+  it("maps question/answer pairs to the schema.org Question/Answer shape, in order", () => {
+    const ld = faqJsonLd([
+      { question: "Is it free?", answer: "Yes, joining the league and playing is free." },
+      { question: "Do I need Discord?", answer: "Yes -- matches and results all happen in Discord." },
+    ]);
+    expect(ld).toEqual({
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      mainEntity: [
+        {
+          "@type": "Question",
+          name: "Is it free?",
+          acceptedAnswer: { "@type": "Answer", text: "Yes, joining the league and playing is free." },
+        },
+        {
+          "@type": "Question",
+          name: "Do I need Discord?",
+          acceptedAnswer: { "@type": "Answer", text: "Yes -- matches and results all happen in Discord." },
+        },
+      ],
+    });
+    expect(roundTrips(ld)).toBe(true);
+  });
+
+  it("handles an empty list without throwing", () => {
+    const ld = faqJsonLd([]);
+    expect(ld.mainEntity).toEqual([]);
     expect(roundTrips(ld)).toBe(true);
   });
 });

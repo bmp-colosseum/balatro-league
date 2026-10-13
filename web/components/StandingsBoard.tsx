@@ -1,0 +1,603 @@
+// Shared standings board -- the full tier-tabs / season-window / progress /
+// key / ladder strip / "Your division" card / per-division tables render,
+// extracted from app/standings/page.tsx so the home page (app/page.tsx) can
+// embed the exact same content below its own intro, through the exact same
+// data path (loadStandingsPageData), instead of forking a second copy of
+// this ~500-line render. /standings itself renders this unchanged (same
+// JSX, same props) -- its own page.tsx just does the data loading +
+// SiteNav/main wrapper and hands the result to this component.
+//
+// headingLevel lets a caller that already has its own page h1 (the home
+// page) render the season heading as h2 instead, so the page never carries
+// two h1s (SEO audit L7, design-system/MASTER.md's "one clear h1" rule).
+// showOpenSignupBanner lets a caller that already has its own prominent Join
+// CTA (the home page's "Join" block) suppress this board's own banner so the
+// two don't stack.
+
+import Link from "next/link";
+import { type ViewerDivisionSummary, type StandingsPageData } from "@/lib/loaders/standings";
+import { CollapsibleDivision } from "@/components/CollapsibleDivision";
+import {
+  CardAvatar,
+  DivisionStandingsTable,
+  ZoneKeySample,
+  type StandingsRowExtras,
+} from "@/components/DivisionStandingsTable";
+import { SeasonWindow } from "@/components/SeasonWindow";
+import { type StandingRow } from "@/lib/standings";
+import { divisionSummaryLine, recordPips } from "@/lib/standings-cards-core";
+import { rarityIndex, tierColors, tierSlug } from "@/lib/tier-colors";
+import { buildLadder } from "@/lib/division-ladder";
+import { LadderStrip } from "@/components/LadderStrip";
+import { seasonMatchTotals } from "@/lib/home-page-core";
+
+// Clinch predictor: who is mathematically guaranteed to promote ("up") /
+// relegate ("down") regardless of how the remaining matches play out.
+// Conservative — flags a player only when it holds even in their WORST
+// remaining case while every rival wins out. (That ignores rivals also playing
+// each other, which can only help the flagged player, so it never
+// false-positives; it just won't flag a borderline case early.) Assumes the
+// standard 3/1/0 scoring. Absent from the map = not yet decided.
+function computeClinch(
+  rows: Array<StandingRow & { dropped?: boolean }>,
+  gamesByPlayer: Record<string, number>,
+  fallbackTotal: number,
+  promoteN: number,
+  relegateN: number,
+): Map<string, "up" | "down"> {
+  const MAX_PER_MATCH = 3;
+  const result = new Map<string, "up" | "down">();
+  const active = rows.filter((r) => !r.dropped);
+  const n = active.length;
+  if (n === 0) return result;
+  const info = active.map((r) => {
+    // Per-player total scheduled games — N-1 in a round-robin, their assigned
+    // count in a graph division — so "remaining" (hence the ceiling) is right.
+    const total = gamesByPlayer[r.player.id] ?? fallbackTotal;
+    const remaining = Math.max(0, total - r.played);
+    return { id: r.player.id, floor: r.points, ceil: r.points + MAX_PER_MATCH * remaining };
+  });
+  for (const me of info) {
+    if (promoteN > 0) {
+      // Guaranteed top-promoteN if fewer than promoteN rivals can even reach
+      // this player's floor.
+      const canCatch = info.filter((o) => o.id !== me.id && o.ceil >= me.floor).length;
+      if (canCatch < promoteN) {
+        result.set(me.id, "up");
+        continue;
+      }
+    }
+    if (relegateN > 0) {
+      // Locked into the bottom relegateN if enough rivals are guaranteed
+      // strictly above even when this player wins out.
+      const guaranteedAbove = info.filter((o) => o.id !== me.id && o.floor > me.ceil).length;
+      if (guaranteedAbove >= n - relegateN) {
+        result.set(me.id, "down");
+      }
+    }
+  }
+  return result;
+}
+
+// v2 "Card Table" "Your division" card -- /standings' answer to "where am I
+// and who's next" for a returning, signed-in player (the audit's Win #1).
+// Pinned above every division's table. Brand new markup with no v1
+// equivalent: always in the DOM, hidden by default, shown only under
+// html[data-ui="v2"] (see globals.css) -- same pattern as every other
+// v2-only block on this page.
+function YourDivisionCard({
+  viewerDivision,
+  avatarUrl,
+}: {
+  viewerDivision: ViewerDivisionSummary;
+  avatarUrl: string | null;
+}) {
+  const pips = recordPips(viewerDivision.wins, viewerDivision.draws, viewerDivision.losses);
+  const left = viewerDivision.unplayedOpponentNames;
+  return (
+    <div className="card your-division-v2">
+      <div className="card-header your-division-head">
+        <CardAvatar displayName={viewerDivision.divisionName} avatarUrl={avatarUrl} />
+        <div className="your-division-name-block">
+          <div className="your-division-label">Your division</div>
+          <strong className="pixel division-name" data-rarity={rarityIndex(viewerDivision.tierPosition)}>
+            <Link href={`/divisions/${viewerDivision.divisionId}`} style={{ textDecoration: "none" }}>
+              {viewerDivision.divisionName}
+            </Link>
+          </strong>
+        </div>
+        <span className="your-division-rank" data-rarity={rarityIndex(viewerDivision.tierPosition)}>
+          #{viewerDivision.rank}
+        </span>
+      </div>
+      <div className="your-division-stats">
+        <span className="your-division-points">{viewerDivision.points} pts</span>
+        <span className="your-division-hand">
+          {pips.map((kind, i) => (
+            <span key={i} className="player-card-pip" data-kind={kind} />
+          ))}
+        </span>
+        <span className="muted">{viewerDivision.wins}W {viewerDivision.draws}D {viewerDivision.losses}L</span>
+      </div>
+      <div className="your-division-left muted">
+        {left.length > 0 ? `${left.length} left: ${left.join(", ")}` : "All matches played"}
+      </div>
+      <Link href={`/divisions/${viewerDivision.divisionId}`} className="your-division-report">
+        Report a result
+      </Link>
+    </div>
+  );
+}
+
+export interface StandingsBoardProps {
+  data: StandingsPageData;
+  openRound: { id: string } | null;
+  showBmpMmr: boolean;
+  // "/standings" itself is "h1"; an embedding page (the home page) that
+  // already owns the page's one h1 passes "h2".
+  headingLevel?: "h1" | "h2";
+  // Off on the home page, which already has its own dedicated Join block
+  // covering the same CTA -- see app/page.tsx.
+  showOpenSignupBanner?: boolean;
+}
+
+export function StandingsBoard({
+  data,
+  openRound,
+  showBmpMmr,
+  headingLevel = "h1",
+  showOpenSignupBanner = true,
+}: StandingsBoardProps) {
+  // Capitalized so JSX treats it as a dynamic tag-name expression rather than
+  // the literal string "Heading" -- React.createElement happily accepts the
+  // runtime "h1"/"h2" string this resolves to.
+  const Heading = headingLevel;
+
+  // Season-wide match progress (sum of every division's round-robin) --
+  // shared pure helper so this and the home page's own progress line can
+  // never disagree (lib/home-page-core.ts).
+  const { totalPlayed, totalExpected } = seasonMatchTotals(data.tiers);
+  const totalRemaining = Math.max(0, totalExpected - totalPlayed);
+  const pctPlayed = totalExpected > 0 ? Math.round((totalPlayed / totalExpected) * 100) : 0;
+
+  // The whole ladder, one rung per division, ordered top (Legendary) to
+  // bottom (the last Common division) -- see lib/division-ladder.ts. Divisions
+  // within one tier are rungs of the SAME ladder, not parallel groups: the
+  // top of the lowest division promotes into the one above it, all the way
+  // up, even across a tier boundary. Feeds the ladder strip below, each
+  // division's above/below neighbor names for the v2 zone key's "Promotion
+  // to <X>" / "Relegation to <X>" wording, and which single division sits at
+  // the true top of the whole ladder.
+  const tiersWithDivisions = data.tiers.filter((t) => t.divisions.length > 0);
+  const ladder = buildLadder(
+    tiersWithDivisions.flatMap((t) =>
+      t.divisions.map((d) => ({
+        id: d.id,
+        name: d.name,
+        tierName: t.name,
+        tierPosition: t.position,
+        groupNumber: d.groupNumber,
+        promote: d.promote,
+        relegate: d.relegate,
+      })),
+    ),
+  );
+  const rungByDivisionId = new Map(ladder.map((r) => [r.id, r]));
+
+  return (
+    <>
+      {/* Open-signups CTA — pinned to the very top so anyone landing here
+          during a signup window sees it first, not buried below standings
+          or a "no active season" notice. */}
+      {openRound && showOpenSignupBanner && (
+        <Link
+          href="/join"
+          className="card"
+          style={{
+            display: "block",
+            textDecoration: "none",
+            marginBottom: 16,
+            background: "rgba(46,204,113,0.12)",
+            border: "1px solid rgba(46,204,113,0.45)",
+          }}
+        >
+          🎴 <strong>Sign-ups are open!</strong> Join the next season →
+        </Link>
+      )}
+      {!data.season ? (
+        <>
+          <Heading>Standings</Heading>
+          <div className="card muted">No active season right now.</div>
+        </>
+      ) : (
+        <>
+          <Heading>{data.season.name} — Standings</Heading>
+          {/* v2 "Card Table" tier tabs -- jump links to each tier's
+              section below, chunky and rarity-colored per MASTER.md. Brand
+              new element, hidden under v1 by a base `.tier-tabs { display:
+              none; }` rule (see globals.css) rather than trying to make it
+              look native to the current design -- least invasive way to
+              guarantee v1 stays byte-for-byte unchanged. */}
+          <nav className="tier-tabs" aria-label="Jump to tier">
+            {tiersWithDivisions.map((tier) => (
+              <a
+                key={tier.id}
+                href={`#tier-${tierSlug(tier.name)}`}
+                className="tier-tab"
+                data-rarity={rarityIndex(tier.position)}
+              >
+                {tier.name} <span className="tier-tab-count">{tier.divisions.length}</span>
+              </a>
+            ))}
+          </nav>
+          <SeasonWindow start={data.season.startedAt} end={data.season.scheduledEndAt} className="mb-2" />
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div className="progress-v1">
+              <span style={{ fontSize: 15, whiteSpace: "nowrap" }}>
+                <strong>{totalPlayed}</strong> <span className="muted">/ {totalExpected}</span> matches played · <strong>{totalRemaining}</strong> remaining
+              </span>
+              <div style={{ flex: "1 1 120px", minWidth: 100, background: "var(--surface-2)", borderRadius: 99, height: 6, overflow: "hidden" }}>
+                <div style={{ background: "var(--gold)", height: "100%", width: `${pctPlayed}%` }} />
+              </div>
+              <span className="muted" style={{ fontSize: 13, whiteSpace: "nowrap" }}>{pctPlayed}% complete</span>
+            </div>
+            {/* v2: "12 of 174 played" plus the bar only -- drops the
+                "remaining" and "% complete" repeats of the same number
+                (see progress-v1 above, which v1 keeps unchanged). New
+                block, hidden by default, shown only under
+                html[data-ui="v2"] (see globals.css). */}
+            <div className="progress-v2">
+              <span style={{ whiteSpace: "nowrap" }}>
+                <strong>{totalPlayed}</strong> of {totalExpected} played
+              </span>
+              <div style={{ flex: "1 1 120px", minWidth: 100, background: "var(--surface-2)", borderRadius: 99, height: 6, overflow: "hidden" }}>
+                <div style={{ background: "var(--gold)", height: "100%", width: `${pctPlayed}%` }} />
+              </div>
+            </div>
+            <details style={{ marginTop: 2 }} className="key-disclosure">
+              {/* Plain body-size text + a chevron instead of a bare 11px
+                  uppercase word with no affordance (ux-round5 L40) -- same
+                  "this opens" signal the Hide chip gives the collapsed
+                  divisions below (CollapsibleDivision.tsx). */}
+              <summary className="muted" style={{ cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", gap: 4, minHeight: 32 }}>
+                Key
+                <svg className="key-disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true" width={14} height={14}>
+                  <path d="M7 10l5 5 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </summary>
+              <div className="key-legend-v1" style={{ marginTop: 8, fontSize: 12, display: "flex", flexWrap: "wrap", gap: "4px 16px", alignItems: "center" }}>
+                <span><span style={{ color: "var(--info)" }}>↑</span> promotion spot</span>
+                <span><span style={{ color: "var(--admin)" }}>↓</span> relegation spot</span>
+                <span><span style={{ color: "var(--info)" }}>🔒↑</span> clinched — guaranteed up</span>
+                <span><span style={{ color: "var(--admin)" }}>🔒↓</span> locked — guaranteed down</span>
+                <span><span style={{ color: "var(--accent)" }}>⚔</span> tied — needs a shootout (a 1-game tiebreaker)</span>
+                <span><s>name</s> dropped out</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                  <span style={{ display: "inline-block", width: 10, height: 14, borderRadius: 3, background: "var(--success)" }} />
+                  <span style={{ display: "inline-block", width: 10, height: 14, borderRadius: 3, background: "var(--muted)" }} />
+                  <span style={{ display: "inline-block", width: 10, height: 14, borderRadius: 3, background: "var(--danger)" }} />
+                  form (win / draw / loss)
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: 12, height: 12, fill: "var(--success)" }}>
+                    <path d="M12 21s-6.7-4.35-9.33-8.36C.37 9.77 1.4 6 5 6c2.06 0 3.46 1.24 4.2 2.3C9.94 7.24 11.34 6 13.4 6c3.6 0 4.63 3.77 2.33 6.64C18.7 16.65 12 21 12 21z" />
+                  </svg>
+                  net lives (signed, +green/-red)
+                </span>
+              </div>
+              {/* v2 "Card Table" KEY -- describes exactly what the player
+                  cards draw: real mini card fragments (not a bare color
+                  swatch) for the zone stripe + dashed divider + chevron,
+                  an inline SVG lock (not the emoji) for clinch, a plain X
+                  glyph for the shootout marker (hidden when this season's
+                  tiebreak is "lives" -- the per-row tie footnote already
+                  explains the break there, see DivisionStandingsTable's
+                  ShowdownGlyph). Same v1/v2 toggle pattern as the rest of
+                  this page (see app/globals.css). The samples/wording
+                  below were reworked 2026-10 -- the old blue/amber swatch
+                  pair clashed with the tier colors (division names/rank
+                  badges use the same blue for the Common tier) and gave no
+                  visual hint that the cut-off COLOR was what the legend
+                  was pointing at; see docs/handbook/standings-and-tiebreaks.md's
+                  "Zones" section. */}
+              <div className="key-legend-v2" style={{ marginTop: 8, fontSize: 12, display: "flex", flexWrap: "wrap", gap: "4px 16px", alignItems: "center" }}>
+                <span style={{ width: "100%", fontSize: 11.5 }}>
+                  The dashed line is the cut-off. Players above a promotion line go up to the named division; below a relegation line go down.
+                </span>
+                <ZoneKeySample />
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: 12, height: 12, fill: "var(--zone-promote)" }}>
+                    <path d="M7 10V8a5 5 0 0 1 10 0v2h.5A1.5 1.5 0 0 1 19 11.5v8A1.5 1.5 0 0 1 17.5 21h-11A1.5 1.5 0 0 1 5 19.5v-8A1.5 1.5 0 0 1 6.5 10H7zm2 0h6V8a3 3 0 0 0-6 0v2z" />
+                  </svg>
+                  clinched -- guaranteed up
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: 12, height: 12, fill: "var(--zone-relegate)" }}>
+                    <path d="M7 10V8a5 5 0 0 1 10 0v2h.5A1.5 1.5 0 0 1 19 11.5v8A1.5 1.5 0 0 1 17.5 21h-11A1.5 1.5 0 0 1 5 19.5v-8A1.5 1.5 0 0 1 6.5 10H7zm2 0h6V8a3 3 0 0 0-6 0v2z" />
+                  </svg>
+                  locked -- guaranteed down
+                </span>
+                {data.season.tiebreak !== "lives" && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: 12, height: 12 }}>
+                      <path d="M4 4l16 16M20 4L4 20" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                    </svg>
+                    tied -- needs a shootout (a 1-game tiebreaker)
+                  </span>
+                )}
+                <span><s>name</s> dropped out</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                  <span style={{ display: "inline-block", width: 10, height: 14, borderRadius: 3, background: "var(--success)" }} />
+                  <span style={{ display: "inline-block", width: 10, height: 14, borderRadius: 3, background: "var(--muted)" }} />
+                  <span style={{ display: "inline-block", width: 10, height: 14, borderRadius: 3, background: "var(--danger)" }} />
+                  form (win / draw / loss)
+                </span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true" style={{ width: 12, height: 12, fill: "var(--success)" }}>
+                    <path d="M12 21s-6.7-4.35-9.33-8.36C.37 9.77 1.4 6 5 6c2.06 0 3.46 1.24 4.2 2.3C9.94 7.24 11.34 6 13.4 6c3.6 0 4.63 3.77 2.33 6.64C18.7 16.65 12 21 12 21z" />
+                  </svg>
+                  net lives (signed, +green/-red)
+                </span>
+              </div>
+            </details>
+          </div>
+          {ladder.length > 1 && <LadderStrip ladder={ladder} />}
+          {data.viewerDivision && (
+            <YourDivisionCard
+              viewerDivision={data.viewerDivision}
+              avatarUrl={data.avatarUrlByPlayerId.get(data.viewerPlayerId ?? "") ?? null}
+            />
+          )}
+          {tiersWithDivisions.map((tier) => {
+            const isTopTier = tier.position === data.minTierPosition;
+            const isBottomTier = tier.position === data.maxTierPosition;
+            return (
+              <section key={tier.id} id={`tier-${tierSlug(tier.name)}`} className="tier-section" style={{ marginTop: 24 }}>
+                {/* `pixel` + `data-rarity` give v2 the colored display-face
+                    heading per MASTER.md ("section headings for tiers in
+                    the pixel face coloured by rarity"); both are no-ops
+                    under v1 (see globals.css). */}
+                {/* v2 only: when a tier has just one division, the h3 +
+                    card title + rarity chip said the tier name three
+                    times. data-multi (set only for 2+ divisions) lets the
+                    v2 stylesheet drop this heading for a single-division
+                    tier and keep just the coloured card title; v1 always
+                    shows it (see globals.css). */}
+                <h3
+                  className="pixel tier-heading"
+                  data-rarity={rarityIndex(tier.position)}
+                  data-multi={tier.divisions.length >= 2 ? "1" : undefined}
+                >
+                  {tier.name}
+                </h3>
+                <div className="grid grid-2">
+                  {tier.divisions.map((div, divIndex) => {
+                    // Relegation/promotion is a CHAIN across every division
+                    // (incl. between divisions of the same tier): each div's
+                    // bottom drops into the next div, each div's top rises into
+                    // the previous one. The only true ends are the FIRST division
+                    // overall (top tier, first group — nothing above to promote
+                    // to) and the LAST division overall (bottom tier, last group
+                    // — nothing below to relegate to). Gating on the whole
+                    // top/bottom TIER was wrong for multi-division tiers (it hid
+                    // relegation between Common A (1) → Common 2, etc.).
+                    const isFirstDivisionOverall = isTopTier && divIndex === 0;
+                    const isLastDivisionOverall = isBottomTier && divIndex === tier.divisions.length - 1;
+                    const droppedIds = new Set(div.droppedMemberIds);
+                    const rows = div.rows.map((r) => ({
+                      ...r,
+                      dropped: droppedIds.has(r.player.id),
+                    }));
+                    const activeCount = div.activeMemberIds.length;
+                    const expectedMatches = div.expectedMatches;
+                    const playedMatches = div.playedMatches;
+                    const complete = expectedMatches > 0 && playedMatches >= expectedMatches;
+                    // Group rows into tie chains. A new chain starts at any
+                    // row NOT flagged tiedWithPrev (the natural break point).
+                    // Then mark every row whose chain straddles the promo
+                    // boundary (index 0) or relegation boundary (last index)
+                    // — both/all players in the chain need to play shootouts.
+                    const chains: number[][] = [];
+                    {
+                      let current: number[] = [];
+                      for (let i = 0; i < rows.length; i++) {
+                        if (i === 0 || !rows[i]!.tiedWithPrev) {
+                          if (current.length > 0) chains.push(current);
+                          current = [i];
+                        } else {
+                          current.push(i);
+                        }
+                      }
+                      if (current.length > 0) chains.push(current);
+                    }
+                    // Promote/relegate counts for THIS division come from the
+                    // real placement rule (div.promote / div.relegate, already 0
+                    // at the top/bottom of the ladder). Clamped so we always
+                    // leave ≥1 row that's neither promoting nor relegating.
+                    const promoteN = isFirstDivisionOverall ? 0 : div.promote;
+                    const relegateN = isLastDivisionOverall ? 0 : div.relegate;
+                    const _room = Math.max(0, rows.length - 1);
+                    const promoteEff = Math.min(promoteN, _room);
+                    const relegateEff = Math.min(relegateN, _room - promoteEff);
+
+                    // Clinch predictor — who's already locked up/down even
+                    // before the round-robin finishes. Top tier never
+                    // promotes; bottom tier never relegates.
+                    const clinch = computeClinch(
+                      rows,
+                      div.gamesByPlayer,
+                      Math.max(0, activeCount - 1),
+                      promoteEff,
+                      relegateEff,
+                    );
+
+                    // Shootout marker is TIER-INDEPENDENT — chains crossing
+                    // either boundary (promo or relegation) need resolving.
+                    // For N=1 this collapses to the old "ties at rank 1" /
+                    // "ties at last rank" behavior; for N>1 it catches the
+                    // promo/reli edge wherever it sits.
+                    const promoTieRowSet = new Set<number>();
+                    const relegationTieRowSet = new Set<number>();
+                    for (const chain of chains) {
+                      if (chain.length < 2) continue; // not a tie chain
+                      // A tie straddling the promotion cut (top `promoteEff`) or
+                      // the relegation cut (bottom `relegateEff`) needs a showdown.
+                      if (promoteEff > 0) {
+                        const crossesPromoEdge =
+                          chain.some((i) => i < promoteEff) && chain.some((i) => i >= promoteEff);
+                        if (crossesPromoEdge) {
+                          for (const idx of chain) promoTieRowSet.add(idx);
+                        }
+                      }
+                      if (relegateEff > 0) {
+                        const reliEdge = rows.length - relegateEff;
+                        const crossesReliEdge =
+                          chain.some((i) => i < reliEdge) && chain.some((i) => i >= reliEdge);
+                        if (crossesReliEdge) {
+                          for (const idx of chain) relegationTieRowSet.add(idx);
+                        }
+                      }
+                    }
+                    // Per-row badges/MMR for the shared standings table.
+                    const extras = new Map<string, StandingsRowExtras>(
+                      rows.map((r, i) => [r.player.id, {
+                        promoting: complete && i < promoteEff && !promoTieRowSet.has(i),
+                        relegating: complete && i >= rows.length - relegateEff && !relegationTieRowSet.has(i),
+                        // Where the row sits today: the zone stripe shows the line all season.
+                        inPromotionSpot: promoteEff > 0 && i < promoteEff,
+                        inRelegationSpot: relegateEff > 0 && i >= rows.length - relegateEff,
+                        clinchStatus: complete ? undefined : clinch.get(r.player.id),
+                        showdown: complete && (promoTieRowSet.has(i) || relegationTieRowSet.has(i)),
+                        mmr: data.mmrByPlayerId.get(r.player.id),
+                        isViewer: data.viewerPlayerId !== null && r.player.id === data.viewerPlayerId,
+                        avatarUrl: data.avatarUrlByPlayerId.get(r.player.id),
+                      }]),
+                    );
+                    const rung = rungByDivisionId.get(div.id);
+                    const neighbors = { above: rung?.above?.name, below: rung?.below?.name };
+                    // v2 phone collapse: the viewer's own division, and
+                    // (signed out) the first division of each tier, start
+                    // expanded; every other division starts collapsed to
+                    // the one-line summary. Desktop and v1 always show
+                    // everything (components/CollapsibleDivision.tsx).
+                    const isViewerDivision =
+                      data.viewerPlayerId !== null && div.activeMemberIds.includes(data.viewerPlayerId);
+                    const isOpenByDefault =
+                      isViewerDivision || (data.viewerPlayerId === null && divIndex === 0);
+                    const leader = rows[0];
+                    const summaryText = divisionSummaryLine({
+                      leaderName: leader?.player.displayName,
+                      playedMatches,
+                      expectedMatches,
+                    });
+                    return (
+                      <div key={div.id} id={`division-${div.id}`} className="card">
+                      <CollapsibleDivision
+                        divisionId={div.id}
+                        defaultOpenOnPhone={isOpenByDefault}
+                        divisionName={div.name}
+                        tierRarity={rarityIndex(tier.position)}
+                        isOwnDivision={isViewerDivision}
+                        summary={summaryText}
+                      >
+                        {/* `card-header` is a no-op under v1 (no bare
+                            `.card-header` rule outside a responsive-table
+                            cell -- see globals.css); under v2 it becomes
+                            the panel header strip (panel-2 bg, bottom
+                            border) per MASTER.md. */}
+                        <div className="card-header">
+                          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                            <strong className="pixel division-name" data-rarity={rarityIndex(tier.position)}>
+                              <Link href={`/divisions/${div.id}`} style={{ textDecoration: "none" }}>{div.name}</Link>
+                            </strong>
+                            {/* Rarity chip -- same render as the TierPill helper
+                                used on /players and the winners page, reusing
+                                tierColors/rarityIndex so it carries data-rarity.
+                                New element: hidden under v1 (see globals.css).
+                                v2 only: dropped for a single-division tier (see
+                                the tier-heading's data-multi above) so the tier
+                                name isn't repeated a third time. */}
+                            <span
+                              className="pill division-chip"
+                              data-rarity={rarityIndex(tier.position)}
+                              data-multi={tier.divisions.length >= 2 ? "1" : undefined}
+                              style={{ background: tierColors(tier.position).bg, color: tierColors(tier.position).fg }}
+                            >
+                              {tier.name}
+                            </span>
+                            {div.scoringBadge && (
+                              <span className="pill" style={{ fontSize: 11 }} title="This season's active scoring rule">
+                                counts best {div.scoringBadge.n} of {div.scoringBadge.scheduled} matches
+                              </span>
+                            )}
+                            <span
+                              className="pill matches-chip"
+                              // color uses the --flash-*-text tokens -- see
+                              // --flash-danger-text's comment in globals.css.
+                              style={{
+                                background: complete ? "rgba(46,204,113,0.15)" : "rgba(149,165,166,0.15)",
+                                color: complete ? "var(--flash-success-text)" : "var(--flash-muted-text)",
+                                fontSize: 11,
+                                marginLeft: "auto",
+                              }}
+                              title={complete ? "All matches played" : "In progress"}
+                            >
+                              {complete ? "✅" : ""} {playedMatches}/{expectedMatches} matches
+                            </span>
+                          </div>
+                          <div className="muted meta-v1" style={{ fontSize: 11, marginTop: 2, marginBottom: 8, display: "flex", flexWrap: "wrap", gap: "2px 10px" }}>
+                            <span>👤 {activeCount} player{activeCount === 1 ? "" : "s"}</span>
+                            {promoteN > 0 && <span><span style={{ color: "var(--info)" }}>↑ {promoteN}</span> promote</span>}
+                            {relegateN > 0 && <span><span style={{ color: "var(--admin)" }}>↓ {relegateN}</span> relegate</span>}
+                            <span>{div.format === "round-robin" ? "🔁 Round robin (play everyone)" : "🎯 4 assigned opponents"}</span>
+                          </div>
+                          {/* v2-only wording ("N players" / "N up" / "N down")
+                              per the brief -- both variants always render,
+                              CSS shows exactly one depending on
+                              html[data-ui="v2"] (same pattern as the zone
+                              key), so v1's text never moves. */}
+                          <div className="muted meta-v2">
+                            <span>{activeCount} player{activeCount === 1 ? "" : "s"}</span>
+                            {promoteN > 0 && <span>{promoteN} up</span>}
+                            {relegateN > 0 && <span>{relegateN} down</span>}
+                            <span>{div.format === "round-robin" ? "round robin, play everyone" : "4 assigned opponents"}</span>
+                          </div>
+                        </div>
+                        <DivisionStandingsTable
+                          rows={rows}
+                          extras={extras}
+                          showBmpMmr={showBmpMmr}
+                          bmpCurrentSeason={data.bmpCurrentSeason}
+                          showCountedBadge={!!div.scoringBadge}
+                          livesBreaksTies={data.season?.tiebreak === "lives"}
+                          tierRarity={rarityIndex(tier.position)}
+                          aboveDivisionName={neighbors?.above}
+                          belowDivisionName={neighbors?.below}
+                          isTopOfLadder={rung?.above === null}
+                          noMatchesYet={playedMatches === 0}
+                          isFinal={complete}
+                        />
+                        {div.shootouts.length > 0 && (
+                          <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+                            <strong style={{ color: "var(--accent)" }}>⚔ Shootout{div.shootouts.length === 1 ? "" : "s"}:</strong>{" "}
+                            {div.shootouts.map((s, i) => (
+                              <span key={s.id}>
+                                {i > 0 && " · "}
+                                <strong>{s.winnerName}</strong> beat {s.loserName}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </CollapsibleDivision>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+        </>
+      )}
+    </>
+  );
+}
