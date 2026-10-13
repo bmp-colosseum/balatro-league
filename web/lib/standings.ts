@@ -2,6 +2,7 @@
 
 import type { Match, Player } from "@prisma/client";
 import { DEFAULTS, type ScoringConfig } from "@/lib/league-settings";
+import { tiebreakDecidedPhrase, type TiebreakDecisionKind, type TiebreakWordingValues } from "@/lib/standings-cards-core";
 
 export interface StandingRow {
   player: Player;
@@ -52,6 +53,14 @@ export interface StandingRow {
   // match, total net lives across the group, or a real, unbreakable tie.
   // Built by orderLivesPointsGroup. Mirrors the bot (src/standings.ts).
   tiebreakNote?: string;
+  // Same conditions as tiebreakNote -- the mechanism that produced it, as
+  // structured data instead of free text, so a display layer can build its
+  // own isFinal-aware wording (see lib/standings-cards-core.ts'
+  // tiebreakDecidedPhrase / groupTiebreakNotes) without re-parsing the
+  // sentence. Not mirrored to the bot (src/standings.ts) -- nothing there
+  // consumes it, only the web's v2 "Card Table" merged tie footnote does.
+  tiebreakKind?: TiebreakDecisionKind;
+  tiebreakValues?: TiebreakWordingValues;
 }
 
 // "chain" (default): today's tiebreak order -- points, head-to-head,
@@ -328,14 +337,6 @@ export function livesDisplayOrder<T extends StandingRow>(rows: T[]): T[] {
   });
 }
 
-// "+N"/"-N" for a tiebreakNote's signed lives numbers -- a negative value
-// already carries its own "-", a non-negative one needs "+" added (0 reads
-// as "+0", never produced by the only caller below since that branch is
-// gated on a nonzero differential). Mirrors the bot's identical helper.
-function formatSignedLives(n: number): string {
-  return n > 0 ? `+${n}` : `${n}`;
-}
-
 // "A" / "A and B" / "A, B and C" -- the player-name list inside a
 // tiebreakNote. Mirrors the bot's identical helper.
 function joinNames(names: string[]): string {
@@ -383,8 +384,11 @@ export function orderLivesPointsGroup<T extends StandingRow>(
     const [a, b] = group as [T, T];
     const shoot = shootoutBetween(a.player.id, b.player.id);
     if (shoot !== 0) {
-      a.tiebreakNote = `Tied on points with ${b.player.displayName}; shootout decided it`;
-      b.tiebreakNote = `Tied on points with ${a.player.displayName}; shootout decided it`;
+      const phrase = tiebreakDecidedPhrase("shootout", {}, true);
+      a.tiebreakKind = "shootout";
+      a.tiebreakNote = `Tied on points with ${b.player.displayName}; ${phrase}`;
+      b.tiebreakKind = "shootout";
+      b.tiebreakNote = `Tied on points with ${a.player.displayName}; ${phrase}`;
       return shoot < 0 ? [a, b] : [b, a];
     }
 
@@ -399,15 +403,23 @@ export function orderLivesPointsGroup<T extends StandingRow>(
     const h2h = h2hResult(a.player.id, b.player.id);
     if (h2h !== 0) {
       const [winner, loser] = h2h < 0 ? [a, b] : [b, a];
-      winner.tiebreakNote = `Tied on points with ${loser.player.displayName}; beat them head-to-head`;
-      loser.tiebreakNote = `Tied on points with ${winner.player.displayName}; lost to them head-to-head`;
+      winner.tiebreakKind = "headToHeadResult";
+      winner.tiebreakValues = { won: true };
+      winner.tiebreakNote = `Tied on points with ${loser.player.displayName}; ${tiebreakDecidedPhrase("headToHeadResult", winner.tiebreakValues, true)}`;
+      loser.tiebreakKind = "headToHeadResult";
+      loser.tiebreakValues = { won: false };
+      loser.tiebreakNote = `Tied on points with ${winner.player.displayName}; ${tiebreakDecidedPhrase("headToHeadResult", loser.tiebreakValues, true)}`;
       return [winner, loser];
     }
 
     if (diff !== null) {
       if (diff !== 0) {
-        a.tiebreakNote = `Tied on points with ${b.player.displayName}; head-to-head lives ${formatSignedLives(diff)} vs ${formatSignedLives(-diff)} decided it`;
-        b.tiebreakNote = `Tied on points with ${a.player.displayName}; head-to-head lives ${formatSignedLives(-diff)} vs ${formatSignedLives(diff)} decided it`;
+        a.tiebreakKind = "headToHeadLives";
+        a.tiebreakValues = { diff };
+        a.tiebreakNote = `Tied on points with ${b.player.displayName}; ${tiebreakDecidedPhrase("headToHeadLives", a.tiebreakValues, true)}`;
+        b.tiebreakKind = "headToHeadLives";
+        b.tiebreakValues = { diff: -diff };
+        b.tiebreakNote = `Tied on points with ${a.player.displayName}; ${tiebreakDecidedPhrase("headToHeadLives", b.tiebreakValues, true)}`;
         return diff > 0 ? [a, b] : [b, a];
       }
     }
@@ -416,9 +428,14 @@ export function orderLivesPointsGroup<T extends StandingRow>(
     const nb = b.netLives ?? 0;
     if (na !== nb) {
       const [first, second] = na > nb ? [a, b] : [b, a];
-      const list = `${first.netLives ?? 0} / ${second.netLives ?? 0}`;
-      first.tiebreakNote = `Tied on points with ${second.player.displayName}; total net lives decided it (${list})`;
-      second.tiebreakNote = `Tied on points with ${first.player.displayName}; total net lives decided it (${list})`;
+      const livesList = [first.netLives ?? 0, second.netLives ?? 0];
+      const phrase = tiebreakDecidedPhrase("netLives", { livesList }, true);
+      first.tiebreakKind = "netLives";
+      first.tiebreakValues = { livesList };
+      first.tiebreakNote = `Tied on points with ${second.player.displayName}; ${phrase}`;
+      second.tiebreakKind = "netLives";
+      second.tiebreakValues = { livesList };
+      second.tiebreakNote = `Tied on points with ${first.player.displayName}; ${phrase}`;
       return [first, second];
     }
 
@@ -426,7 +443,9 @@ export function orderLivesPointsGroup<T extends StandingRow>(
     const first = ordered[0]!;
     const second = ordered[1]!;
     second.tiedWithPrev = true;
+    first.tiebreakKind = "realTie";
     first.tiebreakNote = `Tied with ${second.player.displayName} on points and net lives -- shares the place`;
+    second.tiebreakKind = "realTie";
     second.tiebreakNote = `Tied with ${first.player.displayName} on points and net lives -- shares the place`;
     return [first, second];
   }
@@ -450,7 +469,7 @@ export function orderLivesPointsGroup<T extends StandingRow>(
   // original group member and the whole group's final-order lives list); a
   // run of 2+ remains a genuine tie SHARING A RANK (gets the "real tie"
   // note, naming only its own rank-mates).
-  const livesList = byLives.map((r) => `${r.netLives ?? 0}`).join(" / ");
+  const livesList = byLives.map((r) => r.netLives ?? 0);
   let clusterStart = 0;
   for (let i = 1; i <= byLives.length; i++) {
     if (i < byLives.length && byLives[i]!.tiedWithPrev) continue;
@@ -458,10 +477,13 @@ export function orderLivesPointsGroup<T extends StandingRow>(
     if (cluster.length === 1) {
       const row = cluster[0]!;
       const others = byLives.filter((r) => r !== row).map((r) => r.player.displayName);
-      row.tiebreakNote = `Tied on points with ${joinNames(others)}; total net lives decided it (${livesList})`;
+      row.tiebreakKind = "netLives";
+      row.tiebreakValues = { livesList };
+      row.tiebreakNote = `Tied on points with ${joinNames(others)}; ${tiebreakDecidedPhrase("netLives", row.tiebreakValues, true)}`;
     } else {
       for (const row of cluster) {
         const otherNames = cluster.filter((r) => r !== row).map((r) => r.player.displayName);
+        row.tiebreakKind = "realTie";
         row.tiebreakNote = `Tied with ${joinNames(otherNames)} on points and net lives -- shares the place`;
       }
     }

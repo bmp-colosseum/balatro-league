@@ -15,7 +15,13 @@ import { rankLabel } from "@/lib/standings";
 import { DiscordId } from "@/components/DiscordId";
 import type { StandingsMmrEntry } from "@/lib/loaders/standings";
 import { boundaryBelow, boundaryLabel, clinchTitle, zoneKeyLines, zoneOf, type Zone } from "@/lib/standings-zone";
-import { groupTiebreakNotes, initials, recordPips } from "@/lib/standings-cards-core";
+import {
+  groupTiebreakNotes,
+  initials,
+  recordPips,
+  type TiebreakDecisionKind,
+  type TiebreakWordingValues,
+} from "@/lib/standings-cards-core";
 
 // Minimal row shape the table needs. Every standings source — the /standings
 // cache, computeStandings, the division loader — is structurally compatible
@@ -52,6 +58,12 @@ export interface StandingsTableRow {
   // StandingRow.tiebreakNote in @/lib/standings. Shown as the Lives cell's
   // tooltip and as a small muted line under the player's name.
   tiebreakNote?: string;
+  // See StandingRow.tiebreakKind/tiebreakValues in @/lib/standings --
+  // structured form of tiebreakNote, read by groupTiebreakNotes below to
+  // build its isFinal-aware merged footnote. Same presence rule as
+  // tiebreakNote.
+  tiebreakKind?: TiebreakDecisionKind;
+  tiebreakValues?: TiebreakWordingValues;
 }
 
 type Row = StandingsTableRow;
@@ -350,6 +362,7 @@ export function DivisionStandingsTable({
   isTopOfLadder,
   tierRarity,
   noMatchesYet = false,
+  isFinal = true,
 }: {
   rows: Row[];
   extras?: Map<string, StandingsRowExtras>;
@@ -397,6 +410,16 @@ export function DivisionStandingsTable({
   // whole list, instead of a wall of misleadingly-confident "1" ranks and
   // "0 PTS" tiles. v2 only; v1 renders unchanged regardless of this flag.
   noMatchesYet?: boolean;
+  // True once this division is complete (every scheduled match played) --
+  // threaded into groupTiebreakNotes so its merged tie footnote can say
+  // "decided it" instead of present-tense "currently separate them" wording.
+  // A group with every member individually clinched (extras' clinchStatus)
+  // counts as final too even before this is true (see groupTiebreakNotes).
+  // Defaults true (the original, only) behavior so callers that don't pass
+  // it -- e.g. /seasons/[id]'s ended-season view, always final in spirit --
+  // keep the unconditional "decided it" wording instead of silently
+  // regressing to present-tense phrasing for an archived season.
+  isFinal?: boolean;
 }) {
   const hasFinalRank = !!finalRankHeader && !!finalRankCell;
   // The Lives column shows whenever ANY row carries netLives -- under the
@@ -430,9 +453,15 @@ export function DivisionStandingsTable({
   // v2 player-card stack only: one merged tie footnote per ORIGINAL
   // points-tied group instead of repeating a near-identical sentence on
   // every tied row (see groupTiebreakNotes). Keyed by the group's last row
-  // index so the footnote renders once, right after that row.
+  // index so the footnote renders once, right after that row. `clinched`
+  // (whether THIS row's clinchStatus is already set) rides along per row so
+  // groupTiebreakNotes can treat an individually-decided group as final
+  // even before `isFinal` (division complete) is true.
   const tieFootnoteByLastIndex = new Map(
-    groupTiebreakNotes(rows).map((g) => [g.lastIndex, g.text]),
+    groupTiebreakNotes(
+      rows.map((r) => ({ ...r, clinched: extras?.get(r.player.id)?.clinchStatus !== undefined })),
+      isFinal,
+    ).map((g) => [g.lastIndex, g.text]),
   );
 
   return (

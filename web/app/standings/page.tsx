@@ -560,6 +560,7 @@ export default async function StandingsPage() {
                             belowDivisionName={neighbors?.below}
                             isTopOfLadder={rung?.above === null}
                             noMatchesYet={playedMatches === 0}
+                            isFinal={complete}
                           />
                           {div.shootouts.length > 0 && (
                             <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>

@@ -73,6 +73,22 @@ the name on the site, one of: shootout decided it; beat or lost to them
 head-to-head; head-to-head lives decided it; total net lives decided it;
 tied on points and net lives, shares the place.
 
+The v2 "Card Table" standings merge a tie group's per-row notes into one
+footnote (`groupTiebreakNotes` in `web/lib/standings-cards-core.ts`), naming
+every tied player once. That merged footnote is isFinal-aware: "decided it"
+wording only appears once the division is complete (every scheduled match
+played) or every member of the tie is already individually clinched
+(`StandingsRowExtras.clinchStatus`) -- otherwise it uses present-tense,
+non-final wording instead ("net lives currently separate them (+3 / -3)",
+"a shootout currently separates them", "is currently ahead/behind them
+head-to-head", "head-to-head lives ... currently separate them"), since more
+matches could still shift the numbers or the tie group's membership before
+the division ends. A real, unbreakable tie ("shares the place") never takes
+"decided it" wording in either state -- nothing was decided. The mechanism
+is carried as structured data (`StandingRow.tiebreakKind`/`tiebreakValues`,
+set alongside `tiebreakNote`) rather than re-parsed from the sentence; not
+mirrored to the bot, since only the web's merged footnote needs it.
+
 "Net lives" is the winner's remaining lives, entered after each game in the
 match flow (see [matches-and-results.md](matches-and-results.md)), summed
 with sign across a player's counted games.

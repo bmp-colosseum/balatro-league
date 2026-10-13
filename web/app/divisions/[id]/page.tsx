@@ -312,6 +312,7 @@ export default async function PublicDivisionPage({
               belowDivisionName={division.belowDivision?.name}
               isTopOfLadder={division.aboveDivision === null}
               noMatchesYet={division.confirmedPairingCount === 0}
+              isFinal={division.complete}
             />
           </div>
         </div>

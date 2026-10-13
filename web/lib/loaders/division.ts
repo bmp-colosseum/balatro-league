@@ -14,6 +14,7 @@ import { discordAvatarUrl } from "@/lib/avatar";
 import { formatSeasonLabel } from "@/lib/format-season";
 import { computeUnplayedPairs, pairKey } from "@/lib/unplayed-pairs";
 import { normalizeTiebreak, type ScoringBadge } from "@/lib/standings-mode";
+import type { TiebreakDecisionKind, TiebreakWordingValues } from "@/lib/standings-cards-core";
 import type { UncountedEntry } from "@/lib/uncounted-core";
 import { getPlacementRules } from "@/lib/placement-rules";
 import { scheduleDegree } from "@/lib/schedule";
@@ -50,6 +51,11 @@ export interface DivisionStandingRow {
   // See StandingRow.tiebreakNote -- plain-English audit of which step
   // decided this row's tie, present under the same conditions as netLives.
   tiebreakNote?: string;
+  // See StandingRow.tiebreakKind/tiebreakValues -- structured form of
+  // tiebreakNote for the v2 merged tie footnote's isFinal-aware wording
+  // (lib/standings-cards-core.ts). Same presence rule as tiebreakNote.
+  tiebreakKind?: TiebreakDecisionKind;
+  tiebreakValues?: TiebreakWordingValues;
   // Discord avatar URL (web/lib/avatar.ts) for this row's player. null = no
   // custom avatar (caller falls back to initials/a placeholder).
   avatarUrl: string | null;
@@ -107,6 +113,14 @@ export interface DivisionPageData {
     ladderPosition: string;
     aboveDivision: { id: string; name: string } | null;
     belowDivision: { id: string; name: string } | null;
+    // True when every active-member pair that's supposed to play (the
+    // schedule-aware set `unplayed` below is computed from) already has --
+    // same "division complete" concept as /standings' own `complete` local
+    // (lib/loaders/standings.ts doesn't expose this page's schedule-aware
+    // unplayed-pairs computation, so it's derived here instead of imported).
+    // Feeds DivisionStandingsTable's isFinal prop (the tie footnote's
+    // "decided it" vs "currently separate them" wording).
+    complete: boolean;
   };
   standings: DivisionStandingRow[];
   // Set only when this season's scoringMode is a best-n mode AND this
@@ -254,6 +268,8 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
     netLives: r.netLives,
     livesGamesMissing: r.livesGamesMissing,
     tiebreakNote: r.tiebreakNote,
+    tiebreakKind: r.tiebreakKind,
+    tiebreakValues: r.tiebreakValues,
     avatarUrl: discordAvatarUrl(r.player.discordId, avatarHashByDiscordId.get(r.player.discordId)),
   }));
 
@@ -361,6 +377,7 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
       ladderPosition,
       aboveDivision,
       belowDivision,
+      complete: unplayed.length === 0,
     },
     standings,
     scoringBadge,

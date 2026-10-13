@@ -571,3 +571,37 @@ html[data-ui="v2"] .ladder-strip-note {
   font-size: 11px;
   margin-top: 8px;
 }
+
+/* --- Ladder show/hide toggle (feat/ladder-toggle) -------------------------
+   New block, kept separate from the ladder-strip-v2 rules above to avoid
+   touching them -- components/LadderStrip.tsx's "Hide ladder"/"Show ladder"
+   chip in the panel header, and the body it collapses. data-hidden="1"
+   hides the body down to the one-line header; data-ready is the
+   CollapsibleDivision-style "mounted yet" flag (see that component's own
+   header comment for why a flash is possible on a RETURN visit with hidden
+   previously chosen -- not on first visit, which always matches the
+   default). */
+html[data-ui="v2"] .ladder-strip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+html[data-ui="v2"] .ladder-strip-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 4px 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  background: var(--panel-2);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+html[data-ui="v2"] .ladder-strip-v2[data-hidden="1"] > .ladder-strip-body {
+  display: none;
+}
