@@ -26,6 +26,7 @@ import { computeBestNStandings, buildBestNMembers, type BestNPairing } from "./s
 import { normalizeScoringMode, selectStandingsEngine, buildScoringBadge, normalizeTiebreak, type ScoringBadge } from "./standings-mode.js";
 import { attachNetLives } from "./standings-lives.js";
 import { buildUncounted, type UncountedEntry } from "./uncounted-core.js";
+import { isScheduleLocked } from "./schedule-locked.js";
 
 interface CachedRow {
   playerId: string;
@@ -78,7 +79,7 @@ function parsePayload(rowsJson: string): CachedPayload {
 interface DivisionForStandings {
   seasonId: string;
   opponentsPerPlayer: number | null;
-  season: { scoringMode: string; tiebreak: string };
+  season: { scoringMode: string; tiebreak: string; scheduleLocked: boolean };
   members: {
     playerId: string;
     status: string;
@@ -103,7 +104,7 @@ const LIVE_MATCH_STATUSES: PairingStatus[] = ["CONFIRMED", "PENDING", "DISPUTED"
 const DIVISION_FOR_STANDINGS_INCLUDE = {
   seasonId: true,
   opponentsPerPlayer: true,
-  season: { select: { scoringMode: true, tiebreak: true } },
+  season: { select: { scoringMode: true, tiebreak: true, scheduleLocked: true } },
   members: { select: { playerId: true, status: true, joinedAt: true, droppedAt: true, player: true } },
   matches: {
     // Live matches only: CONFIRMED feeds the engines; PENDING/DISPUTED count toward each
@@ -124,6 +125,44 @@ const DIVISION_FOR_STANDINGS_INCLUDE = {
     },
   },
 } as const;
+
+// Canonical, order-independent key for an unordered pair of ids. Mirrors
+// web/lib/unplayed-pairs.ts's identical export (the bot has no equivalent
+// module of its own -- this is the one place it needs the primitive).
+function pairKey(a: string, b: string): string {
+  return a < b ? `${a}-${b}` : `${b}-${a}`;
+}
+
+// Same "no pairing left to play" rule as the web's /divisions/[id] page's own
+// `complete` (web/lib/loaders/division.ts, via web/lib/unplayed-pairs.ts's
+// computeUnplayedPairs -- inlined here since the bot has no equivalent
+// module): only ACTIVE-member pairs count, and for a schedule-locked
+// division only a pair that's actually ASSIGNED (has a LEAGUE_BO2 match row
+// at all) counts as a real matchup -- an unlocked (full round-robin)
+// division counts every active-member pair. Feeds computeStandings /
+// computeBestNStandings' divisionComplete -- the lives tiebreak's per-row
+// tiebreakNote isFinal (see computeStandings' doc comment in standings.ts).
+// Mirrors web/lib/standings-cache.ts.
+export function isDivisionComplete(
+  activeMemberIds: readonly string[],
+  leagueMatches: ReadonlyArray<{ playerAId: string; playerBId: string; status: string; gamesWonA: number; gamesWonB: number }>,
+  seasonScheduleLocked: boolean,
+): boolean {
+  const scheduleLocked = isScheduleLocked(seasonScheduleLocked, leagueMatches);
+  const playedKeys = new Set(
+    leagueMatches.filter((m) => m.status === "CONFIRMED").map((m) => pairKey(m.playerAId, m.playerBId)),
+  );
+  const assignedKeys = new Set(leagueMatches.map((m) => pairKey(m.playerAId, m.playerBId)));
+  for (let i = 0; i < activeMemberIds.length; i++) {
+    for (let j = i + 1; j < activeMemberIds.length; j++) {
+      const key = pairKey(activeMemberIds[i]!, activeMemberIds[j]!);
+      if (playedKeys.has(key)) continue;
+      if (scheduleLocked && !assignedKeys.has(key)) continue; // not on the locked schedule -- not a real matchup
+      return false; // outstanding
+    }
+  }
+  return true;
+}
 
 // The one place that decides, for a division already loaded with its full
 // (ACTIVE + DROPPED) roster and season.scoringMode, which engine to run and
@@ -147,13 +186,19 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
     .filter((m) => m.format === "SHOOTOUT_BO1" && m.status === "CONFIRMED" && m.winnerId !== null)
     .map((m) => ({ playerAId: m.playerAId, playerBId: m.playerBId, winnerId: m.winnerId! }));
 
+  const activeMembers = div.members.filter((m) => m.status === "ACTIVE");
+  const divisionComplete = isDivisionComplete(
+    activeMembers.map((m) => m.playerId),
+    leagueMatches,
+    div.season.scheduleLocked,
+  );
+
   let rows: StandingRow[];
   let badge: ScoringBadge | null = null;
   let uncounted: UncountedEntry[] = [];
 
   if (selection.engine === "standard") {
-    const activeMembers = div.members.filter((m) => m.status === "ACTIVE");
-    rows = computeStandings(activeMembers.map((m) => m.player), pairings, shootouts, scoring, tiebreak);
+    rows = computeStandings(activeMembers.map((m) => m.player), pairings, shootouts, scoring, tiebreak, divisionComplete);
   } else {
     const scheduledGamesByPlayerId = new Map<string, number>();
     for (const m of leagueMatches) {
@@ -169,7 +214,7 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
       })),
       scheduledGamesByPlayerId,
     );
-    const result = computeBestNStandings(bestNMembers, pairings, shootouts, scoring, selection.dropoutGames, div.opponentsPerPlayer ?? null, tiebreak);
+    const result = computeBestNStandings(bestNMembers, pairings, shootouts, scoring, selection.dropoutGames, div.opponentsPerPlayer ?? null, tiebreak, divisionComplete);
     rows = result.rows;
     badge = buildScoringBadge(mode, result.division.n, result.division.k, result.division.scheduled, result.division.dropouts);
     uncounted = buildUncounted(

@@ -69,9 +69,18 @@ Three or more players: ordered by total net lives only. Equal net lives is a
 real tie and shares the rank. No shootout is asked for in a 3+ way tie.
 
 Each row that was separated this way carries a `tiebreakNote` shown under
-the name on the site, one of: shootout decided it; beat or lost to them
-head-to-head; head-to-head lives decided it; total net lives decided it;
-tied on points and net lives, shares the place.
+the name on the site (the classic table's footnote and the Lives column's
+hover title) and in the bot's Discord standings post, one of: shootout
+decided it; beat or lost to them head-to-head; head-to-head lives decided
+it; total net lives decided it; tied on points and net lives, shares the
+place. Like the merged v2 footnote below, this per-row note is isFinal-aware
+(`divisionComplete`, computed the same "no pairing left to play" way on both
+the web and the bot -- see `isDivisionComplete` in `standings-cache.ts`): it
+only says "decided it" once the division is done playing, and otherwise uses
+the same present-tense, non-final wording described below -- the per-row
+note, the merged footnote, and the Discord post all draw that wording from
+one shared source (`tiebreakDecidedPhrase` in `src/tiebreak-text.ts`,
+synced to `web/lib/tiebreak-text.ts`), so they can't drift.
 
 The v2 "Card Table" standings merge a tie group's per-row notes into one
 footnote (`groupTiebreakNotes` in `web/lib/standings-cards-core.ts`), naming

@@ -1,6 +1,25 @@
 // Pure helpers for the v2 "Card Table" standings player cards
 // (components/DivisionStandingsTable.tsx) -- no React, no I/O. The shell
 // calls these per row with plain data and renders the result.
+//
+// tiebreakDecidedPhrase and its types live in ./tiebreak-text (synced from
+// the bot's src/tiebreak-text.ts -- see web/scripts/sync-schema.mjs) so the
+// per-row tiebreakNote (lib/standings.ts), this file's own merged tie
+// footnote, and the bot's Discord standings post all share one wording
+// source. Re-exported here (rather than every caller importing
+// ./tiebreak-text directly) so existing call sites -- lib/standings.ts,
+// lib/loaders/division.ts, this file's own test -- keep importing from
+// "@/lib/standings-cards-core" unchanged.
+
+import {
+  tiebreakDecidedPhrase,
+  type TiebreakDecisionKind,
+  type TiebreakDecidedKind,
+  type TiebreakWordingValues,
+} from "./tiebreak-text";
+
+export { tiebreakDecidedPhrase };
+export type { TiebreakDecisionKind, TiebreakDecidedKind, TiebreakWordingValues };
 
 // One pip per match result in the "hand" strip next to a player's record.
 // There is no per-match play-order data available yet (only aggregate
@@ -50,86 +69,6 @@ function joinNames(names: readonly string[]): string {
   if (names.length <= 1) return names[0] ?? "";
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-}
-
-// "+N"/"-N" for a signed lives number -- a negative value already carries
-// its own "-", a non-negative one needs "+" added. Small local copy of
-// lib/standings.ts's identical private helper -- this file stays zero-import
-// (see the file header).
-function formatSignedLives(n: number): string {
-  return n > 0 ? `+${n}` : `${n}`;
-}
-
-// Which mechanism decided (or failed to decide) a group of rows originally
-// tied on points -- set by orderLivesPointsGroup (lib/standings.ts) onto
-// StandingRow.tiebreakKind, alongside the existing free-text tiebreakNote.
-// Lets the wording below pick the right phrase instead of inferring it from
-// which stats happen to be present (netLives is set on EVERY row under the
-// "lives" tiebreak regardless of what actually separated a given pair, so
-// presence alone can't tell shootout/head-to-head apart from net lives --
-// see groupTiebreakNotes' history). "realTie" means nothing was decided (an
-// unbreakable tie sharing a rank) -- it never takes "decided it" wording,
-// in either state.
-export type TiebreakDecisionKind =
-  | "shootout"
-  | "headToHeadResult"
-  | "headToHeadLives"
-  | "netLives"
-  | "realTie";
-
-// The subset of TiebreakDecisionKind that DOES have a "decided it" /
-// "currently separate them" clause (see tiebreakDecidedPhrase) --
-// "realTie" is handled separately by its own fixed sentence.
-export type TiebreakDecidedKind = Exclude<TiebreakDecisionKind, "realTie">;
-
-// Raw inputs for tiebreakDecidedPhrase below -- plain values only; all
-// formatting (sign, parenthesized list) happens inside that function so
-// there is exactly one place that owns the punctuation. Which fields are
-// read depends on kind: "headToHeadResult" reads `won`; "headToHeadLives"
-// reads `diff` (this row's own signed differential from the one match);
-// "netLives" reads `livesList` (every tied row's net lives, in display
-// order -- the same list for every row in the group); "shootout" reads
-// nothing.
-export interface TiebreakWordingValues {
-  won?: boolean;
-  diff?: number;
-  livesList?: number[];
-}
-
-// The "decided it" (isFinal) / "currently separate them" (not yet final)
-// half of a tiebreak sentence, e.g. "total net lives decided it (3 / -3)"
-// vs "net lives currently separate them (+3 / -3)". isFinal is true once
-// the division is complete (every match played) or this specific tie is
-// already clinched/decided per the caller's own promote/relegate/clinch
-// logic -- until then more matches could still shift the numbers (net
-// lives is a season-long running total) or the tie group's membership
-// itself (a third player could still join or leave it), so the wording
-// stays present-tense and provisional rather than claiming a final
-// verdict already happened. Pure: a plain (kind, values, isFinal) ->
-// string mapping, no row/group shape involved -- callers (the per-row
-// tiebreakNote in lib/standings.ts, and groupTiebreakNotes below) build
-// their own surrounding sentence around this clause.
-export function tiebreakDecidedPhrase(
-  kind: TiebreakDecidedKind,
-  values: TiebreakWordingValues,
-  isFinal: boolean,
-): string {
-  switch (kind) {
-    case "shootout":
-      return isFinal ? "shootout decided it" : "a shootout currently separates them";
-    case "headToHeadResult":
-      if (isFinal) return values.won ? "beat them head-to-head" : "lost to them head-to-head";
-      return values.won ? "is currently ahead of them head-to-head" : "is currently behind them head-to-head";
-    case "headToHeadLives": {
-      const diff = values.diff ?? 0;
-      const pair = `${formatSignedLives(diff)} vs ${formatSignedLives(-diff)}`;
-      return isFinal ? `head-to-head lives ${pair} decided it` : `head-to-head lives ${pair} currently separate them`;
-    }
-    case "netLives": {
-      const list = (values.livesList ?? []).join(" / ");
-      return isFinal ? `total net lives decided it (${list})` : `net lives currently separate them (${list})`;
-    }
-  }
 }
 
 // Minimal row shape groupTiebreakNotes needs -- structurally compatible with

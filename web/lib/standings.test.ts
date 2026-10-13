@@ -454,6 +454,158 @@ describe("computeStandings -- tiebreak: lives -- tiebreakNote audit", () => {
   });
 });
 
+describe("computeStandings -- tiebreak: lives -- tiebreakNote isFinal (divisionComplete) wording", () => {
+  // Every decided kind, built in both states (divisionComplete true/false) --
+  // true (the default, see every other test above) keeps the exact
+  // pre-existing "decided it" wording; false switches to the present-tense
+  // "currently separate them" / "is currently ahead" forms (tiebreakDecidedPhrase).
+  const cases: Array<{
+    kind: string;
+    build: (divisionComplete: boolean) => { a: string | undefined; b: string | undefined };
+    final: { a: string; b: string };
+    nonFinal: { a: string; b: string };
+  }> = [
+    {
+      kind: "shootout",
+      build: (divisionComplete) => {
+        const players = [P("alice", "Alice"), P("bob", "Bob")];
+        const shootouts: ShootoutInput[] = [{ playerAId: "alice", playerBId: "bob", winnerId: "bob" }];
+        const lives = computeStandings(players, [], shootouts, undefined, "lives", divisionComplete);
+        return {
+          a: lives.find((r) => r.player.id === "alice")!.tiebreakNote,
+          b: lives.find((r) => r.player.id === "bob")!.tiebreakNote,
+        };
+      },
+      final: {
+        a: "Tied on points with Bob; shootout decided it",
+        b: "Tied on points with Alice; shootout decided it",
+      },
+      nonFinal: {
+        a: "Tied on points with Bob; a shootout currently separates them",
+        b: "Tied on points with Alice; a shootout currently separates them",
+      },
+    },
+    {
+      kind: "headToHeadResult",
+      build: (divisionComplete) => {
+        const players = [P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"), P("eve", "Eve"), P("dave", "Dave")];
+        const pairings = [
+          M("alice", "bob", 2, 0),
+          M("alice", "carol", 0, 2),
+          M("carol", "eve", 1, 1),
+          M("bob", "dave", 2, 0),
+        ];
+        const lives = computeStandings(players, pairings, [], undefined, "lives", divisionComplete);
+        return {
+          a: lives.find((r) => r.player.id === "alice")!.tiebreakNote,
+          b: lives.find((r) => r.player.id === "bob")!.tiebreakNote,
+        };
+      },
+      final: {
+        a: "Tied on points with Bob; beat them head-to-head",
+        b: "Tied on points with Alice; lost to them head-to-head",
+      },
+      nonFinal: {
+        a: "Tied on points with Bob; is currently ahead of them head-to-head",
+        b: "Tied on points with Alice; is currently behind them head-to-head",
+      },
+    },
+    {
+      kind: "headToHeadLives",
+      build: (divisionComplete) => {
+        const players = [P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"), P("eve", "Eve"), P("dave", "Dave")];
+        const pairings = [
+          M("alice", "bob", 1, 1, [G("alice", 4), G("bob", 1)]), // h2h diff = +3 for alice
+          M("alice", "carol", 2, 0),
+          M("carol", "eve", 1, 1),
+          M("bob", "dave", 2, 0),
+        ];
+        const lives = computeStandings(players, pairings, [], undefined, "lives", divisionComplete);
+        return {
+          a: lives.find((r) => r.player.id === "alice")!.tiebreakNote,
+          b: lives.find((r) => r.player.id === "bob")!.tiebreakNote,
+        };
+      },
+      final: {
+        a: "Tied on points with Bob; head-to-head lives +3 vs -3 decided it",
+        b: "Tied on points with Alice; head-to-head lives -3 vs +3 decided it",
+      },
+      nonFinal: {
+        a: "Tied on points with Bob; head-to-head lives +3 vs -3 currently separate them",
+        b: "Tied on points with Alice; head-to-head lives -3 vs +3 currently separate them",
+      },
+    },
+    {
+      kind: "netLives",
+      build: (divisionComplete) => {
+        const players = [P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"), P("dave", "Dave")];
+        const pairings = [
+          M("alice", "bob", 1, 1, [G("alice", 3), G("bob", 3)]), // h2h diff = 0 -> falls through to total net lives
+          M("alice", "carol", 1, 1, [G("alice", 5)]),
+          M("bob", "dave", 1, 1),
+        ];
+        const lives = computeStandings(players, pairings, [], undefined, "lives", divisionComplete);
+        return {
+          a: lives.find((r) => r.player.id === "alice")!.tiebreakNote,
+          b: lives.find((r) => r.player.id === "bob")!.tiebreakNote,
+        };
+      },
+      final: {
+        a: "Tied on points with Bob; total net lives decided it (5 / 0)",
+        b: "Tied on points with Alice; total net lives decided it (5 / 0)",
+      },
+      nonFinal: {
+        a: "Tied on points with Bob; net lives currently separate them (5 / 0)",
+        b: "Tied on points with Alice; net lives currently separate them (5 / 0)",
+      },
+    },
+  ];
+
+  it.each(cases)("$kind -- divisionComplete true keeps the existing 'decided it' wording", (c) => {
+    const { a, b } = c.build(true);
+    expect(a).toBe(c.final.a);
+    expect(b).toBe(c.final.b);
+  });
+
+  it.each(cases)("$kind -- divisionComplete false switches to present-tense wording", (c) => {
+    const { a, b } = c.build(false);
+    expect(a).toBe(c.nonFinal.a);
+    expect(b).toBe(c.nonFinal.b);
+  });
+
+  it("realTie wording is unaffected by divisionComplete -- nothing was decided in either state", () => {
+    const players = [P("alice", "Alice"), P("bob", "Bob"), P("carol", "Carol"), P("dave", "Dave")];
+    const pairings = [
+      M("alice", "carol", 2, 0, [G("alice", 4)]),
+      M("bob", "dave", 2, 0, [G("bob", 4)]),
+    ];
+    const final = computeStandings(players, pairings, [], undefined, "lives", true);
+    const nonFinal = computeStandings(players, pairings, [], undefined, "lives", false);
+    const expected = "Tied with Bob on points and net lives -- shares the place";
+    expect(final.find((r) => r.player.id === "alice")!.tiebreakNote).toBe(expected);
+    expect(nonFinal.find((r) => r.player.id === "alice")!.tiebreakNote).toBe(expected);
+  });
+});
+
+describe("computeStandings -- tiebreak: lives -- divisionComplete threading (no pairing unplayed vs one unplayed)", () => {
+  it("marks the note non-final when divisionComplete is false (a pairing is still unplayed) and final when true (none are)", () => {
+    const players = [P("alice", "Alice"), P("bob", "Bob")];
+    const shootouts: ShootoutInput[] = [{ playerAId: "alice", playerBId: "bob", winnerId: "bob" }];
+    // divisionComplete is caller-supplied (see computeStandings' doc comment --
+    // the caller derives it from its own schedule/results data, e.g.
+    // web/lib/standings-cache.ts's isDivisionComplete finding an unplayed
+    // pairing elsewhere in the division); here we simply exercise both values.
+    const stillPlaying = computeStandings(players, [], shootouts, undefined, "lives", false);
+    const allPlayed = computeStandings(players, [], shootouts, undefined, "lives", true);
+    expect(stillPlaying.find((r) => r.player.id === "bob")!.tiebreakNote).toBe(
+      "Tied on points with Alice; a shootout currently separates them",
+    );
+    expect(allPlayed.find((r) => r.player.id === "bob")!.tiebreakNote).toBe(
+      "Tied on points with Alice; shootout decided it",
+    );
+  });
+});
+
 describe("computeStandings -- properties", () => {
   it("chain mode's output is identical whether or not pairings carry games data", () => {
     fc.assert(

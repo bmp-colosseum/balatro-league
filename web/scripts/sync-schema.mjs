@@ -66,6 +66,13 @@ const SYNC = [
   // status line (web/lib/auto-signups.ts), so both read the same inputs the
   // same way.
   { from: ["src", "auto-signups-core.ts"], to: ["lib", "auto-signups-core.ts"] },
+  // Pure tiebreak-note wording (isFinal-aware "decided it" / "currently
+  // separate them" phrasing) -- shared by the bot's and web's standings
+  // engines (both standings.ts's orderLivesPointsGroup) and the web's v2
+  // Card Table merged tie footnote (standings-cards-core.ts), so the
+  // per-row note, the merged footnote, and the bot's Discord standings post
+  // never drift in wording.
+  { from: ["src", "tiebreak-text.ts"], to: ["lib", "tiebreak-text.ts"] },
 ];
 
 for (const { from, to } of SYNC) {

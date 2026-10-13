@@ -152,6 +152,9 @@ function sortResultsBestFirst(results: PlayerResult[]): PlayerResult[] {
     .sort((x, y) => y.points - x.points || y.rank - x.rank || x.opponentId.localeCompare(y.opponentId));
 }
 
+// divisionComplete (default true) is forwarded to computeStandings /
+// sortStandingsLives verbatim -- see computeStandings' own doc comment in
+// lib/standings.ts for what it means and who computes it.
 export function computeBestNStandings(
   members: BestNMemberInput[],
   pairings: BestNPairing[],
@@ -160,6 +163,7 @@ export function computeBestNStandings(
   dropoutGames: DropoutGamesMode = "count",
   scheduledPerPlayer: number | null = null,
   tiebreak: Tiebreak = "chain",
+  divisionComplete = true,
 ): BestNStandingsResult {
   const active = members.filter((m) => m.status === "ACTIVE");
   const droppedCount = members.filter((m) => m.status === "DROPPED").length;
@@ -185,6 +189,7 @@ export function computeBestNStandings(
       shootouts,
       scoring,
       tiebreak,
+      divisionComplete,
     ).map((row) => ({ ...row, counted: row.played, of: row.played, droppedResults: [] }));
     return { rows, division: { n, k, scheduled, dropouts } };
   }
@@ -319,6 +324,7 @@ export function computeBestNStandings(
       (xId, yId) => shootoutBetween(xId, yId, effectiveShootouts),
       (xId, yId) => (bothCounted(xId, yId) ? headToHeadLivesDiff(xId, yId, effectivePairings) : null),
       (xId, yId) => (bothCounted(xId, yId) ? headToHead(xId, yId, effectivePairings) : 0),
+      divisionComplete,
     );
   } else {
     sorted = rows.slice().sort((x, y) => {

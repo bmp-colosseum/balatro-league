@@ -7,7 +7,7 @@
 // under vitest, per vitest.config.ts's setup comment.
 
 import { describe, it, expect } from "vitest";
-import { parseStandingsRows, parseStandingsUncounted } from "./standings-cache.js";
+import { parseStandingsRows, parseStandingsUncounted, isDivisionComplete } from "./standings-cache.js";
 
 const LEGACY_BARE_ARRAY = JSON.stringify([
   { playerId: "a", points: 6, wins: 2, draws: 0, losses: 0, gamesWon: 4, gamesLost: 0, played: 2 },
@@ -61,5 +61,51 @@ describe("parseStandingsUncounted", () => {
     expect(parseStandingsUncounted(NEW_PAYLOAD_WITH_BEST_N)).toEqual([
       { matchKey: "a|b", forPlayerId: "a" },
     ]);
+  });
+});
+
+// Same "no pairing left to play" rule as /divisions/[id]'s own `complete`
+// (web/lib/loaders/division.ts, via web/lib/unplayed-pairs.ts) -- feeds
+// computeStandings/computeBestNStandings' divisionComplete (the lives
+// tiebreak's per-row tiebreakNote isFinal). Mirrors src/standings-cache.test.ts.
+describe("isDivisionComplete", () => {
+  it("is false (unlocked schedule) when an active-member pair hasn't played", () => {
+    const matches = [
+      { playerAId: "a", playerBId: "b", status: "CONFIRMED", gamesWonA: 2, gamesWonB: 0 },
+    ];
+    expect(isDivisionComplete(["a", "b", "c"], matches, false)).toBe(false);
+  });
+
+  it("is true (unlocked schedule) once every active-member pair has played", () => {
+    const matches = [
+      { playerAId: "a", playerBId: "b", status: "CONFIRMED", gamesWonA: 2, gamesWonB: 0 },
+      { playerAId: "a", playerBId: "c", status: "CONFIRMED", gamesWonA: 1, gamesWonB: 1 },
+      { playerAId: "b", playerBId: "c", status: "CONFIRMED", gamesWonA: 2, gamesWonB: 0 },
+    ];
+    expect(isDivisionComplete(["a", "b", "c"], matches, false)).toBe(true);
+  });
+
+  it("is false (schedule-locked) while an assigned pairing is still PENDING", () => {
+    const matches = [
+      { playerAId: "a", playerBId: "b", status: "CONFIRMED", gamesWonA: 2, gamesWonB: 0 },
+      { playerAId: "a", playerBId: "c", status: "PENDING", gamesWonA: 0, gamesWonB: 0 },
+    ];
+    expect(isDivisionComplete(["a", "b", "c"], matches, true)).toBe(false);
+  });
+
+  it("is true (schedule-locked) once every assigned pairing is CONFIRMED, even with a sub-round-robin schedule", () => {
+    // A locked 1-opponent schedule: a/b played, c has no assigned opponent at
+    // all -- the unassigned a-c / b-c pairs don't count against completeness.
+    const matches = [
+      { playerAId: "a", playerBId: "b", status: "CONFIRMED", gamesWonA: 2, gamesWonB: 0 },
+    ];
+    expect(isDivisionComplete(["a", "b", "c"], matches, true)).toBe(true);
+  });
+
+  it("detects a locked schedule from a 0-0 PENDING slot even when the season flag itself is false (the flag is only a fast-path)", () => {
+    const matches = [
+      { playerAId: "a", playerBId: "b", status: "PENDING", gamesWonA: 0, gamesWonB: 0 },
+    ];
+    expect(isDivisionComplete(["a", "b"], matches, false)).toBe(false);
   });
 });
