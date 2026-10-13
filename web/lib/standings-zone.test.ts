@@ -1,5 +1,18 @@
 import { describe, expect, test } from "vitest";
-import { boundaryBelow, boundaryLabel, clinchTitle, zoneKeyLines, zoneOf, type Zone, type ZoneExtras, type ZoneKeyLinesInput } from "./standings-zone";
+import {
+  boundaryArrowDirection,
+  boundaryBelow,
+  boundaryLabel,
+  clinchTitle,
+  zoneCertainty,
+  zoneGlyphTitle,
+  zoneKeyLines,
+  zoneOf,
+  type Zone,
+  type ZoneCertainty,
+  type ZoneExtras,
+  type ZoneKeyLinesInput,
+} from "./standings-zone";
 
 describe("zoneOf", () => {
   test.each<[string, ZoneExtras | undefined, Zone]>([
@@ -175,5 +188,70 @@ describe("clinchTitle", () => {
 
   test("down -> locked wording", () => {
     expect(clinchTitle("down")).toBe("Locked: guaranteed down");
+  });
+});
+
+describe("zoneCertainty", () => {
+  test("no zone -> undefined regardless of extras", () => {
+    expect(zoneCertainty({ promoting: true }, undefined)).toBeUndefined();
+  });
+
+  test.each<[string, ZoneExtras | undefined, Zone, ZoneCertainty | undefined]>([
+    ["promoting -> decided", { promoting: true }, "promote", "decided"],
+    ["relegating -> decided", { relegating: true }, "relegate", "decided"],
+    ["clinched up -> decided", { clinchStatus: "up" }, "promote", "decided"],
+    ["clinched down -> decided", { clinchStatus: "down" }, "relegate", "decided"],
+    ["in promotion spot only -> spot", { inPromotionSpot: true }, "promote", "spot"],
+    ["in relegation spot only -> spot", { inRelegationSpot: true }, "relegate", "spot"],
+    [
+      "clinched AND in the spot -> decided wins (same precedence as zoneOf)",
+      { inPromotionSpot: true, clinchStatus: "up" },
+      "promote",
+      "decided",
+    ],
+    ["empty extras -> undefined", {}, "promote", undefined],
+    ["no extras at all -> undefined", undefined, "relegate", undefined],
+  ])("%s", (_name, ex, zone, expected) => {
+    expect(zoneCertainty(ex, zone)).toBe(expected);
+  });
+});
+
+describe("zoneGlyphTitle", () => {
+  test("no zone -> undefined", () => {
+    expect(zoneGlyphTitle(undefined, "decided")).toBeUndefined();
+  });
+
+  test("no certainty -> undefined", () => {
+    expect(zoneGlyphTitle("promote", undefined)).toBeUndefined();
+  });
+
+  test("decided promote -> clinchTitle('up') wording", () => {
+    expect(zoneGlyphTitle("promote", "decided")).toBe(clinchTitle("up"));
+  });
+
+  test("decided relegate -> clinchTitle('down') wording", () => {
+    expect(zoneGlyphTitle("relegate", "decided")).toBe(clinchTitle("down"));
+  });
+
+  test("spot promote -> not-yet-guaranteed wording", () => {
+    expect(zoneGlyphTitle("promote", "spot")).toBe("In the promotion spot -- not yet guaranteed");
+  });
+
+  test("spot relegate -> not-yet-guaranteed wording", () => {
+    expect(zoneGlyphTitle("relegate", "spot")).toBe("In the relegation spot -- not yet guaranteed");
+  });
+});
+
+describe("boundaryArrowDirection", () => {
+  test("promote -> up", () => {
+    expect(boundaryArrowDirection("promote")).toBe("up");
+  });
+
+  test("relegate -> down", () => {
+    expect(boundaryArrowDirection("relegate")).toBe("down");
+  });
+
+  test("no boundary -> undefined", () => {
+    expect(boundaryArrowDirection(undefined)).toBeUndefined();
   });
 });

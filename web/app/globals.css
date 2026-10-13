@@ -686,6 +686,18 @@ html[data-ui="v2"] {
   --uncommon: #3cc78f;
   --rare: #ff8a83;
   --legendary: #cd98e1;
+  /* Zone treatment (promotion/relegation stripe, dashed divider, rank-tile
+     glyph) -- deliberately NEITHER token is a tier color (common/uncommon/
+     rare/legendary above), so the zone stripe never looks like it's
+     announcing a division's own rarity tier the way the old --info/--admin
+     pairing did (--info resolved to the SAME hue as --common). Promotion
+     gets the warm gold accent (also used for pts bars/links/the "you"
+     badge); relegation gets a neutral grey hatch instead of a second solid
+     color, so the two read as "reward" vs "caution" rather than two more
+     tier-like fills. See app/v2/standings-cards.css' --zone-relegate-hatch
+     use on the stripe. */
+  --zone-promote: var(--gold);
+  --zone-relegate: var(--paper-faint);
   --shadow: 0 6px 0 var(--panel-edge), 0 14px 28px rgba(0, 0, 0, 0.35);
   color-scheme: dark;
   /* v2 overrides of the :root --flash-*-text pair above -- --rare/--uncommon
@@ -1051,11 +1063,13 @@ html[data-ui="v2"] .zone-key-swatch {
   margin-right: 4px;
   vertical-align: middle;
 }
-/* Common-blue / amber -- the SAME tokens the v2 player-card's zone stripe
-   and the v1 table's up/down arrows use (--info/--admin, see
-   app/v2/standings-cards.css), so every zone indicator on the site agrees. */
-html[data-ui="v2"] .zone-key-swatch-promote { background: var(--info); }
-html[data-ui="v2"] .zone-key-swatch-relegate { background: var(--admin); }
+/* Gold / neutral grey -- the SAME tokens the v2 player-card's zone stripe
+   uses (--zone-promote/--zone-relegate, see app/v2/standings-cards.css), so
+   every zone indicator on the site agrees. Deliberately not --info/--admin
+   (nor any --common/--uncommon/--rare/--legendary tier color) -- see
+   --zone-promote's own comment above for why. */
+html[data-ui="v2"] .zone-key-swatch-promote { background: var(--zone-promote); }
+html[data-ui="v2"] .zone-key-swatch-relegate { background: var(--zone-relegate); }
 
 /* Page-level KEY legend -- v1's arrows/emoji vs v2's stripe/SVG-lock/plain-X
    wording (see app/standings/page.tsx), same always-in-the-DOM toggle
@@ -1064,6 +1078,36 @@ html[data-ui="v2"] .zone-key-swatch-relegate { background: var(--admin); }
 .key-legend-v2 { display: none !important; }
 html[data-ui="v2"] .key-legend-v1 { display: none !important; }
 html[data-ui="v2"] .key-legend-v2 { display: flex !important; }
+
+/* Zone sample fragments in the v2 Key legend (DivisionStandingsTable's
+   ZoneKeySample) -- REAL .player-card markup/classes at a shrunk-down size
+   instead of a bare color swatch, so the legend shows exactly what the
+   stripe + dashed divider + chevron look like (ux feedback: the cut-off
+   color wasn't obviously what the legend referred to). The extra
+   .key-legend-sample-card class beats the plain .player-card rule on
+   specificity, so these overrides apply regardless of CSS source order. */
+html[data-ui="v2"] .key-legend-sample-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+html[data-ui="v2"] .key-legend-sample {
+  display: inline-flex;
+  flex-direction: column;
+  width: 84px;
+  gap: 15px;
+  margin: 0 4px;
+  vertical-align: middle;
+}
+html[data-ui="v2"] .player-card.key-legend-sample-card {
+  display: block;
+  min-height: 16px;
+  padding: 5px 8px 5px 10px;
+  margin-bottom: 0;
+  border-width: 1px;
+  border-radius: 4px;
+}
 
 /* Phone: the standings cards (not the desktop table -- that's already
    hidden below 640px) drop W-D-L and the played count under 480px. */

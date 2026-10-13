@@ -41,11 +41,11 @@ html[data-ui="v2"] .player-card:hover {
 }
 
 /* Promotion / relegation zone -- a thin left stripe (subtle, not a full
-   border halo) in the SAME tokens the v1 table's up/down arrows use
-   (--info resolves to Common-blue, --admin stays amber under v2 -- see
-   app/globals.css' token block), so the card and the table agree on what
-   "promoting" looks like. Zone/clinch state is per lib/standings-zone.ts'
-   zoneOf; see DivisionStandingsTable.tsx. */
+   border halo). Promotion is a solid gold fill; relegation is a diagonal
+   grey hatch (a repeating-linear-gradient of --paper-faint) instead of a
+   second solid color -- see --zone-promote/--zone-relegate's own comment in
+   app/globals.css for why NEITHER is a tier color. Zone/clinch state is per
+   lib/standings-zone.ts' zoneOf; see DivisionStandingsTable.tsx. */
 html[data-ui="v2"] .player-card[data-zone="promote"]::before,
 html[data-ui="v2"] .player-card[data-zone="relegate"]::before {
   content: "";
@@ -56,29 +56,40 @@ html[data-ui="v2"] .player-card[data-zone="relegate"]::before {
   width: 4px;
   border-radius: 3px 0 0 3px;
 }
-html[data-ui="v2"] .player-card[data-zone="promote"]::before { background: var(--info); }
-html[data-ui="v2"] .player-card[data-zone="relegate"]::before { background: var(--admin); }
+html[data-ui="v2"] .player-card[data-zone="promote"]::before {
+  background: var(--zone-promote);
+}
+html[data-ui="v2"] .player-card[data-zone="relegate"]::before {
+  background-color: var(--panel-edge);
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--zone-relegate) 0 2px,
+    transparent 2px 4px
+  );
+}
 
 /* Dashed divider between the zone and the rest of the stack -- same
-   boundary hook (lib/standings-zone.ts) as the table's dashed row border,
-   same tokens as the stripe above. A small uppercase label "punches
-   through" the dashed line at desktop (like the Tour's "Playoff line"),
-   reading the exact ladder-aware text (e.g. "Promotion to Rare 1") from
-   the data-boundary-label attribute DivisionStandingsTable sets per row
-   (lib/standings-zone.ts' boundaryLabel) instead of a bare static word;
-   phone swaps it for a bare chevron, see the phone media block below. */
+   boundary hook (lib/standings-zone.ts) and tokens as the stripe above. A
+   real chevron + label "punches through" the dashed line at desktop (like
+   the Tour's "Playoff line"), rendered by DivisionStandingsTable's
+   BoundaryLabel (an up-chevron for promotion, down for relegation, then the
+   exact ladder-aware text, e.g. "Promotion to Rare 1") instead of a bare
+   static word -- phone drops the text and keeps just the chevron, see the
+   phone media block below. */
 html[data-ui="v2"] .player-card[data-boundary="promote"] {
-  border-bottom: 2px dashed var(--info);
+  border-bottom: 2px dashed var(--zone-promote);
 }
 html[data-ui="v2"] .player-card[data-boundary="relegate"] {
-  border-bottom: 2px dashed var(--admin);
+  border-bottom: 2px dashed var(--zone-relegate);
 }
-html[data-ui="v2"] .player-card[data-boundary]::after {
-  content: "";
+html[data-ui="v2"] .player-card-boundary-label {
   position: absolute;
   left: 50%;
-  bottom: -9px;
+  bottom: -10px;
   transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   padding: 0 8px;
   background: var(--panel);
   font-size: 9px;
@@ -88,8 +99,14 @@ html[data-ui="v2"] .player-card[data-boundary]::after {
   white-space: nowrap;
   z-index: 1;
 }
-html[data-ui="v2"] .player-card[data-boundary="promote"]::after { content: attr(data-boundary-label); color: var(--info); }
-html[data-ui="v2"] .player-card[data-boundary="relegate"]::after { content: attr(data-boundary-label); color: var(--admin); }
+html[data-ui="v2"] .player-card-boundary-arrow {
+  width: 10px;
+  height: 10px;
+  fill: currentColor;
+  flex-shrink: 0;
+}
+html[data-ui="v2"] .player-card-boundary-label[data-boundary="promote"] { color: var(--zone-promote); }
+html[data-ui="v2"] .player-card-boundary-label[data-boundary="relegate"] { color: var(--zone-relegate); }
 
 /* Rank-tile corner badge -- clinch lock (ClinchGlyph, inline SVG) or the
    tied-needs-a-shootout glyph (ShowdownGlyph, CSS-only content below).
@@ -120,10 +137,26 @@ html[data-ui="v2"] .player-card-showdown {
 html[data-ui="v2"] .player-card-clinch svg {
   width: 10px;
   height: 10px;
+}
+/* Same two zone hues as the stripe/divider (gold promote / grey relegate),
+   never a third color -- certainty changes SHAPE instead: solid filled lock
+   + solid ring for decided/clinched (guaranteed), an outlined lock + dashed
+   ring for a row that merely sits in the spot today with nothing
+   guaranteed yet (lib/standings-zone.ts' zoneCertainty). */
+html[data-ui="v2"] .player-card-clinch[data-zone="promote"] { color: var(--zone-promote); }
+html[data-ui="v2"] .player-card-clinch[data-zone="relegate"] { color: var(--zone-relegate); }
+html[data-ui="v2"] .player-card-clinch[data-certainty="decided"] svg {
   fill: currentColor;
 }
-html[data-ui="v2"] .player-card-clinch[data-status="up"] { color: var(--info); }
-html[data-ui="v2"] .player-card-clinch[data-status="down"] { color: var(--admin); }
+html[data-ui="v2"] .player-card-clinch[data-certainty="spot"] {
+  background: transparent;
+  border-style: dashed;
+}
+html[data-ui="v2"] .player-card-clinch[data-certainty="spot"] svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+}
 /* Crossed-swords glyph via a CSS escape (ASCII in source, renders the
    actual character) instead of an emoji/unicode literal in the component. */
 html[data-ui="v2"] .player-card-showdown {
@@ -311,24 +344,21 @@ html[data-ui="v2"] .player-card-points-label {
     row-gap: 2px;
     column-gap: 8px;
   }
-  /* Boundary label has no room for the word at this width -- swap it for a
-     small CSS-drawn downward chevron (a border triangle, no glyph/escape
-     needed) instead of truncating "Promotion"/"Relegation". */
-  html[data-ui="v2"] .player-card[data-boundary]::after {
-    content: "";
-    width: 0;
-    height: 0;
-    padding: 0;
-    background: none;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    bottom: -6px;
+  /* Boundary label has no room for the word at this width -- drop the text
+     and keep just the real up/down chevron (BoundaryLabel's own SVG, which
+     already points the correct way per row, unlike the old CSS-triangle
+     hack this replaces -- that border trick drew the SAME downward shape
+     for both promote and relegate). */
+  html[data-ui="v2"] .player-card-boundary-label {
+    bottom: -7px;
+    padding: 0 4px;
   }
-  html[data-ui="v2"] .player-card[data-boundary="promote"]::after {
-    border-top: 5px solid var(--info);
+  html[data-ui="v2"] .player-card-boundary-text {
+    display: none;
   }
-  html[data-ui="v2"] .player-card[data-boundary="relegate"]::after {
-    border-top: 5px solid var(--admin);
+  html[data-ui="v2"] .player-card-boundary-arrow {
+    width: 11px;
+    height: 11px;
   }
   html[data-ui="v2"] .player-card-rank {
     width: 36px;

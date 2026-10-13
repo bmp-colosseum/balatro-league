@@ -408,6 +408,28 @@ describe("globals.css v2 'Card Table' token pairs clear WCAG AA", () => {
   );
 });
 
+// Zone treatment (promotion/relegation stripe, dashed divider, rank-tile
+// glyph) -- 2026-10 rework replacing --info/--admin (which clashed with the
+// Common tier's own blue) with --zone-promote (the gold accent) and
+// --zone-relegate (a neutral --paper-faint hatch), neither a tier color.
+// --zone-promote/--zone-relegate are plain var() aliases (gold/paper-faint
+// respectively), so the token-pair harness above resolves them exactly like
+// any other alias -- these are the literal pairs the divider label text and
+// rank-tile glyph render (text/icon color directly on the panel backdrop
+// behind them, see app/v2/standings-cards.css).
+describe("zone treatment (--zone-promote/--zone-relegate) tokens clear WCAG AA", () => {
+  const pairs: Array<[string, string, boolean?]> = [
+    ["zone-promote", "bg"], ["zone-promote", "surface"], ["zone-promote", "surface-2"],
+    ["zone-relegate", "bg"], ["zone-relegate", "surface"], ["zone-relegate", "surface-2"],
+  ];
+
+  it.each(pairs)("%s on %s", (fgName, bgName, large) => {
+    const ratio = contrastRatioFromCss(v2[fgName], v2[bgName]);
+    expect(ratio).not.toBeNull();
+    expect(ratio!).toBeGreaterThanOrEqual(requiredRatio(Boolean(large)));
+  });
+});
+
 describe("the --flash-*-text tokens clear WCAG AA against their own self-tint", () => {
   // Every `.flash.success`/`.flash.error`-shaped badge in this codebase
   // (plus every ad-hoc inline W/L/DISPUTED/VOID/DROPPED/banned pill that
