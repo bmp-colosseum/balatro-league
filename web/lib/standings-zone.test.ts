@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { boundaryBelow, clinchTitle, zoneKeyLines, zoneOf, type Zone, type ZoneExtras, type ZoneKeyLinesInput } from "./standings-zone";
+import { boundaryBelow, boundaryLabel, clinchTitle, zoneKeyLines, zoneOf, type Zone, type ZoneExtras, type ZoneKeyLinesInput } from "./standings-zone";
 
 describe("zoneOf", () => {
   test.each<[string, ZoneExtras | undefined, Zone]>([
@@ -92,22 +92,22 @@ describe("zoneKeyLines", () => {
 
   test("promote only, with a neighbor name -> names the division above", () => {
     const input: ZoneKeyLinesInput = { promote: true, relegate: false, above: "Rare 1" };
-    expect(zoneKeyLines(input)).toEqual([{ kind: "promote", text: "Promotes to Rare 1" }]);
+    expect(zoneKeyLines(input)).toEqual([{ kind: "promote", text: "Promotion to Rare 1" }]);
   });
 
   test("promote only, no neighbor name -> bare verb fallback", () => {
     const input: ZoneKeyLinesInput = { promote: true, relegate: false };
-    expect(zoneKeyLines(input)).toEqual([{ kind: "promote", text: "Promotes" }]);
+    expect(zoneKeyLines(input)).toEqual([{ kind: "promote", text: "Promotion" }]);
   });
 
   test("relegate only, with a neighbor name -> names the division below", () => {
     const input: ZoneKeyLinesInput = { promote: false, relegate: true, below: "Common 2" };
-    expect(zoneKeyLines(input)).toEqual([{ kind: "relegate", text: "Drops to Common 2" }]);
+    expect(zoneKeyLines(input)).toEqual([{ kind: "relegate", text: "Relegation to Common 2" }]);
   });
 
   test("relegate only, no neighbor name -> bare verb fallback", () => {
     const input: ZoneKeyLinesInput = { promote: false, relegate: true };
-    expect(zoneKeyLines(input)).toEqual([{ kind: "relegate", text: "Drops" }]);
+    expect(zoneKeyLines(input)).toEqual([{ kind: "relegate", text: "Relegation" }]);
   });
 
   test("everything applies -> promote, then relegate, in that order", () => {
@@ -118,8 +118,8 @@ describe("zoneKeyLines", () => {
       below: "Uncommon 1",
     };
     expect(zoneKeyLines(input)).toEqual([
-      { kind: "promote", text: "Promotes to Legendary" },
-      { kind: "relegate", text: "Drops to Uncommon 1" },
+      { kind: "promote", text: "Promotion to Legendary" },
+      { kind: "relegate", text: "Relegation to Uncommon 1" },
     ]);
   });
 
@@ -127,7 +127,44 @@ describe("zoneKeyLines", () => {
     // Defensive case -- the page never sets promote=true without an `above`
     // once a division isn't first-overall, but the helper stays safe either way.
     const input: ZoneKeyLinesInput = { promote: true, relegate: false, above: undefined };
-    expect(zoneKeyLines(input)[0]!.text).toBe("Promotes");
+    expect(zoneKeyLines(input)[0]!.text).toBe("Promotion");
+  });
+
+  test("isTopOfLadder -> always 'Top of the ladder', even with promote false", () => {
+    const input: ZoneKeyLinesInput = { promote: false, relegate: false, isTopOfLadder: true };
+    expect(zoneKeyLines(input)).toEqual([{ kind: "promote", text: "Top of the ladder" }]);
+  });
+
+  test("isTopOfLadder wins over a named `above` (shouldn't happen together, but stays safe)", () => {
+    const input: ZoneKeyLinesInput = { promote: true, relegate: false, above: "Rare 1", isTopOfLadder: true };
+    expect(zoneKeyLines(input)).toEqual([{ kind: "promote", text: "Top of the ladder" }]);
+  });
+
+  test("bottom of the ladder: relegate false -> no relegation label at all", () => {
+    const input: ZoneKeyLinesInput = { promote: true, relegate: false, above: "Rare 1", below: undefined };
+    expect(zoneKeyLines(input).some((l) => l.kind === "relegate")).toBe(false);
+  });
+});
+
+describe("boundaryLabel", () => {
+  test("no boundary -> no label", () => {
+    expect(boundaryLabel(undefined)).toBeUndefined();
+  });
+
+  test("promote boundary with a neighbor name", () => {
+    expect(boundaryLabel("promote", "Rare 1", "Common 2")).toBe("Promotion to Rare 1");
+  });
+
+  test("promote boundary, no neighbor name -> bare fallback", () => {
+    expect(boundaryLabel("promote")).toBe("Promotion");
+  });
+
+  test("relegate boundary with a neighbor name", () => {
+    expect(boundaryLabel("relegate", "Rare 1", "Common 2")).toBe("Relegation to Common 2");
+  });
+
+  test("relegate boundary, no neighbor name -> bare fallback", () => {
+    expect(boundaryLabel("relegate")).toBe("Relegation");
   });
 });
 

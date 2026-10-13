@@ -14,7 +14,7 @@ import { Fragment, type ReactNode, type CSSProperties } from "react";
 import { rankLabel } from "@/lib/standings";
 import { DiscordId } from "@/components/DiscordId";
 import type { StandingsMmrEntry } from "@/lib/loaders/standings";
-import { boundaryBelow, clinchTitle, zoneKeyLines, zoneOf, type Zone } from "@/lib/standings-zone";
+import { boundaryBelow, boundaryLabel, clinchTitle, zoneKeyLines, zoneOf, type Zone } from "@/lib/standings-zone";
 import { groupTiebreakNotes, initials, recordPips } from "@/lib/standings-cards-core";
 
 // Minimal row shape the table needs. Every standings source — the /standings
@@ -347,6 +347,7 @@ export function DivisionStandingsTable({
   finalRankCell,
   aboveDivisionName,
   belowDivisionName,
+  isTopOfLadder,
   tierRarity,
   noMatchesYet = false,
 }: {
@@ -371,13 +372,19 @@ export function DivisionStandingsTable({
   finalRankHeader?: ReactNode;
   finalRankCell?: (r: Row) => ReactNode;
   // Names of the divisions immediately above/below this one in ladder order
-  // (across tier boundaries too), for the v2 zone key's "Promotes to <X>" /
-  // "Drops to <X>" wording -- see lib/standings-zone.ts' zoneKeyLines.
+  // (across tier boundaries too), for the v2 zone key's "Promotion to <X>" /
+  // "Relegation to <X>" wording -- see lib/standings-zone.ts' zoneKeyLines.
   // Undefined at either end of the ladder (nothing above the top division,
   // nothing below the bottom one), and for callers that don't track ladder
   // order (e.g. /seasons/[id]) -- the v2 key then falls back to the bare verb.
   aboveDivisionName?: string;
   belowDivisionName?: string;
+  // True only for the single division at the very top of the whole ladder
+  // (web/lib/division-ladder.ts' buildLadder) -- the zone key then reads
+  // "Top of the ladder" instead of silently showing nothing (this division's
+  // promote is always 0, so it would otherwise never earn a key line).
+  // Undefined for callers that don't track ladder order.
+  isTopOfLadder?: boolean;
   // This division's tier rarity, 0-3 (0 legendary, 1 rare, 2 uncommon, 3
   // common -- same convention as lib/tier-colors.ts' rarityIndex), used to
   // colour the v2 player card's rank badge. Undefined for callers that
@@ -411,7 +418,14 @@ export function DivisionStandingsTable({
     relegate: anyRelegateZone,
     above: aboveDivisionName,
     below: belowDivisionName,
+    isTopOfLadder,
   });
+  // Per-row dashed-divider label text (the v2 card's data-boundary ::after
+  // content -- see app/v2/standings-cards.css), same "to <neighbor>" wording
+  // as the key lines. Computed once per zone kind since every row sharing a
+  // boundary kind in this division gets the same neighbor name.
+  const promoteBoundaryLabel = boundaryLabel("promote", aboveDivisionName, belowDivisionName);
+  const relegateBoundaryLabel = boundaryLabel("relegate", aboveDivisionName, belowDivisionName);
 
   // v2 player-card stack only: one merged tie footnote per ORIGINAL
   // points-tied group instead of repeating a near-identical sentence on
@@ -551,6 +565,12 @@ export function DivisionStandingsTable({
               // see lib/standings-zone.ts.
               const zone = zones[i];
               const boundary = boundaryBelow(zones, i);
+              // "Promotion to <above>" / "Relegation to <below>" (or the
+              // bare word, or nothing at the true top/bottom of the ladder)
+              // -- see lib/standings-zone.ts' boundaryLabel. Read via CSS
+              // content: attr(data-boundary-label) (app/v2/standings-cards.css).
+              const boundaryLabelText =
+                boundary === "promote" ? promoteBoundaryLabel : boundary === "relegate" ? relegateBoundaryLabel : undefined;
               // One merged tie footnote under the LAST row of its group
               // (see groupTiebreakNotes) instead of a note on every tied row.
               const footnote = tieFootnoteByLastIndex.get(i);
@@ -560,6 +580,7 @@ export function DivisionStandingsTable({
                     className="player-card"
                     data-zone={zone}
                     data-boundary={boundary}
+                    data-boundary-label={boundaryLabelText}
                     data-you={ex?.isViewer ? "1" : undefined}
                   >
                     {/* Rank badge -- the medal string is "N" normally or "#N"

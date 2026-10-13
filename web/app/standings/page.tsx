@@ -14,6 +14,8 @@ import { SeasonWindow } from "@/components/SeasonWindow";
 import { type StandingRow } from "@/lib/standings";
 import { divisionSummaryLine, recordPips } from "@/lib/standings-cards-core";
 import { rarityIndex, tierColors, tierSlug } from "@/lib/tier-colors";
+import { buildLadder } from "@/lib/division-ladder";
+import { LadderStrip } from "@/components/LadderStrip";
 
 // Clinch predictor: who is mathematically guaranteed to promote ("up") /
 // relegate ("down") regardless of how the remaining matches play out.
@@ -142,22 +144,30 @@ export default async function StandingsPage() {
   const totalRemaining = Math.max(0, totalExpected - totalPlayed);
   const pctPlayed = totalExpected > 0 ? Math.round((totalPlayed / totalExpected) * 100) : 0;
 
-  // Flattened ladder order (tiers already ordered by position, divisions by
-  // groupNumber -- see loadStandingsPageData) so each division can look up
-  // the name of the division immediately above/below it for the v2 zone
-  // key's "Promotes to <X>" / "Drops to <X>" wording. Undefined at either
-  // end of the whole ladder.
+  // The whole ladder, one rung per division, ordered top (Legendary) to
+  // bottom (the last Common division) -- see lib/division-ladder.ts. Divisions
+  // within one tier are rungs of the SAME ladder, not parallel groups: the
+  // top of the lowest division promotes into the one above it, all the way
+  // up, even across a tier boundary. Feeds the ladder strip below, each
+  // division's above/below neighbor names for the v2 zone key's "Promotion
+  // to <X>" / "Relegation to <X>" wording, and which single division sits at
+  // the true top of the whole ladder.
   const tiersWithDivisions = data.tiers.filter((t) => t.divisions.length > 0);
   const flatDivisions = tiersWithDivisions.flatMap((t) => t.divisions);
-  const neighborNamesByDivisionId = new Map<string, { above?: string; below?: string }>(
-    flatDivisions.map((d, i) => [
-      d.id,
-      {
-        above: i > 0 ? flatDivisions[i - 1]!.name : undefined,
-        below: i < flatDivisions.length - 1 ? flatDivisions[i + 1]!.name : undefined,
-      },
-    ]),
+  const ladder = buildLadder(
+    tiersWithDivisions.flatMap((t) =>
+      t.divisions.map((d) => ({
+        id: d.id,
+        name: d.name,
+        tierName: t.name,
+        tierPosition: t.position,
+        groupNumber: d.groupNumber,
+        promote: d.promote,
+        relegate: d.relegate,
+      })),
+    ),
   );
+  const rungByDivisionId = new Map(ladder.map((r) => [r.id, r]));
 
   return (
     <>
@@ -313,6 +323,7 @@ export default async function StandingsPage() {
                 </div>
               </details>
             </div>
+            {ladder.length > 1 && <LadderStrip ladder={ladder} />}
             {data.viewerDivision && (
               <YourDivisionCard
                 viewerDivision={data.viewerDivision}
@@ -444,7 +455,8 @@ export default async function StandingsPage() {
                           avatarUrl: data.avatarUrlByPlayerId.get(r.player.id),
                         }]),
                       );
-                      const neighbors = neighborNamesByDivisionId.get(div.id);
+                      const rung = rungByDivisionId.get(div.id);
+                      const neighbors = { above: rung?.above?.name, below: rung?.below?.name };
                       // v2 phone collapse: the viewer's own division, and
                       // (signed out) the first division of each tier, start
                       // expanded; every other division starts collapsed to
@@ -461,7 +473,7 @@ export default async function StandingsPage() {
                         expectedMatches,
                       });
                       return (
-                        <div key={div.id} className="card">
+                        <div key={div.id} id={`division-${div.id}`} className="card">
                         <CollapsibleDivision
                           divisionId={div.id}
                           defaultOpenOnPhone={isOpenByDefault}
@@ -543,6 +555,7 @@ export default async function StandingsPage() {
                             tierRarity={rarityIndex(tier.position)}
                             aboveDivisionName={neighbors?.above}
                             belowDivisionName={neighbors?.below}
+                            isTopOfLadder={rung?.above === null}
                             noMatchesYet={playedMatches === 0}
                           />
                           {div.shootouts.length > 0 && (
