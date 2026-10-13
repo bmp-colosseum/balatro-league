@@ -17,7 +17,7 @@ describe("buildRobotsRules", () => {
     expect(robots.rules.disallow).toEqual(disallow);
   });
 
-  it("does not disallow /profile -- noindex pages must stay crawlable so the per-page noindex tag is seen", () => {
+  it("does not disallow /profile -- profiles are indexable public content, and any future noindex-but-crawlable page needs the same treatment so its noindex tag is actually seen", () => {
     const disallow = ["/admin", "/me", "/auth", "/report", "/changes", "/api"];
     const robots = buildRobotsRules(SITE_URL, disallow);
     expect(robots.rules.disallow).not.toContain("/profile");

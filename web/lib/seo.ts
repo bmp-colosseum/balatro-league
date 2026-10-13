@@ -23,9 +23,13 @@ export interface PageMetaInput {
   // Absolute or site-relative image URL; defaults to the shared brand card
   // (public/og-image.png) when a page has nothing more specific to show.
   image?: string;
-  // Player profiles are noindex for now (owner hasn't decided whether to expose
-  // Discord display names/avatars to search) -- set true to emit `robots: {index:
-  // false}` while still following links from the page and keeping a canonical.
+  // Set true to emit `robots: {index: false}` while still following links from the
+  // page and keeping a canonical -- "don't rank this", not "don't bother with
+  // metadata". No current page uses this (admin/me/auth/report set their own plain
+  // `robots` field instead, since they don't need pageMetadata's OG/Twitter fields
+  // at all): player profiles were the one noIndex: true caller until the TO decided
+  // (2026-10-13) that indexing them was fine. Kept for the next page that needs it
+  // -- see docs/handbook/seo.md.
   noIndex?: boolean;
 }
 

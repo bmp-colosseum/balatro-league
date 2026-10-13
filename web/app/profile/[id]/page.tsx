@@ -28,17 +28,14 @@ export async function generateMetadata({
   // title.absolute bypasses the root layout's "%s | Balatro League" template --
   // a plain string here would otherwise double up to "Balatro League | Balatro League".
   if (!player) return { title: { absolute: "Balatro League" } };
-  // Profiles are noindex for now -- the owner hasn't decided whether exposing Discord
-  // display names/avatars to search is wanted (SEO audit open question, L5/
-  // docs/handbook/seo.md). Still gets a real title/description/canonical: noindex
-  // means "don't put this in search results", not "don't bother with metadata" --
-  // the page is still crawlable (not blocked in robots.txt) and still unfurls
-  // properly when a link is pasted into Discord.
+  // Indexable as of 2026-10-13 -- the TO decided exposing Discord display names/
+  // avatars to search is fine (was an open question in the SEO audit; see
+  // docs/handbook/seo.md). No noIndex here: a real title/description/canonical,
+  // same as every other public page.
   return pageMetadata({
     title: player.displayName,
     description: `${player.displayName}'s Balatro League match history, division, and stats.`,
     path: `/profile/${id}`,
-    noIndex: true,
   });
 }
 

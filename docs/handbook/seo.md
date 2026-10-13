@@ -18,14 +18,22 @@ title, description, canonical link, and Open Graph/Twitter card through the shar
 `pageMetadata()` helper in `web/lib/seo.ts`, so a link pasted into Discord unfurls
 properly instead of showing the generic site title.
 
+**Player profiles (`/profile/[id]`) are indexed as of 2026-10-13**, decided by the
+TO -- exposing Discord display names and avatars to search was an open question in
+the original audit; it's resolved now. `generateMetadata` there calls
+`pageMetadata()` with no `noIndex` flag, same as every other public page. Only
+profiles with at least one CONFIRMED (played) match are listed in `app/sitemap.ts`
+-- a profile with zero history isn't worth a crawl-budget entry with nothing on
+it, though it's still reachable and still indexable if linked to from elsewhere
+(standings, a division page, a shared link).
+
 ## Noindex (crawlable, but told not to rank)
 
-**`/profile/[id]`** -- the owner hasn't decided whether exposing Discord display
-names and avatars to Google is wanted (open question in the audit). `generateMetadata`
-there passes `noIndex: true` to `pageMetadata()`, which emits
-`<meta name="robots" content="noindex">` while still setting a title/description/
-canonical -- the page is still crawlable and still unfurls in Discord, it just
-won't show up in search results. **To make profiles indexable, flip that one flag.**
+Nothing currently uses this -- the `noIndex` flag on `pageMetadata()` (`web/lib/
+seo.ts`) stays available for the next page that needs "crawlable but not ranked"
+(sets `<meta name="robots" content="noindex">` while still keeping a title/
+description/canonical, so the page still unfurls properly in Discord). Player
+profiles were the one caller until the indexing decision above retired it.
 
 ## Blocked entirely (`web/app/robots.ts`)
 
@@ -33,7 +41,8 @@ won't show up in search results. **To make profiles indexable, flip that one fla
 `robots.txt`. These are either organiser tools or signed-in-only action pages with
 no public content.
 
-`/profile` is deliberately **not** in this list, even though it's noindex -- a
+`/profile` is **not** in this list -- it's ordinary public content now. The
+general principle still matters for the next noindex-but-crawlable page though: a
 `noindex` meta tag only works if the crawler is allowed to fetch the page and see
 it. Blocking it in `robots.txt` as well would hide that very instruction and risk
 the bare URL getting indexed anyway from an external link, with no title or

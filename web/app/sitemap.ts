@@ -28,7 +28,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // One query each for every season / division row, non-archived only -- division's
   // own `season` relation is already selected here so lastModified for both comes
   // out of these two queries with no extra round trips ("cheap", per the plan).
-  const [seasons, divisions] = await Promise.all([
+  // Profile paths: two groupBy aggregates over Match (indexed on playerAId/
+  // playerBId, filtered to CONFIRMED -- a played, counted result), each player's
+  // id paired with their latest confirmedAt across either side of the match. A
+  // player who's never played a confirmed match gets no sitemap entry (their
+  // profile still exists and is still indexable if linked to -- it's just not
+  // worth a crawl budget entry with nothing on it).
+  const [seasons, divisions, playedAsA, playedAsB] = await Promise.all([
     prisma.season.findMany({
       where: { archivedAt: null },
       select: { id: true, startedAt: true, endedAt: true, scheduledEndAt: true },
@@ -39,6 +45,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         id: true,
         season: { select: { startedAt: true, endedAt: true, scheduledEndAt: true } },
       },
+    }),
+    prisma.match.groupBy({
+      by: ["playerAId"],
+      where: { status: "CONFIRMED" },
+      _max: { confirmedAt: true },
+    }),
+    prisma.match.groupBy({
+      by: ["playerBId"],
+      where: { status: "CONFIRMED" },
+      _max: { confirmedAt: true },
     }),
   ]);
 
@@ -51,5 +67,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     lastModified: d.season.endedAt ?? d.season.scheduledEndAt ?? d.season.startedAt,
   }));
 
-  return buildSitemapEntries(SITE_URL, [...STATIC_PATHS, ...seasonPaths, ...divisionPaths]);
+  // Merge both sides -- a player's most recent confirmed match might be as
+  // either playerA or playerB, so take whichever side's max is later.
+  const lastPlayedByPlayerId = new Map<string, Date>();
+  for (const row of playedAsA) {
+    if (row._max.confirmedAt) lastPlayedByPlayerId.set(row.playerAId, row._max.confirmedAt);
+  }
+  for (const row of playedAsB) {
+    if (!row._max.confirmedAt) continue;
+    const existing = lastPlayedByPlayerId.get(row.playerBId);
+    if (!existing || row._max.confirmedAt > existing) lastPlayedByPlayerId.set(row.playerBId, row._max.confirmedAt);
+  }
+  const profilePaths: SitemapEntryInput[] = Array.from(lastPlayedByPlayerId.entries()).map(
+    ([playerId, lastModified]) => ({ path: `/profile/${playerId}`, lastModified }),
+  );
+
+  return buildSitemapEntries(SITE_URL, [...STATIC_PATHS, ...seasonPaths, ...divisionPaths, ...profilePaths]);
 }

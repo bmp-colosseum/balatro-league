@@ -31,4 +31,18 @@ describe("buildSitemapEntries", () => {
     const input = [{ path: "/stats" }, { path: "/traits" }];
     expect(buildSitemapEntries(SITE_URL, input)).toEqual(buildSitemapEntries(SITE_URL, input));
   });
+
+  it("handles a realistic mixed batch -- static paths alongside dated profile paths, same shape app/sitemap.ts builds", () => {
+    const lastPlayed = new Date("2026-10-01T00:00:00.000Z");
+    const entries = buildSitemapEntries(SITE_URL, [
+      { path: "/standings" },
+      { path: "/profile/p1", lastModified: lastPlayed },
+      { path: "/profile/p2", lastModified: lastPlayed },
+    ]);
+    expect(entries).toEqual([
+      { url: "https://balatroleague.com/standings" },
+      { url: "https://balatroleague.com/profile/p1", lastModified: lastPlayed },
+      { url: "https://balatroleague.com/profile/p2", lastModified: lastPlayed },
+    ]);
+  });
 });
