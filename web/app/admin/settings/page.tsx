@@ -93,7 +93,7 @@ export default async function AdminSettingsPage({
           <details key={t.id} className="card" open={t.isDefault}>
             <summary style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
               {t.isDefault && (
-                <span className="pill" style={{ background: "rgba(241,196,15,0.2)", color: "var(--accent)" }}>
+                <span className="pill" style={{ background: "rgba(241,196,15,0.2)", color: "var(--flash-accent-text)" }}>
                   ★ default
                 </span>
               )}

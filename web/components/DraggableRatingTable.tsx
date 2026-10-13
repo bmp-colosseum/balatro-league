@@ -49,10 +49,12 @@ export interface RatingRow {
   bmpFetchError: string | null;
 }
 
+// fg uses the --flash-*-text tokens -- see --flash-danger-text's comment
+// in globals.css.
 const STATUS_PILL = {
-  NEW: { bg: "rgba(241,196,15,0.2)", fg: "var(--accent)", label: "New" },
-  RETURNING: { bg: "rgba(52,152,219,0.2)", fg: "var(--info)", label: "Returning" },
-  GAP: { bg: "rgba(241,196,15,0.2)", fg: "var(--accent)", label: "Gap" },
+  NEW: { bg: "rgba(241,196,15,0.2)", fg: "var(--flash-accent-text)", label: "New" },
+  RETURNING: { bg: "rgba(52,152,219,0.2)", fg: "var(--flash-info-text)", label: "Returning" },
+  GAP: { bg: "rgba(241,196,15,0.2)", fg: "var(--flash-accent-text)", label: "Gap" },
 };
 
 export function DraggableRatingTable({

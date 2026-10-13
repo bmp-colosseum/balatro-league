@@ -75,6 +75,32 @@
      below needs a distinct lightened value. */
   --flash-accent-text: var(--accent);
   --flash-muted-text: var(--muted);
+  /* Same self-tint recipe again, for admin's "BUILT" signup-round badge
+     (app/admin/signups/page.tsx) -- the only self-tinted badge in the app
+     keyed off --accent-2-text rather than danger/success/accent/muted.
+     --accent-2/--accent-2-text aren't re-themed per v2 look, so one value
+     covers both; measured 2.61-4.59:1 across all six page/panel surfaces,
+     #aeb4f9 clears 4.5:1 on all of them (contrast audit, 2026-10). */
+  --flash-accent-2-text: #aeb4f9;
+  /* Same self-tint recipe for --info (admin sweep, 2026-10): rgba(118,199,
+     255, 0.06-0.2) + color:var(--info) badges (signup/dry-run pills,
+     promotion-hunt tags, the match-importance key) measured fine in v1
+     (5.46-6.80:1) but 3.26-3.76:1 in v2, since v2 aliases --info to the
+     now-lightened --common. v1 simply aliases --info here; only the v2
+     override below needs a distinct value. */
+  --flash-info-text: var(--info);
+  /* Dark-ink companions for solid --success/--danger fills with white text
+     on top (admin sweep, 2026-10): the DM-unread-count badges (components/
+     AdminMobileMenu.tsx, AdminNav.tsx; danger fill) and the "Accept result"
+     confirm button (app/admin/matches/page.tsx; success fill) measured
+     2.10-3.82:1 with white text -- pre-existing, not introduced by the
+     --danger lightening above, which only made the existing miss slightly
+     worse. --success-ink reuses the existing #06261a already used by
+     .pill[data-status="active"] below; --danger-ink reuses --admin-ink's
+     value (works well against this warm/bright a hue too), named for its
+     own fill per the --gold-ink/--admin-ink convention. */
+  --success-ink: #06261a;
+  --danger-ink: #2a1d05;
   --radius: 0.5rem;
 }
 
@@ -670,6 +696,7 @@ html[data-ui="v2"] {
   --flash-success-text: #86dcb9;
   --flash-accent-text: #f5cc76;
   --flash-muted-text: #c1cac7;
+  --flash-info-text: #a3d6ff;
 
   /* Semantic aliases re-pointed onto the tokens above. */
   --bg: var(--felt);

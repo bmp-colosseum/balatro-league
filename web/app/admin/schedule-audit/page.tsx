@@ -69,7 +69,9 @@ export default async function ScheduleAuditPage() {
                             style={{
                               fontSize: 11,
                               background: m.paused ? "rgba(241,196,15,0.18)" : "rgba(231,76,60,0.18)",
-                              color: m.paused ? "var(--accent)" : "var(--danger)",
+                              // color uses the --flash-*-text tokens -- see
+                              // --flash-danger-text's comment in globals.css.
+                              color: m.paused ? "var(--flash-accent-text)" : "var(--flash-danger-text)",
                             }}
                           >
                             {m.paused ? "PAUSED" : m.state}
@@ -108,7 +110,7 @@ export default async function ScheduleAuditPage() {
                           {m.playerA} <span className="muted">vs</span> {m.playerB}
                         </td>
                         <td style={{ textAlign: "center" }}>
-                          <span className="pill" style={{ fontSize: 11, background: "rgba(231,76,60,0.18)", color: "var(--danger)" }}>
+                          <span className="pill" style={{ fontSize: 11, background: "rgba(231,76,60,0.18)", color: "var(--flash-danger-text)" }}>
                             {m.gamesWonA}-{m.gamesWonB}
                           </span>
                         </td>
@@ -176,7 +178,9 @@ export default async function ScheduleAuditPage() {
                           style={{
                             fontSize: 11,
                             background: m.live ? "rgba(231,76,60,0.18)" : "rgba(149,165,166,0.18)",
-                            color: m.live ? "var(--danger)" : "var(--muted)",
+                            // color uses the --flash-*-text tokens -- see
+                            // --flash-danger-text's comment in globals.css.
+                            color: m.live ? "var(--flash-danger-text)" : "var(--flash-muted-text)",
                           }}
                         >
                           {m.live ? "LIVE" : "closed"} · {m.state}

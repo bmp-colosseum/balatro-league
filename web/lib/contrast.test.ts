@@ -351,6 +351,18 @@ describe("globals.css v1 token pairs clear WCAG AA", () => {
     expect(ratio).not.toBeNull();
     expect(ratio!).toBeGreaterThanOrEqual(4.5);
   });
+
+  // Dark-ink companions for solid --success/--danger fills with white text
+  // on top (admin sweep, 2026-10): the DM-unread-count badges and the
+  // "Accept result" confirm button.
+  it.each([
+    ["success-ink", "success"],
+    ["danger-ink", "danger"],
+  ])("%s on %s clears 4.5:1", (inkName, fillName) => {
+    const ratio = contrastRatioFromCss(v1[inkName], v1[fillName]);
+    expect(ratio).not.toBeNull();
+    expect(ratio!).toBeGreaterThanOrEqual(4.5);
+  });
 });
 
 describe("globals.css v2 'Card Table' token pairs clear WCAG AA", () => {
@@ -374,6 +386,18 @@ describe("globals.css v2 'Card Table' token pairs clear WCAG AA", () => {
 
   it("gold-ink on gold (tier chip ink) clears 4.5:1", () => {
     expect(contrastRatioFromCss(v2["gold-ink"], v2["gold"])!).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // success-ink/danger-ink aren't re-themed per look, but --success/
+  // --danger resolve to --uncommon/--rare here, so re-check the pairing
+  // against what it actually composites with under v2.
+  it.each([
+    ["success-ink", "success"],
+    ["danger-ink", "danger"],
+  ])("%s on %s clears 4.5:1", (inkName, fillName) => {
+    const ratio = contrastRatioFromCss(v2[inkName], v2[fillName]);
+    expect(ratio).not.toBeNull();
+    expect(ratio!).toBeGreaterThanOrEqual(4.5);
   });
 
   it.each(["common", "uncommon", "rare", "legendary"])(
@@ -410,12 +434,22 @@ describe("the --flash-*-text tokens clear WCAG AA against their own self-tint", 
 
   // [flash token, the fixed rgba literal its real-world tint uses -- note
   // the muted tint is rgb(149,165,166) ("#95a5a6"), a plain grey distinct
-  // from the --muted TOKEN's own color (#abb3c4 / #b8c2bf)]
+  // from the --muted TOKEN's own color (#abb3c4 / #b8c2bf); the info tint
+  // is rgb(118,199,255) ("#76c7ff"), i.e. --info's own v1 color -- some
+  // call sites instead tint with rgb(52,152,219) ("#3498db", the admin
+  // sweep's "Returning" pill), a different blue, which --flash-info-text
+  // also has to clear (checked separately below since it's not --info's
+  // own hue). --accent-2/--accent-2-text aren't re-themed per v2 look, so
+  // --flash-accent-2-text only needs one set of ratios, not a v1/v2 pair --
+  // it's included in both it.each tables below for simplicity (the v2
+  // globals.css override just falls through to the same :root value).]
   const TINTS: Array<[string, string]> = [
     ["flash-danger-text", "#e74c3c"],
     ["flash-success-text", "#2ecc71"],
     ["flash-accent-text", "#f1c40f"],
     ["flash-muted-text", "#95a5a6"],
+    ["flash-info-text", "#76c7ff"],
+    ["flash-accent-2-text", "#5865f2"],
   ];
 
   it.each(TINTS)("v1 %s clears 4.5:1 on every page surface at alpha 0.2", (tokenName, tintHex) => {
@@ -433,6 +467,22 @@ describe("the --flash-*-text tokens clear WCAG AA against their own self-tint", 
       const ratio = contrastRatioFromCss(v2[tokenName], bg);
       expect(ratio).not.toBeNull();
       expect(ratio!).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  // components/DraggableRatingTable.tsx's "Returning" status pill tints
+  // with rgb(52,152,219) ("#3498db") -- a different blue than --info's own
+  // hue -- while still using --flash-info-text for the label. Checked
+  // against that specific mismatched tint rather than assuming it's
+  // covered by the same-hue cases above.
+  it("flash-info-text clears 4.5:1 on the #3498db-tinted 'Returning' pill", () => {
+    for (const [tokens, surfaces] of [[v1, v1Surfaces], [v2, v2Surfaces]] as const) {
+      for (const surface of surfaces) {
+        const bg = selfTintedBg("#3498db", surface, 0.2);
+        const ratio = contrastRatioFromCss(tokens["flash-info-text"], bg);
+        expect(ratio).not.toBeNull();
+        expect(ratio!).toBeGreaterThanOrEqual(4.5);
+      }
     }
   });
 });

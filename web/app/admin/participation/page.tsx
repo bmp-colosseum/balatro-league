@@ -13,10 +13,12 @@ export const dynamic = "force-dynamic";
 
 const RETURN_TO = "/admin/participation";
 
+// fg uses the --flash-*-text tokens -- see --flash-danger-text's comment
+// in globals.css.
 const STATUS_PILL: Record<MemberStatus, { label: string; bg: string; fg: string }> = {
-  "no-show": { label: "NO-SHOW", bg: "rgba(231,76,60,0.18)", fg: "var(--danger)" },
-  incomplete: { label: "incomplete", bg: "rgba(241,196,15,0.16)", fg: "var(--accent)" },
-  done: { label: "done", bg: "rgba(46,204,113,0.16)", fg: "var(--success)" },
+  "no-show": { label: "NO-SHOW", bg: "rgba(231,76,60,0.18)", fg: "var(--flash-danger-text)" },
+  incomplete: { label: "incomplete", bg: "rgba(241,196,15,0.16)", fg: "var(--flash-accent-text)" },
+  done: { label: "done", bg: "rgba(46,204,113,0.16)", fg: "var(--flash-success-text)" },
 };
 
 export default async function ParticipationPage({
@@ -78,7 +80,7 @@ export default async function ParticipationPage({
                         <td style={{ fontWeight: 500 }}>
                           <Link href={`/profile/${m.playerId}`} style={{ color: "var(--text)" }}>{m.displayName}</Link>
                           {m.strikeCount > 0 && (
-                            <span className="pill" style={{ fontSize: 10, marginLeft: 6, background: "rgba(241,196,15,0.18)", color: "var(--accent)" }}>
+                            <span className="pill" style={{ fontSize: 10, marginLeft: 6, background: "rgba(241,196,15,0.18)", color: "var(--flash-accent-text)" }}>
                               {m.strikeCount}⚠
                             </span>
                           )}
@@ -92,7 +94,7 @@ export default async function ParticipationPage({
                         </td>
                         <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                           {m.banned ? (
-                            <span className="pill" style={{ fontSize: 11, background: "rgba(231,76,60,0.18)", color: "var(--danger)" }}>banned</span>
+                            <span className="pill" style={{ fontSize: 11, background: "rgba(231,76,60,0.18)", color: "var(--flash-danger-text)" }}>banned</span>
                           ) : (
                             <>
                               <form action={addStrikeAction} style={{ display: "inline", marginRight: 6 }}>

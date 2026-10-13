@@ -10,20 +10,22 @@ export const dynamic = "force-dynamic";
 
 // One "stake" label per player from their promo/releg status (promotion race
 // takes visual priority over the drop, then mid-table).
+// fg uses the --flash-*-text tokens -- see --flash-danger-text's comment
+// in globals.css.
 function stakeBadge(p: PPPlayerResult): { label: string; bg: string; fg: string } | null {
-  if (p.promo === "clinched") return { label: "🔒 Promoted", bg: "rgba(46,204,113,0.2)", fg: "var(--success)" };
-  if (p.releg === "clinched") return { label: "🔻 Relegated", bg: "rgba(231,76,60,0.2)", fg: "var(--danger)" };
-  if (p.promo === "contested") return { label: "↑ Promotion hunt", bg: "rgba(118,199,255,0.2)", fg: "var(--info)" };
-  if (p.releg === "contested") return { label: "⚠ Drop zone", bg: "rgba(241,196,15,0.2)", fg: "var(--accent)" };
-  if (p.releg === "safe" || p.promo === "eliminated") return { label: "mid-table", bg: "rgba(149,165,166,0.16)", fg: "var(--muted)" };
+  if (p.promo === "clinched") return { label: "🔒 Promoted", bg: "rgba(46,204,113,0.2)", fg: "var(--flash-success-text)" };
+  if (p.releg === "clinched") return { label: "🔻 Relegated", bg: "rgba(231,76,60,0.2)", fg: "var(--flash-danger-text)" };
+  if (p.promo === "contested") return { label: "↑ Promotion hunt", bg: "rgba(118,199,255,0.2)", fg: "var(--flash-info-text)" };
+  if (p.releg === "contested") return { label: "⚠ Drop zone", bg: "rgba(241,196,15,0.2)", fg: "var(--flash-accent-text)" };
+  if (p.releg === "safe" || p.promo === "eliminated") return { label: "mid-table", bg: "rgba(149,165,166,0.16)", fg: "var(--flash-muted-text)" };
   return null;
 }
 
 const MATCH_STYLE: Record<MatchImportance, { tag: string; bg: string; fg: string }> = {
-  promotion: { tag: "PROMOTION", bg: "rgba(118,199,255,0.18)", fg: "var(--info)" },
-  relegation: { tag: "RELEGATION", bg: "rgba(231,76,60,0.18)", fg: "var(--danger)" },
-  influences: { tag: "IN PLAY", bg: "rgba(241,196,15,0.16)", fg: "var(--accent)" },
-  "dead-rubber": { tag: "dead rubber", bg: "rgba(149,165,166,0.14)", fg: "var(--muted)" },
+  promotion: { tag: "PROMOTION", bg: "rgba(118,199,255,0.18)", fg: "var(--flash-info-text)" },
+  relegation: { tag: "RELEGATION", bg: "rgba(231,76,60,0.18)", fg: "var(--flash-danger-text)" },
+  influences: { tag: "IN PLAY", bg: "rgba(241,196,15,0.16)", fg: "var(--flash-accent-text)" },
+  "dead-rubber": { tag: "dead rubber", bg: "rgba(149,165,166,0.14)", fg: "var(--flash-muted-text)" },
 };
 
 function MatchRow({ m }: { m: PPMatchResult }) {
@@ -79,7 +81,7 @@ export default async function WhatsAtStakePage() {
                     {d.locked ? " · locked schedule" : " · round-robin"}
                   </span>
                   {!pic.exact && (
-                    <span className="pill" style={{ fontSize: 10, background: "rgba(241,196,15,0.2)", color: "var(--accent)" }}>
+                    <span className="pill" style={{ fontSize: 10, background: "rgba(241,196,15,0.2)", color: "var(--flash-accent-text)" }}>
                       estimate — {pic.variableMatches} open matches too many to solve exactly
                     </span>
                   )}

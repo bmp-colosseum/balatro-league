@@ -62,7 +62,7 @@ export default async function BuildSeasonPage({
       <main>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <h2 style={{ margin: 0 }}>Set up the season — "{round.name}"</h2>
-          <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--success)" }}>
+          <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--flash-success-text)" }}>
             {playerCount} signups
           </span>
           <Link href="/admin/seasons" className="muted" style={{ marginLeft: "auto" }}>

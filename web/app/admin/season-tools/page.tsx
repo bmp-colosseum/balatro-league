@@ -166,7 +166,7 @@ export default async function SeasonToolsPage() {
                 <li key={n.playerId}>
                   {n.displayName} <DiscordId value={n.discordId} username={n.username} />
                   {n.alreadySentGuide && (
-                    <span className="pill" style={{ fontSize: 10, marginLeft: 6, background: "rgba(46,204,113,0.18)", color: "var(--success)" }}>
+                    <span className="pill" style={{ fontSize: 10, marginLeft: 6, background: "rgba(46,204,113,0.18)", color: "var(--flash-success-text)" }}>
                       guide sent
                     </span>
                   )}

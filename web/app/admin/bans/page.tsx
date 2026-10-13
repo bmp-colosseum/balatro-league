@@ -95,7 +95,9 @@ export default async function BansPage({
                             : b.banLiftsAtSeasonNumber == null
                             ? "rgba(231,76,60,0.18)"
                             : "rgba(241,196,15,0.18)",
-                          color: !b.active ? "var(--muted)" : b.banLiftsAtSeasonNumber == null ? "var(--danger)" : "var(--accent)",
+                          // color uses the --flash-*-text tokens -- see
+                          // --flash-danger-text's comment in globals.css.
+                          color: !b.active ? "var(--flash-muted-text)" : b.banLiftsAtSeasonNumber == null ? "var(--flash-danger-text)" : "var(--flash-accent-text)",
                         }}
                       >
                         {b.durationLabel}
@@ -145,11 +147,11 @@ export default async function BansPage({
                 <div key={p.playerId} style={{ borderTop: "1px solid var(--border)", paddingTop: 8 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
                     {p.displayName}
-                    <span className="pill" style={{ fontSize: 10, marginLeft: 6, background: "rgba(241,196,15,0.18)", color: "var(--accent)" }}>
+                    <span className="pill" style={{ fontSize: 10, marginLeft: 6, background: "rgba(241,196,15,0.18)", color: "var(--flash-accent-text)" }}>
                       {p.strikes.length} strike{p.strikes.length === 1 ? "" : "s"}
                     </span>
                     {p.banned && (
-                      <span className="pill" style={{ fontSize: 10, marginLeft: 4, background: "rgba(231,76,60,0.18)", color: "var(--danger)" }}>banned</span>
+                      <span className="pill" style={{ fontSize: 10, marginLeft: 4, background: "rgba(231,76,60,0.18)", color: "var(--flash-danger-text)" }}>banned</span>
                     )}
                   </div>
                   {p.strikes.map((s) => (

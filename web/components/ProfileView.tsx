@@ -746,7 +746,7 @@ export async function ProfileView({
                       </td>
                       <td data-label="MMR"><strong>{snap.rankedMmr}</strong></td>
                       <td data-label="Tier">
-                        <span className="pill" style={{ background: "rgba(118,199,255,0.15)", color: "var(--info)", fontSize: 11 }}>
+                        <span className="pill" style={{ background: "rgba(118,199,255,0.15)", color: "var(--flash-info-text)", fontSize: 11 }}>
                           {snap.rankedTier}
                         </span>
                       </td>
@@ -770,7 +770,7 @@ export async function ProfileView({
                 </div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 22, fontWeight: 600 }}>{fallbackSnapshot.rankedMmr}</span>
-                  <span className="pill" style={{ background: "rgba(118,199,255,0.15)", color: "var(--info)", fontSize: 11 }}>
+                  <span className="pill" style={{ background: "rgba(118,199,255,0.15)", color: "var(--flash-info-text)", fontSize: 11 }}>
                     {fallbackSnapshot.rankedTier}
                   </span>
                   {fallbackSnapshot.totalGames != null && (

@@ -509,7 +509,10 @@ function DisputeProposalBlock({
           <form action={acceptDisputeProposal}>
             <input type="hidden" name="pairingId" value={row.matchId} />
             <input type="hidden" name="returnTo" value={returnTo} />
-            <ConfirmButton message="Accept the disputed result and update standings?" style={{ background: "var(--success)", color: "#fff" }}>
+            {/* White text on --success measured 2.10-2.15:1 (contrast
+                audit, 2026-10) -- --success-ink is the dark-ink companion
+                (same recipe as --gold-ink/--admin-ink) that clears 4.5:1. */}
+            <ConfirmButton message="Accept the disputed result and update standings?" style={{ background: "var(--success)", color: "var(--success-ink)" }}>
               Accept proposed
             </ConfirmButton>
           </form>

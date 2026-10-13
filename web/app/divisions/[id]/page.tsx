@@ -1174,13 +1174,13 @@ function TieHelper({ groups }: { groups: TieGroup[] }) {
             <div key={gi} style={{ borderTop: gi === 0 ? undefined : "1px solid var(--border)", paddingTop: gi === 0 ? 0 : 10 }}>
               <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
                 {g.members.length}-way tie on <strong>{g.points}</strong> pts
-                <span className="pill" style={{ fontSize: 10, marginLeft: 8, background: "rgba(118,199,255,0.18)", color: "var(--info)" }}>
+                <span className="pill" style={{ fontSize: 10, marginLeft: 8, background: "rgba(118,199,255,0.18)", color: "var(--flash-info-text)" }}>
                   {g.boundary === "both" ? "promotion & relegation" : g.boundary === "promotion" ? "promotion" : "relegation"}
                 </span>
                 {g.allDecided ? (
-                  <span className="pill" style={{ fontSize: 10, marginLeft: 6, background: "rgba(46,204,113,0.16)", color: "var(--success)" }}>head-to-head separates them</span>
+                  <span className="pill" style={{ fontSize: 10, marginLeft: 6, background: "rgba(46,204,113,0.16)", color: "var(--flash-success-text)" }}>head-to-head separates them</span>
                 ) : (
-                  <span className="pill" style={{ fontSize: 10, marginLeft: 6, background: "rgba(241,196,15,0.16)", color: "var(--accent)" }}>needs a call / shootout</span>
+                  <span className="pill" style={{ fontSize: 10, marginLeft: 6, background: "rgba(241,196,15,0.16)", color: "var(--flash-accent-text)" }}>needs a call / shootout</span>
                 )}
               </div>
               <div className="table-scroll">

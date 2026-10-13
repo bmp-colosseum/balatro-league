@@ -14,7 +14,9 @@ export function WipBanner({ note }: { note?: string }) {
         borderRadius: 8,
         border: "1px solid #f1c40f",
         background: "rgba(241,196,15,0.12)",
-        color: "var(--accent)",
+        // --flash-accent-text -- see --flash-danger-text's comment in
+        // globals.css (this banner's own background is a self-tint).
+        color: "var(--flash-accent-text)",
         fontSize: 13,
         fontWeight: 600,
       }}

@@ -74,7 +74,7 @@ export default async function MmrAdminPage({
       <main>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <h2 style={{ margin: 0 }}>Hidden MMR</h2>
-          <span className="pill" style={{ background: "rgba(118,199,255,0.2)", color: "var(--info)" }}>
+          <span className="pill" style={{ background: "rgba(118,199,255,0.2)", color: "var(--flash-info-text)" }}>
             {set} set · {unset} unset
           </span>
         </div>

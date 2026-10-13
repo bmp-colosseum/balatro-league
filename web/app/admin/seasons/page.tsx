@@ -134,11 +134,13 @@ export default async function AdminSeasonsPage({
               {timelineSeasons.map((s) => {
                 const label = formatSeasonLabel(s);
                 const isRatingSource = s.id === mostRecentlyEndedId;
+                // fg uses the --flash-*-text tokens -- see
+                // --flash-danger-text's comment in globals.css.
                 const status = s.isActive
-                  ? { label: "ACTIVE", bg: "rgba(46,204,113,0.2)", fg: "var(--success)" }
+                  ? { label: "ACTIVE", bg: "rgba(46,204,113,0.2)", fg: "var(--flash-success-text)" }
                   : s.endedAt
-                  ? { label: `ended ${s.endedAt.toISOString().slice(0, 10)}`, bg: "rgba(149,165,166,0.2)", fg: "var(--muted)" }
-                  : { label: "draft", bg: "rgba(241,196,15,0.2)", fg: "var(--accent)" };
+                  ? { label: `ended ${s.endedAt.toISOString().slice(0, 10)}`, bg: "rgba(149,165,166,0.2)", fg: "var(--flash-muted-text)" }
+                  : { label: "draft", bg: "rgba(241,196,15,0.2)", fg: "var(--flash-accent-text)" };
                 return (
                   <li
                     key={s.id}
@@ -159,7 +161,7 @@ export default async function AdminSeasonsPage({
                     {isRatingSource && (
                       <span
                         className="pill"
-                        style={{ background: "rgba(118,199,255,0.2)", color: "var(--info)", fontSize: 10 }}
+                        style={{ background: "rgba(118,199,255,0.2)", color: "var(--flash-info-text)", fontSize: 10 }}
                         title="Player ranks were last set when this season ended."
                       >
                         ratings sourced from here
@@ -209,7 +211,7 @@ export default async function AdminSeasonsPage({
                         r.status === "CLOSED"
                           ? "rgba(241,196,15,0.2)"
                           : "rgba(46,204,113,0.2)",
-                      color: r.status === "CLOSED" ? "var(--accent)" : "var(--success)",
+                      color: r.status === "CLOSED" ? "var(--flash-accent-text)" : "var(--flash-success-text)",
                       fontSize: 11,
                     }}
                   >
@@ -249,9 +251,9 @@ export default async function AdminSeasonsPage({
                     {formatSeasonLabel(s)} <span className="muted" style={{ fontSize: 11, fontWeight: 400 }}>→ manage</span>
                   </Link>
                   {s.isActive ? (
-                    <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--success)" }}>ACTIVE</span>
+                    <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--flash-success-text)" }}>ACTIVE</span>
                   ) : (
-                    <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "var(--muted)" }}>Inactive</span>
+                    <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "var(--flash-muted-text)" }}>Inactive</span>
                   )}
                   {s.divisions.length > 0 && (
                     <Link href={`/admin/seasons/${s.id}/winners`} style={{ fontSize: 12, marginLeft: "auto" }}>

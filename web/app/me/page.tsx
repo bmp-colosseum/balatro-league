@@ -68,7 +68,7 @@ export default async function MePage({
               </div>
             ) : (
               <div style={{ marginTop: 4 }}>
-                <span className="pill" style={{ background: "rgba(241,196,15,0.15)", color: "var(--accent)" }}>Not linked</span>{" "}
+                <span className="pill" style={{ background: "rgba(241,196,15,0.15)", color: "var(--flash-accent-text)" }}>Not linked</span>{" "}
                 Sign up via the Discord bot to join the league.
               </div>
             )}

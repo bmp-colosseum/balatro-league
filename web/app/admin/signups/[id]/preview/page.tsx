@@ -79,14 +79,14 @@ export default async function PlacementPreviewPage({
   let pill: ReactNode;
 
   if (editorSeasonId) {
-    pill = <span className="pill" style={{ background: "rgba(46,204,113,0.18)", color: "var(--success)" }}>editing draft</span>;
+    pill = <span className="pill" style={{ background: "rgba(46,204,113,0.18)", color: "var(--flash-success-text)" }}>editing draft</span>;
     body = <DraftArranger seasonId={editorSeasonId} roundId={round.id} />;
   } else if (mode === "current") {
     // Read-only continuity projection (no draft yet / empty). Doesn't touch loadBuildSeasonPage.
     const continuity = await loadContinuityPlacement(round.id);
     const ok = continuity !== "NO_ROUND" && continuity !== "NO_SEASON" && continuity != null;
     const count = ok ? continuity.returnerCount + continuity.rookieCount : 0;
-    pill = <span className="pill" style={{ background: "rgba(118,199,255,0.2)", color: "var(--info)" }}>{count} signups · dry run</span>;
+    pill = <span className="pill" style={{ background: "rgba(118,199,255,0.2)", color: "var(--flash-info-text)" }}>{count} signups · dry run</span>;
     body =
       continuity === "NO_SEASON" ? (
         // No active season to carry placement over from — this is a first
@@ -131,7 +131,7 @@ export default async function PlacementPreviewPage({
     const result = await loadBuildSeasonPage(id);
     if (result === "NOT_FOUND") notFound();
     if (result === "BUILT_REDIRECT") {
-      pill = <span className="pill" style={{ background: "rgba(118,199,255,0.2)", color: "var(--info)" }}>draft exists</span>;
+      pill = <span className="pill" style={{ background: "rgba(118,199,255,0.2)", color: "var(--flash-info-text)" }}>draft exists</span>;
       body = (
         <div className="card">
           This round already has a draft — switch to{" "}
@@ -150,7 +150,7 @@ export default async function PlacementPreviewPage({
         const effectiveMmr = p?.hiddenMmr ?? (peak != null ? Math.round(peak * 1.5) : DEFAULT_SEED);
         return { discordId: s.discordId, displayName: s.displayName, rating: p?.rating ?? null, mmr: snap?.rankedMmr ?? null, hiddenMmr: effectiveMmr };
       });
-      pill = <span className="pill" style={{ background: "rgba(118,199,255,0.2)", color: "var(--info)" }}>{players.length} signups · dry run</span>;
+      pill = <span className="pill" style={{ background: "rgba(118,199,255,0.2)", color: "var(--flash-info-text)" }}>{players.length} signups · dry run</span>;
       body =
         players.length === 0 ? (
           <div className="card">No signups yet — once people join, their projected placement shows here.</div>

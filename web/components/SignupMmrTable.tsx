@@ -119,7 +119,7 @@ export function SignupMmrTable({
                     <strong>{r.globalName ?? `@${r.username}`}</strong>
                     {r.globalName && <span className="muted"> @{r.username}</span>}
                     {r.banned && (
-                      <span className="pill" style={{ fontSize: 10, marginLeft: 6, background: "rgba(231,76,60,0.2)", color: "var(--danger)" }}>banned</span>
+                      <span className="pill" style={{ fontSize: 10, marginLeft: 6, background: "rgba(231,76,60,0.2)", color: "var(--flash-danger-text)" }}>banned</span>
                     )}
                     <div className="muted" style={{ fontSize: 11 }}>
                       <span style={{ fontFamily: "ui-monospace, monospace" }}>{r.discordId}</span>

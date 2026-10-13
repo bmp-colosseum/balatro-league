@@ -51,7 +51,10 @@ function GroupRows({ group, unreadDms }: { group: AdminMobileNavGroup; unreadDms
             {link.label}
             {link.href === "/admin/messages" && unreadDms > 0 && (
               <span
-                className="ml-1.5 inline-flex items-center justify-center rounded-full px-1.5 text-[10px] font-semibold leading-4 text-white"
+                // text-white on --danger measured 2.10-3.82:1 (contrast
+                // audit, 2026-10) -- --danger-ink is the dark-ink companion
+                // (same recipe as --gold-ink/--admin-ink) that clears 4.5:1.
+                className="ml-1.5 inline-flex items-center justify-center rounded-full px-1.5 text-[10px] font-semibold leading-4 text-[var(--danger-ink)]"
                 style={{ background: "var(--danger)" }}
               >
                 {unreadDms}

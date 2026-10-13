@@ -8,11 +8,15 @@ import { deleteSignupRound } from "./actions";
 
 export const dynamic = "force-dynamic";
 
+// fg uses the --flash-*-text tokens -- see --flash-danger-text's comment
+// in globals.css (BUILT uses --flash-accent-2-text, the same self-tint
+// treatment for --accent-2-text, the one color pair in the app that isn't
+// danger/success/accent/muted).
 const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
-  OPEN: { bg: "rgba(46,204,113,0.2)", fg: "var(--success)" },
-  CLOSED: { bg: "rgba(241,196,15,0.2)", fg: "var(--accent)" },
-  BUILT: { bg: "rgba(88,101,242,0.18)", fg: "var(--accent-2-text)" },
-  ENDED: { bg: "rgba(149,165,166,0.18)", fg: "var(--muted)" },
+  OPEN: { bg: "rgba(46,204,113,0.2)", fg: "var(--flash-success-text)" },
+  CLOSED: { bg: "rgba(241,196,15,0.2)", fg: "var(--flash-accent-text)" },
+  BUILT: { bg: "rgba(88,101,242,0.18)", fg: "var(--flash-accent-2-text)" },
+  ENDED: { bg: "rgba(149,165,166,0.18)", fg: "var(--flash-muted-text)" },
 };
 
 export default async function SignupsIndexPage() {

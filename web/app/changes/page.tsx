@@ -674,7 +674,11 @@ function QueueExample({ cols }: { cols: { type: string; item: string; note?: str
         >
           <span
             className="pill"
-            style={{ fontSize: 10, padding: "1px 7px", background: "rgba(155,89,182,0.18)", color: "#9b59b6" }}
+            // #9b59b6 on its own tint measured as low as 1.99:1 -- same
+            // self-tinted-purple miss as the "Order" tag above, same fix
+            // (#d9c0e3 clears 4.5:1 on every surface; contrast audit,
+            // 2026-10).
+            style={{ fontSize: 10, padding: "1px 7px", background: "rgba(155,89,182,0.18)", color: "#d9c0e3" }}
           >
             {c.type}
           </span>
