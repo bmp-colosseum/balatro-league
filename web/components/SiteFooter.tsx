@@ -23,8 +23,11 @@ export function SiteFooter({ discordInviteUrl }: { discordInviteUrl: string | nu
           )}
           <Link href="/how-it-works">How it works</Link>
           {/* The league's sibling site -- a real cross-site navigation (two
-              separate Next.js apps on two subdomains), so a plain <a>. */}
-          <a href={TOUR_PUBLIC_URL}>Team Tour</a>
+              separate Next.js apps on two subdomains), so a plain <a>. Full
+              name, not just "Team Tour", so the anchor text itself tells a
+              crawler (and anyone pasting the link) what's on the other end
+              (SEO audit L8, .claude/knowledge/seo/01-audit-and-plan.md). */}
+          <a href={TOUR_PUBLIC_URL}>Pizza Power Team Tour</a>
         </nav>
       </div>
     </footer>

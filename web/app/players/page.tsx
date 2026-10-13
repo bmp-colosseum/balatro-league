@@ -5,12 +5,20 @@ import { loadPlayersList } from "@/lib/loaders/players";
 import { rarityIndex, tierColors } from "@/lib/tier-colors";
 import { SiteNav } from "@/components/SiteNav";
 import { DiscordId } from "@/components/DiscordId";
+import { pageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Players - Balatro League",
-};
+// Gated: redirects signed-out visitors (incl. crawlers) to /auth/signin before this
+// metadata ever reaches them, so it's cosmetic (the signed-in browser tab) rather
+// than SEO-relevant -- left off app/sitemap.ts for the same reason (see that file's
+// comment) and NOT given noindex since there's no content here for a crawler to see
+// in the first place.
+export const metadata = pageMetadata({
+  title: "Players",
+  description: "The Balatro League player roster and current divisions.",
+  path: "/players",
+});
 
 export default async function PlayersPage() {
   // Player roster is gated — must be logged in to see it. Standings + season

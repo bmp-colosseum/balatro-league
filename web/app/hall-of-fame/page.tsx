@@ -6,12 +6,15 @@ import { loadHallOfFame, type HofMatch, type HofSeason, type HofDivisionChampion
 import { rarityIndex } from "@/lib/tier-colors";
 import { RarityText } from "@/components/RarityText";
 import { CardAvatar } from "@/components/DivisionStandingsTable";
+import { pageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Hall of Fame - Balatro League",
-};
+export const metadata = pageMetadata({
+  title: "Hall of Fame",
+  description: "Every Balatro League champion, season by season.",
+  path: "/hall-of-fame",
+});
 
 function endedLabel(d: Date): string {
   return d.toLocaleDateString("en-US", { year: "numeric", month: "long", timeZone: "UTC" });
@@ -42,7 +45,13 @@ export default async function HallOfFamePage({
             html[data-ui="v2"] (app/globals.css). See the v2 trophy shelf
             below for the "Card Table" redesign of this same data. */}
         <div className="hof-v1">
-          <h1>🏆 Hall of Fame</h1>
+          {/* v2 ("Card Table") has been the default look for every visitor since
+              2026-10-09 (see app/globals.css's html[data-ui="v2"] block comment),
+              so .hof-v1 is the one CSS hides by default -- demoted from h1 to h2
+              so the page has exactly one h1 in the common case instead of two in
+              the raw markup (SEO audit L7, .claude/knowledge/seo/01-audit-and-plan.md).
+              The visible-by-default h1 is HallOfFameTrophyShelf's, in .hof-v2 below. */}
+          <h2>🏆 Hall of Fame</h2>
           <p className="muted" style={{ marginTop: -4, marginBottom: 16 }}>
             The top division&apos;s winner is the league champion.
           </p>

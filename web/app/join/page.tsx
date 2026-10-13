@@ -19,8 +19,18 @@ import {
   unsubscribeFromJoinAction,
   withdrawFromJoinAction,
 } from "./actions";
+import { pageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
+
+// Previously had no page-level metadata at all -- every visitor got the root
+// layout's generic default (SEO audit finding 3, L4). The best copy on the
+// site lives here already (see the h1 below), so the description mirrors it.
+export const metadata = pageMetadata({
+  title: "Join the league",
+  description: "Sign up for the next free Balatro multiplayer league season on Discord. Get placed in a division by rating and play your scheduled opponents.",
+  path: "/join",
+});
 
 export default async function JoinPage({
   searchParams,

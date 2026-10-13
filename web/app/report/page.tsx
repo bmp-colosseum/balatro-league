@@ -18,8 +18,10 @@ import { submitReportFromReportPage } from "./actions";
 
 export const dynamic = "force-dynamic";
 
+// Signed-in-only action page; noindex (SEO audit L5).
 export const metadata = {
-  title: "Report a match - Balatro League",
+  title: "Report a match",
+  robots: { index: false },
 };
 
 export default async function ReportPage({

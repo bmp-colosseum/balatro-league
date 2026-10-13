@@ -20,6 +20,7 @@ handbook is about behaviour and procedure.
 | [messages-and-dms.md](messages-and-dms.md) | Every DM and channel post the bot sends, when, and where its wording lives; copy rules | whoever edits message text |
 | [admin-guide.md](admin-guide.md) | Task-by-task clicks on the current admin UI | TO |
 | [operations.md](operations.md) | Deploy pipeline, the prod box rules, security scanning, the Team Tour sibling repo | whoever edits `.github/workflows/` |
+| [seo.md](seo.md) | What's indexed, what's noindex and why, robots/sitemap/JSON-LD, the default OG image | whoever edits `web/lib/seo.ts` or `web/app/robots.ts`/`sitemap.ts` |
 
 ## Who this is for
 

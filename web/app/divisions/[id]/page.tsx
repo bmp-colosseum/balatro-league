@@ -8,6 +8,9 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { hasTier } from "@/lib/admin";
+import { JsonLd } from "@/components/JsonLd";
+import { pageMetadata, absoluteUrl } from "@/lib/seo";
+import { breadcrumbJsonLd } from "@/lib/json-ld";
 import { DivisionStandingsTable, type StandingsRowExtras } from "@/components/DivisionStandingsTable";
 import { loadMmrForPlayerIds } from "@/lib/loaders/standings";
 import { getShowBmpMmr } from "@/lib/preferences";
@@ -59,8 +62,15 @@ export async function generateMetadata({
     where: { id },
     select: { name: true, season: { select: { number: true, subtitle: true } } },
   });
-  if (!division) return { title: "Balatro League" };
-  return { title: `${division.name} - ${formatSeasonLabel(division.season)} - Balatro League` };
+  // title.absolute bypasses the root layout's "%s | Balatro League" template --
+  // a plain string here would otherwise double up to "Balatro League | Balatro League".
+  if (!division) return { title: { absolute: "Balatro League" } };
+  const seasonLabel = formatSeasonLabel(division.season);
+  return pageMetadata({
+    title: `${division.name} - ${seasonLabel}`,
+    description: `${division.name} standings, schedule, and results for ${seasonLabel}.`,
+    path: `/divisions/${id}`,
+  });
 }
 
 export default async function PublicDivisionPage({
@@ -146,6 +156,13 @@ export default async function PublicDivisionPage({
 
   return (
     <>
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: "Standings", url: absoluteUrl("/standings") },
+          { name: division.seasonName, url: absoluteUrl(`/seasons/${division.seasonId}`) },
+          { name: division.name, url: absoluteUrl(`/divisions/${id}`) },
+        ])}
+      />
       <SiteNav activePath="/standings" />
       <main>
         {/* Admin shortcut bar: the per-division tools render at the very
@@ -202,7 +219,13 @@ export default async function PublicDivisionPage({
         </div>
 
         <div className="division-top-v1" style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-          <h1 style={{ margin: 0 }}>{division.name}</h1>
+          {/* v2 ("Card Table") has been the default look for every visitor since
+              2026-10-09 (see app/globals.css's html[data-ui="v2"] block comment),
+              so .division-top-v1 is the one CSS hides by default -- demoted from h1
+              to h2 so the page has exactly one h1 in the common case instead of two
+              in the raw markup (SEO audit L7). The visible-by-default h1 is the
+              .division-hero-v2 one above. */}
+          <h2 style={{ margin: 0 }}>{division.name}</h2>
           <span className="pill" style={{ background: tc.bg, color: tc.fg }}>{division.tierName}</span>
           <Link href={`/seasons/${division.seasonId}`} className="muted">
             {division.seasonName}

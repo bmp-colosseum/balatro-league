@@ -10,12 +10,15 @@ import {
   type StatsItemRow,
   type StatsComboRow,
 } from "@/lib/loaders/stats";
+import { pageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Stats - Balatro League",
-};
+export const metadata = pageMetadata({
+  title: "Stats",
+  description: "All-time Balatro League stats: most match wins, longest streaks, and the most/least picked decks and stakes.",
+  path: "/stats",
+});
 
 // Below this many pool appearances a ban rate isn't meaningful — show "—".
 const MIN_BAN_APPEARANCES = 5;

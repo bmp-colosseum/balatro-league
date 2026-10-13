@@ -12,12 +12,15 @@ import { SiteNav } from "@/components/SiteNav";
 import { SeasonDateSync } from "@/components/SeasonDateSync";
 import { loadHowItWorksPageData } from "@/lib/loaders/how-it-works";
 import { discordMarkdownToHtml } from "@/lib/discord-markdown";
+import { pageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "How it works - Balatro League",
-};
+export const metadata = pageMetadata({
+  title: "How it works",
+  description: "How Balatro League seasons, divisions, and promotion/relegation work, start to finish.",
+  path: "/how-it-works",
+});
 
 export default async function HowItWorksPage() {
   const [{ content, supportChannelUrl, seasonWindowDates }, session] = await Promise.all([

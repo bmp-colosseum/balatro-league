@@ -14,6 +14,7 @@ import { SeasonWindow } from "@/components/SeasonWindow";
 import { type StandingRow } from "@/lib/standings";
 import { divisionSummaryLine, recordPips } from "@/lib/standings-cards-core";
 import { rarityIndex, tierColors, tierSlug } from "@/lib/tier-colors";
+import { pageMetadata } from "@/lib/seo";
 
 // Clinch predictor: who is mathematically guaranteed to promote ("up") /
 // relegate ("down") regardless of how the remaining matches play out.
@@ -115,9 +116,11 @@ function YourDivisionCard({
 
 export const dynamic = "force-dynamic"; // Always fresh — DB writes happen out-of-band via the bot
 
-export const metadata = {
-  title: "Standings - Balatro League",
-};
+export const metadata = pageMetadata({
+  title: "Standings",
+  description: "Current Balatro League standings across every division, updated live as matches are reported.",
+  path: "/standings",
+});
 
 export default async function StandingsPage() {
   const showBmpMmr = await getShowBmpMmr();

@@ -10,12 +10,15 @@ import { SiteNav } from "@/components/SiteNav";
 import { DiscordId } from "@/components/DiscordId";
 import { loadTraitsAdmin } from "@/lib/loaders/traits-admin";
 import { criteriaForGuide } from "@/lib/trait-rules";
+import { pageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Traits - Balatro League",
-};
+export const metadata = pageMetadata({
+  title: "Traits",
+  description: "Every Balatro League trait badge, how it's earned, and who currently has it.",
+  path: "/traits",
+});
 
 // Inline SVG glyph per trait, used whenever an admin hasn't set a custom
 // icon -- MASTER.md says no emoji as icons, and the registry's default

@@ -3,8 +3,10 @@ import { SiteNav } from "@/components/SiteNav";
 import { Button } from "@/components/ui/button";
 import { safeSignInRedirect } from "@/lib/signin-redirect";
 
+// Noindex (SEO audit L5) -- an auth gateway, not content.
 export const metadata = {
-  title: "Sign in - Balatro League",
+  title: "Sign in",
+  robots: { index: false },
 };
 
 export default async function SignInPage({

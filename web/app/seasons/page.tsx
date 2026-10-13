@@ -4,12 +4,15 @@ import { loadSeasonsIndex } from "@/lib/loaders/seasons";
 import { loadHallOfFame } from "@/lib/loaders/hall-of-fame";
 import { SiteNav } from "@/components/SiteNav";
 import { SeasonWindow } from "@/components/SeasonWindow";
+import { pageMetadata } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = {
-  title: "Seasons - Balatro League",
-};
+export const metadata = pageMetadata({
+  title: "Seasons",
+  description: "Every Balatro League season, past and current, with divisions, dates, and champions.",
+  path: "/seasons",
+});
 
 export default async function SeasonsPage() {
   // Champion name per ended season, off the same Hall of Fame data the

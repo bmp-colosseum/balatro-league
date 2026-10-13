@@ -4,8 +4,11 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { CommandPalette } from "@/components/CommandPalette";
 import { SiteFooter } from "@/components/SiteFooter";
+import { JsonLd } from "@/components/JsonLd";
 import { getUiPreviewV2 } from "@/lib/preferences";
 import { loadDiscordInviteUrl } from "@/lib/loaders/discord-invite";
+import { DEFAULT_OG_IMAGE, SITE_NAME, SITE_URL } from "@/lib/seo";
+import { organizationJsonLd, websiteJsonLd } from "@/lib/json-ld";
 
 // Crisp pixel font for headings + accents — a nod to Balatro's pixel look,
 // without hurting readability of the dense tables (body text stays system).
@@ -44,9 +47,28 @@ const bodyV2 = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Balatro League",
-  description: "League standings, schedules, and history",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    template: `%s | ${SITE_NAME}`,
+    default: "Balatro League: a Balatro multiplayer league on Discord",
+  },
+  description:
+    "A free, community-run Balatro multiplayer league played on Discord with the Balatro Multiplayer mod. Sign up, get placed in a division by rating, and play your scheduled opponents every season.",
   icons: { icon: "/Balatro_League.png", apple: "/Balatro_League.png" },
+  openGraph: {
+    title: "Balatro League",
+    description: "A free Balatro multiplayer league on Discord. Join a division, play your matches, climb the ladder.",
+    url: SITE_URL,
+    siteName: SITE_NAME,
+    type: "website",
+    images: [{ url: DEFAULT_OG_IMAGE, width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Balatro League",
+    description: "A free Balatro multiplayer league on Discord. Join a division, play your matches, climb the ladder.",
+    images: [DEFAULT_OG_IMAGE],
+  },
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -73,6 +95,22 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           each page.tsx renders its own <SiteNav>+<main> fragment rather than
           a single shared one this layout could wrap directly. */}
       <body>
+        {/* WebSite drives the "site name" Google shows in results; Organization
+            (logo = the shared OG card, sameAs = the admin-configured Discord invite
+            when one is set) is cheap and has no required fields beyond these. Both
+            on every page (not just "/") per Next's JSON-LD guide -- duplicate
+            identical script tags across a site's pages are normal and ignored by
+            Google, same as repeating <title> would be. See
+            .claude/knowledge/seo/01-audit-and-plan.md section 5. */}
+        <JsonLd data={websiteJsonLd({ name: SITE_NAME, url: SITE_URL })} />
+        <JsonLd
+          data={organizationJsonLd({
+            name: SITE_NAME,
+            url: SITE_URL,
+            logo: DEFAULT_OG_IMAGE,
+            sameAs: discordInviteUrl ?? undefined,
+          })}
+        />
         {/* First focusable element on every page -- invisible until it has
             keyboard focus (see .skip-link in globals.css), so a keyboard/
             screen-reader user never has to tab through the brand switcher,

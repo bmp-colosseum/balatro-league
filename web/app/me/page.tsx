@@ -12,8 +12,11 @@ import { Callout } from "@/components/Callout";
 
 export const dynamic = "force-dynamic";
 
+// Signed-in-only content; noindex (SEO audit L5) -- a signed-out visitor never sees
+// it (redirected elsewhere), so there's nothing here worth a search result.
 export const metadata = {
-  title: "My profile - Balatro League",
+  title: "My profile",
+  robots: { index: false },
 };
 
 export default async function MePage({

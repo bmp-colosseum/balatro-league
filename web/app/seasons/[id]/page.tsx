@@ -56,6 +56,9 @@ import { DiscordId } from "@/components/DiscordId";
 import { ReplacePlayerSection } from "@/components/ReplacePlayerSection";
 import { loadServerLeavers, type ServerLeaver } from "@/lib/loaders/server-leavers";
 import { addFakePlayer, refreshActiveSeasonMmrs, replacePlayer, swapPlayers } from "@/app/admin/players/actions";
+import { JsonLd } from "@/components/JsonLd";
+import { pageMetadata, absoluteUrl } from "@/lib/seo";
+import { breadcrumbJsonLd } from "@/lib/json-ld";
 
 export const dynamic = "force-dynamic";
 
@@ -69,8 +72,15 @@ export async function generateMetadata({
     where: { id },
     select: { number: true, subtitle: true },
   });
-  if (!season) return { title: "Balatro League" };
-  return { title: `${formatSeasonLabel(season)} - Balatro League` };
+  // title.absolute bypasses the root layout's "%s | Balatro League" template --
+  // a plain string here would otherwise double up to "Balatro League | Balatro League".
+  if (!season) return { title: { absolute: "Balatro League" } };
+  const label = formatSeasonLabel(season);
+  return pageMetadata({
+    title: label,
+    description: `${label} standings, divisions, schedule, and results.`,
+    path: `/seasons/${id}`,
+  });
 }
 
 export default async function SeasonDetailPage({
@@ -110,6 +120,14 @@ export default async function SeasonDetailPage({
   // available and add admin extras underneath.
   return (
     <>
+      {seasonPublic && (
+        <JsonLd
+          data={breadcrumbJsonLd([
+            { name: "Seasons", url: absoluteUrl("/seasons") },
+            { name: seasonPublic.name, url: absoluteUrl(`/seasons/${id}`) },
+          ])}
+        />
+      )}
       <SiteNav activePath="/seasons" />
       <main>
         {signupTestOk && (
