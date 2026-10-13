@@ -61,7 +61,16 @@ interface CachedRow {
 // On-disk shape of DivisionStandings.rowsJson. Legacy rows written before
 // the scoring-mode switch are a bare CachedRow[] (no badge) -- parsePayload
 // below accepts both.
+// Bump when the cached row shape gains fields the readers rely on; older payloads are
+// recomputed on first read instead of being served with the missing fields.
+export const STANDINGS_PAYLOAD_VERSION = 2;
+
+export function isStaleStandingsPayload(payload: { version?: number }): boolean {
+  return (payload.version ?? 1) < STANDINGS_PAYLOAD_VERSION;
+}
+
 interface CachedPayload {
+  version?: number;
   rows: CachedRow[];
   badge?: ScoringBadge;
   // Which of this division's results are set aside under a best-N scoring
@@ -204,6 +213,7 @@ async function computeLiveStandings(div: DivisionForStandings): Promise<CachedPa
   }
 
   const payload: CachedPayload = {
+    version: STANDINGS_PAYLOAD_VERSION,
     rows: rows.map((r) => ({
       playerId: r.player.id,
       points: r.points,
@@ -266,7 +276,7 @@ export async function loadDivisionStandingsFresh(divisionId: string): Promise<St
   return loadDivisionStandings(divisionId);
 }
 
-export async function loadDivisionStandings(divisionId: string): Promise<StandingRow[]> {
+export async function loadDivisionStandings(divisionId: string, afterRecompute = false): Promise<StandingRow[]> {
   const cached = await prisma.divisionStandings.findUnique({ where: { divisionId } });
   if (!cached) {
     const div = await prisma.division.findUnique({
@@ -284,6 +294,10 @@ export async function loadDivisionStandings(divisionId: string): Promise<Standin
     return hydrateRows(payload.rows, new Map(players.map((p) => [p.id, p])));
   }
   const payload = parsePayload(cached.rowsJson);
+  if (isStaleStandingsPayload(payload) && !afterRecompute) {
+    await recomputeDivisionStandings(divisionId);
+    return loadDivisionStandings(divisionId, true);
+  }
   const players = payload.rows.length === 0 ? [] : await prisma.player.findMany({
     where: { id: { in: payload.rows.map((r) => r.playerId) } },
   });
@@ -388,6 +402,7 @@ export async function loadManyDivisionStandings(
   const allPlayerIds = new Set<string>();
   for (const c of cached) {
     const payload = parsePayload(c.rowsJson);
+    if (isStaleStandingsPayload(payload)) continue; // falls through to loadDivisionStandings, which recomputes
     parsedByDiv.set(c.divisionId, payload.rows);
     for (const r of payload.rows) allPlayerIds.add(r.playerId);
   }
