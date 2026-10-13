@@ -75,7 +75,7 @@ export default async function HomePage() {
         <div className="grid grid-3">
           <div className="card">
             <h2>How it works</h2>
-            <ol style={{ margin: "8px 0", paddingLeft: 20, display: "grid", gap: 6 }}>
+            <ol style={{ margin: "8px 0", paddingLeft: 20, display: "grid", gap: 6, listStyle: "decimal" }}>
               <li>Sign up for the next season.</li>
               <li>Get placed in a division by rating.</li>
               <li>Play your scheduled opponents and report results -- climb the divisions season to season.</li>
@@ -100,7 +100,7 @@ export default async function HomePage() {
                     <div className="muted" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".8px" }}>
                       Top of Legendary
                     </div>
-                    <ol style={{ margin: "6px 0 0", paddingLeft: 20 }}>
+                    <ol style={{ margin: "6px 0 0", paddingLeft: 20, listStyle: "decimal" }}>
                       {legendaryTop.map((row) => (
                         <li key={row.rank}>
                           {row.displayName} <span className="muted">-- {row.points} pts</span>
@@ -130,7 +130,12 @@ export default async function HomePage() {
               opponents.
             </p>
             <p style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
-              <Button render={<Link href="/join" />} nativeButton={false} className="h-11 px-5 text-base">
+              <Button
+                render={<Link href="/join" />}
+                nativeButton={false}
+                className="h-11 px-5 text-base"
+                style={{ background: "var(--gold)", color: "var(--gold-ink)" }}
+              >
                 Join the league
               </Button>
               {discordInviteUrl && (
