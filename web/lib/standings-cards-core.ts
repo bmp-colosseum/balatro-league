@@ -248,9 +248,12 @@ export function groupTiebreakNotes(rows: readonly TiebreakNoteRow[], divisionCom
     const kind = groupKind(group);
     let text: string;
     if (kind === undefined) {
-      text = allHaveLives
-        ? `${joinNames(names)} tied on points: total net lives decided it (${group.map((r) => `${r.netLives}`).join(" / ")})`
-        : `${joinNames(names)} tied on points`;
+      const lives = group.map((r) => `${r.netLives}`).join(" / ");
+      text = !allHaveLives
+        ? `${joinNames(names)} tied on points`
+        : isFinal
+          ? `${joinNames(names)} tied on points: total net lives decided it (${lives})`
+          : `${joinNames(names)} tied on points; net lives currently separate them (${lives})`;
     } else if (kind === "realTie") {
       text = `${joinNames(names)} tied on points and net lives -- shares the place`;
     } else {

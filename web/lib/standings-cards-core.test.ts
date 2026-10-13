@@ -411,3 +411,18 @@ describe("divisionSummaryLine", () => {
     ).toBe("Zed leads . 1/6");
   });
 });
+
+describe("groupTiebreakNotes mixed-kind fallback follows isFinal", () => {
+  function mk(name: string, netLives: number, kind: "realTie" | "netLives"): TiebreakNoteRow {
+    return { points: 3, tiebreakNote: "tied", netLives, tiebreakKind: kind, player: { displayName: name } } as TiebreakNoteRow;
+  }
+  const rows = [mk("A", 0, "realTie"), mk("B", 0, "realTie"), mk("C", 0, "realTie"), mk("D", -8, "netLives")];
+  test("uses present-tense wording while the division is still live", () => {
+    const text = groupTiebreakNotes(rows, false)[0]?.text ?? "";
+    expect(text).toContain("net lives currently separate them (0 / 0 / 0 / -8)");
+    expect(text).not.toContain("decided it");
+  });
+  test("uses decided-it wording once the division is complete", () => {
+    expect(groupTiebreakNotes(rows, true)[0]?.text ?? "").toContain("total net lives decided it (0 / 0 / 0 / -8)");
+  });
+});
