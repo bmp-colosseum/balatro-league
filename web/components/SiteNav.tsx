@@ -94,7 +94,11 @@ export async function SiteNav({ activePath }: { activePath: string }) {
             <button
               type="submit"
               className="pill"
-              style={{ background: "var(--admin)", color: "#fff", border: "none", cursor: "pointer" }}
+              // White text on --admin measures ~2.85:1 (contrast audit,
+              // 2026-10) -- var(--admin-ink) is the dark-ink companion
+              // token (same recipe as --gold-ink) that reliably clears
+              // 4.5:1 against --admin instead.
+              style={{ background: "var(--admin)", color: "var(--admin-ink)", border: "none", cursor: "pointer" }}
               title="This browser is on the classic look. Click to go back to the new look."
             >
               Classic look on -- back to new look

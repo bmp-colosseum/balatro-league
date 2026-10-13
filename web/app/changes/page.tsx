@@ -550,11 +550,19 @@ function SubHeading({ children }: { children: React.ReactNode }) {
 }
 
 // One reworked/exclusive item with a colored tag.
+// fg values self-tint (the pill's own background is a translucent tint OF
+// that color over the page background), which pulls the effective
+// background toward the text color and reduces contrast -- see
+// --flash-danger-text's comment in globals.css. Reworked/Banned reuse the
+// shared --flash-*-text tokens; MP exclusive/Order are one-off hues with no
+// shared semantic token, so they're lightened directly here (contrast
+// audit, 2026-10: #3498db/#9b59b6 measured 1.99-4.95:1 across both themes'
+// surfaces, #a0cfee/#d9c0e3 clear 4.5:1 on all of them).
 const TAG_STYLE: Record<string, { bg: string; fg: string }> = {
-  "MP exclusive": { bg: "rgba(52,152,219,0.15)", fg: "#3498db" },
-  Reworked: { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)" },
-  Banned: { bg: "rgba(231,76,60,0.15)", fg: "var(--danger)" },
-  Order: { bg: "rgba(155,89,182,0.15)", fg: "#9b59b6" },
+  "MP exclusive": { bg: "rgba(52,152,219,0.15)", fg: "#a0cfee" },
+  Reworked: { bg: "rgba(241,196,15,0.15)", fg: "var(--flash-accent-text)" },
+  Banned: { bg: "rgba(231,76,60,0.15)", fg: "var(--flash-danger-text)" },
+  Order: { bg: "rgba(155,89,182,0.15)", fg: "#d9c0e3" },
 };
 
 // What each tag means — shown as a legend up top so the colored pills are
@@ -748,7 +756,7 @@ function BitQueue({ bits, used }: { bits: string; used?: number }) {
               fontWeight: 700,
               border: consumed ? "2px solid var(--accent)" : "1px solid var(--border)",
               background: hit ? "rgba(46,204,113,0.18)" : "rgba(255,255,255,0.03)",
-              color: hit ? "var(--success)" : "var(--muted)",
+              color: hit ? "var(--flash-success-text)" : "var(--muted)",
               opacity: consumed ? 1 : 0.5,
             }}
           >

@@ -29,10 +29,52 @@
      links still read as "blurple" -- only text consumers use this; fills
      keep --accent-2 unchanged so button contrast doesn't shift. */
   --accent-2-text: #747ff4;
-  --danger: #e74c3c;
+  /* Lifted from #e74c3c -- measured 4.12-4.95:1 as plain TEXT on bg/surface/
+     surface-2 (ProfileView.tsx "L" labels, hall-of-fame loss tags, standings
+     relegate zone text, DROPPED/banned pills, etc. -- the dominant real-world
+     use of this token per a grep of every var(--danger) call site), under
+     the 4.5:1 floor on surface-2 and razor-thin on surface. #e95a4b clears
+     4.5:1 on all three (contrast audit, 2026-10). */
+  --danger: #e95a4b;
   --success: #2ecc71;
   --info: #76c7ff;
-  --admin: #e67e22;
+  /* Lifted from #e67e22 -- as TEXT on the v2 "Card Table" panel/panel-2/felt
+     surfaces (.player-card-clinch[data-status="down"], the relegation
+     ::after label) it measured 3.62-4.31:1, under the 4.5:1 floor. #eb9950
+     clears 4.5:1 there while still comfortably clearing it as text on the
+     v1 bg/surface pair it already passed (contrast audit, 2026-10). */
+  --admin: #eb9950;
+  /* Dark ink companion for --admin, same recipe as --gold-ink below --
+     white text on --admin (the "Classic look on" nav pill) measured
+     ~2.85:1; a dark ink reliably clears 4.5:1 against any --admin shade
+     instead (contrast audit, 2026-10). Lives in :root (not the v2 block)
+     because --admin itself isn't re-themed per-look. */
+  --admin-ink: #2a1d05;
+  /* Text color for the one-off `.flash.success`/`.flash.error` banners
+     (and every ad-hoc inline "W/L"/"DROPPED"/"banned" pill that reuses the
+     same rgba(success|danger, 0.15-0.2) self-tinted background recipe --
+     see app/report/page.tsx, app/divisions/[id]/page.tsx, components/
+     ProfileView.tsx, app/standings/page.tsx, app/changes/page.tsx,
+     app/me/page.tsx, app/players/page.tsx). Compositing the semantic
+     --danger/--success color over its OWN translucent tint shifts the
+     background's luminance toward the text color, which *reduces* contrast
+     the more legible the base token already is -- plain --danger/--success
+     measured 3.53-4.28:1 once tinted, even after the token-level fix above.
+     These are solved directly against that tinted backdrop (worst case:
+     alpha 0.2, the highest alpha any call site pairs with text color) so
+     every one of those self-tinted badges clears 4.5:1 without having to
+     push the shared --danger/--success tokens pale (contrast audit,
+     2026-10). */
+  --flash-danger-text: #ed786c;
+  --flash-success-text: #2ecc71;
+  /* Same self-tint recipe, for the DISPUTED/D (accent-tinted) and VOID/V
+     (muted-tinted) match-outcome pills (outcomeBadge() in components/
+     ProfileView.tsx and its copies). v1 measured fine as plain --accent/
+     --muted even at the worst-case 0.2 alpha (5.97-7.40:1 / 4.95-6.46:1) so
+     these simply alias the existing tokens here; only the v2 override
+     below needs a distinct lightened value. */
+  --flash-accent-text: var(--accent);
+  --flash-muted-text: var(--muted);
   --radius: 0.5rem;
 }
 
@@ -407,8 +449,8 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color:
 form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 
 .flash { padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; }
-.flash.success { background: rgba(46,204,113,0.15); color: var(--success); border: 1px solid rgba(46,204,113,0.3); }
-.flash.error { background: rgba(231,76,60,0.15); color: var(--danger); border: 1px solid rgba(231,76,60,0.3); }
+.flash.success { background: rgba(46,204,113,0.15); color: var(--flash-success-text); border: 1px solid rgba(46,204,113,0.3); }
+.flash.error { background: rgba(231,76,60,0.15); color: var(--flash-danger-text); border: 1px solid rgba(231,76,60,0.3); }
 
 /* Discord @username chip next to a player's name. Visibility is decided
    server-side (the <DiscordId> component only renders it for verified members
@@ -419,6 +461,16 @@ form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
   margin-left: 6px;
   user-select: all;
 }
+
+/* "picks & bans" match-detail disclosure toggle (picksBansDetails() in
+   components/ProfileView.tsx) -- was an inline `color: var(--accent-2-text)`,
+   which an inline style keeps even under html[data-ui="v2"] (nothing in a
+   stylesheet can win over it). Measured 3.56:1 on the v2 panel surface
+   (contrast audit, 2026-10): accent-2-text was never intended as a v2 color,
+   only --paper/--gold are. Moved to a class so v2 can re-theme it the same
+   way every other small v2 disclosure label does (see
+   .profile-match-hands-disclosure summary in app/v2/profile.css). */
+.profile-picks-bans-summary { color: var(--accent-2-text); }
 
 /* Product switcher mark (components/ProductSwitcher.tsx, folded into
    components/SiteMobileMenu.tsx on phone) -- two CSS card chips, the active
@@ -566,8 +618,10 @@ form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 /* ========================================================================
    v2 "Card Table" design system -- design-system/MASTER.md is the spec.
    Every rule below is scoped under html[data-ui="v2"] (set by layout.tsx
-   from the admin-only preview cookie; see lib/preferences.ts) so the
-   current look is completely unaffected without it.
+   from the ui-preview cookie; see lib/preferences.ts). v2 has been the
+   DEFAULT look for every visitor, logged in or not, since 2026-10-09 -- a
+   logged-out production crawl for the 2026-10 contrast audit confirmed
+   this look is what ships today, not a gated preview.
    ======================================================================== */
 
 html[data-ui="v2"] {
@@ -580,22 +634,42 @@ html[data-ui="v2"] {
   --panel-edge: #0d1a1a;
   --paper: #f3eee2;
   --paper-dim: #b8c2bf;
-  /* Lifted from #7f8f8c -- measured 3.63:1 on panel and 3.05:1 on panel-2,
-     both under MASTER.md's own 4.5:1 floor for every "None played",
-     subtitle, table header and tier-chip count that uses this pair (see
-     .claude/knowledge/ux-round3/01-findings.md finding 8). #93a3a0 clears
-     4.5:1 on panel (4.67:1 measured); panel-2 improves to 3.92:1 but still
-     doesn't clear 4.5 there -- flagging rather than inventing a second,
-     panel-2-specific token in the same pass. */
-  --paper-faint: #93a3a0;
+  /* Lifted from #7f8f8c, then again from #93a3a0 (contrast audit, 2026-10):
+     a live logged-out crawl of production -- /standings, /hall-of-fame,
+     /seasons, /profile, the phone menu, the product switcher and the
+     command palette, at 390x844 and 1280x900 -- measured #93a3a0 at
+     3.92:1 on panel-2 (.player-card-lives-label, .pill.matches-chip,
+     .division-summary-meta; 580 text nodes, the single largest failing
+     group in the audit), under MASTER.md's own 4.5:1 floor. #a1afac clears
+     4.5:1 on felt/panel/panel-2 alike. */
+  --paper-faint: #a1afac;
   --gold: #f1b53a;
   --gold-ink: #2a1d05;
-  --common: #1e9bff;
+  /* --common/--rare/--legendary lifted the same pass -- all three measured
+     under 4.5:1 as plain TEXT on felt/panel/panel-2 wherever a tier color
+     is the copy itself rather than a chip fill (.rarity-text, .tier-heading,
+     .division-name[data-rarity], .hof-card-division, .vs-loser,
+     .lives-cell/.player-card-lives[data-sign="neg"]) -- --rare on panel
+     alone accounted for 3498 failing text nodes, the audit's largest single
+     pair. --uncommon measured fine (4.79-5.71:1) and is unchanged. Each
+     lightened value clears 4.5:1 on felt/panel/panel-2; the ink-on-chip
+     fill pairing (.pill[data-rarity], .tier-tab) only gets MORE contrast
+     from a lighter fill, so no chip needed re-checking beyond confirming
+     that (still 7.7-8.2:1 ink-on-chip after the change). */
+  --common: #53b3ff;
   --uncommon: #3cc78f;
-  --rare: #ff6259;
-  --legendary: #bb73d6;
+  --rare: #ff8a83;
+  --legendary: #cd98e1;
   --shadow: 0 6px 0 var(--panel-edge), 0 14px 28px rgba(0, 0, 0, 0.35);
   color-scheme: dark;
+  /* v2 overrides of the :root --flash-*-text pair above -- --rare/--uncommon
+     need a further, flash-only lightening to clear 4.5:1 once composited
+     under their own rgba(.../0.2) self-tint (same reasoning as :root's
+     --flash-danger-text/--flash-success-text comment). */
+  --flash-danger-text: #ff9d97;
+  --flash-success-text: #86dcb9;
+  --flash-accent-text: #f5cc76;
+  --flash-muted-text: #c1cac7;
 
   /* Semantic aliases re-pointed onto the tokens above. */
   --bg: var(--felt);
@@ -609,7 +683,8 @@ html[data-ui="v2"] {
   --success: var(--uncommon);
   --info: var(--common);
   --radius: 10px;
-  /* --admin keeps its orange per MASTER.md. */
+  /* --admin keeps its orange per MASTER.md (lightened once, in :root, for
+     both looks at once -- see --admin's own comment there). */
 
   /* shadcn --color-* variables onto the same tokens, so every shadcn
      component (Button, Input, Dialog, Command, Select, Menu) re-themes for

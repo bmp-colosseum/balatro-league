@@ -61,11 +61,17 @@ function outcomeBadge(
   isDisputed: boolean,
   isVoid: boolean,
 ): { bg: string; fg: string; label: string } {
-  if (isDisputed) return { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)", label: "DISPUTED" };
-  if (isVoid) return { bg: "rgba(149,165,166,0.18)", fg: "var(--muted)", label: "V" };
-  if (m.outcome === "WIN") return { bg: "rgba(46,204,113,0.15)", fg: "var(--success)", label: "W" };
-  if (m.outcome === "LOSS") return { bg: "rgba(231,76,60,0.15)", fg: "var(--danger)", label: "L" };
-  return { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)", label: "D" };
+  // fg uses the --flash-*-text tokens, not the plain semantic ones: this
+  // badge's own background is a translucent tint OF that same color over
+  // the page/card background, and compositing a color over its own tint
+  // pulls the effective background toward the text color -- which
+  // *reduces* contrast the more legible the base token already is. See
+  // --flash-danger-text's comment in globals.css for the full writeup.
+  if (isDisputed) return { bg: "rgba(241,196,15,0.15)", fg: "var(--flash-accent-text)", label: "DISPUTED" };
+  if (isVoid) return { bg: "rgba(149,165,166,0.18)", fg: "var(--flash-muted-text)", label: "V" };
+  if (m.outcome === "WIN") return { bg: "rgba(46,204,113,0.15)", fg: "var(--flash-success-text)", label: "W" };
+  if (m.outcome === "LOSS") return { bg: "rgba(231,76,60,0.15)", fg: "var(--flash-danger-text)", label: "L" };
+  return { bg: "rgba(241,196,15,0.15)", fg: "var(--flash-accent-text)", label: "D" };
 }
 
 // Unified profile view, rendered by BOTH /profile/[id] and /me (no redirect).
@@ -81,7 +87,7 @@ function picksBansDetails(games: GamePlayed[], opponentName: string) {
   if (withPool.length === 0) return null;
   return (
     <details style={{ marginTop: 3 }}>
-      <summary style={{ cursor: "pointer", fontSize: 10, color: "var(--accent-2-text)" }}>picks &amp; bans</summary>
+      <summary className="profile-picks-bans-summary" style={{ cursor: "pointer", fontSize: 10 }}>picks &amp; bans</summary>
       <div style={{ marginTop: 4, display: "grid", gap: 8 }}>
         {withPool.map((g) => {
           const bans = g.pool
@@ -91,8 +97,12 @@ function picksBansDetails(games: GamePlayed[], opponentName: string) {
           return (
             <div key={g.num} style={{ fontSize: 11 }}>
               <div style={{ opacity: 0.55, marginBottom: 2 }}>Game {g.num} - pool of {g.pool.length}</div>
+              {/* opacity was 0.85 -- at this 11px size that composited to
+                  3.6-4.3:1 on surface-2/panel-2 even after lightening
+                  --danger/--rare (contrast audit, 2026-10); full opacity
+                  is needed to hold 4.5:1. */}
               {bans.map((b, i) => (
-                <div key={i} style={{ color: "var(--danger)", opacity: 0.85 }}>
+                <div key={i} style={{ color: "var(--danger)" }}>
                   <span style={{ opacity: 0.6 }}>{b.banOrdinal}.</span> {b.deck}/{b.stake}
                   <span className="muted" style={{ marginLeft: 4 }}>
                     banned by {b.bannedByMe ? "you" : opponentName}
@@ -857,11 +867,11 @@ export async function ProfileView({
                   <Link href={`/seasons/${h.seasonId}`} style={{ color: "var(--text)", fontWeight: 600, fontSize: 16 }}>
                     {h.seasonName}
                   </Link>
-                  {h.isActive && <span className="pill" style={{ background: "rgba(46,204,113,0.15)", color: "var(--success)" }}>ACTIVE</span>}
+                  {h.isActive && <span className="pill" style={{ background: "rgba(46,204,113,0.15)", color: "var(--flash-success-text)" }}>ACTIVE</span>}
                   <span className="pill" style={{ background: color.bg, color: color.fg }}>{h.tierName}</span>
                   <Link href={`/divisions/${h.divisionId}`} style={{ color: "var(--text)" }}>{h.divisionName}</Link>
                   {h.status === "DROPPED" && (
-                    <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "var(--danger)" }}>DROPPED</span>
+                    <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "var(--flash-danger-text)" }}>DROPPED</span>
                   )}
                 </div>
                 {/* Stat summary on its own line directly under the title —

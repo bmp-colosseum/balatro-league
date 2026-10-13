@@ -63,7 +63,7 @@ export default async function MePage({
             <div style={{ fontSize: 18, fontWeight: 600 }}>{user.name ?? "(unknown)"}</div>
             {player ? (
               <div style={{ marginTop: 4 }}>
-                <span className="pill" style={{ background: "rgba(46,204,113,0.15)", color: "var(--success)" }}>Linked</span>{" "}
+                <span className="pill" style={{ background: "rgba(46,204,113,0.15)", color: "var(--flash-success-text)" }}>Linked</span>{" "}
                 Connected to a league profile.
               </div>
             ) : (

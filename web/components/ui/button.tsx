@@ -13,11 +13,23 @@ const buttonVariants = cva(
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+        // ghost/link carry no rest-state `bg-*` utility by design (that's
+        // the point of "ghost"), but globals.css's `@layer base { button {
+        // background: var(--accent-2) } }` fallback (there specifically so
+        // a caller's OWN Tailwind bg/border classes win -- see its comment)
+        // fills that gap for any <button> with none of its own, which these
+        // variants otherwise have. Contrast audit, 2026-10: a ghost button
+        // with `text-foreground` on that accent-2 fallback measured 3.98:1
+        // (components/SiteNav.tsx's and SiteMobileMenu.tsx's "Show
+        // balatromp.com rating" rows). `bg-transparent` is itself a real
+        // Tailwind utility, so it wins over the unlayered fallback the same
+        // way every other variant's own `bg-*` class already does, while
+        // leaving hover/aria-expanded backgrounds untouched.
         ghost:
-          "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
+          "bg-transparent hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
-        link: "text-primary underline-offset-4 hover:underline",
+        link: "bg-transparent text-primary underline-offset-4 hover:underline",
       },
       size: {
         default:

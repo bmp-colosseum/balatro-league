@@ -769,11 +769,14 @@ function YourPlayedTable({
           const myG = isA ? p.gamesWonA : p.gamesWonB;
           const oppG = isA ? p.gamesWonB : p.gamesWonA;
           // A 0-0 is a void (finished, no points) — distinct from a 1-1 draw.
+          // fg uses the --flash-*-text tokens (not the plain semantic ones)
+          // because this badge's background is a translucent tint OF that
+          // same color -- see --flash-danger-text's comment in globals.css.
           const outcome =
-            myG === 0 && oppG === 0 ? { bg: "rgba(149,165,166,0.18)", fg: "var(--muted)", label: "V" }
-            : myG > oppG ? { bg: "rgba(46,204,113,0.15)", fg: "var(--success)", label: "W" }
-            : myG < oppG ? { bg: "rgba(231,76,60,0.15)", fg: "var(--danger)", label: "L" }
-            : { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)", label: "D" };
+            myG === 0 && oppG === 0 ? { bg: "rgba(149,165,166,0.18)", fg: "var(--flash-muted-text)", label: "V" }
+            : myG > oppG ? { bg: "rgba(46,204,113,0.15)", fg: "var(--flash-success-text)", label: "W" }
+            : myG < oppG ? { bg: "rgba(231,76,60,0.15)", fg: "var(--flash-danger-text)", label: "L" }
+            : { bg: "rgba(241,196,15,0.15)", fg: "var(--flash-accent-text)", label: "D" };
           return (
             <tr key={p.id}>
               <td className="muted">{date}</td>
@@ -880,7 +883,7 @@ function AdminSection({
                       <Link href={`/profile/${m.player.id}`} style={{ color: "var(--text)" }}>{m.player.displayName}</Link>
                     </strong>
                     {isDropped && (
-                      <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "var(--danger)", marginLeft: 6 }}>DROPPED</span>
+                      <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "var(--flash-danger-text)", marginLeft: 6 }}>DROPPED</span>
                     )}
                   </td>
                   <td><span className="muted">{m.player.discordId}</span></td>
@@ -1142,13 +1145,15 @@ function AdminSection({
 // differential vs each other, and any shootout already on record. This is the
 // mini-league you use to decide the placements typed into the form below.
 function TieHelper({ groups }: { groups: TieGroup[] }) {
+  // fg uses the --flash-*-text tokens -- see the comment on TieHelper's
+  // sibling outcome badge above / --flash-danger-text in globals.css.
   const cell = (r: "win" | "loss" | "draw" | "none") =>
     r === "win"
-      ? { bg: "rgba(46,204,113,0.15)", fg: "var(--success)" }
+      ? { bg: "rgba(46,204,113,0.15)", fg: "var(--flash-success-text)" }
       : r === "loss"
-      ? { bg: "rgba(231,76,60,0.15)", fg: "var(--danger)" }
+      ? { bg: "rgba(231,76,60,0.15)", fg: "var(--flash-danger-text)" }
       : r === "draw"
-      ? { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)" }
+      ? { bg: "rgba(241,196,15,0.15)", fg: "var(--flash-accent-text)" }
       : { bg: "transparent", fg: "var(--muted)" };
 
   return (

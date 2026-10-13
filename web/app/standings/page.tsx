@@ -502,9 +502,11 @@ export default async function StandingsPage() {
                               )}
                               <span
                                 className="pill matches-chip"
+                                // color uses the --flash-*-text tokens -- see
+                                // --flash-danger-text's comment in globals.css.
                                 style={{
                                   background: complete ? "rgba(46,204,113,0.15)" : "rgba(149,165,166,0.15)",
-                                  color: complete ? "var(--success)" : "var(--muted)",
+                                  color: complete ? "var(--flash-success-text)" : "var(--flash-muted-text)",
                                   fontSize: 11,
                                   marginLeft: "auto",
                                 }}

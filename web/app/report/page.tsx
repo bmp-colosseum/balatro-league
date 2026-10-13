@@ -115,12 +115,14 @@ export default async function ReportPage({
                   const isDisputed = m.status === "DISPUTED";
                   // A 0-0 is a void (finished, no points) — distinct from a 1-1 draw.
                   const isVoid = m.myGames === 0 && m.opponentGames === 0;
+                  // fg uses the --flash-*-text tokens -- see
+                  // --flash-danger-text's comment in globals.css.
                   const outcome =
-                    isDisputed ? { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)", label: "DISPUTED" }
-                    : isVoid ? { bg: "rgba(149,165,166,0.18)", fg: "var(--muted)", label: "V" }
-                    : m.outcome === "WIN" ? { bg: "rgba(46,204,113,0.15)", fg: "var(--success)", label: "W" }
-                    : m.outcome === "LOSS" ? { bg: "rgba(231,76,60,0.15)", fg: "var(--danger)", label: "L" }
-                    : { bg: "rgba(241,196,15,0.15)", fg: "var(--accent)", label: "D" };
+                    isDisputed ? { bg: "rgba(241,196,15,0.15)", fg: "var(--flash-accent-text)", label: "DISPUTED" }
+                    : isVoid ? { bg: "rgba(149,165,166,0.18)", fg: "var(--flash-muted-text)", label: "V" }
+                    : m.outcome === "WIN" ? { bg: "rgba(46,204,113,0.15)", fg: "var(--flash-success-text)", label: "W" }
+                    : m.outcome === "LOSS" ? { bg: "rgba(231,76,60,0.15)", fg: "var(--flash-danger-text)", label: "L" }
+                    : { bg: "rgba(241,196,15,0.15)", fg: "var(--flash-accent-text)", label: "D" };
                   return (
                     <tr key={m.pairingId} style={isDisputed ? { opacity: 0.7 } : undefined}>
                       <td>{date}</td>

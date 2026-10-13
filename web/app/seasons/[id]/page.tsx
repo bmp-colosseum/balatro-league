@@ -182,9 +182,9 @@ async function PublicSummary({
       <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 4 }}>
         <h1 style={{ margin: 0 }}>{season.name}</h1>
         {season.isActive ? (
-          <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--success)" }}>ACTIVE</span>
+          <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--flash-success-text)" }}>ACTIVE</span>
         ) : (
-          <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "var(--muted)" }}>FINISHED</span>
+          <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "var(--flash-muted-text)" }}>FINISHED</span>
         )}
       </div>
       <SeasonWindow
@@ -365,13 +365,13 @@ async function AdminSeasonPanel({
           <Button type="submit" variant="secondary" size="sm">Save</Button>
         </form>
         {season.isActive && (
-          <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--success)" }}>ACTIVE</span>
+          <span className="pill" style={{ background: "rgba(46,204,113,0.2)", color: "var(--flash-success-text)" }}>ACTIVE</span>
         )}
         {!season.isActive && !season.endedAt && (
-          <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "var(--muted)" }}>Inactive</span>
+          <span className="pill" style={{ background: "rgba(149,165,166,0.2)", color: "var(--flash-muted-text)" }}>Inactive</span>
         )}
         {season.endedAt && (
-          <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "var(--danger)" }}>Ended</span>
+          <span className="pill" style={{ background: "rgba(231,76,60,0.2)", color: "var(--flash-danger-text)" }}>Ended</span>
         )}
       </div>
       <div className="muted" style={{ marginTop: 4 }}>
@@ -429,7 +429,7 @@ async function AdminSeasonPanel({
           {!season.isActive && !season.endedAt && (
             <>
               <div className="card" style={{ background: justBuilt ? "rgba(46,204,113,0.10)" : "rgba(241,196,15,0.08)", borderColor: justBuilt ? "var(--success)" : "var(--accent)", marginTop: 12 }}>
-                <strong style={{ color: justBuilt ? "var(--success)" : "var(--accent)" }}>
+                <strong style={{ color: justBuilt ? "var(--flash-success-text)" : "var(--flash-accent-text)" }}>
                   {justBuilt ? "✓ Season built — review below" : "📝 Draft mode"}
                 </strong>{" "}
                 <span className="muted" style={{ fontSize: 12 }}>

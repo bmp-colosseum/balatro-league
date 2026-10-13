@@ -328,6 +328,12 @@ html[data-ui="v2"] .profile-match-hands-disclosure summary {
   color: var(--paper-dim);
   padding: 6px 2px;
 }
+/* Same treatment for the "picks & bans" disclosure (globals.css's
+   .profile-picks-bans-summary) -- v1's accent-2-text link colour measured
+   3.56:1 here; paper-dim matches this disclosure's sibling above. */
+html[data-ui="v2"] .profile-picks-bans-summary {
+  color: var(--paper-dim);
+}
 html[data-ui="v2"] .profile-match-hands-past {
   display: flex;
   flex-direction: column;
