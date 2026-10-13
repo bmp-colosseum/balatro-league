@@ -214,6 +214,20 @@ export default async function PublicDivisionPage({
               {division.relegate > 0 && <span>{division.relegate} down</span>}
               <span>{division.scheduleFormat === "round-robin" ? "round robin, play everyone" : division.scheduleFormat}</span>
             </div>
+            {/* "Rung N of M" -- this division's exact spot on the whole
+                ladder (lib/division-ladder.ts), with its neighbors linked, so
+                a reader lands here and immediately sees it's a rung in one
+                chain, not a standalone group. Null neighbor = the true
+                top/bottom of the whole ladder. */}
+            <div className="muted ladder-rung-line" style={{ fontSize: 11, marginTop: 4 }}>
+              Rung {division.ladderPosition}
+              {division.aboveDivision && (
+                <> . Up: <Link href={`/divisions/${division.aboveDivision.id}`} className="muted">{division.aboveDivision.name}</Link></>
+              )}
+              {division.belowDivision && (
+                <> . Down: <Link href={`/divisions/${division.belowDivision.id}`} className="muted">{division.belowDivision.name}</Link></>
+              )}
+            </div>
           </div>
           <RosterV2 rows={standings} viewerPlayerId={viewerPlayerId} />
         </div>
@@ -294,6 +308,9 @@ export default async function PublicDivisionPage({
               showCountedBadge={!!scoringBadge}
               livesBreaksTies={livesBreaksTies}
               tierRarity={rarityIndex(division.tierPosition)}
+              aboveDivisionName={division.aboveDivision?.name}
+              belowDivisionName={division.belowDivision?.name}
+              isTopOfLadder={division.aboveDivision === null}
               noMatchesYet={division.confirmedPairingCount === 0}
             />
           </div>

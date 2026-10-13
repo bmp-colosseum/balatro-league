@@ -148,19 +148,43 @@ No test enforces these pairs. Run `diff` on each pair after touching one.
 The header comment in `web/lib/standings-best-n.ts` still says nothing calls
 it; that is stale, both caches wire it in via `selectStandingsEngine`.
 
+## The ladder
+
+Divisions are not parallel groups -- every division in a season sits on ONE
+ladder, ordered tier position ascending, then `Division.groupNumber`
+ascending within a tier (`web/lib/division-ladder.ts`'s `buildLadder` --
+same ordering convention every loader already queried by, just given a name):
+Legendary at the top, then Rare 1, Rare 2, ..., Uncommon 1,
+..., Common 1, ..., Common N at the bottom. The top of a division promotes
+into the division directly above it on the ladder (even across a tier
+boundary); the bottom relegates into the division directly below. A
+division's own promotion/relegation COUNTS (`promoteCount`/`relegateCount`)
+are set by hand per division by the organiser -- `buildLadder` only orders
+divisions and reports each one's neighbors, it never derives or changes
+those counts. The top division overall never promotes; the bottom never
+relegates (both counts read as 0 there regardless of what's stored).
+
+Surfaced on `/standings` (a compact "Ladder" strip above the division
+cards), on each division page's hero ("Rung N of M . Up: X . Down: Y"), and
+in the onboarding guide (`src/onboarding-guide.ts`'s "the-ladder" section,
+mirrored to `web/lib/onboarding-guide.ts`).
+
 ## Zones on the standings table
 
 `web/lib/standings-zone.ts`: a row is in the promote zone if it is promoting
 or has clinched up, relegate if relegating or clinched down. On the v2 player
 cards this draws as a thin blue (promote) or amber (relegate) left stripe --
 same `--info`/`--admin` tokens the v1 table's up/down arrows use -- plus a
-dashed divider labelled "Promotion"/"Relegation" (a bare chevron on phones)
-below the last promoting row and above the first relegating row. The
-per-division key under the table reads "Promotes to X" / "Drops to Y". The
-card's rank tile also shows a small lock glyph when a row is mid-season
-clinched (not yet decided), and a plain crossed-lines glyph on a tied row
-that still needs a shootout -- the latter is suppressed under the "lives"
-tiebreak, since the per-row tie footnote already explains the break there.
+dashed divider labelled "Promotion to X" / "Relegation to Y" (the bare word
+when no neighbor name is known, "Top of the ladder" for the single division
+at the very top of the whole ladder, nothing when relegate is 0; a bare
+chevron on phones) below the last promoting row and above the first
+relegating row. The per-division key under the table reads the same
+"Promotion to X" / "Relegation to Y" wording. The card's rank tile also
+shows a small lock glyph when a row is mid-season clinched (not yet
+decided), and a plain crossed-lines glyph on a tied row that still needs a
+shootout -- the latter is suppressed under the "lives" tiebreak, since the
+per-row tie footnote already explains the break there.
 
 ## Things to know that are not obvious
 

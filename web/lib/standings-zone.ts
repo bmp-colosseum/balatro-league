@@ -69,6 +69,14 @@ export interface ZoneKeyLinesInput {
   relegate: boolean;
   above?: string;
   below?: string;
+  // True only for the single division sitting at the very top of the WHOLE
+  // ladder (web/lib/division-ladder.ts' buildLadder -- its `above` is null).
+  // Lets the key say so explicitly instead of silently showing nothing,
+  // since that division's promote is always 0 and would otherwise never
+  // produce a line here. Only ever set by callers that track full ladder
+  // order (undefined -- i.e. no change -- for callers that don't, like the
+  // ended-season view).
+  isTopOfLadder?: boolean;
 }
 
 export type ZoneKeyLine =
@@ -77,13 +85,26 @@ export type ZoneKeyLine =
 
 export function zoneKeyLines(input: ZoneKeyLinesInput): ZoneKeyLine[] {
   const lines: ZoneKeyLine[] = [];
-  if (input.promote) {
-    lines.push({ kind: "promote", text: input.above ? `Promotes to ${input.above}` : "Promotes" });
+  if (input.isTopOfLadder) {
+    lines.push({ kind: "promote", text: "Top of the ladder" });
+  } else if (input.promote) {
+    lines.push({ kind: "promote", text: input.above ? `Promotion to ${input.above}` : "Promotion" });
   }
   if (input.relegate) {
-    lines.push({ kind: "relegate", text: input.below ? `Drops to ${input.below}` : "Drops" });
+    lines.push({ kind: "relegate", text: input.below ? `Relegation to ${input.below}` : "Relegation" });
   }
   return lines;
+}
+
+// Text for the dashed zone-boundary divider's "punched through" label (the
+// v2 player card's data-boundary ::after content -- see
+// app/v2/standings-cards.css). Same "to <neighbor>" wording as the key
+// lines above, kept as its own pure function since the divider is per-row
+// (keyed off which zone boundary this row sits on) rather than per-division.
+export function boundaryLabel(boundary: Zone, above?: string, below?: string): string | undefined {
+  if (boundary === "promote") return above ? `Promotion to ${above}` : "Promotion";
+  if (boundary === "relegate") return below ? `Relegation to ${below}` : "Relegation";
+  return undefined;
 }
 
 // Title text for the v2 player card's rank-tile clinch glyph (an inline SVG

@@ -91,6 +91,11 @@ export function buildOnboardingGuideSections(input: OnboardingGuideInput): Onboa
         body: `Each season is split into tiers by skill, highest to lowest: **Legendary**, **Rare**, **Uncommon**, **Common**. Each tier is split into divisions (small groups) so you're playing people around your level. Your division channel's name tells you which one you're in.`,
       },
       {
+        id: "the-ladder",
+        heading: "The ladder",
+        body: `Divisions within a tier aren't separate groups -- they're rungs of ONE ladder, highest to lowest: Legendary, then Rare 1, Rare 2, and so on, then Uncommon, then Common, all the way down. The top of each division promotes into the division directly above it on that ladder (even across a tier boundary), and the bottom relegates into the one directly below. How many move is set per division by the organiser, shown on the standings page and your division channel.`,
+      },
+      {
         id: "your-schedule",
         heading: "Your schedule",
         body: `You're placed in one division with a set of assigned opponents, not the whole server. The bot DMs you your matchups directly. If you lose track, click **Who do I play?** in your division channel any time; that's your reminder.`,
@@ -161,6 +166,8 @@ export function buildOnboardingGuideMessages(input: OnboardingGuideInput): strin
     renderSectionLine(byId("seasons")),
     ``,
     renderSectionLine(byId("tiers-and-divisions")),
+    ``,
+    renderSectionLine(byId("the-ladder")),
     ``,
     renderSectionLine(byId("your-schedule")),
   ].join("\n");

@@ -62,7 +62,10 @@ html[data-ui="v2"] .player-card[data-zone="relegate"]::before { background: var(
 /* Dashed divider between the zone and the rest of the stack -- same
    boundary hook (lib/standings-zone.ts) as the table's dashed row border,
    same tokens as the stripe above. A small uppercase label "punches
-   through" the dashed line at desktop (like the Tour's "Playoff line");
+   through" the dashed line at desktop (like the Tour's "Playoff line"),
+   reading the exact ladder-aware text (e.g. "Promotion to Rare 1") from
+   the data-boundary-label attribute DivisionStandingsTable sets per row
+   (lib/standings-zone.ts' boundaryLabel) instead of a bare static word;
    phone swaps it for a bare chevron, see the phone media block below. */
 html[data-ui="v2"] .player-card[data-boundary="promote"] {
   border-bottom: 2px dashed var(--info);
@@ -85,8 +88,8 @@ html[data-ui="v2"] .player-card[data-boundary]::after {
   white-space: nowrap;
   z-index: 1;
 }
-html[data-ui="v2"] .player-card[data-boundary="promote"]::after { content: "Promotion"; color: var(--info); }
-html[data-ui="v2"] .player-card[data-boundary="relegate"]::after { content: "Relegation"; color: var(--admin); }
+html[data-ui="v2"] .player-card[data-boundary="promote"]::after { content: attr(data-boundary-label); color: var(--info); }
+html[data-ui="v2"] .player-card[data-boundary="relegate"]::after { content: attr(data-boundary-label); color: var(--admin); }
 
 /* Rank-tile corner badge -- clinch lock (ClinchGlyph, inline SVG) or the
    tied-needs-a-shootout glyph (ShowdownGlyph, CSS-only content below).
@@ -520,4 +523,51 @@ html[data-ui="v2"] .your-division-report {
   font-size: 13px;
   font-weight: 700;
   color: var(--gold);
+}
+
+/* "Ladder" strip -- the whole league's divisions as ONE descending chain
+   (see components/LadderStrip.tsx). Off by default like every other
+   v2-only block, shown only under html[data-ui="v2"]. Chips reuse the
+   existing .pill[data-rarity] Card Table fill/ink (app/globals.css); this
+   block only adds the strip's own layout. */
+.ladder-strip-v2 { display: none; }
+html[data-ui="v2"] .ladder-strip-v2 {
+  display: block;
+  margin-bottom: 16px;
+}
+html[data-ui="v2"] .ladder-strip-title {
+  font-family: var(--font-display-v2), var(--font-pixel), sans-serif;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+html[data-ui="v2"] .ladder-strip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 2px;
+}
+html[data-ui="v2"] .ladder-strip-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+html[data-ui="v2"] .ladder-strip-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 4px 10px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+html[data-ui="v2"] .ladder-strip-arrow {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+html[data-ui="v2"] .ladder-strip-note {
+  font-size: 11px;
+  margin-top: 8px;
 }

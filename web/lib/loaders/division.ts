@@ -17,6 +17,7 @@ import { normalizeTiebreak, type ScoringBadge } from "@/lib/standings-mode";
 import type { UncountedEntry } from "@/lib/uncounted-core";
 import { getPlacementRules } from "@/lib/placement-rules";
 import { scheduleDegree } from "@/lib/schedule";
+import { buildLadder } from "@/lib/division-ladder";
 
 export interface DivisionStandingRow {
   player: { id: string; displayName: string; discordId: string; username: string | null };
@@ -100,6 +101,12 @@ export interface DivisionPageData {
     relegate: number;
     // "round-robin" or "<N> opponents" -- see lib/schedule.ts' scheduleDegree.
     scheduleFormat: string;
+    // This division's spot on the whole ladder (lib/division-ladder.ts) --
+    // the hero's "Rung N of M" line + the linked neighbor names. Null/the
+    // neighbor fields are null at the true top/bottom of the ladder.
+    ladderPosition: string;
+    aboveDivision: { id: string; name: string } | null;
+    belowDivision: { id: string; name: string } | null;
   };
   standings: DivisionStandingRow[];
   // Set only when this season's scoringMode is a best-n mode AND this
@@ -161,9 +168,12 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
         orderBy: [{ tier: { position: "asc" } }, { groupNumber: "asc" }],
         select: {
           id: true,
+          name: true,
+          groupNumber: true,
           opponentsPerPlayer: true,
           promoteCount: true,
           relegateCount: true,
+          tier: { select: { name: true, position: true } },
           members: { where: { status: "ACTIVE" }, select: { id: true } },
         },
       },
@@ -187,6 +197,26 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
     ladderActiveSize,
   );
   const scheduleFormat = scheduleDeg >= ladderActiveSize - 1 ? "round-robin" : `${scheduleDeg} opponents`;
+
+  // This division's rung on the whole ladder (lib/division-ladder.ts) --
+  // feeds the hero's "Rung N of M" line and the linked above/below neighbor
+  // names. promote/relegate above are NOT re-derived here -- buildLadder
+  // only orders divisions and reports neighbors, it never computes counts.
+  const rungs = buildLadder(
+    ladder.map((d) => ({
+      id: d.id,
+      name: d.name,
+      tierName: d.tier.name,
+      tierPosition: d.tier.position,
+      groupNumber: d.groupNumber,
+      promote: 0,
+      relegate: 0,
+    })),
+  );
+  const thisRung = rungs.find((r) => r.id === division.id) ?? null;
+  const ladderPosition = thisRung?.ladderPosition ?? "1 of 1";
+  const aboveDivision = thisRung?.above ?? null;
+  const belowDivision = thisRung?.below ?? null;
 
   // Cached standings — same source as /standings, no recompute. Read the
   // badge AFTER (not before) loadDivisionStandings, which warms the cache
@@ -328,6 +358,9 @@ export async function loadDivisionPageData(divisionId: string): Promise<Division
       promote,
       relegate,
       scheduleFormat,
+      ladderPosition,
+      aboveDivision,
+      belowDivision,
     },
     standings,
     scoringBadge,
