@@ -33,4 +33,24 @@ describe("productSwitcherRows", () => {
     const [, tour] = productSwitcherRows("Season 9");
     expect(tour.sub).not.toMatch(/\d/);
   });
+
+  it("both rows carry a stable description, unaffected by the active season", () => {
+    const withSeason = productSwitcherRows("Season 9");
+    const withoutSeason = productSwitcherRows(null);
+    expect(withSeason[0].description).toBe(
+      "Individual player league. Divisions, promotion and relegation, every season.",
+    );
+    expect(withSeason[1].description).toBe(
+      "Balatro team tournament. Draft a roster, play weekly matchups, make the playoffs.",
+    );
+    expect(withoutSeason[0].description).toBe(withSeason[0].description);
+    expect(withoutSeason[1].description).toBe(withSeason[1].description);
+  });
+
+  it("descriptions are ASCII-only", () => {
+    const rows = productSwitcherRows("Season 9");
+    for (const row of rows) {
+      expect(row.description).toMatch(/^[\x00-\x7F]*$/);
+    }
+  });
 });

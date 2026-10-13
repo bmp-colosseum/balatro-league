@@ -89,8 +89,12 @@ export function SiteMobileMenu({
           >
             <span className="flex min-w-0 flex-col">
               <span style={{ fontWeight: row.current ? 700 : 400 }}>{row.label}</span>
-              <span className="muted truncate" style={{ fontSize: 12 }}>
-                {row.sub}
+              {/* No `truncate` here (unlike the label row): the description is a full
+                  sentence or two, and clipping it mid-word on a narrow popover (390px)
+                  defeats the point of adding it -- wrap instead, the row's min-h-11
+                  floor already tolerates the extra height. */}
+              <span className="muted" style={{ fontSize: 12 }}>
+                {row.description}
               </span>
             </span>
           </MenuLinkItem>

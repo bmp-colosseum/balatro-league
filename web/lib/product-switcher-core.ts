@@ -18,6 +18,13 @@ export interface ProductSwitcherRow {
    *  for the OTHER product (this app has no access to the Tour's live data), so
    *  the Tour row stays a stable, true-on-any-day description. */
   sub: string;
+  /** Stable one-line pitch for what the product IS, independent of season state --
+   *  the menu's rendered second line (components/ProductSwitcher.tsx,
+   *  components/SiteMobileMenu.tsx). Distinct from `sub`, which carries the
+   *  current-row's live "Now viewing <season>" status when one is known; that
+   *  status is already surfaced elsewhere (the header's own season pill), so the
+   *  switcher's second line is free to always show this stable description instead. */
+  description: string;
   href: string;
   /** This app IS this product -- the switcher highlights it instead of describing
    *  "the active season" (which only this app knows) for the OTHER product. */
@@ -26,6 +33,9 @@ export interface ProductSwitcherRow {
 
 const LEAGUE_URL = "https://balatroleague.com";
 const TOUR_URL = "https://tour.balatroleague.com";
+
+const LEAGUE_DESCRIPTION = "Individual player league. Divisions, promotion and relegation, every season.";
+const TOUR_DESCRIPTION = "Balatro team tournament. Draft a roster, play weekly matchups, make the playoffs.";
 
 /**
  * Builds the switcher's two rows, League always first. `activeSeasonName` is
@@ -39,6 +49,7 @@ export function productSwitcherRows(activeSeasonName: string | null): ProductSwi
       key: "league",
       label: "Balatro League",
       sub: activeSeasonName ? `Now viewing ${activeSeasonName}` : "Standings, divisions and seasons",
+      description: LEAGUE_DESCRIPTION,
       href: LEAGUE_URL,
       current: true,
     },
@@ -46,6 +57,7 @@ export function productSwitcherRows(activeSeasonName: string | null): ProductSwi
       key: "tour",
       label: "Team Tour",
       sub: "Team standings and brackets",
+      description: TOUR_DESCRIPTION,
       href: TOUR_URL,
       current: false,
     },
