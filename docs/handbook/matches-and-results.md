@@ -36,9 +36,9 @@ Sources: [src/commands/start-match.ts](../../src/commands/start-match.ts),
   carries one extra orientation sentence spelling this order out for a
   newcomer, computed from the real policy/pool rather than hardcoded.
   The UI is a dropdown plus a random-ban button; "Reroll options" (both
-  must agree) and "Propose custom combo" are shown for casual `/challenge`
-  matches only -- league matches hide both so a league pool is never
-  reroll-able or swappable for a custom combo.
+  must agree) and "Propose custom combo" are shown for league matches and
+  casual `/challenge` matches alike (they were league-hidden for two days in
+  October 2026; the TO asked for them back).
 - Who bans first in game 2: the loser of game 1 presses "{name} bans first",
   unless the rules template sets `firstPickMode` to ALTERNATE, which skips the
   choice.

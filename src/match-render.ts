@@ -463,29 +463,26 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
     // Random ban auto-rolls the active banner's picks into the same
     // confirm prompt (still a deliberate confirm, just no manual
     // choosing). Reroll + Propose are shared-action buttons either
-    // player can click -- but only for CASUAL challenges. League matches
-    // hide both: the organiser wants a league match's pool fixed to what
-    // the season's preset drew, not reroll-able or swappable for a custom
-    // combo (see B16 in .claude/knowledge/bot-ux/01-findings.md).
-    // Cancel/pause/helper live on the helper row.
+    // player can click, in league matches as well as casual challenges
+    // (the 2026-10-12 B16 change hid them for league matches; the TO
+    // asked for them back on 2026-10-14). Cancel/pause/helper live on
+    // the helper row.
     const banActionButtons = [
       new ButtonBuilder()
         .setCustomId(`match:banrandom:${s.id}`)
         .setLabel(`🎲 Random ban${expected > 1 ? "s" : ""}`)
         .setStyle(ButtonStyle.Secondary),
     ];
-    if (s.isCasual) {
-      banActionButtons.push(
-        new ButtonBuilder()
-          .setCustomId(`match:reroll:${s.id}`)
-          .setLabel(rerollLabel)
-          .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-          .setCustomId(`match:proposestart:${s.id}`)
-          .setLabel("Propose custom combo")
-          .setStyle(ButtonStyle.Secondary),
-      );
-    }
+    banActionButtons.push(
+      new ButtonBuilder()
+        .setCustomId(`match:reroll:${s.id}`)
+        .setLabel(rerollLabel)
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`match:proposestart:${s.id}`)
+        .setLabel("Propose custom combo")
+        .setStyle(ButtonStyle.Secondary),
+    );
     const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(...banActionButtons);
     return {
       embeds: [embed],

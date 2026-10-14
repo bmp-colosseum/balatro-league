@@ -226,7 +226,7 @@ describe("renderMatch -- GAME_1_BAN orientation + wording (B04)", () => {
   });
 });
 
-describe("renderMatch -- reroll/propose are casual-only (B16)", () => {
+describe("renderMatch -- reroll/propose show for league and casual matches", () => {
   function buttonLabels(components: ReturnType<typeof renderMatch>["components"]): string[] {
     return components.flatMap((row) =>
       row.components
@@ -235,12 +235,12 @@ describe("renderMatch -- reroll/propose are casual-only (B16)", () => {
     );
   }
 
-  it("league (non-casual) GAME_1_BAN hides Reroll and Propose custom combo", () => {
+  it("league (non-casual) GAME_1_BAN shows Random ban, Reroll and Propose custom combo", () => {
     const session = makeSession({ state: "GAME_1_BAN", isCasual: false }, { game1: emptyGameState(A.id, pool()) });
     const labels = buttonLabels(renderMatch(session, A, B).components);
     expect(labels.some((l) => l.includes("Random ban"))).toBe(true);
-    expect(labels.some((l) => l.includes("Reroll"))).toBe(false);
-    expect(labels.some((l) => l.includes("Propose custom combo"))).toBe(false);
+    expect(labels.some((l) => l.includes("Reroll"))).toBe(true);
+    expect(labels.some((l) => l.includes("Propose custom combo"))).toBe(true);
   });
 
   it("casual GAME_1_BAN still shows Reroll and Propose custom combo", () => {
