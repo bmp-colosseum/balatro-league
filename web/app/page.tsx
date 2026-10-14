@@ -22,13 +22,11 @@ import { auth } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { SiteNav } from "@/components/SiteNav";
 import { StandingsBoard } from "@/components/StandingsBoard";
-import { SeasonWindow } from "@/components/SeasonWindow";
 import { loadStandingsPageData } from "@/lib/loaders/standings";
 import { loadOpenSignupRoundId } from "@/lib/loaders/join";
 import { loadDiscordInviteUrl } from "@/lib/loaders/discord-invite";
 import { getShowBmpMmr } from "@/lib/preferences";
 import { pageMetadata } from "@/lib/seo";
-import { seasonMatchTotals, seasonProgressLine, topDivisionRows } from "@/lib/home-page-core";
 
 export const dynamic = "force-dynamic"; // Always fresh -- same reasoning as /standings
 
@@ -57,106 +55,42 @@ export default async function HomePage() {
     loadDiscordInviteUrl(),
   ]);
 
-  const { totalPlayed, totalExpected } = seasonMatchTotals(data.tiers);
-  const legendaryTop = topDivisionRows(data.tiers, "Legendary", 3);
 
   return (
     <>
       <SiteNav activePath="/" />
       <main>
-        <div className="card">
-          <h1>Balatro League</h1>
-          <p className="muted" style={{ marginTop: 4, fontSize: 16 }}>
-            A free Balatro Multiplayer league on Discord: divisions, promotion and relegation, a new
-            season every few weeks.
-          </p>
-        </div>
-
-        <div className="grid grid-3">
-          <div className="card">
-            <h2>How it works</h2>
-            <ol style={{ margin: "8px 0", paddingLeft: 20, display: "grid", gap: 6, listStyle: "decimal" }}>
-              <li>Sign up for the next season.</li>
-              <li>Get placed in a division by rating.</li>
-              <li>Play your scheduled opponents and report results -- climb the divisions season to season.</li>
-            </ol>
-            <p style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 10 }}>
-              <Link href="/how-it-works">Full rules</Link>
-              <Link href="/join">Join the league</Link>
+        <div className="card home-hero" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16, justifyContent: "space-between" }}>
+          <div style={{ minWidth: 0, flex: "1 1 320px" }}>
+            <h1 style={{ margin: 0 }}>Balatro League</h1>
+            <p className="muted" style={{ margin: "4px 0 0", fontSize: 15 }}>
+              A free Balatro Multiplayer league on Discord: divisions, promotion and relegation, a new
+              season every few weeks.
             </p>
           </div>
-
-          <div className="card">
-            <h2>This season</h2>
-            {data.season ? (
-              <>
-                <p className="pixel" style={{ fontSize: 18, marginTop: 4 }}>{data.season.name}</p>
-                <SeasonWindow start={data.season.startedAt} end={data.season.scheduledEndAt} />
-                <p className="muted" style={{ marginTop: 8 }}>
-                  {seasonProgressLine({ totalPlayed, totalExpected })}
-                </p>
-                {legendaryTop.length > 0 && (
-                  <div style={{ marginTop: 10 }}>
-                    <div className="muted" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: ".8px" }}>
-                      Top of Legendary
-                    </div>
-                    <ol style={{ margin: "6px 0 0", paddingLeft: 20, listStyle: "decimal" }}>
-                      {legendaryTop.map((row) => (
-                        <li key={row.rank}>
-                          {row.displayName} <span className="muted">-- {row.points} pts</span>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                )}
-                <p style={{ marginTop: 10 }}>
-                  <Link href="#standings">Full standings below</Link>
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="muted" style={{ marginTop: 4 }}>No active season right now.</p>
-                <p style={{ marginTop: 10 }}>
-                  <Link href="/join">Get notified for the next one</Link>
-                </p>
-              </>
-            )}
-          </div>
-
-          <div className="card">
-            <h2>Join</h2>
-            <p className="muted" style={{ marginTop: 4 }}>
-              Free to join. Sign in with Discord, get placed in a division, and play your scheduled
-              opponents.
-            </p>
-            <p style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+          <p style={{ display: "flex", gap: 10, flexWrap: "wrap", margin: 0 }}>
+            <Button
+              render={<Link href="/join" />}
+              nativeButton={false}
+              className="h-11 px-5 text-base"
+              style={{ background: "var(--gold)", color: "var(--gold-ink)" }}
+            >
+              Join the league
+            </Button>
+            <Button render={<Link href="/how-it-works" />} nativeButton={false} variant="secondary" className="h-11 px-5 text-base">
+              How it works
+            </Button>
+            {discordInviteUrl && (
               <Button
-                render={<Link href="/join" />}
+                render={<a href={discordInviteUrl} target="_blank" rel="noreferrer" />}
                 nativeButton={false}
+                variant="secondary"
                 className="h-11 px-5 text-base"
-                style={{ background: "var(--gold)", color: "var(--gold-ink)" }}
               >
-                Join the league
+                Discord
               </Button>
-              {discordInviteUrl && (
-                <Button
-                  render={<a href={discordInviteUrl} target="_blank" rel="noreferrer" />}
-                  nativeButton={false}
-                  variant="secondary"
-                  className="h-11 px-5 text-base"
-                >
-                  Open Discord invite
-                </Button>
-              )}
-            </p>
-            <p className="muted" style={{ marginTop: 10, fontSize: 13 }}>
-              There is also the{" "}
-              <a href="https://tour.balatroleague.com/" target="_blank" rel="noreferrer">
-                Pizza Power Team Tour
-              </a>
-              , a drafted-team version of the same mod.
-            </p>
-          </div>
+            )}
+          </p>
         </div>
 
         {/* Anchor target for the "This season" card's "Full standings below"
