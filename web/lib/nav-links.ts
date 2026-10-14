@@ -19,7 +19,10 @@ export interface NavLink {
 // a primary-nav destination -- it's linked from the profile's Traits card
 // instead (see ProfileView.tsx).
 export const PRIMARY_LINKS: NavLink[] = [
-  { href: "/standings", label: "Standings" },
+  // "/" is the standings page now -- /standings is a permanent redirect to
+  // it (web/app/standings/page.tsx), so the nav's own Standings link skips
+  // straight to the canonical URL instead of bouncing through the redirect.
+  { href: "/", label: "Standings" },
   { href: "/players", label: "Players" },
   { href: "/stats", label: "Stats" },
   { href: "/hall-of-fame", label: "Hall of Fame" },

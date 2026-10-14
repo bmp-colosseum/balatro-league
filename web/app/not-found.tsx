@@ -18,7 +18,7 @@ export default function NotFound() {
           <p className="muted">The link may be old, or the page may have moved.</p>
           <p style={{ marginTop: 16, display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap", alignItems: "center" }}>
             <Link
-              href="/standings"
+              href="/"
               style={{
                 display: "inline-flex",
                 alignItems: "center",

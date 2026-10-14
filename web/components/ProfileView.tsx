@@ -342,7 +342,7 @@ export async function ProfileView({
       <SiteNav activePath="" />
       <main>
         <p style={{ marginBottom: 4 }}>
-          <Link href="/standings" className="muted" style={{ fontSize: 13 }}>← Standings</Link>
+          <Link href="/" className="muted" style={{ fontSize: 13 }}>← Standings</Link>
         </p>
         <h1 className="profile-header-v1">{profile.player.displayName}<DiscordId value={profile.player.discordId} username={profile.player.username} /></h1>
         {shownTimezone && (

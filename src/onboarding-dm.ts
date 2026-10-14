@@ -68,7 +68,10 @@ export async function sendOnboardingGuideDm(playerId: string, force = false): Pr
   const messages = buildOnboardingGuideMessages({
     seasonLabel,
     seasonWindowLines: windowLines,
-    standingsUrl: webUrl("standings"),
+    // "/standings" merged into the home page -- the web dashboard's root is
+    // the standings page now (see web/app/standings/page.tsx, a permanent
+    // redirect to "/"), so the DM's absolute link goes straight there.
+    standingsUrl: webUrl(),
     supportChannelUrl,
     tiebreak: normalizeTiebreak(season?.tiebreak),
   });

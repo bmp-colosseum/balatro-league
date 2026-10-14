@@ -24,9 +24,10 @@ export interface OnboardingGuideInput {
   // Pre-rendered season start/end line(s) (e.g. from seasonWindowLines()).
   // [] falls back to a generic "check the pinned info" line.
   seasonWindowLines: string[];
-  // Link to the standings page -- the bot's DM needs the full URL Discord
-  // requires (e.g. "https://balatroleague.com/standings"); the web page's
-  // own loader passes a relative "/standings" instead (ux-round4 L10), since
+  // Link to the standings page (the web dashboard's "/", which merged
+  // "/standings" into itself) -- the bot's DM needs the full URL Discord
+  // requires (e.g. "https://balatroleague.com"); the web page's own loader
+  // passes a relative "/" instead (ux-round4 L10), since
   // discordMarkdownToHtml renders a bare "/path" as a same-tab link.
   standingsUrl: string;
   // Jump link to the support channel, or null to omit the direct mention.

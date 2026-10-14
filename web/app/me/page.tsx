@@ -49,7 +49,7 @@ export default async function MePage({
   // Logout stays inline — uses next-auth's signOut, no DB work.
   async function logoutAction() {
     "use server";
-    await signOut({ redirectTo: "/standings" });
+    await signOut({ redirectTo: "/" });
   }
 
 

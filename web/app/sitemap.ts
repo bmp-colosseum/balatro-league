@@ -15,10 +15,11 @@ export const dynamic = "force-dynamic";
 // point crawlers at a 307 with nothing to index. /changes 404s for non-admins, same
 // reasoning. See docs/handbook/seo.md.
 const STATIC_PATHS: SitemapEntryInput[] = [
-  // "/" used to be a bare redirect to /standings (not worth a sitemap entry
-  // of its own); it's a real landing page now -- see app/page.tsx.
+  // "/" used to be a bare redirect to /standings; it's the real landing +
+  // standings page now (app/page.tsx), and /standings permanently redirects
+  // here instead (app/standings/page.tsx) -- so "/" is the one sitemap entry
+  // for both, not two.
   { path: "/" },
-  { path: "/standings" },
   { path: "/seasons" },
   { path: "/hall-of-fame" },
   { path: "/how-it-works" },

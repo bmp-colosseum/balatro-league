@@ -56,7 +56,7 @@ export default async function ProfilePage({
     <>
       <JsonLd
         data={breadcrumbJsonLd([
-          { name: "Standings", url: absoluteUrl("/standings") },
+          { name: "Standings", url: absoluteUrl("/") },
           { name: player?.displayName ?? "Profile", url: absoluteUrl(`/profile/${id}`) },
         ])}
       />

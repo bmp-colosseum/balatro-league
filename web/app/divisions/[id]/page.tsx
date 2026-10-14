@@ -158,12 +158,12 @@ export default async function PublicDivisionPage({
     <>
       <JsonLd
         data={breadcrumbJsonLd([
-          { name: "Standings", url: absoluteUrl("/standings") },
+          { name: "Standings", url: absoluteUrl("/") },
           { name: division.seasonName, url: absoluteUrl(`/seasons/${division.seasonId}`) },
           { name: division.name, url: absoluteUrl(`/divisions/${id}`) },
         ])}
       />
-      <SiteNav activePath="/standings" />
+      <SiteNav activePath="/" />
       <main>
         {/* Admin shortcut bar: the per-division tools render at the very
             bottom of a long page, so admins get a one-line jump to them and
@@ -204,7 +204,7 @@ export default async function PublicDivisionPage({
               <Link href={`/seasons/${division.seasonId}`} className="muted">
                 {division.seasonName}
               </Link>
-              <Link href="/standings" className="muted" style={{ marginLeft: "auto" }}>
+              <Link href="/" className="muted" style={{ marginLeft: "auto" }}>
                 all standings
               </Link>
             </div>
@@ -244,7 +244,7 @@ export default async function PublicDivisionPage({
           <Link href={`/seasons/${division.seasonId}`} className="muted">
             {division.seasonName}
           </Link>
-          <Link href="/standings" style={{ marginLeft: "auto" }}>← all standings</Link>
+          <Link href="/" style={{ marginLeft: "auto" }}>← all standings</Link>
         </div>
         <div className="muted division-top-v1" style={{ marginTop: 4 }}>
           {division.activeCount} active {division.activeCount === 1 ? "player" : "players"} · {division.confirmedPairingCount} {division.confirmedPairingCount === 1 ? "match" : "matches"} played · {unplayed.length} remaining

@@ -100,7 +100,7 @@ export default async function HowItWorksPage() {
           <h3>Ready?</h3>
           <p>
             <Link
-              href={isLoggedIn ? "/standings" : "/join"}
+              href={isLoggedIn ? "/" : "/join"}
               className="howto-cta"
               style={{
                 display: "inline-block",

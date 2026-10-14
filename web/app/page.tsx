@@ -8,13 +8,23 @@
 // (components/StandingsBoard.tsx) -- so this page both pitches the league
 // AND proves it's live and active without a click.
 //
-// /standings stays the canonical URL for the standings CONTENT (its own
-// pageMetadata canonical is unchanged); this page's own canonical is "/".
-// The embedded board here renders its season heading as h2 (not h1) since
-// this page's own h1 is "Balatro League" -- one h1 per page, per
-// design-system/MASTER.md and the SEO audit's L7 single-h1 fix -- and
-// suppresses its own open-signups banner since the "Join" block below
-// already covers that CTA prominently.
+// /standings now permanently redirects here (see app/standings/page.tsx) --
+// this page's own canonical is "/".
+//
+// The pitch strip (H1 + sentence + Join/How it works/Discord buttons) only
+// renders for a signed-out visitor -- a signed-in player already knows what
+// the league is and would rather land straight on the standings they came
+// for (and their own division), not re-read the elevator pitch every visit.
+// Logged-out visitors and crawlers still get the full strip, so the page's
+// SEO/first-impression job (SEO audit finding 5) is unchanged for them.
+//
+// Exactly one h1 either way: when the strip renders, it owns the h1 and the
+// embedded board's own season heading renders as h2 (headingLevel="h2").
+// When the strip is hidden, the board's own heading is promoted to the
+// page's h1 instead (headingLevel="h1") -- see components/StandingsBoard.tsx's
+// headingLevel prop. The board's own open-signups banner stays suppressed in
+// both cases: a signed-in player doesn't need it repeated, and a signed-out
+// visitor already has the strip's own "Join" button covering that CTA.
 
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -49,6 +59,7 @@ export default async function HomePage() {
   const showBmpMmr = await getShowBmpMmr();
   const session = await auth();
   const viewerDiscordId = (session?.user as { discordId?: string } | undefined)?.discordId;
+  const isLoggedIn = !!session?.user;
   const [data, openRound, discordInviteUrl] = await Promise.all([
     loadStandingsPageData({ showBmpMmr, viewerDiscordId }),
     loadOpenSignupRoundId(),
@@ -60,49 +71,51 @@ export default async function HomePage() {
     <>
       <SiteNav activePath="/" />
       <main>
-        <div className="card home-hero" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16, justifyContent: "space-between" }}>
-          <div style={{ minWidth: 0, flex: "1 1 320px" }}>
-            <h1 style={{ margin: 0 }}>Balatro League</h1>
-            <p className="muted" style={{ margin: "4px 0 0", fontSize: 15 }}>
-              A free Balatro Multiplayer league on Discord: divisions, promotion and relegation, a new
-              season every few weeks.
+        {!isLoggedIn && (
+          <div className="card home-hero" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 16, justifyContent: "space-between" }}>
+            <div style={{ minWidth: 0, flex: "1 1 320px" }}>
+              <h1 style={{ margin: 0 }}>Balatro League</h1>
+              <p className="muted" style={{ margin: "4px 0 0", fontSize: 15 }}>
+                A free Balatro Multiplayer league on Discord: divisions, promotion and relegation, a new
+                season every few weeks.
+              </p>
+            </div>
+            <p style={{ display: "flex", gap: 10, flexWrap: "wrap", margin: 0 }}>
+              <Button
+                render={<Link href="/join" />}
+                nativeButton={false}
+                className="h-11 px-5 text-base"
+                style={{ background: "var(--gold)", color: "var(--gold-ink)" }}
+              >
+                Join the league
+              </Button>
+              <Button render={<Link href="/how-it-works" />} nativeButton={false} variant="secondary" className="h-11 px-5 text-base">
+                How it works
+              </Button>
+              {discordInviteUrl && (
+                <Button
+                  render={<a href={discordInviteUrl} target="_blank" rel="noreferrer" />}
+                  nativeButton={false}
+                  variant="secondary"
+                  className="h-11 px-5 text-base"
+                >
+                  Discord
+                </Button>
+              )}
             </p>
           </div>
-          <p style={{ display: "flex", gap: 10, flexWrap: "wrap", margin: 0 }}>
-            <Button
-              render={<Link href="/join" />}
-              nativeButton={false}
-              className="h-11 px-5 text-base"
-              style={{ background: "var(--gold)", color: "var(--gold-ink)" }}
-            >
-              Join the league
-            </Button>
-            <Button render={<Link href="/how-it-works" />} nativeButton={false} variant="secondary" className="h-11 px-5 text-base">
-              How it works
-            </Button>
-            {discordInviteUrl && (
-              <Button
-                render={<a href={discordInviteUrl} target="_blank" rel="noreferrer" />}
-                nativeButton={false}
-                variant="secondary"
-                className="h-11 px-5 text-base"
-              >
-                Discord
-              </Button>
-            )}
-          </p>
-        </div>
+        )}
 
         {/* Anchor target for the "This season" card's "Full standings below"
-            link -- StandingsBoard renders its own h2 ("Standings" / "<season>
-            -- Standings"), so this wraps it rather than adding a second,
-            redundant "Standings" heading right above it. */}
+            link -- StandingsBoard renders its own heading ("Standings" /
+            "<season> -- Standings"), so this wraps it rather than adding a
+            second, redundant "Standings" heading right above it. */}
         <div id="standings" style={{ scrollMarginTop: 16 }}>
           <StandingsBoard
             data={data}
             openRound={openRound}
             showBmpMmr={showBmpMmr}
-            headingLevel="h2"
+            headingLevel={isLoggedIn ? "h1" : "h2"}
             showOpenSignupBanner={false}
           />
         </div>

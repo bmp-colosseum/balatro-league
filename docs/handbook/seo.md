@@ -12,9 +12,11 @@ Sources: [web/lib/seo.ts](../../web/lib/seo.ts),
 
 ## Indexable (public, in the sitemap)
 
-`/` (the home landing page, replacing the old bare redirect to `/standings`),
-`/standings`, `/seasons`, every `/seasons/[id]`, every `/divisions/[id]`,
-`/hall-of-fame`, `/how-it-works`, `/join`, `/stats`, `/traits`, and
+`/` (the home landing page, which now also IS the standings page -- `/standings`
+permanently redirects here, see `web/app/standings/page.tsx`, so there's one
+canonical standings URL instead of two sitemap entries), `/seasons`, every
+`/seasons/[id]`, every `/divisions/[id]`, `/hall-of-fame`, `/how-it-works`,
+`/join`, `/stats`, `/traits`, and
 `/guides/balatro-multiplayer-with-friends` (the "play with friends" how-to guide,
 linked from `/how-it-works` and the footer). Each gets a real title, description,
 canonical link, and Open Graph/Twitter card through the shared `pageMetadata()`

@@ -1,36 +1,18 @@
-import { auth } from "@/auth";
-import { loadStandingsPageData } from "@/lib/loaders/standings";
-import { loadOpenSignupRoundId } from "@/lib/loaders/join";
-import { getShowBmpMmr } from "@/lib/preferences";
-import { SiteNav } from "@/components/SiteNav";
-import { StandingsBoard } from "@/components/StandingsBoard";
-import { pageMetadata } from "@/lib/seo";
+// /standings merged into the home page ("/"), which now renders the exact
+// same full standings content for every visitor (see app/page.tsx,
+// components/StandingsBoard.tsx) -- one canonical standings URL instead of
+// two. Kept as a permanent (308) redirect, not removed outright, so every
+// existing /standings link (bookmarks, shared links, search results indexed
+// before the merge) still lands somewhere instead of 404ing. A "#division-
+// <id>" deep link carries over automatically -- browsers reattach the
+// original fragment to a Location header with no fragment of its own, and
+// LadderStrip's own "#division-<id>" anchors are relative already, so they
+// resolve against "/" with no code change needed here.
+//
+// No query string to preserve: this page never read searchParams.
 
-export const dynamic = "force-dynamic"; // Always fresh — DB writes happen out-of-band via the bot
+import { permanentRedirect } from "next/navigation";
 
-export const metadata = pageMetadata({
-  title: "Standings",
-  description: "Current Balatro League standings across every division, updated live as matches are reported.",
-  path: "/standings",
-});
-
-export default async function StandingsPage() {
-  const showBmpMmr = await getShowBmpMmr();
-  // Viewer's Discord id (for the v2 "you" badge) -- undefined when signed
-  // out, same session shape SiteNav/the /me page already read.
-  const session = await auth();
-  const viewerDiscordId = (session?.user as { discordId?: string } | undefined)?.discordId;
-  const [data, openRound] = await Promise.all([
-    loadStandingsPageData({ showBmpMmr, viewerDiscordId }),
-    loadOpenSignupRoundId(),
-  ]);
-
-  return (
-    <>
-      <SiteNav activePath="/standings" />
-      <main>
-        <StandingsBoard data={data} openRound={openRound} showBmpMmr={showBmpMmr} />
-      </main>
-    </>
-  );
+export default function StandingsPage(): never {
+  permanentRedirect("/");
 }

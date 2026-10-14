@@ -61,9 +61,11 @@ export async function loadHowItWorksPageData(): Promise<HowItWorksPageData> {
     seasonLabel,
     seasonWindowLines,
     // Relative, not an absolute www-prefixed URL (ux-round4 L10) -- the web
-    // page can link its own /standings directly; only the bot's onboarding
-    // DM (src/onboarding-dm.ts) needs the full https URL Discord requires.
-    standingsUrl: "/standings",
+    // page can link its own standings page ("/", which merged /standings'
+    // content -- see app/standings/page.tsx) directly; only the bot's
+    // onboarding DM (src/onboarding-dm.ts) needs the full https URL Discord
+    // requires.
+    standingsUrl: "/",
     supportChannelUrl,
     tiebreak: normalizeTiebreak(season?.tiebreak),
   });
