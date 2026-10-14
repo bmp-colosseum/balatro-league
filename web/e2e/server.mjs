@@ -7,21 +7,31 @@ import { execSync, spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { findFreePort } from "./../scripts/lib/get-free-port.mjs";
 
-const PG_PORT = 54330;
-const WEB_PORT = 3210;
+// playwright.config.ts picks both ports up front (so it can set use.baseURL
+// and webServer.url before spawning this process) and passes them down via
+// env. Running this file standalone (`node e2e/server.mjs`, no Playwright)
+// falls back to picking its own free ports so it still works on its own.
+const PG_PORT = Number(process.env.E2E_PG_PORT) || (await findFreePort());
+const WEB_PORT = Number(process.env.E2E_WEB_PORT) || (await findFreePort());
 const DB_URL = `postgresql://postgres:postgres@localhost:${PG_PORT}/e2e`;
 
 const dir = mkdtempSync(join(tmpdir(), "bl-e2e-"));
+// --encoding=UTF8 --locale=C: embedded-postgres' default initdb on Windows
+// picks up the OS codepage (WIN1252), which then fails on any schema push
+// whose SQL contains a non-Latin1 character (e.g. a "↑/↓" arrow quoted out
+// of a Prisma schema doc-comment into a generated COMMENT ON statement).
 const pg = new EmbeddedPostgres({
   databaseDir: dir,
   user: "postgres",
   password: "postgres",
   port: PG_PORT,
   persistent: false,
+  initdbFlags: ["--encoding=UTF8", "--locale=C"],
 });
 
-console.log("[e2e] starting embedded postgres…");
+console.log(`[e2e] starting embedded postgres on port ${PG_PORT}…`);
 await pg.initialise();
 await pg.start();
 await pg.createDatabase("e2e");
@@ -45,7 +55,7 @@ const env = {
   ADMIN_TOKEN: "e2e-admin-token-0123456789", // for seed endpoints used by create-league E2E
 };
 
-console.log("[e2e] starting next dev…");
+console.log(`[e2e] starting next dev on port ${WEB_PORT}…`);
 const next = spawn("npx", ["next", "dev", "-p", String(WEB_PORT)], { env, stdio: "inherit", shell: true });
 
 let cleaning = false;

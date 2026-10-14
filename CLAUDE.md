@@ -11,3 +11,9 @@ handbook page in the same commit. The page index and owners are in
 together; never leave the page describing behaviour the code no longer has.
 
 Web styling conventions live in `web/AGENTS.md` (loaded via `web/CLAUDE.md`).
+
+## Verifying a web change locally
+
+The sandbox can't reach the production database. Use the `verify` skill
+(`.claude/skills/verify/SKILL.md`) to build, run, and screenshot the web app
+against a local seeded dataset shaped like production instead.

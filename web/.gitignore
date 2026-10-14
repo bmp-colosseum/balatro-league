@@ -44,3 +44,8 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 /e2e/.cache/
+
+# verify-env (local-only, disposable embedded Postgres + next start)
+/.verify-env-state.json
+/.verify-env.log
+/shots/
