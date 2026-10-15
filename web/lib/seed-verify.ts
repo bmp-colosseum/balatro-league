@@ -22,6 +22,7 @@ import { recomputeDivisionStandings } from "@/lib/standings-cache";
 import { performSeasonActivation } from "@/lib/season-activation";
 import { seedMatchesForSeason } from "@/lib/seed-e2e";
 import { writeMatchGames, type GameStateLike } from "@/lib/match-write";
+import { nextSeasonNumber } from "@/lib/format-season";
 import defaults from "@/lib/match-defaults.json";
 
 const VERIFY_PREFIX = "verify-";
@@ -71,7 +72,16 @@ async function resetVerifyData(): Promise<void> {
     await prisma.season.deleteMany({ where: { id: { in: seasonIds } } });
   }
   await prisma.signup.deleteMany({ where: { discordId: { startsWith: VERIFY_PREFIX } } });
-  await prisma.signupRound.deleteMany({ where: { name: { startsWith: "Verify " } } });
+  // Two name shapes to catch here: the CLOSED/built rounds always named
+  // "Verify ...", and the OPEN round left behind for the next-season signup
+  // banner, which is deliberately named like a real round ("Season N
+  // Signups") instead -- caught instead via its resultingSeasonId pointing
+  // at one of the verify seasons just collected above. resultingSeasonId
+  // isn't a declared FK (see schema comment), so this needs doing by hand
+  // before the Season rows above vanish, or it'd dangle across reseeds.
+  await prisma.signupRound.deleteMany({
+    where: { OR: [{ name: { startsWith: "Verify " } }, { resultingSeasonId: { in: seasonIds } }] },
+  });
   await prisma.player.deleteMany({ where: { discordId: { startsWith: VERIFY_PREFIX } } });
 }
 
@@ -248,6 +258,14 @@ export async function runSeedVerify(opts: SeedVerifyOptions, actor: AuditActor):
   // Open-signups toggle: when on, leave one OPEN SignupRound (the /join
   // "signups open" state) with its own small newcomer roster; when off,
   // leave none (the "between seasons" state).
+  //
+  // Linked to a real (draft, unbuilt) next-season Season row via
+  // resultingSeasonId -- mirrors production's auto-open flow (see
+  // docs/handbook/season-lifecycle.md#1-signups: "creates Season N+1 ...
+  // then posts the signup embed"), and is what lets the website's
+  // season-naming surfaces (home page banner/hero, admin lifecycle strip --
+  // see web/lib/signup-season-label-core.ts) render a real season number
+  // against this round instead of falling back to the round's own name.
   let openSignupRoundId: string | null = null;
   if (opts.openSignups !== false) {
     const newcomers = Array.from({ length: 8 }, (_, i) => ({
@@ -256,13 +274,18 @@ export async function runSeedVerify(opts: SeedVerifyOptions, actor: AuditActor):
       rating: playerCount + i + 1,
     }));
     await prisma.player.createMany({ data: newcomers, skipDuplicates: true });
+    const nextNumber = await nextSeasonNumber(prisma);
+    const nextSeason = await prisma.season.create({
+      data: { number: nextNumber, subtitle: `${VERIFY_SUBTITLE} Next`, isActive: false },
+    });
     const openRound = await prisma.signupRound.create({
       data: {
-        name: "Verify Next Season Signups",
+        name: `Season ${nextNumber} Signups`,
         guildId: "verify-guild",
         channelId: "verify-channel",
         messageId: "verify-open",
         status: "OPEN",
+        resultingSeasonId: nextSeason.id,
       },
     });
     await prisma.signup.createMany({

@@ -362,6 +362,11 @@ interface LifecycleSeason {
   id: string;
   isActive: boolean;
   endedAt: Date | null;
+  // Already present on the full season object this page's loader hands
+  // in -- just widening the type so the OPEN-signups strip can name the
+  // season via the site's one canonical formatSeasonLabel.
+  number: number;
+  subtitle: string | null;
 }
 interface LifecycleRound {
   id: string;
@@ -500,7 +505,7 @@ function LifecycleActions({
     return (
       <div style={{ marginTop: 8 }}>
         <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
-          🟢 Signups open in <code>#{channels.find((c) => c.id === round.channelId)?.name ?? round.channelId}</code> — {round._count.signups} joined
+          🟢 {formatSeasonLabel(season)} sign-ups open in <code>#{channels.find((c) => c.id === round.channelId)?.name ?? round.channelId}</code> — {round._count.signups} joined
         </div>
         <RosterPanel round={round} />
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>

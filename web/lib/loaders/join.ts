@@ -8,6 +8,22 @@ import { auth } from "@/auth";
 import { isAdminUser } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { loadDiscordInviteUrl } from "@/lib/loaders/discord-invite";
+import { signupSeasonLabel } from "@/lib/signup-season-label-core";
+
+// Shared by loadJoinPageData and loadOpenSignupSummary below -- both need
+// "does this round already have a built Season, and if so what's its
+// number/subtitle" before they can derive a label, and that's the only
+// query-shaped step signupSeasonLabel itself can't do (it's pure).
+async function seasonInfoForRound(
+  resultingSeasonId: string | null,
+): Promise<{ seasonNumber: number | null; subtitle: string | null }> {
+  if (!resultingSeasonId) return { seasonNumber: null, subtitle: null };
+  const s = await prisma.season.findUnique({
+    where: { id: resultingSeasonId },
+    select: { number: true, subtitle: true },
+  });
+  return s ? { seasonNumber: s.number, subtitle: s.subtitle } : { seasonNumber: null, subtitle: null };
+}
 
 export interface JoinPageData {
   discordInviteUrl: string | null;
@@ -49,16 +65,17 @@ export async function loadJoinPageData(): Promise<JoinPageData> {
     null,
   ]);
 
-  // If the round has a resultingSeasonId, fetch its label for context.
+  // If the round has a resultingSeasonId, derive its label through the
+  // one shared rule (lib/signup-season-label-core.ts) -- same helper
+  // loadOpenSignupSummary below uses, so a round never gets a different
+  // label depending on which loader asked. Unlike the old inline version,
+  // this always returns a label (round-name-derived when no Season row
+  // exists yet) instead of null -- the /join page's own `?? round.name`
+  // fallback for that case still renders the same text either way.
   let seasonLabel: string | null = null;
-  if (round?.resultingSeasonId) {
-    const s = await prisma.season.findUnique({
-      where: { id: round.resultingSeasonId },
-      select: { number: true, subtitle: true },
-    });
-    if (s) {
-      seasonLabel = s.subtitle ? `Season ${s.number} — ${s.subtitle}` : `Season ${s.number}`;
-    }
+  if (round) {
+    const { seasonNumber, subtitle } = await seasonInfoForRound(round.resultingSeasonId);
+    seasonLabel = signupSeasonLabel({ seasonNumber, subtitle, roundName: round.name });
   }
 
   // Second query — couldn't run in the Promise.all above because round.id
@@ -96,11 +113,46 @@ export async function loadSeasonLengthDays(): Promise<number> {
 }
 
 // The currently-OPEN signup round, id only — drives the "sign-ups are open"
-// CTA on the public /standings page. Most-recently opened wins.
+// CTA on the public /standings page. Most-recently opened wins. Kept
+// alongside loadOpenSignupSummary below (which most new callers want
+// instead) since SiteNav only needs the boolean "is something open".
 export async function loadOpenSignupRoundId(): Promise<{ id: string } | null> {
   return prisma.signupRound.findFirst({
     where: { status: "OPEN" },
     orderBy: { openedAt: "desc" },
     select: { id: true },
   });
+}
+
+export interface OpenSignupSummary {
+  id: string;
+  name: string;
+  seasonLabel: string;
+  signupCount: number;
+  closesAt: Date | null;
+}
+
+// The currently-OPEN signup round, named -- drives the home page hero line
+// and the StandingsBoard banner (components/StandingsBoard.tsx), both of
+// which need to say WHICH season is signing up, not just that one is.
+// Most-recently-opened round wins, same tie-break as loadOpenSignupRoundId.
+export async function loadOpenSignupSummary(): Promise<OpenSignupSummary | null> {
+  const round = await prisma.signupRound.findFirst({
+    where: { status: "OPEN" },
+    orderBy: { openedAt: "desc" },
+    include: {
+      signups: { where: { withdrawn: false }, select: { id: true } },
+    },
+  });
+  if (!round) return null;
+
+  const { seasonNumber, subtitle } = await seasonInfoForRound(round.resultingSeasonId);
+
+  return {
+    id: round.id,
+    name: round.name,
+    seasonLabel: signupSeasonLabel({ seasonNumber, subtitle, roundName: round.name }),
+    signupCount: round.signups.length,
+    closesAt: round.closesAt,
+  };
 }

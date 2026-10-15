@@ -803,6 +803,11 @@ interface LifecycleSeason {
   isActive: boolean;
   endedAt: Date | null;
   scheduledStartAt: Date | null;
+  // Already present on the full season object this page's loader hands
+  // in -- just widening the type so the OPEN-signups strip can name the
+  // season via the site's one canonical formatSeasonLabel.
+  number: number;
+  subtitle: string | null;
 }
 interface LifecycleRound { id: string; status: string; closedAt: Date | null; channelId: string; _count: { signups: number } }
 interface LifecycleChannel { id: string; name: string }
@@ -912,7 +917,7 @@ function LifecycleActions({
     return (
       <div className="card">
         <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>
-          🟢 Signups open in <code>#{channels.find((c) => c.id === round.channelId)?.name ?? round.channelId}</code> — {round._count.signups} joined
+          🟢 {formatSeasonLabel(season)} sign-ups open in <code>#{channels.find((c) => c.id === round.channelId)?.name ?? round.channelId}</code> — {round._count.signups} joined
         </div>
         <form action={finalizeSignupsForSeason}>
           <input type="hidden" name="seasonId" value={season.id} />
