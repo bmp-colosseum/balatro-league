@@ -145,6 +145,40 @@ Before reporting a UI/behavior change done:
 4. Run `--stop` when finished so the next agent isn't blocked by a stale
    `.verify-env-state.json`.
 
+## prod-probe (read-only against production)
+
+For confirming what a live Discord post or a production page actually renders
+right after a deploy -- the one case verify-env can't cover, since it never
+touches production data.
+
+The scripts live in the Tour repo, not here: `prod-discord-message.sh` and
+`prod-probe.mjs` under `D:/balatro-team-tour/apps/tour/scripts/` (landing on
+Tour branch `chore/verify-prod-probe` today, 2026-10-14). Both are URL- and
+container-agnostic -- League just supplies its own parameters: bot container
+`balatro-league-bot-1`, env var `DISCORD_TOKEN`, ssh host alias `balatro`,
+site `https://balatroleague.com`.
+
+```
+sh D:/balatro-team-tour/apps/tour/scripts/prod-discord-message.sh https://discord.com/channels/<guild>/<channel>/<message> --container balatro-league-bot-1
+sh D:/balatro-team-tour/apps/tour/scripts/prod-discord-message.sh <channelId> <messageId> --container balatro-league-bot-1
+node D:/balatro-team-tour/apps/tour/scripts/prod-probe.mjs "https://balatroleague.com/standings" --widths 1280,390 --eval "document.querySelectorAll('table').length" --out-dir <scratchpad>/prod-probe
+```
+
+Playwright resolves from the Tour repo's own `node_modules` -- League's
+`web/` only has `@playwright/test`, same gap as the `PLAYWRIGHT_MODULE_PATH`
+fallback noted under Shoot -- so run these by absolute path from any cwd, no
+install needed here. `prod-probe.mjs` prints one JSON line per width (`url`,
+`width`, `out`, `title`, `overflowPx`, `h1Count`, `evalResult`, `evalError`,
+`consoleErrors`, `pageErrors`, `httpErrors`) and writes one PNG per width.
+`prod-discord-message.sh` prints a redacted JSON summary: author, flags (with
+names), content, embeds, flattened components, attachments.
+
+**Read-only (GET only).** **The bot token is read on the host inside the ssh
+command and never leaves it** -- never paste it into chat, a file, or a
+brief. **No mutating snippets** -- no submitting clicks, no `fetch` POSTs.
+**Screenshots go to the scratchpad, never committed.** **Never a system-wide
+process kill**, same rule as `--stop` above.
+
 ## Gotchas
 
 - **No production DB from the sandbox.** `.env`/`.env.local`'s
