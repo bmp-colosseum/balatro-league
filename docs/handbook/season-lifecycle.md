@@ -60,6 +60,11 @@ Both the button and the automatic path run `openSignupsCore` in
 embed, write an audit row, enqueue the "Are you in?" DM kickoff and a
 `#league-info` refresh.
 
+While the round is open, the website also names the season: the home page
+banner/hero and the admin lifecycle strip all read "Season N sign-ups are
+open" (plus the live signed-up count), derived once in
+`web/lib/signup-season-label-core.ts`.
+
 ### Closing (always by hand)
 
 `/admin/seasons`, season card, "Close signups". This flips the round from

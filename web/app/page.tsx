@@ -33,10 +33,20 @@ import { Button } from "@/components/ui/button";
 import { SiteNav } from "@/components/SiteNav";
 import { StandingsBoard } from "@/components/StandingsBoard";
 import { loadStandingsPageData } from "@/lib/loaders/standings";
-import { loadOpenSignupRoundId } from "@/lib/loaders/join";
+import { loadOpenSignupSummary } from "@/lib/loaders/join";
 import { loadDiscordInviteUrl } from "@/lib/loaders/discord-invite";
 import { getShowBmpMmr } from "@/lib/preferences";
 import { pageMetadata } from "@/lib/seo";
+import { signupHeroLine } from "@/lib/signup-season-label-core";
+
+// Mirrors lib/season-window-text.ts's own (file-private) formatDate -- a
+// season/signup deadline is a date-only concept, so this is pinned to UTC
+// rather than the server process's local timezone. Not imported from there
+// directly: that helper isn't exported, and duplicating one `toLocaleDateString`
+// call is cheaper than widening that file's public surface for it.
+function formatSignupCloseDate(d: Date): string {
+  return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
 
 export const dynamic = "force-dynamic"; // Always fresh -- same reasoning as /standings
 
@@ -62,7 +72,7 @@ export default async function HomePage() {
   const isLoggedIn = !!session?.user;
   const [data, openRound, discordInviteUrl] = await Promise.all([
     loadStandingsPageData({ showBmpMmr, viewerDiscordId }),
-    loadOpenSignupRoundId(),
+    loadOpenSignupSummary(),
     loadDiscordInviteUrl(),
   ]);
 
@@ -79,6 +89,15 @@ export default async function HomePage() {
                 A free Balatro Multiplayer league on Discord: divisions, promotion and relegation, a new
                 season every few weeks.
               </p>
+              {openRound && (
+                <p className="muted" style={{ margin: "6px 0 0", fontSize: 13 }}>
+                  {signupHeroLine({
+                    label: openRound.seasonLabel,
+                    closesAt: openRound.closesAt,
+                    formatDate: formatSignupCloseDate,
+                  })}
+                </p>
+              )}
             </div>
             <p style={{ display: "flex", gap: 10, flexWrap: "wrap", margin: 0 }}>
               <Button
@@ -87,7 +106,7 @@ export default async function HomePage() {
                 className="h-11 px-5 text-base"
                 style={{ background: "var(--gold)", color: "var(--gold-ink)" }}
               >
-                Join the league
+                {openRound ? `Join ${openRound.seasonLabel}` : "Join the league"}
               </Button>
               <Button render={<Link href="/how-it-works" />} nativeButton={false} variant="secondary" className="h-11 px-5 text-base">
                 How it works

@@ -30,6 +30,8 @@ import { rarityIndex, tierColors, tierSlug } from "@/lib/tier-colors";
 import { buildLadder } from "@/lib/division-ladder";
 import { LadderStrip } from "@/components/LadderStrip";
 import { seasonMatchTotals } from "@/lib/home-page-core";
+import { type OpenSignupSummary } from "@/lib/loaders/join";
+import { signupBannerText } from "@/lib/signup-season-label-core";
 
 // Clinch predictor: who is mathematically guaranteed to promote ("up") /
 // relegate ("down") regardless of how the remaining matches play out.
@@ -131,7 +133,7 @@ function YourDivisionCard({
 
 export interface StandingsBoardProps {
   data: StandingsPageData;
-  openRound: { id: string } | null;
+  openRound: OpenSignupSummary | null;
   showBmpMmr: boolean;
   // "/standings" itself is "h1"; an embedding page (the home page) that
   // already owns the page's one h1 passes "h2".
@@ -201,7 +203,7 @@ export function StandingsBoard({
             border: "1px solid rgba(46,204,113,0.45)",
           }}
         >
-          🎴 <strong>Sign-ups are open!</strong> Join the next season →
+          <strong>{signupBannerText({ label: openRound.seasonLabel, signupCount: openRound.signupCount })}</strong>
         </Link>
       )}
       {!data.season ? (
