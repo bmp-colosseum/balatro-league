@@ -9,12 +9,16 @@
 // Then in apps/tour: `npm run export:players` (auto-fills), fix leftovers in
 // discord-map.csv, `npm run relink:discord -- --apply`.
 
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-const prisma = new PrismaClient();
+// Prisma 7 requires a driver adapter; same pool shape as lib/prisma-pool.ts.
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL, max: 5, connectionTimeoutMillis: 20000, idleTimeoutMillis: 10000 }),
+});
 
 const players = await prisma.player.findMany({ select: { displayName: true, username: true, discordId: true } });
 

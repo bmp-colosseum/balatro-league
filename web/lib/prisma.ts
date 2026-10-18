@@ -1,7 +1,9 @@
 // Shared Prisma client for the Next.js web app.
 // Uses the schema at ../prisma/schema.prisma (same DB the Discord bot reads/writes).
 
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import { poolConfigFor } from "./prisma-pool";
 
 // Avoid creating new client instances on every hot-reload in dev
 declare global {
@@ -9,17 +11,9 @@ declare global {
   var __prisma: PrismaClient | undefined;
 }
 
-// Cap the connection pool. Without this Prisma defaults to cpus*2+1 per
-// process, and the web pool + bot pool + any seed script together exhaust
-// the test DB's max_connections ("too many clients already"). 5 is plenty
-// for the web app; respects an explicit connection_limit if one is already
-// on the URL (e.g. set on Railway).
-function pooledDbUrl(limit: number): string | undefined {
-  const base = process.env.DATABASE_URL;
-  if (!base || base.includes("connection_limit")) return base;
-  const sep = base.includes("?") ? "&" : "?";
-  return `${base}${sep}connection_limit=${limit}&pool_timeout=20`;
-}
+// Pool sizing lives in prisma-pool.ts (max 5 per container; bot 5 + pg-boss 3,
+// two web containers during a roll -- same budget as before the adapter). The
+// adapter owns the pool built from that plain config.
 
 // Slow-query logging is OPT-IN (LOG_SLOW_QUERIES=true) — Prisma's query-event
 // emission has per-query overhead, so we DON'T want it on by default for every
@@ -30,7 +24,11 @@ type PrismaQueryEvent = { duration: number; query: string; target: string };
 
 function makePrisma(): PrismaClient {
   const client = new PrismaClient({
-    datasourceUrl: pooledDbUrl(5),
+    adapter: new PrismaPg(poolConfigFor(process.env.DATABASE_URL), {
+      // Idle-pool / connection errors must be logged, never crash the server.
+      onPoolError: (err) => console.error("[db] pool error:", err.message),
+      onConnectionError: (err) => console.error("[db] connection error:", err.message),
+    }),
     log: LOG_SLOW_QUERIES
       ? [{ emit: "event", level: "query" }, { emit: "stdout", level: "error" }]
       : process.env.NODE_ENV === "production"
