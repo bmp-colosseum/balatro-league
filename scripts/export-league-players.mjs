@@ -29,6 +29,7 @@ try {
 }
 
 const SNOWFLAKE = /^\d{17,20}$/;
+// Pool numbers mirror src/db-pool.ts (source of truth); keep in sync by hand.
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL, max: 5, connectionTimeoutMillis: 20000, idleTimeoutMillis: 10000 }) });
 
 const players = await prisma.player.findMany({ select: { displayName: true, discordId: true } });

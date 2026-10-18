@@ -9,6 +9,7 @@
 // Then in apps/tour: `npm run export:players` (auto-fills), fix leftovers in
 // discord-map.csv, `npm run relink:discord -- --apply`.
 
+import "dotenv/config"; // Prisma 7 no longer auto-loads .env
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 import { writeFileSync } from "node:fs";
