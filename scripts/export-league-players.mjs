@@ -13,6 +13,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -28,7 +29,7 @@ try {
 }
 
 const SNOWFLAKE = /^\d{17,20}$/;
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL, max: 5, connectionTimeoutMillis: 20000, idleTimeoutMillis: 10000 }) });
 
 const players = await prisma.player.findMany({ select: { displayName: true, discordId: true } });
 const real = players.filter((p) => SNOWFLAKE.test(p.discordId));

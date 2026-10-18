@@ -7,7 +7,9 @@
 // connections immediately on Railway deploys instead of leaving them
 // idle until the timeout kicks in.
 
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import { poolConfigFor } from "./db-pool.js";
 import { env } from "./env.js";
 import { dbQueriesTotal, dbQueryDurationSeconds } from "./metrics.js";
 
@@ -20,17 +22,9 @@ declare global {
   var __botPrisma: BotPrismaClient | undefined;
 }
 
-// Cap Prisma's pool. Railway's tier shares ~22 Postgres connections between
-// the bot (Prisma + pg-boss max:3), the web app, and any seed scripts — and
-// Prisma otherwise defaults to cpus*2+1 per process, which exhausts it ("too
-// many clients already"). 5 here + 3 for pg-boss keeps the bot well under
-// budget. Respects an explicit connection_limit already on the URL.
-function pooledDbUrl(limit: number): string {
-  const base = env.DATABASE_URL;
-  if (base.includes("connection_limit")) return base;
-  const sep = base.includes("?") ? "&" : "?";
-  return `${base}${sep}connection_limit=${limit}&pool_timeout=20`;
-}
+// Pool sizing lives in db-pool.ts (max 5 + pg-boss max 3 stays under the
+// Postgres connection budget). The adapter owns the pool built from this plain
+// config, so $disconnect below closes it.
 
 // Slow-query logging is OPT-IN (LOG_SLOW_QUERIES=true). Prisma's query-event
 // emission adds per-query overhead, so it's off by default; flip the env var on
@@ -41,7 +35,11 @@ type PrismaQueryEvent = { duration: number; query: string; target: string };
 
 function makePrisma() {
   const client = new PrismaClient({
-    datasourceUrl: pooledDbUrl(5),
+    adapter: new PrismaPg(poolConfigFor(env.DATABASE_URL), {
+      // Idle-pool / connection errors must be logged, never crash the bot.
+      onPoolError: (err) => console.error("[db] pool error:", err.message),
+      onConnectionError: (err) => console.error("[db] connection error:", err.message),
+    }),
     log: LOG_SLOW_QUERIES
       ? [{ emit: "event", level: "query" }, { emit: "stdout", level: "error" }]
       : process.env.NODE_ENV === "production"
