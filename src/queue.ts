@@ -74,7 +74,7 @@ import { runActivityScan } from "./activity-scan.js";
 import { runRosterCheckin } from "./roster-checkin.js";
 import { MODLOG_RETENTION_DAYS } from "./mod-log.js";
 import { buildScheduleEmbed } from "./schedule-embed.js";
-import { sanitizeName } from "./sanitize.js";
+import { nameMd } from "./name-format-core.js";
 import { changedScheduleText, divisionNoticeText } from "./schedule-change-text.js";
 import { mentionWithHandle, handleOf, type MentionSubject } from "./mention.js";
 import { runShootoutCheck, isDivisionComplete } from "./shootout.js";
@@ -381,13 +381,13 @@ export async function initQueue(): Promise<void> {
         const embed = await buildScheduleEmbed(playerId);
         const content =
           role === "new"
-            ? `👋 You've been added to **${divisionName}**, taking **${sanitizeName(departedName ?? "")}**'s spot. Here's your schedule — reach out to your opponents to set up games:`
+            ? `👋 You've been added to **${divisionName}**, taking **${nameMd(departedName ?? "")}**'s spot. Here's your schedule — reach out to your opponents to set up games:`
             : role === "changed"
               ? changedScheduleText(divisionName, removed, added, { departedName, countBest })
             : role === "notice"
               ? divisionNoticeText(divisionName, departedName ?? "A player", countBest)
             : role === "opponent"
-              ? `🔄 **Schedule update — ${divisionName}.** **${sanitizeName(departedName ?? "")}** was dropped and replaced by **${sanitizeName(newName ?? "")}**, so one of your matchups is now against ${sanitizeName(newName ?? "")}. Your current schedule:`
+              ? `🔄 **Schedule update — ${divisionName}.** **${nameMd(departedName ?? "")}** was dropped and replaced by **${nameMd(newName ?? "")}**, so one of your matchups is now against ${nameMd(newName ?? "")}. Your current schedule:`
               : `\u{1F504} **Schedule update -- ${divisionName}.** Your division's schedule was redrawn from scratch (nothing you did caused this), so your opponents changed. Here is your current schedule -- reach out to your new opponents to set up your matches.`;
         try {
           const user = await client.users.fetch(player.discordId);
@@ -1443,7 +1443,7 @@ async function queueSeasonOnboardingDms(seasonId: string): Promise<void> {
         ? opps
             .map((o) => {
               const handle = handleOf(o);
-              return `• ${sanitizeName(o.displayName)}${handle ? ` (${handle})` : ""}`;
+              return `• ${nameMd(o.displayName)}${handle ? ` (${handle})` : ""}`;
             })
             .join("\n")
         : "_(click **Who do I play?** in your division channel to see your matchups)_";

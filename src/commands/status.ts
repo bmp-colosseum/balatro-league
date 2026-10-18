@@ -10,7 +10,7 @@ import { prisma } from "../db.js";
 import { getOrCreatePlayer, guildDisplayName } from "../players.js";
 import { formatSeasonLabel } from "../format-season.js";
 import { computeStandings } from "../standings.js";
-import { sanitizeName } from "../sanitize.js";
+import { nameMd } from "../name-format-core.js";
 import { handleOf } from "../mention.js";
 import type { SlashCommand } from "./types.js";
 
@@ -129,7 +129,7 @@ export async function computeStatusSummaryForPlayer(playerId: string): Promise<P
         m.gamesWonB === 0,
     )
     .map((m) => (m.playerAId === playerId ? m.playerBId : m.playerAId));
-  const remainingOpponents = remainingOpponentIds.map((id) => sanitizeName(nameById.get(id) ?? "?"));
+  const remainingOpponents = remainingOpponentIds.map((id) => nameMd(nameById.get(id) ?? "?"));
   const remainingOpponentHandles = remainingOpponentIds.map((id) => handleById.get(id) ?? "");
 
   return {

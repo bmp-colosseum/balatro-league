@@ -9,10 +9,10 @@ import { prisma } from "./db.js";
 import { tryGetDiscordClient } from "./discord.js";
 import { resolveDevopsChannelId } from "./devops-channel.js";
 
-// allowedMentions is optional -- when omitted, Discord's default applies
-// (mentions in `message` ping normally). Pass it explicitly when a caller
-// needs precise control over who gets pinged (e.g. health-broadcast.ts
-// pinging only the owner, never @everyone/@here/roles).
+// allowedMentions is optional. The Client default pings nobody, so when
+// pingDevops is set and no override is given, the DEVOPS role ids are allowed
+// explicitly. Pass it to take precise control over who gets pinged (e.g.
+// health-broadcast.ts pinging only the owner, never @everyone/@here/roles).
 export async function postDevopsAlert(
   message: string,
   pingDevops = false,
@@ -31,14 +31,16 @@ export async function postDevopsAlert(
       return false;
     }
     let prefix = "";
+    let devopsRoleIds: string[] = [];
     if (pingDevops) {
       const bindings = await prisma.roleBinding.findMany({ where: { tier: "DEVOPS" } });
       const mentions = bindings.map((b) => `<@&${b.discordRoleId}>`).join(" ");
       if (mentions) prefix = mentions + " ";
+      devopsRoleIds = bindings.map((b) => b.discordRoleId);
     }
     await (channel as TextChannel).send({
       content: prefix + message,
-      ...(allowedMentions ? { allowedMentions } : {}),
+      allowedMentions: allowedMentions ?? { roles: devopsRoleIds },
     });
     return true;
   } catch (err) {

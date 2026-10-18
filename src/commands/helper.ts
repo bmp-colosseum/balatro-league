@@ -34,7 +34,7 @@ export async function summonHelpers(args: {
   channel: GuildTextBasedChannel | null;
   caller: User;
   reason: string;
-}): Promise<{ content: string } | { error: string }> {
+}): Promise<{ content: string; allowedMentions: { roles: string[] } } | { error: string }> {
   const { guild, channel, caller, reason } = args;
   const bindings = await prisma.roleBinding.findMany({ where: { tier: "HELPER" } });
   if (bindings.length === 0) {
@@ -66,7 +66,10 @@ export async function summonHelpers(args: {
   const callerMention = `<@${caller.id}>`;
   const where = isPrivateThread ? "this thread" : "this channel";
   const reasonLine = reason ? `\n> ${reason}` : "";
-  return { content: `🆘 ${pingLines} — ${callerMention} requested help in ${where}.${reasonLine}` };
+  return {
+    content: `🆘 ${pingLines} — ${callerMention} requested help in ${where}.${reasonLine}`,
+    allowedMentions: { roles: bindings.map((b) => b.discordRoleId) },
+  };
 }
 
 export const helper: SlashCommand = {
@@ -105,6 +108,6 @@ export const helper: SlashCommand = {
     // The ping itself stays public — helpers need to see it, and the
     // whole point of /helper is to summon attention. The runner gets the
     // public message as their reply since they're already in-thread.
-    await interaction.reply({ content: result.content });
+    await interaction.reply({ content: result.content, allowedMentions: result.allowedMentions });
   },
 };

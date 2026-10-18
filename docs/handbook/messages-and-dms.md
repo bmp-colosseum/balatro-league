@@ -127,8 +127,32 @@ anywhere else yet; this section is the source.
   characters, uppercased -- [src/match-ref.ts](../../src/match-ref.ts)), e.g.
   "Match ref A1B2C3", never the full cuid. Staff still look up the full id in
   the admin web / `/admin` tooling.
-- Names go through `sanitizeName` before being bolded in a DM.
+- Player names follow "Player names in posts" below.
 - Discord messages may use emoji; the website may not use emoji as icons
   (`design-system/MASTER.md`).
 - Every DM is logged in `DmDelivery` with a kind and status, so "did they get
   it" is answerable from the Messages page.
+
+## Player names in posts
+
+Every player-controlled name (display name, username, nickname) goes through
+[src/name-format-core.ts](../../src/name-format-core.ts) before it enters a
+string sent to Discord. Never escape by hand at a call site.
+
+- `nameMd(name)`: message content, embed descriptions and embed field values.
+  Backslash-escapes markdown characters and a leading `#`, `>`, `-` or `1.`,
+  so a name cannot restyle the post.
+- `namePlain(name)`: embed titles, author names, footers, field names, thread
+  and channel names, select-menu labels, autocomplete choices. No backslashes,
+  because those surfaces render no markdown.
+- Both modes defang `@everyone`, `@here`, `<@id>`, `<@&id>` and `<#id>` by
+  swapping the `@` or `#` for its fullwidth twin, so a name never reads as a
+  mention.
+- `joinNames` and `fitLines` keep a list under the Discord limit (description
+  4096, field value 1024) and end it with "and N more".
+- The bot Client defaults to `allowedMentions: { parse: [] }`: nothing pings
+  unless that send passes its own `allowedMentions` naming the users or roles
+  it means to ping. A per-send value replaces the default.
+- Stored names stay raw. Audit summaries and logs are not Discord posts.
+- `src/name-format-guard.test.ts` fails on a raw name in a template literal;
+  its allowlist needs a one-word reason per entry.

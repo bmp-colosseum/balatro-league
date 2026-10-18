@@ -9,7 +9,7 @@ import {
   TextDisplayBuilder,
 } from "discord.js";
 import { buildReportMessageBlocks, type ReportStatus } from "./result-message-core.js";
-import { sanitizeName } from "./sanitize.js";
+import { nameMd } from "./name-format-core.js";
 import { mentionWithHandle, type MentionSubject } from "./mention.js";
 import { matchRef } from "./match-ref.js";
 
@@ -40,8 +40,8 @@ export function buildReportContainer(args: {
   const blocks = buildReportMessageBlocks({
     status,
     divisionName,
-    reporterName: sanitizeName(reporter.displayName),
-    opponentName: sanitizeName(opponent.displayName),
+    reporterName: nameMd(reporter.displayName),
+    opponentName: nameMd(opponent.displayName),
     opponentMention: mentionWithHandle(opponent),
     reporterIsA,
     gamesWonA: result.gamesWonA,

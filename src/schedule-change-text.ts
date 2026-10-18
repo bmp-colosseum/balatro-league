@@ -1,7 +1,7 @@
 // Pure wording for the "changed" schedule DM (notify.schedule-change worker in
 // queue.ts): tells one player which opponent they lost after a roster change,
 // whom they play instead, and that nothing else moved. No Discord, no DB.
-import { sanitizeName } from "./sanitize.js";
+import { nameMd } from "./name-format-core.js";
 
 export interface ScheduleNoticeExtra {
   // Who left (shown in the division-wide notice).
@@ -15,12 +15,12 @@ function bestNLine(countBest: number | undefined): string | null {
   return `From now on only your best ${countBest} results count toward the standings, so nobody is worse off for having one match fewer.`;
 }
 
-const names = (xs: string[]) => xs.map((n) => `**${sanitizeName(n)}**`).join(" and ");
+const names = (xs: string[]) => xs.map((n) => `**${nameMd(n)}**`).join(" and ");
 
 // Division-wide notice for members whose own matchups did not change.
 export function divisionNoticeText(divisionName: string, departedName: string, countBest: number | undefined): string {
   const parts = [
-    `**${sanitizeName(departedName)}** has left the division. Your own matchups have not changed -- keep playing them as planned.`,
+    `**${nameMd(departedName)}** has left the division. Your own matchups have not changed -- keep playing them as planned.`,
   ];
   const line = bestNLine(countBest);
   if (line) parts.push(line);

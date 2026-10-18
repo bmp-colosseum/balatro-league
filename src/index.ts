@@ -83,6 +83,9 @@ function createClient(intents: GatewayIntentBits[]): Client {
   const client = new Client({
     intents,
     partials: [Partials.Message, Partials.Channel],
+    // Ping nobody unless a send opts in with its own allowedMentions (a per-send
+    // value fully replaces this default; see MessagePayload.resolveBody).
+    allowedMentions: { parse: [] },
   });
 
 // Moderation capture — match + dispute threads only (mod-log.ts scopes it).

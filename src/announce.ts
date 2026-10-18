@@ -36,7 +36,7 @@ import { formatSeasonLabel } from "./format-season.js";
 import { getConfig, LeagueConfigKey } from "./league-config.js";
 import { attachRestTiming } from "./rate-limit-logger.js";
 import { buildConfirmedResultBlocks, type GameLineInput } from "./result-message-core.js";
-import { sanitizeName } from "./sanitize.js";
+import { nameMd, namePlain } from "./name-format-core.js";
 import { tierAccentColor } from "./tier-colors.js";
 import { webUrl } from "./web-url.js";
 
@@ -90,9 +90,9 @@ export async function announceResult(pairingId: string): Promise<void> {
     stakeEmoji: g.stake ? stakeEmoji(g.stake) : null,
     winnerName:
       g.winnerId === pairing.playerAId
-        ? sanitizeName(pairing.playerA.displayName)
+        ? nameMd(pairing.playerA.displayName)
         : g.winnerId === pairing.playerBId
-          ? sanitizeName(pairing.playerB.displayName)
+          ? nameMd(pairing.playerB.displayName)
           : null,
     winnerLives: g.winnerLives,
   }));
@@ -107,8 +107,8 @@ export async function announceResult(pairingId: string): Promise<void> {
     seasonLabel: formatSeasonLabel(season),
     divisionName: pairing.division.name,
     divisionUrl: webUrl(`divisions/${pairing.division.id}`),
-    playerAName: sanitizeName(pairing.playerA.displayName),
-    playerBName: sanitizeName(pairing.playerB.displayName),
+    playerAName: nameMd(pairing.playerA.displayName),
+    playerBName: nameMd(pairing.playerB.displayName),
     gamesWonA: pairing.gamesWonA,
     gamesWonB: pairing.gamesWonB,
     forfeit: pairing.forfeit,
@@ -209,20 +209,20 @@ export async function announceChallengeResult(opts: {
   let title: string;
   let color: number;
   if (winsA > winsB) {
-    title = `🎴 ${sanitizeName(playerA.displayName)} beats ${sanitizeName(playerB.displayName)}`;
+    title = `🎴 ${namePlain(playerA.displayName)} beats ${namePlain(playerB.displayName)}`;
     color = 0x9b59b6;
   } else if (winsB > winsA) {
-    title = `🎴 ${sanitizeName(playerB.displayName)} beats ${sanitizeName(playerA.displayName)}`;
+    title = `🎴 ${namePlain(playerB.displayName)} beats ${namePlain(playerA.displayName)}`;
     color = 0x9b59b6;
   } else {
-    title = `🎴 ${sanitizeName(playerA.displayName)} draws ${sanitizeName(playerB.displayName)}`;
+    title = `🎴 ${namePlain(playerA.displayName)} draws ${namePlain(playerB.displayName)}`;
     color = 0x95a5a6;
   }
 
   const embed = new EmbedBuilder()
     .setTitle(title)
     .setDescription(
-      `${sanitizeName(playerA.displayName)} **${winsA}–${winsB}** ${sanitizeName(playerB.displayName)}\n_Casual challenge — not counted toward standings._`,
+      `${nameMd(playerA.displayName)} **${winsA}–${winsB}** ${nameMd(playerB.displayName)}\n_Casual challenge — not counted toward standings._`,
     )
     .setColor(color)
     .setFooter({ text: "Challenge" })
@@ -234,7 +234,7 @@ export async function announceChallengeResult(opts: {
       const v = [c.deck, c.stake].filter(Boolean).join(" / ");
       if (!v && !c.winnerName) return null;
       const combo = v || "_combo not recorded_";
-      const who = c.winnerName ? ` — **${sanitizeName(c.winnerName)}**` : "";
+      const who = c.winnerName ? ` — **${nameMd(c.winnerName)}**` : "";
       return `Game ${i + 1}: ${combo}${who}`;
     })
     .filter(Boolean) as string[];

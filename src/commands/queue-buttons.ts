@@ -15,8 +15,11 @@ import {
 import { isDiscordIdBanned, BANNED_MESSAGE } from "../bans.js";
 import { enqueueQueueOpponentNotify } from "../queue.js";
 import type { ButtonHandler } from "./types.js";
+import { joinNames, nameMd } from "../name-format-core.js";
 
-const names = (ps: { displayName: string }[]) => ps.map((p) => p.displayName).join(", ");
+// Three of these lists can share one reply (2000-char limit), so each is capped.
+const QUEUE_NAMES_BUDGET = 450;
+const names = (ps: { displayName: string }[]) => joinNames(ps.map((p) => p.displayName), { max: QUEUE_NAMES_BUDGET, mode: "md" });
 
 // The "who's around for me" block shared by the queue-up / leave / status replies.
 function statusLines(s: QueueStatus): string[] {
@@ -105,7 +108,7 @@ export const queueButtons: ButtonHandler = {
 
       if (outcome.matched) {
         await interaction.editReply(
-          `🎮 **Matched with ${outcome.oppName}!** A match invite is up — accept it to start.` +
+          `🎮 **Matched with ${nameMd(outcome.oppName ?? "")}!** A match invite is up — accept it to start.` +
             (outcome.inviteUrl ? `\n${outcome.inviteUrl}` : ""),
         );
         return;

@@ -14,6 +14,7 @@ import { getConfig, setConfig, LeagueConfigKey } from "./league-config.js";
 import { createLeagueMatchInvite } from "./league-match-invite.js";
 import { recordAudit, SYSTEM_ACTOR } from "./audit.js";
 import { getDiscordClient } from "./discord.js";
+import { joinNames, nameMd } from "./name-format-core.js";
 
 // A queue entry auto-expires after this long without the player re-queueing.
 // Past ~12h idle it's near-certain they're no longer around, and a stale entry
@@ -42,7 +43,7 @@ function renderQueueMessage(players: Player[]): BaseMessageOptions {
     "⚠️ **This is a convenience, not a scheduler.** Getting your matches played is still **your responsibility** — reach out to your opponents directly. The queue only helps for the moments you both happen to be free at once.",
     "",
     players.length
-      ? `**In the queue (${players.length}):** ${players.map((p) => p.displayName).join(", ")}`
+      ? `**In the queue (${players.length}):** ${joinNames(players.map((p) => p.displayName), { max: QUEUE_NAMES_BUDGET, mode: "md" })}`
       : "_Queue is empty right now._",
   ];
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -52,6 +53,10 @@ function renderQueueMessage(players: Player[]): BaseMessageOptions {
   );
   return { content: lines.join("\n"), components: [row], allowedMentions: { parse: [] } };
 }
+
+// Budget for the joined names so the whole post stays under Discord's 2000-char
+// message limit next to the fixed copy.
+const QUEUE_NAMES_BUDGET = 1200;
 
 // Players currently queued for the season, in the order they joined.
 async function currentlyQueued(seasonId: string): Promise<Player[]> {
@@ -401,7 +406,7 @@ export async function notifyOpponentsOfQueueJoin(
     const ok = await user
       .send({
         content:
-          `🔔 **${joiner.displayName}** just joined the league queue — you still have a match to play against them. ` +
+          `🔔 **${nameMd(joiner.displayName)}** just joined the league queue — you still have a match to play against them. ` +
           `Hit **Queue up** and you'll pair up instantly.` +
           queueLink,
         components: [row],

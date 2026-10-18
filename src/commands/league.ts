@@ -30,6 +30,7 @@ import { enqueueLeagueInfoRefresh, enqueueStandingsRefresh, refreshDivisionWelco
 import { activePublicSeason } from "../active-season.js";
 import { formatSeasonLabel } from "../format-season.js";
 import type { SlashCommand } from "./types.js";
+import { nameMd } from "../name-format-core.js";
 
 const WEBHOOK_URL_RE = /^https:\/\/(discord\.com|discordapp\.com)\/api\/(v\d+\/)?webhooks\/\d+\/[\w-]+$/;
 
@@ -360,7 +361,7 @@ async function inactiveRegistry(interaction: ChatInputCommandInteraction) {
     out.push("✅ Nobody's fully silent — every active player has chatted, played, or at least started a match.");
   } else {
     out.push(`🔇 **${ghosts.length} fully silent** — no chat this season, no match played or attempted:`);
-    for (const g of ghosts) out.push(`  • **${g.name}** (${g.div}) — ${fmtLast(g)}`);
+    for (const g of ghosts) out.push(`  • **${nameMd(g.name)}** (${g.div}) — ${fmtLast(g)}`);
     out.push("");
     out.push("_DM step (Still playing / I'm out buttons) is the next pass — for now this is the review list._");
   }

@@ -42,7 +42,7 @@ import { sweepQueueMatches } from "./league-queue.js";
 import { tryGetDiscordClient } from "./discord.js";
 import { renderMatch } from "./match-render.js";
 import { mentionWithHandle } from "./mention.js";
-import { sanitizeName } from "./sanitize.js";
+import { nameMd } from "./name-format-core.js";
 import type { MatchSession } from "@prisma/client";
 
 const SWEEP_INTERVAL_MS = 60 * 1000;
@@ -152,6 +152,7 @@ async function notifyAutoPaused(session: MatchSession): Promise<void> {
         `${AUTO_PAUSE_HOURS}h with no activity so it doesn't get cancelled. When you're both back, hit ` +
         `**Resume** on the match message above (or just report your result). It'll stay paused for up ` +
         `to ${PAUSED_CANCEL_DAYS} days.`,
+      allowedMentions: { users: [playerA.discordId, playerB.discordId] },
     })
     .catch((err) => logDiscordError("match-sweep.auto-pause.notify", err, { sessionId: session.id, threadId: channelId }));
 }
@@ -161,14 +162,14 @@ async function notifyAutoPaused(session: MatchSession): Promise<void> {
 // (DB player lookups, Discord DM/thread-post) around it.
 export function buildExpiredInviteDm(inviteeDisplayName: string): string {
   return (
-    `Your match invite to **${sanitizeName(inviteeDisplayName)}** expired -- they didn't accept in time. ` +
+    `Your match invite to **${nameMd(inviteeDisplayName)}** expired -- they didn't accept in time. ` +
     `Nothing is recorded. Agree a time with them first, then press **Start a match** again.`
   );
 }
 
 export function buildMatchCancelledNotice(playerADisplayName: string, playerBDisplayName: string, durationLabel: string): string {
   return (
-    `Your match **${sanitizeName(playerADisplayName)} vs ${sanitizeName(playerBDisplayName)}** was cancelled ` +
+    `Your match **${nameMd(playerADisplayName)} vs ${nameMd(playerBDisplayName)}** was cancelled ` +
     `after ${durationLabel} with no activity. Nothing is recorded. If you still want to play it, press ` +
     `**Start a match** and pick each other again.`
   );

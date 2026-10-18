@@ -3,7 +3,7 @@
 
 import type { Match, Player } from "@prisma/client";
 import { DEFAULTS, type ScoringConfig } from "./league-settings.js";
-import { sanitizeName } from "./sanitize.js";
+import { nameMd } from "./name-format-core.js";
 import { tiebreakDecidedPhrase } from "./tiebreak-text.js";
 
 export interface StandingRow {
@@ -331,7 +331,7 @@ export function livesDisplayOrder<T extends StandingRow>(rows: T[]): T[] {
 
 // "A" / "A and B" / "A, B and C" -- the player-name list inside a
 // tiebreakNote. Mirrors web/lib/standings.ts's identical helper.
-function joinNames(names: string[]): string {
+function joinTieNames(names: string[]): string {
   if (names.length <= 1) return names[0] ?? "";
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
@@ -461,11 +461,11 @@ export function orderLivesPointsGroup<T extends StandingRow>(
     if (cluster.length === 1) {
       const row = cluster[0]!;
       const others = byLives.filter((r) => r !== row).map((r) => r.player.displayName);
-      row.tiebreakNote = `Tied on points with ${joinNames(others)}; ${tiebreakDecidedPhrase("netLives", { livesList }, divisionComplete)}`;
+      row.tiebreakNote = `Tied on points with ${joinTieNames(others)}; ${tiebreakDecidedPhrase("netLives", { livesList }, divisionComplete)}`;
     } else {
       for (const row of cluster) {
         const otherNames = cluster.filter((r) => r !== row).map((r) => r.player.displayName);
-        row.tiebreakNote = `Tied with ${joinNames(otherNames)} on points and net lives -- shares the place`;
+        row.tiebreakNote = `Tied with ${joinTieNames(otherNames)} on points and net lives -- shares the place`;
       }
     }
     clusterStart = i;
@@ -568,7 +568,7 @@ export function formatDivisionField(rows: StandingRow[], expectedSize: number): 
         ? `\`#${n.toString().padStart(2)}\``
         : `\`${n.toString().padStart(2)}.\``;
       const stats = `**${r.points}** pts · ${r.wins}-${r.draws}-${r.losses} · ${r.gamesWon}-${r.gamesLost} g`;
-      const name = r.dropped ? `~~${sanitizeName(r.player.displayName)}~~ _(dropped)_` : sanitizeName(r.player.displayName);
+      const name = r.dropped ? `~~${nameMd(r.player.displayName)}~~ _(dropped)_` : nameMd(r.player.displayName);
       return `${prefix} ${name} — ${stats}`;
     })
     .join("\n") + (rows.length < expectedSize ? `\n_${expectedSize - rows.length} seat(s) open_` : "");
