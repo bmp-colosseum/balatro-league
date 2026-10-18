@@ -31,8 +31,10 @@ export async function setup(): Promise<void> {
   const url = `postgresql://postgres:postgres@localhost:${PORT}/test`;
   writeFileSync(URL_FILE, url);
 
-  // Create the schema. db push is fast and needs no migration history.
-  execSync("npx prisma db push --schema=prisma/schema.prisma --skip-generate --accept-data-loss", {
+  // Create the schema. db push is fast and needs no migration history. No
+  // --accept-data-loss: the database is brand new, and Prisma 7 refuses that
+  // flag from an AI agent without the user's consent text.
+  execSync("npx prisma db push --schema=prisma/schema.prisma", {
     env: { ...process.env, DATABASE_URL: url },
     stdio: "ignore",
   });

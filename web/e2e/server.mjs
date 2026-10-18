@@ -37,7 +37,7 @@ await pg.start();
 await pg.createDatabase("e2e");
 
 console.log("[e2e] pushing schema…");
-execSync("npx prisma db push --schema=./prisma/schema.prisma --skip-generate --accept-data-loss", {
+execSync("npx prisma db push --schema=./prisma/schema.prisma", {
   env: { ...process.env, DATABASE_URL: DB_URL },
   stdio: "inherit",
 });

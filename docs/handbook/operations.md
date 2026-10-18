@@ -1,8 +1,7 @@
 # Operations
 
 Deploying, the production box, security scanning, and the Team Tour sibling
-repo. `DEPLOY.md` and `DEPLOY-WEB.md` describe the old Railway setup and are
-superseded by this page.
+repo.
 
 Sources: [.github/workflows/deploy.yml](../../.github/workflows/deploy.yml),
 [ci.yml](../../.github/workflows/ci.yml),
@@ -177,7 +176,6 @@ switcher, season pill, felt-deep footer) ported between `web/` and the Tour's
 
 ## Stale documents to be aware of
 
-- `README.md` "Deploying", `DEPLOY.md`, `DEPLOY-WEB.md`: Railway. Superseded.
 - `docs/ops/move-bot-to-new-server.md`: says `DATABASE_URL` lives on
   Railway. It lives in `/srv/balatro/secrets.env`. The Discord steps are
   still right.

@@ -20,6 +20,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY web/package.json web/package-lock.json ./web/
 COPY web/scripts ./web/scripts
 COPY web/prisma ./web/prisma
+COPY web/prisma.config.ts ./web/prisma.config.ts
 COPY prisma/schema.prisma ./prisma/schema.prisma
 COPY src/data ./src/data
 COPY src/assets/balatro ./src/assets/balatro
@@ -43,9 +44,9 @@ WORKDIR /app/web
 COPY --from=build /app/web/.next/standalone ./
 COPY --from=build /app/web/.next/static ./.next/static
 COPY --from=build /app/web/public ./public
-# Prisma's query engine can miss output tracing; copy it explicitly so runtime
-# queries work regardless.
-COPY --from=build /app/web/node_modules/.prisma ./node_modules/.prisma
+# Prisma 7 has no Rust query engine: the standalone trace itself pulls the generated
+# client (node_modules/.prisma/client incl. the query-compiler wasm-base64), @prisma/client
+# and pg, proven by booting .next/standalone/server.js. @prisma/adapter-pg is bundled.
 EXPOSE 3000
 # No curl in this slim image -- probe with node itself. Polled by Docker directly (feeds
 # `docker inspect --format '{{.State.Health.Status}}'`, which the deploy workflow's rolling

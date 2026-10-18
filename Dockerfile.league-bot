@@ -19,6 +19,7 @@ FROM base AS build
 # `npm ci`. The npm cache mount avoids re-downloading on a cache miss too.
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
+COPY prisma.config.ts ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 COPY . .
 RUN npm run build

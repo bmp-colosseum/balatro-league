@@ -52,13 +52,13 @@ Fill in:
 - `DISCORD_TOKEN`, `DISCORD_CLIENT_ID` — from step 1
 - `DISCORD_GUILD_ID` — right-click your server icon in Discord (with Developer Mode on) → Copy Server ID. Setting this registers commands per-guild, which propagates instantly.
 - `LEAGUE_ADMIN_ROLE_ID`, `RESULTS_CHANNEL_ID` — optional for now; needed once admin commands ship.
-- `DATABASE_URL` — defaults to local SQLite. For Postgres, change to `postgresql://...` and update `prisma/schema.prisma` provider to `postgresql`.
+- `DATABASE_URL` — a Postgres connection string (`postgresql://...`). The schema is Postgres-only; Prisma 7 reads this from `prisma.config.ts`, which loads `.env` itself.
 
 ### 3. Install + initialize
 
 ```bash
 npm install
-npm run db:migrate    # creates dev.db with the schema
+npm run db:migrate    # applies prisma/migrations to your Postgres
 npm run register      # registers slash commands with Discord
 ```
 
@@ -99,10 +99,8 @@ src/
 
 ## Deploying
 
-> Superseded: the league deploys to the shared Colosseum box via the self-hosted runner, not Railway. See [docs/handbook/operations.md](docs/handbook/operations.md). The Railway notes below are kept for history only.
-
-Two services on Railway:
-- **Bot** (this repo root): Discord gateway connection. See [DEPLOY.md](./DEPLOY.md).
-- **Web** (`web/`): Next.js dashboard + public pages. See [DEPLOY-WEB.md](./DEPLOY-WEB.md).
-
-Both share the same Postgres. The old Express dashboard at the bot service will be deprecated once the web service is live and verified.
+`master` is production. A push to it runs `.github/workflows/deploy.yml` on the
+self-hosted runner, which rebuilds the bot and web images and rolls the live
+containers on the Colosseum box. The bot image runs `prisma migrate deploy` on
+boot; the web image never migrates. Full procedure, rollback and host rules:
+[docs/handbook/operations.md](docs/handbook/operations.md).

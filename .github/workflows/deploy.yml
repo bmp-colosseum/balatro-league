@@ -42,6 +42,7 @@ on:
       - "src/**"
       - "web/**"
       - "prisma/**"
+      - "prisma.config.ts"
       - "package.json"
       - "package-lock.json"
       - "Dockerfile.league-bot"
@@ -107,7 +108,7 @@ jobs:
               || printf '%s\n' "$files" | grep -qE "$2"; then echo 1; else echo 0; fi
           }
           LB_PREV="$(deployed LEAGUE_BOT_TAG)"; LW_PREV="$(deployed LEAGUE_WEB_TAG)"
-          LB=$(pick_one "$LB_PREV" '^(src/|prisma/|Dockerfile\.league-bot$)')
+          LB=$(pick_one "$LB_PREV" '^(src/|prisma/|prisma\.config\.ts$|Dockerfile\.league-bot$)')
           LW=$(pick_one "$LW_PREV" '^(web/|prisma/)')
           echo "deployed now: league-bot=${LB_PREV:-<none>} league-web=${LW_PREV:-<none>} | target=$SHA"
           echo "build -> league-bot=$LB league-web=$LW"
