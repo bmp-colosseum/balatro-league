@@ -33,8 +33,8 @@ from a shell) -- it is a long-lived supervisor, not a one-shot command. It:
    forced -- see Gotchas).
 3. Runs `prisma migrate deploy` from the **repo root** (`/d/wt-verify`, not
    `web/`) against it -- the root has the real migration history; `web/prisma`
-   is a schema-only sync copy with no `migrations/` dir, so `npm start`'s own
-   migrate step there is a no-op by design.
+   is a schema-only sync copy with no `migrations/` dir, and `web`'s `npm start`
+   runs no migrate step at all (the bot image owns migrations).
 4. `next build` then `next start -p <port>` (a real production build, not
    `next dev`).
 5. Seeds via one POST to `/api/admin/seed-verify` (see "What gets seeded").
@@ -203,10 +203,10 @@ process kill**, same rule as `--stop` above.
   seeds results first, then activates -- if you add another seed path that
   calls both, keep that order, or fix the root cause in `seedMatchesForSeason`
   itself (out of scope here since it's shared with the real e2e test).
-- **web's own `prisma migrate deploy` is a no-op.** `web/prisma/schema.prisma`
-  is synced from the repo root by `scripts/sync-schema.mjs`, but
-  `migrations/` is never synced -- `web`'s own `npm start` migrate step
-  silently finds zero migrations. `verify-env.mjs` runs migrate deploy from
+- **web never migrates.** `web/prisma/schema.prisma` is synced from the repo
+  root by `scripts/sync-schema.mjs`, but `migrations/` is never synced and
+  `web`'s `npm start` runs no migrate step (the bot image runs
+  `prisma migrate deploy` on boot). `verify-env.mjs` runs migrate deploy from
   the repo root instead, where the real migration history lives.
 - **ASCII only** in anything you write back to the repo (code, commit
   messages, this file). No smart quotes, no em-dashes, no emoji.
