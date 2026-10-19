@@ -178,29 +178,45 @@ html[data-ui="v2"] .profile-season-grid-v2 {
   gap: 6px;
   margin-top: 12px;
 }
-/* Desktop: a real 4-up grid, so 7 seasons fill exactly two rows instead of
-   an auto-fit column count that left two orphans on their own row. */
+/* Tablet: 2-up; desktop: a real 4-up grid, so 7 seasons fill exactly two
+   rows instead of an auto-fit column count that left two orphans on their
+   own row. 4-up only from 1024px: below that a column is too narrow for
+   name + tier chip + place + points on one line. */
 @media (min-width: 640px) {
   html[data-ui="v2"] .profile-season-grid-v2 {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
   }
 }
+@media (min-width: 1024px) {
+  html[data-ui="v2"] .profile-season-grid-v2 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+/* The row may wrap (name + chip on the first line, place + points on the
+   second) when a grid column is too narrow for all four on one line. Before
+   this the card was overflow:hidden with a nowrap chip, so a 4-up column at
+   1280px clipped the chip and the place text. */
 html[data-ui="v2"] .profile-season-card-v2 {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 8px;
   padding: 8px 12px;
-  overflow: hidden;
+}
+html[data-ui="v2"] .profile-season-card-v2 .pill {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 html[data-ui="v2"] .profile-season-card-v2[data-won="true"] {
   border-color: var(--gold);
   box-shadow: inset 4px 0 0 var(--gold), var(--shadow);
 }
 html[data-ui="v2"] .profile-season-name {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -216,6 +232,7 @@ html[data-ui="v2"] .profile-season-rank {
 }
 html[data-ui="v2"] .profile-season-card-v2 .profile-season-points {
   flex-shrink: 0;
+  margin-left: auto;
   font-family: var(--font-body-v2), "Segoe UI", sans-serif;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
