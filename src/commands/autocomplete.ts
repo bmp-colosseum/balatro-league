@@ -4,6 +4,7 @@
 import type { AutocompleteInteraction } from "discord.js";
 import { activePublicSeason } from "../active-season.js";
 import { prisma } from "../db.js";
+import { namePlain } from "../name-format-core.js";
 
 export async function divisionNameAutocomplete(interaction: AutocompleteInteraction): Promise<void> {
   const focused = interaction.options.getFocused().toLowerCase();
@@ -57,7 +58,7 @@ export async function sameDivisionMemberAutocomplete(interaction: AutocompleteIn
   const matches = others
     .filter((m) => m.player.displayName.toLowerCase().includes(focused))
     .slice(0, 25)
-    .map((m) => ({ name: m.player.displayName, value: m.player.discordId }));
+    .map((m) => ({ name: namePlain(m.player.displayName), value: m.player.discordId }));
   await interaction.respond(matches);
 }
 
@@ -89,6 +90,6 @@ export async function activeSeasonMemberAutocomplete(interaction: AutocompleteIn
       return m.player.displayName.toLowerCase().includes(focused);
     })
     .slice(0, 25)
-    .map((m) => ({ name: `${m.player.displayName} · ${m.division.name}`, value: m.player.discordId }));
+    .map((m) => ({ name: `${namePlain(m.player.displayName)} · ${m.division.name}`, value: m.player.discordId }));
   await interaction.respond(matches);
 }

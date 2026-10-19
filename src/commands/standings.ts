@@ -13,6 +13,7 @@ import { tierEmbedColor } from "../tiers.js";
 import { divisionNameAutocomplete } from "./autocomplete.js";
 import { formatSeasonLabel } from "../format-season.js";
 import type { SlashCommand } from "./types.js";
+import { nameMd } from "../name-format-core.js";
 
 // Both a slash command and a control-panel button drive the standings render;
 // they share these interaction methods (deferReply/editReply/followUp/user).
@@ -119,7 +120,7 @@ async function buildMyScheduleEmbed(seasonId: string, discordId: string): Promis
     } else {
       status = "▫️ not played";
     }
-    return `**${oppName}** — ${status}`;
+    return `**${nameMd(oppName)}** — ${status}`;
   });
   const played = matches.filter((m) => m.status === "CONFIRMED").length;
   return new EmbedBuilder()

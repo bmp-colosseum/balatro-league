@@ -1,3 +1,5 @@
+import { nameMd } from "./name-format-core.js";
+
 // Shared "who do I ping" rendering. Discord's <@id> mention renders as
 // "unknown-user" / "@invalid-user" for viewers whose client hasn't resolved
 // that member (common in match threads, DMs, and for anyone who left/never
@@ -39,7 +41,7 @@ export function mentionWithHandle(p: MentionSubject): string {
   const base = `<@${p.discordId}>`;
   if (!isUsernameAllowed(p)) return base;
   const handle = normalizedHandle(p);
-  return handle ? `${base} (@${handle})` : base;
+  return handle ? `${base} (@${nameMd(handle)})` : base;
 }
 
 // Just the "@handle" part (no mention), or "" when unavailable/opted out.
@@ -48,5 +50,5 @@ export function mentionWithHandle(p: MentionSubject): string {
 export function handleOf(p: MentionSubject): string {
   if (!isUsernameAllowed(p)) return "";
   const handle = normalizedHandle(p);
-  return handle ? `@${handle}` : "";
+  return handle ? `@${nameMd(handle)}` : "";
 }

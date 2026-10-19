@@ -11,6 +11,7 @@ import { getConfig, LeagueConfigKey } from "./league-config.js";
 import { env } from "./env.js";
 import { buildCheckinMessage } from "./checkin-message.js";
 import { recordDmDelivery } from "./dm-delivery.js";
+import { nameMd } from "./name-format-core.js";
 
 export async function runRosterCheckin(opts: { playerIds: string[]; seasonId: string }): Promise<number> {
   if (opts.playerIds.length === 0) return 0;
@@ -34,7 +35,7 @@ export async function runRosterCheckin(opts: { playerIds: string[]; seasonId: st
     if (member.checkinStatus === "pending" || member.checkinStatus === "in" || member.checkinStatus === "out") continue;
 
     const content = buildCheckinMessage({
-      name: member.player.displayName,
+      name: nameMd(member.player.displayName),
       divisionName: member.division.name,
       divisionChannelUrl: jump(member.division.discordChannelId),
       supportChannelUrl: supportUrl,

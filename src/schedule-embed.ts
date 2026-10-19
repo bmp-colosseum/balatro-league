@@ -9,7 +9,10 @@ import { activePublicSeason } from "./active-season.js";
 import { prisma } from "./db.js";
 import { formatSeasonLabel } from "./format-season.js";
 import { formatZone } from "./timezones.js";
-import { sanitizeName } from "./sanitize.js";
+import { fitLines, nameMd } from "./name-format-core.js";
+
+// Discord's embed field value limit.
+const EMBED_FIELD_VALUE_MAX = 1024;
 
 export async function buildScheduleEmbed(playerId: string): Promise<EmbedBuilder | null> {
   const activeSeason = await activePublicSeason();
@@ -50,7 +53,7 @@ export async function buildScheduleEmbed(playerId: string): Promise<EmbedBuilder
   for (const opp of opponents) {
     // Show the display name people recognize (bold) plus their @username, so
     // opponents can actually find + DM each other on Discord.
-    const label = opp.username ? `**${sanitizeName(opp.displayName)}** (@${opp.username})` : `**${sanitizeName(opp.displayName)}**`;
+    const label = opp.username ? `**${nameMd(opp.displayName)}** (@${nameMd(opp.username)})` : `**${nameMd(opp.displayName)}**`;
     const p = div.matches.find(
       (pr) =>
         (pr.playerAId === playerId && pr.playerBId === opp.id) ||
@@ -81,12 +84,10 @@ export async function buildScheduleEmbed(playerId: string): Promise<EmbedBuilder
 
   function fmt(items: Item[]): string {
     if (items.length === 0) return "_(none)_";
-    return items
-      .map((i) => {
+    return fitLines(items.map((i) => {
         const base = i.status ? `• ${i.name} — ${i.status}` : `• ${i.name}`;
         return i.tz ? `${base}  ·  🕐 ${formatZone(i.tz)}` : base;
-      })
-      .join("\n");
+    }), EMBED_FIELD_VALUE_MAX);
   }
 
   const settled = done.length + youReported.length + theyReported.length + disputed.length;

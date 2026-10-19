@@ -15,7 +15,7 @@ import { loadDivisionStandings } from "./standings-cache.js";
 import { shootoutsNeeded, type ShootoutNeed } from "./standings.js";
 import { normalizeTiebreak, type SeasonTiebreak } from "./standings-mode.js";
 import { enqueueDm } from "./queue.js";
-import { sanitizeName } from "./sanitize.js";
+import { nameMd } from "./name-format-core.js";
 import { mentionWithHandle, type MentionSubject } from "./mention.js";
 import { tiesText } from "./ties-text.js";
 
@@ -122,7 +122,7 @@ export async function runShootoutCheck(divisionId: string): Promise<number> {
     const { shootoutUnresolvedReason: unresolvedReason, shootoutCallToAction: callToAction } = tiesText(tiebreak);
     // DM each player (framed from their side).
     const dm = (me: typeof need.a, opp: typeof need.b) =>
-      `🎯 **Shootout needed** — you and **${sanitizeName(opp.displayName)}** are tied for ${where} in ` +
+      `🎯 **Shootout needed** — you and **${nameMd(opp.displayName)}** are tied for ${where} in ` +
       `**${division.name}**, ${unresolvedReason}. ${callToAction} ` +
       `**#league-matches** and hit **Start shootout**.`;
     if (isRealDiscordId(need.a.discordId))
@@ -134,7 +134,7 @@ export async function runShootoutCheck(divisionId: string): Promise<number> {
     // mentions actually notify -- postChannelMessage suppresses user pings).
     if (client && division.discordChannelId) {
       const mentions = [need.a, need.b].filter((p) => isRealDiscordId(p.discordId)).map((p) => mentionWithHandle(p));
-      const names = `${sanitizeName(need.a.displayName)} & ${sanitizeName(need.b.displayName)}`;
+      const names = `${nameMd(need.a.displayName)} & ${nameMd(need.b.displayName)}`;
       const splitPhrase = tiebreak === "lives" ? "and net lives tied too" : "and split your head-to-head";
       const decidesPhrase =
         tiebreak === "lives"

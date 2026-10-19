@@ -11,7 +11,7 @@ import { activePublicSeason } from "../active-season.js";
 import { prisma } from "../db.js";
 import { createLeagueMatchInvite } from "../league-match-invite.js";
 import { isDiscordIdBanned, BANNED_MESSAGE } from "../bans.js";
-import { sanitizeName } from "../sanitize.js";
+import { nameMd, namePlain } from "../name-format-core.js";
 import { pendingShootoutsForPlayer } from "../shootout.js";
 import type { ButtonHandler, SelectMenuHandler } from "./types.js";
 
@@ -81,7 +81,7 @@ export const leagueMatchesButtons: ButtonHandler = {
       const menu = new StringSelectMenuBuilder()
         .setCustomId("league-matches-shootout-pick:")
         .setPlaceholder("Play your shootout")
-        .addOptions(pending.slice(0, 25).map((p) => ({ label: p.opponentName.slice(0, 100), value: p.opponentId })));
+        .addOptions(pending.slice(0, 25).map((p) => ({ label: namePlain(p.opponentName).slice(0, 100), value: p.opponentId })));
       const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
       await interaction.editReply({
         content: "**Shootout tiebreaker** — pick who to play. It's a single game; the winner takes the spot.",
@@ -102,7 +102,7 @@ export const leagueMatchesButtons: ButtonHandler = {
     const menu = new StringSelectMenuBuilder()
       .setCustomId("league-matches-pick:")
       .setPlaceholder("Pick who you want to play")
-      .addOptions(shown.map((o) => ({ label: o.displayName.slice(0, 100), value: o.id })));
+      .addOptions(shown.map((o) => ({ label: namePlain(o.displayName).slice(0, 100), value: o.id })));
     const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
     await interaction.editReply({
       content:
@@ -162,7 +162,7 @@ export const leagueMatchesPickSelect: SelectMenuHandler = {
       return;
     }
     await interaction.editReply(
-      `Match invite sent to **${sanitizeName(opp.displayName)}** — it's in a private thread and they need to accept. Expires in ${result.expiryMinutes} min if not accepted.` +
+      `Match invite sent to **${nameMd(opp.displayName)}** — it's in a private thread and they need to accept. Expires in ${result.expiryMinutes} min if not accepted.` +
         (result.inviteUrl ? `\n${result.inviteUrl}` : ""),
     );
   },
@@ -213,7 +213,7 @@ export const leagueMatchesShootoutPickSelect: SelectMenuHandler = {
       return;
     }
     await interaction.editReply(
-      `Shootout invite sent to **${sanitizeName(opp.displayName)}** — single game, winner takes the spot. It's in a private thread; they need to accept. Expires in ${result.expiryMinutes} min.` +
+      `Shootout invite sent to **${nameMd(opp.displayName)}** — single game, winner takes the spot. It's in a private thread; they need to accept. Expires in ${result.expiryMinutes} min.` +
         (result.inviteUrl ? `\n${result.inviteUrl}` : ""),
     );
   },

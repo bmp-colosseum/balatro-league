@@ -126,7 +126,10 @@ export async function checkQueueStalls(): Promise<{
       ``,
       `Likely causes: handler hung on an await, worker process dead, DB lock contention. Check Railway logs.`,
     ].join("\n");
-    await (channel as TextChannel).send({ content: body });
+    await (channel as TextChannel).send({
+      content: body,
+      allowedMentions: { roles: devopsBindings.map((b) => b.discordRoleId) },
+    });
     return { checked: 1, stalled, posted: true };
   } catch (err) {
     console.warn("[devops-alarm] post failed:", err);

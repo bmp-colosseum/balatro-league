@@ -27,7 +27,7 @@ import { getOrCreatePlayer } from "../players.js";
 import { gamesFromResult, parsePairingResult } from "../scoring.js";
 import { recomputeDivisionStandings } from "../standings-cache.js";
 import { formatSeasonLabel } from "../format-season.js";
-import { sanitizeName } from "../sanitize.js";
+import { nameMd, namePlain } from "../name-format-core.js";
 import type { SlashCommand } from "./types.js";
 
 const RESULT_CHOICES = [
@@ -422,7 +422,7 @@ async function undoReport(interaction: ChatInputCommandInteraction) {
   });
   if (!pairing) {
     await interaction.editReply(
-      `No set between **${p1User.username}** and **${p2User.username}** in ${formatSeasonLabel(activeSeason)} — nothing to undo.`,
+      `No set between **${nameMd(p1User.username)}** and **${nameMd(p2User.username)}** in ${formatSeasonLabel(activeSeason)} — nothing to undo.`,
     );
     return;
   }
@@ -446,7 +446,7 @@ async function undoReport(interaction: ChatInputCommandInteraction) {
     },
   });
   await interaction.editReply(
-    `Undone: deleted the **${oldResult}** set between **${p1User.username}** and **${p2User.username}** ` +
+    `Undone: deleted the **${oldResult}** set between **${nameMd(p1User.username)}** and **${nameMd(p2User.username)}** ` +
       `in **${pairing.division.name}**. They can play and report again.`,
   );
 }
@@ -482,12 +482,12 @@ async function persistShootout(args: {
     where: { playerId: p1.id, division: { seasonId: activeSeason.id } },
     include: { division: true },
   });
-  if (!member) return { ok: false, error: `${sanitizeName(p1.displayName)} isn't in a division this season.` };
+  if (!member) return { ok: false, error: `${nameMd(p1.displayName)} isn't in a division this season.` };
   const otherInSameDiv = await prisma.divisionMember.findFirst({
     where: { playerId: p2.id, divisionId: member.divisionId },
   });
   if (!otherInSameDiv) {
-    return { ok: false, error: `${sanitizeName(p1.displayName)} and ${sanitizeName(p2.displayName)} aren't in the same division — a shootout only makes sense for tied opponents.` };
+    return { ok: false, error: `${nameMd(p1.displayName)} and ${nameMd(p2.displayName)} aren't in the same division — a shootout only makes sense for tied opponents.` };
   }
 
   const [canonA, canonB] = p1.id < p2.id ? [p1.id, p2.id] : [p2.id, p1.id];
@@ -571,7 +571,7 @@ async function recordShootout(interaction: ChatInputCommandInteraction) {
   });
   const loserDiscordId = winnerDiscordId === p1DiscordId ? p2DiscordId : p1DiscordId;
   await interaction.editReply(
-    `⚔ Showdown recorded — **${result.winnerName}** beats <@${loserDiscordId}> ` +
+    `⚔ Showdown recorded — **${nameMd(result.winnerName)}** beats <@${loserDiscordId}> ` +
       `in **${result.divisionName}**. Standings sort updated.` +
       (notes ? `\n_Notes: ${notes}_` : ""),
   );
@@ -608,7 +608,7 @@ async function joinMatch(interaction: ChatInputCommandInteraction) {
       // Threads: add the admin as a member. Private Threads need explicit
       // membership; Public Threads they can already see but the message
       // confirms presence to players.
-      await channel.members.add(interaction.user.id, `Admin ${interaction.user.username} mediating`);
+      await channel.members.add(interaction.user.id, `Admin ${namePlain(interaction.user.username)} mediating`);
       await channel.send(
         `🛠️ <@${interaction.user.id}> joined to mediate. Players: explain the situation here.`,
       );
@@ -618,7 +618,7 @@ async function joinMatch(interaction: ChatInputCommandInteraction) {
       await text.permissionOverwrites.edit(
         interaction.user.id,
         { ViewChannel: true, SendMessages: true, ReadMessageHistory: true },
-        { reason: `Admin ${interaction.user.username} mediating` },
+        { reason: `Admin ${namePlain(interaction.user.username)} mediating` },
       );
       await text.send(
         `🛠️ <@${interaction.user.id}> joined to mediate. Players: explain the situation here.`,
@@ -675,7 +675,7 @@ async function recordPairing(interaction: ChatInputCommandInteraction) {
   });
   if (!shared || shared.division.members.length === 0) {
     await interaction.editReply(
-      `${p1User.username} and ${p2User.username} aren't in the same division this season.`,
+      `${nameMd(p1User.username)} and ${nameMd(p2User.username)} aren't in the same division this season.`,
     );
     return;
   }
@@ -776,7 +776,7 @@ async function recordPairing(interaction: ChatInputCommandInteraction) {
   }
 
   await interaction.editReply(
-    `Recorded: **${p1User.username} ${games.a}-${games.b} ${p2User.username}** in **${division.name}**.` +
+    `Recorded: **${nameMd(p1User.username)} ${games.a}-${games.b} ${nameMd(p2User.username)}** in **${division.name}**.` +
       (reason ? `\nReason: ${reason}` : "") +
       (liveSession ? `\nClosed the in-progress match${closedThread ? " and its thread" : ""}.` : ""),
   );
@@ -812,7 +812,7 @@ async function recordForfeit(interaction: ChatInputCommandInteraction) {
   });
   if (!shared || shared.division.members.length === 0) {
     await interaction.editReply(
-      `${winnerUser.username} and ${loserUser.username} aren't in the same division this season.`,
+      `${nameMd(winnerUser.username)} and ${nameMd(loserUser.username)} aren't in the same division this season.`,
     );
     return;
   }
@@ -873,7 +873,7 @@ async function recordForfeit(interaction: ChatInputCommandInteraction) {
   });
 
   await interaction.editReply(
-    `✅ Recorded **${sanitizeName(winner.displayName)}** def. **${sanitizeName(loser.displayName)}** — **2-0 by DQ** in **${division.name}**.\n` +
+    `✅ Recorded **${nameMd(winner.displayName)}** def. **${nameMd(loser.displayName)}** — **2-0 by DQ** in **${division.name}**.\n` +
       `Reason (admin-only): _${reason}_`,
   );
 }
@@ -905,7 +905,7 @@ async function voidPlayer(interaction: ChatInputCommandInteraction) {
     include: { division: true },
   });
   if (!member) {
-    await interaction.editReply(`${playerUser.username} isn't in a division this season.`);
+    await interaction.editReply(`${nameMd(playerUser.username)} isn't in a division this season.`);
     return;
   }
   const division = member.division;
@@ -945,7 +945,7 @@ async function voidPlayer(interaction: ChatInputCommandInteraction) {
   });
 
   await interaction.editReply(
-    `✅ Voided **${sanitizeName(player.displayName)}** in **${division.name}** — **${voided.count}** match(es) cancelled, removed from standings.\n` +
+    `✅ Voided **${nameMd(player.displayName)}** in **${division.name}** — **${voided.count}** match(es) cancelled, removed from standings.\n` +
       `No 2-0s awarded to opponents, no losses recorded against them.\n` +
       `Reason (admin-only): _${reason}_`,
   );
@@ -970,7 +970,7 @@ async function scanBots(interaction: ChatInputCommandInteraction) {
 
   const lines = result.removed.map(
     (r) =>
-      `• **${r.username}** (\`${r.discordId}\`) — ${r.removedSignups} signup(s)` +
+      `• **${nameMd(r.username)}** (\`${r.discordId}\`) — ${r.removedSignups} signup(s)` +
       (r.deletedPlayer ? `, player + ${r.deletedMatches} match(es) deleted` : ""),
   );
   await interaction.editReply(
@@ -1009,7 +1009,7 @@ async function voidMatch(interaction: ChatInputCommandInteraction) {
     include: { division: { include: { members: { where: { playerId: p2.id } } } } },
   });
   if (!shared || shared.division.members.length === 0) {
-    await interaction.editReply(`**${sanitizeName(p1.displayName)}** and **${sanitizeName(p2.displayName)}** aren't in the same division this season.`);
+    await interaction.editReply(`**${nameMd(p1.displayName)}** and **${nameMd(p2.displayName)}** aren't in the same division this season.`);
     return;
   }
   const division = shared.division;
@@ -1058,7 +1058,7 @@ async function voidMatch(interaction: ChatInputCommandInteraction) {
   });
 
   await interaction.editReply(
-    `✅ Voided the game between **${sanitizeName(p1.displayName)}** and **${sanitizeName(p2.displayName)}** in **${division.name}** — recorded **0-0** (finished, no points, not a W/L/D).\n` +
+    `✅ Voided the game between **${nameMd(p1.displayName)}** and **${nameMd(p2.displayName)}** in **${division.name}** — recorded **0-0** (finished, no points, not a W/L/D).\n` +
       `Reason (admin-only): _${reason}_`,
   );
 }
@@ -1086,7 +1086,7 @@ async function recordStrike(interaction: ChatInputCommandInteraction) {
     summary: `Strike #${count} on ${player.displayName}: ${reason}`,
     metadata: { reason, count },
   });
-  await interaction.editReply(`⚠️ Logged strike **#${count}** for **${sanitizeName(player.displayName)}** — _${reason}_`);
+  await interaction.editReply(`⚠️ Logged strike **#${count}** for **${nameMd(player.displayName)}** — _${reason}_`);
 }
 
 // List a player's strikes, newest first, with the running count.
@@ -1095,7 +1095,7 @@ async function listStrikes(interaction: ChatInputCommandInteraction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const player = await prisma.player.findUnique({ where: { discordId: user.id } });
   if (!player) {
-    await interaction.editReply(`${user.username} isn't in the league yet — no strikes.`);
+    await interaction.editReply(`${nameMd(user.username)} isn't in the league yet — no strikes.`);
     return;
   }
   const strikes = await prisma.strike.findMany({
@@ -1103,7 +1103,7 @@ async function listStrikes(interaction: ChatInputCommandInteraction) {
     orderBy: { createdAt: "desc" },
   });
   if (strikes.length === 0) {
-    await interaction.editReply(`✅ **${sanitizeName(player.displayName)}** has no strikes.`);
+    await interaction.editReply(`✅ **${nameMd(player.displayName)}** has no strikes.`);
     return;
   }
   const lines = strikes.map(
@@ -1111,7 +1111,7 @@ async function listStrikes(interaction: ChatInputCommandInteraction) {
       `**${strikes.length - i}.** <t:${Math.floor(s.createdAt.getTime() / 1000)}:d> — ${s.reason} _(by ${s.issuedByName})_`,
   );
   await interaction.editReply(
-    `⚠️ **${sanitizeName(player.displayName)}** — **${strikes.length}** strike${strikes.length === 1 ? "" : "s"}:\n${lines.join("\n")}`,
+    `⚠️ **${nameMd(player.displayName)}** — **${strikes.length}** strike${strikes.length === 1 ? "" : "s"}:\n${lines.join("\n")}`,
   );
 }
 
@@ -1169,6 +1169,6 @@ async function forceResult(interaction: ChatInputCommandInteraction) {
   });
 
   await interaction.editReply(
-    `Force-resolved: **${sanitizeName(pairing.playerA.displayName)} ${games.a}-${games.b} ${sanitizeName(pairing.playerB.displayName)}** in **${pairing.division.name}**.\nReason: ${reason}`,
+    `Force-resolved: **${nameMd(pairing.playerA.displayName)} ${games.a}-${games.b} ${nameMd(pairing.playerB.displayName)}** in **${pairing.division.name}**.\nReason: ${reason}`,
   );
 }

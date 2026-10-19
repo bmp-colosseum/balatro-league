@@ -24,6 +24,7 @@ import { supportTicketButtons, supportTicketEmbed } from "../support-ticket.js";
 import { postModerationNotice } from "../mod-log.js";
 import { summonHelpers } from "./helper.js";
 import type { SlashCommand } from "./types.js";
+import { namePlain } from "../name-format-core.js";
 
 export async function openSupportTicket(
   interaction: ChatInputCommandInteraction | ModalSubmitInteraction,
@@ -91,7 +92,7 @@ export async function openSupportTicket(
   let thread;
   try {
     thread = await (channel as TextChannel).threads.create({
-      name: `ticket-${ticket.id.slice(-6)}-${interaction.user.username}`.slice(0, 90),
+      name: `ticket-${ticket.id.slice(-6)}-${namePlain(interaction.user.username)}`.slice(0, 90),
       type: ChannelType.PrivateThread,
       invitable: false,
       autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
@@ -126,7 +127,7 @@ export async function openSupportTicket(
     reason: issue,
   });
   if ("content" in summoned) {
-    await thread.send(summoned.content).catch(() => {});
+    await thread.send({ content: summoned.content, allowedMentions: summoned.allowedMentions }).catch(() => {});
   } else {
     await thread.send(`⚠️ ${summoned.error}`).catch(() => {});
   }

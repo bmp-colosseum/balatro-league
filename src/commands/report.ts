@@ -16,6 +16,7 @@ import { buildProblemTicketIssue, isReportProblemAction } from "../report-proble
 import { reportSet } from "../reporting.js";
 import { openSupportTicket } from "./support.js";
 import type { ButtonHandler, ModalHandler, SlashCommand } from "./types.js";
+import { nameMd } from "../name-format-core.js";
 
 const RESULT_CHOICES = [
   { name: "2-0 (I won both games)", value: "2-0" },
@@ -184,8 +185,8 @@ export const reportProblemModal: ModalHandler = {
     const description = interaction.fields.getTextInputValue("description").trim();
     const issue = buildProblemTicketIssue({
       pairingId: pairing.id,
-      playerAName: pairing.playerA.displayName,
-      playerBName: pairing.playerB.displayName,
+      playerAName: nameMd(pairing.playerA.displayName),
+      playerBName: nameMd(pairing.playerB.displayName),
       description,
     });
     await openSupportTicket(interaction, issue);

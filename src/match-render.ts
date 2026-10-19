@@ -19,7 +19,7 @@ import {
 import { deckEmoji, deckEmojiPartial, stakeEmoji, stakeEmojiPartial } from "./balatro-emojis.js";
 import { parseGame, parseProposal, parsePolicy, phaseFor, remainingCombos, MAX_GAME_LIVES, type GameState, type ComboProposal } from "./match-session.js";
 import type { DeckEntry } from "./match-config.js";
-import { sanitizeName } from "./sanitize.js";
+import { nameMd, namePlain } from "./name-format-core.js";
 import { mentionWithHandle } from "./mention.js";
 import { matchRef } from "./match-ref.js";
 
@@ -114,20 +114,20 @@ function computeActiveContent(
   if (s.cancelInitiatorPlayerId && s.state !== "CANCELLED" && s.state !== "COMPLETE") {
     const initiator = s.cancelInitiatorPlayerId === a.id ? a : b;
     const opposing = s.cancelInitiatorPlayerId === a.id ? b : a;
-    return { content: `${mentionWithHandle(opposing)} ⛔ **${sanitizeName(initiator.displayName)}** wants to cancel — click **Cancel match** to agree, or just keep playing.`, turnKey: opposing.discordId };
+    return { content: `${mentionWithHandle(opposing)} ⛔ **${nameMd(initiator.displayName)}** wants to cancel — click **Cancel match** to agree, or just keep playing.`, turnKey: opposing.discordId };
   }
   // Pause vote pending — ping the other player so it's not just a silent
   // button swap. Same precedence idea as cancel.
   if (s.pauseInitiatorPlayerId && s.state !== "PAUSED" && s.state !== "CANCELLED" && s.state !== "COMPLETE") {
     const initiator = s.pauseInitiatorPlayerId === a.id ? a : b;
     const opposing = s.pauseInitiatorPlayerId === a.id ? b : a;
-    return { content: `${mentionWithHandle(opposing)} ⏸️ **${sanitizeName(initiator.displayName)}** wants to pause — click **Pause** to agree, or keep playing.`, turnKey: opposing.discordId };
+    return { content: `${mentionWithHandle(opposing)} ⏸️ **${nameMd(initiator.displayName)}** wants to pause — click **Pause** to agree, or keep playing.`, turnKey: opposing.discordId };
   }
   // DC claim pending — ping the player it's against to confirm or dispute.
   if (s.dcInitiatorPlayerId && s.state !== "CANCELLED" && s.state !== "COMPLETE") {
     const claimant = s.dcInitiatorPlayerId === a.id ? a : b;
     const opposing = s.dcInitiatorPlayerId === a.id ? b : a;
-    return { content: `${mentionWithHandle(opposing)} 🔌 **${sanitizeName(claimant.displayName)}** says you disconnected — **Confirm** to forfeit this game, or **Keep playing** if you're still here.`, turnKey: opposing.discordId };
+    return { content: `${mentionWithHandle(opposing)} 🔌 **${nameMd(claimant.displayName)}** says you disconnected — **Confirm** to forfeit this game, or **Keep playing** if you're still here.`, turnKey: opposing.discordId };
   }
   if (s.state === "WAITING_ACCEPT") {
     return { content: `${mentionWithHandle(b)} 🎴 match invite from ${mentionWithHandle(a)} — accept or decline.`, turnKey: b.discordId };
@@ -172,7 +172,7 @@ function computeActiveContent(
         const voterIsA = Boolean(game.rerollVoteByA);
         const voter = voterIsA ? a : b;
         const opposing = voterIsA ? b : a;
-        return { content: `${mentionWithHandle(opposing)} 🔄 **${sanitizeName(voter.displayName)}** wants to reroll the pool — click **Confirm reroll** to agree, or keep banning.`, turnKey: opposing.discordId };
+        return { content: `${mentionWithHandle(opposing)} 🔄 **${nameMd(voter.displayName)}** wants to reroll the pool — click **Confirm reroll** to agree, or keep banning.`, turnKey: opposing.discordId };
       }
       const phase = phaseFor(game, a.id, b.id, parsePolicy(s.policy), !s.isCasual);
       if (phase.kind !== "BAN") return { content: "", turnKey: "" };
@@ -210,7 +210,7 @@ function computeActiveContent(
           const aVoted = Boolean(game.voteByA);
           const voter = aVoted ? a : b;
           const pending = aVoted ? b : a;
-          return { content: `${mentionWithHandle(pending)} 🗳️ ${sanitizeName(voter.displayName)} reported the result — cast your vote to confirm the winner.`, turnKey: pending.discordId };
+          return { content: `${mentionWithHandle(pending)} 🗳️ ${nameMd(voter.displayName)} reported the result — cast your vote to confirm the winner.`, turnKey: pending.discordId };
         }
       }
       // No votes yet → both players go play the run, then vote a winner. A
@@ -227,7 +227,7 @@ function computeActiveContent(
     if (s.resumeInitiatorPlayerId) {
       const initiator = s.resumeInitiatorPlayerId === a.id ? a : b;
       const opposing = s.resumeInitiatorPlayerId === a.id ? b : a;
-      return { content: `${mentionWithHandle(opposing)} ▶️ **${sanitizeName(initiator.displayName)}** wants to resume — click **Resume** to continue.`, turnKey: opposing.discordId };
+      return { content: `${mentionWithHandle(opposing)} ▶️ **${nameMd(initiator.displayName)}** wants to resume — click **Resume** to continue.`, turnKey: opposing.discordId };
     }
     return { content: "", turnKey: "" };
   }
@@ -331,11 +331,11 @@ function renderChooseFirst(s: MatchSession, a: Player, b: Player, prevGame: Game
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`match:choosefirst:${s.id}:${a.id}`)
-      .setLabel(`${a.displayName} bans first`)
+      .setLabel(`${namePlain(a.displayName)} bans first`)
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId(`match:choosefirst:${s.id}:${b.id}`)
-      .setLabel(`${b.displayName} bans first`)
+      .setLabel(`${namePlain(b.displayName)} bans first`)
       .setStyle(ButtonStyle.Primary),
   );
   return { embeds: [embed], components: [row] };
@@ -420,14 +420,14 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
     const orientationLine =
       gameNumber === 1
         ? `**How this works:** each game starts with ${pool.length} deck and stake options. ` +
-          `${sanitizeName(first.displayName)} bans 1, ${sanitizeName(otherPlayer.displayName)} bans ${policy.secondPlayerBans}, ` +
-          `${sanitizeName(first.displayName)} bans ${policy.firstPlayerBans - 1}, then **${sanitizeName(otherPlayer.displayName)} picks** ` +
+          `${nameMd(first.displayName)} bans 1, ${nameMd(otherPlayer.displayName)} bans ${policy.secondPlayerBans}, ` +
+          `${nameMd(first.displayName)} bans ${policy.firstPlayerBans - 1}, then **${nameMd(otherPlayer.displayName)} picks** ` +
           `from the last ${Math.max(pool.length - policy.firstPlayerBans - policy.secondPlayerBans, 0)}. ` +
           `The winner of each game records their lives left.\n\n`
         : "";
     embed.setDescription(
       orientationLine +
-        `🎯 **${sanitizeName(whose.displayName)}** is banning: choose **${expected}** from the menu below.\n\n` +
+        `🎯 **${nameMd(whose.displayName)}** is banning: choose **${expected}** from the menu below.\n\n` +
         `**Options (${sortedRemaining.length} left):**\n` +
         poolLines.join("\n"),
     );
@@ -440,7 +440,7 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
     // turn" and the public message is left untouched.
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId(`match:banselect:${s.id}`)
-      .setPlaceholder(`${whose.displayName}: choose ${expected} to ban`)
+      .setPlaceholder(`${namePlain(whose.displayName)}: choose ${expected} to ban`)
       .setMinValues(expected)
       .setMaxValues(expected)
       .addOptions(
@@ -518,7 +518,7 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
       );
     });
     embed.setDescription(
-      `Bans done. **${sanitizeName(picker.displayName)}** picks the deck for this game from the 2 remaining.\n\n` +
+      `Bans done. **${nameMd(picker.displayName)}** picks the deck for this game from the 2 remaining.\n\n` +
         optionLines.join("\n\n"),
     );
     // Private dropdown, same as bans: the opponent sees the menu but not
@@ -527,7 +527,7 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
     // dropdown commits.
     const pickSelect = new StringSelectMenuBuilder()
       .setCustomId(`match:pickselect:${s.id}`)
-      .setPlaceholder(`${picker.displayName}: pick your deck`)
+      .setPlaceholder(`${namePlain(picker.displayName)}: pick your deck`)
       .setMinValues(1)
       .setMaxValues(1)
       .addOptions(
@@ -567,8 +567,8 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
     // (the handler guards), but we render them for everyone to see.
     const winner = phase.winnerId === a.id ? a : b;
     embed.setDescription(
-      `🏆 **${sanitizeName(winner.displayName)}** won game ${gameNumber}!\n\n` +
-        `**${sanitizeName(winner.displayName)}** — how many lives did you have left? ` +
+      `🏆 **${nameMd(winner.displayName)}** won game ${gameNumber}!\n\n` +
+        `**${nameMd(winner.displayName)}** — how many lives did you have left? ` +
         `(For the standings tiebreaker. Only you can set this.)`,
     );
     const livesRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
@@ -592,9 +592,9 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
       const dcer = s.dcInitiatorPlayerId === a.id ? b : a;
       embed.setDescription(
         `${playingLine(picked)}\n\n` +
-          `🔌 **${sanitizeName(claimant.displayName)}** reports that **${sanitizeName(dcer.displayName)}** disconnected.\n\n` +
-          `**${sanitizeName(dcer.displayName)}** — **Confirm DC** to give ${sanitizeName(claimant.displayName)} this game, or **Keep playing** if you're still here.\n` +
-          `_If ${sanitizeName(dcer.displayName)} is gone for good, press **Call helper** below._`,
+          `🔌 **${nameMd(claimant.displayName)}** reports that **${nameMd(dcer.displayName)}** disconnected.\n\n` +
+          `**${nameMd(dcer.displayName)}** — **Confirm DC** to give ${nameMd(claimant.displayName)} this game, or **Keep playing** if you're still here.\n` +
+          `_If ${nameMd(dcer.displayName)} is gone for good, press **Call helper** below._`,
       );
       // Two options only: the reported player confirms (forfeits), or
       // either player clicks Keep playing to clear the report and resume.
@@ -614,9 +614,9 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
     // the match auto-advances (this render only fires while voting is
     // incomplete or disputed).
     const voteLine = (vote: string | undefined, who: Player) => {
-      if (!vote) return `· **${sanitizeName(who.displayName)}**: not voted`;
+      if (!vote) return `· **${nameMd(who.displayName)}**: not voted`;
       const target = vote === a.id ? a.displayName : b.displayName;
-      return `· **${sanitizeName(who.displayName)}**: voted ${sanitizeName(target)}`;
+      return `· **${nameMd(who.displayName)}**: voted ${nameMd(target)}`;
     };
     let description = `${playingLine(picked)}\n\n`;
     if (game.disputed) {
@@ -637,11 +637,11 @@ function renderGame(s: MatchSession, a: Player, b: Player, pool: DeckEntry[], ga
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(`match:winner:${s.id}:${a.id}`)
-        .setLabel(`${a.displayName} won`)
+        .setLabel(`${namePlain(a.displayName)} won`)
         .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
         .setCustomId(`match:winner:${s.id}:${b.id}`)
-        .setLabel(`${b.displayName} won`)
+        .setLabel(`${namePlain(b.displayName)} won`)
         .setStyle(ButtonStyle.Primary),
     );
     // DC button. For shootouts, the click handler refuses the auto-
@@ -670,9 +670,9 @@ function renderComplete(s: MatchSession, a: Player, b: Player, games: Array<Game
   const aWins = played.filter((g) => g.winnerId === a.id).length;
   const bWins = played.filter((g) => g.winnerId === b.id).length;
   const verdict =
-    aWins > bWins ? `🏆 ${sanitizeName(a.displayName)} ${aWins}-${bWins} ${sanitizeName(b.displayName)}` :
-    bWins > aWins ? `🏆 ${sanitizeName(b.displayName)} ${bWins}-${aWins} ${sanitizeName(a.displayName)}` :
-    `🤝 ${sanitizeName(a.displayName)} ${aWins}-${bWins} ${sanitizeName(b.displayName)}`;
+    aWins > bWins ? `🏆 ${nameMd(a.displayName)} ${aWins}-${bWins} ${nameMd(b.displayName)}` :
+    bWins > aWins ? `🏆 ${nameMd(b.displayName)} ${bWins}-${aWins} ${nameMd(a.displayName)}` :
+    `🤝 ${nameMd(a.displayName)} ${aWins}-${bWins} ${nameMd(b.displayName)}`;
   const tail = s.isCasual
     ? "Casual match — not recorded to the league."
     : "Result recorded. It counts straight away and is posted in the results channel. Wrong result? Press **Report a problem** under that post.";
@@ -688,7 +688,7 @@ function renderComplete(s: MatchSession, a: Player, b: Player, games: Array<Game
       const combo = c ? [c.deck, c.stake].filter(Boolean).join(" / ") : "_combo not recorded_";
       const winner =
         g.winnerId === a.id ? a.displayName : g.winnerId === b.id ? b.displayName : null;
-      const who = winner ? ` — **${sanitizeName(winner)}**` : "";
+      const who = winner ? ` — **${nameMd(winner)}**` : "";
       const lives = g.winnerLives != null ? ` _(${g.winnerLives} ${g.winnerLives === 1 ? "life" : "lives"} left)_` : "";
       return `Game ${i + 1}: ${combo}${who}${lives}`;
     })
@@ -769,7 +769,7 @@ export function renderComboBuilder(args: {
         `Accepting skips ban/pick for **this game only** (the next game bans/picks as normal).\n\n` +
         `Deck: ${deck ? `${deckIcon} **${deck}**` : "_not picked_"}\n` +
         `Stake: ${stake ? `${stakeIcon} **${stake}**` : "_not picked_"}\n\n` +
-        `Once you submit, **${sanitizeName(responder.displayName)}** can Accept, Counter, or Cancel.`,
+        `Once you submit, **${nameMd(responder.displayName)}** can Accept, Counter, or Cancel.`,
     )
     .setFooter({ text: `Match ref ${matchRef(sessionId)}` });
 
@@ -846,9 +846,9 @@ function renderProposal(
     .setColor(0xf1c40f)
     .setFooter({ text: `Match ref ${matchRef(s.id)}` })
     .setDescription(
-      `**${sanitizeName(proposer.displayName)}** proposes:\n\n` +
+      `**${nameMd(proposer.displayName)}** proposes:\n\n` +
         `${icons ? `${icons}  ` : ""}**${proposal.deck} / ${proposal.stake}**\n\n` +
-        `${sanitizeName(responder.displayName)}, accept to use this combo for **this game only**. ` +
+        `${nameMd(responder.displayName)}, accept to use this combo for **this game only**. ` +
         `Counter to take over the proposal yourself, or cancel to go back to ban/pick.`,
     );
   const actions = new ActionRowBuilder<ButtonBuilder>().addComponents(

@@ -8,7 +8,10 @@ import { prisma } from "./db.js";
 import { loadDivisionStandings, loadDivisionScoringBadge, recomputeDivisionStandings } from "./standings-cache.js";
 import { formatSeasonLabel } from "./format-season.js";
 import { webUrl } from "./web-url.js";
-import { sanitizeName } from "./sanitize.js";
+import { fitLines, nameMd } from "./name-format-core.js";
+
+// Discord's embed description limit.
+const EMBED_DESCRIPTION_MAX = 4096;
 
 // Medal for the top 3, otherwise the numeric position.
 function place(i: number): string {
@@ -54,12 +57,12 @@ export async function composeStandingsEmbeds(): Promise<EmbedBuilder[]> {
     const badge = await loadDivisionScoringBadge(div.id).catch(() => null);
     const lines = rows.map((r, i) => {
       const countedNote = badge && r.counted !== undefined && r.of !== undefined ? ` (${r.counted} of ${r.of})` : "";
-      return `${place(i)} ${sanitizeName(r.player.displayName)} — **${r.points}** pts · ${r.wins}-${r.draws}-${r.losses}${countedNote}`;
+      return `${place(i)} ${nameMd(r.player.displayName)} — **${r.points}** pts · ${r.wins}-${r.draws}-${r.losses}${countedNote}`;
     });
     divisionEmbeds.push(
       new EmbedBuilder()
         .setTitle(badge ? `${div.name} - counts best ${badge.n} of ${badge.scheduled} matches` : div.name)
-        .setDescription(lines.length > 0 ? lines.join("\n") : "_No results yet._")
+        .setDescription(lines.length > 0 ? fitLines(lines, EMBED_DESCRIPTION_MAX) : "_No results yet._")
         .setColor(tierColor(div.tier.position)),
     );
   }

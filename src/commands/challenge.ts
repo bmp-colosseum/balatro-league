@@ -21,7 +21,7 @@ import { renderMatch } from "../match-render.js";
 import { postModerationNotice } from "../mod-log.js";
 import { getOrCreatePlayer, guildDisplayName } from "../players.js";
 import { bannedPlayerIds, BANNED_MESSAGE } from "../bans.js";
-import { sanitizeName } from "../sanitize.js";
+import { nameMd, namePlain } from "../name-format-core.js";
 import { mentionWithHandle } from "../mention.js";
 import type { SlashCommand } from "./types.js";
 
@@ -121,7 +121,7 @@ export const challenge: SlashCommand = {
       return;
     }
     if (banned.has(opp.id)) {
-      await interaction.editReply(`${sanitizeName(opp.displayName)} is banned from the league right now, so you can't challenge them.`);
+      await interaction.editReply(`${nameMd(opp.displayName)} is banned from the league right now, so you can't challenge them.`);
       return;
     }
 
@@ -197,7 +197,7 @@ export const challenge: SlashCommand = {
     try {
       const suffix = session.id.slice(-6);
       const thread = await parent.threads.create({
-        name: `Challenge: ${me.displayName} vs ${opp.displayName} (${suffix})`,
+        name: `Challenge: ${namePlain(me.displayName)} vs ${namePlain(opp.displayName)} (${suffix})`,
         type: ChannelType.PrivateThread,
         // 60 min is the minimum auto-archive for private threads. Session
         // expiry runs separately (5 min default) — match-sweep cancels
@@ -230,6 +230,7 @@ export const challenge: SlashCommand = {
       if (thread && thread.type === ChannelType.PrivateThread) {
         const sent = await thread.send({
           content: `${mentionWithHandle(opp)} — ${mentionWithHandle(me)} wants to play. Invite expires in ${settings.matchInviteExpiryMinutes} min.`,
+          allowedMentions: { users: [opp.discordId] },
           embeds,
           components,
         });

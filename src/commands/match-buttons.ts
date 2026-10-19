@@ -58,7 +58,7 @@ import { bannedPlayerIds, BANNED_MESSAGE } from "../bans.js";
 import { hasTier } from "../permissions.js";
 import { backfillMatchId, postModerationNotice } from "../mod-log.js";
 import { postTranscriptSummary } from "../transcript-channel.js";
-import { sanitizeName } from "../sanitize.js";
+import { nameMd, namePlain } from "../name-format-core.js";
 import { mentionWithHandle } from "../mention.js";
 import {
   emptyGameState,
@@ -915,7 +915,7 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
     const cancelled = await updateSession(session, { state: MatchSessionState.CANCELLED });
     await reply(
       interaction,
-      bannedNow.has(playerB.id) ? BANNED_MESSAGE : `${sanitizeName(playerA.displayName)} is banned from the league, so this match can't start.`,
+      bannedNow.has(playerB.id) ? BANNED_MESSAGE : `${nameMd(playerA.displayName)} is banned from the league, so this match can't start.`,
     );
     if (cancelled) closeMatchChannel(interaction, cancelled.id, cancelled.threadId).catch(() => {});
     return;
@@ -998,7 +998,7 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
       try {
         const suffix = session.id.slice(-6);
         const thread = await parentChannel.threads.create({
-          name: `Match: ${playerA.displayName} vs ${playerB.displayName} (${suffix})`,
+          name: `Match: ${namePlain(playerA.displayName)} vs ${namePlain(playerB.displayName)} (${suffix})`,
           type: ChannelType.PrivateThread,
           autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
           invitable: false,
@@ -1053,7 +1053,7 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
     const pointer = new EmbedBuilder()
       .setTitle("🎴 Match started")
       .setColor(0x2ecc71)
-      .setDescription(`${sanitizeName(playerA.displayName)} vs ${sanitizeName(playerB.displayName)} — play it out in <#${matchChannelId}>.`)
+      .setDescription(`${nameMd(playerA.displayName)} vs ${nameMd(playerB.displayName)} — play it out in <#${matchChannelId}>.`)
       .setFooter({ text: `Match ${updated.id}` });
     await editOrUpdate(interaction, { content: "", embeds: [pointer], components: [] })
       .catch((err) => console.warn(`[handleAccept] invite pointer edit failed for ${updated.id}:`, err));
@@ -1065,6 +1065,7 @@ async function handleAccept(interaction: ButtonInteraction, session: MatchSessio
           content: content || `${mentionWithHandle(playerA)} ${mentionWithHandle(playerB)} — your match thread.`,
           embeds,
           components,
+          allowedMentions: { parse: ["users"] },
         });
         // The canonical match message is now the in-thread send.
         await prisma.matchSession.update({
@@ -1468,7 +1469,7 @@ export const callHelperModal = {
       await interaction.reply({ content: result.error, flags: MessageFlags.Ephemeral });
       return;
     }
-    await interaction.reply({ content: result.content });
+    await interaction.reply({ content: result.content, allowedMentions: result.allowedMentions });
     // The helper ping just posted below the controls — bump them back to
     // the bottom so players don't have to scroll up to keep playing.
     if (sessionId) {
@@ -2088,7 +2089,7 @@ async function handleProposeSubmit(interaction: ButtonInteraction, session: Matc
   const sentEmbed = new EmbedBuilder()
     .setTitle("✅ Proposal sent")
     .setColor(0x2ecc71)
-    .setDescription(`Proposed **${proposal.deck} / ${proposal.stake}** — waiting on ${sanitizeName(ctx.other.displayName)} to respond.`);
+    .setDescription(`Proposed **${proposal.deck} / ${proposal.stake}** — waiting on ${nameMd(ctx.other.displayName)} to respond.`);
   await interaction.update({ embeds: [sentEmbed], components: [] });
   await refreshPublicMatchMessage(interaction, updated);
 }

@@ -7,7 +7,7 @@ import {
 import { prisma } from "../db.js";
 import { getOrCreatePlayer, guildDisplayName } from "../players.js";
 import { loadPlayerHistory } from "../profile.js";
-import { sanitizeName } from "../sanitize.js";
+import { nameMd, namePlain } from "../name-format-core.js";
 import type { SlashCommand } from "./types.js";
 
 // Tier-position-based emoji. Mirrors the default Legendary/Rare/Uncommon/Common palette
@@ -37,13 +37,13 @@ export const profile: SlashCommand = {
       if (user.id === interaction.user.id) {
         await getOrCreatePlayer(user, guildDisplayName(interaction));
       } else {
-        await interaction.editReply(`${user.username} isn't registered in the league.`);
+        await interaction.editReply(`${nameMd(user.username)} isn't registered in the league.`);
         return;
       }
     }
     const existing = await prisma.player.findUnique({ where: { discordId: user.id } });
     if (!existing) {
-      await interaction.editReply(`${user.username} isn't in the league yet.`);
+      await interaction.editReply(`${nameMd(user.username)} isn't in the league yet.`);
       return;
     }
 
@@ -70,7 +70,7 @@ export const profile: SlashCommand = {
     }
 
     const embed = new EmbedBuilder()
-      .setTitle(`${sanitizeName(existing.displayName)} — profile`)
+      .setTitle(`${namePlain(existing.displayName)} — profile`)
       .setColor(0x5865f2)
       .addFields(
         { name: "Seasons played", value: String(t.seasons), inline: true },
