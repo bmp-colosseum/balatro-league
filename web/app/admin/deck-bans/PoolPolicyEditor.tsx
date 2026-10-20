@@ -154,7 +154,7 @@ export function PoolPolicyEditor({
                         type="number"
                         name={`weight_${deck}`}
                         min={0}
-                        step="0.1"
+                        step="any"
                         value={weights[deck] ?? 1}
                         aria-label={`${deck} weight`}
                         onChange={(e) => {
@@ -189,7 +189,7 @@ export function PoolPolicyEditor({
                         type="number"
                         name={`stakeWeight_${stake}`}
                         min={0}
-                        step="0.1"
+                        step="any"
                         value={stakeWeights[stake] ?? 1}
                         aria-label={`${stake} weight`}
                         onChange={(e) => {

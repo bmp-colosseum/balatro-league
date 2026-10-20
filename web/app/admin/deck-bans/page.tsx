@@ -307,6 +307,7 @@ function PresetEditor({
       </div>
 
       <PoolPolicyEditor
+        key={preset.id}
         presetId={preset.id}
         decks={preset.decks}
         stakes={preset.stakes}
