@@ -9,7 +9,7 @@ import { loadDivisionStandings, loadDivisionScoringBadge, recomputeDivisionStand
 import { formatSeasonLabel } from "./format-season.js";
 import { webUrl } from "./web-url.js";
 import { fitLines, nameMd } from "./name-format-core.js";
-import { tierAccentColor } from "./tier-colors.js";
+import { FALLBACK_ACCENT_COLOR, tierAccentColor } from "./tier-colors.js";
 
 // Discord's embed description limit.
 const EMBED_DESCRIPTION_MAX = 4096;
@@ -36,7 +36,7 @@ export async function composeStandingsEmbeds(): Promise<EmbedBuilder[]> {
   const header = new EmbedBuilder()
     .setTitle(`🏆 ${formatSeasonLabel(season)} — Live Standings`)
     .setDescription(`Auto-updated as results come in. Full standings + history: ${webUrl("standings")}`)
-    .setColor(0xf1c40f)
+    .setColor(FALLBACK_ACCENT_COLOR)
     .setTimestamp(new Date());
 
   const divisionEmbeds: EmbedBuilder[] = [];
