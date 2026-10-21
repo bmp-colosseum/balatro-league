@@ -245,7 +245,7 @@ function PresetEditor({
             <ConfirmButton
               message="Delete this deck-ban preset? Any seasons using it will fall back to the default."
               variant="secondary"
-              className="text-[#e74c3c]"
+              className="text-[var(--danger)]"
             >
               Delete preset
             </ConfirmButton>
@@ -401,7 +401,7 @@ function ListEditor({
             <form action={removeAction}>
               <input type="hidden" name="id" value={presetId} />
               <input type="hidden" name="name" value={name} />
-              <Button type="submit" variant="ghost" size="sm" className="text-[#e74c3c]">
+              <Button type="submit" variant="ghost" size="sm" className="text-[var(--danger)]">
                 remove
               </Button>
             </form>

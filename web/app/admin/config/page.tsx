@@ -161,7 +161,7 @@ export default async function AdminConfigPage() {
                       <input type="hidden" name="id" value={b.id} />
                       <ConfirmButton
                         message="Remove this role binding? It may change who has admin/devops access."
-                        className="text-[#e74c3c]"
+                        className="text-[var(--danger)]"
                       >
                         remove
                       </ConfirmButton>
@@ -228,7 +228,7 @@ function ConfigSection({
                   {value && (
                     <form action={clearConfigValue} style={{ display: "inline" }}>
                       <input type="hidden" name="key" value={key} />
-                      <ConfirmButton message="Clear this config value?" className="text-[#e74c3c]">
+                      <ConfirmButton message="Clear this config value?" variant="secondary" className="text-[var(--danger)]">
                         clear
                       </ConfirmButton>
                     </form>

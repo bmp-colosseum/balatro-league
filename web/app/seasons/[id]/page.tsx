@@ -880,7 +880,7 @@ function LifecycleActions({
               </form>
               <form action={clearSeasonScheduledStart}>
                 <input type="hidden" name="id" value={season.id} />
-                <Button type="submit" variant="secondary" size="sm" className="text-[#e74c3c]">Cancel schedule</Button>
+                <Button type="submit" variant="secondary" size="sm" className="text-[var(--danger)]">Cancel schedule</Button>
               </form>
             </div>
           ) : (

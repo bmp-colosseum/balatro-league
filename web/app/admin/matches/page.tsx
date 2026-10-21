@@ -412,7 +412,7 @@ function MatchRowCard({ row, data, returnTo }: { row: MatchPageRow; data: AdminM
                 <input type="hidden" name="returnTo" value={returnTo} />
                 <ConfirmButton
                   message={`Remove the ${row.playerA.displayName} vs ${row.playerB.displayName} result? Standings fall back to the next tiebreaker.`}
-                  className="secondary"
+                  variant="secondary"
                   style={{ fontSize: 11, color: "var(--danger)" }}
                 >
                   Undo
@@ -425,7 +425,7 @@ function MatchRowCard({ row, data, returnTo }: { row: MatchPageRow; data: AdminM
             <form action={undoAction}>
               <input type="hidden" name="matchId" value={row.matchId} />
               <input type="hidden" name="returnTo" value={returnTo} />
-              <ConfirmButton message="Undo this shootout?" className="secondary" style={{ fontSize: 11, color: "var(--danger)" }}>
+              <ConfirmButton message="Undo this shootout?" variant="secondary" style={{ fontSize: 11, color: "var(--danger)" }}>
                 Undo
               </ConfirmButton>
             </form>

@@ -859,6 +859,18 @@ html[data-ui="v2"] [data-slot="button"][class*="text-destructive"] {
   background: var(--rare);
   color: #0b1b1a;
 }
+/* The default variant (bg-primary) was still Discord blurple + white under
+   v2: the base @theme inline block inlines --color-primary as var(--accent-2)
+   and --color-primary-foreground as #fff straight into .bg-primary /
+   .text-primary-foreground, so the --color-primary re-point above never
+   reaches them. Give it the plain v2 button's gold/ink fill so "End season",
+   "Create season", "Ban", DQ / Void etc. read like every other action.
+   A button that carries its own arbitrary fill (bg-[var(--success)] on the
+   join page's "Sign me up") keeps it. */
+html[data-ui="v2"] [data-slot="button"][class*="bg-primary"]:not([class*="bg-["]) {
+  background: var(--gold);
+  color: var(--gold-ink);
+}
 html[data-ui="v2"] [data-slot="button"][class*="bg-primary"]:active,
 html[data-ui="v2"] [data-slot="button"][class*="bg-secondary"]:active,
 html[data-ui="v2"] [data-slot="button"][class*="text-destructive"]:active {

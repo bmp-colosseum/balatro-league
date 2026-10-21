@@ -171,7 +171,7 @@ export default async function JoinPage({
                 ) : (
                   <form action={signupFromJoinAction}>
                     <input type="hidden" name="roundId" value={data.openRound.id} />
-                    <Button type="submit" className="bg-[var(--success)] text-white hover:opacity-90">
+                    <Button type="submit" className="bg-[var(--success)] text-[var(--success-ink)] hover:opacity-90">
                       <Image src="/Balatro_League.png" alt="" width={16} height={16} className="mr-1.5 inline-block rounded-[2px] align-[-2px]" /> Sign me up
                     </Button>
                     <p className="muted" style={{ fontSize: 11, marginTop: 6 }}>

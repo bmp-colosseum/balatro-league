@@ -134,7 +134,7 @@ export function TraitEditorRow({
                 onClick={clearIcon}
                 variant="ghost"
                 size="sm"
-                className="text-[#e74c3c]"
+                className="text-[var(--danger)]"
               >
                 remove icon
               </Button>
@@ -173,7 +173,7 @@ export function TraitEditorRow({
             type="submit"
             variant="outline"
             size="sm"
-            className="text-[#e74c3c]"
+            className="text-[var(--danger)]"
           >
             Reset to default
           </Button>

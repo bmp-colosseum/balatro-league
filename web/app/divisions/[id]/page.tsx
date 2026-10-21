@@ -965,7 +965,7 @@ function AdminSection({
                       <ConfirmButton
                         variant="secondary"
                         size="sm"
-                        className="text-[#e74c3c]"
+                        className="text-[var(--danger)]"
                         message={`Remove ${m.player.displayName} completely? This deletes every match they played in this division, results included. Use Drop instead if they just left.`}
                       >
                         Remove
@@ -1084,7 +1084,7 @@ function AdminSection({
                         <input type="hidden" name="divisionId" value={division.id} />
                         <input type="hidden" name="p1" value={s.playerAId} />
                         <input type="hidden" name="p2" value={s.playerBId} />
-                        <Button type="submit" variant="ghost" size="sm" className="text-[#e74c3c]">
+                        <Button type="submit" variant="ghost" size="sm" className="text-[var(--danger)]">
                           delete
                         </Button>
                       </form>
