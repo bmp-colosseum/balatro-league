@@ -18,11 +18,11 @@ describe("rarityIndex", () => {
 
 describe("tierAccentColor", () => {
   it("returns the legendary color for position 1", () => {
-    expect(tierAccentColor(1)).toBe(0xbb73d6);
+    expect(tierAccentColor(1)).toBe(0xcd98e1);
   });
 
   it("returns the rare color for position 2", () => {
-    expect(tierAccentColor(2)).toBe(0xff6259);
+    expect(tierAccentColor(2)).toBe(0xff8a83);
   });
 
   it("returns the uncommon color for position 3", () => {
@@ -30,11 +30,11 @@ describe("tierAccentColor", () => {
   });
 
   it("returns the common color for position 4", () => {
-    expect(tierAccentColor(4)).toBe(0x1e9bff);
+    expect(tierAccentColor(4)).toBe(0x53b3ff);
   });
 
   it("cycles back to legendary for position 5", () => {
-    expect(tierAccentColor(5)).toBe(0xbb73d6);
+    expect(tierAccentColor(5)).toBe(0xcd98e1);
   });
 
   it("falls back to gold for null/undefined/zero/negative/non-finite positions", () => {
@@ -46,7 +46,7 @@ describe("tierAccentColor", () => {
   });
 
   it("is always one of the five known colors for any finite position >= 1", () => {
-    const known = new Set([0xbb73d6, 0xff6259, 0x3cc78f, 0x1e9bff, FALLBACK_ACCENT_COLOR]);
+    const known = new Set([0xcd98e1, 0xff8a83, 0x3cc78f, 0x53b3ff, FALLBACK_ACCENT_COLOR]);
     fc.assert(
       fc.property(fc.integer({ min: 1, max: 1_000_000 }), (position) => {
         expect(known.has(tierAccentColor(position))).toBe(true);

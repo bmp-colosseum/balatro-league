@@ -8,16 +8,19 @@
 // Deliberately duplicated rather than imported -- this bot has no dependency
 // on the web app's module graph, and the cycle is one line of pure math.
 
+// Values are the site's v2 tokens verbatim (globals.css html[data-ui="v2"]
+// block) so a Discord embed and the matching web tier pill are the same hex.
 const PALETTE: readonly number[] = [
-  0xbb73d6, // legendary (--legendary)
-  0xff6259, // rare (--rare)
+  0xcd98e1, // legendary (--legendary)
+  0xff8a83, // rare (--rare)
   0x3cc78f, // uncommon (--uncommon)
-  0x1e9bff, // common (--common)
+  0x53b3ff, // common (--common)
 ];
 
 // Used when a division's tier position is missing or out of range -- keeps a
 // result post colored instead of falling back to Discord's default grey.
-export const FALLBACK_ACCENT_COLOR = 0xf1c40f;
+// Also the standings header embed color. Same hex as the site's --gold.
+export const FALLBACK_ACCENT_COLOR = 0xf1b53a;
 
 // Same (position - 1) % length cycle as web/lib/tier-colors.ts's rarityIndex,
 // exposed here in case a caller wants the raw 0-3 index rather than a color.
