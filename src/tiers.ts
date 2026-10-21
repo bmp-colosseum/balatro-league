@@ -2,6 +2,7 @@
 
 import { prisma } from "./db.js";
 import { defaultDivisionNames, type TierConfig } from "./pyramid.js";
+import { tierAccentColor } from "./tier-colors.js";
 
 // Create the Tier rows + per-tier Division rows for a season.
 // Called from /league create-season (Discord) and the dashboard create-season POST.
@@ -40,8 +41,11 @@ export function tierColors(position: number): { bg: string; fg: string } {
   return TIER_PALETTE[idx]!;
 }
 
-// Discord embed color (just the RGB int, no alpha) matching the same palette.
-const TIER_EMBED_COLORS = [0xf1c40f, 0x9b59b6, 0x3498db, 0x95a5a6] as const;
+// Discord embed color for a tier position. Delegates to the one rarity
+// palette (tier-colors.ts) the result posts and #league-standings embeds use,
+// so /standings, the channel and the website all agree on which tier is
+// purple (legendary), red (rare), green (uncommon) and blue (common). The
+// old local list here put yellow on the top tier and purple on the second.
 export function tierEmbedColor(position: number): number {
-  return TIER_EMBED_COLORS[(position - 1) % TIER_EMBED_COLORS.length]!;
+  return tierAccentColor(position);
 }

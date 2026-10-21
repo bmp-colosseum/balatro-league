@@ -9,6 +9,7 @@ import { loadDivisionStandings, loadDivisionScoringBadge, recomputeDivisionStand
 import { formatSeasonLabel } from "./format-season.js";
 import { webUrl } from "./web-url.js";
 import { fitLines, nameMd } from "./name-format-core.js";
+import { tierAccentColor } from "./tier-colors.js";
 
 // Discord's embed description limit.
 const EMBED_DESCRIPTION_MAX = 4096;
@@ -16,12 +17,6 @@ const EMBED_DESCRIPTION_MAX = 4096;
 // Medal for the top 3, otherwise the numeric position.
 function place(i: number): string {
   return ["🥇", "🥈", "🥉"][i] ?? `**${i + 1}.**`;
-}
-
-// Embed side-color by tier position (1 = top). Cycles for deep pyramids.
-const TIER_COLORS = [0xf1c40f, 0xe74c3c, 0x9b59b6, 0x3498db, 0x2ecc71, 0x95a5a6];
-function tierColor(position: number): number {
-  return TIER_COLORS[(position - 1) % TIER_COLORS.length] ?? 0x95a5a6;
 }
 
 export async function composeStandingsEmbeds(): Promise<EmbedBuilder[]> {
@@ -63,7 +58,11 @@ export async function composeStandingsEmbeds(): Promise<EmbedBuilder[]> {
       new EmbedBuilder()
         .setTitle(badge ? `${div.name} - counts best ${badge.n} of ${badge.scheduled} matches` : div.name)
         .setDescription(lines.length > 0 ? fitLines(lines, EMBED_DESCRIPTION_MAX) : "_No results yet._")
-        .setColor(tierColor(div.tier.position)),
+        // Same rarity palette as the result posts (announce.ts) and the web
+        // tier pills: position 1 = legendary purple, then rare red, uncommon
+        // green, common blue. The old local list put yellow on the top tier
+        // and purple on the third, which players read as the wrong rarity.
+        .setColor(tierAccentColor(div.tier.position)),
     );
   }
 
